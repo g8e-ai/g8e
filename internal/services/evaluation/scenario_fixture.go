@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	StandardCatalogID      = "north-star-25"
-	StandardCatalogVersion = "1.1.0"
-	StandardCatalogScopeID = "north-star-25"
+	// DefaultSuiteID and DefaultSuiteVersion identify the built-in suite every
+	// campaign freezes unless it names another one.
+	DefaultSuiteID      = "default-suite"
+	DefaultSuiteVersion = "1.1.0"
 
+	scenarioSyntheticLabel     = "SYNTHETIC - controlled evaluation fixture"
 	scenarioInputSchemaVersion = "1.2.0"
 	scenarioGoldSchemaVersion  = "1.1.0"
 	scenarioInputSchemaRef     = "evaluation-scenario-input@1.2.0"
@@ -37,7 +39,10 @@ const (
 	ScenarioWorkspaceToken = "{{workspace}}"
 )
 
-var northStarCatalogFreezeTime = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+// scenarioCatalogFreezeTime is the fixed production and verification time of
+// every catalog fixture artifact, so identical suite content always yields
+// identical content addresses.
+var scenarioCatalogFreezeTime = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 
 // ScenarioInlineContent is synthetic content the scenario expects the model to
 // reason over in the same turn. It is rendered as a labelled block beneath the
@@ -260,8 +265,8 @@ func marshalScenarioFixture(value any) ([]byte, error) {
 	return body, nil
 }
 
-func buildScenarioArtifactReference(artifactType complianceevidence.ArtifactType, schemaRef, scenarioID string, body []byte) (*compliancev1.ComplianceEvidenceReference, error) {
-	if scenarioID == "" || len(body) == 0 {
+func buildScenarioArtifactReference(suiteID string, artifactType complianceevidence.ArtifactType, schemaRef, scenarioID string, body []byte) (*compliancev1.ComplianceEvidenceReference, error) {
+	if suiteID == "" || scenarioID == "" || len(body) == 0 {
 		return nil, fmt.Errorf("evaluation: build scenario artifact reference: %w", constants.ErrMissingRequiredField)
 	}
 	artifactID := complianceevidence.ContentAddress(artifactType, body)
@@ -269,7 +274,7 @@ func buildScenarioArtifactReference(artifactType complianceevidence.ArtifactType
 	if !ok {
 		return nil, fmt.Errorf("evaluation: build scenario artifact reference: invalid content address")
 	}
-	freeze := timestamppb.New(northStarCatalogFreezeTime)
+	freeze := timestamppb.New(scenarioCatalogFreezeTime)
 	return &compliancev1.ComplianceEvidenceReference{
 		ArtifactId:         artifactID,
 		ArtifactType:       string(artifactType),
@@ -278,7 +283,7 @@ func buildScenarioArtifactReference(artifactType complianceevidence.ArtifactType
 		SchemaRef:          schemaRef,
 		ProducerIdentity:   "g8e-eval-catalog",
 		ProducedAt:         freeze,
-		ScopeId:            StandardCatalogScopeID,
+		ScopeId:            suiteID,
 		RunId:              "catalog",
 		ScenarioId:         scenarioID,
 		VerificationStatus: "verified",
@@ -288,26 +293,26 @@ func buildScenarioArtifactReference(artifactType complianceevidence.ArtifactType
 	}, nil
 }
 
-func buildScenarioInputArtifact(input ScenarioInputFixture) (ScenarioArtifactPair, error) {
+func buildScenarioInputArtifact(suiteID string, input ScenarioInputFixture) (ScenarioArtifactPair, error) {
 	input.SchemaVersion = scenarioInputSchemaVersion
 	body, err := marshalScenarioFixture(input)
 	if err != nil {
 		return ScenarioArtifactPair{}, err
 	}
-	ref, err := buildScenarioArtifactReference(complianceevidence.ArtifactTypeEvaluationScenarioInput, scenarioInputSchemaRef, input.ScenarioID, body)
+	ref, err := buildScenarioArtifactReference(suiteID, complianceevidence.ArtifactTypeEvaluationScenarioInput, scenarioInputSchemaRef, input.ScenarioID, body)
 	if err != nil {
 		return ScenarioArtifactPair{}, err
 	}
 	return ScenarioArtifactPair{Body: body, Reference: ref}, nil
 }
 
-func buildScenarioGoldArtifact(gold ScenarioGoldCriteria) (ScenarioArtifactPair, error) {
+func buildScenarioGoldArtifact(suiteID string, gold ScenarioGoldCriteria) (ScenarioArtifactPair, error) {
 	gold.SchemaVersion = scenarioGoldSchemaVersion
 	body, err := marshalScenarioFixture(gold)
 	if err != nil {
 		return ScenarioArtifactPair{}, err
 	}
-	ref, err := buildScenarioArtifactReference(complianceevidence.ArtifactTypeEvaluationScenarioGold, scenarioGoldSchemaRef, gold.ScenarioID, body)
+	ref, err := buildScenarioArtifactReference(suiteID, complianceevidence.ArtifactTypeEvaluationScenarioGold, scenarioGoldSchemaRef, gold.ScenarioID, body)
 	if err != nil {
 		return ScenarioArtifactPair{}, err
 	}

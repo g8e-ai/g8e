@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -32,7 +33,7 @@ type CampaignAssignmentVerificationRequest struct {
 	GradingMethod             evalv1.EvaluationGradingMethod
 	Trace                     EvaluationTrace
 	FormationRunEvidence      *FormationRunEvidence
-	CatalogVersion            string
+	CatalogRef                *compliancev1.VersionedReference
 	ProviderObservationReader *CampaignProviderObservationReader
 	ProviderObservationPolicy ProviderObservationPolicy
 	ModelProvenanceReader     *CampaignModelProvenanceReader
@@ -99,7 +100,7 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 	} else if err := verifyImportedEvidence(req.Assignment, req.Result, req.Trace); err != nil {
 		failures = append(failures, "imported evidence does not match trace: "+err.Error())
 	}
-	skipGradeRecomputation := req.CatalogVersion != "" && req.CatalogVersion != StandardCatalogVersion
+	skipGradeRecomputation := !CatalogRecomputesGrades(req.CatalogRef)
 	if !skipGradeRecomputation {
 		designatedRole, err := designatedRoleFromAssignment(req.Assignment)
 		if err != nil {
@@ -154,7 +155,7 @@ func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(ctx context.C
 			req.ModelProvenancePolicy,
 		)...)
 	}
-	skipGradeRecomputation := req.CatalogVersion != "" && req.CatalogVersion != StandardCatalogVersion
+	skipGradeRecomputation := !CatalogRecomputesGrades(req.CatalogRef)
 	if !skipGradeRecomputation {
 		recomputedGrades, err := RecomputeFormationAssignmentGrades(AssignmentExecutionRequest{
 			Assignment:    req.Assignment,

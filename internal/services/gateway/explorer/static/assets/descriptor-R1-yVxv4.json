@@ -245,6 +245,32 @@
     "PublicReceiptStatus": [
       "unavailable",
       "reported"
+    ],
+    "PublicTrajectoryPolicy": [
+      "answer",
+      "first_choice",
+      "guided",
+      "governed"
+    ],
+    "PublicTrajectoryOutcome": [
+      "direct",
+      "recovered",
+      "yielded_to_denial",
+      "no_tool_call",
+      "wrong_tool",
+      "wrong_arguments",
+      "ignored_guidance",
+      "abandoned_after_error",
+      "circumvented_denial",
+      "loop_exhausted",
+      "provider_rejected_tool_declaration"
+    ],
+    "PublicHintArgumentSource": [
+      "prompt",
+      "seed",
+      "workspace",
+      "operator_context",
+      "model_authored"
     ]
   }
 }

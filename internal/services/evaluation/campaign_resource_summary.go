@@ -32,6 +32,22 @@ func isMemoryCodexCall(call *evalv1.ModelInferenceRecord) bool {
 	return call.GetAgentPersona() == memoryCodexAgentRole
 }
 
+// isScoredAgentRole reports whether an agent_role names the active agent that
+// answers the scored turn (never triage, memory, tribunal, or a grader).
+func isScoredAgentRole(role string) bool {
+	return role == "sage" || role == "dash"
+}
+
+// scoredAgentInference returns the first inference made by the scored agent.
+func scoredAgentInference(calls []*evalv1.ModelInferenceRecord) *evalv1.ModelInferenceRecord {
+	for _, call := range calls {
+		if call != nil && isScoredAgentRole(call.GetAgentPersona()) {
+			return call
+		}
+	}
+	return nil
+}
+
 // scoredInferenceRecords returns the inference records that count toward
 // resource aggregates, preserving nil entries so callers still reject them.
 func scoredInferenceRecords(calls []*evalv1.ModelInferenceRecord) []*evalv1.ModelInferenceRecord {

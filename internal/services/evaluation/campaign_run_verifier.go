@@ -180,10 +180,6 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 			failures = append(failures, err.Error())
 			continue
 		}
-		catalogVersion := ""
-		if catalog.GetCatalogRef() != nil {
-			catalogVersion = catalog.GetCatalogRef().GetVersion()
-		}
 		assignmentReport, err := v.assignmentVerifier.Verify(ctx, CampaignAssignmentVerificationRequest{
 			Assignment:                assignment,
 			Result:                    result,
@@ -193,7 +189,7 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 			GradingMethod:             gradingMethod,
 			Trace:                     trace,
 			FormationRunEvidence:      formationRunEvidence,
-			CatalogVersion:            catalogVersion,
+			CatalogRef:                catalog.GetCatalogRef(),
 			ProviderObservationReader: v.providerObservationReader,
 			ProviderObservationPolicy: v.providerObservationPolicy,
 			ModelProvenanceReader:     v.modelProvenanceReader,

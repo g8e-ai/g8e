@@ -1958,6 +1958,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 }
 .criterion-chip { color: var(--fg-muted); font-weight: 500; }
 .assignment-scenario-tools { margin: 0; color: var(--fg-dim); font-size: var(--text-md); }
+.assignment-scenario-policy, .assignment-scenario-hint { margin: 6px 0 0; color: var(--fg-dim); font-size: var(--text-md); }
 .assignment-context, .assignment-activity, .assignment-benchmark, .assignment-metrics, .assignment-stages, .assignment-resources, .assignment-evidence, .assignment-repetitions {
   padding: 16px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius);
 }
@@ -2087,6 +2088,29 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   font-size: 14px;
   font-weight: 600;
   color: #f87171;
+}
+.failure-reason {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.5;
+}
+.failure-trajectory-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.failure-trajectory-meta .failure-tools-declared {
+  flex-basis: 100%;
+  margin: 0;
+}
+.failure-trajectory-meta strong {
+  color: var(--fg);
 }
 .failure-output-detail {
   margin: 0 0 8px;

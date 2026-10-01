@@ -16,8 +16,9 @@ import {
   scenarioCatalogDocsUrl,
   scenarioCatalogSourceUrl,
   scenarioTaskSourceUrl,
+  TRAJECTORY_POLICY_META,
   type ScenarioTaskDefinition,
-} from '../content/scenario-catalog';
+} from '../content/scenario-task';
 import { G8E_REPO_URL } from '../content/platform';
 import { SCENARIO_CATEGORIES, type ScenarioCategory } from '../contract/types';
 import { TaskExpectationSection, TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
@@ -31,30 +32,9 @@ function TaskFlag({ children }: { children: ReactNode }) {
 }
 
 function TaskFlagNotes({ task }: { task: ScenarioTaskDefinition }) {
-  const notes: string[] = [];
-
-  if (task.requiresToolDecision) {
-    notes.push('Which tool is called affects the grade.');
-  }
-  if (task.requiresGovernedAction) {
-    notes.push('Pass may require refusal or policy block without host effect.');
-  }
-  if (task.expectsFailureOrUnavailable) {
-    notes.push('Explicit failure or unavailable outcomes can still pass.');
-  }
-  if (task.tinyTask) {
-    notes.push('Minimal scenario for quick smoke coverage.');
-  }
-
-  if (notes.length === 0) {
-    return null;
-  }
-
   return (
     <ul className="task-flag-notes">
-      {notes.map((note) => (
-        <li key={note}>{note}</li>
-      ))}
+      <li>{TRAJECTORY_POLICY_META[task.trajectoryPolicy].note}</li>
     </ul>
   );
 }
@@ -75,10 +55,7 @@ function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
         <div className="task-detail-meta">
           <TaskFlag>{meta.label}</TaskFlag>
           <TaskFlag>{formatGradingMethod(task.gradingMethod)}</TaskFlag>
-          {task.tinyTask ? <TaskFlag>Tiny task</TaskFlag> : null}
-          {task.requiresToolDecision ? <TaskFlag>Tool decision required</TaskFlag> : null}
-          {task.requiresGovernedAction ? <TaskFlag>Governed action</TaskFlag> : null}
-          {task.expectsFailureOrUnavailable ? <TaskFlag>May fail or be unavailable</TaskFlag> : null}
+          <TaskFlag>{TRAJECTORY_POLICY_META[task.trajectoryPolicy].label}</TaskFlag>
         </div>
         <TaskFlagNotes task={task} />
       </header>

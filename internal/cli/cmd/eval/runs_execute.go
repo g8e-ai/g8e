@@ -182,7 +182,11 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: run execute: %w", err)
 	}
-	_, artifacts, err := evaluation.LoadScenarioCatalog()
+	catalog, err := store.LoadScenarioCatalog(cmd.Context(), binding.GetCampaignId())
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: run execute: %w", err)
+	}
+	artifacts, err := store.LoadScenarioArtifacts(cmd.Context(), binding.GetCampaignId(), catalog)
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: run execute: %w", err)
 	}

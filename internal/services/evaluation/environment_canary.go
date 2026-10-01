@@ -237,8 +237,7 @@ func scoredModelCall(trace EvaluationTrace) (EvaluationTrace, bool) {
 		if !ok {
 			continue
 		}
-		switch stringValue(call["agent_role"]) {
-		case "sage", "dash":
+		if isScoredAgentRole(stringValue(call["agent_role"])) {
 			return call, true
 		}
 	}

@@ -18,9 +18,13 @@ import {
   type PublicActivityFamily,
   type PublicGovernedActionActivityRecord,
   type PublicModelActivityRecord,
+  type PublicHintArgumentSource,
   type PublicPolicyDecisionActivityRecord,
+  type PublicPromptHint,
   type PublicToolCallActivityRecord,
   type PublicToolDecisionActivityRecord,
+  type PublicTrajectoryOutcome,
+  type PublicTrajectoryPolicy,
   type PublicUnavailableReason,
   type QualityState,
   type ScenarioCategory,
@@ -321,6 +325,10 @@ function adaptResultProjection(
     model_response: optionalString(record.model_response),
     failure_output: optionalString(record.failure_output),
     role_transcripts: mapRoleTranscripts(record.role_transcripts),
+    ...(typeof record.trajectory_outcome === 'string' ? { trajectory_outcome: mapTrajectoryOutcome(record.trajectory_outcome) } : {}),
+    ...(optionalInteger(record.guided_retry_count) !== undefined ? { guided_retry_count: optionalInteger(record.guided_retry_count) } : {}),
+    ...(optionalString(record.failure_reason) !== undefined ? { failure_reason: optionalString(record.failure_reason) } : {}),
+    ...(Array.isArray(record.tools_declared) ? { tools_declared: stringArray(record.tools_declared) } : {}),
   };
 
   const records: Array<SnapshotRecord | LiveEvent> = [assignment];
@@ -393,9 +401,27 @@ function mapScenarioSummary(value: unknown): AssignmentResult['scenario_summary'
     allowed_tools: stringArray(value.allowed_tools),
     expected_tools: stringArray(value.expected_tools),
     forbidden_tools: stringArray(value.forbidden_tools),
+    ...(typeof value.trajectory_policy === 'string' ? { trajectory_policy: mapTrajectoryPolicy(value.trajectory_policy) } : {}),
+    ...(isRecord(value.prompt_hint) ? { prompt_hint: mapPromptHint(value.prompt_hint) } : {}),
     criteria: Array.isArray(value.criteria) ? value.criteria.map(mapScenarioCriterion) : [],
     tool_score_dimensions: Array.isArray(value.tool_score_dimensions)
       ? value.tool_score_dimensions.map(mapToolScoreDimension)
+      : [],
+  };
+}
+
+function mapPromptHint(value: Record<string, unknown>): PublicPromptHint {
+  return {
+    hinted_tools: stringArray(value.hinted_tools),
+    arguments: Array.isArray(value.arguments)
+      ? value.arguments.map((entry) => {
+          const argument = asRecord(entry);
+          return {
+            tool_name: requiredString(argument, 'tool_name'),
+            argument_name: requiredString(argument, 'argument_name'),
+            source: mapHintArgumentSource(requiredString(argument, 'source')),
+          };
+        })
       : [],
   };
 }
@@ -476,7 +502,17 @@ function mapToolDecisionRecord(value: unknown, _path: string): PublicToolDecisio
 
 function mapToolCallRecord(value: unknown, _path: string): PublicToolCallActivityRecord {
   const record = asRecord(value);
-  return { tool_label: requiredString(record, 'tool_label'), execution_outcome: mapExecutionOutcome(requiredString(record, 'execution_outcome')), semantic_outcome: mapSemanticOutcome(requiredString(record, 'semantic_outcome')), evidence_source: 'application_reported' };
+  const loopTurn = optionalInteger(record.loop_turn);
+  const errorType = optionalString(record.error_type);
+  return {
+    tool_label: requiredString(record, 'tool_label'),
+    execution_outcome: mapExecutionOutcome(requiredString(record, 'execution_outcome')),
+    semantic_outcome: mapSemanticOutcome(requiredString(record, 'semantic_outcome')),
+    evidence_source: 'application_reported',
+    ...(loopTurn !== undefined ? { loop_turn: loopTurn } : {}),
+    ...(errorType !== undefined ? { error_type: errorType } : {}),
+    ...(record.guidance_shown === true ? { guidance_shown: true } : {}),
+  };
 }
 
 function mapPolicyDecisionRecord(value: unknown, _path: string): PublicPolicyDecisionActivityRecord {
@@ -549,6 +585,9 @@ function mapSemanticOutcome(value: string): PublicToolDecisionActivityRecord['ou
 function mapExecutionOutcome(value: string): PublicToolCallActivityRecord['execution_outcome'] { return mapNativeResultStatus(value); }
 function mapToolOutcome(value: string): 'allow' | 'deny' | 'refused' { return normalizeEnumToken(value).replace(/^EVALUATION_/, '').replace(/^POLICY_DECISION_OUTCOME_/, '').toLowerCase() as ReturnType<typeof mapToolOutcome>; }
 function mapReportedPolicyOutcome(value: string): 'allow' | 'deny' | 'refused' { return mapToolOutcome(value); }
+function mapTrajectoryPolicy(value: string): PublicTrajectoryPolicy { return normalizeEnumToken(value).replace(/^TRAJECTORY_POLICY_/, '').toLowerCase() as PublicTrajectoryPolicy; }
+function mapTrajectoryOutcome(value: string): PublicTrajectoryOutcome { return normalizeEnumToken(value).replace(/^TRAJECTORY_OUTCOME_/, '').toLowerCase() as PublicTrajectoryOutcome; }
+function mapHintArgumentSource(value: string): PublicHintArgumentSource { return normalizeEnumToken(value).replace(/^HINT_ARGUMENT_SOURCE_/, '').toLowerCase() as PublicHintArgumentSource; }
 function mapReceiptStatus(value: string): 'unavailable' | 'reported' { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^RECEIPT_STATUS_/, '').toLowerCase() as ReturnType<typeof mapReceiptStatus>; }
 function mapEvidenceSource(value: string): 'application_reported' | 'bound_public_proof' { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^EVIDENCE_SOURCE_/, '').toLowerCase() as ReturnType<typeof mapEvidenceSource>; }
 function mapVerificationState(value: string): VerifierState {

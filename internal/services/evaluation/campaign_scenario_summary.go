@@ -17,6 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 func ResolvePublicScenarioContext(ctx context.Context, store *Store, run *evalv1.EvaluationRun, catalog *evalv1.EvaluationScenarioCatalog, assignment *evalv1.EvaluationAssignment, artifacts map[string]ScenarioArtifacts) (*PublicScenarioContext, error) {
@@ -48,7 +49,7 @@ func ResolvePublicScenarioContext(ctx context.Context, store *Store, run *evalv1
 		return nil, fmt.Errorf("evaluation: resolve public scenario artifact binding: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	return &PublicScenarioContext{
-		CampaignID: binding.GetCampaignId(), RunID: run.GetRunId(), ScenarioID: scenario.GetScenarioId(), ScenarioVersion: scenario.GetScenarioVersion(), Category: scenario.GetCategory(), PublicDescription: scenario.GetPublicDescription(), GradingMethod: scenario.GetGradingMethod(), AllowedTools: append([]string(nil), scenario.GetAllowedTools()...), ExpectedTools: append([]string(nil), scenario.GetExpectedTools()...), ForbiddenTools: append([]string(nil), scenario.GetForbiddenTools()...), Criteria: cloneCriteria(scenario.GetPublicCriteria()), ToolScoreDimensions: cloneDimensions(scenario.GetPublicToolScoreDimensions()), CatalogRef: cloneReference(catalog.GetCatalogRef()), CatalogDigest: catalog.GetCatalogDigest(), ScenarioReference: cloneEvidenceReference(scenario.GetGoldCriteriaRef()),
+		CampaignID: binding.GetCampaignId(), RunID: run.GetRunId(), ScenarioID: scenario.GetScenarioId(), ScenarioVersion: scenario.GetScenarioVersion(), Category: scenario.GetCategory(), PublicDescription: scenario.GetPublicDescription(), GradingMethod: scenario.GetGradingMethod(), AllowedTools: append([]string(nil), scenario.GetAllowedTools()...), ExpectedTools: append([]string(nil), scenario.GetExpectedTools()...), ForbiddenTools: append([]string(nil), scenario.GetForbiddenTools()...), TrajectoryPolicy: scenario.GetTrajectoryPolicy(), PromptHint: clonePromptHint(scenario.GetPromptHint()), Criteria: cloneCriteria(scenario.GetPublicCriteria()), ToolScoreDimensions: cloneDimensions(scenario.GetPublicToolScoreDimensions()), CatalogRef: cloneReference(catalog.GetCatalogRef()), CatalogDigest: catalog.GetCatalogDigest(), ScenarioReference: cloneEvidenceReference(scenario.GetGoldCriteriaRef()),
 	}, nil
 }
 
@@ -56,7 +57,7 @@ func BuildPublicScenarioSummary(scenario *PublicScenarioContext) (*evalv1.Public
 	if scenario == nil || scenario.ScenarioID == "" || scenario.ScenarioVersion == "" || scenario.PublicDescription == "" || len(scenario.Criteria) == 0 {
 		return nil, fmt.Errorf("evaluation: build public scenario summary: %w", constants.ErrEvidenceArtifactMalformed)
 	}
-	return &evalv1.PublicScenarioSummary{ScenarioId: scenario.ScenarioID, ScenarioVersion: scenario.ScenarioVersion, Category: scenario.Category, PublicDescription: scenario.PublicDescription, GradingMethod: scenario.GradingMethod, AllowedTools: append([]string(nil), scenario.AllowedTools...), ExpectedTools: append([]string(nil), scenario.ExpectedTools...), ForbiddenTools: append([]string(nil), scenario.ForbiddenTools...), Criteria: cloneCriteria(scenario.Criteria), ToolScoreDimensions: cloneDimensions(scenario.ToolScoreDimensions)}, nil
+	return &evalv1.PublicScenarioSummary{ScenarioId: scenario.ScenarioID, ScenarioVersion: scenario.ScenarioVersion, Category: scenario.Category, PublicDescription: scenario.PublicDescription, GradingMethod: scenario.GradingMethod, AllowedTools: append([]string(nil), scenario.AllowedTools...), ExpectedTools: append([]string(nil), scenario.ExpectedTools...), ForbiddenTools: append([]string(nil), scenario.ForbiddenTools...), TrajectoryPolicy: scenario.TrajectoryPolicy, PromptHint: clonePromptHint(scenario.PromptHint), Criteria: cloneCriteria(scenario.Criteria), ToolScoreDimensions: cloneDimensions(scenario.ToolScoreDimensions)}, nil
 }
 
 func findScenario(catalog *evalv1.EvaluationScenarioCatalog, id string, ref *compliancev1.VersionedReference) *evalv1.EvaluationScenarioDefinition {
@@ -111,6 +112,15 @@ func cloneCriteria(criteria []*evalv1.PublicScenarioCriterion) []*evalv1.PublicS
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].GetCriterionId() < out[j].GetCriterionId() })
 	return out
+}
+
+// clonePromptHint copies the public prompt hint. The proto carries only tool
+// names and argument sources, never argument values (R7).
+func clonePromptHint(hint *evalv1.PromptHint) *evalv1.PromptHint {
+	if hint == nil {
+		return nil
+	}
+	return proto.Clone(hint).(*evalv1.PromptHint)
 }
 
 func cloneDimensions(dimensions []*evalv1.PublicToolScoreDimensionRequirement) []*evalv1.PublicToolScoreDimensionRequirement {

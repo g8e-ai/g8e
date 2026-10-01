@@ -262,6 +262,17 @@ agent-tool-registry-check:
 	@echo "Checking protocol/constants/agenttools/agent-tool-registry.json against g8ee..."
 	@cd ensemble && $(PYTHON) -m app.services.evaluation.agent_tool_registry_export --check
 
+# The evaluation explorer's scenario catalog module is generated from the Go
+# scenario catalog. Never hand-edit scenario-catalog.generated.ts.
+.PHONY: explorer-catalog explorer-catalog-check
+explorer-catalog:
+	@echo "Regenerating the evaluation explorer scenario catalog from the Go catalog..."
+	@go run ./internal/tools/explorercatalog -write
+
+explorer-catalog-check:
+	@echo "Checking the evaluation explorer scenario catalog against the Go catalog..."
+	@go run ./internal/tools/explorercatalog -check
+
 .PHONY: website-build
 website-build:
 	@echo "Rendering g8e.ai from README.md..."
