@@ -136,7 +136,6 @@ type operatorShowOutput struct {
 	UpdatedAt         time.Time                `json:"updated_at"`
 	Name              string                   `json:"name,omitempty"`
 	SystemFingerprint string                   `json:"system_fingerprint,omitempty"`
-	LastHeartbeatAt   *time.Time               `json:"last_heartbeat_at,omitempty"`
 	RuntimeConfig     *models.RuntimeConfig    `json:"runtime_config,omitempty"`
 	Heartbeat         *operatorHeartbeatOutput `json:"heartbeat,omitempty"`
 }
@@ -169,7 +168,6 @@ func operatorShowPayload(op models.OperatorDocumentGo) operatorShowOutput {
 		UpdatedAt:         op.UpdatedAt,
 		Name:              op.Name,
 		SystemFingerprint: op.SystemFingerprint,
-		LastHeartbeatAt:   op.LastHeartbeatAt,
 		RuntimeConfig:     op.RuntimeConfig,
 	}
 	if view := parseOperatorHeartbeatView(op.LatestHeartbeat); view != nil {
@@ -230,9 +228,6 @@ func printOperatorShow(cmd *cobra.Command, op models.OperatorDocumentGo) {
 		cmd.Printf("Fingerprint: %s\n", op.SystemFingerprint)
 	}
 	cmd.Printf("Updated:   %s\n", op.UpdatedAt.UTC().Format("2006-01-02 15:04:05 UTC"))
-	if op.LastHeartbeatAt != nil {
-		cmd.Printf("Last heartbeat: %s\n", op.LastHeartbeatAt.UTC().Format("2006-01-02 15:04:05 UTC"))
-	}
 
 	if op.RuntimeConfig != nil {
 		cmd.Println()

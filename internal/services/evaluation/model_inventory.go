@@ -26,7 +26,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-const StandardScenarioCount = 27
+const StandardScenarioCount = 26
 
 // ModelInventoryFreeze is the immutable model registry derived from
 // a complete provider inventory query and optional capability probes.

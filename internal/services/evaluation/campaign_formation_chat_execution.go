@@ -33,7 +33,7 @@ type CampaignFormationChatRunner struct {
 	persona        harnessclient.Persona
 	dataOperatorID string
 	waitForTrace   CampaignTraceWaiter
-	fileWriter     WorkspaceFileWriter
+	fileWriter     SimulatedFileWriter
 	production     FormationProductionDependencies
 }
 
@@ -41,9 +41,9 @@ type CampaignFormationChatRunner struct {
 // runner. production supplies the same provenance, observation, allocation,
 // and release dependencies the direct-dispatch runner uses; its RoleExecutor
 // is set per run. fileWriter may be nil for a deployment with no scenario that
-// sets ScenarioInputFixture.WorkspaceFiles; RunHeterogeneousFormation fails
+// sets ScenarioInputFixture.SimulatedFiles; RunHeterogeneousFormation fails
 // closed if a scenario needs one and none is configured.
-func NewCampaignFormationChatRunner(client CampaignChatClient, persona harnessclient.Persona, dataOperatorID string, waitForTrace CampaignTraceWaiter, fileWriter WorkspaceFileWriter, production FormationProductionDependencies) *CampaignFormationChatRunner {
+func NewCampaignFormationChatRunner(client CampaignChatClient, persona harnessclient.Persona, dataOperatorID string, waitForTrace CampaignTraceWaiter, fileWriter SimulatedFileWriter, production FormationProductionDependencies) *CampaignFormationChatRunner {
 	return &CampaignFormationChatRunner{
 		client:         client,
 		persona:        persona,
@@ -55,7 +55,7 @@ func NewCampaignFormationChatRunner(client CampaignChatClient, persona harnesscl
 }
 
 // formationRoleOutput pairs one completed role with its designated output
-// text, seeded into every subsequent role's investigation as a handoff turn.
+// text, threaded into every subsequent role's outgoing chat message.
 type formationRoleOutput struct {
 	Role   FormationRole
 	Output string
@@ -76,14 +76,8 @@ func (r *CampaignFormationChatRunner) RunHeterogeneousFormation(ctx context.Cont
 	if err := json.Unmarshal(initialState, &input); err != nil {
 		return nil, fmt.Errorf("evaluation: run heterogeneous formation: decode initial state: %w", err)
 	}
-	// One workspace per assignment attempt, shared by every role: the fixture
-	// files are written once and each role's request carries the same root.
-	ws, err := NewScenarioWorkspace(runContext.DataOperatorWorkingDirectory, runContext.RunID, runContext.EvaluationAttemptID)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: run heterogeneous formation: build scenario workspace: %w", err)
-	}
-	if err := r.materializeWorkspaceFiles(ctx, runContext, ws, input); err != nil {
-		return nil, fmt.Errorf("evaluation: run heterogeneous formation: materialize workspace files: %w", err)
+	if err := r.materializeSimulatedFiles(ctx, runContext, input); err != nil {
+		return nil, fmt.Errorf("evaluation: run heterogeneous formation: materialize simulated files: %w", err)
 	}
 	deps := r.production
 	deps.RunContext = runContext
@@ -91,7 +85,6 @@ func (r *CampaignFormationChatRunner) RunHeterogeneousFormation(ctx context.Cont
 		runner:     r,
 		runContext: runContext,
 		input:      input,
-		workspace:  ws,
 		registry:   InferenceVariantsFromEvalRegistry(binding.Variants),
 	}
 	result, err := RunHeterogeneousFormationProduction(ctx, binding, deps, nil)
@@ -112,17 +105,12 @@ type formationChatRoleExecutor struct {
 	runner       *CampaignFormationChatRunner
 	runContext   FormationRunContext
 	input        ScenarioInputFixture
-	workspace    ScenarioWorkspace
 	registry     []*operatorv1.InferenceModelVariant
 	priorOutputs []formationRoleOutput
 }
 
 func (e *formationChatRoleExecutor) ExecuteRole(ctx context.Context, req FormationRoleRequest) (FormationRoleResult, error) {
 	r := e.runner
-	seed, err := formationRoleSeed(e.input, &e.workspace, e.priorOutputs)
-	if err != nil {
-		return FormationRoleResult{}, fmt.Errorf("evaluation: formation role %s: build seed: %w", req.Role, err)
-	}
 	probeReq := ChatProbeRequest{
 		AssignmentID:            e.runContext.AssignmentID,
 		EvaluationAttemptID:     e.runContext.EvaluationAttemptID + ":" + string(req.Role),
@@ -136,10 +124,8 @@ func (e *formationChatRoleExecutor) ExecuteRole(ctx context.Context, req Formati
 		ModelRegistry:           e.registry,
 		EvaluationLane:          "model_role",
 		DesignatedModelRole:     string(req.Role),
-		Message:                 renderScenarioMessage(e.input.UserPrompt, e.input.InlineContext, &e.workspace),
+		Message:                 formationRoleChatMessage(e.input, e.priorOutputs),
 		GradingMethod:           evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
-		Seed:                    seed,
-		Workspace:               &e.workspace,
 	}
 	chatReq, err := BuildChatProbeRequest(probeReq, r.dataOperatorID, e.runContext.DataSessionID)
 	if err != nil {
@@ -167,6 +153,17 @@ func (e *formationChatRoleExecutor) ExecuteRole(ctx context.Context, req Formati
 	if output != "" {
 		e.priorOutputs = append(e.priorOutputs, formationRoleOutput{Role: req.Role, Output: output})
 	}
+	// Store prior role outputs in trace for grading verification of handoff.
+	if len(e.priorOutputs) > 0 {
+		priorMap := make([]map[string]string, 0, len(e.priorOutputs))
+		for _, prior := range e.priorOutputs {
+			priorMap = append(priorMap, map[string]string{
+				"role":   string(prior.Role),
+				"output": prior.Output,
+			})
+		}
+		trace["prior_role_outputs"] = priorMap
+	}
 	result := formationRoleResultFromTrace(trace)
 	result.OutputState = formationAppendRoleState(req.InputState, req.Role, output)
 	result.MutationCandidate = append([]byte(nil), result.OutputState...)
@@ -174,11 +171,42 @@ func (e *formationChatRoleExecutor) ExecuteRole(ctx context.Context, req Formati
 	return result, nil
 }
 
-// materializeWorkspaceFiles writes the scenario's fixture files once for the
-// whole formation, before any role runs, so every role reads the same files.
-func (r *CampaignFormationChatRunner) materializeWorkspaceFiles(ctx context.Context, runContext FormationRunContext, ws ScenarioWorkspace, input ScenarioInputFixture) error {
+func (r *CampaignFormationChatRunner) materializeSimulatedFiles(ctx context.Context, runContext FormationRunContext, input ScenarioInputFixture) error {
+	if len(input.SimulatedFiles) == 0 {
+		return nil
+	}
+	if r.fileWriter == nil {
+		return fmt.Errorf("evaluation: scenario %s requires a simulated file writer", runContext.ScenarioID)
+	}
 	target := Target{OperatorID: r.dataOperatorID, SessionID: runContext.DataSessionID}
-	return materializeScenarioWorkspace(ctx, r.fileWriter, target, runContext.RunID, runContext.ScenarioID, runContext.EvaluationAttemptID, ws, input.WorkspaceFiles)
+	for _, file := range input.SimulatedFiles {
+		if err := r.fileWriter.WriteSimulatedFile(ctx, target, runContext.RunID, runContext.ScenarioID, runContext.EvaluationAttemptID, file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// formationRoleChatMessage renders the outgoing chat message for one role:
+// the base scenario message (same rendering homogeneous assignments use),
+// plus every already-completed role's designated output appended as a
+// cumulative handoff block — the only context-threading channel
+// EnsembleChatRequest exposes is its single Message text field, so threading
+// is necessarily textual here, matching the cumulative state the
+// direct-dispatch runner already builds via formationAppendRoleState
+// (formation_production_adapter.go).
+func formationRoleChatMessage(input ScenarioInputFixture, priorOutputs []formationRoleOutput) string {
+	base := renderScenarioMessage(input.UserPrompt, input.InlineContext)
+	if len(priorOutputs) == 0 {
+		return base
+	}
+	var b strings.Builder
+	b.WriteString(base)
+	b.WriteString("\n\nPrior formation role output:")
+	for _, prior := range priorOutputs {
+		fmt.Fprintf(&b, "\n\n[%s]:\n%s", prior.Role, prior.Output)
+	}
+	return b.String()
 }
 
 // formationRoleResultFromTrace aggregates every scored G8EProvider call in one

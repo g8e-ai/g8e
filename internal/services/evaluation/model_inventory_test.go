@@ -33,8 +33,8 @@ type modelInventoryFreezePayload struct {
 
 func TestComputeHomogeneousMatrixSize(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, uint64(41), ComputeHomogeneousMatrixSize(1))
-	assert.Equal(t, uint64(164), ComputeHomogeneousMatrixSize(4))
+	assert.Equal(t, uint64(39), ComputeHomogeneousMatrixSize(1))
+	assert.Equal(t, uint64(156), ComputeHomogeneousMatrixSize(4))
 }
 
 func TestBuildModelVariantsFromProviderInventory_SortsAndDedupes(t *testing.T) {

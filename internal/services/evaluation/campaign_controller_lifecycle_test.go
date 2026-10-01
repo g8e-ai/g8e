@@ -87,48 +87,6 @@ func TestCampaignControllerStartRunBindsANewRunToAnExistingCampaign(t *testing.T
 	assert.Equal(t, []string{"run-a", "run-b", "run-c"}, runIDs)
 }
 
-func createMultiModelCampaign(t *testing.T, f *archiveFixture, campaignID string) {
-	t.Helper()
-	inventory, err := MaterializeModelRegistry(campaignID, []*evalv1.ModelVariant{testModelVariant(), secondTestModelVariant()})
-	require.NoError(t, err)
-	_, err = f.controller.CreateCampaign(context.Background(), CampaignCreateRequest{
-		CampaignID:        campaignID,
-		Catalog:           f.req.Catalog,
-		Inventory:         inventory,
-		ScenarioArtifacts: f.req.ScenarioArtifacts,
-	})
-	require.NoError(t, err)
-}
-
-func TestCampaignControllerStartRunRejectsAMultiModelModelRoleCampaign(t *testing.T) {
-	f := newArchiveFixture(t)
-	createMultiModelCampaign(t, f, "multi-model")
-
-	for _, lane := range []evalv1.EvaluationLane{
-		evalv1.EvaluationLane_EVALUATION_LANE_UNSPECIFIED,
-		evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
-	} {
-		_, err := f.controller.StartRun(context.Background(), RunStartRequest{CampaignID: "multi-model", RunID: "run-multi", Lane: lane})
-		require.ErrorIs(t, err, constants.ErrEvaluationCampaignSubjectInvalid, lane.String())
-	}
-	exists, err := f.store.RunExists(context.Background(), "run-multi")
-	require.NoError(t, err)
-	assert.False(t, exists, "a rejected start must not persist a run")
-}
-
-func TestCampaignControllerStartRunAllowsAMultiModelSystemCampaign(t *testing.T) {
-	f := newArchiveFixture(t)
-	createMultiModelCampaign(t, f, "multi-system")
-
-	run, err := f.controller.StartRun(context.Background(), RunStartRequest{
-		CampaignID: "multi-system",
-		RunID:      "run-system",
-		Lane:       evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM, run.GetLane())
-}
-
 func TestCampaignControllerStartRunRejectsExistingRunAndMissingCampaign(t *testing.T) {
 	f := newArchiveFixture(t)
 	ctx := context.Background()

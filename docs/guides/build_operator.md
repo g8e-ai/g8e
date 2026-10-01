@@ -190,7 +190,7 @@ The current worker path applies these options:
 | `-s, --execution-vault` (default true) | Enables the execution vault and defaults to `true`. Outbound startup currently requires it; setting it to `false` fails closed during service initialization. |
 | `-G, --no-git` | Disables the git-backed file ledger while retaining the encrypted audit store. |
 | `-l, --log <level>` | Sets `info`, `error`, or `debug` logging. |
-| `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds and the accepted range is 0-30 (0 selects the default). Larger values are rejected at startup because the Gateway marks an Operator `stale` after 60 seconds without a heartbeat. |
+| `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds. |
 | `--lattice-endpoint <url>` and related `--lattice-*` flags | These flags are exposed by Cobra but `operatorStartCmd` does not copy their values into `ServeOperatorOptions`, so the flags currently have no effect. The service-layer environment path uses `LATTICE_ENDPOINT`, `LATTICE_CLIENT_ID`, `LATTICE_CLIENT_SECRET`, `SANDBOXES_TOKEN`, `LATTICE_ENTITY_NAME`, and `LATTICE_POSTURE_FLOOR`; the adapter remains incomplete. |
 | `--inference-enabled` | Enables the governed inference backend for an Inference Operator. |
 | `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. |
@@ -259,7 +259,7 @@ After enrolling the host CLI with `g8e auth enroll user` and starting one or mor
 ./g8e operator show <operator-id-or-session-id>
 ```
 
-`operator list` prints operator ID, type, hostname (decoded from the Gateway-persisted latest heartbeat), session ID, and status. This hostname is live operator telemetry; it is distinct from the enrollment-time `name` metadata shown by `auth enroll list`. The status is evaluated when the list is read: an `active` Operator with no heartbeat for more than 60 seconds is listed as `stale`, and its next heartbeat restores `active`. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata, the Gateway-recorded last heartbeat time, and the same canonical latest heartbeat snapshot.
+`operator list` prints operator ID, type, hostname (decoded from the Gateway-persisted latest heartbeat), session ID, and status. This hostname is live operator telemetry; it is distinct from the enrollment-time `name` metadata shown by `auth enroll list`. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata plus the same canonical latest heartbeat snapshot.
 
 #### Bind the CLI session to operators
 

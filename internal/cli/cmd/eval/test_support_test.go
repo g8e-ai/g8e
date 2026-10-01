@@ -88,7 +88,7 @@ func TestWriteModelInventoryFreezeFile_WritesJSON(t *testing.T) {
 	freeze := &evaluation.ModelInventoryFreeze{
 		CampaignID:           "eval-init-qwen3-4b",
 		RegistryDigest:       "digest-1",
-		HomogeneousCellCount: 41,
+		HomogeneousCellCount: 39,
 		Variants:             []*evalv1.ModelVariant{{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest"}},
 	}
 	require.NoError(t, writeModelInventoryFreezeFile(path, freeze))

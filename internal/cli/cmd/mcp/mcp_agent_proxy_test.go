@@ -8,11 +8,10 @@
 package mcp
 
 import (
-	"bytes"
 	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/agent"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
@@ -24,44 +23,150 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func TestRunMCPAgentRun_NoArgsReturnsError(t *testing.T) {
-	err := runMCPAgentRun(nil, false, "", shared.NewFileSvc,authcmd.PanickingEnrollerFactory())
+func TestAgentLaunchArgs_ClaudeIncludesMcpConfigAndDisallowedTools(t *testing.T) {
+	args, err := agentLaunchArgs("claude", "/tmp/mcp-config.json", "/fake/g8e", "claude")
+	require.NoError(t, err)
+	assert.Contains(t, args, "--mcp-config")
+	assert.Contains(t, args, "/tmp/mcp-config.json")
+	assert.Contains(t, args, "--strict-mcp-config")
+	assert.Contains(t, args, "--disallowed-tools")
+}
+
+func TestAgentLaunchArgs_CodexIncludesMcpConfigAndDisallowedTools(t *testing.T) {
+	args, err := agentLaunchArgs("codex", "/tmp/mcp-config.json", "/fake/g8e", "codex")
+	require.NoError(t, err)
+	assert.Contains(t, args, "--mcp-config")
+	assert.Contains(t, args, "--strict-mcp-config")
+	assert.Contains(t, args, "--disallowed-tools")
+}
+
+func TestAgentLaunchArgs_GooseReturnsNoProfileArgs(t *testing.T) {
+	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json", "/fake/g8e", "goose")
+	require.NoError(t, err)
+	assert.Contains(t, args, "session")
+	assert.Contains(t, args, "--no-profile")
+	assert.Contains(t, args, "--with-extension")
+	assert.Contains(t, args, "/fake/g8e mcp stdio --app goose")
+}
+
+func TestAgentLaunchArgs_GeminiReturnsEmptyArgs(t *testing.T) {
+	args, err := agentLaunchArgs("gemini", "/tmp/mcp-config.json", "/fake/g8e", "gemini")
+	require.NoError(t, err)
+	assert.Empty(t, args)
+}
+
+func TestAgentLaunchArgs_CursorReturnsError(t *testing.T) {
+	_, err := agentLaunchArgs("cursor", "/tmp/mcp-config.json", "/fake/g8e", "cursor")
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrAgentNotFound)
+	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+}
+
+func TestAgentLaunchArgs_DevinReturnsEmptyArgs(t *testing.T) {
+	args, err := agentLaunchArgs("devin", "/tmp/mcp-config.json", "/fake/g8e", "devin")
+	require.NoError(t, err)
+	assert.Empty(t, args)
+}
+
+func TestAgentLaunchArgs_AiderReturnsError(t *testing.T) {
+	_, err := agentLaunchArgs("aider", "/tmp/mcp-config.json", "/fake/g8e", "aider")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+}
+
+func TestAgentLaunchArgs_OllamaReturnsError(t *testing.T) {
+	_, err := agentLaunchArgs("ollama", "/tmp/mcp-config.json", "/fake/g8e", "ollama")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+}
+
+func TestAgentLaunchArgs_UnknownAgentReturnsError(t *testing.T) {
+	_, err := agentLaunchArgs("unknown-agent", "/tmp/mcp-config.json", "/fake/g8e", "unknown-agent")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+}
+
+func TestAgentLaunchArgs_IsCaseInsensitive(t *testing.T) {
+	args, err := agentLaunchArgs("CLAUDE", "/tmp/mcp-config.json", "/fake/g8e", "claude")
+	require.NoError(t, err)
+	assert.Contains(t, args, "--mcp-config")
+}
+
+func TestRunMCPAgentRun_NoArgsReturnsError(t *testing.T) {
+	err := runMCPAgentRun(nil, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "specify an agent name")
 }
 
 func TestRunMCPAgentRun_UnknownAgentReturnsError(t *testing.T) {
-	err := runMCPAgentRun([]string{"unknown-agent"}, false, "", shared.NewFileSvc,authcmd.PanickingEnrollerFactory())
+	err := runMCPAgentRun([]string{"unknown-agent"}, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotFound)
 }
 
-func TestAgentVerify_PassesForEveryRegisteredAgentWithoutTheAgentInstalled(t *testing.T) {
-	t.Setenv("PATH", "")
-	home := testutil.TempDir(t)
-	t.Setenv("HOME", home)
-
-	for _, integration := range agent.All() {
-		t.Run(string(integration.ID), func(t *testing.T) {
-			cmd := agentVerifyCmd()
-			var out bytes.Buffer
-			cmd.SetOut(&out)
-			cmd.SetErr(&out)
-
-			require.NoError(t, runAgentVerify(cmd, string(integration.ID)))
-			assert.Contains(t, out.String(), "PASS "+string(integration.ID))
-		})
+func TestGetSupportedAgents_ReturnsAllExpectedAgents(t *testing.T) {
+	agents := getSupportedAgents()
+	ids := make(map[string]bool)
+	for _, a := range agents {
+		ids[a.ID] = true
 	}
-
-	entries, err := os.ReadDir(home)
-	require.NoError(t, err)
-	assert.Empty(t, entries, "verify must not touch the user's real agent config")
+	assert.True(t, ids["claude"])
+	assert.True(t, ids["codex"])
+	assert.True(t, ids["goose"])
+	assert.True(t, ids["gemini"])
+	assert.True(t, ids["devin"])
+	assert.False(t, ids["cursor"])
+	assert.False(t, ids["aider"])
+	assert.False(t, ids["generic"])
 }
 
-func TestAgentVerify_UnknownAgentFailsClosed(t *testing.T) {
-	err := runAgentVerify(agentVerifyCmd(), "cursor")
-	require.ErrorIs(t, err, constants.ErrAgentNotFound)
+func TestWriteAgentConfig_GooseWritesConfigFile(t *testing.T) {
+	t.Setenv("HOME", testutil.TempDir(t))
+
+	configPath, cleanup, err := WriteAgentConfig("goose", "/fake/g8e", "goose")
+	require.NoError(t, err)
+	if cleanup != nil {
+		t.Cleanup(cleanup)
+	}
+	assert.FileExists(t, configPath)
+}
+
+func TestWriteAgentConfig_GeminiWritesSettingsFile(t *testing.T) {
+	t.Setenv("HOME", testutil.TempDir(t))
+
+	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e", "gemini")
+	require.NoError(t, err)
+	if cleanup != nil {
+		t.Cleanup(cleanup)
+	}
+	assert.FileExists(t, configPath)
+
+	data, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "g8e")
+	assert.Contains(t, string(data), "tools")
+	assert.Contains(t, string(data), "core")
+}
+
+func TestWriteAgentConfig_GeminiMergesExistingSettings(t *testing.T) {
+	tmpHome := testutil.TempDir(t)
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	geminiDir := filepath.Join(tmpHome, ".gemini")
+	require.NoError(t, os.MkdirAll(geminiDir, 0o755))
+	existingSettings := `{"mcpServers":{"other":{"command":"other-cmd","args":[]}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(geminiDir, "settings.json"), []byte(existingSettings), 0o644))
+
+	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e", "gemini")
+	require.NoError(t, err)
+	if cleanup != nil {
+		t.Cleanup(cleanup)
+	}
+
+	data, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "g8e")
+	assert.Contains(t, string(data), "other")
 }
 
 func TestExtractURLFromText_FindsApproveURL(t *testing.T) {

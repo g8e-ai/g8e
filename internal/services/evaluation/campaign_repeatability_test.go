@@ -23,6 +23,6 @@ func TestValidateRepeatabilitySpec(t *testing.T) {
 }
 
 func TestComputeRepeatabilityMatrixSize(t *testing.T) {
-	assert.Equal(t, uint64(205), ComputeRepeatabilityMatrixSize(1))
-	assert.Equal(t, uint64(7175), ComputeRepeatabilityMatrixSize(35))
+	assert.Equal(t, uint64(195), ComputeRepeatabilityMatrixSize(1))
+	assert.Equal(t, uint64(6825), ComputeRepeatabilityMatrixSize(35))
 }

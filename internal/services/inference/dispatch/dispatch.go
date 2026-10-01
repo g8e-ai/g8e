@@ -597,10 +597,7 @@ func validateInferenceResult(result *operatorv1.InferenceResult, req DispatchInf
 // TargetOperatorSessionID the target must appear in the requestor's
 // operator list (ownership) and carry inference capability; without one,
 // exactly one inference-capable session must exist. Terminated operators
-// are never selectable, and neither is any Operator whose status is not active:
-// the Gateway moves an Operator with no heartbeat for over a minute to stale,
-// so a stale, stopped, or offline session cannot take or contest a dispatch.
-// Returns ErrInferenceOperatorNotFound for no match,
+// are never selectable. Returns ErrInferenceOperatorNotFound for no match,
 // ErrInferenceOperatorNotCapable for an explicit target that lacks the
 // capability, and ErrInferenceOperatorAmbiguous for multiple matches with
 // no explicit target.
@@ -614,7 +611,7 @@ func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest)
 		return op.RuntimeConfig != nil &&
 			op.RuntimeConfig.InferenceEnabled &&
 			op.OperatorSessionID != "" &&
-			op.Status == constants.OperatorStatusActive
+			op.Status != constants.OperatorStatusTerminated
 	}
 
 	if req.TargetOperatorSessionID != "" {

@@ -7,19 +7,6 @@
 
 package constants
 
-import "time"
-
-// OperatorHeartbeatStaleAfter is how long a remote Operator may go without a
-// heartbeat before the Gateway marks its document stale. Operators heartbeat
-// every 30 seconds by default, so this tolerates one missed beat plus jitter.
-const OperatorHeartbeatStaleAfter = 60 * time.Second
-
-// OperatorStalenessSweepInterval is how often the Gateway sweeps the Operator
-// registry for silent Operators so the stale transition is pushed to the
-// dashboard without waiting for a reader. A quarter of the stale window bounds
-// the delay between an Operator going stale and the push to 15 seconds.
-const OperatorStalenessSweepInterval = OperatorHeartbeatStaleAfter / 4
-
 // ExecutionStatus is a typed string for execution status.
 type ExecutionStatus string
 

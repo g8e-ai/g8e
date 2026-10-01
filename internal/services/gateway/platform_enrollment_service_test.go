@@ -128,14 +128,6 @@ func signCompletionTranscript(t *testing.T, req *models.PlatformEnrollmentReques
 // material and component kind.
 func createAndApproveRequest(t *testing.T, env *platformEnrollmentTestEnv, kind models.PlatformComponentKind, instanceID, hostname string, appCSR string, operatorCSR, cliCSR string) (string, string, *models.PlatformEnrollmentRequest) {
 	t.Helper()
-	return createAndApproveRequestWithFingerprint(t, env, kind, instanceID, hostname, appCSR, operatorCSR, cliCSR, "test-fingerprint")
-}
-
-// createAndApproveRequestWithFingerprint is createAndApproveRequest with an
-// explicit operator system fingerprint, for tests that need two enrollments to
-// share or differ in Operator identity.
-func createAndApproveRequestWithFingerprint(t *testing.T, env *platformEnrollmentTestEnv, kind models.PlatformComponentKind, instanceID, hostname string, appCSR string, operatorCSR, cliCSR, fingerprint string) (string, string, *models.PlatformEnrollmentRequest) {
-	t.Helper()
 
 	req := models.PlatformEnrollmentCreateRequest{
 		ComponentKind: kind,
@@ -146,7 +138,7 @@ func createAndApproveRequestWithFingerprint(t *testing.T, env *platformEnrollmen
 		req.App = &models.PlatformAppCSRPayload{CSRPEM: appCSR}
 	}
 	if operatorCSR != "" {
-		req.SystemFingerprint = fingerprint
+		req.SystemFingerprint = "test-fingerprint"
 		req.Operator = &models.PlatformOperatorCSRPayload{
 			OperatorCSRPEM: operatorCSR,
 			CLICSRPEM:      cliCSR,
@@ -667,62 +659,6 @@ func TestPlatformEnrollmentService_OperatorIssuanceIsDiscoverableViaListUserOper
 	assert.Equal(t, env.ownerID, found.UserID)
 	assert.False(t, found.IsSlot, "platform-enrolled operator is not a slot")
 	assert.Equal(t, constants.OperatorStatusActive, found.Status)
-}
-
-// enrollOperatorWithFingerprint runs a full operator enrollment (create,
-// approve, complete) for the given system fingerprint and returns the issued
-// operator and operator session IDs.
-func enrollOperatorWithFingerprint(t *testing.T, env *platformEnrollmentTestEnv, instanceID, fingerprint string) (string, string) {
-	t.Helper()
-	operatorCSR, operatorKey, cliCSR, cliKey := generateOperatorCSRsAndKeys(t)
-	_, token, approved := createAndApproveRequestWithFingerprint(t, env,
-		models.PlatformComponentOperator, instanceID, "operator.local",
-		"", operatorCSR, cliCSR, fingerprint)
-	resp, err := env.enrollSvc.Complete(context.Background(), token, models.PlatformEnrollmentProofs{
-		Operator: signCompletionTranscript(t, approved, operatorKey),
-		CLI:      signCompletionTranscript(t, approved, cliKey),
-	})
-	require.NoError(t, err)
-	require.NotNil(t, resp.Operator)
-	return resp.Operator.OperatorID, resp.Operator.OperatorSessionID
-}
-
-// TestPlatformEnrollmentService_ReEnrollmentSupersedesPriorOperatorLease proves
-// that enrolling the same Operator identity (system fingerprint) again
-// terminates the earlier lease and deactivates its session, so a role that must
-// resolve to one Operator never sees the old and new lease side by side, while
-// an Operator with a different fingerprint is left alone.
-func TestPlatformEnrollmentService_ReEnrollmentSupersedesPriorOperatorLease(t *testing.T) {
-	env := setupPlatformEnrollmentEnv(t, true)
-
-	otherID, _ := enrollOperatorWithFingerprint(t, env, "operator-other", "fingerprint-other")
-	oldID, oldSessionID := enrollOperatorWithFingerprint(t, env, "operator-old", "fingerprint-observer")
-	newID, newSessionID := enrollOperatorWithFingerprint(t, env, "operator-new", "fingerprint-observer")
-	require.NotEqual(t, oldID, newID)
-
-	operators, err := env.svc.GetRegistrationService().ListUserOperators(env.ownerID)
-	require.NoError(t, err)
-	byID := make(map[string]models.OperatorDocumentGo, len(operators))
-	for _, op := range operators {
-		byID[op.ID] = op
-	}
-	assert.Equal(t, constants.OperatorStatusTerminated, byID[oldID].Status, "the earlier lease for the same identity must be terminated")
-	assert.Equal(t, constants.OperatorStatusActive, byID[newID].Status)
-	assert.Equal(t, constants.OperatorStatusActive, byID[otherID].Status, "a different identity must not be superseded")
-
-	assertOperatorSessionActive := func(sessionID string, want bool) {
-		t.Helper()
-		doc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), sessionID)
-		require.NoError(t, err)
-		require.NotNil(t, doc)
-		var session models.OperatorSession
-		raw, err := json.Marshal(doc.Data)
-		require.NoError(t, err)
-		require.NoError(t, json.Unmarshal(raw, &session))
-		assert.Equal(t, want, session.IsActive)
-	}
-	assertOperatorSessionActive(oldSessionID, false)
-	assertOperatorSessionActive(newSessionID, true)
 }
 
 // ============================================================================

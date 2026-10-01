@@ -17,6 +17,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -34,7 +35,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/agent"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
@@ -628,6 +628,35 @@ func TestSendSuccess(t *testing.T) {
 	})
 }
 
+func TestGetSupportedAgents(t *testing.T) {
+	t.Run("returns all supported agents", func(t *testing.T) {
+		agents := getSupportedAgents()
+		assert.NotEmpty(t, agents)
+
+		agentIDs := make(map[string]bool)
+		for _, agent := range agents {
+			agentIDs[agent.ID] = true
+		}
+
+		assert.True(t, agentIDs["claude"], "should include claude")
+		assert.True(t, agentIDs["codex"], "should include codex")
+		assert.True(t, agentIDs["devin"], "should include devin")
+		assert.True(t, agentIDs["gemini"], "should include gemini")
+		assert.True(t, agentIDs["goose"], "should include goose")
+		assert.False(t, agentIDs["cursor"], "should not include cursor")
+		assert.False(t, agentIDs["aider"], "should not include aider")
+		assert.False(t, agentIDs["generic"], "should not include generic")
+	})
+
+	t.Run("each agent has non-empty ID and description", func(t *testing.T) {
+		agents := getSupportedAgents()
+		for _, agent := range agents {
+			assert.NotEmpty(t, agent.ID, "agent ID should not be empty")
+			assert.NotEmpty(t, agent.Description, "agent description should not be empty")
+		}
+	})
+}
+
 func TestExtractURLFromText(t *testing.T) {
 	t.Run("extracts approval URL with correct prefix", func(t *testing.T) {
 		text := "Please visit https://g8e.local/api/v1/approve/abc123 to authorize"
@@ -762,13 +791,14 @@ func TestAgentRunCmd(t *testing.T) {
 
 func TestPrintAgentShow(t *testing.T) {
 	t.Run("printAgentShow handles all supported agents", func(t *testing.T) {
-		for _, integration := range agent.All() {
+		agents := getSupportedAgents()
+		for _, agent := range agents {
 			cmd := &cobra.Command{}
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
 
-			err := printAgentShow(cmd, string(integration.ID))
+			err := printAgentShow(cmd, agent.ID)
 			if err != nil {
 				assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 			} else {
@@ -925,15 +955,89 @@ func TestMcpStdioCmd(t *testing.T) {
 	})
 }
 
+func TestWriteAgentConfig(t *testing.T) {
+	t.Run("goose writes config file", func(t *testing.T) {
+		t.Setenv("HOME", testutil.TempDir(t))
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("goose", binaryPath, "goose")
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	t.Run("gemini writes config file with existing settings merge", func(t *testing.T) {
+		tmpHome := testutil.TempDir(t)
+		t.Setenv("HOME", tmpHome)
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("gemini", binaryPath, "gemini")
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+
+		data, err := os.ReadFile(configPath)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "g8e")
+		assert.Contains(t, string(data), "tools")
+		assert.Contains(t, string(data), "core")
+	})
+
+	t.Run("devin writes config file", func(t *testing.T) {
+		t.Setenv("HOME", testutil.TempDir(t))
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("devin", binaryPath, "devin")
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+
+		data, err := os.ReadFile(configPath)
+		require.NoError(t, err)
+		var cfg agentMCPConfig
+		require.NoError(t, json.Unmarshal(data, &cfg))
+		require.Contains(t, cfg.MCPServers, "g8e")
+		assert.Equal(t, []string{"mcp", "stdio", "--app", "devin"}, cfg.MCPServers["g8e"].Args,
+			"the agent's stdio bridge must select its credentials by app name, not env or paths")
+	})
+
+	t.Run("unknown agent writes temp file with cleanup", func(t *testing.T) {
+		t.Setenv("HOME", testutil.TempDir(t))
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("unknown-agent", binaryPath, "unknown-agent")
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+
+		_, err = os.Stat(configPath)
+		require.NoError(t, err)
+
+		cleanup()
+
+		_, err = os.Stat(configPath)
+		assert.True(t, errors.Is(err, os.ErrNotExist))
+	})
+}
+
 func TestRunMCPAgentRun_NoArgs(t *testing.T) {
 	t.Run("returns error when no args", func(t *testing.T) {
-		err := runMCPAgentRun(nil, false, "", shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+		err := runMCPAgentRun(nil, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "specify an agent name")
 	})
 
 	t.Run("returns ErrAgentNotFound for unknown agent", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, false, "", shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrAgentNotFound)
 	})
@@ -942,7 +1046,7 @@ func TestRunMCPAgentRun_NoArgs(t *testing.T) {
 		// Devin is a local CLI agent and goes through launchAgentWithGovernance.
 		// We can't test the full launch path here (requires gateway), but we verify
 		// it does NOT return the old cloud-based error.
-		err := runMCPAgentRun([]string{"devin"}, false, "", shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+		err := runMCPAgentRun([]string{"devin"}, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.NotContains(t, err.Error(), "cloud-based agent")
 	})

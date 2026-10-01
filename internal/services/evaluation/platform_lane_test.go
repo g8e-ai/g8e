@@ -399,13 +399,14 @@ func artifactTypes(artifacts []laneTestArtifact) []string {
 	return values
 }
 
-// TestCommandLane_WriteWorkspaceFile_DispatchesGovernedWriteAndWaitsForReceipt
-// guards the fixture-materialization path: WriteWorkspaceFile must dispatch a
-// real governed file write for the fixture content at the given absolute path
-// and only return once a completed receipt confirms it landed, so a
-// scenario's expected file_read_on_operator/recursive_grep_search target
-// exists before the chat request is sent.
-func TestCommandLane_WriteWorkspaceFile_DispatchesGovernedWriteAndWaitsForReceipt(t *testing.T) {
+// TestCommandLane_WriteSimulatedFile_DispatchesGovernedWriteAndWaitsForReceipt
+// guards the fix for the "true attachment"-equivalent gap on the tool side:
+// ScenarioSimulatedFile content used to have no executor behind it, so a
+// scenario's expected file_read_on_operator/run_commands_with_operator call
+// always failed with a missing-path error. WriteSimulatedFile must dispatch a
+// real governed file write for the fixture content and only return once a
+// completed receipt confirms it landed.
+func TestCommandLane_WriteSimulatedFile_DispatchesGovernedWriteAndWaitsForReceipt(t *testing.T) {
 	target := Target{OperatorID: "operator-1", SessionID: "session-1"}
 	fakeClient := &laneTestClient{
 		dispatchStatus:   http.StatusOK,
@@ -413,43 +414,43 @@ func TestCommandLane_WriteWorkspaceFile_DispatchesGovernedWriteAndWaitsForReceip
 		receipts:         []*operatorv1.ActionReceipt{{TransactionId: "tx-1", FinalPersistenceAttestation: &operatorv1.ReceiptPersistenceAttestation{TransactionId: "tx-1"}}},
 	}
 	lane := NewCommandLane(fakeClient, &laneTestArtifactSink{}, client.Persona{CLISessionID: "cli-session-1"}, time.Millisecond, time.Second)
-	absPath := "/home/op/workspaces/ws-0123456789abcdef/net/network-summary.txt"
-	content := "upstream_host=payments.internal.example"
+	file := ScenarioSimulatedFile{Kind: "file", Label: "network-summary", Path: "/synthetic/eval/network-summary.txt", Content: "upstream_host=payments.internal.example"}
 
-	err := lane.WriteWorkspaceFile(context.Background(), target, "run-1", "tool-arg-file-path", "attempt-1", absPath, content)
+	err := lane.WriteSimulatedFile(context.Background(), target, "run-1", "tool-arg-file-path", "attempt-1", file)
 
 	require.NoError(t, err)
 	require.Len(t, fakeClient.dispatchRequests, 1)
 	dispatch := fakeClient.dispatchRequests[0]
 	assert.Equal(t, target.SessionID, dispatch.TargetOperatorSessionID)
-	assert.Equal(t, absPath, dispatch.TargetResource)
+	assert.Equal(t, file.Path, dispatch.TargetResource)
 	assert.Equal(t, "run-1", dispatch.CaseID)
 	assert.Equal(t, "tool-arg-file-path", dispatch.InvestigationID)
 	assert.Equal(t, "attempt-1", dispatch.TaskID)
 	fileEdit := &operatorv1.FileEditRequested{}
 	require.NoError(t, proto.Unmarshal(dispatch.Payload, fileEdit))
-	assert.Equal(t, absPath, fileEdit.FilePath)
-	assert.Equal(t, content, fileEdit.Content)
+	assert.Equal(t, file.Path, fileEdit.FilePath)
+	assert.Equal(t, file.Content, fileEdit.Content)
 	assert.True(t, fileEdit.CreateIfMissing)
 	assert.Equal(t, string(constants.FileOperationWrite), fileEdit.Operation)
 	assert.Equal(t, 1, fakeClient.receiptCalls)
 }
 
-func TestCommandLane_WriteWorkspaceFile_FailsClosedOnRejectedDispatch(t *testing.T) {
+func TestCommandLane_WriteSimulatedFile_FailsClosedOnRejectedDispatch(t *testing.T) {
 	target := Target{OperatorID: "operator-1", SessionID: "session-1"}
 	fakeClient := &laneTestClient{dispatchStatus: http.StatusOK, dispatchResponse: &client.DispatchCommandResponse{Success: false}}
 	lane := NewCommandLane(fakeClient, &laneTestArtifactSink{}, client.Persona{}, time.Millisecond, time.Second)
+	file := ScenarioSimulatedFile{Path: "/synthetic/eval/network-summary.txt", Content: "upstream_host=payments.internal.example"}
 
-	err := lane.WriteWorkspaceFile(context.Background(), target, "run-1", "tool-arg-file-path", "attempt-1", "/home/op/workspaces/ws-0123456789abcdef/net/network-summary.txt", "upstream_host=payments.internal.example")
+	err := lane.WriteSimulatedFile(context.Background(), target, "run-1", "tool-arg-file-path", "attempt-1", file)
 
 	require.ErrorIs(t, err, constants.ErrEvaluationDispatchFailed)
 	assert.Zero(t, fakeClient.receiptCalls)
 }
 
-func TestCommandLane_WriteWorkspaceFile_RequiresOperatorTargetAndPath(t *testing.T) {
+func TestCommandLane_WriteSimulatedFile_RequiresOperatorTargetAndPath(t *testing.T) {
 	lane := NewCommandLane(&laneTestClient{}, &laneTestArtifactSink{}, client.Persona{}, time.Millisecond, time.Second)
 
-	err := lane.WriteWorkspaceFile(context.Background(), Target{}, "run-1", "scenario-1", "attempt-1", "", "x")
+	err := lane.WriteSimulatedFile(context.Background(), Target{}, "run-1", "scenario-1", "attempt-1", ScenarioSimulatedFile{Content: "x"})
 
 	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }

@@ -148,9 +148,6 @@ class ModelCallTelemetry(G8eBaseModel):
     input_artifact_hash: str = ""
     output_artifact_hash: str = ""
     model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None
-    # Tool names as actually sent to the provider on this call, in order. None
-    # means the provider did not report them; [] means none were declared.
-    tools_declared: list[str] | None = None
     governed_transaction_id: str | None = None
     governed_result_digest: str | None = None
     governed_receipt_status: str | None = None

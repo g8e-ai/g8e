@@ -131,15 +131,14 @@ func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req A
 		return nil, assignmentExecutionError("evaluation: execute heterogeneous assignment: build initial state", err)
 	}
 	runContext := FormationRunContext{
-		CampaignID:                   req.Assignment.GetCampaignId(),
-		RunID:                        req.Assignment.GetRunId(),
-		AssignmentID:                 req.Assignment.GetAssignmentId(),
-		EvaluationAttemptID:          req.AttemptID,
-		ScenarioID:                   req.Assignment.GetScenarioId(),
-		ModelRegistryDigest:          req.Binding.ModelRegistryDigest,
-		InferenceSessionID:           req.Binding.InferenceOperatorSessionID,
-		DataSessionID:                req.Binding.DataOperatorSessionID,
-		DataOperatorWorkingDirectory: req.Binding.DataOperatorWorkingDirectory,
+		CampaignID:          req.Assignment.GetCampaignId(),
+		RunID:               req.Assignment.GetRunId(),
+		AssignmentID:        req.Assignment.GetAssignmentId(),
+		EvaluationAttemptID: req.AttemptID,
+		ScenarioID:          req.Assignment.GetScenarioId(),
+		ModelRegistryDigest: req.Binding.ModelRegistryDigest,
+		InferenceSessionID:  req.Binding.InferenceOperatorSessionID,
+		DataSessionID:       req.Binding.DataOperatorSessionID,
 	}
 	if req.OnFormationRoleStarting != nil {
 		runContext.OnRoleStarting = func(startCtx context.Context, role FormationRole) error {

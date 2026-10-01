@@ -10,11 +10,8 @@ package operatorcapability
 import (
 	"fmt"
 
-	"google.golang.org/protobuf/encoding/protojson"
-
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // DataOperatorStatus summarizes the active data-operator session discovered
@@ -23,7 +20,6 @@ type DataOperatorStatus struct {
 	OperatorID        string
 	OperatorSessionID string
 	Status            string
-	WorkingDirectory  string
 }
 
 // IsDataOperator reports whether op is an active remote session whose role is
@@ -53,37 +49,13 @@ func ActiveDataOperators(operators []models.OperatorDocumentGo) []DataOperatorSt
 		if !IsStackDataOperator(op) {
 			continue
 		}
-		wd := extractWorkingDirectory(op.LatestHeartbeat)
 		matches = append(matches, DataOperatorStatus{
 			OperatorID:        op.ID,
 			OperatorSessionID: op.OperatorSessionID,
 			Status:            string(op.Status),
-			WorkingDirectory:  wd,
 		})
 	}
 	return matches
-}
-
-// extractWorkingDirectory reads the pwd from the operator's heartbeat.
-// It tries EnvironmentDetails.pwd first, then falls back to SystemIdentity.pwd.
-// Returns empty string if the heartbeat cannot be unmarshalled or pwd is absent.
-func extractWorkingDirectory(hb []byte) string {
-	if len(hb) == 0 {
-		return ""
-	}
-	hr := &operatorv1.HeartbeatResult{}
-	if err := protojson.Unmarshal(hb, hr); err != nil {
-		return ""
-	}
-	// Try EnvironmentDetails first
-	if env := hr.GetEnvironment(); env != nil && env.GetPwd() != "" {
-		return env.GetPwd()
-	}
-	// Fall back to SystemIdentity
-	if si := hr.GetSystemIdentity(); si != nil && si.GetPwd() != "" {
-		return si.GetPwd()
-	}
-	return ""
 }
 
 // SelectDataOperator resolves exactly one data-operator. Zero sessions return

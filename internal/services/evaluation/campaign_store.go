@@ -385,7 +385,7 @@ func (s *Store) AssignmentResultExists(ctx context.Context, runID, assignmentID 
 
 func sortAssignmentsDeterministic(assignments []*evalv1.EvaluationAssignment) {
 	sort.Slice(assignments, func(i, j int) bool {
-		return assignmentExecutionLess(assignments[i], assignments[j])
+		return assignments[i].GetDeterministicIdentity() < assignments[j].GetDeterministicIdentity()
 	})
 }
 

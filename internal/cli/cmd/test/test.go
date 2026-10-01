@@ -55,44 +55,16 @@ func testUnitCmd() *cobra.Command {
 }
 
 func testUnitCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
-	var runRegexp string
-	var pkg string
-
 	cmd := &cobra.Command{
 		Use:   "unit",
 		Short: "Run Tier 1 (Unit) tests",
-		Long:  `Run unit tests without any build tags. These tests use mocks/stubs and have no external dependencies (no files, network, or DB). Use --pkg and --run to select a package and tests by regular expression.`,
+		Long:  `Run unit tests without any build tags. These tests use mocks/stubs and have no external dependencies (no files, network, or DB).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("pkg") && !cmd.Flags().Changed("run") {
-				fmt.Println("make test-unit")
+			fmt.Println("make test-unit")
 
-				// Delegate to the Makefile so the CLI and repository test target share
-				// package exclusions, race settings, cache settings, and timeouts.
-				code, err := runner(cmd.Context(), "make", "test-unit")
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrUnitTestsFailed, err)
-				}
-				if code != 0 {
-					return fmt.Errorf("%w: exit code %d", constants.ErrUnitTestsFailed, code)
-				}
-
-				fmt.Println("Unit tests completed successfully.")
-				return nil
-			}
-
-			fmt.Println("Running Tier 1 (Unit) tests...")
-
-			testArgs := []string{"test", "-timeout", "180s"}
-			if runRegexp != "" {
-				testArgs = append(testArgs, "-run", runRegexp)
-			}
-			targetPkg := pkg
-			if targetPkg == "" {
-				targetPkg = "./..."
-			}
-			testArgs = append(testArgs, targetPkg)
-
-			code, err := runner(cmd.Context(), "go", testArgs...)
+			// Delegate to the Makefile so the CLI and repository test target share
+			// package exclusions, race settings, cache settings, and timeouts.
+			code, err := runner(cmd.Context(), "make", "test-unit")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrUnitTestsFailed, err)
 			}
@@ -104,9 +76,6 @@ func testUnitCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVar(&pkg, "pkg", "./...", "Package pattern selecting which unit test package to compile and run")
-	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which unit tests to run (passed to go test -run)")
 
 	return cmd
 }

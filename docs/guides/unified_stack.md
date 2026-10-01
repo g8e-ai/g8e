@@ -189,7 +189,7 @@ Rules:
 
 ### Init campaign inventory (one model per campaign)
 
-A `model-role` campaign freezes exactly one model: **one model, one campaign, 37 cells**. `g8e eval campaigns create` and `g8e eval runs start` reject any other count. This keeps runs tidy, isolates failures, and lets the provider unload each model when its campaign finishes. Use `g8e eval runs start` for one model, or `g8e eval rollout run` for many (`g8e eval rollout next` inspects the next pending entry) — no `.env` edits or operator recreate between models.
+Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 37 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
 
 Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/README.md) for the public/private boundary.
 
@@ -224,12 +224,14 @@ Optional rollout queue (multi-model tracking):
 ./g8e eval rollout run --until 1
 ```
 
-To compare models side by side in the explorer, run them with the Provider Observer enrolled. Each model's run is its own dataset, and the explorer compares datasets that report the same GPU memory and system RAM, which the observer supplies once a run completes; there is nothing to configure.
-
-List the variants available to queue:
+List variants or create custom campaigns without a queue:
 
 ```bash
 ./g8e eval models list
+
+# Mini smoke combined campaign (3 models → 225 cells)
+./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
+./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
 Track per-model verification progress in `.g8e/eval/init-campaign-queue.json` (`status: verified` or `pending`, plus `verified_run_id` when complete).
@@ -245,16 +247,14 @@ Build a three-model smoke inventory from your own provider freeze. Tags below ar
 | `gemma3:4b` | larger |
 
 ```bash
-# Full provider freeze, then queue each smoke model for rollout:
+# Full provider freeze, then create a three-model smoke campaign:
 ./g8e eval models freeze
 
-./g8e eval rollout add qwen3:0.6b
-./g8e eval rollout add qwen3:4b
-./g8e eval rollout add gemma3:4b
-./g8e eval rollout run
+./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
+./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
-Rollout runs three campaigns of **37** role-eligible scenario cells each (**111** assignments in total), one model resident at a time.
+Matrix size for three models: **111** assignments (3 × 37 role-eligible scenario cells).
 
 ## Environment configuration
 
@@ -276,7 +276,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 | `G8E_INFERENCE_CAMPAIGN_ID` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
 | `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
 
-Container names (`g8e-<service>`) and host ports (8080, 8443, 8000, 3000, and loopback 8081, 8082, 5173) are literals in `docker-compose.yml`. Operators use the `g8e operator start` default heartbeat interval of 30 seconds; the Gateway marks an Operator `stale` after 60 seconds without a heartbeat, so `--heartbeat-interval` accepts at most 30. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
+Container names (`g8e-<service>`), host ports (8080, 8443, 8000, 3000, and loopback 8081, 8082, 5173), and heartbeat interval are literals in `docker-compose.yml`. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
 
 ## Standard bootstrap workflow
 

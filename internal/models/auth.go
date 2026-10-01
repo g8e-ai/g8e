@@ -122,7 +122,6 @@ type OperatorDocumentGo struct {
 	ClaimedAt            *time.Time               `json:"claimed_at,omitempty"`
 	StopReason           string                   `json:"stop_reason,omitempty"`
 	LatestHeartbeat      json.RawMessage          `json:"latest_heartbeat_snapshot,omitempty"`
-	LastHeartbeatAt      *time.Time               `json:"last_heartbeat_at,omitempty"`
 	CurrentHostname      string                   `json:"current_hostname,omitempty"`
 	RuntimeConfig        *RuntimeConfig           `json:"runtime_config,omitempty"`
 	ConsumedByOperatorID string                   `json:"consumed_by_operator_id,omitempty"`
@@ -148,17 +147,6 @@ type OperatorSessionValidationResponse struct {
 type OperatorResponse struct {
 	Success  bool                `json:"success"`
 	Operator *OperatorDocumentGo `json:"operator,omitempty"`
-}
-
-// OperatorStatusUpdatedPayload is the SSE payload of the
-// g8e.v1.operator.status.updated.<state> events. It carries the transition, not
-// the Operator document: the operator document stays the source of truth and
-// consumers patch the status of the Operator they already hold.
-type OperatorStatusUpdatedPayload struct {
-	OperatorID string                   `json:"operator_id"`
-	Status     constants.OperatorStatus `json:"status"`
-	Name       string                   `json:"name,omitempty"`
-	Timestamp  time.Time                `json:"timestamp"`
 }
 
 type TerminateOperatorRequest struct {
