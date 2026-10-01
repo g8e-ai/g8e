@@ -31,6 +31,12 @@ func TestGenerate_EmitsEveryCatalogScenarioWithoutHintValues(t *testing.T) {
 	assert.Contains(t, text, `"source": "workspace"`)
 }
 
+func TestGenerate_KeepsLicenseHeader(t *testing.T) {
+	out, err := generate()
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(string(out), "// Copyright (c) 2026 Lateralus Labs, LLC.\n// Licensed under the Business Source License 1.1"))
+}
+
 func TestGenerate_IsDeterministic(t *testing.T) {
 	first, err := generate()
 	require.NoError(t, err)
