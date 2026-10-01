@@ -378,6 +378,9 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
+	if stackSet == nil && len(freeze.Variants) != 1 {
+		return nil, fmt.Errorf("evaluation: campaigns create: %d models selected: %w", len(freeze.Variants), constants.ErrEvaluationCampaignSubjectInvalid)
+	}
 	store := evaluation.NewStore(fileSvc)
 	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
 	campaignSpec, err := controller.CreateCampaign(ctx, evaluation.CampaignCreateRequest{

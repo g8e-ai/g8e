@@ -1550,6 +1550,7 @@ var (
 	ErrEvaluationProviderModelsResident    = errors.New("evaluation: provider has resident models")
 	ErrEvaluationRecoveredResultMissing    = errors.New("evaluation: recovered terminal assignment has no persisted result")
 	ErrEvaluationCampaignConflict          = errors.New("evaluation: campaign already exists with a different frozen spec")
+	ErrEvaluationCampaignSubjectInvalid    = errors.New("evaluation: a model-role campaign must freeze exactly one model; qualify many models through rollout or a formation campaign")
 	ErrEvaluationArchived                  = errors.New("evaluation: campaign or run is archived")
 	ErrEvaluationNotArchived               = errors.New("evaluation: campaign or run is not archived")
 	ErrEvaluationRunRunning                = errors.New("evaluation: run is running; cancel it first")
