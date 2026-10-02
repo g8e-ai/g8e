@@ -13,6 +13,8 @@ import { useUserPref, PREF } from '../state/dataset';
 import { modelComparisonId, resolveModelFromComparisonId, useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
 import { ModelComparisonPanel } from '../components/ModelComparisonPanel';
+import { ReleaseSelector } from '../components/ReleaseSelector';
+import { CURRENT_PLATFORM_RELEASE, matchesRelease } from '../content/release';
 import {
   EmptyState,
   ErrorState,
@@ -67,7 +69,8 @@ export function ModelsView() {
     }
   }, [params, setComparison, setParams]);
 
-  const models = useStoreState((state) => Array.from(state.models.values()));
+  const release = params.get('release') ?? CURRENT_PLATFORM_RELEASE;
+  const models = useStoreState((state) => Array.from(state.models.values()).filter((record) => matchesRelease(record, release)));
   const connection = useStoreState((state) => state.connection);
   const evaluatedFilter =
     filters.evaluated === 'evaluated' &&
@@ -245,6 +248,7 @@ export function ModelsView() {
       />
 
       <div className="models-toolbar">
+        <ReleaseSelector />
         <input
           type="search"
           placeholder="Search models..."

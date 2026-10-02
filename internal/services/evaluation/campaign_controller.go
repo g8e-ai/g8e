@@ -51,6 +51,7 @@ type CampaignRunSummary struct {
 type CampaignStore interface {
 	SaveCampaignSpec(ctx context.Context, spec *evalv1.EvaluationCampaignSpec) error
 	LoadCampaignSpec(ctx context.Context, campaignID string) (*evalv1.EvaluationCampaignSpec, error)
+	LoadCampaignRelease(ctx context.Context, campaignID string) (CampaignRelease, error)
 	SaveScenarioCatalog(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog) error
 	LoadScenarioCatalog(ctx context.Context, campaignID string) (*evalv1.EvaluationScenarioCatalog, error)
 	SaveScenarioArtifacts(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error

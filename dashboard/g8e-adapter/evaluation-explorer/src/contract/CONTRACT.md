@@ -1,6 +1,6 @@
 # OpenDevOps.ai local evaluation view contract
 
-Status: frozen at schema_version 1.5.0 on 2026-09-22. Explorer records emit 1.5.0; the validator continues to decode historical view records from 1.0.0 through 1.4.0. Campaign lifecycle envelopes remain 1.0.0, while enriched campaign result envelopes emit 1.2.0 and historical result envelopes from 1.0.0 and 1.1.0 remain readable. Envelope 1.2.0 adds the eval-fidelity public fields below as optional, additive view fields; the view schema stays 1.5.0.
+Status: frozen at schema_version 1.6.0 on 2026-10-02. Explorer records emit 1.6.0; the validator continues to decode historical view records from 1.0.0 through 1.5.0. Campaign lifecycle envelopes remain 1.0.0, while enriched campaign result envelopes emit 1.2.0 and historical result envelopes from 1.0.0 and 1.1.0 remain readable. View schema 1.6.0 adds campaign release provenance and retains the typed headline and verification requirements of 1.5.0.
 
 This is the single typed source of truth for the public-safe read model the browser renders. The Go evaluation publication service, the frontend `campaign-adapter`, the mock replay producer, the deterministic fixtures, and the frontend validators all consume this contract. No consumer hand-defines enums or record shapes. A change to any enum value or required field is a contract revision: bump `VIEW_SCHEMA_VERSION` in `types.ts`, update `descriptor.json`, and update the Go projector plus frontend adapter together.
 
@@ -11,6 +11,14 @@ This is the single typed source of truth for the public-safe read model the brow
 - `src/contract/campaign-wire.ts` is the strict runtime validation layer for raw Go campaign envelopes. It dispatches lifecycle 1.0.0 versus result 1.0.0/1.1.0/1.2.0 shapes, validates canonical protobuf enum names and decimal uint64 strings, and rejects enriched fields on historical result envelopes.
 - `src/contract/descriptor.json` is the machine-readable cross-language mirror for Go and TypeScript consumers. `tests/descriptor-sync.test.ts` asserts that the descriptor's enum values exactly match `types.ts`, so the two never drift silently.
 - `src/fixtures/fixtures.ts` is the deterministic fixture set. Every snapshot record kind and every live event kind has at least one fixture. `tests/contract-conformance.test.ts` validates every fixture against the guards and asserts full kind coverage.
+
+## Campaign release provenance
+
+Campaign view records carry `release`, `release_basis`, and optional `source_revision` in their common envelope. `release_basis` is `recorded` (digest-bound campaign identity), `asserted` (operator tag outside the digest), or `unknown` (no release recorded or tagged). A known basis requires a nonempty release; unknown cannot name one. Historical records without these fields remain unknown. The source revision comes only from the campaign spec; `source_revision_label` continues to name the projection source and is not a commit identity. Native evaluation records without campaign identity do not acquire an inferred release.
+
+The owned lifecycle/result protobufs carry the same fields with `PublicReleaseBasis` enum names. `campaign-wire.ts` validates that identity before adaptation, and `campaign-adapter.ts` preserves it on the assignment and synthesized live events. Go publication resolves it from `Store.LoadCampaignRelease` for live, completion, verification, and catch-up records. A malformed release tag stops publication; no producer substitutes its build or verifier identity for missing campaign identity.
+
+The overview, evaluation list, model list, and default dataset selection use the bundle's platform release, read from repository `VERSION` by `build-platform-release.ts` for both Vite and Vitest. `?release=all` includes older and unknown records; `?release=vX.Y.Z` selects a specific measured release. The selected value is explicit in the URL, including “all,” so reload does not revert that choice. Campaign rows, details, and dataset options label recorded versus asserted identity. Explicit detail URLs continue to address historical datasets even when they do not match the current-release default; stored evidence is never rescored by the browser.
 
 ## Frozen enums
 

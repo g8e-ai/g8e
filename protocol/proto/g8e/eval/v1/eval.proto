@@ -1020,6 +1020,14 @@ message EvaluationVerifiedPopulation {
 
 // Public projection records expose only disclosure-approved fields.
 
+// The release measured by a campaign is independent of verifier provenance.
+enum PublicReleaseBasis {
+  PUBLIC_RELEASE_BASIS_UNSPECIFIED = 0;
+  PUBLIC_RELEASE_BASIS_RECORDED = 1; // Bound into campaign_digest at creation.
+  PUBLIC_RELEASE_BASIS_ASSERTED = 2; // Operator tag outside campaign_digest.
+  PUBLIC_RELEASE_BASIS_UNKNOWN = 3; // Historical campaign without a release tag.
+}
+
 message PublicCampaignIdentity {
   string campaign_id = 1;
   string campaign_digest = 2;
@@ -1028,6 +1036,9 @@ message PublicCampaignIdentity {
   string catalog_digest = 5;
   string model_registry_digest = 6;
   EvaluationLane lane = 7;
+  string release = 8;
+  PublicReleaseBasis release_basis = 9;
+  string source_revision = 10;
 }
 
 message PublicModelVariantIdentity {
@@ -1050,6 +1061,9 @@ message PublicAssignmentLifecycleRecord {
   EvaluationAssignmentLifecycleStatus lifecycle_status = 9;
   uint32 repetition = 10;
   google.protobuf.Timestamp observed_at = 11;
+  string release = 12;
+  PublicReleaseBasis release_basis = 13;
+  string source_revision = 14;
 }
 
 message PublicModelCallSummary {
@@ -1218,4 +1232,7 @@ message PublicAssignmentResultProjection {
   uint32 guided_retry_count = 21;
   string failure_reason = 22;
   repeated string tools_declared = 23;
+  string release = 24;
+  PublicReleaseBasis release_basis = 25;
+  string source_revision = 26;
 }

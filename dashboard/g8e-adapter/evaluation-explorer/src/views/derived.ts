@@ -28,6 +28,7 @@ import type {
   ModelRole,
   ModelSummary,
   ProviderEnvironment,
+  ReleaseProvenance,
   PublicGradeExplanationCode,
   PublicSemanticGradeSummary,
   QualityState,
@@ -802,7 +803,7 @@ export function datasetLabel(datasetId: string): string {
   return datasetId.startsWith(prefix) ? datasetId.slice(prefix.length) : datasetId;
 }
 
-export interface RecentCampaignRow {
+export interface RecentCampaignRow extends ReleaseProvenance {
   datasetId: string;
   label: string;
   detail: string;
@@ -852,6 +853,9 @@ export function recentCampaignRows(
 
     rows.push({
       datasetId,
+      release: primary?.release ?? catalog?.release,
+      release_basis: primary?.release_basis ?? catalog?.release_basis,
+      source_revision: primary?.source_revision ?? catalog?.source_revision,
       label,
       detail,
       observedAt,

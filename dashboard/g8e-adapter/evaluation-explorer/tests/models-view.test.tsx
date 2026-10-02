@@ -6,6 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { allFixtureSnapshotRecords, fixtureLiveEvents, FIXTURE_DATASET_IDS } from '../src/fixtures/fixtures';
 import type { ModelSummary } from '../src/contract/types';
+import { VIEW_SCHEMA_VERSION } from '../src/contract/types';
 import { evalStore } from '../src/state/store';
 import { ModelsView } from '../src/views/ModelsView';
 
@@ -19,7 +20,7 @@ describe('ModelsView', () => {
     expect(source).toBeDefined();
     evalStore.loadFixtures([{ ...source!, quality_state: 'exploratory_verified' }], []);
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <ModelsView />
       </MemoryRouter>,
     );
@@ -35,7 +36,7 @@ describe('ModelsView', () => {
     expect(source).toBeDefined();
     evalStore.loadFixtures([{ ...source!, schema_version: '1.2.0', quality_state: 'verified_public' }], []);
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <ModelsView />
       </MemoryRouter>,
     );
@@ -51,9 +52,9 @@ describe('ModelsView', () => {
       (record): record is ModelSummary => record.kind === 'model_summary' && record.variant_id === 'gemma4-12b',
     );
     expect(source).toBeDefined();
-    evalStore.loadFixtures([{ ...source!, schema_version: '1.5.0', quality_state: 'verified_public' }], []);
+    evalStore.loadFixtures([{ ...source!, schema_version: VIEW_SCHEMA_VERSION, quality_state: 'verified_public' }], []);
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <ModelsView />
       </MemoryRouter>,
     );
@@ -64,7 +65,7 @@ describe('ModelsView', () => {
 
   it('labels the historical Gemma 4 12B result as not verified to current standards', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <ModelsView />
       </MemoryRouter>,
     );
@@ -76,7 +77,7 @@ describe('ModelsView', () => {
 
   it('lists models from every dataset without a dataset selector', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <ModelsView />
       </MemoryRouter>,
     );
@@ -103,7 +104,7 @@ describe('ModelsView', () => {
     ], []);
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <ModelsView />
       </MemoryRouter>,
     );
@@ -122,7 +123,7 @@ describe('ModelsView', () => {
     ], []);
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <ModelsView />
       </MemoryRouter>,
     );
@@ -148,7 +149,7 @@ describe('ModelsView', () => {
     ], []);
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <ModelsView />
       </MemoryRouter>,
     );

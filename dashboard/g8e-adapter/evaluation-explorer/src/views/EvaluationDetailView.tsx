@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
+import { CURRENT_PLATFORM_RELEASE, releaseLabel } from '../content/release';
 import { recordKey, useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
 import { RunFailuresSection } from '../components/RunFailuresSection';
@@ -49,7 +50,7 @@ export function EvaluationDetailView() {
   // active dataset rather than erroring.
   const runId = routeRun ?? routeDataset;
   const datasetParam = routeRun ? routeDataset : undefined;
-  const activeDatasetId = useActiveDatasetId(datasetParam ?? params.get('dataset') ?? undefined);
+  const activeDatasetId = useActiveDatasetId(datasetParam ?? params.get('dataset') ?? undefined, params.get('release') ?? CURRENT_PLATFORM_RELEASE);
 
   const run = useStoreState((state) =>
     runId ? state.evaluations.get(recordKey(activeDatasetId, runId)) : undefined,
@@ -151,6 +152,8 @@ export function EvaluationDetailView() {
           <DetailRow label="Evaluation unit">{run.evaluation_unit ? `${run.evaluation_unit.charAt(0).toUpperCase()}${run.evaluation_unit.slice(1)} evaluation` : <UnavailableValue reason="not observed in this dataset" />}</DetailRow>
           <DetailRow label="Stack identity">{run.stack_id ?? (run.evaluation_unit === 'model' ? 'Not applicable' : <UnavailableValue reason="not observed in this dataset" />)}</DetailRow>
           <DetailRow label="Campaign">{run.campaign_id ?? <UnavailableValue reason="no campaign recorded" />}</DetailRow>
+          <DetailRow label="Platform release">{releaseLabel(run)}</DetailRow>
+          {run.source_revision ? <DetailRow label="Source revision">{run.source_revision}</DetailRow> : null}
           <DetailRow label="Started">{run.started_at ? formatTimestamp(run.started_at) : '—'}</DetailRow>
           <DetailRow label="Ended">{run.ended_at ? formatTimestamp(run.ended_at) : '—'}</DetailRow>
           <DetailRow label="Elapsed">{run.elapsed_seconds ? formatDuration(run.elapsed_seconds) : '—'}</DetailRow>

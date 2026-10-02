@@ -32,6 +32,24 @@ const failedResultVector = JSON.parse(
 ) as { message_type: string; canonical_json: string };
 
 describe('isCampaignProjectionEnvelope', () => {
+  it.each([
+    ['PUBLIC_RELEASE_BASIS_RECORDED', 'recorded', 'v2.2.8', 'abc123'],
+    ['PUBLIC_RELEASE_BASIS_ASSERTED', 'asserted', 'v2.2.7', undefined],
+    ['PUBLIC_RELEASE_BASIS_UNKNOWN', 'unknown', undefined, undefined],
+  ])('retains campaign release %s through assignment and event adaptation', (wireBasis, basis, release, revision) => {
+    const records = adaptCampaignProjectionEnvelope({
+      ...fixtureCampaignResultEnvelope,
+      record: { ...fixtureCampaignResultEnvelope.record, release, release_basis: wireBasis, source_revision: revision },
+    }, createCampaignAdaptContext());
+    expect(records).toHaveLength(2);
+    for (const record of records) {
+      expect(record.release).toBe(release);
+      expect(record.release_basis).toBe(basis);
+      expect(record.source_revision).toBe(revision);
+      expect(() => decodeViewRecord(record.kind, record)).not.toThrow();
+    }
+  });
+
   it('accepts typed campaign envelopes', () => {
     expect(
       isCampaignProjectionEnvelope({

@@ -120,7 +120,7 @@ func TestPublicProjection_ToolsDeclaredStaysEmptyWhenNotReported(t *testing.T) {
 	projection, err := BuildAssignmentResultProjection(
 		&evalv1.EvaluationAssignment{AssignmentId: "assignment-1", RunId: "run-1", ScenarioId: "scenario-1"},
 		result, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT,
-		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "unverified")
+		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "unverified", CampaignRelease{})
 	require.NoError(t, err)
 	assert.Empty(t, projection.GetToolsDeclared())
 }

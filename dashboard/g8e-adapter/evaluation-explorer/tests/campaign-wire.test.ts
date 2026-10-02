@@ -8,6 +8,7 @@ import {
   type CampaignResultRecord,
 } from '../src/contract/campaign-wire';
 import { fixtureCampaignResultEnvelope } from '../src/fixtures/fixtures';
+import { ValidationError } from '../src/contract/validators';
 
 const lifecycleEnvelope = {
   schema_version: '1.0.0',
@@ -49,6 +50,31 @@ const historicalResultEnvelope = {
 } as const;
 
 describe('campaign projection wire contract', () => {
+  it.each([
+    ['PUBLIC_RELEASE_BASIS_RECORDED', 'v2.2.8'],
+    ['PUBLIC_RELEASE_BASIS_ASSERTED', 'v2.2.7'],
+    ['PUBLIC_RELEASE_BASIS_UNKNOWN', undefined],
+  ])('preserves release provenance %s on lifecycle and result envelopes', (basis, release) => {
+    for (const envelope of [lifecycleEnvelope, historicalResultEnvelope]) {
+      const decoded = decodeCampaignProjectionEnvelope({ ...envelope, record: { ...envelope.record, release, release_basis: basis } });
+      expect(decoded.record).toMatchObject({ release_basis: basis });
+      expect(decoded.record.release).toBe(release);
+    }
+  });
+
+  it.each([
+    { release: 'v2.2.8' },
+    { release: 'v2.2.8', release_basis: 'PUBLIC_RELEASE_BASIS_UNKNOWN' },
+    { release_basis: 'PUBLIC_RELEASE_BASIS_RECORDED' },
+    { release: 'v2.2.8', release_basis: 'recorded' },
+    { release_basis: 'PUBLIC_RELEASE_BASIS_INFERRED' },
+    { release_basis: 'PUBLIC_RELEASE_BASIS_UNKNOWN', source_revision: 42 },
+  ])('rejects inconsistent or unknown release identity %j', (identity) => {
+    for (const envelope of [lifecycleEnvelope, historicalResultEnvelope]) {
+      expect(() => decodeCampaignProjectionEnvelope({ ...envelope, record: { ...envelope.record, ...identity } })).toThrow(ValidationError);
+    }
+  });
+
   it('accepts lifecycle envelopes at version 1.0.0', () => {
     expect(decodeCampaignProjectionEnvelope(lifecycleEnvelope)).toMatchObject({
       message_type: 'PublicAssignmentLifecycleRecord',

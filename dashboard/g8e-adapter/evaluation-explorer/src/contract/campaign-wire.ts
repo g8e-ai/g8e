@@ -7,8 +7,8 @@
 // before any adapter conversion is allowed.
 
 import { parseWireActivityFamily, WIRE_UNAVAILABLE_REASONS, type WireActivityFamily } from './activity-family';
-import { PUBLIC_UNAVAILABLE_REASONS, TOOL_SCORE_DIMENSIONS, type RoleTranscript, type ToolScoreDimension } from './types';
-import { assertRoleTranscripts, ValidationError } from './validators';
+import { PUBLIC_UNAVAILABLE_REASONS, TOOL_SCORE_DIMENSIONS, type ReleaseProvenance, type RoleTranscript, type ToolScoreDimension } from './types';
+import { assertReleaseProvenance, assertRoleTranscripts, ValidationError } from './validators';
 
 export const CAMPAIGN_LIFECYCLE_SCHEMA_VERSION = '1.0.0' as const;
 export const CAMPAIGN_RESULT_SCHEMA_VERSIONS = ['1.0.0', '1.1.0', '1.2.0'] as const;
@@ -309,7 +309,33 @@ export type WireResourceSummary = Partial<
   Record<'latency_ms' | 'input_tokens' | 'output_tokens' | 'thinking_tokens' | 'cache_tokens' | 'retries', WireMetric>
 >;
 
-export interface CampaignLifecycleRecord {
+const WIRE_RELEASE_BASES = {
+  PUBLIC_RELEASE_BASIS_RECORDED: 'recorded',
+  PUBLIC_RELEASE_BASIS_ASSERTED: 'asserted',
+  PUBLIC_RELEASE_BASIS_UNKNOWN: 'unknown',
+} as const;
+
+export interface WireReleaseProvenance {
+  release?: string;
+  release_basis?: keyof typeof WIRE_RELEASE_BASES;
+  source_revision?: string;
+}
+
+export function mapCampaignRelease(record: WireReleaseProvenance): ReleaseProvenance {
+  return {
+    release: record.release,
+    release_basis: record.release_basis === undefined ? 'unknown' : WIRE_RELEASE_BASES[record.release_basis],
+    source_revision: record.source_revision,
+  };
+}
+
+function assertWireReleaseProvenance(value: Record<string, unknown>, path: string): void {
+  if (value.release_basis !== undefined) assertEnum(value.release_basis, Object.keys(WIRE_RELEASE_BASES), `${path}.release_basis`);
+  const basis = value.release_basis as keyof typeof WIRE_RELEASE_BASES | undefined;
+  assertReleaseProvenance({ ...value, release_basis: basis === undefined ? undefined : WIRE_RELEASE_BASES[basis] }, path);
+}
+
+export interface CampaignLifecycleRecord extends WireReleaseProvenance {
   assignment_id: string;
   run_id: string;
   scenario_id: string;
@@ -323,7 +349,7 @@ export interface CampaignLifecycleRecord {
   observed_at: string;
 }
 
-export interface CampaignResultRecord {
+export interface CampaignResultRecord extends WireReleaseProvenance {
   assignment_id: string;
   run_id: string;
   scenario_id: string;
@@ -375,10 +401,12 @@ export type CampaignProjectionEnvelope = CampaignLifecycleEnvelope | CampaignRes
 
 const ENVELOPE_FIELDS = ['schema_version', 'message_type', 'idempotency_key', 'record'] as const;
 const LIFECYCLE_FIELDS = [
+  'release', 'release_basis', 'source_revision',
   'assignment_id', 'run_id', 'scenario_id', 'scenario_category', 'lane', 'designated_role', 'variant_id',
   'stack_id', 'lifecycle_status', 'repetition', 'observed_at',
 ] as const;
 const RESULT_FIELDS = [
+  'release', 'release_basis', 'source_revision',
   'assignment_id', 'run_id', 'scenario_id', 'scenario_category', 'lane', 'designated_role', 'variant_id',
   'lifecycle_status', 'summary_status', 'decomposed_scores', 'result_digest', 'verification_status',
   'unavailable_metric_reasons', 'completed_at', 'scenario_summary', 'semantic_grade_summaries',
@@ -475,6 +503,7 @@ function assertOptionalBoolean(value: unknown, path: string): asserts value is b
 function assertLifecycleRecord(value: unknown, path: string): asserts value is CampaignLifecycleRecord {
   assertObject(value, path);
   rejectUnknown(value, LIFECYCLE_FIELDS, path);
+  assertWireReleaseProvenance(value, path);
   assertString(value.assignment_id, `${path}.assignment_id`);
   assertString(value.run_id, `${path}.run_id`);
   assertString(value.scenario_id, `${path}.scenario_id`);
@@ -738,6 +767,7 @@ function assertExtensions(value: Record<string, unknown>, path: string): void {
 function assertResultRecord(value: unknown, path: string, version: CampaignEnvelopeVersion): asserts value is CampaignResultRecord {
   assertObject(value, path);
   rejectUnknown(value, RESULT_FIELDS, path);
+  assertWireReleaseProvenance(value, path);
   assertString(value.assignment_id, `${path}.assignment_id`);
   assertString(value.run_id, `${path}.run_id`);
   assertString(value.scenario_id, `${path}.scenario_id`);

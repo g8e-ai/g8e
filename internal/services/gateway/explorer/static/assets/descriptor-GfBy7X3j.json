@@ -1,6 +1,7 @@
 {
-  "schema_version": "1.5.0",
+  "schema_version": "1.6.0",
   "enums": {
+    "ReleaseBasis": ["recorded", "asserted", "unknown"],
     "QualityState": [
       "verified_public",
       "exploratory_verified",

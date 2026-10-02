@@ -21,6 +21,7 @@ import (
 // observe payloads (served_model_tag, backend_name, exact quantization) are
 // excluded by design.
 type PublicModelRoleInvocationSignal struct {
+	Release      CampaignRelease
 	RunID        string
 	AssignmentID string
 	VariantID    string
@@ -40,6 +41,7 @@ type PublicMetricDelta map[string]PublicMetricValue
 
 // PublicLiveEvent is one disclosure-safe explorer live event body.
 type PublicLiveEvent struct {
+	CampaignRelease
 	SchemaVersion       string            `json:"schema_version"`
 	Kind                string            `json:"kind"`
 	DatasetID           string            `json:"dataset_id"`
@@ -63,6 +65,7 @@ type PublicLiveEvent struct {
 // per-assignment metric availability into a public metric_updated event. Role
 // is the assignment's designated role: the metric grades that role.
 type PublicMetricAvailabilitySignal struct {
+	Release      CampaignRelease
 	RunID        string
 	AssignmentID string
 	VariantID    string
@@ -105,6 +108,7 @@ func ProjectModelRoleInvocationEvent(signal PublicModelRoleInvocationSignal) (Pu
 		stageParts = append(stageParts, signal.TaskID)
 	}
 	return PublicLiveEvent{
+		CampaignRelease:     signal.Release.publicIdentity(),
 		SchemaVersion:       explorerViewSchemaVersion,
 		Kind:                "stage_updated",
 		DatasetID:           CampaignDatasetID(signal.RunID),
@@ -139,6 +143,7 @@ func ProjectMetricAvailabilityEvent(signal PublicMetricAvailabilitySignal) (Publ
 		return PublicLiveEvent{}, fmt.Errorf("evaluation: project metric availability event: %w", constants.ErrEvaluationLiveEventProgressInvalid)
 	}
 	return PublicLiveEvent{
+		CampaignRelease:     signal.Release.publicIdentity(),
 		SchemaVersion:       explorerViewSchemaVersion,
 		Kind:                "metric_updated",
 		DatasetID:           CampaignDatasetID(signal.RunID),

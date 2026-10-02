@@ -116,7 +116,7 @@ describe('ActiveCampaignBar', () => {
 
   it('shows condensed now-evaluating activity for the live dataset', () => {
     render(
-      <MemoryRouter initialEntries={['/?dataset=ds-verified-archive']}>
+      <MemoryRouter initialEntries={['/?dataset=ds-verified-archive&release=all']}>
         <ActiveCampaignBar />
       </MemoryRouter>,
     );
@@ -185,7 +185,7 @@ describe('ActiveCampaignBar', () => {
     );
 
     render(
-      <MemoryRouter initialEntries={['/?dataset=ds-verified-archive']}>
+      <MemoryRouter initialEntries={['/?dataset=ds-verified-archive&release=all']}>
         <ActiveCampaignBar />
       </MemoryRouter>,
     );

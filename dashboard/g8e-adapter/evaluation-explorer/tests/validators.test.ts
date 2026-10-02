@@ -23,6 +23,24 @@ import {
 } from '../src/fixtures/fixtures';
 
 describe('isCatalogSnapshot', () => {
+  it.each([
+    { release: 'v2.2.8', release_basis: 'recorded', source_revision: 'abc123' },
+    { release: 'v2.2.7', release_basis: 'asserted' },
+    { release: '', release_basis: 'unknown' },
+  ])('accepts explicit campaign provenance %j', (identity) => {
+    expect(() => isCatalogSnapshot({ ...fixtureCatalogExploratory, ...identity })).not.toThrow();
+  });
+
+  it.each([
+    { release: 'v2.2.8' },
+    { release_basis: 'recorded' },
+    { release: 'v2.2.8', release_basis: 'unknown' },
+    { release: 'v2.2.8', release_basis: 'inferred' },
+    { release_basis: 'unknown', source_revision: 42 },
+  ])('rejects invalid campaign provenance %j', (identity) => {
+    expect(() => isCatalogSnapshot({ ...fixtureCatalogExploratory, ...identity })).toThrow(ValidationError);
+  });
+
   it('accepts a valid catalog snapshot', () => {
     expect(() => isCatalogSnapshot(fixtureCatalogExploratory)).not.toThrow();
   });

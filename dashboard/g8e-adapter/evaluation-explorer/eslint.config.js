@@ -20,7 +20,7 @@ export default [
     },
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}', 'e2e/**/*.ts', '*.config.ts'],
+    files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}', 'e2e/**/*.ts', '*.config.ts', 'build-platform-release.ts'],
     languageOptions: {
       parser,
       parserOptions: {
@@ -31,6 +31,7 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.node,
+        __G8E_PLATFORM_RELEASE__: 'readonly',
       },
     },
     plugins: {

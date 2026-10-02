@@ -125,7 +125,7 @@ describe('OverviewView', () => {
 
   it('renders the live event stream full width without the system overview panel', () => {
     render(
-      <MemoryRouter initialEntries={['/?dataset=ds-verified-archive']}>
+      <MemoryRouter initialEntries={['/?dataset=ds-verified-archive&release=all']}>
         <OverviewView />
       </MemoryRouter>,
     );
@@ -139,7 +139,7 @@ describe('OverviewView', () => {
   it('offers a condensed, interactive guide that links to Docs and Tasks', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <OverviewView />
       </MemoryRouter>,
     );
@@ -161,7 +161,7 @@ describe('OverviewView', () => {
     }));
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <OverviewView />
       </MemoryRouter>,
     );

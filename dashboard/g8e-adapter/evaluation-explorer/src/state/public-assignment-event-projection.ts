@@ -11,11 +11,12 @@ import {
   type LiveEvent,
   type MetricValue,
   type ModelRole,
+  type ReleaseProvenance,
 } from '../contract/types';
 import { CAMPAIGN_SOURCE_REVISION, campaignDatasetId } from './campaign-adapter';
 
 /** Public-safe model-role invocation signal (no provider-boundary fields). */
-export interface PublicModelRoleInvocationSignal {
+export interface PublicModelRoleInvocationSignal extends ReleaseProvenance {
   run_id: string;
   assignment_id: string;
   variant_id: string;
@@ -29,7 +30,7 @@ export interface PublicModelRoleInvocationSignal {
 
 /** Public-safe per-assignment metric availability signal. `role` is the
  *  assignment's designated role: the metric grades that role. */
-export interface PublicMetricAvailabilitySignal {
+export interface PublicMetricAvailabilitySignal extends ReleaseProvenance {
   run_id: string;
   assignment_id: string;
   variant_id: string;
@@ -60,6 +61,9 @@ export function projectModelRoleInvocationToLiveEvent(signal: PublicModelRoleInv
     quality_state: 'live_in_progress',
     observed_at: signal.observed_at,
     source_revision_label: CAMPAIGN_SOURCE_REVISION,
+    release: signal.release,
+    release_basis: signal.release_basis ?? 'unknown',
+    source_revision: signal.source_revision,
     event_id: signal.event_id,
     run_id: signal.run_id,
     assignment_id: signal.assignment_id,
@@ -93,6 +97,9 @@ export function projectMetricAvailabilityToLiveEvent(signal: PublicMetricAvailab
     quality_state: 'live_in_progress',
     observed_at: signal.observed_at,
     source_revision_label: CAMPAIGN_SOURCE_REVISION,
+    release: signal.release,
+    release_basis: signal.release_basis ?? 'unknown',
+    source_revision: signal.source_revision,
     event_id: signal.event_id,
     run_id: signal.run_id,
     assignment_id: signal.assignment_id,

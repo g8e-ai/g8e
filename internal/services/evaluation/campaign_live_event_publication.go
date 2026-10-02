@@ -51,7 +51,11 @@ func (c *CampaignPublicationCoordinator) buildAssignmentLiveEventPublishRequests
 		return nil, err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, result)
-	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
+	if err != nil {
+		return nil, err
+	}
+	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total, release)
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +64,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentLiveEventPublishRequests
 		return nil, err
 	}
 	if ok {
+		signal.Release = release
 		event, err := ProjectMetricAvailabilityEvent(signal)
 		if err != nil {
 			return nil, err
@@ -100,7 +105,12 @@ func (c *CampaignPublicationCoordinator) PublishFormationRoleInvocationLiveEvent
 		return err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, nil)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
 	signal := PublicModelRoleInvocationSignal{
+		Release:      release,
 		RunID:        assignment.GetRunId(),
 		AssignmentID: assignment.GetAssignmentId(),
 		VariantID:    variantID,
@@ -141,7 +151,11 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentInvocationLiveEvents(c
 		return err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, nil)
-	requests, err := c.buildPlannedModelRoleInvocationPublishRequests(assignment, observedAt, completed, total)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	requests, err := c.buildPlannedModelRoleInvocationPublishRequests(assignment, observedAt, completed, total, release)
 	if err != nil {
 		return err
 	}
@@ -163,7 +177,11 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentScoredInferenceLiveEve
 		return err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, result)
-	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total, release)
 	if err != nil {
 		return err
 	}
@@ -191,9 +209,11 @@ func (c *CampaignPublicationCoordinator) buildPlannedModelRoleInvocationPublishR
 	observedAt string,
 	completed int,
 	total int,
+	release CampaignRelease,
 ) ([]campaignFeedPublishRequest, error) {
 	requests := make([]campaignFeedPublishRequest, 0, 1)
 	for _, signal := range buildPlannedModelRoleInvocationSignals(assignment, observedAt, completed, total) {
+		signal.Release = release
 		event, err := ProjectModelRoleInvocationEvent(signal)
 		if err != nil {
 			return nil, err
@@ -220,9 +240,11 @@ func (c *CampaignPublicationCoordinator) buildScoredModelRoleInvocationPublishRe
 	observedAt string,
 	completed int,
 	total int,
+	release CampaignRelease,
 ) ([]campaignFeedPublishRequest, error) {
 	requests := make([]campaignFeedPublishRequest, 0, len(result.GetModelInferences()))
 	for _, signal := range buildScoredModelRoleInvocationSignals(assignment, result, observedAt, completed, total) {
+		signal.Release = release
 		event, err := ProjectModelRoleInvocationEvent(signal)
 		if err != nil {
 			return nil, err

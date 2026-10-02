@@ -35,6 +35,7 @@ import {
 import { normalizeActivityFamily, type WireActivityFamily } from '../contract/activity-family';
 import {
   decodeCampaignProjectionEnvelope,
+  mapCampaignRelease,
   type CampaignLifecycleEnvelope,
   type CampaignResultEnvelope,
   type WireActivitySummary,
@@ -262,6 +263,7 @@ function adaptLifecycleRecord(
       quality_state: lifecycleQualityState(lifecycle),
       observed_at: observedAt,
       source_revision_label: CAMPAIGN_SOURCE_REVISION,
+      ...mapCampaignRelease(record),
       event_id: envelope.idempotency_key,
       run_id: runId,
       assignment_id: assignmentId,
@@ -303,6 +305,7 @@ function adaptResultProjection(
     quality_state: qualityState,
     observed_at: observedAt,
     source_revision_label: CAMPAIGN_SOURCE_REVISION,
+    ...mapCampaignRelease(record),
     assignment_id: assignmentId,
     run_id: runId,
     task_id: meta?.scenarioId ?? record.scenario_id,
@@ -343,6 +346,7 @@ function adaptResultProjection(
     quality_state: qualityState,
     observed_at: observedAt,
     source_revision_label: CAMPAIGN_SOURCE_REVISION,
+    ...mapCampaignRelease(record),
     event_id: `${envelope.idempotency_key}:event`,
     run_id: runId,
     assignment_id: assignmentId,
@@ -857,4 +861,3 @@ function normalizeEnumToken(value?: string): string {
   }
   return value;
 }
-

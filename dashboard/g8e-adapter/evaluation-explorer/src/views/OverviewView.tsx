@@ -7,7 +7,9 @@
 // nothing on this page is decorative.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { CURRENT_PLATFORM_RELEASE, matchesRelease, releaseLabel } from '../content/release';
+import { ReleaseSelector } from '../components/ReleaseSelector';
 import { useDatasetOptions } from '../state/dataset';
 import { useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
@@ -86,6 +88,7 @@ function RecentCampaigns({
                   <span className="campaign-evidence-time">{formatRelativeTime(campaign.observedAt)}</span>
                 </div>
                 <div className="campaign-evidence-meta">
+                  <span>{releaseLabel(campaign)}</span>
                   <span>{campaign.detail}</span>
                   <span className={`campaign-evidence-state status-${status}`}>
                     <span className="status-dot" aria-hidden="true" />
@@ -245,9 +248,11 @@ function DownloadsPanel() {
 }
 
 export function OverviewView() {
-  const activeDatasetId = useDatasetOptions().find((option) => option.available && option.kind === 'live_run')?.id ?? '';
-  const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
-  const allEvaluations = useStoreState((state) => Array.from(state.evaluations.values()));
+  const [params] = useSearchParams();
+  const release = params.get('release') ?? CURRENT_PLATFORM_RELEASE;
+  const activeDatasetId = useDatasetOptions(release).find((option) => option.available && option.kind === 'live_run')?.id ?? '';
+  const catalogs = useStoreState((state) => Array.from(state.catalogs.values()).filter((record) => matchesRelease(record, release)));
+  const allEvaluations = useStoreState((state) => Array.from(state.evaluations.values()).filter((record) => matchesRelease(record, release)));
   const events = useStoreState((state) =>
     state.events.filter((event) => event.dataset_id === activeDatasetId),
   );
@@ -257,6 +262,7 @@ export function OverviewView() {
 
   return (
     <div className="overview">
+      <div className="eval-toolbar"><ReleaseSelector /></div>
       <LiveEventStream
         events={events}
         connection={connection}

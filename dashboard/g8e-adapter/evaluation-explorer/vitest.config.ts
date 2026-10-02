@@ -3,8 +3,10 @@
 
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { platformRelease } from './build-platform-release';
 
 export default defineConfig({
+  define: { __G8E_PLATFORM_RELEASE__: JSON.stringify(platformRelease) },
   plugins: [react()],
   test: {
     environment: 'jsdom',

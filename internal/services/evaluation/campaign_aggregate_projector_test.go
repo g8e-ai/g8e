@@ -83,7 +83,7 @@ func TestPassRateDividesByAssignmentsJudgedOnTheModel(t *testing.T) {
 	assert.InDelta(t, 0.5, *state.Headline.PassRate.Value, 1e-9)
 	assert.Equal(t, uint32(2), state.Headline.PassRate.Eligible)
 
-	model := buildModelSummaryRecord("ds", "2026-01-01T00:00:00Z", state.VariantRoles["qwen3-4b:primary"])
+	model := buildModelSummaryRecord("ds", "2026-01-01T00:00:00Z", state.VariantRoles["qwen3-4b:primary"], CampaignRelease{})
 	require.NotNil(t, model.PassRate)
 	assert.InDelta(t, 0.5, model.PassRate.Estimate, 1e-9)
 	assert.Equal(t, uint32(2), model.PassRate.Denominator)
@@ -104,7 +104,7 @@ func TestPassRateIsUnavailableWhenNothingWasJudgedOnTheModel(t *testing.T) {
 	assert.Nil(t, state.Headline.PassRate.Value)
 	assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE, state.Headline.PassRate.UnavailableReason)
 
-	model := buildModelSummaryRecord("ds", "2026-01-01T00:00:00Z", state.VariantRoles["qwen3-4b:primary"])
+	model := buildModelSummaryRecord("ds", "2026-01-01T00:00:00Z", state.VariantRoles["qwen3-4b:primary"], CampaignRelease{})
 	assert.Nil(t, model.PassRate)
 }
 
@@ -137,7 +137,7 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 
 	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "1.5.0", summary.SchemaVersion)
+	assert.Equal(t, explorerViewSchemaVersion, summary.SchemaVersion)
 	assert.Equal(t, "evaluation_summary", summary.Kind)
 	assert.Equal(t, "model", summary.EvaluationUnit)
 	assert.Equal(t, "completed", summary.LifecycleState)
@@ -147,7 +147,7 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 
 	var catalog catalogSnapshotRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &catalog))
-	assert.Equal(t, "1.5.0", catalog.SchemaVersion)
+	assert.Equal(t, explorerViewSchemaVersion, catalog.SchemaVersion)
 	assert.Equal(t, "catalog_snapshot", catalog.Kind)
 	assert.Equal(t, "ds-live-run-1", catalog.DatasetID)
 	assert.Equal(t, uint32(1), catalog.AssignmentCount)
@@ -155,7 +155,7 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 
 	var model modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[2].Body, &model))
-	assert.Equal(t, "1.5.0", model.SchemaVersion)
+	assert.Equal(t, explorerViewSchemaVersion, model.SchemaVersion)
 	assert.Equal(t, "model_summary", model.Kind)
 	assert.Equal(t, "qwen3-4b", model.VariantID)
 	assert.Equal(t, "primary", model.Role)
@@ -170,7 +170,7 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 
 	var methodology methodologySnapshotRecord
 	require.NoError(t, json.Unmarshal(records[3].Body, &methodology))
-	assert.Equal(t, "1.5.0", methodology.SchemaVersion)
+	assert.Equal(t, explorerViewSchemaVersion, methodology.SchemaVersion)
 	assert.Equal(t, "methodology_snapshot", methodology.Kind)
 }
 

@@ -49,7 +49,7 @@ describe('EvaluationsView', () => {
 
   it('only lists quality filter options that exist in the current runs', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <EvaluationsView />
       </MemoryRouter>,
     );
@@ -65,7 +65,7 @@ describe('EvaluationsView', () => {
 
   it('lists runs from every dataset without a dataset selector', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?release=all']}>
         <EvaluationsView />
       </MemoryRouter>,
     );

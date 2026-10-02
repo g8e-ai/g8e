@@ -6,8 +6,33 @@ import { renderHook } from '@testing-library/react';
 import { useActiveDatasetId } from '../src/state/dataset';
 import { evalStore } from '../src/state/store';
 import { VIEW_SCHEMA_VERSION } from '../src/contract/types';
+import { CURRENT_PLATFORM_RELEASE } from '../src/content/release';
 
 describe('useActiveDatasetId', () => {
+  it('selects only the build release by default without inferring historical identity', () => {
+    evalStore.loadFixtures([], []);
+    const summaries = evalStore.getState().evaluations;
+    for (const [run, identity] of [
+      ['current', { release: CURRENT_PLATFORM_RELEASE, release_basis: 'recorded' }],
+      ['older', { release: 'v2.2.6', release_basis: 'asserted' }],
+      ['unknown', {}],
+    ] as const) {
+      summaries.set(`ds-live-${run}:${run}`, {
+        schema_version: VIEW_SCHEMA_VERSION, kind: 'evaluation_summary', dataset_id: `ds-live-${run}`,
+        quality_state: 'live_in_progress', observed_at: '2026-10-02T12:00:00Z', run_id: run,
+        suite_id: 'suite', arm: 'homogeneous-model-role', evaluation_unit: 'model', lifecycle_state: 'running',
+        assignment_total: 1, assignment_completed: 0, assignment_failed: 0,
+        terminal_outcomes: { completed: 0, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0, provider_failed: 0, execution_failed: 0, escalated: 0 },
+        verifier_state: 'not_run', headline_metrics: {}, ...identity,
+      });
+    }
+    expect(renderHook(() => useActiveDatasetId(undefined)).result.current).toBe('ds-live-current');
+    summaries.delete('ds-live-current:current');
+    expect(renderHook(() => useActiveDatasetId(undefined)).result.current).toBe('');
+    expect(renderHook(() => useActiveDatasetId(undefined, 'v2.2.6')).result.current).toBe('ds-live-older');
+    expect(renderHook(() => useActiveDatasetId('ds-live-unknown')).result.current).toBe('ds-live-unknown');
+  });
+
   it('honors explicit ds-live route ids without a catalog snapshot', () => {
     const { result } = renderHook(() =>
       useActiveDatasetId('ds-live-smoke-campaign-1789575779'),
@@ -74,7 +99,7 @@ describe('useActiveDatasetId', () => {
       headline_metrics: {},
     });
 
-    const { result } = renderHook(() => useActiveDatasetId(undefined));
+    const { result } = renderHook(() => useActiveDatasetId(undefined, 'all'));
     expect(result.current).toBe('ds-live-verified');
   });
 
@@ -131,7 +156,7 @@ describe('useActiveDatasetId', () => {
       [],
     );
 
-    const { result } = renderHook(() => useActiveDatasetId(undefined));
+    const { result } = renderHook(() => useActiveDatasetId(undefined, 'all'));
     expect(result.current).toBe('ds-live-eval-init-gemma3-1b-1789735715');
   });
 
@@ -166,7 +191,7 @@ describe('useActiveDatasetId', () => {
       headline_metrics: {},
     });
 
-    const { result } = renderHook(() => useActiveDatasetId(undefined));
+    const { result } = renderHook(() => useActiveDatasetId(undefined, 'all'));
     expect(result.current).toBe('ds-live-smoke-campaign-1789575779');
   });
 

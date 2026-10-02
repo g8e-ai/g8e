@@ -92,6 +92,8 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 For campaign evidence, check the recorded release in the protected `campaign-spec.json`. Compliance capture preserves that digest-bound release and source revision and excludes operator `release-tag.json` assertions. Campaign exports report the release and its recorded/asserted/unknown basis in `run_summary.json` and SQLite metadata; the exporting build does not fill in an unknown historical release. See [Evaluation Architecture](../architecture/evals.md) for the export contract.
 
+Public campaign records and the Explorer also distinguish recorded, asserted, and unknown release provenance. The Explorer's current-release default comes from `VERSION` at bundle build time, so rebuild and embed it after changing `VERSION`. Tag an older campaign only from evidence of its producing release; otherwise re-run it. To refresh an already published run after adding or correcting an asserted tag, use `g8e eval public restore --run-id <run> --force`: this clears host publication idempotency and appends current projections without modifying the campaign digest or its stored scores.
+
 1. **Determine change inventory:** Diff `v<prev-tag>..HEAD` to identify all added, changed, removed, fixed, and security-sensitive features.
 2. **Reconcile documentation:** Walk the documentation catalog in `docs/devs/docs.md`, audit affected documents end-to-end against production code, and update stale cross-links.
 3. **Draft release notes:** Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` following the template with Overview, Added, Changed, Fixed, Tests, Documentation, Compliance Evidence, and Deferred sections.

@@ -184,6 +184,7 @@ func TestCampaignExporter_BuildAssignmentExportRecordIncludesGradeOnlyObservatio
 		reader,
 		false,
 		nil,
+		CampaignRelease{},
 	)
 	require.NoError(t, err)
 	require.NotNil(t, record.BenchmarkObservations)
@@ -270,6 +271,8 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 
 	aggregateState, err := CollectRunAggregateState(assignments, results)
 	require.NoError(t, err)
+	aggregateState.Release, err = store.LoadCampaignRelease(context.Background(), run.GetCampaignBinding().GetCampaignId())
+	require.NoError(t, err)
 	expectedAggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, report, time.Unix(1_700_000_300, 0).UTC())
 	require.NoError(t, err)
 	var expectedEvaluationSummaryBody []byte
@@ -321,7 +324,7 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(evaluationSummaryJSON, &evaluationSummary))
 	assert.JSONEq(t, string(expectedEvaluationSummaryBody), string(evaluationSummaryJSON))
-	assert.Equal(t, "1.5.0", evaluationSummary.SchemaVersion)
+	assert.Equal(t, explorerViewSchemaVersion, evaluationSummary.SchemaVersion)
 	assert.Equal(t, "evaluation_summary", evaluationSummary.Kind)
 	assert.Equal(t, "passed", evaluationSummary.VerifierState)
 	assert.Equal(t, "ratio", evaluationSummary.HeadlineMetrics.PassRate.Unit)

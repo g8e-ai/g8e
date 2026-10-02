@@ -20,6 +20,7 @@ import (
 )
 
 type catalogSnapshotRecord struct {
+	CampaignRelease
 	SchemaVersion        string   `json:"schema_version"`
 	Kind                 string   `json:"kind"`
 	DatasetID            string   `json:"dataset_id"`
@@ -63,6 +64,7 @@ type modelMetricValueRecord struct {
 }
 
 type modelSummaryRecord struct {
+	CampaignRelease
 	SchemaVersion        string                  `json:"schema_version"`
 	Kind                 string                  `json:"kind"`
 	DatasetID            string                  `json:"dataset_id"`
@@ -104,6 +106,7 @@ type methodologyMetricRecord struct {
 }
 
 type methodologySnapshotRecord struct {
+	CampaignRelease
 	SchemaVersion       string                    `json:"schema_version"`
 	Kind                string                    `json:"kind"`
 	DatasetID           string                    `json:"dataset_id"`
@@ -116,7 +119,7 @@ type methodologySnapshotRecord struct {
 }
 
 const (
-	explorerViewSchemaVersion = "1.5.0"
+	explorerViewSchemaVersion = "1.6.0"
 	campaignSourceRevision    = "g8e-eval-campaign"
 )
 
@@ -154,6 +157,7 @@ type CampaignViewRecord struct {
 }
 
 type runAggregateState struct {
+	Release   CampaignRelease
 	Scheduled uint32
 	Terminal  uint32
 	// Judged counts terminal assignments that ended in a verdict on the model
@@ -711,9 +715,9 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 		bucket := state.VariantRoles[key]
 		var modelRecord modelSummaryRecord
 		if settled {
-			modelRecord = buildCompletedModelSummaryRecord(datasetID, observed, bucket)
+			modelRecord = buildCompletedModelSummaryRecord(datasetID, observed, bucket, state.Release)
 		} else {
-			modelRecord = buildModelSummaryRecord(datasetID, observed, bucket)
+			modelRecord = buildModelSummaryRecord(datasetID, observed, bucket, state.Release)
 		}
 		modelBody, err := marshalCanonicalViewRecord(modelRecord)
 		if err != nil {
@@ -727,9 +731,9 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 
 	var methodologyRecord methodologySnapshotRecord
 	if settled {
-		methodologyRecord = buildCompletedMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state))
+		methodologyRecord = buildCompletedMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state), state.Release)
 	} else {
-		methodologyRecord = buildMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state))
+		methodologyRecord = buildMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state), state.Release)
 	}
 	methodologyBody, err := marshalCanonicalViewRecord(methodologyRecord)
 	if err != nil {
@@ -789,7 +793,7 @@ func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*eva
 	sort.Strings(keys)
 	for _, key := range keys {
 		bucket := state.VariantRoles[key]
-		modelBody, err := marshalCanonicalViewRecord(buildCompletedModelSummaryRecord(datasetID, observed, bucket))
+		modelBody, err := marshalCanonicalViewRecord(buildCompletedModelSummaryRecord(datasetID, observed, bucket, state.Release))
 		if err != nil {
 			return nil, err
 		}
@@ -799,7 +803,7 @@ func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*eva
 		})
 	}
 
-	methodologyBody, err := marshalCanonicalViewRecord(buildCompletedMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state)))
+	methodologyBody, err := marshalCanonicalViewRecord(buildCompletedMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state), state.Release))
 	if err != nil {
 		return nil, err
 	}
@@ -812,7 +816,8 @@ func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*eva
 
 func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) catalogSnapshotRecord {
 	return catalogSnapshotRecord{
-		SchemaVersion: explorerViewSchemaVersion, Kind: "catalog_snapshot", DatasetID: datasetID, DatasetKind: "live_run",
+		CampaignRelease: state.Release.publicIdentity(),
+		SchemaVersion:   explorerViewSchemaVersion, Kind: "catalog_snapshot", DatasetID: datasetID, DatasetKind: "live_run",
 		QualityState: "live_in_progress", ObservedAt: observedAt, SourceRevisionLabel: campaignSourceRevision,
 		Title:       fmt.Sprintf("Live smoke run (%s)", runID),
 		Description: "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. Values are provisional while assignments are still executing.",
@@ -822,7 +827,7 @@ func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runA
 	}
 }
 
-func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) modelSummaryRecord {
+func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate, release CampaignRelease) modelSummaryRecord {
 	scheduled := bucket.Scheduled
 	terminal := bucket.Terminal
 	coverage := 0.0
@@ -830,7 +835,8 @@ func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAg
 		coverage = float64(terminal) / float64(scheduled)
 	}
 	record := modelSummaryRecord{
-		SchemaVersion: explorerViewSchemaVersion, Kind: "model_summary", DatasetID: datasetID,
+		CampaignRelease: release.publicIdentity(),
+		SchemaVersion:   explorerViewSchemaVersion, Kind: "model_summary", DatasetID: datasetID,
 		QualityState: qualityStateForModelSummary(terminal), ObservedAt: observedAt, SourceRevisionLabel: campaignSourceRevision,
 		VariantID: bucket.VariantID, DisplayName: displayNameForVariant(bucket.VariantID), ServedModelTag: servedTagForVariant(bucket.VariantID),
 		Role: bucket.Role, BackendProviderClass: "ollama", InventoryOnly: terminal == 0, EvaluationCoverage: coverage,
@@ -871,16 +877,16 @@ func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, st
 	return record
 }
 
-func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) modelSummaryRecord {
-	record := buildModelSummaryRecord(datasetID, observedAt, bucket)
+func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate, release CampaignRelease) modelSummaryRecord {
+	record := buildModelSummaryRecord(datasetID, observedAt, bucket, release)
 	if bucket.Scheduled > 0 && bucket.Terminal >= bucket.Scheduled {
 		record.QualityState = "exploratory_partial"
 	}
 	return record
 }
 
-func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string, suite *methodologySuiteRecord) methodologySnapshotRecord {
-	record := buildMethodologySnapshotRecord(datasetID, observedAt, suite)
+func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string, suite *methodologySuiteRecord, release CampaignRelease) methodologySnapshotRecord {
+	record := buildMethodologySnapshotRecord(datasetID, observedAt, suite, release)
 	record.QualityState = "exploratory_partial"
 	record.Limitations = []string{
 		"Campaign execution is complete; values remain provisional until verification runs.",
@@ -947,7 +953,7 @@ func appendVerifiedModelSummaryRecords(records []CampaignViewRecord, runID, data
 		if bucket == nil || bucket.Scheduled == 0 || bucket.Terminal < bucket.Scheduled {
 			continue
 		}
-		modelRecord := buildCompletedModelSummaryRecord(datasetID, observed, bucket)
+		modelRecord := buildCompletedModelSummaryRecord(datasetID, observed, bucket, state.Release)
 		if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
 			modelRecord.QualityState = "exploratory_verified"
 		}
@@ -1060,6 +1066,7 @@ func BuildVerifiedModelSummaryViewRecords(input VerifiedModelSummaryProjectionIn
 	if err != nil {
 		return nil, err
 	}
+	state.Release = input.Release
 	return appendVerifiedModelSummaryRecords(nil, input.Run.GetRunId(), CampaignDatasetID(input.Run.GetRunId()), input.Report.GetVerifiedAt().AsTime().UTC().Format(time.RFC3339Nano), state, input.Report, input.Applicability.EligibleModelBuckets)
 }
 
@@ -1135,8 +1142,9 @@ type summaryVerificationMetadataRecord struct {
 }
 
 // evaluationSummaryRecord is the typed explorer evaluation_summary wire shape
-// for schema 1.5.0.
+// for schema 1.6.0.
 type evaluationSummaryRecord struct {
+	CampaignRelease
 	SchemaVersion          string                             `json:"schema_version"`
 	Kind                   string                             `json:"kind"`
 	DatasetID              string                             `json:"dataset_id"`
@@ -1185,6 +1193,7 @@ func buildEvaluationSummaryRecord(input evaluationSummaryInput) (*evaluationSumm
 	}
 	settled := runAggregateSettled(state)
 	record := &evaluationSummaryRecord{
+		CampaignRelease:     state.Release.publicIdentity(),
 		SchemaVersion:       explorerViewSchemaVersion,
 		Kind:                "evaluation_summary",
 		DatasetID:           input.DatasetID,
@@ -1331,9 +1340,10 @@ func buildModelRoleMapping(state *runAggregateState) map[string]string {
 	return mapping
 }
 
-func buildMethodologySnapshotRecord(datasetID, observedAt string, suite *methodologySuiteRecord) methodologySnapshotRecord {
+func buildMethodologySnapshotRecord(datasetID, observedAt string, suite *methodologySuiteRecord, release CampaignRelease) methodologySnapshotRecord {
 	return methodologySnapshotRecord{
-		SchemaVersion: explorerViewSchemaVersion, Kind: "methodology_snapshot", DatasetID: datasetID,
+		CampaignRelease: release.publicIdentity(),
+		SchemaVersion:   explorerViewSchemaVersion, Kind: "methodology_snapshot", DatasetID: datasetID,
 		QualityState: "live_in_progress", ObservedAt: observedAt, SourceRevisionLabel: campaignSourceRevision,
 		MetricDefinitions: methodologyMetricDefinitions(),
 		SuiteDefinitions:  []methodologySuiteRecord{*suite},

@@ -10,6 +10,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
 import { RoleLeadersPanel } from '../components/RoleLeadersPanel';
+import { ReleaseSelector } from '../components/ReleaseSelector';
+import { CURRENT_PLATFORM_RELEASE, matchesRelease, releaseLabel } from '../content/release';
 import {
   EmptyState,
   OutcomeCounts,
@@ -34,19 +36,21 @@ export function EvaluationsView() {
   const suiteFilter = params.get('suite') ?? 'all';
   const statusFilter = params.get('status') ?? 'all';
   const qualityFilter = params.get('quality') ?? 'exploratory_verified';
+  const releaseFilter = params.get('release') ?? CURRENT_PLATFORM_RELEASE;
 
   const evaluations = useStoreState((state) =>
     Array.from(state.evaluations.values()).sort((a, b) =>
       (b.started_at ?? b.observed_at ?? '').localeCompare(a.started_at ?? a.observed_at ?? ''),
     ),
   );
-  const models = useStoreState((state) => Array.from(state.models.values()));
-  const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
+  const models = useStoreState((state) => Array.from(state.models.values()).filter((record) => matchesRelease(record, releaseFilter)));
+  const catalogs = useStoreState((state) => Array.from(state.catalogs.values()).filter((record) => matchesRelease(record, releaseFilter)));
   const connection = useStoreState((state) => state.connection);
+  const releaseEvaluations = useMemo(() => evaluations.filter((record) => matchesRelease(record, releaseFilter)), [evaluations, releaseFilter]);
 
   const qualityOptions = useMemo(
-    () => availableQualityFilterOptions(evaluations, EVALUATION_QUALITY_FILTER_STATES),
-    [evaluations],
+    () => availableQualityFilterOptions(releaseEvaluations, EVALUATION_QUALITY_FILTER_STATES),
+    [releaseEvaluations],
   );
   const effectiveQualityFilter = normalizeQualityFilter(qualityFilter, qualityOptions);
 
@@ -58,13 +62,13 @@ export function EvaluationsView() {
   }, [effectiveQualityFilter, qualityFilter, params, setParams]);
 
   const filtered = useMemo(() => {
-    return evaluations.filter((e) => {
+    return releaseEvaluations.filter((e) => {
       if (suiteFilter !== 'all' && e.suite_id !== suiteFilter) return false;
       if (statusFilter !== 'all' && e.lifecycle_state !== statusFilter) return false;
       if (effectiveQualityFilter !== 'all' && e.quality_state !== effectiveQualityFilter) return false;
       return true;
     });
-  }, [evaluations, suiteFilter, statusFilter, effectiveQualityFilter]);
+  }, [releaseEvaluations, suiteFilter, statusFilter, effectiveQualityFilter]);
 
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -104,6 +108,7 @@ export function EvaluationsView() {
         ),
       },
       { id: 'suite', header: 'Suite', accessorKey: 'suite_id' },
+      { id: 'release', header: 'Release', accessorFn: releaseLabel },
       { id: 'arm', header: 'Arm', accessorKey: 'arm' },
       {
         id: 'progress',
@@ -168,10 +173,11 @@ export function EvaluationsView() {
       <SectionHeading
         kicker="EVALUATIONS"
         title="Evaluation runs"
-        description="All published runs across datasets. Each row shows the dataset, suite, progress, verifier state, and headline metrics."
+        description="Published runs for the selected release across datasets. Each row shows release provenance, progress, verifier state, and headline metrics."
       />
 
       <div className="eval-toolbar">
+        <ReleaseSelector />
         <select aria-label="Filter by suite" value={suiteFilter} onChange={(e) => setFilter('suite', e.target.value)}>
           <option value="all">All suites</option>
           {Array.from(new Set(evaluations.map((e) => e.suite_id))).map((s) => (
@@ -197,7 +203,7 @@ export function EvaluationsView() {
       {filtered.length === 0 ? (
         <EmptyState
           hasRecords={evaluations.length > 0}
-          hasFilters={suiteFilter !== 'all' || statusFilter !== 'all' || effectiveQualityFilter !== 'all'}
+          hasFilters={releaseFilter !== 'all' || suiteFilter !== 'all' || statusFilter !== 'all' || effectiveQualityFilter !== 'all'}
           connection={connection}
         />
       ) : (

@@ -137,8 +137,10 @@ func TestHeadlineMetricID_RecognizesExplorerHeadlineMetrics(t *testing.T) {
 
 func TestCampaignPublicationCoordinator_ExportsProjectionRecordsOnly(t *testing.T) {
 	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	savePublicRunIdentity(t, store, "run-1", "campaign-1")
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
 	assignment := &evalv1.EvaluationAssignment{
 		AssignmentId:    "assign-1",
 		RunId:           "run-1",
@@ -207,6 +209,7 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 	require.NoError(t, err)
 	result.ResultDigest = digest
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           runID,
@@ -255,6 +258,7 @@ func TestCampaignPublication_PublishesInvocationAtAssignmentStart(t *testing.T) 
 		},
 	}
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           runID,
@@ -291,6 +295,7 @@ func TestCampaignPublication_PublishesScoredInferenceDuringTraceProgress(t *test
 		},
 	}
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           runID,
@@ -337,6 +342,7 @@ func TestCampaignPublication_PublishesScoredInferenceRetriesInMetricDelta(t *tes
 		},
 	}
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           runID,
@@ -378,6 +384,7 @@ func TestCampaignPublication_PublishesFormationRoleInvocationIncrementally(t *te
 	assignment := heterogeneousAssignmentExecutionRequest(t, stack, variants).Assignment
 	assignment.SchemaVersion = CampaignSchemaVersion
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           assignment.GetRunId(),
@@ -406,6 +413,7 @@ func TestCampaignPublication_PublishesFormationRoleProgressWithPerRoleMetrics(t 
 	assignment := req.Assignment
 	assignment.SchemaVersion = CampaignSchemaVersion
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           assignment.GetRunId(),

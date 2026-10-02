@@ -36,7 +36,7 @@ func TestBuildAssignmentLifecycleProjection(t *testing.T) {
 			},
 		},
 	}
-	projection, err := BuildAssignmentLifecycleProjection(assignment, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE, time.Time{})
+	projection, err := BuildAssignmentLifecycleProjection(assignment, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE, time.Time{}, CampaignRelease{})
 	require.NoError(t, err)
 	assert.Equal(t, "assign-1", projection.GetAssignmentId())
 	assert.Equal(t, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, projection.GetDesignatedRole())
@@ -139,7 +139,7 @@ func TestBuildAssignmentLifecycleProjection_HeterogeneousSetsPrimaryVariant(t *t
 			Heterogeneous: &evalv1.HeterogeneousAssignmentTarget{Stack: stack},
 		},
 	}
-	projection, err := BuildAssignmentLifecycleProjection(assignment, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE, time.Time{})
+	projection, err := BuildAssignmentLifecycleProjection(assignment, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE, time.Time{}, CampaignRelease{})
 	require.NoError(t, err)
 	assert.Equal(t, stack.GetStackId(), projection.GetStackId())
 	assert.Equal(t, stack.GetPrimarySlot().GetVariantId(), projection.GetVariantId())
@@ -170,6 +170,7 @@ func TestBuildAssignmentResultProjection_HeterogeneousSetsPrimaryVariant(t *test
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		"unverified",
+		CampaignRelease{},
 	)
 	require.NoError(t, err)
 	assert.Equal(t, stack.GetPrimarySlot().GetVariantId(), projection.GetVariantId())
@@ -202,6 +203,7 @@ func TestBuildAssignmentResultProjection(t *testing.T) {
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		"unverified",
+		CampaignRelease{},
 	)
 	require.NoError(t, err)
 	assert.Equal(t, result.GetResultDigest(), projection.GetResultDigest())

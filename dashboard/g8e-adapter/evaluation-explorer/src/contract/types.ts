@@ -10,12 +10,12 @@
 // and checked-in explorer fixtures. See src/contract/CONTRACT.md for the
 // ownership map and integration decisions.
 //
-// FROZEN at schema_version 1.5.0 on 2026-09-22. A change to any enum value
+// FROZEN at schema_version 1.6.0 on 2026-10-02. A change to any enum value
 // or required field is a contract revision: bump VIEW_SCHEMA_VERSION and
 // update descriptor.json and validators.
 
-export const VIEW_SCHEMA_VERSION = '1.5.0' as const;
-export const SUPPORTED_VIEW_SCHEMA_VERSIONS = ['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.5.0'] as const;
+export const VIEW_SCHEMA_VERSION = '1.6.0' as const;
+export const SUPPORTED_VIEW_SCHEMA_VERSIONS = ['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.5.0', '1.6.0'] as const;
 export type ViewSchemaVersion = (typeof SUPPORTED_VIEW_SCHEMA_VERSIONS)[number];
 
 export const ACTIVITY_AVAILABILITIES = ['observed', 'unavailable', 'not_applicable'] as const;
@@ -306,7 +306,17 @@ export const FRESHNESS_STATES = [
 export type FreshnessState = (typeof FRESHNESS_STATES)[number];
 
 /** Common envelope fields present on every snapshot record and live event. */
-export interface ViewRecordEnvelope {
+export const RELEASE_BASES = ['recorded', 'asserted', 'unknown'] as const;
+export type ReleaseBasis = (typeof RELEASE_BASES)[number];
+
+/** Missing identity on historical records means unknown; never infer a release. */
+export interface ReleaseProvenance {
+  release?: string;
+  release_basis?: ReleaseBasis;
+  source_revision?: string;
+}
+
+export interface ViewRecordEnvelope extends ReleaseProvenance {
   schema_version: string;
   kind: SnapshotKind | LiveEventKind;
   dataset_id: string;

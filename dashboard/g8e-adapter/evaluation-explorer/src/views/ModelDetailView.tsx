@@ -9,6 +9,7 @@
 
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
+import { CURRENT_PLATFORM_RELEASE } from '../content/release';
 import { modelRecordKey, useStoreState } from '../state/store';
 import {
   DetailRow,
@@ -35,7 +36,7 @@ export function ModelDetailView() {
   // the active dataset rather than erroring.
   const variantId = routeVariant ?? routeDataset;
   const datasetParam = routeVariant ? routeDataset : undefined;
-  const activeDatasetId = useActiveDatasetId(datasetParam ?? params.get('dataset') ?? undefined);
+  const activeDatasetId = useActiveDatasetId(datasetParam ?? params.get('dataset') ?? undefined, params.get('release') ?? CURRENT_PLATFORM_RELEASE);
   const roleFilter = params.get('role');
 
   const model = useStoreState((state) => {

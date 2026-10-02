@@ -38,7 +38,7 @@ func TestStoreLoadCampaignRelease_ARecordedReleaseIsTheDigestBoundOne(t *testing
 
 	release, err := f.store.LoadCampaignRelease(context.Background(), f.req.CampaignID)
 	require.NoError(t, err)
-	assert.Equal(t, CampaignRelease{Release: testPlatform.Release, Basis: ReleaseBasisRecorded}, release)
+	assert.Equal(t, CampaignRelease{Release: testPlatform.Release, Basis: ReleaseBasisRecorded, SourceRevision: testPlatform.SourceRevision}, release)
 }
 
 func TestStoreTagCampaignRelease_AssertsAReleaseOnALegacyCampaign(t *testing.T) {
@@ -68,7 +68,7 @@ func TestStoreTagCampaignRelease_RefusesToRelabelARecordedRelease(t *testing.T) 
 	require.ErrorIs(t, err, constants.ErrEvaluationReleaseRecorded)
 	release, err := f.store.LoadCampaignRelease(context.Background(), f.req.CampaignID)
 	require.NoError(t, err)
-	assert.Equal(t, CampaignRelease{Release: testPlatform.Release, Basis: ReleaseBasisRecorded}, release)
+	assert.Equal(t, CampaignRelease{Release: testPlatform.Release, Basis: ReleaseBasisRecorded, SourceRevision: testPlatform.SourceRevision}, release)
 }
 
 func TestStoreTagCampaignRelease_RequiresACampaignAndARelease(t *testing.T) {

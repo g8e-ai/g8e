@@ -39,6 +39,7 @@ import {
   PUBLIC_USAGE_AVAILABILITIES,
   PUBLIC_UNAVAILABLE_REASONS,
   QUALITY_STATES,
+  RELEASE_BASES,
   REPEATABILITY_CLASSES,
   RUN_METRIC_UNITS,
   SCENARIO_CATEGORIES,
@@ -51,6 +52,7 @@ import {
 } from '../src/contract/types';
 
 type EnumName =
+  | 'ReleaseBasis'
   | 'ActivityAvailability'
   | 'QualityState'
   | 'DatasetKind'
@@ -96,6 +98,7 @@ const tsEnums: Record<EnumName, readonly string[]> = {
   QualityState: QUALITY_STATES,
   DatasetKind: DATASET_KINDS,
   ModelRole: MODEL_ROLES,
+  ReleaseBasis: RELEASE_BASES,
   ScenarioCategory: SCENARIO_CATEGORIES,
   EvaluationUnit: EVALUATION_UNITS,
   EnvironmentSource: ENVIRONMENT_SOURCES,
@@ -135,7 +138,7 @@ const tsEnums: Record<EnumName, readonly string[]> = {
 
 describe('descriptor.json stays in sync with types.ts', () => {
   it('exposes the frozen schema version', () => {
-    expect(descriptor.schema_version).toBe('1.5.0');
+    expect(descriptor.schema_version).toBe('1.6.0');
   });
 
   it('includes the not-run verifier lifecycle state', () => {

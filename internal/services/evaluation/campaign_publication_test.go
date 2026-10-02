@@ -88,6 +88,7 @@ func TestCampaignPublicationCoordinatorExportFeedRecordsBatches(t *testing.T) {
 func TestCampaignPublicationCoordinatorIdempotentLifecyclePublish(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, "run-1", "campaign-1")
 	exporter := &recordingCampaignFeedExporter{}
 	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
 	assignment := &evalv1.EvaluationAssignment{
@@ -377,6 +378,7 @@ func TestCampaignPublicationCoordinatorPublishAssignmentLifecycles(t *testing.T)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
 	runID := "run-batch-lifecycles"
+	savePublicRunIdentity(t, store, runID, "camp-1")
 	assignments := []*evalv1.EvaluationAssignment{
 		{
 			AssignmentId:    "assign-1",

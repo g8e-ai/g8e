@@ -11,7 +11,8 @@
 // selectable as soon as its catalog record lands.
 
 import { useCallback, useMemo, useState } from 'react';
-import type { CatalogSnapshot, DatasetKind, EvaluationSummary, QualityState } from '../contract/types';
+import type { CatalogSnapshot, DatasetKind, EvaluationSummary, QualityState, ReleaseProvenance } from '../contract/types';
+import { CURRENT_PLATFORM_RELEASE, matchesRelease, releaseLabel } from '../content/release';
 import { evalStore, useStoreState } from './store';
 
 const PREF_KEYS = {
@@ -20,7 +21,7 @@ const PREF_KEYS = {
   comparison: 'opendevops.comparison',
 } as const;
 
-export interface DatasetOption {
+export interface DatasetOption extends ReleaseProvenance {
   id: string;
   kind: DatasetKind;
   label: string;
@@ -51,7 +52,8 @@ function liveDatasetIdsFromEvaluations(evaluations: Iterable<EvaluationSummary>)
     .map(([datasetId]) => datasetId);
 }
 
-function buildOptions(catalogs: CatalogSnapshot[], liveDatasetIds: string[]): DatasetOption[] {
+function buildOptions(catalogs: CatalogSnapshot[], evaluations: EvaluationSummary[]): DatasetOption[] {
+  const liveDatasetIds = liveDatasetIdsFromEvaluations(evaluations);
   const options: DatasetOption[] = [];
   for (const kind of KIND_ORDER) {
     const matches = catalogs
@@ -59,11 +61,15 @@ function buildOptions(catalogs: CatalogSnapshot[], liveDatasetIds: string[]): Da
       .sort((a, b) => b.generated_at.localeCompare(a.generated_at));
     if (kind === 'live_run' && matches.length === 0 && liveDatasetIds.length > 0) {
       liveDatasetIds.forEach((datasetId, index) => {
+        const identity = evaluations.find((summary) => summary.dataset_id === datasetId);
         options.push({
           id: datasetId,
           kind,
-          label: index === 0 ? KIND_LABELS[kind] : `${KIND_LABELS[kind]} · ${datasetId}`,
+          label: `${index === 0 ? KIND_LABELS[kind] : `${KIND_LABELS[kind]} · ${datasetId}`} · ${releaseLabel(identity ?? {})}`,
           available: true,
+          release: identity?.release,
+          release_basis: identity?.release_basis,
+          source_revision: identity?.source_revision,
         });
       });
       continue;
@@ -76,9 +82,12 @@ function buildOptions(catalogs: CatalogSnapshot[], liveDatasetIds: string[]): Da
       options.push({
         id: catalog.dataset_id,
         kind,
-        label: index === 0 ? KIND_LABELS[kind] : `${KIND_LABELS[kind]} · ${catalog.dataset_id}`,
+        label: `${index === 0 ? KIND_LABELS[kind] : `${KIND_LABELS[kind]} · ${catalog.dataset_id}`} · ${releaseLabel(catalog)}`,
         available: true,
         quality: catalog.quality_state,
+        release: catalog.release,
+        release_basis: catalog.release_basis,
+        source_revision: catalog.source_revision,
       });
     });
   }
@@ -109,22 +118,23 @@ function defaultDatasetId(
   return liveDatasetIds[0] ?? '';
 }
 
-export function useDatasetOptions(): DatasetOption[] {
+export function useDatasetOptions(release: string = CURRENT_PLATFORM_RELEASE): DatasetOption[] {
   const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
   const evaluations = useStoreState((state) => state.evaluations);
   return useMemo(
-    () => buildOptions(catalogs, liveDatasetIdsFromEvaluations(evaluations.values())),
-    [catalogs, evaluations],
+    () => buildOptions(catalogs.filter((record) => matchesRelease(record, release)), Array.from(evaluations.values()).filter((record) => matchesRelease(record, release))),
+    [catalogs, evaluations, release],
   );
 }
 
-export function useActiveDatasetId(routeDatasetId: string | undefined): string {
-  const options = useDatasetOptions();
+export function useActiveDatasetId(routeDatasetId: string | undefined, release: string = CURRENT_PLATFORM_RELEASE): string {
+  const options = useDatasetOptions(release);
   const evaluations = useStoreState((state) => state.evaluations);
-  const liveDatasetIds = liveDatasetIdsFromEvaluations(evaluations.values());
-  const fallbackDatasetId = defaultDatasetId(options, liveDatasetIds, evaluations.values());
+  const eligibleEvaluations = Array.from(evaluations.values()).filter((record) => matchesRelease(record, release));
+  const liveDatasetIds = liveDatasetIdsFromEvaluations(eligibleEvaluations);
+  const fallbackDatasetId = defaultDatasetId(options, liveDatasetIds, eligibleEvaluations);
   if (routeDatasetId) {
-    if (options.some((o) => o.id === routeDatasetId)) return routeDatasetId;
+    if (options.some((o) => o.id === routeDatasetId) || evalStore.getCatalog(routeDatasetId)) return routeDatasetId;
     // Live campaign datasets are synthesized from publication envelopes and may
     // not have a catalog_snapshot yet; honor explicit route ids and any run
     // summaries already indexed for that dataset.

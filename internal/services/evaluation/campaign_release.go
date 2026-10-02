@@ -16,6 +16,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 // ReleaseBasis says how a campaign's platform release is known.
@@ -42,8 +43,27 @@ type CampaignReleaseTag struct {
 
 // CampaignRelease is the release a campaign measured and how that is known.
 type CampaignRelease struct {
-	Release string
-	Basis   ReleaseBasis
+	Release        string       `json:"release"`
+	Basis          ReleaseBasis `json:"release_basis"`
+	SourceRevision string       `json:"source_revision,omitempty"`
+}
+
+func (r CampaignRelease) publicIdentity() CampaignRelease {
+	if r.Basis == "" {
+		r.Basis = ReleaseBasisUnknown
+	}
+	return r
+}
+
+func (r CampaignRelease) publicBasis() evalv1.PublicReleaseBasis {
+	switch r.Basis {
+	case ReleaseBasisRecorded:
+		return evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED
+	case ReleaseBasisAsserted:
+		return evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_ASSERTED
+	default:
+		return evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNKNOWN
+	}
 }
 
 // TagCampaignRelease records an operator-asserted release for a campaign that
@@ -79,12 +99,12 @@ func (s *Store) LoadCampaignRelease(ctx context.Context, campaignID string) (Cam
 		return CampaignRelease{}, err
 	}
 	if recorded := spec.GetPlatformRelease(); recorded != "" {
-		return CampaignRelease{Release: recorded, Basis: ReleaseBasisRecorded}, nil
+		return CampaignRelease{Release: recorded, Basis: ReleaseBasisRecorded, SourceRevision: spec.GetSourceRevision()}, nil
 	}
 	body, err := s.files.ReadFile(ctx, s.layout.campaignReleaseTagPath(campaignID))
 	if err != nil {
 		if isNotFound(err) {
-			return CampaignRelease{Basis: ReleaseBasisUnknown}, nil
+			return CampaignRelease{Basis: ReleaseBasisUnknown, SourceRevision: spec.GetSourceRevision()}, nil
 		}
 		return CampaignRelease{}, fmt.Errorf("evaluation: read campaign release tag: %w", err)
 	}
@@ -92,5 +112,5 @@ func (s *Store) LoadCampaignRelease(ctx context.Context, campaignID string) (Cam
 	if err := json.Unmarshal(body, &tag); err != nil || tag.CampaignID != campaignID || tag.Release == "" {
 		return CampaignRelease{}, fmt.Errorf("%w: campaign release tag", constants.ErrEvidenceArtifactMalformed)
 	}
-	return CampaignRelease{Release: tag.Release, Basis: ReleaseBasisAsserted}, nil
+	return CampaignRelease{Release: tag.Release, Basis: ReleaseBasisAsserted, SourceRevision: spec.GetSourceRevision()}, nil
 }

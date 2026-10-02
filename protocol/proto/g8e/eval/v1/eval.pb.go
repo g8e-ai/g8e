@@ -2229,6 +2229,59 @@ func (EvaluationWitnessPolicy) EnumDescriptor() ([]byte, []int) {
 	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{38}
 }
 
+// The release measured by a campaign is independent of verifier provenance.
+type PublicReleaseBasis int32
+
+const (
+	PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNSPECIFIED PublicReleaseBasis = 0
+	PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED    PublicReleaseBasis = 1 // Bound into campaign_digest at creation.
+	PublicReleaseBasis_PUBLIC_RELEASE_BASIS_ASSERTED    PublicReleaseBasis = 2 // Operator tag outside campaign_digest.
+	PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNKNOWN     PublicReleaseBasis = 3 // Historical campaign without a release tag.
+)
+
+// Enum value maps for PublicReleaseBasis.
+var (
+	PublicReleaseBasis_name = map[int32]string{
+		0: "PUBLIC_RELEASE_BASIS_UNSPECIFIED",
+		1: "PUBLIC_RELEASE_BASIS_RECORDED",
+		2: "PUBLIC_RELEASE_BASIS_ASSERTED",
+		3: "PUBLIC_RELEASE_BASIS_UNKNOWN",
+	}
+	PublicReleaseBasis_value = map[string]int32{
+		"PUBLIC_RELEASE_BASIS_UNSPECIFIED": 0,
+		"PUBLIC_RELEASE_BASIS_RECORDED":    1,
+		"PUBLIC_RELEASE_BASIS_ASSERTED":    2,
+		"PUBLIC_RELEASE_BASIS_UNKNOWN":     3,
+	}
+)
+
+func (x PublicReleaseBasis) Enum() *PublicReleaseBasis {
+	p := new(PublicReleaseBasis)
+	*p = x
+	return p
+}
+
+func (x PublicReleaseBasis) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PublicReleaseBasis) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_eval_v1_eval_proto_enumTypes[39].Descriptor()
+}
+
+func (PublicReleaseBasis) Type() protoreflect.EnumType {
+	return &file_g8e_eval_v1_eval_proto_enumTypes[39]
+}
+
+func (x PublicReleaseBasis) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PublicReleaseBasis.Descriptor instead.
+func (PublicReleaseBasis) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{39}
+}
+
 type EvaluationRuntimeBoundary struct {
 	state                    protoimpl.MessageState     `protogen:"open.v1"`
 	Component                EvaluationRuntimeComponent `protobuf:"varint,1,opt,name=component,proto3,enum=g8e.eval.v1.EvaluationRuntimeComponent" json:"component,omitempty"`
@@ -7726,6 +7779,9 @@ type PublicCampaignIdentity struct {
 	CatalogDigest       string                 `protobuf:"bytes,5,opt,name=catalog_digest,json=catalogDigest,proto3" json:"catalog_digest,omitempty"`
 	ModelRegistryDigest string                 `protobuf:"bytes,6,opt,name=model_registry_digest,json=modelRegistryDigest,proto3" json:"model_registry_digest,omitempty"`
 	Lane                EvaluationLane         `protobuf:"varint,7,opt,name=lane,proto3,enum=g8e.eval.v1.EvaluationLane" json:"lane,omitempty"`
+	Release             string                 `protobuf:"bytes,8,opt,name=release,proto3" json:"release,omitempty"`
+	ReleaseBasis        PublicReleaseBasis     `protobuf:"varint,9,opt,name=release_basis,json=releaseBasis,proto3,enum=g8e.eval.v1.PublicReleaseBasis" json:"release_basis,omitempty"`
+	SourceRevision      string                 `protobuf:"bytes,10,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -7807,6 +7863,27 @@ func (x *PublicCampaignIdentity) GetLane() EvaluationLane {
 		return x.Lane
 	}
 	return EvaluationLane_EVALUATION_LANE_UNSPECIFIED
+}
+
+func (x *PublicCampaignIdentity) GetRelease() string {
+	if x != nil {
+		return x.Release
+	}
+	return ""
+}
+
+func (x *PublicCampaignIdentity) GetReleaseBasis() PublicReleaseBasis {
+	if x != nil {
+		return x.ReleaseBasis
+	}
+	return PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNSPECIFIED
+}
+
+func (x *PublicCampaignIdentity) GetSourceRevision() string {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return ""
 }
 
 type PublicModelVariantIdentity struct {
@@ -7898,6 +7975,9 @@ type PublicAssignmentLifecycleRecord struct {
 	LifecycleStatus  EvaluationAssignmentLifecycleStatus `protobuf:"varint,9,opt,name=lifecycle_status,json=lifecycleStatus,proto3,enum=g8e.eval.v1.EvaluationAssignmentLifecycleStatus" json:"lifecycle_status,omitempty"`
 	Repetition       uint32                              `protobuf:"varint,10,opt,name=repetition,proto3" json:"repetition,omitempty"`
 	ObservedAt       *timestamppb.Timestamp              `protobuf:"bytes,11,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	Release          string                              `protobuf:"bytes,12,opt,name=release,proto3" json:"release,omitempty"`
+	ReleaseBasis     PublicReleaseBasis                  `protobuf:"varint,13,opt,name=release_basis,json=releaseBasis,proto3,enum=g8e.eval.v1.PublicReleaseBasis" json:"release_basis,omitempty"`
+	SourceRevision   string                              `protobuf:"bytes,14,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -8007,6 +8087,27 @@ func (x *PublicAssignmentLifecycleRecord) GetObservedAt() *timestamppb.Timestamp
 		return x.ObservedAt
 	}
 	return nil
+}
+
+func (x *PublicAssignmentLifecycleRecord) GetRelease() string {
+	if x != nil {
+		return x.Release
+	}
+	return ""
+}
+
+func (x *PublicAssignmentLifecycleRecord) GetReleaseBasis() PublicReleaseBasis {
+	if x != nil {
+		return x.ReleaseBasis
+	}
+	return PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNSPECIFIED
+}
+
+func (x *PublicAssignmentLifecycleRecord) GetSourceRevision() string {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return ""
 }
 
 type PublicModelCallSummary struct {
@@ -9362,6 +9463,9 @@ type PublicAssignmentResultProjection struct {
 	GuidedRetryCount         uint32                              `protobuf:"varint,21,opt,name=guided_retry_count,json=guidedRetryCount,proto3" json:"guided_retry_count,omitempty"`
 	FailureReason            string                              `protobuf:"bytes,22,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"`
 	ToolsDeclared            []string                            `protobuf:"bytes,23,rep,name=tools_declared,json=toolsDeclared,proto3" json:"tools_declared,omitempty"`
+	Release                  string                              `protobuf:"bytes,24,opt,name=release,proto3" json:"release,omitempty"`
+	ReleaseBasis             PublicReleaseBasis                  `protobuf:"varint,25,opt,name=release_basis,json=releaseBasis,proto3,enum=g8e.eval.v1.PublicReleaseBasis" json:"release_basis,omitempty"`
+	SourceRevision           string                              `protobuf:"bytes,26,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -9555,6 +9659,27 @@ func (x *PublicAssignmentResultProjection) GetToolsDeclared() []string {
 		return x.ToolsDeclared
 	}
 	return nil
+}
+
+func (x *PublicAssignmentResultProjection) GetRelease() string {
+	if x != nil {
+		return x.Release
+	}
+	return ""
+}
+
+func (x *PublicAssignmentResultProjection) GetReleaseBasis() PublicReleaseBasis {
+	if x != nil {
+		return x.ReleaseBasis
+	}
+	return PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNSPECIFIED
+}
+
+func (x *PublicAssignmentResultProjection) GetSourceRevision() string {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return ""
 }
 
 var File_g8e_eval_v1_eval_proto protoreflect.FileDescriptor
@@ -10149,7 +10274,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x04lane\x18\b \x01(\x0e2\x1b.g8e.eval.v1.EvaluationLaneR\x04lane\x12:\n" +
 	"\x19expected_assignment_count\x18\t \x01(\rR\x17expectedAssignmentCount\x12H\n" +
 	"\aentries\x18\n" +
-	" \x03(\v2..g8e.eval.v1.EvaluationVerifiedPopulationEntryR\aentries\"\xb6\x02\n" +
+	" \x03(\v2..g8e.eval.v1.EvaluationVerifiedPopulationEntryR\aentries\"\xbf\x03\n" +
 	"\x16PublicCampaignIdentity\x12\x1f\n" +
 	"\vcampaign_id\x18\x01 \x01(\tR\n" +
 	"campaignId\x12'\n" +
@@ -10159,14 +10284,18 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x0fcatalog_version\x18\x04 \x01(\tR\x0ecatalogVersion\x12%\n" +
 	"\x0ecatalog_digest\x18\x05 \x01(\tR\rcatalogDigest\x122\n" +
 	"\x15model_registry_digest\x18\x06 \x01(\tR\x13modelRegistryDigest\x12/\n" +
-	"\x04lane\x18\a \x01(\x0e2\x1b.g8e.eval.v1.EvaluationLaneR\x04lane\"\xcf\x01\n" +
+	"\x04lane\x18\a \x01(\x0e2\x1b.g8e.eval.v1.EvaluationLaneR\x04lane\x12\x18\n" +
+	"\arelease\x18\b \x01(\tR\arelease\x12D\n" +
+	"\rrelease_basis\x18\t \x01(\x0e2\x1f.g8e.eval.v1.PublicReleaseBasisR\freleaseBasis\x12'\n" +
+	"\x0fsource_revision\x18\n" +
+	" \x01(\tR\x0esourceRevision\"\xcf\x01\n" +
 	"\x1aPublicModelVariantIdentity\x12\x1d\n" +
 	"\n" +
 	"variant_id\x18\x01 \x01(\tR\tvariantId\x12(\n" +
 	"\x10served_model_tag\x18\x02 \x01(\tR\x0eservedModelTag\x12!\n" +
 	"\fmodel_digest\x18\x03 \x01(\tR\vmodelDigest\x12!\n" +
 	"\fmodel_family\x18\x04 \x01(\tR\vmodelFamily\x12\"\n" +
-	"\fquantization\x18\x05 \x01(\tR\fquantization\"\xc2\x04\n" +
+	"\fquantization\x18\x05 \x01(\tR\fquantization\"\xcb\x05\n" +
 	"\x1fPublicAssignmentLifecycleRecord\x12#\n" +
 	"\rassignment_id\x18\x01 \x01(\tR\fassignmentId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n" +
@@ -10184,7 +10313,10 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	" \x01(\rR\n" +
 	"repetition\x12;\n" +
 	"\vobserved_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"observedAt\"\xb7\x05\n" +
+	"observedAt\x12\x18\n" +
+	"\arelease\x18\f \x01(\tR\arelease\x12D\n" +
+	"\rrelease_basis\x18\r \x01(\x0e2\x1f.g8e.eval.v1.PublicReleaseBasisR\freleaseBasis\x12'\n" +
+	"\x0fsource_revision\x18\x0e \x01(\tR\x0esourceRevision\"\xb7\x05\n" +
 	"\x16PublicModelCallSummary\x12#\n" +
 	"\rassignment_id\x18\x01 \x01(\tR\fassignmentId\x12.\n" +
 	"\x13inference_record_id\x18\x02 \x01(\tR\x11inferenceRecordId\x12=\n" +
@@ -10321,7 +10453,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x18verifier_release_version\x18\x03 \x01(\tR\x16verifierReleaseVersion\x12:\n" +
 	"\x19verifier_contract_version\x18\x04 \x01(\tR\x17verifierContractVersion\x12#\n" +
 	"\rreport_digest\x18\x05 \x01(\tR\freportDigest\x12+\n" +
-	"\x11population_digest\x18\x06 \x01(\tR\x10populationDigest\"\xcb\v\n" +
+	"\x11population_digest\x18\x06 \x01(\tR\x10populationDigest\"\xd4\f\n" +
 	" PublicAssignmentResultProjection\x12#\n" +
 	"\rassignment_id\x18\x01 \x01(\tR\fassignmentId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n" +
@@ -10348,7 +10480,10 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x12trajectory_outcome\x18\x14 \x01(\x0e2(.g8e.eval.v1.EvaluationTrajectoryOutcomeR\x11trajectoryOutcome\x12,\n" +
 	"\x12guided_retry_count\x18\x15 \x01(\rR\x10guidedRetryCount\x12%\n" +
 	"\x0efailure_reason\x18\x16 \x01(\tR\rfailureReason\x12%\n" +
-	"\x0etools_declared\x18\x17 \x03(\tR\rtoolsDeclared*\x8b\x01\n" +
+	"\x0etools_declared\x18\x17 \x03(\tR\rtoolsDeclared\x12\x18\n" +
+	"\arelease\x18\x18 \x01(\tR\arelease\x12D\n" +
+	"\rrelease_basis\x18\x19 \x01(\x0e2\x1f.g8e.eval.v1.PublicReleaseBasisR\freleaseBasis\x12'\n" +
+	"\x0fsource_revision\x18\x1a \x01(\tR\x0esourceRevision*\x8b\x01\n" +
 	"\x0eEvaluationLane\x12\x1f\n" +
 	"\x1bEVALUATION_LANE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18EVALUATION_LANE_PLATFORM\x10\x01\x12\x1e\n" +
@@ -10592,7 +10727,12 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x17EvaluationWitnessPolicy\x12)\n" +
 	"%EVALUATION_WITNESS_POLICY_UNSPECIFIED\x10\x00\x12%\n" +
 	"!EVALUATION_WITNESS_POLICY_INTERIM\x10\x01\x12$\n" +
-	" EVALUATION_WITNESS_POLICY_STRICT\x10\x02B<Z:github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1;evalv1b\x06proto3"
+	" EVALUATION_WITNESS_POLICY_STRICT\x10\x02*\xa2\x01\n" +
+	"\x12PublicReleaseBasis\x12$\n" +
+	" PUBLIC_RELEASE_BASIS_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dPUBLIC_RELEASE_BASIS_RECORDED\x10\x01\x12!\n" +
+	"\x1dPUBLIC_RELEASE_BASIS_ASSERTED\x10\x02\x12 \n" +
+	"\x1cPUBLIC_RELEASE_BASIS_UNKNOWN\x10\x03B<Z:github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1;evalv1b\x06proto3"
 
 var (
 	file_g8e_eval_v1_eval_proto_rawDescOnce sync.Once
@@ -10606,7 +10746,7 @@ func file_g8e_eval_v1_eval_proto_rawDescGZIP() []byte {
 	return file_g8e_eval_v1_eval_proto_rawDescData
 }
 
-var file_g8e_eval_v1_eval_proto_enumTypes = make([]protoimpl.EnumInfo, 39)
+var file_g8e_eval_v1_eval_proto_enumTypes = make([]protoimpl.EnumInfo, 40)
 var file_g8e_eval_v1_eval_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
 var file_g8e_eval_v1_eval_proto_goTypes = []any{
 	(EvaluationLane)(0),                           // 0: g8e.eval.v1.EvaluationLane
@@ -10648,312 +10788,316 @@ var file_g8e_eval_v1_eval_proto_goTypes = []any{
 	(ModelProvenanceObservationAttemptStatus)(0),  // 36: g8e.eval.v1.ModelProvenanceObservationAttemptStatus
 	(GradeBasis)(0),                               // 37: g8e.eval.v1.GradeBasis
 	(EvaluationWitnessPolicy)(0),                  // 38: g8e.eval.v1.EvaluationWitnessPolicy
-	(*EvaluationRuntimeBoundary)(nil),             // 39: g8e.eval.v1.EvaluationRuntimeBoundary
-	(*EvaluationDeploymentIdentity)(nil),          // 40: g8e.eval.v1.EvaluationDeploymentIdentity
-	(*EvaluationValue)(nil),                       // 41: g8e.eval.v1.EvaluationValue
-	(*EvaluationRun)(nil),                         // 42: g8e.eval.v1.EvaluationRun
-	(*EvaluationAttempt)(nil),                     // 43: g8e.eval.v1.EvaluationAttempt
-	(*EvaluationObservation)(nil),                 // 44: g8e.eval.v1.EvaluationObservation
-	(*EvaluationTargetState)(nil),                 // 45: g8e.eval.v1.EvaluationTargetState
-	(*EvaluationAssertion)(nil),                   // 46: g8e.eval.v1.EvaluationAssertion
-	(*EvaluationVerdict)(nil),                     // 47: g8e.eval.v1.EvaluationVerdict
-	(*EvaluationMetric)(nil),                      // 48: g8e.eval.v1.EvaluationMetric
-	(*EvaluationReport)(nil),                      // 49: g8e.eval.v1.EvaluationReport
-	(*ModelCampaignBinding)(nil),                  // 50: g8e.eval.v1.ModelCampaignBinding
-	(*EvaluationCampaignSpec)(nil),                // 51: g8e.eval.v1.EvaluationCampaignSpec
-	(*EvaluationScenarioCatalog)(nil),             // 52: g8e.eval.v1.EvaluationScenarioCatalog
-	(*PublicScenarioCriterion)(nil),               // 53: g8e.eval.v1.PublicScenarioCriterion
-	(*PublicToolScoreDimensionRequirement)(nil),   // 54: g8e.eval.v1.PublicToolScoreDimensionRequirement
-	(*PromptHintArgument)(nil),                    // 55: g8e.eval.v1.PromptHintArgument
-	(*PromptHint)(nil),                            // 56: g8e.eval.v1.PromptHint
-	(*EvaluationScenarioDefinition)(nil),          // 57: g8e.eval.v1.EvaluationScenarioDefinition
-	(*ModelVariant)(nil),                          // 58: g8e.eval.v1.ModelVariant
-	(*ModelCapabilityObservation)(nil),            // 59: g8e.eval.v1.ModelCapabilityObservation
-	(*RoleAssignment)(nil),                        // 60: g8e.eval.v1.RoleAssignment
-	(*HeterogeneousStackDefinition)(nil),          // 61: g8e.eval.v1.HeterogeneousStackDefinition
-	(*EvaluationAssignment)(nil),                  // 62: g8e.eval.v1.EvaluationAssignment
-	(*HomogeneousAssignmentTarget)(nil),           // 63: g8e.eval.v1.HomogeneousAssignmentTarget
-	(*HeterogeneousAssignmentTarget)(nil),         // 64: g8e.eval.v1.HeterogeneousAssignmentTarget
-	(*ProviderBoundaryHardwareSample)(nil),        // 65: g8e.eval.v1.ProviderBoundaryHardwareSample
-	(*ProviderBoundaryObservationWindow)(nil),     // 66: g8e.eval.v1.ProviderBoundaryObservationWindow
-	(*ProviderBoundaryObservationCommand)(nil),    // 67: g8e.eval.v1.ProviderBoundaryObservationCommand
-	(*ProviderBoundaryObservationCompleted)(nil),  // 68: g8e.eval.v1.ProviderBoundaryObservationCompleted
-	(*ModelWeightAttestation)(nil),                // 69: g8e.eval.v1.ModelWeightAttestation
-	(*ModelProvenanceAttestationWindow)(nil),      // 70: g8e.eval.v1.ModelProvenanceAttestationWindow
-	(*ModelProvenanceObservationCommand)(nil),     // 71: g8e.eval.v1.ModelProvenanceObservationCommand
-	(*ModelProvenanceObservationCompleted)(nil),   // 72: g8e.eval.v1.ModelProvenanceObservationCompleted
-	(*ModelInferenceRecord)(nil),                  // 73: g8e.eval.v1.ModelInferenceRecord
-	(*ToolDecisionRecord)(nil),                    // 74: g8e.eval.v1.ToolDecisionRecord
-	(*ToolCallRecord)(nil),                        // 75: g8e.eval.v1.ToolCallRecord
-	(*EscalationRecord)(nil),                      // 76: g8e.eval.v1.EscalationRecord
-	(*HandoffRecord)(nil),                         // 77: g8e.eval.v1.HandoffRecord
-	(*RecoveryRecord)(nil),                        // 78: g8e.eval.v1.RecoveryRecord
-	(*GovernedActionBinding)(nil),                 // 79: g8e.eval.v1.GovernedActionBinding
-	(*DeterministicGrade)(nil),                    // 80: g8e.eval.v1.DeterministicGrade
-	(*SemanticGrade)(nil),                         // 81: g8e.eval.v1.SemanticGrade
-	(*DecomposedScoreRecord)(nil),                 // 82: g8e.eval.v1.DecomposedScoreRecord
-	(*GraderModelCallRecord)(nil),                 // 83: g8e.eval.v1.GraderModelCallRecord
-	(*PolicyDecisionRecord)(nil),                  // 84: g8e.eval.v1.PolicyDecisionRecord
-	(*EvaluationAssignmentResult)(nil),            // 85: g8e.eval.v1.EvaluationAssignmentResult
-	(*CampaignComplianceSourceArtifact)(nil),      // 86: g8e.eval.v1.CampaignComplianceSourceArtifact
-	(*CampaignComplianceSourceInventory)(nil),     // 87: g8e.eval.v1.CampaignComplianceSourceInventory
-	(*EvaluationVerificationReport)(nil),          // 88: g8e.eval.v1.EvaluationVerificationReport
-	(*EvaluationVerifiedPopulationEntry)(nil),     // 89: g8e.eval.v1.EvaluationVerifiedPopulationEntry
-	(*EvaluationVerifiedPopulation)(nil),          // 90: g8e.eval.v1.EvaluationVerifiedPopulation
-	(*PublicCampaignIdentity)(nil),                // 91: g8e.eval.v1.PublicCampaignIdentity
-	(*PublicModelVariantIdentity)(nil),            // 92: g8e.eval.v1.PublicModelVariantIdentity
-	(*PublicAssignmentLifecycleRecord)(nil),       // 93: g8e.eval.v1.PublicAssignmentLifecycleRecord
-	(*PublicModelCallSummary)(nil),                // 94: g8e.eval.v1.PublicModelCallSummary
-	(*PublicScenarioSummary)(nil),                 // 95: g8e.eval.v1.PublicScenarioSummary
-	(*PublicSemanticGradeSummary)(nil),            // 96: g8e.eval.v1.PublicSemanticGradeSummary
-	(*PublicModelActivityRecord)(nil),             // 97: g8e.eval.v1.PublicModelActivityRecord
-	(*PublicToolDecisionActivityRecord)(nil),      // 98: g8e.eval.v1.PublicToolDecisionActivityRecord
-	(*PublicToolCallActivityRecord)(nil),          // 99: g8e.eval.v1.PublicToolCallActivityRecord
-	(*PublicPolicyDecisionActivityRecord)(nil),    // 100: g8e.eval.v1.PublicPolicyDecisionActivityRecord
-	(*PublicGovernedActionActivityRecord)(nil),    // 101: g8e.eval.v1.PublicGovernedActionActivityRecord
-	(*PublicModelActivity)(nil),                   // 102: g8e.eval.v1.PublicModelActivity
-	(*PublicToolDecisionActivity)(nil),            // 103: g8e.eval.v1.PublicToolDecisionActivity
-	(*PublicToolCallActivity)(nil),                // 104: g8e.eval.v1.PublicToolCallActivity
-	(*PublicPolicyDecisionActivity)(nil),          // 105: g8e.eval.v1.PublicPolicyDecisionActivity
-	(*PublicGovernedActionActivity)(nil),          // 106: g8e.eval.v1.PublicGovernedActionActivity
-	(*PublicAssignmentActivitySummary)(nil),       // 107: g8e.eval.v1.PublicAssignmentActivitySummary
-	(*PublicEvidenceBinding)(nil),                 // 108: g8e.eval.v1.PublicEvidenceBinding
-	(*PublicVerificationMetadata)(nil),            // 109: g8e.eval.v1.PublicVerificationMetadata
-	(*PublicAssignmentResultProjection)(nil),      // 110: g8e.eval.v1.PublicAssignmentResultProjection
-	(*v1.VersionedReference)(nil),                 // 111: g8e.compliance.v1.VersionedReference
-	(*v1.ComplianceEvidenceReference)(nil),        // 112: g8e.compliance.v1.ComplianceEvidenceReference
-	(*timestamppb.Timestamp)(nil),                 // 113: google.protobuf.Timestamp
+	(PublicReleaseBasis)(0),                       // 39: g8e.eval.v1.PublicReleaseBasis
+	(*EvaluationRuntimeBoundary)(nil),             // 40: g8e.eval.v1.EvaluationRuntimeBoundary
+	(*EvaluationDeploymentIdentity)(nil),          // 41: g8e.eval.v1.EvaluationDeploymentIdentity
+	(*EvaluationValue)(nil),                       // 42: g8e.eval.v1.EvaluationValue
+	(*EvaluationRun)(nil),                         // 43: g8e.eval.v1.EvaluationRun
+	(*EvaluationAttempt)(nil),                     // 44: g8e.eval.v1.EvaluationAttempt
+	(*EvaluationObservation)(nil),                 // 45: g8e.eval.v1.EvaluationObservation
+	(*EvaluationTargetState)(nil),                 // 46: g8e.eval.v1.EvaluationTargetState
+	(*EvaluationAssertion)(nil),                   // 47: g8e.eval.v1.EvaluationAssertion
+	(*EvaluationVerdict)(nil),                     // 48: g8e.eval.v1.EvaluationVerdict
+	(*EvaluationMetric)(nil),                      // 49: g8e.eval.v1.EvaluationMetric
+	(*EvaluationReport)(nil),                      // 50: g8e.eval.v1.EvaluationReport
+	(*ModelCampaignBinding)(nil),                  // 51: g8e.eval.v1.ModelCampaignBinding
+	(*EvaluationCampaignSpec)(nil),                // 52: g8e.eval.v1.EvaluationCampaignSpec
+	(*EvaluationScenarioCatalog)(nil),             // 53: g8e.eval.v1.EvaluationScenarioCatalog
+	(*PublicScenarioCriterion)(nil),               // 54: g8e.eval.v1.PublicScenarioCriterion
+	(*PublicToolScoreDimensionRequirement)(nil),   // 55: g8e.eval.v1.PublicToolScoreDimensionRequirement
+	(*PromptHintArgument)(nil),                    // 56: g8e.eval.v1.PromptHintArgument
+	(*PromptHint)(nil),                            // 57: g8e.eval.v1.PromptHint
+	(*EvaluationScenarioDefinition)(nil),          // 58: g8e.eval.v1.EvaluationScenarioDefinition
+	(*ModelVariant)(nil),                          // 59: g8e.eval.v1.ModelVariant
+	(*ModelCapabilityObservation)(nil),            // 60: g8e.eval.v1.ModelCapabilityObservation
+	(*RoleAssignment)(nil),                        // 61: g8e.eval.v1.RoleAssignment
+	(*HeterogeneousStackDefinition)(nil),          // 62: g8e.eval.v1.HeterogeneousStackDefinition
+	(*EvaluationAssignment)(nil),                  // 63: g8e.eval.v1.EvaluationAssignment
+	(*HomogeneousAssignmentTarget)(nil),           // 64: g8e.eval.v1.HomogeneousAssignmentTarget
+	(*HeterogeneousAssignmentTarget)(nil),         // 65: g8e.eval.v1.HeterogeneousAssignmentTarget
+	(*ProviderBoundaryHardwareSample)(nil),        // 66: g8e.eval.v1.ProviderBoundaryHardwareSample
+	(*ProviderBoundaryObservationWindow)(nil),     // 67: g8e.eval.v1.ProviderBoundaryObservationWindow
+	(*ProviderBoundaryObservationCommand)(nil),    // 68: g8e.eval.v1.ProviderBoundaryObservationCommand
+	(*ProviderBoundaryObservationCompleted)(nil),  // 69: g8e.eval.v1.ProviderBoundaryObservationCompleted
+	(*ModelWeightAttestation)(nil),                // 70: g8e.eval.v1.ModelWeightAttestation
+	(*ModelProvenanceAttestationWindow)(nil),      // 71: g8e.eval.v1.ModelProvenanceAttestationWindow
+	(*ModelProvenanceObservationCommand)(nil),     // 72: g8e.eval.v1.ModelProvenanceObservationCommand
+	(*ModelProvenanceObservationCompleted)(nil),   // 73: g8e.eval.v1.ModelProvenanceObservationCompleted
+	(*ModelInferenceRecord)(nil),                  // 74: g8e.eval.v1.ModelInferenceRecord
+	(*ToolDecisionRecord)(nil),                    // 75: g8e.eval.v1.ToolDecisionRecord
+	(*ToolCallRecord)(nil),                        // 76: g8e.eval.v1.ToolCallRecord
+	(*EscalationRecord)(nil),                      // 77: g8e.eval.v1.EscalationRecord
+	(*HandoffRecord)(nil),                         // 78: g8e.eval.v1.HandoffRecord
+	(*RecoveryRecord)(nil),                        // 79: g8e.eval.v1.RecoveryRecord
+	(*GovernedActionBinding)(nil),                 // 80: g8e.eval.v1.GovernedActionBinding
+	(*DeterministicGrade)(nil),                    // 81: g8e.eval.v1.DeterministicGrade
+	(*SemanticGrade)(nil),                         // 82: g8e.eval.v1.SemanticGrade
+	(*DecomposedScoreRecord)(nil),                 // 83: g8e.eval.v1.DecomposedScoreRecord
+	(*GraderModelCallRecord)(nil),                 // 84: g8e.eval.v1.GraderModelCallRecord
+	(*PolicyDecisionRecord)(nil),                  // 85: g8e.eval.v1.PolicyDecisionRecord
+	(*EvaluationAssignmentResult)(nil),            // 86: g8e.eval.v1.EvaluationAssignmentResult
+	(*CampaignComplianceSourceArtifact)(nil),      // 87: g8e.eval.v1.CampaignComplianceSourceArtifact
+	(*CampaignComplianceSourceInventory)(nil),     // 88: g8e.eval.v1.CampaignComplianceSourceInventory
+	(*EvaluationVerificationReport)(nil),          // 89: g8e.eval.v1.EvaluationVerificationReport
+	(*EvaluationVerifiedPopulationEntry)(nil),     // 90: g8e.eval.v1.EvaluationVerifiedPopulationEntry
+	(*EvaluationVerifiedPopulation)(nil),          // 91: g8e.eval.v1.EvaluationVerifiedPopulation
+	(*PublicCampaignIdentity)(nil),                // 92: g8e.eval.v1.PublicCampaignIdentity
+	(*PublicModelVariantIdentity)(nil),            // 93: g8e.eval.v1.PublicModelVariantIdentity
+	(*PublicAssignmentLifecycleRecord)(nil),       // 94: g8e.eval.v1.PublicAssignmentLifecycleRecord
+	(*PublicModelCallSummary)(nil),                // 95: g8e.eval.v1.PublicModelCallSummary
+	(*PublicScenarioSummary)(nil),                 // 96: g8e.eval.v1.PublicScenarioSummary
+	(*PublicSemanticGradeSummary)(nil),            // 97: g8e.eval.v1.PublicSemanticGradeSummary
+	(*PublicModelActivityRecord)(nil),             // 98: g8e.eval.v1.PublicModelActivityRecord
+	(*PublicToolDecisionActivityRecord)(nil),      // 99: g8e.eval.v1.PublicToolDecisionActivityRecord
+	(*PublicToolCallActivityRecord)(nil),          // 100: g8e.eval.v1.PublicToolCallActivityRecord
+	(*PublicPolicyDecisionActivityRecord)(nil),    // 101: g8e.eval.v1.PublicPolicyDecisionActivityRecord
+	(*PublicGovernedActionActivityRecord)(nil),    // 102: g8e.eval.v1.PublicGovernedActionActivityRecord
+	(*PublicModelActivity)(nil),                   // 103: g8e.eval.v1.PublicModelActivity
+	(*PublicToolDecisionActivity)(nil),            // 104: g8e.eval.v1.PublicToolDecisionActivity
+	(*PublicToolCallActivity)(nil),                // 105: g8e.eval.v1.PublicToolCallActivity
+	(*PublicPolicyDecisionActivity)(nil),          // 106: g8e.eval.v1.PublicPolicyDecisionActivity
+	(*PublicGovernedActionActivity)(nil),          // 107: g8e.eval.v1.PublicGovernedActionActivity
+	(*PublicAssignmentActivitySummary)(nil),       // 108: g8e.eval.v1.PublicAssignmentActivitySummary
+	(*PublicEvidenceBinding)(nil),                 // 109: g8e.eval.v1.PublicEvidenceBinding
+	(*PublicVerificationMetadata)(nil),            // 110: g8e.eval.v1.PublicVerificationMetadata
+	(*PublicAssignmentResultProjection)(nil),      // 111: g8e.eval.v1.PublicAssignmentResultProjection
+	(*v1.VersionedReference)(nil),                 // 112: g8e.compliance.v1.VersionedReference
+	(*v1.ComplianceEvidenceReference)(nil),        // 113: g8e.compliance.v1.ComplianceEvidenceReference
+	(*timestamppb.Timestamp)(nil),                 // 114: google.protobuf.Timestamp
 }
 var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	23,  // 0: g8e.eval.v1.EvaluationRuntimeBoundary.component:type_name -> g8e.eval.v1.EvaluationRuntimeComponent
-	111, // 1: g8e.eval.v1.EvaluationDeploymentIdentity.topology_ref:type_name -> g8e.compliance.v1.VersionedReference
-	39,  // 2: g8e.eval.v1.EvaluationDeploymentIdentity.runtime_boundaries:type_name -> g8e.eval.v1.EvaluationRuntimeBoundary
-	112, // 3: g8e.eval.v1.EvaluationValue.artifact_reference:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	111, // 4: g8e.eval.v1.EvaluationRun.suite_ref:type_name -> g8e.compliance.v1.VersionedReference
-	40,  // 5: g8e.eval.v1.EvaluationRun.deployment:type_name -> g8e.eval.v1.EvaluationDeploymentIdentity
+	112, // 1: g8e.eval.v1.EvaluationDeploymentIdentity.topology_ref:type_name -> g8e.compliance.v1.VersionedReference
+	40,  // 2: g8e.eval.v1.EvaluationDeploymentIdentity.runtime_boundaries:type_name -> g8e.eval.v1.EvaluationRuntimeBoundary
+	113, // 3: g8e.eval.v1.EvaluationValue.artifact_reference:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	112, // 4: g8e.eval.v1.EvaluationRun.suite_ref:type_name -> g8e.compliance.v1.VersionedReference
+	41,  // 5: g8e.eval.v1.EvaluationRun.deployment:type_name -> g8e.eval.v1.EvaluationDeploymentIdentity
 	22,  // 6: g8e.eval.v1.EvaluationRun.active_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
 	0,   // 7: g8e.eval.v1.EvaluationRun.lane:type_name -> g8e.eval.v1.EvaluationLane
-	113, // 8: g8e.eval.v1.EvaluationRun.started_at:type_name -> google.protobuf.Timestamp
-	113, // 9: g8e.eval.v1.EvaluationRun.completed_at:type_name -> google.protobuf.Timestamp
-	112, // 10: g8e.eval.v1.EvaluationRun.final_verification_report_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	50,  // 11: g8e.eval.v1.EvaluationRun.campaign_binding:type_name -> g8e.eval.v1.ModelCampaignBinding
-	111, // 12: g8e.eval.v1.EvaluationAttempt.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	114, // 8: g8e.eval.v1.EvaluationRun.started_at:type_name -> google.protobuf.Timestamp
+	114, // 9: g8e.eval.v1.EvaluationRun.completed_at:type_name -> google.protobuf.Timestamp
+	113, // 10: g8e.eval.v1.EvaluationRun.final_verification_report_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	51,  // 11: g8e.eval.v1.EvaluationRun.campaign_binding:type_name -> g8e.eval.v1.ModelCampaignBinding
+	112, // 12: g8e.eval.v1.EvaluationAttempt.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
 	24,  // 13: g8e.eval.v1.EvaluationAttempt.status:type_name -> g8e.eval.v1.EvaluationAttemptStatus
-	113, // 14: g8e.eval.v1.EvaluationAttempt.started_at:type_name -> google.protobuf.Timestamp
-	113, // 15: g8e.eval.v1.EvaluationAttempt.completed_at:type_name -> google.protobuf.Timestamp
-	111, // 16: g8e.eval.v1.EvaluationObservation.observation_type:type_name -> g8e.compliance.v1.VersionedReference
+	114, // 14: g8e.eval.v1.EvaluationAttempt.started_at:type_name -> google.protobuf.Timestamp
+	114, // 15: g8e.eval.v1.EvaluationAttempt.completed_at:type_name -> google.protobuf.Timestamp
+	112, // 16: g8e.eval.v1.EvaluationObservation.observation_type:type_name -> g8e.compliance.v1.VersionedReference
 	25,  // 17: g8e.eval.v1.EvaluationObservation.source:type_name -> g8e.eval.v1.EvaluationObservationSource
-	113, // 18: g8e.eval.v1.EvaluationObservation.observed_at:type_name -> google.protobuf.Timestamp
+	114, // 18: g8e.eval.v1.EvaluationObservation.observed_at:type_name -> google.protobuf.Timestamp
 	26,  // 19: g8e.eval.v1.EvaluationObservation.authority:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
-	41,  // 20: g8e.eval.v1.EvaluationObservation.value:type_name -> g8e.eval.v1.EvaluationValue
-	112, // 21: g8e.eval.v1.EvaluationObservation.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	113, // 22: g8e.eval.v1.EvaluationTargetState.observed_at:type_name -> google.protobuf.Timestamp
+	42,  // 20: g8e.eval.v1.EvaluationObservation.value:type_name -> g8e.eval.v1.EvaluationValue
+	113, // 21: g8e.eval.v1.EvaluationObservation.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	114, // 22: g8e.eval.v1.EvaluationTargetState.observed_at:type_name -> google.protobuf.Timestamp
 	27,  // 23: g8e.eval.v1.EvaluationAssertion.comparator:type_name -> g8e.eval.v1.EvaluationComparator
-	41,  // 24: g8e.eval.v1.EvaluationAssertion.expected:type_name -> g8e.eval.v1.EvaluationValue
-	111, // 25: g8e.eval.v1.EvaluationAssertion.required_observation_types:type_name -> g8e.compliance.v1.VersionedReference
+	42,  // 24: g8e.eval.v1.EvaluationAssertion.expected:type_name -> g8e.eval.v1.EvaluationValue
+	112, // 25: g8e.eval.v1.EvaluationAssertion.required_observation_types:type_name -> g8e.compliance.v1.VersionedReference
 	26,  // 26: g8e.eval.v1.EvaluationAssertion.required_authorities:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
-	111, // 27: g8e.eval.v1.EvaluationVerdict.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
+	112, // 27: g8e.eval.v1.EvaluationVerdict.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
 	28,  // 28: g8e.eval.v1.EvaluationVerdict.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	112, // 29: g8e.eval.v1.EvaluationVerdict.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	111, // 30: g8e.eval.v1.EvaluationVerdict.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
-	113, // 31: g8e.eval.v1.EvaluationVerdict.evaluated_at:type_name -> google.protobuf.Timestamp
+	113, // 29: g8e.eval.v1.EvaluationVerdict.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	112, // 30: g8e.eval.v1.EvaluationVerdict.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	114, // 31: g8e.eval.v1.EvaluationVerdict.evaluated_at:type_name -> google.protobuf.Timestamp
 	31,  // 32: g8e.eval.v1.EvaluationMetric.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
 	29,  // 33: g8e.eval.v1.EvaluationMetric.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
-	111, // 34: g8e.eval.v1.EvaluationMetric.eligible_population_ref:type_name -> g8e.compliance.v1.VersionedReference
+	112, // 34: g8e.eval.v1.EvaluationMetric.eligible_population_ref:type_name -> g8e.compliance.v1.VersionedReference
 	30,  // 35: g8e.eval.v1.EvaluationMetric.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
-	112, // 36: g8e.eval.v1.EvaluationMetric.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	42,  // 37: g8e.eval.v1.EvaluationReport.run:type_name -> g8e.eval.v1.EvaluationRun
-	43,  // 38: g8e.eval.v1.EvaluationReport.attempts:type_name -> g8e.eval.v1.EvaluationAttempt
-	44,  // 39: g8e.eval.v1.EvaluationReport.observations:type_name -> g8e.eval.v1.EvaluationObservation
-	46,  // 40: g8e.eval.v1.EvaluationReport.assertions:type_name -> g8e.eval.v1.EvaluationAssertion
-	47,  // 41: g8e.eval.v1.EvaluationReport.verdicts:type_name -> g8e.eval.v1.EvaluationVerdict
-	48,  // 42: g8e.eval.v1.EvaluationReport.metrics:type_name -> g8e.eval.v1.EvaluationMetric
-	112, // 43: g8e.eval.v1.EvaluationReport.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 36: g8e.eval.v1.EvaluationMetric.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	43,  // 37: g8e.eval.v1.EvaluationReport.run:type_name -> g8e.eval.v1.EvaluationRun
+	44,  // 38: g8e.eval.v1.EvaluationReport.attempts:type_name -> g8e.eval.v1.EvaluationAttempt
+	45,  // 39: g8e.eval.v1.EvaluationReport.observations:type_name -> g8e.eval.v1.EvaluationObservation
+	47,  // 40: g8e.eval.v1.EvaluationReport.assertions:type_name -> g8e.eval.v1.EvaluationAssertion
+	48,  // 41: g8e.eval.v1.EvaluationReport.verdicts:type_name -> g8e.eval.v1.EvaluationVerdict
+	49,  // 42: g8e.eval.v1.EvaluationReport.metrics:type_name -> g8e.eval.v1.EvaluationMetric
+	113, // 43: g8e.eval.v1.EvaluationReport.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	28,  // 44: g8e.eval.v1.EvaluationReport.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	85,  // 45: g8e.eval.v1.EvaluationReport.assignment_results:type_name -> g8e.eval.v1.EvaluationAssignmentResult
-	88,  // 46: g8e.eval.v1.EvaluationReport.campaign_verification_report:type_name -> g8e.eval.v1.EvaluationVerificationReport
-	111, // 47: g8e.eval.v1.ModelCampaignBinding.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
-	111, // 48: g8e.eval.v1.EvaluationCampaignSpec.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
-	58,  // 49: g8e.eval.v1.EvaluationCampaignSpec.model_registry:type_name -> g8e.eval.v1.ModelVariant
+	86,  // 45: g8e.eval.v1.EvaluationReport.assignment_results:type_name -> g8e.eval.v1.EvaluationAssignmentResult
+	89,  // 46: g8e.eval.v1.EvaluationReport.campaign_verification_report:type_name -> g8e.eval.v1.EvaluationVerificationReport
+	112, // 47: g8e.eval.v1.ModelCampaignBinding.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	112, // 48: g8e.eval.v1.EvaluationCampaignSpec.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	59,  // 49: g8e.eval.v1.EvaluationCampaignSpec.model_registry:type_name -> g8e.eval.v1.ModelVariant
 	22,  // 50: g8e.eval.v1.EvaluationCampaignSpec.governance_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
-	111, // 51: g8e.eval.v1.EvaluationScenarioCatalog.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
-	57,  // 52: g8e.eval.v1.EvaluationScenarioCatalog.scenarios:type_name -> g8e.eval.v1.EvaluationScenarioDefinition
+	112, // 51: g8e.eval.v1.EvaluationScenarioCatalog.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	58,  // 52: g8e.eval.v1.EvaluationScenarioCatalog.scenarios:type_name -> g8e.eval.v1.EvaluationScenarioDefinition
 	4,   // 53: g8e.eval.v1.PublicScenarioCriterion.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
 	20,  // 54: g8e.eval.v1.PublicToolScoreDimensionRequirement.dimension:type_name -> g8e.eval.v1.PublicToolScoreDimension
 	13,  // 55: g8e.eval.v1.PromptHintArgument.source:type_name -> g8e.eval.v1.EvaluationHintArgumentSource
-	55,  // 56: g8e.eval.v1.PromptHint.arguments:type_name -> g8e.eval.v1.PromptHintArgument
+	56,  // 56: g8e.eval.v1.PromptHint.arguments:type_name -> g8e.eval.v1.PromptHintArgument
 	2,   // 57: g8e.eval.v1.EvaluationScenarioDefinition.category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
 	4,   // 58: g8e.eval.v1.EvaluationScenarioDefinition.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
-	112, // 59: g8e.eval.v1.EvaluationScenarioDefinition.input_fixture_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	112, // 60: g8e.eval.v1.EvaluationScenarioDefinition.gold_criteria_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	53,  // 61: g8e.eval.v1.EvaluationScenarioDefinition.public_criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
-	54,  // 62: g8e.eval.v1.EvaluationScenarioDefinition.public_tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
+	113, // 59: g8e.eval.v1.EvaluationScenarioDefinition.input_fixture_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 60: g8e.eval.v1.EvaluationScenarioDefinition.gold_criteria_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	54,  // 61: g8e.eval.v1.EvaluationScenarioDefinition.public_criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
+	55,  // 62: g8e.eval.v1.EvaluationScenarioDefinition.public_tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
 	1,   // 63: g8e.eval.v1.EvaluationScenarioDefinition.eligible_roles:type_name -> g8e.eval.v1.ModelCampaignRole
 	11,  // 64: g8e.eval.v1.EvaluationScenarioDefinition.trajectory_policy:type_name -> g8e.eval.v1.EvaluationTrajectoryPolicy
-	56,  // 65: g8e.eval.v1.EvaluationScenarioDefinition.prompt_hint:type_name -> g8e.eval.v1.PromptHint
-	59,  // 66: g8e.eval.v1.ModelVariant.capability_observations:type_name -> g8e.eval.v1.ModelCapabilityObservation
+	57,  // 65: g8e.eval.v1.EvaluationScenarioDefinition.prompt_hint:type_name -> g8e.eval.v1.PromptHint
+	60,  // 66: g8e.eval.v1.ModelVariant.capability_observations:type_name -> g8e.eval.v1.ModelCapabilityObservation
 	5,   // 67: g8e.eval.v1.ModelCapabilityObservation.capability:type_name -> g8e.eval.v1.ModelCapabilityKind
 	28,  // 68: g8e.eval.v1.ModelCapabilityObservation.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	1,   // 69: g8e.eval.v1.RoleAssignment.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	60,  // 70: g8e.eval.v1.HeterogeneousStackDefinition.primary_slot:type_name -> g8e.eval.v1.RoleAssignment
-	60,  // 71: g8e.eval.v1.HeterogeneousStackDefinition.assistant_slot:type_name -> g8e.eval.v1.RoleAssignment
-	60,  // 72: g8e.eval.v1.HeterogeneousStackDefinition.lite_slot:type_name -> g8e.eval.v1.RoleAssignment
-	111, // 73: g8e.eval.v1.EvaluationAssignment.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	61,  // 70: g8e.eval.v1.HeterogeneousStackDefinition.primary_slot:type_name -> g8e.eval.v1.RoleAssignment
+	61,  // 71: g8e.eval.v1.HeterogeneousStackDefinition.assistant_slot:type_name -> g8e.eval.v1.RoleAssignment
+	61,  // 72: g8e.eval.v1.HeterogeneousStackDefinition.lite_slot:type_name -> g8e.eval.v1.RoleAssignment
+	112, // 73: g8e.eval.v1.EvaluationAssignment.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
 	0,   // 74: g8e.eval.v1.EvaluationAssignment.lane:type_name -> g8e.eval.v1.EvaluationLane
 	3,   // 75: g8e.eval.v1.EvaluationAssignment.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	113, // 76: g8e.eval.v1.EvaluationAssignment.queued_at:type_name -> google.protobuf.Timestamp
-	113, // 77: g8e.eval.v1.EvaluationAssignment.started_at:type_name -> google.protobuf.Timestamp
-	113, // 78: g8e.eval.v1.EvaluationAssignment.completed_at:type_name -> google.protobuf.Timestamp
-	63,  // 79: g8e.eval.v1.EvaluationAssignment.homogeneous:type_name -> g8e.eval.v1.HomogeneousAssignmentTarget
-	64,  // 80: g8e.eval.v1.EvaluationAssignment.heterogeneous:type_name -> g8e.eval.v1.HeterogeneousAssignmentTarget
-	58,  // 81: g8e.eval.v1.HomogeneousAssignmentTarget.candidate_variant:type_name -> g8e.eval.v1.ModelVariant
+	114, // 76: g8e.eval.v1.EvaluationAssignment.queued_at:type_name -> google.protobuf.Timestamp
+	114, // 77: g8e.eval.v1.EvaluationAssignment.started_at:type_name -> google.protobuf.Timestamp
+	114, // 78: g8e.eval.v1.EvaluationAssignment.completed_at:type_name -> google.protobuf.Timestamp
+	64,  // 79: g8e.eval.v1.EvaluationAssignment.homogeneous:type_name -> g8e.eval.v1.HomogeneousAssignmentTarget
+	65,  // 80: g8e.eval.v1.EvaluationAssignment.heterogeneous:type_name -> g8e.eval.v1.HeterogeneousAssignmentTarget
+	59,  // 81: g8e.eval.v1.HomogeneousAssignmentTarget.candidate_variant:type_name -> g8e.eval.v1.ModelVariant
 	1,   // 82: g8e.eval.v1.HomogeneousAssignmentTarget.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	61,  // 83: g8e.eval.v1.HeterogeneousAssignmentTarget.stack:type_name -> g8e.eval.v1.HeterogeneousStackDefinition
+	62,  // 83: g8e.eval.v1.HeterogeneousAssignmentTarget.stack:type_name -> g8e.eval.v1.HeterogeneousStackDefinition
 	21,  // 84: g8e.eval.v1.ProviderBoundaryHardwareSample.vram_bytes_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
 	21,  // 85: g8e.eval.v1.ProviderBoundaryHardwareSample.gpu_utilization_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
 	21,  // 86: g8e.eval.v1.ProviderBoundaryHardwareSample.temperature_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
 	21,  // 87: g8e.eval.v1.ProviderBoundaryHardwareSample.power_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
 	21,  // 88: g8e.eval.v1.ProviderBoundaryHardwareSample.clock_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
 	21,  // 89: g8e.eval.v1.ProviderBoundaryHardwareSample.host_ram_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
-	65,  // 90: g8e.eval.v1.ProviderBoundaryObservationWindow.samples:type_name -> g8e.eval.v1.ProviderBoundaryHardwareSample
+	66,  // 90: g8e.eval.v1.ProviderBoundaryObservationWindow.samples:type_name -> g8e.eval.v1.ProviderBoundaryHardwareSample
 	32,  // 91: g8e.eval.v1.ProviderBoundaryObservationCommand.phase:type_name -> g8e.eval.v1.ProviderBoundaryObservationPhase
 	33,  // 92: g8e.eval.v1.ProviderBoundaryObservationCommand.attempt_status:type_name -> g8e.eval.v1.ProviderBoundaryObservationAttemptStatus
-	66,  // 93: g8e.eval.v1.ProviderBoundaryObservationCompleted.window:type_name -> g8e.eval.v1.ProviderBoundaryObservationWindow
+	67,  // 93: g8e.eval.v1.ProviderBoundaryObservationCompleted.window:type_name -> g8e.eval.v1.ProviderBoundaryObservationWindow
 	34,  // 94: g8e.eval.v1.ModelProvenanceAttestationWindow.manifest_verification_status:type_name -> g8e.eval.v1.ModelManifestVerificationStatus
-	69,  // 95: g8e.eval.v1.ModelProvenanceAttestationWindow.weight_attestations:type_name -> g8e.eval.v1.ModelWeightAttestation
+	70,  // 95: g8e.eval.v1.ModelProvenanceAttestationWindow.weight_attestations:type_name -> g8e.eval.v1.ModelWeightAttestation
 	35,  // 96: g8e.eval.v1.ModelProvenanceObservationCommand.phase:type_name -> g8e.eval.v1.ModelProvenanceObservationPhase
 	36,  // 97: g8e.eval.v1.ModelProvenanceObservationCommand.attempt_status:type_name -> g8e.eval.v1.ModelProvenanceObservationAttemptStatus
-	70,  // 98: g8e.eval.v1.ModelProvenanceObservationCompleted.window:type_name -> g8e.eval.v1.ModelProvenanceAttestationWindow
+	71,  // 98: g8e.eval.v1.ModelProvenanceObservationCompleted.window:type_name -> g8e.eval.v1.ModelProvenanceAttestationWindow
 	1,   // 99: g8e.eval.v1.ModelInferenceRecord.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	58,  // 100: g8e.eval.v1.ModelInferenceRecord.model_variant:type_name -> g8e.eval.v1.ModelVariant
+	59,  // 100: g8e.eval.v1.ModelInferenceRecord.model_variant:type_name -> g8e.eval.v1.ModelVariant
 	7,   // 101: g8e.eval.v1.ModelInferenceRecord.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
 	6,   // 102: g8e.eval.v1.ModelInferenceRecord.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
-	112, // 103: g8e.eval.v1.ModelInferenceRecord.governed_receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	112, // 104: g8e.eval.v1.ModelInferenceRecord.provider_boundary_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 103: g8e.eval.v1.ModelInferenceRecord.governed_receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 104: g8e.eval.v1.ModelInferenceRecord.provider_boundary_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	8,   // 105: g8e.eval.v1.ModelInferenceRecord.classification:type_name -> g8e.eval.v1.EvaluationCallClassification
 	28,  // 106: g8e.eval.v1.ToolDecisionRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	28,  // 107: g8e.eval.v1.ToolCallRecord.schema_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	28,  // 108: g8e.eval.v1.ToolCallRecord.semantic_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	112, // 109: g8e.eval.v1.ToolCallRecord.governed_binding_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 109: g8e.eval.v1.ToolCallRecord.governed_binding_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	1,   // 110: g8e.eval.v1.EscalationRecord.from_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	1,   // 111: g8e.eval.v1.EscalationRecord.to_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	1,   // 112: g8e.eval.v1.HandoffRecord.from_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	1,   // 113: g8e.eval.v1.HandoffRecord.to_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	28,  // 114: g8e.eval.v1.RecoveryRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	112, // 115: g8e.eval.v1.GovernedActionBinding.receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	112, // 116: g8e.eval.v1.GovernedActionBinding.persistence_attestation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	112, // 117: g8e.eval.v1.GovernedActionBinding.effect_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 115: g8e.eval.v1.GovernedActionBinding.receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 116: g8e.eval.v1.GovernedActionBinding.persistence_attestation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 117: g8e.eval.v1.GovernedActionBinding.effect_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	28,  // 118: g8e.eval.v1.DeterministicGrade.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	37,  // 119: g8e.eval.v1.DeterministicGrade.basis:type_name -> g8e.eval.v1.GradeBasis
 	28,  // 120: g8e.eval.v1.SemanticGrade.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	112, // 121: g8e.eval.v1.SemanticGrade.grader_call_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 121: g8e.eval.v1.SemanticGrade.grader_call_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	31,  // 122: g8e.eval.v1.DecomposedScoreRecord.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
 	29,  // 123: g8e.eval.v1.DecomposedScoreRecord.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
 	30,  // 124: g8e.eval.v1.DecomposedScoreRecord.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
-	112, // 125: g8e.eval.v1.GraderModelCallRecord.inference_record_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	113, // 125: g8e.eval.v1.GraderModelCallRecord.inference_record_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	9,   // 126: g8e.eval.v1.PolicyDecisionRecord.outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
 	0,   // 127: g8e.eval.v1.EvaluationAssignmentResult.lane:type_name -> g8e.eval.v1.EvaluationLane
 	3,   // 128: g8e.eval.v1.EvaluationAssignmentResult.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	73,  // 129: g8e.eval.v1.EvaluationAssignmentResult.model_inferences:type_name -> g8e.eval.v1.ModelInferenceRecord
-	74,  // 130: g8e.eval.v1.EvaluationAssignmentResult.tool_decisions:type_name -> g8e.eval.v1.ToolDecisionRecord
-	75,  // 131: g8e.eval.v1.EvaluationAssignmentResult.tool_calls:type_name -> g8e.eval.v1.ToolCallRecord
-	76,  // 132: g8e.eval.v1.EvaluationAssignmentResult.escalations:type_name -> g8e.eval.v1.EscalationRecord
-	77,  // 133: g8e.eval.v1.EvaluationAssignmentResult.handoffs:type_name -> g8e.eval.v1.HandoffRecord
-	78,  // 134: g8e.eval.v1.EvaluationAssignmentResult.recoveries:type_name -> g8e.eval.v1.RecoveryRecord
-	79,  // 135: g8e.eval.v1.EvaluationAssignmentResult.governed_actions:type_name -> g8e.eval.v1.GovernedActionBinding
-	80,  // 136: g8e.eval.v1.EvaluationAssignmentResult.deterministic_grades:type_name -> g8e.eval.v1.DeterministicGrade
-	81,  // 137: g8e.eval.v1.EvaluationAssignmentResult.semantic_grades:type_name -> g8e.eval.v1.SemanticGrade
-	82,  // 138: g8e.eval.v1.EvaluationAssignmentResult.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
-	83,  // 139: g8e.eval.v1.EvaluationAssignmentResult.grader_calls:type_name -> g8e.eval.v1.GraderModelCallRecord
-	112, // 140: g8e.eval.v1.EvaluationAssignmentResult.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	113, // 141: g8e.eval.v1.EvaluationAssignmentResult.completed_at:type_name -> google.protobuf.Timestamp
-	84,  // 142: g8e.eval.v1.EvaluationAssignmentResult.policy_decisions:type_name -> g8e.eval.v1.PolicyDecisionRecord
+	74,  // 129: g8e.eval.v1.EvaluationAssignmentResult.model_inferences:type_name -> g8e.eval.v1.ModelInferenceRecord
+	75,  // 130: g8e.eval.v1.EvaluationAssignmentResult.tool_decisions:type_name -> g8e.eval.v1.ToolDecisionRecord
+	76,  // 131: g8e.eval.v1.EvaluationAssignmentResult.tool_calls:type_name -> g8e.eval.v1.ToolCallRecord
+	77,  // 132: g8e.eval.v1.EvaluationAssignmentResult.escalations:type_name -> g8e.eval.v1.EscalationRecord
+	78,  // 133: g8e.eval.v1.EvaluationAssignmentResult.handoffs:type_name -> g8e.eval.v1.HandoffRecord
+	79,  // 134: g8e.eval.v1.EvaluationAssignmentResult.recoveries:type_name -> g8e.eval.v1.RecoveryRecord
+	80,  // 135: g8e.eval.v1.EvaluationAssignmentResult.governed_actions:type_name -> g8e.eval.v1.GovernedActionBinding
+	81,  // 136: g8e.eval.v1.EvaluationAssignmentResult.deterministic_grades:type_name -> g8e.eval.v1.DeterministicGrade
+	82,  // 137: g8e.eval.v1.EvaluationAssignmentResult.semantic_grades:type_name -> g8e.eval.v1.SemanticGrade
+	83,  // 138: g8e.eval.v1.EvaluationAssignmentResult.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
+	84,  // 139: g8e.eval.v1.EvaluationAssignmentResult.grader_calls:type_name -> g8e.eval.v1.GraderModelCallRecord
+	113, // 140: g8e.eval.v1.EvaluationAssignmentResult.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	114, // 141: g8e.eval.v1.EvaluationAssignmentResult.completed_at:type_name -> google.protobuf.Timestamp
+	85,  // 142: g8e.eval.v1.EvaluationAssignmentResult.policy_decisions:type_name -> g8e.eval.v1.PolicyDecisionRecord
 	12,  // 143: g8e.eval.v1.EvaluationAssignmentResult.trajectory_outcome:type_name -> g8e.eval.v1.EvaluationTrajectoryOutcome
 	38,  // 144: g8e.eval.v1.CampaignComplianceSourceInventory.provider_observation_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
 	38,  // 145: g8e.eval.v1.CampaignComplianceSourceInventory.model_provenance_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
-	86,  // 146: g8e.eval.v1.CampaignComplianceSourceInventory.artifacts:type_name -> g8e.eval.v1.CampaignComplianceSourceArtifact
+	87,  // 146: g8e.eval.v1.CampaignComplianceSourceInventory.artifacts:type_name -> g8e.eval.v1.CampaignComplianceSourceArtifact
 	28,  // 147: g8e.eval.v1.EvaluationVerificationReport.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	112, // 148: g8e.eval.v1.EvaluationVerificationReport.report_digest_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	113, // 149: g8e.eval.v1.EvaluationVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
+	113, // 148: g8e.eval.v1.EvaluationVerificationReport.report_digest_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	114, // 149: g8e.eval.v1.EvaluationVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
 	38,  // 150: g8e.eval.v1.EvaluationVerificationReport.provider_observation_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
 	38,  // 151: g8e.eval.v1.EvaluationVerificationReport.model_provenance_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
 	3,   // 152: g8e.eval.v1.EvaluationVerifiedPopulationEntry.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
 	1,   // 153: g8e.eval.v1.EvaluationVerifiedPopulationEntry.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	111, // 154: g8e.eval.v1.EvaluationVerifiedPopulation.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	112, // 154: g8e.eval.v1.EvaluationVerifiedPopulation.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
 	0,   // 155: g8e.eval.v1.EvaluationVerifiedPopulation.lane:type_name -> g8e.eval.v1.EvaluationLane
-	89,  // 156: g8e.eval.v1.EvaluationVerifiedPopulation.entries:type_name -> g8e.eval.v1.EvaluationVerifiedPopulationEntry
+	90,  // 156: g8e.eval.v1.EvaluationVerifiedPopulation.entries:type_name -> g8e.eval.v1.EvaluationVerifiedPopulationEntry
 	0,   // 157: g8e.eval.v1.PublicCampaignIdentity.lane:type_name -> g8e.eval.v1.EvaluationLane
-	2,   // 158: g8e.eval.v1.PublicAssignmentLifecycleRecord.scenario_category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
-	0,   // 159: g8e.eval.v1.PublicAssignmentLifecycleRecord.lane:type_name -> g8e.eval.v1.EvaluationLane
-	1,   // 160: g8e.eval.v1.PublicAssignmentLifecycleRecord.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	3,   // 161: g8e.eval.v1.PublicAssignmentLifecycleRecord.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	113, // 162: g8e.eval.v1.PublicAssignmentLifecycleRecord.observed_at:type_name -> google.protobuf.Timestamp
-	1,   // 163: g8e.eval.v1.PublicModelCallSummary.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	7,   // 164: g8e.eval.v1.PublicModelCallSummary.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
-	6,   // 165: g8e.eval.v1.PublicModelCallSummary.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
-	2,   // 166: g8e.eval.v1.PublicScenarioSummary.category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
-	4,   // 167: g8e.eval.v1.PublicScenarioSummary.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
-	53,  // 168: g8e.eval.v1.PublicScenarioSummary.criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
-	54,  // 169: g8e.eval.v1.PublicScenarioSummary.tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
-	11,  // 170: g8e.eval.v1.PublicScenarioSummary.trajectory_policy:type_name -> g8e.eval.v1.EvaluationTrajectoryPolicy
-	56,  // 171: g8e.eval.v1.PublicScenarioSummary.prompt_hint:type_name -> g8e.eval.v1.PromptHint
-	28,  // 172: g8e.eval.v1.PublicSemanticGradeSummary.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	4,   // 173: g8e.eval.v1.PublicSemanticGradeSummary.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
-	10,  // 174: g8e.eval.v1.PublicSemanticGradeSummary.explanation_code:type_name -> g8e.eval.v1.PublicGradeExplanationCode
-	1,   // 175: g8e.eval.v1.PublicModelActivityRecord.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	7,   // 176: g8e.eval.v1.PublicModelActivityRecord.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
-	16,  // 177: g8e.eval.v1.PublicModelActivityRecord.finish_state:type_name -> g8e.eval.v1.PublicFinishState
-	6,   // 178: g8e.eval.v1.PublicModelActivityRecord.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
-	28,  // 179: g8e.eval.v1.PublicToolDecisionActivityRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	17,  // 180: g8e.eval.v1.PublicToolDecisionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
-	28,  // 181: g8e.eval.v1.PublicToolCallActivityRecord.execution_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	28,  // 182: g8e.eval.v1.PublicToolCallActivityRecord.semantic_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	17,  // 183: g8e.eval.v1.PublicToolCallActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
-	9,   // 184: g8e.eval.v1.PublicPolicyDecisionActivityRecord.outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
-	17,  // 185: g8e.eval.v1.PublicPolicyDecisionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
-	9,   // 186: g8e.eval.v1.PublicGovernedActionActivityRecord.reported_policy_outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
-	19,  // 187: g8e.eval.v1.PublicGovernedActionActivityRecord.receipt_status:type_name -> g8e.eval.v1.PublicReceiptStatus
-	17,  // 188: g8e.eval.v1.PublicGovernedActionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
-	14,  // 189: g8e.eval.v1.PublicModelActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	15,  // 190: g8e.eval.v1.PublicModelActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	97,  // 191: g8e.eval.v1.PublicModelActivity.records:type_name -> g8e.eval.v1.PublicModelActivityRecord
-	14,  // 192: g8e.eval.v1.PublicToolDecisionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	15,  // 193: g8e.eval.v1.PublicToolDecisionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	98,  // 194: g8e.eval.v1.PublicToolDecisionActivity.records:type_name -> g8e.eval.v1.PublicToolDecisionActivityRecord
-	14,  // 195: g8e.eval.v1.PublicToolCallActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	15,  // 196: g8e.eval.v1.PublicToolCallActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	99,  // 197: g8e.eval.v1.PublicToolCallActivity.records:type_name -> g8e.eval.v1.PublicToolCallActivityRecord
-	14,  // 198: g8e.eval.v1.PublicPolicyDecisionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	15,  // 199: g8e.eval.v1.PublicPolicyDecisionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	100, // 200: g8e.eval.v1.PublicPolicyDecisionActivity.records:type_name -> g8e.eval.v1.PublicPolicyDecisionActivityRecord
-	14,  // 201: g8e.eval.v1.PublicGovernedActionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	15,  // 202: g8e.eval.v1.PublicGovernedActionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	101, // 203: g8e.eval.v1.PublicGovernedActionActivity.records:type_name -> g8e.eval.v1.PublicGovernedActionActivityRecord
-	102, // 204: g8e.eval.v1.PublicAssignmentActivitySummary.model_activity:type_name -> g8e.eval.v1.PublicModelActivity
-	103, // 205: g8e.eval.v1.PublicAssignmentActivitySummary.tool_decisions:type_name -> g8e.eval.v1.PublicToolDecisionActivity
-	104, // 206: g8e.eval.v1.PublicAssignmentActivitySummary.tool_calls:type_name -> g8e.eval.v1.PublicToolCallActivity
-	105, // 207: g8e.eval.v1.PublicAssignmentActivitySummary.policy_decisions:type_name -> g8e.eval.v1.PublicPolicyDecisionActivity
-	106, // 208: g8e.eval.v1.PublicAssignmentActivitySummary.governed_actions:type_name -> g8e.eval.v1.PublicGovernedActionActivity
-	18,  // 209: g8e.eval.v1.PublicVerificationMetadata.provenance:type_name -> g8e.eval.v1.PublicVerificationProvenance
-	28,  // 210: g8e.eval.v1.PublicVerificationMetadata.verifier_state:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	2,   // 211: g8e.eval.v1.PublicAssignmentResultProjection.scenario_category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
-	0,   // 212: g8e.eval.v1.PublicAssignmentResultProjection.lane:type_name -> g8e.eval.v1.EvaluationLane
-	1,   // 213: g8e.eval.v1.PublicAssignmentResultProjection.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	3,   // 214: g8e.eval.v1.PublicAssignmentResultProjection.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	28,  // 215: g8e.eval.v1.PublicAssignmentResultProjection.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	82,  // 216: g8e.eval.v1.PublicAssignmentResultProjection.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
-	113, // 217: g8e.eval.v1.PublicAssignmentResultProjection.completed_at:type_name -> google.protobuf.Timestamp
-	95,  // 218: g8e.eval.v1.PublicAssignmentResultProjection.scenario_summary:type_name -> g8e.eval.v1.PublicScenarioSummary
-	96,  // 219: g8e.eval.v1.PublicAssignmentResultProjection.semantic_grade_summaries:type_name -> g8e.eval.v1.PublicSemanticGradeSummary
-	107, // 220: g8e.eval.v1.PublicAssignmentResultProjection.activity_summary:type_name -> g8e.eval.v1.PublicAssignmentActivitySummary
-	108, // 221: g8e.eval.v1.PublicAssignmentResultProjection.evidence_bindings:type_name -> g8e.eval.v1.PublicEvidenceBinding
-	109, // 222: g8e.eval.v1.PublicAssignmentResultProjection.verification_metadata:type_name -> g8e.eval.v1.PublicVerificationMetadata
-	12,  // 223: g8e.eval.v1.PublicAssignmentResultProjection.trajectory_outcome:type_name -> g8e.eval.v1.EvaluationTrajectoryOutcome
-	224, // [224:224] is the sub-list for method output_type
-	224, // [224:224] is the sub-list for method input_type
-	224, // [224:224] is the sub-list for extension type_name
-	224, // [224:224] is the sub-list for extension extendee
-	0,   // [0:224] is the sub-list for field type_name
+	39,  // 158: g8e.eval.v1.PublicCampaignIdentity.release_basis:type_name -> g8e.eval.v1.PublicReleaseBasis
+	2,   // 159: g8e.eval.v1.PublicAssignmentLifecycleRecord.scenario_category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
+	0,   // 160: g8e.eval.v1.PublicAssignmentLifecycleRecord.lane:type_name -> g8e.eval.v1.EvaluationLane
+	1,   // 161: g8e.eval.v1.PublicAssignmentLifecycleRecord.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	3,   // 162: g8e.eval.v1.PublicAssignmentLifecycleRecord.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
+	114, // 163: g8e.eval.v1.PublicAssignmentLifecycleRecord.observed_at:type_name -> google.protobuf.Timestamp
+	39,  // 164: g8e.eval.v1.PublicAssignmentLifecycleRecord.release_basis:type_name -> g8e.eval.v1.PublicReleaseBasis
+	1,   // 165: g8e.eval.v1.PublicModelCallSummary.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	7,   // 166: g8e.eval.v1.PublicModelCallSummary.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
+	6,   // 167: g8e.eval.v1.PublicModelCallSummary.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
+	2,   // 168: g8e.eval.v1.PublicScenarioSummary.category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
+	4,   // 169: g8e.eval.v1.PublicScenarioSummary.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
+	54,  // 170: g8e.eval.v1.PublicScenarioSummary.criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
+	55,  // 171: g8e.eval.v1.PublicScenarioSummary.tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
+	11,  // 172: g8e.eval.v1.PublicScenarioSummary.trajectory_policy:type_name -> g8e.eval.v1.EvaluationTrajectoryPolicy
+	57,  // 173: g8e.eval.v1.PublicScenarioSummary.prompt_hint:type_name -> g8e.eval.v1.PromptHint
+	28,  // 174: g8e.eval.v1.PublicSemanticGradeSummary.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	4,   // 175: g8e.eval.v1.PublicSemanticGradeSummary.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
+	10,  // 176: g8e.eval.v1.PublicSemanticGradeSummary.explanation_code:type_name -> g8e.eval.v1.PublicGradeExplanationCode
+	1,   // 177: g8e.eval.v1.PublicModelActivityRecord.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	7,   // 178: g8e.eval.v1.PublicModelActivityRecord.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
+	16,  // 179: g8e.eval.v1.PublicModelActivityRecord.finish_state:type_name -> g8e.eval.v1.PublicFinishState
+	6,   // 180: g8e.eval.v1.PublicModelActivityRecord.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
+	28,  // 181: g8e.eval.v1.PublicToolDecisionActivityRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	17,  // 182: g8e.eval.v1.PublicToolDecisionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
+	28,  // 183: g8e.eval.v1.PublicToolCallActivityRecord.execution_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	28,  // 184: g8e.eval.v1.PublicToolCallActivityRecord.semantic_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	17,  // 185: g8e.eval.v1.PublicToolCallActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
+	9,   // 186: g8e.eval.v1.PublicPolicyDecisionActivityRecord.outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
+	17,  // 187: g8e.eval.v1.PublicPolicyDecisionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
+	9,   // 188: g8e.eval.v1.PublicGovernedActionActivityRecord.reported_policy_outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
+	19,  // 189: g8e.eval.v1.PublicGovernedActionActivityRecord.receipt_status:type_name -> g8e.eval.v1.PublicReceiptStatus
+	17,  // 190: g8e.eval.v1.PublicGovernedActionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
+	14,  // 191: g8e.eval.v1.PublicModelActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	15,  // 192: g8e.eval.v1.PublicModelActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	98,  // 193: g8e.eval.v1.PublicModelActivity.records:type_name -> g8e.eval.v1.PublicModelActivityRecord
+	14,  // 194: g8e.eval.v1.PublicToolDecisionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	15,  // 195: g8e.eval.v1.PublicToolDecisionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	99,  // 196: g8e.eval.v1.PublicToolDecisionActivity.records:type_name -> g8e.eval.v1.PublicToolDecisionActivityRecord
+	14,  // 197: g8e.eval.v1.PublicToolCallActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	15,  // 198: g8e.eval.v1.PublicToolCallActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	100, // 199: g8e.eval.v1.PublicToolCallActivity.records:type_name -> g8e.eval.v1.PublicToolCallActivityRecord
+	14,  // 200: g8e.eval.v1.PublicPolicyDecisionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	15,  // 201: g8e.eval.v1.PublicPolicyDecisionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	101, // 202: g8e.eval.v1.PublicPolicyDecisionActivity.records:type_name -> g8e.eval.v1.PublicPolicyDecisionActivityRecord
+	14,  // 203: g8e.eval.v1.PublicGovernedActionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	15,  // 204: g8e.eval.v1.PublicGovernedActionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	102, // 205: g8e.eval.v1.PublicGovernedActionActivity.records:type_name -> g8e.eval.v1.PublicGovernedActionActivityRecord
+	103, // 206: g8e.eval.v1.PublicAssignmentActivitySummary.model_activity:type_name -> g8e.eval.v1.PublicModelActivity
+	104, // 207: g8e.eval.v1.PublicAssignmentActivitySummary.tool_decisions:type_name -> g8e.eval.v1.PublicToolDecisionActivity
+	105, // 208: g8e.eval.v1.PublicAssignmentActivitySummary.tool_calls:type_name -> g8e.eval.v1.PublicToolCallActivity
+	106, // 209: g8e.eval.v1.PublicAssignmentActivitySummary.policy_decisions:type_name -> g8e.eval.v1.PublicPolicyDecisionActivity
+	107, // 210: g8e.eval.v1.PublicAssignmentActivitySummary.governed_actions:type_name -> g8e.eval.v1.PublicGovernedActionActivity
+	18,  // 211: g8e.eval.v1.PublicVerificationMetadata.provenance:type_name -> g8e.eval.v1.PublicVerificationProvenance
+	28,  // 212: g8e.eval.v1.PublicVerificationMetadata.verifier_state:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	2,   // 213: g8e.eval.v1.PublicAssignmentResultProjection.scenario_category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
+	0,   // 214: g8e.eval.v1.PublicAssignmentResultProjection.lane:type_name -> g8e.eval.v1.EvaluationLane
+	1,   // 215: g8e.eval.v1.PublicAssignmentResultProjection.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	3,   // 216: g8e.eval.v1.PublicAssignmentResultProjection.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
+	28,  // 217: g8e.eval.v1.PublicAssignmentResultProjection.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	83,  // 218: g8e.eval.v1.PublicAssignmentResultProjection.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
+	114, // 219: g8e.eval.v1.PublicAssignmentResultProjection.completed_at:type_name -> google.protobuf.Timestamp
+	96,  // 220: g8e.eval.v1.PublicAssignmentResultProjection.scenario_summary:type_name -> g8e.eval.v1.PublicScenarioSummary
+	97,  // 221: g8e.eval.v1.PublicAssignmentResultProjection.semantic_grade_summaries:type_name -> g8e.eval.v1.PublicSemanticGradeSummary
+	108, // 222: g8e.eval.v1.PublicAssignmentResultProjection.activity_summary:type_name -> g8e.eval.v1.PublicAssignmentActivitySummary
+	109, // 223: g8e.eval.v1.PublicAssignmentResultProjection.evidence_bindings:type_name -> g8e.eval.v1.PublicEvidenceBinding
+	110, // 224: g8e.eval.v1.PublicAssignmentResultProjection.verification_metadata:type_name -> g8e.eval.v1.PublicVerificationMetadata
+	12,  // 225: g8e.eval.v1.PublicAssignmentResultProjection.trajectory_outcome:type_name -> g8e.eval.v1.EvaluationTrajectoryOutcome
+	39,  // 226: g8e.eval.v1.PublicAssignmentResultProjection.release_basis:type_name -> g8e.eval.v1.PublicReleaseBasis
+	227, // [227:227] is the sub-list for method output_type
+	227, // [227:227] is the sub-list for method input_type
+	227, // [227:227] is the sub-list for extension type_name
+	227, // [227:227] is the sub-list for extension extendee
+	0,   // [0:227] is the sub-list for field type_name
 }
 
 func init() { file_g8e_eval_v1_eval_proto_init() }
@@ -10979,7 +11123,7 @@ func file_g8e_eval_v1_eval_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_eval_v1_eval_proto_rawDesc), len(file_g8e_eval_v1_eval_proto_rawDesc)),
-			NumEnums:      39,
+			NumEnums:      40,
 			NumMessages:   72,
 			NumExtensions: 0,
 			NumServices:   0,

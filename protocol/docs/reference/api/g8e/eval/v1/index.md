@@ -113,6 +113,7 @@
     - [PublicFinishState](#g8e-eval-v1-PublicFinishState)
     - [PublicGradeExplanationCode](#g8e-eval-v1-PublicGradeExplanationCode)
     - [PublicReceiptStatus](#g8e-eval-v1-PublicReceiptStatus)
+    - [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis)
     - [PublicToolScoreDimension](#g8e-eval-v1-PublicToolScoreDimension)
     - [PublicUnavailableReason](#g8e-eval-v1-PublicUnavailableReason)
     - [PublicVerificationProvenance](#g8e-eval-v1-PublicVerificationProvenance)
@@ -1206,6 +1207,9 @@ to one governed inference provider attempt.
 | lifecycle_status | [EvaluationAssignmentLifecycleStatus](#g8e-eval-v1-EvaluationAssignmentLifecycleStatus) |  |  |
 | repetition | [uint32](#uint32) |  |  |
 | observed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| release | [string](#string) |  |  |
+| release_basis | [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis) |  |  |
+| source_revision | [string](#string) |  |  |
 
 
 
@@ -1243,6 +1247,9 @@ to one governed inference provider attempt.
 | guided_retry_count | [uint32](#uint32) |  |  |
 | failure_reason | [string](#string) |  |  |
 | tools_declared | [string](#string) | repeated |  |
+| release | [string](#string) |  |  |
+| release_basis | [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis) |  |  |
+| source_revision | [string](#string) |  |  |
 
 
 
@@ -1264,6 +1271,9 @@ to one governed inference provider attempt.
 | catalog_digest | [string](#string) |  |  |
 | model_registry_digest | [string](#string) |  |  |
 | lane | [EvaluationLane](#g8e-eval-v1-EvaluationLane) |  |  |
+| release | [string](#string) |  |  |
+| release_basis | [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis) |  |  |
+| source_revision | [string](#string) |  |  |
 
 
 
@@ -2278,6 +2288,20 @@ governed provider attempt on the remote observer operator.
 | PUBLIC_RECEIPT_STATUS_UNSPECIFIED | 0 |  |
 | PUBLIC_RECEIPT_STATUS_UNAVAILABLE | 1 |  |
 | PUBLIC_RECEIPT_STATUS_REPORTED | 2 |  |
+
+
+
+<a name="g8e-eval-v1-PublicReleaseBasis"></a>
+
+### PublicReleaseBasis
+The release measured by a campaign is independent of verifier provenance.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_RELEASE_BASIS_UNSPECIFIED | 0 |  |
+| PUBLIC_RELEASE_BASIS_RECORDED | 1 | Bound into campaign_digest at creation. |
+| PUBLIC_RELEASE_BASIS_ASSERTED | 2 | Operator tag outside campaign_digest. |
+| PUBLIC_RELEASE_BASIS_UNKNOWN | 3 | Historical campaign without a release tag. |
 
 
 

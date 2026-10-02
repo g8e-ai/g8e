@@ -6,14 +6,17 @@
 
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDatasetOptions } from '../state/dataset';
+import { CURRENT_PLATFORM_RELEASE } from '../content/release';
+import { ReleaseSelector } from './ReleaseSelector';
 
 export function DatasetSelector({ activeId }: { activeId: string }) {
-  const options = useDatasetOptions();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const options = useDatasetOptions(params.get('release') ?? CURRENT_PLATFORM_RELEASE);
 
   return (
     <div className="dataset-selector" data-testid="dataset-selector">
+      <ReleaseSelector />
       <span className="ds-label">Dataset</span>
       <select
         value={activeId}

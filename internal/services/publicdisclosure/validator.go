@@ -81,6 +81,9 @@ func ValidateAssignmentRecord(envelopeVersion string, recordBytes []byte) error 
 		if lifecycle.GetAssignmentId() == "" || lifecycle.GetRunId() == "" || lifecycle.GetScenarioId() == "" {
 			return schemaError("missing lifecycle identity")
 		}
+		if err := validateReleaseIdentity(lifecycle.GetRelease(), lifecycle.GetReleaseBasis(), lifecycle.GetSourceRevision()); err != nil {
+			return err
+		}
 		return validateStrings(envelope.Record)
 	}
 	if envelope.SchemaVersion != historicalVersion && envelope.SchemaVersion != enrichedVersion && envelope.SchemaVersion != trajectoryVersion {
@@ -111,6 +114,9 @@ func validateResult(version string, raw json.RawMessage) error {
 	}
 	if record.GetAssignmentId() == "" || record.GetRunId() == "" || record.GetScenarioId() == "" {
 		return schemaError("missing assignment identity")
+	}
+	if err := validateReleaseIdentity(record.GetRelease(), record.GetReleaseBasis(), record.GetSourceRevision()); err != nil {
+		return err
 	}
 	if record.GetResultDigest() != "" && !hashPattern.MatchString(record.GetResultDigest()) {
 		return fmt.Errorf("invalid result digest: %w", constants.ErrEvidenceArtifactMalformed)
@@ -526,7 +532,7 @@ func validateExplorerViewRecord(recordBytes []byte, event bool) error {
 		return err
 	}
 	if event {
-		if err := allowed(fields, "schema_version", "kind", "dataset_id", "quality_state", "observed_at", "source_revision_label", "event_id", "run_id", "assignment_id", "task_id", "variant_id", "role", "lifecycle_status", "completed", "total", "stage_label", "metric_delta", "feed_sequence"); err != nil {
+		if err := allowed(fields, "schema_version", "kind", "dataset_id", "quality_state", "observed_at", "source_revision_label", "release", "release_basis", "source_revision", "event_id", "run_id", "assignment_id", "task_id", "variant_id", "role", "lifecycle_status", "completed", "total", "stage_label", "metric_delta", "feed_sequence"); err != nil {
 			return publicFeedSchemaError(err.Error())
 		}
 		eventID, eventIDOK := stringField(fields, "event_id")
@@ -584,7 +590,59 @@ func validateExplorerEnvelope(fields map[string]json.RawMessage, event bool) err
 	if _, err := time.Parse(time.RFC3339Nano, observedAt); err != nil {
 		return publicFeedSchemaError("observed_at must be RFC3339")
 	}
+	if err := validateExplorerReleaseIdentity(fields); err != nil {
+		return publicFeedSchemaError(err.Error())
+	}
 	return nil
+}
+
+func validateReleaseIdentity(release string, basis evalv1.PublicReleaseBasis, revision string) error {
+	switch basis {
+	case evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNSPECIFIED:
+		if release != "" || revision != "" {
+			return schemaError("release provenance requires a basis")
+		}
+	case evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED, evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_ASSERTED:
+		if strings.TrimSpace(release) == "" {
+			return schemaError("known release basis requires a release")
+		}
+	case evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNKNOWN:
+		if release != "" {
+			return schemaError("unknown release basis cannot name a release")
+		}
+	default:
+		return schemaError("invalid release basis")
+	}
+	return nil
+}
+
+func validateExplorerReleaseIdentity(fields map[string]json.RawMessage) error {
+	release, releaseOK := stringField(fields, "release")
+	basis, basisOK := stringField(fields, "release_basis")
+	revision, revisionOK := stringField(fields, "source_revision")
+	for _, key := range []string{"release", "release_basis", "source_revision"} {
+		if raw, present := fields[key]; present {
+			var value *string
+			if err := json.Unmarshal(raw, &value); err != nil || value == nil {
+				return schemaError("invalid " + key)
+			}
+		}
+	}
+	if !basisOK && !releaseOK && !revisionOK {
+		return nil
+	}
+	var typedBasis evalv1.PublicReleaseBasis
+	switch basis {
+	case "recorded":
+		typedBasis = evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED
+	case "asserted":
+		typedBasis = evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_ASSERTED
+	case "unknown":
+		typedBasis = evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNKNOWN
+	default:
+		return schemaError("invalid release basis")
+	}
+	return validateReleaseIdentity(release, typedBasis, revision)
 }
 
 func validatePublicFeedManifest(recordBytes []byte) error {
@@ -623,7 +681,7 @@ func integerField(fields map[string]json.RawMessage, field string) (int64, error
 
 func publicFeedViewSchemaVersion(value string) bool {
 	switch value {
-	case "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0":
+	case "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0":
 		return true
 	default:
 		return false

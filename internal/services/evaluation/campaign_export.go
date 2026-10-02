@@ -379,7 +379,7 @@ func (e *CampaignExporter) ExportRun(
 		if err != nil {
 			return nil, err
 		}
-		record, err := e.buildAssignmentExportRecord(ctx, store, run, catalog, assignment, result, category, observationReader, verified, verificationReport)
+		record, err := e.buildAssignmentExportRecord(ctx, store, run, catalog, assignment, result, category, observationReader, verified, verificationReport, release)
 		if err != nil {
 			return nil, err
 		}
@@ -391,6 +391,7 @@ func (e *CampaignExporter) ExportRun(
 		return nil, err
 	}
 	aggregateState.Suite = methodologySuiteFromCatalog(catalog)
+	aggregateState.Release = release
 	if RunAggregateComplete(assignments, results, aggregateState) {
 		if aggregateState.ProviderEnvironment, err = observationReader.ObservedProviderEnvironment(ctx, results); err != nil {
 			return nil, err
@@ -402,7 +403,8 @@ func (e *CampaignExporter) ExportRun(
 	}
 	if verified {
 		verifiedRecords, projectionErr := BuildVerifiedModelSummaryViewRecords(VerifiedModelSummaryProjectionInput{
-			Run: run, Spec: spec, Catalog: catalog, Assignments: assignments, Results: results,
+			Release: release,
+			Run:     run, Spec: spec, Catalog: catalog, Assignments: assignments, Results: results,
 			Report: verificationReport, Applicability: applicability,
 		})
 		if projectionErr != nil {
@@ -532,6 +534,7 @@ func (e *CampaignExporter) buildAssignmentExportRecord(
 	observationReader *CampaignProviderObservationReader,
 	verified bool,
 	report *evalv1.EvaluationVerificationReport,
+	release CampaignRelease,
 ) (CampaignExportAssignmentRecord, error) {
 	verificationStatus := "unverified"
 	if verified {
@@ -543,6 +546,7 @@ func (e *CampaignExporter) buildAssignmentExportRecord(
 		scenario, resolveErr := ResolvePublicScenarioContext(ctx, store, run, catalog, assignment, artifacts)
 		if resolveErr == nil {
 			composed, composeErr := BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
+				Release:    release,
 				Assignment: assignment, Result: result, ScenarioContext: scenario,
 				ObservationReader: observationReader, VerificationStatus: verificationStatus,
 				VerificationMetadata: exportVerificationMetadata(report, verified),
@@ -564,7 +568,7 @@ func (e *CampaignExporter) buildAssignmentExportRecord(
 	if err != nil {
 		return CampaignExportAssignmentRecord{}, err
 	}
-	projection, err := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), verificationStatus)
+	projection, err := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), verificationStatus, release)
 	if err != nil {
 		return CampaignExportAssignmentRecord{}, err
 	}

@@ -7,6 +7,7 @@
 // fail-closed error state rather than rendering partial data.
 
 import {
+  RELEASE_BASES,
   type CatalogSnapshot,
   type ConfidenceInterval,
   DATASET_KINDS,
@@ -190,6 +191,9 @@ const ENVELOPE_FIELDS = [
   'quality_state',
   'observed_at',
   'source_revision_label',
+  'release',
+  'release_basis',
+  'source_revision',
 ] as const;
 
 function assertEnvelope(
@@ -204,6 +208,19 @@ function assertEnvelope(
   assertEnum(value.quality_state, QUALITY_STATES, `${path}.quality_state`);
   assertString(value.observed_at, `${path}.observed_at`);
   assertOptional(value.source_revision_label, `${path}.source_revision_label`, assertString);
+  assertReleaseProvenance(value, path);
+}
+
+export function assertReleaseProvenance(value: Record<string, unknown>, path: string): void {
+  assertOptional(value.release, `${path}.release`, assertString);
+  assertOptional(value.source_revision, `${path}.source_revision`, assertString);
+  if (value.release_basis === undefined && value.release === undefined && value.source_revision === undefined) return;
+  assertEnum(value.release_basis, RELEASE_BASES, `${path}.release_basis`);
+  if (value.release_basis === 'unknown') {
+    assert(value.release === undefined || value.release === '', `${path}.release`, 'unknown basis cannot name a release');
+  } else {
+    assert(typeof value.release === 'string' && value.release.trim() !== '', `${path}.release`, 'known basis requires a release');
+  }
 }
 
 function assertMetricValue(value: unknown, path: string): asserts value is MetricValue {
@@ -506,7 +523,7 @@ export function isEvaluationSummary(value: unknown): asserts value is Evaluation
   assertString(value.arm, 'evaluation_summary.arm');
   assertOptional(value.evaluation_unit, 'evaluation_summary.evaluation_unit', (v, p) => assertEnum(v, EVALUATION_UNITS, p));
   assertOptional(value.stack_id, 'evaluation_summary.stack_id', assertString);
-  if (value.schema_version === '1.5.0') {
+  if (value.schema_version === '1.5.0' || value.schema_version === '1.6.0') {
     assert(value.evaluation_unit !== undefined, 'evaluation_summary.evaluation_unit', 'required for schema 1.5.0');
     if (value.evaluation_unit === 'model') {
       assert(value.primary_invocation_share === undefined, 'evaluation_summary.primary_invocation_share', 'not applicable to model evaluations');
@@ -537,7 +554,7 @@ export function isEvaluationSummary(value: unknown): asserts value is Evaluation
   assertOptional(value.elapsed_seconds, 'evaluation_summary.elapsed_seconds', assertNumber);
   assertEnum(value.verifier_state, VERIFIER_STATES, 'evaluation_summary.verifier_state');
   assertOptional(value.verifier_failure_summary, 'evaluation_summary.verifier_failure_summary', assertString);
-  if (value.schema_version === '1.5.0') {
+  if (value.schema_version === '1.5.0' || value.schema_version === '1.6.0') {
     assertCurrentHeadlineMetrics(value.headline_metrics, 'evaluation_summary.headline_metrics');
     if (value.verifier_state === 'passed' || value.verifier_state === 'failed') {
       assertPublicVerificationMetadata(value.verification_metadata, 'evaluation_summary.verification_metadata');
@@ -874,7 +891,7 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
   assertOptional(value.evaluation_unit, 'assignment_result.evaluation_unit', (v, p) => assertEnum(v, EVALUATION_UNITS, p));
   assertOptional(value.stack_id, 'assignment_result.stack_id', assertString);
   if (value.benchmark_observations !== undefined) assertBenchmarkObservations(value.benchmark_observations, 'assignment_result.benchmark_observations');
-  if (value.schema_version !== '1.4.0' && value.schema_version !== '1.5.0') {
+  if (value.schema_version !== '1.4.0' && value.schema_version !== '1.5.0' && value.schema_version !== '1.6.0') {
     for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata', 'trajectory_outcome', 'guided_retry_count', 'failure_reason', 'tools_declared'] as const) {
       assert(value[field] === undefined, `assignment_result.${field}`, 'field requires schema 1.4.0 or later');
     }
