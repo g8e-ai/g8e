@@ -5,7 +5,7 @@ title: g8e Operator
 # g8e Operator
 
 Last Updated: 2026-10-01
-Version: v2.2.6
+Version: v2.2.7
 
 The Governed Operator is the Policy Execution Point (PEP) for the runtime in which the Operator process runs. The reference implementation is the `g8e` binary started with `g8e operator start`. It receives governed `GovernanceEnvelope` transactions from a Gateway over an outbound-only mTLS WebSocket connection, verifies each transaction locally, executes accepted typed actions through the L5 Actuator, and stores authoritative local execution evidence.
 
@@ -31,7 +31,7 @@ After credentials are available, the worker connects to the Gateway over mTLS, o
 cmd:<operator-id>:<operator-session-id>
 ```
 
-It publishes an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds. An automatic heartbeat is Operator-originated liveness, not a governed operation: it is published directly and produces no receipt or ledger commitment, so it never appears in operational compliance evidence. The Gateway stamps each heartbeat's receipt time on the Operator document, and sixty seconds without one marks the Operator `stale` (see [Liveness and Staleness](#liveness-and-staleness)). The worker retries a closed pub/sub connection with bounded backoff. It initializes encrypted local storage and execution services before accepting governed work. The execution vault is required by the outbound startup path; setting `--execution-vault=false` fails closed during initialization.
+It publishes an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds. An automatic heartbeat is Operator-originated liveness, not a governed operation: it is published directly and produces no receipt or ledger commitment, so it never appears in operational compliance evidence. The Gateway stamps each heartbeat's receipt time on the Operator document, and sixty seconds without one marks the Operator `stale` (see [Liveness and Staleness](#liveness-and-staleness)). The worker holds its command-channel subscription for as long as the service runs: a lost subscription is retried with capped exponential backoff and never abandoned, so a Gateway that is down for any length of time (a restart or an upgrade) does not leave an Operator that heartbeats but cannot receive a command. A TLS certificate failure on the channel is not retried; it shuts the worker down. It initializes encrypted local storage and execution services before accepting governed work. The execution vault is required by the outbound startup path; setting `--execution-vault=false` fails closed during initialization.
 
 The startup command accepts numerous flags controlling enrollment, runtime behavior, and specialized roles. The primary options are:
 
