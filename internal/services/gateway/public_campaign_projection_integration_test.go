@@ -140,7 +140,7 @@ func TestCampaignEvaluationSummaryPublishesThroughSignedMirrorReconstruction(t *
 		RunId:                    assignment.GetRunId(),
 		LifecycleStatus:          evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		ScoredInferenceSpanNanos: &spanNanos,
-		DeterministicGrades:      []*evalv1.DeterministicGrade{{Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS}},
+		DeterministicGrades:      []*evalv1.DeterministicGrade{{Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, Basis: evalv1.GradeBasis_GRADE_BASIS_OBSERVATION}},
 		ModelInferences: []*evalv1.ModelInferenceRecord{{
 			InferenceRecordId:       "inference-1",
 			UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
@@ -164,7 +164,7 @@ func TestCampaignEvaluationSummaryPublishesThroughSignedMirrorReconstruction(t *
 		AssignmentId:        assignmentWithoutMetrics.GetAssignmentId(),
 		RunId:               assignmentWithoutMetrics.GetRunId(),
 		LifecycleStatus:     evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
-		DeterministicGrades: []*evalv1.DeterministicGrade{{Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS}},
+		DeterministicGrades: []*evalv1.DeterministicGrade{{Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, Basis: evalv1.GradeBasis_GRADE_BASIS_OBSERVATION}},
 		ModelInferences:     []*evalv1.ModelInferenceRecord{{InferenceRecordId: "inference-2"}},
 	}
 	aggregate, err := evaluation.CollectRunAggregateState(
@@ -246,7 +246,7 @@ func TestCampaignEvaluationSummaryPublishesThroughSignedMirrorReconstruction(t *
 	assert.Equal(t, evaluationSummaryFromRecords(t, verificationRecords), history.Items[1])
 	assert.Equal(t, "not_run", history.Items[0].VerifierState)
 	summary := history.Items[1]
-	assert.Equal(t, "1.5.0", summary.SchemaVersion)
+	assert.Equal(t, "1.6.0", summary.SchemaVersion)
 	assert.Equal(t, "evaluation_summary", summary.Kind)
 	assert.Equal(t, "passed", summary.VerifierState)
 	assert.Equal(t, 1.0, summary.HeadlineMetrics.PassRate.Value)
