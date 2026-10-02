@@ -32,7 +32,7 @@ function evaluation(overrides: Partial<EvaluationSummary> = {}): EvaluationSumma
     assignment_total: 75,
     assignment_completed: 5,
     assignment_failed: 1,
-    terminal_outcomes: { completed: 5, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+    terminal_outcomes: { completed: 5, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0, provider_failed: 0, execution_failed: 0, escalated: 0 },
     started_at: '2026-09-22T12:00:00Z',
     verifier_state: 'not_applicable',
     headline_metrics: {},

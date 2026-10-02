@@ -29,7 +29,7 @@ function evaluation(
     assignment_total: 75,
     assignment_completed: 10,
     assignment_failed: 0,
-    terminal_outcomes: { completed: 10, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+    terminal_outcomes: { completed: 10, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0, provider_failed: 0, execution_failed: 0, escalated: 0 },
     started_at: startedAt,
     verifier_state: 'not_applicable',
     headline_metrics: {},
@@ -84,7 +84,7 @@ describe('EvaluationsView', () => {
       lifecycle_state: 'completed',
       assignment_completed: 3,
       assignment_failed: 1,
-      terminal_outcomes: { completed: 3, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+      terminal_outcomes: { completed: 3, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0, provider_failed: 0, execution_failed: 0, escalated: 0 },
       verifier_state: 'not_run',
       headline_metrics: {
         pass_rate: { value: 0.75, unit: 'ratio', observed_count: 4, eligible_count: 4, unavailable_count: 0 },

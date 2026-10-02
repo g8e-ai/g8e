@@ -202,7 +202,7 @@ describe('AssignmentDetailView: failure reason', () => {
     assignment_total: 1,
     assignment_completed: 0,
     assignment_failed: 1,
-    terminal_outcomes: { completed: 0, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+    terminal_outcomes: { completed: 0, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0, provider_failed: 0, execution_failed: 0, escalated: 0 },
     verifier_state: 'not_applicable',
     headline_metrics: {},
   };

@@ -711,31 +711,34 @@ function verdictToken(value: string | undefined): string {
 function mapTerminalStatus(lifecycleValue: string, summaryStatus: string | undefined): TerminalStatus {
   const lifecycle = lifecycleToken(lifecycleValue);
   const verdict = verdictToken(summaryStatus);
+  if (verdict === 'PASS' && lifecycle !== 'COMPLETED') {
+    throw new ValidationError(`verdict PASS contradicts lifecycle ${lifecycle}`, 'summary_status');
+  }
   switch (lifecycle) {
     case 'STOPPED':
       return 'stopped';
     case 'GRADER_FAILED':
+    case 'PARTIAL':
       return 'grader_failed';
+    case 'PROVIDER_FAILED':
+      return 'provider_failed';
+    case 'FAILED':
+      return 'execution_failed';
+    case 'ESCALATED':
+      return 'escalated';
     case 'POLICY_REJECTED':
+    case 'UNAVAILABLE':
       return 'invalid_evidence';
     case 'QUEUED':
     case 'RUNNING':
       throw new ValidationError(`result projection carries a non-terminal lifecycle: ${lifecycle}`, 'lifecycle_status');
     case 'COMPLETED':
-    case 'FAILED':
-    case 'PARTIAL':
-    case 'ESCALATED':
-    case 'PROVIDER_FAILED':
-    case 'UNAVAILABLE':
       break;
     default:
       throw new ValidationError(`unknown assignment lifecycle status: ${lifecycle}`, 'lifecycle_status');
   }
   switch (verdict) {
     case 'PASS':
-      if (lifecycle !== 'COMPLETED') {
-        throw new ValidationError(`verdict PASS contradicts lifecycle ${lifecycle}`, 'summary_status');
-      }
       return 'completed';
     case 'FAIL':
       return 'model_failed';

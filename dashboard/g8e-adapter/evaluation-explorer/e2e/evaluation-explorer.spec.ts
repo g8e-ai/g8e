@@ -33,7 +33,7 @@ function nativeEvaluation(runId: string) {
     assignment_total: 2,
     assignment_completed: 2,
     assignment_failed: 0,
-    terminal_outcomes: { completed: 1, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+    terminal_outcomes: { completed: 1, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0, provider_failed: 0, execution_failed: 0, escalated: 0 },
     started_at: '2026-09-15T23:38:21Z',
     ended_at: '2026-09-15T23:38:22Z',
     elapsed_seconds: 1,

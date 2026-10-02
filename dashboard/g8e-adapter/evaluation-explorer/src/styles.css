@@ -1975,7 +1975,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-body); font-weight: 600;
 }
 .terminal-completed, .grade-pass { color: var(--tone-ok); border-color: var(--tone-ok); }
-.terminal-model_failed, .terminal-grader_failed, .terminal-invalid_evidence, .terminal-stopped, .grade-fail {
+.terminal-model_failed, .terminal-grader_failed, .terminal-invalid_evidence, .terminal-stopped, .terminal-provider_failed, .terminal-execution_failed, .terminal-escalated, .grade-fail {
   color: var(--tone-critical); border-color: var(--tone-critical);
 }
 .verification-pill { color: var(--fg-muted); font-weight: 500; }

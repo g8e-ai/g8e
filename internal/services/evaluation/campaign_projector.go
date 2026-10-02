@@ -184,23 +184,19 @@ func marshalCampaignProjectionEnvelope(messageType, idempotencyKey string, recor
 }
 
 // DerivePublicSummaryStatus maps one terminal assignment result to a public
-// summary verdict using deterministic grades when present.
+// summary verdict. Only a COMPLETED lifecycle reaches a model verdict, read
+// from the deterministic grades. Every other terminal lifecycle ended before
+// the model could be judged, so it is INVALID_EVIDENCE: shown, never counted
+// for or against the model. The lifecycle (and AssignmentTerminalOutcome)
+// names which kind of ending it was.
 func DerivePublicSummaryStatus(result *evalv1.EvaluationAssignmentResult) evalv1.EvaluationVerdictStatus {
 	if result == nil {
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED
 	}
-	switch result.GetLifecycleStatus() {
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
+	if result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED {
 		return verdictFromGrades(result.GetDeterministicGrades())
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNAVAILABLE:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
-	default:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
 	}
+	return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE
 }
 
 // ScenarioCategoryForAssignment resolves one scenario category from a frozen

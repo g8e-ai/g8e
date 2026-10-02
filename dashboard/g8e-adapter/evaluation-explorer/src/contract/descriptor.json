@@ -77,7 +77,10 @@
       "model_failed",
       "grader_failed",
       "invalid_evidence",
-      "stopped"
+      "stopped",
+      "provider_failed",
+      "execution_failed",
+      "escalated"
     ],
     "LifecycleStatus": [
       "queued",

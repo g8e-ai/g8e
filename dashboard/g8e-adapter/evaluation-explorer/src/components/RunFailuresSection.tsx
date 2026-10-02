@@ -101,6 +101,9 @@ export function RunFailuresSection({ assignments, connection }: RunFailuresSecti
             <option value="model_failed">Model failed</option>
             <option value="grader_failed">Grader failed</option>
             <option value="invalid_evidence">Invalid evidence</option>
+            <option value="provider_failed">Provider failed</option>
+            <option value="execution_failed">Execution failed</option>
+            <option value="escalated">Escalated</option>
             <option value="stopped">Stopped</option>
           </select>
         </label>

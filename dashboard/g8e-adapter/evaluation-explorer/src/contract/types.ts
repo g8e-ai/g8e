@@ -191,17 +191,23 @@ export const SECURITY_PRIVACY_EVENTS = [
 ] as const;
 export type SecurityPrivacyEvent = (typeof SECURITY_PRIVACY_EVENTS)[number];
 
-/** Terminal outcome classification for an assignment. Reconciled against the
- *  exploratory baseline source data, which emits `completed` and
- *  `model_failed` in `terminal_statuses`. `grader_failed` and
- *  `invalid_evidence` cover the remaining typed failure modes the projector
- *  must represent; `stopped` covers a run stopped before a natural terminal. */
+/** Terminal outcome classification for an assignment. Only `completed` and
+ *  `model_failed` are verdicts on the model. Every other value names why the
+ *  assignment ended without one, and is never counted for or against the
+ *  model: `grader_failed` (grader unavailable or partial), `provider_failed`
+ *  (inference provider error), `execution_failed` (harness or request error),
+ *  `escalated` (handed to a human), `invalid_evidence` (policy-rejected, or a
+ *  failed structural grade), and `stopped` (stopped before a natural
+ *  terminal). */
 export const TERMINAL_STATUSES = [
   'completed',
   'model_failed',
   'grader_failed',
   'invalid_evidence',
   'stopped',
+  'provider_failed',
+  'execution_failed',
+  'escalated',
 ] as const;
 export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 

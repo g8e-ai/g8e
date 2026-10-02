@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -71,10 +72,58 @@ func TestDerivePublicSummaryStatus(t *testing.T) {
 	}
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, DerivePublicSummaryStatus(pass))
 
-	fail := &evalv1.EvaluationAssignmentResult{
-		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL,
+	// A run that ended before the model could be judged is never a model FAIL.
+	for _, lifecycle := range []evalv1.EvaluationAssignmentLifecycleStatus{
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_ESCALATED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNAVAILABLE,
+	} {
+		assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE,
+			DerivePublicSummaryStatus(&evalv1.EvaluationAssignmentResult{LifecycleStatus: lifecycle}), lifecycle.String())
 	}
-	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, DerivePublicSummaryStatus(fail))
+}
+
+func TestAssignmentTerminalOutcome_EveryTerminalLifecycleHasItsOwnOutcome(t *testing.T) {
+	failedGrade := &evalv1.EvaluationAssignmentResult{
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		DeterministicGrades: []*evalv1.DeterministicGrade{{
+			Basis:  basisObservation,
+			Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
+		}},
+	}
+	tests := []struct {
+		name      string
+		lifecycle evalv1.EvaluationAssignmentLifecycleStatus
+		result    *evalv1.EvaluationAssignmentResult
+		want      string
+	}{
+		{"model miss", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, failedGrade, TerminalOutcomeModelFailed},
+		{"completed lifecycle only", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, nil, TerminalOutcomeCompleted},
+		{"provider", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED, nil, TerminalOutcomeProviderFailed},
+		{"execution", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, nil, TerminalOutcomeExecutionFailed},
+		{"grader", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED, nil, TerminalOutcomeGraderFailed},
+		{"partial", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, nil, TerminalOutcomeGraderFailed},
+		{"escalated", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_ESCALATED, nil, TerminalOutcomeEscalated},
+		{"policy rejected", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED, nil, TerminalOutcomeInvalidEvidence},
+		{"stopped", evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED, nil, TerminalOutcomeStopped},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := AssignmentTerminalOutcome(tt.lifecycle, tt.result)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestAssignmentTerminalOutcome_NonTerminalLifecycleIsAnErrorNotAModelFailure(t *testing.T) {
+	_, err := AssignmentTerminalOutcome(evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING, nil)
+	assert.ErrorIs(t, err, constants.ErrEvaluationLifecycleUnknown)
 }
 
 func TestBuildAssignmentLifecycleProjection_HeterogeneousSetsPrimaryVariant(t *testing.T) {

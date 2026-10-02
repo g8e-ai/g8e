@@ -43,6 +43,9 @@ const FAILURE_TERMINAL_STATUSES = new Set<TerminalStatus>([
   'grader_failed',
   'invalid_evidence',
   'stopped',
+  'provider_failed',
+  'execution_failed',
+  'escalated',
 ]);
 
 /** True when the assignment ended in a preserved failure outcome. */

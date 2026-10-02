@@ -56,7 +56,7 @@ const evaluation: EvaluationSummary = {
   assignment_total: 2,
   assignment_completed: 1,
   assignment_failed: 1,
-  terminal_outcomes: { completed: 1, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+  terminal_outcomes: { completed: 1, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0, provider_failed: 0, execution_failed: 0, escalated: 0 },
   started_at: '2026-09-16T17:00:00Z',
   ended_at: '2026-09-16T17:01:32Z',
   elapsed_seconds: 92,

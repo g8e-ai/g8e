@@ -56,25 +56,20 @@ func (e *remoteGatewayCampaignFeedExporter) HighWaterSequence(ctx context.Contex
 }
 
 func (e *remoteGatewayCampaignFeedExporter) ExportBatch(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {
-	for attempt := 0; attempt < 2; attempt++ {
-		err := e.exportBatchOnce(ctx, records)
-		if err == nil {
-			return nil
-		}
-		if attempt == 1 || !isPublicFeedPublicationRetryable(err) {
-			return err
-		}
-		e.invalidateHighWater()
-		nextSequence, err := e.HighWaterSequence(ctx)
-		if err != nil {
-			return fmt.Errorf("campaign publication: gateway export batch: refresh high water: %w", err)
-		}
-		nextSequence++
-		for index := range records {
-			records[index].Sequence = nextSequence + int64(index)
-		}
+	err := e.exportBatchOnce(ctx, records)
+	if err == nil || !isPublicFeedPublicationRetryable(err) {
+		return err
 	}
-	return fmt.Errorf("campaign publication: gateway export batch: sequence retry exhausted")
+	e.invalidateHighWater()
+	nextSequence, err := e.HighWaterSequence(ctx)
+	if err != nil {
+		return fmt.Errorf("campaign publication: gateway export batch: refresh high water: %w", err)
+	}
+	nextSequence++
+	for index := range records {
+		records[index].Sequence = nextSequence + int64(index)
+	}
+	return e.exportBatchOnce(ctx, records)
 }
 
 func isPublicFeedPublicationRetryable(err error) bool {
@@ -190,7 +185,7 @@ func NewHTTPCampaignMirrorProbe(ctx context.Context) evaluation.CampaignMirrorPr
 
 func (p *httpCampaignMirrorProbe) DatasetPresent(ctx context.Context, datasetID string) (bool, error) {
 	if p == nil || datasetID == "" {
-		return false, fmt.Errorf("campaign mirror probe: missing dataset id")
+		return false, fmt.Errorf("campaign mirror probe: dataset id: %w", constants.ErrMissingRequiredField)
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()

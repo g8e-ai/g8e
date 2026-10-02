@@ -560,7 +560,7 @@ function evaluationSummary(
     assignment_total: 75,
     assignment_completed: 10,
     assignment_failed: 0,
-    terminal_outcomes: { completed: 10, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+    terminal_outcomes: { completed: 10, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0, provider_failed: 0, execution_failed: 0, escalated: 0 },
     verifier_state: 'not_applicable',
     headline_metrics: {},
     ...partial,

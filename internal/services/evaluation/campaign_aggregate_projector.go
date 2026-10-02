@@ -154,8 +154,13 @@ type CampaignViewRecord struct {
 }
 
 type runAggregateState struct {
-	Scheduled      uint32
-	Terminal       uint32
+	Scheduled uint32
+	Terminal  uint32
+	// Judged counts terminal assignments that ended in a verdict on the model
+	// (completed or model_failed). It is the pass-rate denominator: a provider,
+	// harness, grader, escalation, policy, or stopped ending is terminal but
+	// says nothing about the model, so it never lowers the rate.
+	Judged         uint32
 	Passed         uint32
 	Failed         uint32
 	ModelCount     uint32
@@ -199,6 +204,7 @@ type variantRoleAggregate struct {
 	Role                string
 	Scheduled           uint32
 	Terminal            uint32
+	Judged              uint32
 	Passed              uint32
 	Failed              uint32
 	Outcomes            map[string]uint32
@@ -324,15 +330,25 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 			if !assignmentLifecycleIsTerminal(assignment.GetLifecycleStatus()) {
 				continue
 			}
-			terminalStatus := lifecycleTerminalOutcome(assignment.GetLifecycleStatus())
+			terminalStatus, err := AssignmentTerminalOutcome(assignment.GetLifecycleStatus(), nil)
+			if err != nil {
+				return nil, fmt.Errorf("evaluation: collect run aggregate state: assignment %s: %w", assignment.GetAssignmentId(), err)
+			}
 			state.Terminal++
-			passed := terminalStatus == "completed"
+			passed := terminalStatus == TerminalOutcomeCompleted
+			judged := terminalOutcomeIsJudged(terminalStatus)
+			if judged {
+				state.Judged++
+			}
 			if passed {
 				state.Passed++
 			} else {
 				state.Failed++
 			}
 			for _, bucket := range buckets {
+				if judged {
+					bucket.Judged++
+				}
 				if passed {
 					bucket.Passed++
 				} else {
@@ -346,15 +362,25 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 			}
 			continue
 		}
+		terminalStatus, err := AssignmentTerminalOutcome(result.GetLifecycleStatus(), result)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: collect run aggregate state: assignment %s: %w", assignment.GetAssignmentId(), err)
+		}
 		state.Terminal++
-		terminalStatus := deriveExplorerTerminalStatus(result)
-		passed := terminalStatus == "completed"
+		passed := terminalStatus == TerminalOutcomeCompleted
+		judged := terminalOutcomeIsJudged(terminalStatus)
+		if judged {
+			state.Judged++
+		}
 		if passed {
 			state.Passed++
 		} else {
 			state.Failed++
 		}
 		for _, bucket := range buckets {
+			if judged {
+				bucket.Judged++
+			}
 			if passed {
 				bucket.Passed++
 			} else {
@@ -393,12 +419,12 @@ const (
 // increments the unavailable count rather than being silently dropped.
 func collectRunHeadlineMetrics(assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, state *runAggregateState) (*runHeadlineMetrics, error) {
 	metrics := &runHeadlineMetrics{
-		PassRate:            runMetricValue{Unit: runMetricUnitRatio, Eligible: state.Terminal, Observed: state.Terminal},
+		PassRate:            runMetricValue{Unit: runMetricUnitRatio, Eligible: state.Judged, Observed: state.Judged},
 		LatencyP50MS:        runMetricValue{Unit: runMetricUnitMilliseconds},
 		OutputThroughputP50: runMetricValue{Unit: runMetricUnitTokensPerSecond},
 	}
-	if state.Terminal > 0 {
-		value := float64(state.Passed) / float64(state.Terminal)
+	if state.Judged > 0 {
+		value := float64(state.Passed) / float64(state.Judged)
 		metrics.PassRate.Value = &value
 	} else {
 		metrics.PassRate.UnavailableReason = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE
@@ -515,7 +541,12 @@ func collectPairwiseAgreement(assignments []*evalv1.EvaluationAssignment, result
 		if assignment == nil {
 			continue
 		}
-		eligible, passed := assignmentOutcome(assignment, results)
+		eligible, passed, err := assignmentOutcome(assignment, results)
+		if err != nil {
+			return modelMetricValueRecord{
+				UnavailableReason: publicUnavailableReasonString(evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE),
+			}
+		}
 		if !eligible {
 			continue
 		}
@@ -545,18 +576,31 @@ func collectPairwiseAgreement(assignments []*evalv1.EvaluationAssignment, result
 	return modelMetricValueRecord{Value: &value}
 }
 
-func assignmentOutcome(assignment *evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) (bool, bool) {
+// assignmentOutcome reports whether an assignment ended in a verdict on the
+// model (completed or model_failed) and whether it passed. Provider, grader,
+// execution, escalation, policy, invalid-evidence, and stopped endings are not
+// the model's behavior, so they are ineligible rather than disagreements.
+func assignmentOutcome(assignment *evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) (eligible bool, passed bool, err error) {
+	lifecycle := assignment.GetLifecycleStatus()
 	result := results[assignment.GetAssignmentId()]
 	if result != nil {
-		if !assignmentLifecycleIsTerminal(result.GetLifecycleStatus()) {
-			return false, false
-		}
-		return true, deriveExplorerTerminalStatus(result) == "completed"
+		lifecycle = result.GetLifecycleStatus()
 	}
-	if !assignmentLifecycleIsTerminal(assignment.GetLifecycleStatus()) {
-		return false, false
+	if !assignmentLifecycleIsTerminal(lifecycle) {
+		return false, false, nil
 	}
-	return true, lifecycleTerminalOutcome(assignment.GetLifecycleStatus()) == "completed"
+	outcome, err := AssignmentTerminalOutcome(lifecycle, result)
+	if err != nil {
+		return false, false, err
+	}
+	switch outcome {
+	case TerminalOutcomeCompleted:
+		return true, true, nil
+	case TerminalOutcomeModelFailed:
+		return true, false, nil
+	default:
+		return false, false, nil
+	}
 }
 
 // contributorUnavailableReason selects the run-metric unavailable reason when
@@ -792,8 +836,12 @@ func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAg
 		Role: bucket.Role, BackendProviderClass: "ollama", InventoryOnly: terminal == 0, EvaluationCoverage: coverage,
 	}
 	if terminal > 0 {
-		passEstimate := float64(bucket.Passed) / float64(terminal)
-		record.PassRate = &modelPassRateRecord{Estimate: passEstimate, Lower: passEstimate, Upper: passEstimate, Denominator: terminal}
+		if bucket.Judged > 0 {
+			passEstimate := float64(bucket.Passed) / float64(bucket.Judged)
+			record.PassRate = &modelPassRateRecord{Estimate: passEstimate, Lower: passEstimate, Upper: passEstimate, Denominator: bucket.Judged}
+		} else {
+			record.UnavailableReasons = []string{"no assignment reached a verdict on the model"}
+		}
 		record.TerminalOutcomes = terminalOutcomesRecord(bucket.Outcomes)
 		record.AgreementPairwise = modelMetricRecordOrNil(bucket.AgreementPairwise)
 		record.LatencyP50MS = modelMetricRecordOrNil(bucket.LatencyP50MS)
@@ -1225,12 +1273,12 @@ func headlineMetricsForState(state *runAggregateState) evaluationHeadlineMetrics
 	headline := state.Headline
 	if headline == nil {
 		headline = &runHeadlineMetrics{
-			PassRate:            runMetricValue{Unit: runMetricUnitRatio, Eligible: state.Terminal, Observed: state.Terminal},
+			PassRate:            runMetricValue{Unit: runMetricUnitRatio, Eligible: state.Judged, Observed: state.Judged},
 			LatencyP50MS:        runMetricValue{Unit: runMetricUnitMilliseconds, UnavailableReason: evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS},
 			OutputThroughputP50: runMetricValue{Unit: runMetricUnitTokensPerSecond, UnavailableReason: evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS},
 		}
-		if state.Terminal > 0 {
-			value := float64(state.Passed) / float64(state.Terminal)
+		if state.Judged > 0 {
+			value := float64(state.Passed) / float64(state.Judged)
 			headline.PassRate.Value = &value
 		} else {
 			headline.PassRate.Observed = 0
@@ -1303,7 +1351,7 @@ func catalogSnapshotLimitations() []string {
 
 func methodologyMetricDefinitions() []methodologyMetricRecord {
 	return []methodologyMetricRecord{
-		{Key: "pass_rate", Name: "Pass rate", Unit: "proportion", Direction: "higher_is_better", Denominator: "terminal homogeneous model-role assignments for the variant and designated role", MissingValueBehavior: "excluded until a terminal assignment exists; never rendered as zero", Aggregation: "mean over terminal assignments within the active live dataset", UncertaintyMethod: "point estimate while the smoke campaign is in progress", Explanation: "The fraction of terminal assignments that passed for one frozen model variant acting in one designated role through the production chat pipeline."},
+		{Key: "pass_rate", Name: "Pass rate", Unit: "proportion", Direction: "higher_is_better", Denominator: "terminal homogeneous model-role assignments that ended in a verdict on the model (completed or model_failed) for the variant and designated role", MissingValueBehavior: "excluded until an assignment reaches a verdict on the model; never rendered as zero", Aggregation: "mean over judged assignments within the active live dataset; provider, execution, grader, escalated, invalid-evidence, and stopped endings are excluded", UncertaintyMethod: "point estimate while the smoke campaign is in progress", Explanation: "The fraction of assignments judged on the model that passed for one frozen model variant acting in one designated role through the production chat pipeline."},
 		{Key: "evaluation_coverage", Name: "Evaluation coverage", Unit: "proportion", Direction: "higher_is_better", Denominator: "scheduled assignments for the variant and designated role", MissingValueBehavior: "rendered as zero only when no assignments are scheduled", Aggregation: "terminal assignments divided by scheduled assignments", UncertaintyMethod: "none (descriptive)", Explanation: "How much of the scheduled smoke matrix has reached a terminal public result for this variant and role."},
 		{Key: "agreement_pairwise", Name: "Pairwise agreement", Unit: "proportion", Direction: "higher_is_better", Denominator: "repetition pairs within the same scenario for the variant and designated role", MissingValueBehavior: "unavailable until at least one scenario has two eligible terminal repetitions", Aggregation: "agreeing repetition pairs divided by all eligible repetition pairs", UncertaintyMethod: "none (descriptive)", Explanation: "How often two repetitions of the same scenario produce the same pass or fail outcome for one model acting in one designated role."},
 		{Key: "latency_p50_ms", Name: "Latency p50", Unit: "milliseconds", Direction: "lower_is_better", Denominator: "terminal assignments with scored inference activity for the variant and designated role", MissingValueBehavior: "unavailable when no scored inference span is observed; never rendered as zero", Aggregation: "median scored inference span across eligible assignments", UncertaintyMethod: "none (descriptive)", Explanation: "The median elapsed scored inference time for one model acting in one designated role."},
@@ -1321,11 +1369,14 @@ func methodologyLimitations() []string {
 
 func terminalOutcomesRecord(outcomes map[string]uint32) map[string]uint32 {
 	record := map[string]uint32{
-		"completed":        0,
-		"model_failed":     0,
-		"grader_failed":    0,
-		"invalid_evidence": 0,
-		"stopped":          0,
+		TerminalOutcomeCompleted:       0,
+		TerminalOutcomeModelFailed:     0,
+		TerminalOutcomeGraderFailed:    0,
+		TerminalOutcomeInvalidEvidence: 0,
+		TerminalOutcomeStopped:         0,
+		TerminalOutcomeProviderFailed:  0,
+		TerminalOutcomeExecutionFailed: 0,
+		TerminalOutcomeEscalated:       0,
 	}
 	for key, count := range outcomes {
 		record[key] = count
@@ -1368,19 +1419,61 @@ func assignmentLifecycleIsTerminal(status evalv1.EvaluationAssignmentLifecycleSt
 	}
 }
 
-func lifecycleTerminalOutcome(status evalv1.EvaluationAssignmentLifecycleStatus) string {
-	switch status {
+// Terminal outcomes are the public, typed reason an assignment ended. Only
+// completed and model_failed are verdicts on the model; every other outcome
+// names a harness, provider, grader, policy, or operator ending and is never
+// counted for or against the model.
+const (
+	TerminalOutcomeCompleted       = "completed"
+	TerminalOutcomeModelFailed     = "model_failed"
+	TerminalOutcomeGraderFailed    = "grader_failed"
+	TerminalOutcomeInvalidEvidence = "invalid_evidence"
+	TerminalOutcomeStopped         = "stopped"
+	TerminalOutcomeProviderFailed  = "provider_failed"
+	TerminalOutcomeExecutionFailed = "execution_failed"
+	TerminalOutcomeEscalated       = "escalated"
+)
+
+// terminalOutcomeIsJudged reports whether an outcome is a verdict on the model.
+func terminalOutcomeIsJudged(outcome string) bool {
+	return outcome == TerminalOutcomeCompleted || outcome == TerminalOutcomeModelFailed
+}
+
+// AssignmentTerminalOutcome is the one mapping from a terminal assignment to
+// its public outcome. result may be nil when only the lifecycle was persisted;
+// a COMPLETED lifecycle without a result is "completed", as the lifecycle is
+// all that is known. A lifecycle that is not terminal is an error, never a
+// model failure.
+func AssignmentTerminalOutcome(lifecycle evalv1.EvaluationAssignmentLifecycleStatus, result *evalv1.EvaluationAssignmentResult) (string, error) {
+	switch lifecycle {
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
-		return "completed"
+		if result == nil {
+			return TerminalOutcomeCompleted, nil
+		}
+		switch DerivePublicSummaryStatus(result) {
+		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS:
+			return TerminalOutcomeCompleted, nil
+		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE:
+			return TerminalOutcomeInvalidEvidence, nil
+		default:
+			return TerminalOutcomeModelFailed, nil
+		}
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL,
 		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED:
-		return "grader_failed"
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED:
-		return "invalid_evidence"
+		return TerminalOutcomeGraderFailed, nil
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED:
+		return TerminalOutcomeProviderFailed, nil
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED:
+		return TerminalOutcomeExecutionFailed, nil
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_ESCALATED:
+		return TerminalOutcomeEscalated, nil
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNAVAILABLE:
+		return TerminalOutcomeInvalidEvidence, nil
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED:
-		return "stopped"
+		return TerminalOutcomeStopped, nil
 	default:
-		return "model_failed"
+		return "", fmt.Errorf("evaluation: terminal outcome for lifecycle %s: %w", lifecycle, constants.ErrEvaluationLifecycleUnknown)
 	}
 }
 
@@ -1577,28 +1670,6 @@ func variantRoleAggregateFor(state *runAggregateState, variantID, role string) *
 		state.VariantRoles[key] = bucket
 	}
 	return bucket
-}
-
-func deriveExplorerTerminalStatus(result *evalv1.EvaluationAssignmentResult) string {
-	switch result.GetLifecycleStatus() {
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED:
-		return "stopped"
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL:
-		return "grader_failed"
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED:
-		return "invalid_evidence"
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
-		switch DerivePublicSummaryStatus(result) {
-		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS:
-			return "completed"
-		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE:
-			return "invalid_evidence"
-		default:
-			return "model_failed"
-		}
-	default:
-		return "model_failed"
-	}
 }
 
 func marshalCanonicalViewRecord(record any) ([]byte, error) {

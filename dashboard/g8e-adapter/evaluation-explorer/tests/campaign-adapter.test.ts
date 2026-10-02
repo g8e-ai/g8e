@@ -858,14 +858,16 @@ describe('adaptCampaignProjectionEnvelope', () => {
       [`${L}COMPLETED`, `${V}INVALID_EVIDENCE`, 'invalid_evidence', 'terminal_failed'],
       [`${L}COMPLETED`, `${V}UNAVAILABLE`, 'invalid_evidence', 'terminal_failed'],
       [`${L}COMPLETED`, `${V}UNSUPPORTED`, 'invalid_evidence', 'terminal_failed'],
-      [`${L}FAILED`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
-      [`${L}PARTIAL`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
-      [`${L}ESCALATED`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
-      [`${L}PROVIDER_FAILED`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
-      [`${L}UNAVAILABLE`, `${V}UNAVAILABLE`, 'invalid_evidence', 'terminal_failed'],
-      [`${L}GRADER_FAILED`, `${V}UNAVAILABLE`, 'grader_failed', 'terminal_failed'],
-      [`${L}POLICY_REJECTED`, `${V}FAIL`, 'invalid_evidence', 'terminal_failed'],
-      [`${L}STOPPED`, `${V}FAIL`, 'stopped', 'terminal_failed'],
+      // A lifecycle that ended before the model could be judged names its own
+      // outcome and carries INVALID_EVIDENCE, never a model FAIL.
+      [`${L}FAILED`, `${V}INVALID_EVIDENCE`, 'execution_failed', 'terminal_failed'],
+      [`${L}PARTIAL`, `${V}INVALID_EVIDENCE`, 'grader_failed', 'terminal_failed'],
+      [`${L}ESCALATED`, `${V}INVALID_EVIDENCE`, 'escalated', 'terminal_failed'],
+      [`${L}PROVIDER_FAILED`, `${V}INVALID_EVIDENCE`, 'provider_failed', 'terminal_failed'],
+      [`${L}UNAVAILABLE`, `${V}INVALID_EVIDENCE`, 'invalid_evidence', 'terminal_failed'],
+      [`${L}GRADER_FAILED`, `${V}INVALID_EVIDENCE`, 'grader_failed', 'terminal_failed'],
+      [`${L}POLICY_REJECTED`, `${V}INVALID_EVIDENCE`, 'invalid_evidence', 'terminal_failed'],
+      [`${L}STOPPED`, `${V}INVALID_EVIDENCE`, 'stopped', 'terminal_failed'],
     ])('maps %s with %s to %s', (lifecycle, verdict, terminal, quality) => {
       expect(adaptResult(lifecycle, verdict)).toMatchObject({ terminal_status: terminal, quality_state: quality });
     });

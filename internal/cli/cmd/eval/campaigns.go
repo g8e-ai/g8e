@@ -477,7 +477,7 @@ Examples:
 				if len(selector.IDs) > 0 {
 					msg += "; if you meant to pass multiple --formations, separate them with a comma (--formations a,b) or repeat the flag (--formations a --formations b) — space-separated values after a flag are parsed as extra positional arguments"
 				}
-				return errors.New(msg)
+				return fmt.Errorf("%s: %w", msg, constants.ErrEvaluationFlagsInvalid)
 			}
 			if !formationCampaign && !selector.IsSet() {
 				return fmt.Errorf("evaluation: campaigns create: name models, pass --family, --max-params, or --all, or use --formations or --all-formations: %w", constants.ErrEvaluationSelectionEmpty)

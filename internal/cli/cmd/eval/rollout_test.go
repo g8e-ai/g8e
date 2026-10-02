@@ -47,7 +47,7 @@ func TestRolloutAdd_RejectsUnknownModel(t *testing.T) {
 	env := setupRunEnv(t)
 	_, err := env.run(t, "rollout", "add", "unknown:model")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.ErrorIs(t, err, constants.ErrInferenceModelNotFound)
 }
 
 func TestRolloutRemove_DropsModelByTag(t *testing.T) {
