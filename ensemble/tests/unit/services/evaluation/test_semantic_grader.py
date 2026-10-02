@@ -230,3 +230,44 @@ async def test_grade_campaign_assignment_semantically_returns_unavailable_when_j
     assert len(semantic_grades) == 1
     assert semantic_grades[0].status == "unavailable"
     assert semantic_grades[0].detail
+
+
+@pytest.mark.asyncio
+async def test_judge_is_called_with_grader_context_without_evaluation_attempt_id():
+    """Verify that judge calls are NOT attributed to the scored turn's evaluation_attempt_id.
+
+    W2 requirement: Grader context must be distinct from the scored chain.
+    The judge should not set the judged assignment's evaluation_attempt_id
+    as a scored-chain member, so grader calls are excluded from scored aggregates.
+    """
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    settings = G8eeUserSettings(
+        eval_judge=EvalJudgeSettings(eval_judge_model="judge-model")
+    )
+    judge_grade = EvalGrade(
+        score=4,
+        reasoning="checkout-api is identified",
+        passed=True,
+        model_calls=[],
+    )
+    with patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()), patch(
+        "app.services.evaluation.semantic_grader.EvalJudge"
+    ) as judge_cls:
+        judge_cls.return_value.grade_turn = AsyncMock(return_value=judge_grade)
+        await grade_campaign_assignment_semantically(
+            evaluation_context=context.evaluation_context,
+            g8e_context=context,
+            request_settings=settings,
+            gold_summary=context.evaluation_context.gold_summary,
+            designated_role_output="checkout-api failed",
+            tool_calls=[],
+        )
+
+    # Verify the judge was instantiated with a grader context
+    judge_instantiation_context = judge_cls.call_args.kwargs["g8e_context"]
+    assert judge_instantiation_context is not None
+    assert judge_instantiation_context.evaluation_context is None, (
+        "Grader context must not carry evaluation_context (which includes evaluation_attempt_id)"
+    )
+    assert judge_instantiation_context.user_id == context.user_id
+    assert judge_instantiation_context.operator_id == context.operator_id

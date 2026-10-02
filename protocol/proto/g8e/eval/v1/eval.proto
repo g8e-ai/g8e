@@ -84,6 +84,18 @@ enum EvaluationUsageAvailability {
   EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE = 2;
 }
 
+// EvaluationCallClassification names the chain a model call belongs to.
+// SCORED_CHAIN calls answer the scored turn and are the only calls summed into
+// scored aggregates. POST_TURN calls (for example the memory write) run after
+// the turn. GRADER calls judge the turn and are recorded in grader_calls, never
+// in model_inferences.
+enum EvaluationCallClassification {
+  EVALUATION_CALL_CLASSIFICATION_UNSPECIFIED = 0;
+  EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN = 1;
+  EVALUATION_CALL_CLASSIFICATION_POST_TURN = 2;
+  EVALUATION_CALL_CLASSIFICATION_GRADER = 3;
+}
+
 enum EvaluationPolicyDecisionOutcome {
   EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED = 0;
   EVALUATION_POLICY_DECISION_OUTCOME_ALLOW = 1;
@@ -768,6 +780,9 @@ message ModelInferenceRecord {
   // from "not reported".
   repeated string tools_declared = 33;
   bool tools_declared_reported = 34;
+  // Which chain the call belongs to, stated by the producer at the call site.
+  // Aggregators select scored calls by this field, never by persona or span.
+  EvaluationCallClassification classification = 35;
 }
 
 message ToolDecisionRecord {

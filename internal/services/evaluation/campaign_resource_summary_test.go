@@ -164,6 +164,48 @@ func TestBuildPublicResourceSummary_ExcludesMemoryCodexCalls(t *testing.T) {
 	})
 }
 
+func TestBuildPublicResourceSummary_ExcludesGraderCalls(t *testing.T) {
+	reported := evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
+	scoredCalls := []*evalv1.ModelInferenceRecord{
+		{
+			AgentPersona: "triage", UsageAvailability: reported, PromptTokens: 4, CompletionTokens: 1,
+			ThinkingTokens: proto.Uint32(0), CacheTokens: proto.Uint32(2), RetryCount: proto.Uint32(0),
+		},
+		{
+			AgentPersona: "sage", UsageAvailability: reported, PromptTokens: 10, CompletionTokens: 5,
+			ThinkingTokens: proto.Uint32(2), CacheTokens: proto.Uint32(1), RetryCount: proto.Uint32(1),
+		},
+	}
+	graderCalls := []*evalv1.GraderModelCallRecord{
+		{GraderCallId: "grader-1", AssignmentId: "assignment-1", JudgeVariantId: "judge-a"},
+		{GraderCallId: "grader-2", AssignmentId: "assignment-1", JudgeVariantId: "judge-a"},
+	}
+	span := proto.Uint64(3_000_000)
+
+	without, err := BuildPublicResourceSummary(&evalv1.EvaluationAssignmentResult{
+		ModelInferences: scoredCalls, ScoredInferenceSpanNanos: span,
+	})
+	require.NoError(t, err)
+	with, err := BuildPublicResourceSummary(&evalv1.EvaluationAssignmentResult{
+		ModelInferences: scoredCalls, GraderCalls: graderCalls, ScoredInferenceSpanNanos: span,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, without, with, "grader calls must not change any scored aggregate")
+	require.NotNil(t, with.InputTokens.Value)
+	assert.Equal(t, float64(14), *with.InputTokens.Value)
+	require.NotNil(t, with.OutputTokens.Value)
+	assert.Equal(t, float64(6), *with.OutputTokens.Value)
+	require.NotNil(t, with.ThinkingTokens.Value)
+	assert.Equal(t, float64(2), *with.ThinkingTokens.Value)
+	require.NotNil(t, with.CacheTokens.Value)
+	assert.Equal(t, float64(3), *with.CacheTokens.Value)
+	require.NotNil(t, with.Retries.Value)
+	assert.Equal(t, float64(1), *with.Retries.Value)
+	require.NotNil(t, with.LatencyMS.Value)
+	assert.Equal(t, float64(3), *with.LatencyMS.Value)
+}
+
 func TestBuildPublicResourceSummary_NilResult(t *testing.T) {
 	_, err := BuildPublicResourceSummary(nil)
 	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)

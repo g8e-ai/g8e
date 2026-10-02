@@ -79,6 +79,7 @@
   
     - [EvaluationAssignmentLifecycleStatus](#g8e-eval-v1-EvaluationAssignmentLifecycleStatus)
     - [EvaluationAttemptStatus](#g8e-eval-v1-EvaluationAttemptStatus)
+    - [EvaluationCallClassification](#g8e-eval-v1-EvaluationCallClassification)
     - [EvaluationComparator](#g8e-eval-v1-EvaluationComparator)
     - [EvaluationEvidenceAuthority](#g8e-eval-v1-EvaluationEvidenceAuthority)
     - [EvaluationGovernancePosture](#g8e-eval-v1-EvaluationGovernancePosture)
@@ -894,6 +895,7 @@ ModelInferenceRecord captures one governed scored inference call.
 | provider_boundary_observation_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
 | tools_declared | [string](#string) | repeated | Tool names as sent to the provider for this call, captured at the provider boundary. tools_declared_reported distinguishes &#34;none declared&#34; from &#34;not reported&#34;. |
 | tools_declared_reported | [bool](#bool) |  |  |
+| classification | [EvaluationCallClassification](#g8e-eval-v1-EvaluationCallClassification) |  | Which chain the call belongs to, stated by the producer at the call site. Aggregators select scored calls by this field, never by persona or span. |
 
 
 
@@ -1756,6 +1758,24 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 | EVALUATION_ATTEMPT_STATUS_UNAVAILABLE | 4 |  |
 | EVALUATION_ATTEMPT_STATUS_UNSUPPORTED | 5 |  |
 | EVALUATION_ATTEMPT_STATUS_INVALID_EVIDENCE | 6 |  |
+
+
+
+<a name="g8e-eval-v1-EvaluationCallClassification"></a>
+
+### EvaluationCallClassification
+EvaluationCallClassification names the chain a model call belongs to.
+SCORED_CHAIN calls answer the scored turn and are the only calls summed into
+scored aggregates. POST_TURN calls (for example the memory write) run after
+the turn. GRADER calls judge the turn and are recorded in grader_calls, never
+in model_inferences.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| EVALUATION_CALL_CLASSIFICATION_UNSPECIFIED | 0 |  |
+| EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN | 1 |  |
+| EVALUATION_CALL_CLASSIFICATION_POST_TURN | 2 |  |
+| EVALUATION_CALL_CLASSIFICATION_GRADER | 3 |  |
 
 
 

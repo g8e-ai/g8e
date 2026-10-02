@@ -61,6 +61,16 @@ async def grade_campaign_assignment_semantically(
 ) -> tuple[list[EvaluationSemanticGradeRecord], list[EvaluationGraderCallRecord]]:
     grade_id = f"{evaluation_context.assignment_id}:semantic-judge"
     judge_model = _resolve_eval_judge_model(request_settings)
+
+    # Grader context: linked to the assignment but NOT the scored evaluation_attempt_id.
+    # This ensures grader calls are recorded separately and excluded from scored aggregates.
+    grader_context = G8eHttpContext(
+        user_id=g8e_context.user_id,
+        evaluation_context=None,  # Grader is not a scored-chain member
+        operator_id=g8e_context.operator_id,
+        operator_session_id=g8e_context.operator_session_id,
+    )
+
     try:
         if request_settings.llm.lite_provider == LLMProvider.JEV:
             decision_provider = get_decision_provider(request_settings.llm)
@@ -68,7 +78,7 @@ async def grade_campaign_assignment_semantically(
                 decision_provider=decision_provider,
                 model=judge_model,
                 settings=request_settings.eval_judge,
-                g8e_context=g8e_context,
+                g8e_context=grader_context,
             )
         else:
             provider = get_llm_provider(request_settings.llm, is_lite=True)
@@ -76,7 +86,7 @@ async def grade_campaign_assignment_semantically(
                 provider=provider,
                 model=judge_model,
                 settings=request_settings.eval_judge,
-                g8e_context=g8e_context,
+                g8e_context=grader_context,
             )
         grade = await judge.grade_turn(
             user_query=gold_summary.user_prompt,

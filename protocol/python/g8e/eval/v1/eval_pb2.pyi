@@ -81,6 +81,13 @@ class EvaluationUsageAvailability(int, metaclass=_enum_type_wrapper.EnumTypeWrap
     EVALUATION_USAGE_AVAILABILITY_REPORTED: _ClassVar[EvaluationUsageAvailability]
     EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE: _ClassVar[EvaluationUsageAvailability]
 
+class EvaluationCallClassification(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    EVALUATION_CALL_CLASSIFICATION_UNSPECIFIED: _ClassVar[EvaluationCallClassification]
+    EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN: _ClassVar[EvaluationCallClassification]
+    EVALUATION_CALL_CLASSIFICATION_POST_TURN: _ClassVar[EvaluationCallClassification]
+    EVALUATION_CALL_CLASSIFICATION_GRADER: _ClassVar[EvaluationCallClassification]
+
 class EvaluationPolicyDecisionOutcome(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED: _ClassVar[EvaluationPolicyDecisionOutcome]
@@ -360,6 +367,10 @@ EVALUATION_LOAD_STATE_UNAVAILABLE: EvaluationLoadState
 EVALUATION_USAGE_AVAILABILITY_UNSPECIFIED: EvaluationUsageAvailability
 EVALUATION_USAGE_AVAILABILITY_REPORTED: EvaluationUsageAvailability
 EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE: EvaluationUsageAvailability
+EVALUATION_CALL_CLASSIFICATION_UNSPECIFIED: EvaluationCallClassification
+EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN: EvaluationCallClassification
+EVALUATION_CALL_CLASSIFICATION_POST_TURN: EvaluationCallClassification
+EVALUATION_CALL_CLASSIFICATION_GRADER: EvaluationCallClassification
 EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED: EvaluationPolicyDecisionOutcome
 EVALUATION_POLICY_DECISION_OUTCOME_ALLOW: EvaluationPolicyDecisionOutcome
 EVALUATION_POLICY_DECISION_OUTCOME_DENY: EvaluationPolicyDecisionOutcome
@@ -1143,7 +1154,7 @@ class ModelProvenanceObservationCompleted(_message.Message):
     def __init__(self, window: _Optional[_Union[ModelProvenanceAttestationWindow, _Mapping]] = ...) -> None: ...
 
 class ModelInferenceRecord(_message.Message):
-    __slots__ = ("inference_record_id", "provider_attempt_id", "assignment_id", "evaluation_attempt_id", "model_role", "agent_persona", "call_site", "model_variant", "temperature", "top_p", "top_k", "seed", "max_output_tokens", "input_hash", "output_hash", "usage_availability", "prompt_tokens", "completion_tokens", "thinking_tokens", "cache_tokens", "request_started_at_unix_nanos", "first_token_at_unix_nanos", "generation_duration_nanos", "total_duration_nanos", "load_duration_nanos", "load_state", "retry_count", "finish_reason", "privacy_attested", "governed_receipt_ref", "result_digest", "provider_boundary_observation_ref", "tools_declared", "tools_declared_reported")
+    __slots__ = ("inference_record_id", "provider_attempt_id", "assignment_id", "evaluation_attempt_id", "model_role", "agent_persona", "call_site", "model_variant", "temperature", "top_p", "top_k", "seed", "max_output_tokens", "input_hash", "output_hash", "usage_availability", "prompt_tokens", "completion_tokens", "thinking_tokens", "cache_tokens", "request_started_at_unix_nanos", "first_token_at_unix_nanos", "generation_duration_nanos", "total_duration_nanos", "load_duration_nanos", "load_state", "retry_count", "finish_reason", "privacy_attested", "governed_receipt_ref", "result_digest", "provider_boundary_observation_ref", "tools_declared", "tools_declared_reported", "classification")
     INFERENCE_RECORD_ID_FIELD_NUMBER: _ClassVar[int]
     PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
     ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -1178,6 +1189,7 @@ class ModelInferenceRecord(_message.Message):
     PROVIDER_BOUNDARY_OBSERVATION_REF_FIELD_NUMBER: _ClassVar[int]
     TOOLS_DECLARED_FIELD_NUMBER: _ClassVar[int]
     TOOLS_DECLARED_REPORTED_FIELD_NUMBER: _ClassVar[int]
+    CLASSIFICATION_FIELD_NUMBER: _ClassVar[int]
     inference_record_id: str
     provider_attempt_id: str
     assignment_id: str
@@ -1212,7 +1224,8 @@ class ModelInferenceRecord(_message.Message):
     provider_boundary_observation_ref: _compliance_pb2.ComplianceEvidenceReference
     tools_declared: _containers.RepeatedScalarFieldContainer[str]
     tools_declared_reported: bool
-    def __init__(self, inference_record_id: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., model_role: _Optional[_Union[ModelCampaignRole, str]] = ..., agent_persona: _Optional[str] = ..., call_site: _Optional[str] = ..., model_variant: _Optional[_Union[ModelVariant, _Mapping]] = ..., temperature: _Optional[float] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., seed: _Optional[int] = ..., max_output_tokens: _Optional[int] = ..., input_hash: _Optional[str] = ..., output_hash: _Optional[str] = ..., usage_availability: _Optional[_Union[EvaluationUsageAvailability, str]] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., thinking_tokens: _Optional[int] = ..., cache_tokens: _Optional[int] = ..., request_started_at_unix_nanos: _Optional[int] = ..., first_token_at_unix_nanos: _Optional[int] = ..., generation_duration_nanos: _Optional[int] = ..., total_duration_nanos: _Optional[int] = ..., load_duration_nanos: _Optional[int] = ..., load_state: _Optional[_Union[EvaluationLoadState, str]] = ..., retry_count: _Optional[int] = ..., finish_reason: _Optional[str] = ..., privacy_attested: _Optional[bool] = ..., governed_receipt_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., result_digest: _Optional[str] = ..., provider_boundary_observation_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., tools_declared: _Optional[_Iterable[str]] = ..., tools_declared_reported: _Optional[bool] = ...) -> None: ...
+    classification: EvaluationCallClassification
+    def __init__(self, inference_record_id: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., model_role: _Optional[_Union[ModelCampaignRole, str]] = ..., agent_persona: _Optional[str] = ..., call_site: _Optional[str] = ..., model_variant: _Optional[_Union[ModelVariant, _Mapping]] = ..., temperature: _Optional[float] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., seed: _Optional[int] = ..., max_output_tokens: _Optional[int] = ..., input_hash: _Optional[str] = ..., output_hash: _Optional[str] = ..., usage_availability: _Optional[_Union[EvaluationUsageAvailability, str]] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., thinking_tokens: _Optional[int] = ..., cache_tokens: _Optional[int] = ..., request_started_at_unix_nanos: _Optional[int] = ..., first_token_at_unix_nanos: _Optional[int] = ..., generation_duration_nanos: _Optional[int] = ..., total_duration_nanos: _Optional[int] = ..., load_duration_nanos: _Optional[int] = ..., load_state: _Optional[_Union[EvaluationLoadState, str]] = ..., retry_count: _Optional[int] = ..., finish_reason: _Optional[str] = ..., privacy_attested: _Optional[bool] = ..., governed_receipt_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., result_digest: _Optional[str] = ..., provider_boundary_observation_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., tools_declared: _Optional[_Iterable[str]] = ..., tools_declared_reported: _Optional[bool] = ..., classification: _Optional[_Union[EvaluationCallClassification, str]] = ...) -> None: ...
 
 class ToolDecisionRecord(_message.Message):
     __slots__ = ("decision_id", "assignment_id", "tool_name", "recognized", "selected", "permission_compliant", "unnecessary", "outcome")
