@@ -34,7 +34,7 @@ import {
 } from '../contract/types';
 import { normalizeActivityFamily, parseWireActivityFamily } from '../contract/activity-family';
 import { decodeCampaignProjectionEnvelope } from '../contract/campaign-wire';
-import { assertRoleTranscripts } from '../contract/validators';
+import { assertRoleTranscripts, ValidationError } from '../contract/validators';
 
 export const CAMPAIGN_SOURCE_REVISION = 'g8e-eval-campaign';
 
@@ -776,19 +776,14 @@ function decomposedScoreKey(score: Record<string, unknown>): string | undefined 
   return suffix || undefined;
 }
 
-function synthesizePassMetric(metrics: Record<string, MetricValue>): void {
-  if (metrics.task_score) {
-    metrics.pass = metrics.task_score;
-    return;
+/** A published score set always carries the task score, which is the verdict. A
+ *  set without it is a contract violation, never a reason to infer a verdict
+ *  from another metric. */
+function taskScoreAsPass(metrics: Record<string, MetricValue>): void {
+  if (!metrics.task_score) {
+    throw new ValidationError('decomposed scores are missing task_score', 'decomposed_scores');
   }
-  const rate = metrics.deterministic_pass_rate;
-  if (rate?.value !== undefined) {
-    metrics.pass = { value: rate.value >= 1 ? 1 : 0 };
-    return;
-  }
-  if (!metrics.pass) {
-    metrics.pass = { unavailable_reason: 'task score not published' };
-  }
+  metrics.pass = metrics.task_score;
 }
 
 function mapDecomposedScores(value: unknown): Record<string, MetricValue> {
@@ -796,18 +791,23 @@ function mapDecomposedScores(value: unknown): Record<string, MetricValue> {
     return { pass: { unavailable_reason: 'decomposed scores not published' } };
   }
   const metrics: Record<string, MetricValue> = {};
-  for (const entry of value) {
-    if (typeof entry !== 'object' || entry === null) continue;
+  for (const [index, entry] of value.entries()) {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new ValidationError('expected score object', `decomposed_scores[${index}]`);
+    }
     const score = entry as Record<string, unknown>;
     const key = decomposedScoreKey(score);
-    if (!key) continue;
-    if (typeof score.value === 'number' && Number.isFinite(score.value)) {
-      metrics[key] = { value: score.value };
-    } else {
-      metrics[key] = { unavailable_reason: 'score value unavailable' };
+    if (!key) {
+      throw new ValidationError('score has neither dimension nor score_id', `decomposed_scores[${index}]`);
     }
+    // The wire decoder materializes the proto3 default, so a score without a
+    // finite value has bypassed it.
+    if (typeof score.value !== 'number' || !Number.isFinite(score.value)) {
+      throw new ValidationError('score value was not decoded', `decomposed_scores[${index}].value`);
+    }
+    metrics[key] = { value: score.value };
   }
-  synthesizePassMetric(metrics);
+  taskScoreAsPass(metrics);
   return metrics;
 }
 

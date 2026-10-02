@@ -1584,4 +1584,5 @@ var (
 	ErrEvaluationModelRequired             = errors.New("evaluation: --model is required")
 	ErrEvaluationNoCasesSelected           = errors.New("evaluation: no inference acceptance cases selected")
 	ErrEvaluationInferenceCasesFailed      = errors.New("evaluation: inference acceptance cases failed")
+	ErrEvaluationLiveEventProgressInvalid  = errors.New("evaluation: live event progress is invalid")
 )

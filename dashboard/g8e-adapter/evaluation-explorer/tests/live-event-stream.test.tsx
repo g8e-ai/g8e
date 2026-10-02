@@ -337,6 +337,7 @@ describe('LiveEventStream', () => {
     const labels = [
       'Time',
       'Role',
+      'Grading',
       'Event',
       'Status',
       'Category',
@@ -605,6 +606,7 @@ describe('LiveEventStream', () => {
         .filter((row) => row.querySelector('.stream-event-link')?.textContent === 'Stage Updated');
     const rowForRole = (role: string) =>
       stageRows().find((row) => row.querySelector('.stream-role')?.textContent === role);
+    const gradingTag = (role: string) => rowForRole(role)?.querySelector('.stream-role-tag');
 
     const stageEvents = [
       liveEvent({ event_id: 'evt-start', kind: 'assignment_started', assignment_id: 'assignment-chain', role: 'assistant', variant_id: 'gemma4-e2b' }),
@@ -645,9 +647,10 @@ describe('LiveEventStream', () => {
         </MemoryRouter>,
       );
 
-      expect(rowForRole('Assistant')).toHaveTextContent('Graded');
-      expect(rowForRole('Lite')).toHaveTextContent('Chain');
-      expect(rowForRole('Primary')).toHaveTextContent('Chain');
+      expect(gradingTag('Assistant')).toHaveTextContent('Graded');
+      expect(gradingTag('Lite')).toHaveTextContent('Chain');
+      expect(gradingTag('Primary')).toHaveTextContent('Chain');
+      expect(gradingTag('Assistant')?.closest('td')).not.toBe(rowForRole('Assistant')?.querySelector('.stream-role')?.closest('td'));
       expect(rowForRole('Primary')).toHaveClass('stream-row-chain');
       expect(rowForRole('Assistant')).not.toHaveClass('stream-row-chain');
       for (const row of stageRows()) {
@@ -758,14 +761,15 @@ describe('LiveEventStream', () => {
     const row = screen.getByRole('row', { name: /Stage Updated/i });
     expect(row).toBeInTheDocument();
     const cells = Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent?.trim());
-    // Columns: [Time, Role, Event, Status, Category, Task, Pass, Pass Rate, Latency, Input tokens, Output tokens, Tokens/s, Retries, Model, Progress]
+    // Columns: [Time, Role, Grading, Event, Status, Category, Task, Assignment, Pass, Pass Rate, Latency, Input tokens, Output tokens, Tokens/s, Retries, Model, Progress]
     expect(cells[1]).toBe('Lite');
-    expect(cells[2]).toBe('Stage Updated');
-    expect(cells[3]).toBe('Running');
-    expect(cells[4]).toBe('Tool Selection');
-    expect(cells[5]).toBe('tool-select-file-read');
-    expect(cells[4]).not.toBe('Lite');
-    expect(cells[4]).not.toBe('lite');
+    expect(cells[2]).toBe('—');
+    expect(cells[3]).toBe('Stage Updated');
+    expect(cells[4]).toBe('Running');
+    expect(cells[5]).toBe('Tool Selection');
+    expect(cells[6]).toBe('tool-select-file-read');
+    expect(cells[5]).not.toBe('Lite');
+    expect(cells[5]).not.toBe('lite');
   });
 
   it('does not fallback to role name when task is unrecognized and assignment is missing', () => {
@@ -792,8 +796,8 @@ describe('LiveEventStream', () => {
     expect(row).toBeInTheDocument();
     const cells = Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent?.trim());
     expect(cells[1]).toBe('Lite');
-    expect(cells[4]).toBe('—');
-    expect(cells[5]).toBe('custom-unknown-task');
+    expect(cells[5]).toBe('—');
+    expect(cells[6]).toBe('custom-unknown-task');
   });
 
   it('filters by category using the category dropdown', async () => {

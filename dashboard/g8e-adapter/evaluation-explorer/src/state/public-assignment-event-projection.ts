@@ -27,11 +27,13 @@ export interface PublicModelRoleInvocationSignal {
   total: number;
 }
 
-/** Public-safe per-assignment metric availability signal. */
+/** Public-safe per-assignment metric availability signal. `role` is the
+ *  assignment's designated role: the metric grades that role. */
 export interface PublicMetricAvailabilitySignal {
   run_id: string;
   assignment_id: string;
   variant_id: string;
+  role: ModelRole;
   metric_id: string;
   numerator: number;
   denominator: number;
@@ -95,6 +97,7 @@ export function projectMetricAvailabilityToLiveEvent(signal: PublicMetricAvailab
     run_id: signal.run_id,
     assignment_id: signal.assignment_id,
     variant_id: signal.variant_id,
+    role: signal.role,
     lifecycle_status: 'running',
     completed: signal.completed,
     total: signal.total,

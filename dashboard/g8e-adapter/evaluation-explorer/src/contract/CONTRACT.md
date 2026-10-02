@@ -30,6 +30,8 @@ The enum values are reconciled against canonical protocol vectors and checked-in
 - `VerifierState`: `not_run`, `passed`, `failed`, `not_applicable`. `not_run` means verification applies but no persisted applicable report has been published. `not_applicable` is reserved for evaluation programs that explicitly have no verification contract.
 - `SnapshotKind`: `catalog_snapshot`, `model_summary`, `suite_summary`, `evaluation_summary`, `assignment_result`, `methodology_snapshot`.
 - `LiveEventKind`: `evaluation_queued`, `evaluation_started`, `assignment_started`, `stage_updated`, `assignment_completed`, `assignment_failed`, `metric_updated`, `evaluation_completed`, `evaluation_failed`, `evaluation_stopped`.
+- A campaign `metric_updated` event carries the assignment's designated `role`; the Go projector rejects one without it, and the stream never substitutes the model's registry role.
+- A campaign result's `decomposed_scores[].value` is a protobuf `double`, so protojson omits a zero. The wire decoder (`decodeCampaignProjectionEnvelope`) is the only place that applies the proto3 default of 0, which makes a failed `task_score` read as `Fail`. The adapter rejects a score set without `task_score` instead of inferring a verdict from `deterministic_pass_rate`.
 - `FeedRecordType`: `projection`, `event`, `proof_manifest`, `key_revocation` (transport-level, from the public contract pack).
 - `FreshnessState`: `active`, `delayed`, `stale`, `intentionally_stopped`, `safety_stopped`, `source_offline` (transport-level, from the public contract pack).
 

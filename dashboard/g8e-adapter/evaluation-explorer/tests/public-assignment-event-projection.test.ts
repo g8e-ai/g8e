@@ -51,6 +51,7 @@ describe('public assignment event projection', () => {
         run_id: 'run-live-1',
         assignment_id: 'assign-1',
         variant_id: 'qwen3-4b',
+        role: 'primary',
         metric_id: 'pass_rate',
         numerator: 3,
         denominator: 4,
@@ -62,6 +63,7 @@ describe('public assignment event projection', () => {
       });
 
       expect(event.kind).toBe('metric_updated');
+      expect(event.role).toBe('primary');
       expect(event.metric_delta).toEqual({ pass_rate: { value: 0.75 } });
       expect(() => decodeViewRecord('metric_updated', event)).not.toThrow();
     });
@@ -71,6 +73,7 @@ describe('public assignment event projection', () => {
         run_id: 'run-live-1',
         assignment_id: 'assign-1',
         variant_id: 'qwen3-4b',
+        role: 'primary',
         metric_id: 'pass_rate',
         numerator: 0,
         denominator: 0,
@@ -88,6 +91,7 @@ describe('public assignment event projection', () => {
         run_id: 'run-live-1',
         assignment_id: 'assign-1',
         variant_id: 'qwen3-4b',
+        role: 'primary',
         metric_id: 'pass_rate',
         numerator: 1,
         denominator: 2,
@@ -116,6 +120,7 @@ describe('public assignment event projection', () => {
         run_id: 'run-live-1',
         assignment_id: 'assign-1',
         variant_id: 'qwen3-4b',
+        role: 'primary',
         metric_id: 'pass_rate',
         numerator: 1,
         denominator: 1,

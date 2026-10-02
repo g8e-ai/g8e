@@ -13,7 +13,7 @@ import {
   isCampaignProjectionEnvelope,
   liveEventProgressCounts,
 } from '../src/state/campaign-adapter';
-import { decodeViewRecord } from '../src/contract/validators';
+import { decodeViewRecord, ValidationError } from '../src/contract/validators';
 import { decodeCampaignProjectionEnvelope } from '../src/contract/campaign-wire';
 import type { LiveEvent } from '../src/contract/types';
 import { EvalStore } from '../src/state/store';
@@ -641,6 +641,79 @@ describe('adaptCampaignProjectionEnvelope', () => {
         pass: { value: 0 },
       },
     });
+  });
+
+  it('decodes a failed task_score that protojson omitted as 0, never as unavailable', () => {
+    const context = createCampaignAdaptContext();
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-4:lifecycle:running',
+        record: {
+          assignment_id: 'assign-4',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          scenario_category: 'EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE',
+          lane: 'EVALUATION_LANE_MODEL_ROLE',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          repetition: 1,
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'qwen3-4b',
+          observed_at: '2026-09-16T14:00:01Z',
+        },
+      },
+      context,
+    );
+
+    const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
+    const records = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-4:result',
+        record: {
+          ...resultRecord,
+          assignment_id: 'assign-4',
+          // The Go canonical encoder drops a zero double, so a failed score has no `value`.
+          decomposed_scores: [
+            { score_id: 'assign-4:task-score', dimension: 'task_score' },
+            { score_id: 'assign-4:deterministic-pass-rate', dimension: 'deterministic_pass_rate', value: 0.727 },
+          ],
+        },
+      },
+      context,
+    );
+
+    const assignment = records.find((record) => record.kind === 'assignment_result');
+    expect(assignment).toMatchObject({
+      assignment_id: 'assign-4',
+      metric_values: {
+        task_score: { value: 0 },
+        deterministic_pass_rate: { value: 0.727 },
+        pass: { value: 0 },
+      },
+    });
+  });
+
+  it('rejects a score set that carries no task_score instead of inferring a verdict', () => {
+    const context = createCampaignAdaptContext();
+    const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
+    expect(() =>
+      adaptCampaignProjectionEnvelope(
+        {
+          schema_version: '1.0.0',
+          message_type: 'PublicAssignmentResultProjection',
+          idempotency_key: 'run-1:assign-5:result',
+          record: {
+            ...resultRecord,
+            assignment_id: 'assign-5',
+            decomposed_scores: [{ score_id: 'assign-5:deterministic-pass-rate', dimension: 'deterministic_pass_rate', value: 1 }],
+          },
+        },
+        context,
+      ),
+    ).toThrow(ValidationError);
   });
 
   it('maps published benchmark_observations onto assignment_result records', () => {

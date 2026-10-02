@@ -14,10 +14,44 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/publicdisclosure"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
+
+func TestProjectMetricAvailabilityEvent_RejectsMissingRole(t *testing.T) {
+	_, err := ProjectMetricAvailabilityEvent(PublicMetricAvailabilitySignal{
+		RunID:        "run-live-1",
+		AssignmentID: "assign-1",
+		VariantID:    "qwen3-4b",
+		MetricID:     "pass_rate",
+		Numerator:    1,
+		Denominator:  1,
+		ObservedAt:   "2026-09-24T12:00:05.000Z",
+		EventID:      "run-live-1:assign-1:metric:pass_rate:44",
+		Completed:    1,
+		Total:        5,
+	})
+	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestProjectMetricAvailabilityEvent_RejectsInvalidProgress(t *testing.T) {
+	_, err := ProjectMetricAvailabilityEvent(PublicMetricAvailabilitySignal{
+		RunID:        "run-live-1",
+		AssignmentID: "assign-1",
+		VariantID:    "qwen3-4b",
+		Role:         models.ModelRolePrimary,
+		MetricID:     "pass_rate",
+		Numerator:    1,
+		Denominator:  1,
+		ObservedAt:   "2026-09-24T12:00:05.000Z",
+		EventID:      "run-live-1:assign-1:metric:pass_rate:45",
+		Completed:    6,
+		Total:        5,
+	})
+	require.ErrorIs(t, err, constants.ErrEvaluationLiveEventProgressInvalid)
+}
 
 func TestProjectModelRoleInvocationEvent_ExcludesProviderBoundaryFields(t *testing.T) {
 	event, err := ProjectModelRoleInvocationEvent(PublicModelRoleInvocationSignal{
@@ -50,6 +84,7 @@ func TestProjectMetricAvailabilityEvent_ProjectsPassRateDelta(t *testing.T) {
 		RunID:        "run-live-1",
 		AssignmentID: "assign-1",
 		VariantID:    "qwen3-4b",
+		Role:         models.ModelRolePrimary,
 		MetricID:     "pass_rate",
 		Numerator:    3,
 		Denominator:  4,
@@ -61,6 +96,7 @@ func TestProjectMetricAvailabilityEvent_ProjectsPassRateDelta(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "metric_updated", event.Kind)
+	assert.Equal(t, "primary", event.Role, "a metric event names the role it grades")
 	passRate, ok := event.MetricDelta["pass_rate"]
 	require.True(t, ok)
 	require.NotNil(t, passRate.Value)
@@ -76,6 +112,7 @@ func TestProjectMetricAvailabilityEvent_ZeroDenominatorIsUnavailable(t *testing.
 		RunID:        "run-live-1",
 		AssignmentID: "assign-1",
 		VariantID:    "qwen3-4b",
+		Role:         models.ModelRolePrimary,
 		MetricID:     "pass_rate",
 		Numerator:    0,
 		Denominator:  0,

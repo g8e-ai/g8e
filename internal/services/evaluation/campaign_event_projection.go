@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
@@ -59,11 +60,13 @@ type PublicLiveEvent struct {
 }
 
 // PublicMetricAvailabilitySignal is the disclosure-safe input for projecting
-// per-assignment metric availability into a public metric_updated event.
+// per-assignment metric availability into a public metric_updated event. Role
+// is the assignment's designated role: the metric grades that role.
 type PublicMetricAvailabilitySignal struct {
 	RunID        string
 	AssignmentID string
 	VariantID    string
+	Role         models.ModelRole
 	MetricID     string
 	Numerator    int
 	Denominator  int
@@ -89,13 +92,13 @@ func HeadlineMetricID(metricID string) bool {
 // a stage_updated live event body for record_type "event" publication.
 func ProjectModelRoleInvocationEvent(signal PublicModelRoleInvocationSignal) (PublicLiveEvent, error) {
 	if signal.RunID == "" || signal.AssignmentID == "" || signal.VariantID == "" || signal.EventID == "" || signal.ObservedAt == "" {
-		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: missing required field")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: %w", constants.ErrMissingRequiredField)
 	}
 	if signal.Role == "" {
-		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: missing role")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: role: %w", constants.ErrMissingRequiredField)
 	}
 	if signal.Completed < 0 || signal.Total < 0 || signal.Completed > signal.Total {
-		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: invalid progress")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: %w", constants.ErrEvaluationLiveEventProgressInvalid)
 	}
 	stageParts := []string{"model role invoked", string(signal.Role), signal.VariantID}
 	if signal.TaskID != "" {
@@ -127,10 +130,13 @@ func ProjectModelRoleInvocationEvent(signal PublicModelRoleInvocationSignal) (Pu
 // publication.
 func ProjectMetricAvailabilityEvent(signal PublicMetricAvailabilitySignal) (PublicLiveEvent, error) {
 	if signal.RunID == "" || signal.AssignmentID == "" || signal.VariantID == "" || signal.MetricID == "" || signal.EventID == "" || signal.ObservedAt == "" {
-		return PublicLiveEvent{}, fmt.Errorf("evaluation: project metric availability event: missing required field")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project metric availability event: %w", constants.ErrMissingRequiredField)
+	}
+	if signal.Role == "" {
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project metric availability event: role: %w", constants.ErrMissingRequiredField)
 	}
 	if signal.Completed < 0 || signal.Total < 0 || signal.Completed > signal.Total {
-		return PublicLiveEvent{}, fmt.Errorf("evaluation: project metric availability event: invalid progress")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project metric availability event: %w", constants.ErrEvaluationLiveEventProgressInvalid)
 	}
 	return PublicLiveEvent{
 		SchemaVersion:       explorerViewSchemaVersion,
@@ -143,6 +149,7 @@ func ProjectMetricAvailabilityEvent(signal PublicMetricAvailabilitySignal) (Publ
 		RunID:               signal.RunID,
 		AssignmentID:        signal.AssignmentID,
 		VariantID:           signal.VariantID,
+		Role:                string(signal.Role),
 		LifecycleStatus:     "running",
 		Completed:           signal.Completed,
 		Total:               signal.Total,

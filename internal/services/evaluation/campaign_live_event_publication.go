@@ -55,7 +55,11 @@ func (c *CampaignPublicationCoordinator) buildAssignmentLiveEventPublishRequests
 	if err != nil {
 		return nil, err
 	}
-	if signal, ok := buildAssignmentPassMetricSignal(assignment, result, observedAt, completed, total); ok {
+	signal, ok, err := buildAssignmentPassMetricSignal(assignment, result, observedAt, completed, total)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
 		event, err := ProjectMetricAvailabilityEvent(signal)
 		if err != nil {
 			return nil, err
@@ -394,14 +398,18 @@ func buildAssignmentPassMetricSignal(
 	observedAt string,
 	completed int,
 	total int,
-) (PublicMetricAvailabilitySignal, bool) {
+) (PublicMetricAvailabilitySignal, bool, error) {
 	status := DerivePublicSummaryStatus(result)
 	if status == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED {
-		return PublicMetricAvailabilitySignal{}, false
+		return PublicMetricAvailabilitySignal{}, false, nil
 	}
 	variantID, err := primaryVariantIDForAssignment(assignment)
 	if err != nil {
-		return PublicMetricAvailabilitySignal{}, false
+		return PublicMetricAvailabilitySignal{}, false, fmt.Errorf("evaluation: build assignment pass metric signal: %w", err)
+	}
+	role, err := designatedRoleLabelForAssignment(assignment)
+	if err != nil {
+		return PublicMetricAvailabilitySignal{}, false, fmt.Errorf("evaluation: build assignment pass metric signal: %w", err)
 	}
 	rate := 0.0
 	numerator := 0
@@ -413,6 +421,7 @@ func buildAssignmentPassMetricSignal(
 		RunID:        assignment.GetRunId(),
 		AssignmentID: assignment.GetAssignmentId(),
 		VariantID:    variantID,
+		Role:         models.ModelRole(role),
 		MetricID:     "pass_rate",
 		Numerator:    numerator,
 		Denominator:  1,
@@ -421,5 +430,5 @@ func buildAssignmentPassMetricSignal(
 		EventID:      MetricAvailabilityIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), "pass_rate") + ":event",
 		Completed:    completed,
 		Total:        total,
-	}, true
+	}, true, nil
 }

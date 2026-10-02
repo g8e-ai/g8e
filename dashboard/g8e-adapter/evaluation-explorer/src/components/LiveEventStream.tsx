@@ -130,6 +130,20 @@ function designatedRolesByAssignment(events: LiveEvent[]): Map<string, ModelRole
   return designated;
 }
 
+/** The role a row belongs to: its own, else its assignment's designated role. A
+ *  row with an assignment and neither is shown as unresolved, never guessed from
+ *  the model's registry role. A row without an assignment is platform-level. */
+function streamEventRoleLabel(
+  event: LiveEvent,
+  assignment: AssignmentResult | undefined,
+  designatedRoles: Map<string, ModelRole>,
+): string {
+  const role =
+    event.role ?? (event.assignment_id ? (assignment?.role ?? designatedRoles.get(`${event.run_id}:${event.assignment_id}`)) : undefined);
+  if (role) return roleLabel(role);
+  return event.assignment_id ? '—' : 'Platform';
+}
+
 function streamRoleGrading(
   event: LiveEvent,
   assignment: AssignmentResult | undefined,
@@ -254,7 +268,7 @@ type AssignmentMetricColumn =
   | 'thinking_tokens'
   | 'cache_tokens'
   | 'retries';
-type StreamSortField = 'time' | 'role' | 'assignment' | keyof EventParts | AssignmentMetricColumn | 'model' | 'progress';
+type StreamSortField = 'time' | 'role' | 'grading' | 'assignment' | keyof EventParts | AssignmentMetricColumn | 'model' | 'progress';
 type StreamSortDirection = 'asc' | 'desc';
 
 const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: string }> = [
@@ -314,10 +328,12 @@ function streamSortValue(
   event: LiveEvent,
   assignment: AssignmentResult | undefined,
   model: ReturnType<typeof resolveModelSummary>,
+  designatedRoles: Map<string, ModelRole>,
   field: StreamSortField,
 ): string | number {
   if (field === 'time') return event.observed_at;
-  if (field === 'role') return (event.role ? roleLabel(event.role) : model ? roleLabel(model.role) : 'Platform').toLowerCase();
+  if (field === 'role') return streamEventRoleLabel(event, assignment, designatedRoles).toLowerCase();
+  if (field === 'grading') return streamRoleGrading(event, assignment, designatedRoles) ?? '';
   if (field === 'assignment') return (event.assignment_id ?? '').toLowerCase();
   if (field === 'model') return (model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0] ?? '').toLowerCase();
   if (field === 'progress') return event.total > 0 ? event.completed / event.total : '';
@@ -497,8 +513,8 @@ export function LiveEventStream({
       const rightModel = right.variant_id
         ? resolveModelSummary(models, right.dataset_id, right.variant_id)
         : undefined;
-      const leftValue = streamSortValue(left, leftAssignment, leftModel, sortField);
-      const rightValue = streamSortValue(right, rightAssignment, rightModel, sortField);
+      const leftValue = streamSortValue(left, leftAssignment, leftModel, designatedRoles, sortField);
+      const rightValue = streamSortValue(right, rightAssignment, rightModel, designatedRoles, sortField);
       const comparison =
         typeof leftValue === 'number' && typeof rightValue === 'number'
           ? leftValue - rightValue
@@ -513,7 +529,7 @@ export function LiveEventStream({
           ? comparison
           : -comparison;
     });
-  }, [visible, assignments, models, sortField, sortDirection]);
+  }, [visible, assignments, models, designatedRoles, sortField, sortDirection]);
 
   const pageCount = Math.ceil(sortedVisible.length / STREAM_PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
@@ -628,6 +644,7 @@ export function LiveEventStream({
               <tr>
                 <SortHeader label="Time" field="time" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Role" field="role" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortHeader label="Grading" field="grading" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Event" field="kind" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Status" field="status" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Category" field="category" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
@@ -664,16 +681,12 @@ export function LiveEventStream({
                   ? `/models/${event.dataset_id}/${event.variant_id}${model?.role ? `?role=${model.role}` : ''}`
                   : undefined;
                 const roleGrading = streamRoleGrading(event, assignment, designatedRoles);
-                const roleLabelText = event.role
-                  ? roleLabel(event.role)
-                  : model
-                    ? roleLabel(model.role)
-                    : 'Platform';
+                const roleLabelText = streamEventRoleLabel(event, assignment, designatedRoles);
                 return (
                   <Fragment key={event.event_id}>
                     {isNewRun ? (
                       <tr className="stream-run-divider-row" data-testid={`run-divider-${event.run_id}`}>
-                        <td colSpan={16} className="stream-run-divider-cell">
+                        <td colSpan={17} className="stream-run-divider-cell">
                           <div className="stream-run-divider">
                             <span className="stream-run-divider-badge">Run: {event.run_id}</span>
                             <span className="stream-run-divider-line" />
@@ -687,6 +700,8 @@ export function LiveEventStream({
                         <span className={`stream-role status-${eventRoleStatus(event)}`}>
                           {roleLabelText}
                         </span>
+                      </td>
+                      <td>
                         {roleGrading === 'graded' ? (
                           <span className="stream-role-tag graded" title="Designated role: the assignment verdict grades this role">
                             Graded
@@ -698,7 +713,9 @@ export function LiveEventStream({
                           >
                             Chain
                           </span>
-                        ) : null}
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td className="stream-event-value">
                         <Link to={eventHref} className="stream-event-link">

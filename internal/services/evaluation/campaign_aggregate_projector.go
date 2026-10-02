@@ -1555,6 +1555,16 @@ func primaryVariantIDForAssignment(assignment *evalv1.EvaluationAssignment) (str
 	return variantID, err
 }
 
+// designatedRoleLabelForAssignment is the role the assignment's verdict grades:
+// the homogeneous target's designated role, or primary for a heterogeneous stack.
+func designatedRoleLabelForAssignment(assignment *evalv1.EvaluationAssignment) (string, error) {
+	if IsHeterogeneousAssignment(assignment) {
+		return modelCampaignRoleLabel(evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY)
+	}
+	_, role, err := homogeneousVariantRole(assignment)
+	return role, err
+}
+
 func variantRoleAggregateFor(state *runAggregateState, variantID, role string) *variantRoleAggregate {
 	key := variantID + ":" + role
 	bucket := state.VariantRoles[key]

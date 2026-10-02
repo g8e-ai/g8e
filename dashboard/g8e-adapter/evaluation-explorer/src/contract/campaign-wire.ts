@@ -151,10 +151,13 @@ interface WireMetric {
   unavailable_reason?: WireMetricUnavailableReason;
 }
 
-interface WireScore {
+/** A decomposed score as decoded. protojson omits a zero `double`, so the wire
+ *  may lack `value`; the decoder materializes the proto3 default of 0 and every
+ *  consumer sees a number. A failed task score is 0, never "unavailable". */
+export interface WireScore {
   score_id: string;
   dimension?: string;
-  value?: number;
+  value: number;
   unit?: string;
   direction?: string;
   missing_data_policy?: string;
@@ -441,7 +444,7 @@ function assertLifecycleRecord(value: unknown, path: string): asserts value is C
   assertTimestamp(value.observed_at, `${path}.observed_at`);
 }
 
-function assertScore(value: unknown, path: string): asserts value is WireScore {
+function assertScore(value: unknown, path: string): asserts value is Omit<WireScore, 'value'> & { value?: number } {
   assertObject(value, path);
   rejectUnknown(value, ['score_id', 'dimension', 'value', 'unit', 'direction', 'missing_data_policy'], path);
   assertString(value.score_id, `${path}.score_id`);
@@ -759,7 +762,15 @@ export function decodeCampaignProjectionEnvelope(value: unknown): CampaignProjec
   }
   assert((CAMPAIGN_RESULT_SCHEMA_VERSIONS as readonly string[]).includes(value.schema_version), `${path}.schema_version`, 'result records require envelope 1.0.0 or 1.1.0');
   assertResultRecord(value.record, `${path}.record`, value.schema_version as CampaignEnvelopeVersion);
+  materializeScoreDefaults(value.record);
   return value as unknown as CampaignProjectionEnvelope;
+}
+
+/** Applies the proto3 default to scores whose zero `value` protojson omitted.
+ *  This is the only place the wire's absence rule is interpreted. */
+function materializeScoreDefaults(record: CampaignResultRecord): void {
+  if (record.decomposed_scores === undefined) return;
+  record.decomposed_scores = record.decomposed_scores.map((score) => ({ ...score, value: score.value ?? 0 }));
 }
 
 export function isCampaignProjectionEnvelope(value: unknown): value is CampaignProjectionEnvelope {
