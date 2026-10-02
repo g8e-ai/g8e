@@ -53,6 +53,7 @@ func probeTraceBase() EvaluationTrace {
 func governedModelCall() EvaluationTrace {
 	return EvaluationTrace{
 		"agent_role":              "sage",
+		"classification":          "scored_chain",
 		"provider":                "G8EProvider",
 		"governed_transaction_id": "tx-1",
 		"governed_result_digest":  "a" + repeatHex('a', 63),

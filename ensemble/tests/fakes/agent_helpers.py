@@ -10,7 +10,7 @@
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from app.constants import AgentMode, G8EE_COMPONENT
+from app.constants import AgentMode, G8EE_COMPONENT, ReasoningAgent
 from app.llm.llm_types import ThoughtSignature
 from app.models.agent import (
     AgentInputs,
@@ -105,6 +105,8 @@ def make_agent_inputs(
             settings=request_settings,
             agent_mode=agent_mode,
         )
+
+    kwargs.setdefault("active_agent", ReasoningAgent.SAGE)
 
     return AgentInputs(
         case_id=case_id,

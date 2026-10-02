@@ -249,6 +249,7 @@ func StubHomogeneousAssignmentModelInferences(assignment *evalv1.EvaluationAssig
 	}
 	return []*evalv1.ModelInferenceRecord{{
 		InferenceRecordId: "stub-inference",
+		Classification:    evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN,
 		ModelRole:         role,
 		ModelVariant:      variant,
 		AgentPersona:      "sage",

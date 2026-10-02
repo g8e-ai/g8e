@@ -82,6 +82,7 @@ func TestBuildPublicAssignmentProjectionPreservesCanonicalZeroAndUint64Values(t 
 	result := &evalv1.EvaluationAssignmentResult{
 		AssignmentId: "assignment-1", RunId: "run-1",
 		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			Classification:    callScoredChain,
 			InferenceRecordId: "inference-1", ModelRole: evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
 			AgentPersona: "primary", ModelVariant: &evalv1.ModelVariant{VariantId: "variant-1"},
 			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,

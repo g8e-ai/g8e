@@ -379,6 +379,7 @@ func modelInferenceRecordsFromFormationRun(assignment *evalv1.EvaluationAssignme
 		}
 		record := &evalv1.ModelInferenceRecord{
 			InferenceRecordId:       newID("inference"),
+			Classification:          evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN,
 			ProviderAttemptId:       role.ProviderAttemptID,
 			AssignmentId:            assignment.GetAssignmentId(),
 			EvaluationAttemptId:     attemptID,

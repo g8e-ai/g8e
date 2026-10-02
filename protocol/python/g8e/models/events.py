@@ -123,8 +123,14 @@ class ModelBoundaryPrivacyAttestation(G8eBaseModel):
     raw_sensitive_types: list[str] = Field(default_factory=list)
 
 
+CallClassification = Literal["scored_chain", "post_turn", "grader"]
+
+
 class ModelCallTelemetry(G8eBaseModel):
     agent_role: str
+    # Chain the call belongs to, stated at the call site. Aggregators select
+    # scored calls by this field, never by agent_role or timing.
+    classification: CallClassification | None = None
     model_role: Literal["primary", "assistant", "lite"] | None = None
     provider: str
     model: str

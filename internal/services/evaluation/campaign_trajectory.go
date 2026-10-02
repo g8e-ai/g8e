@@ -772,7 +772,7 @@ func modelCallDeclaredTool(trace EvaluationTrace, tool string) bool {
 		if !ok {
 			continue
 		}
-		if role, _ := call["agent_role"].(string); role == memoryCodexAgentRole {
+		if classification, _ := call["classification"].(string); classification != traceScoredChainClassification {
 			continue
 		}
 		tools, ok := call["tools_declared"].([]any)

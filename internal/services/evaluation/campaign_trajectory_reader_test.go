@@ -733,15 +733,16 @@ func TestModelCallDeclaredTool(t *testing.T) {
 		tool  string
 		want  bool
 	}{
-		{name: "declared by a scored call", calls: []any{EvaluationTrace{"agent_role": "sage", "tools_declared": []any{toolGrep, toolRead}}}, tool: toolRead, want: true},
-		{name: "declared as a string slice in memory", calls: []any{EvaluationTrace{"agent_role": "sage", "tools_declared": []string{toolGrep}}}, tool: toolGrep, want: true},
-		{name: "declared by a plain map call", calls: []any{map[string]any{"tools_declared": []any{toolGrep}}}, tool: toolGrep, want: true},
+		{name: "declared by a scored call", calls: []any{EvaluationTrace{"agent_role": "sage", "classification": "scored_chain", "tools_declared": []any{toolGrep, toolRead}}}, tool: toolRead, want: true},
+		{name: "declared as a string slice in memory", calls: []any{EvaluationTrace{"agent_role": "sage", "classification": "scored_chain", "tools_declared": []string{toolGrep}}}, tool: toolGrep, want: true},
+		{name: "declared by a plain map call", calls: []any{map[string]any{"classification": "scored_chain", "tools_declared": []any{toolGrep}}}, tool: toolGrep, want: true},
+		{name: "a call with no classification does not count", calls: []any{EvaluationTrace{"agent_role": "sage", "tools_declared": []any{toolGrep}}}, tool: toolGrep, want: false},
 		{name: "not in the declaration", calls: []any{EvaluationTrace{"tools_declared": []any{toolRead}}}, tool: toolGrep, want: false},
-		{name: "the memory call's declaration does not count", calls: []any{EvaluationTrace{"agent_role": memoryCodexAgentRole, "tools_declared": []any{toolGrep}}}, tool: toolGrep, want: false},
-		{name: "declared by a later scored call", calls: []any{EvaluationTrace{"agent_role": "triage", "tools_declared": []any{}}, EvaluationTrace{"agent_role": "sage", "tools_declared": []any{toolGrep}}}, tool: toolGrep, want: true},
+		{name: "the memory call's declaration does not count", calls: []any{EvaluationTrace{"agent_role": "codex", "classification": "post_turn", "tools_declared": []any{toolGrep}}}, tool: toolGrep, want: false},
+		{name: "declared by a later scored call", calls: []any{EvaluationTrace{"agent_role": "triage", "classification": "scored_chain", "tools_declared": []any{}}, EvaluationTrace{"agent_role": "sage", "classification": "scored_chain", "tools_declared": []any{toolGrep}}}, tool: toolGrep, want: true},
 		{name: "declaration not reported", calls: []any{EvaluationTrace{"agent_role": "sage"}}, tool: toolGrep, want: false},
 		{name: "declaration reported as null", calls: []any{EvaluationTrace{"agent_role": "sage", "tools_declared": nil}}, tool: toolGrep, want: false},
-		{name: "non-string entries are ignored", calls: []any{EvaluationTrace{"tools_declared": []any{1, nil, toolGrep}}}, tool: toolGrep, want: true},
+		{name: "non-string entries are ignored", calls: []any{EvaluationTrace{"classification": "scored_chain", "tools_declared": []any{1, nil, toolGrep}}}, tool: toolGrep, want: true},
 		{name: "non-object calls are skipped", calls: []any{"junk", 3}, tool: toolGrep, want: false},
 		{name: "no model calls", calls: nil, tool: toolGrep, want: false},
 	}

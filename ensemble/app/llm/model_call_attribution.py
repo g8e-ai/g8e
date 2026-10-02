@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from app.constants.chat_model_call_sites import classification_for_agent_role
 from app.llm.model_evidence import (
     recorded_declared_tool_names,
     recorded_governed_dispatch_evidence,
@@ -95,6 +96,7 @@ def build_model_call_telemetry(
     resolved_input_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
     return ModelCallTelemetry(
         agent_role=agent_role,
+        classification=classification_for_agent_role(agent_role),
         model_role=model_role,
         provider=type(provider).__name__,
         model=model,

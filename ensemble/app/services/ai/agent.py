@@ -97,19 +97,17 @@ def _resolve_agent_model_role(inputs: AgentInputs) -> str:
 def _agent_role_for_telemetry(inputs: AgentInputs) -> str:
     """Return the persona a model call is attributed to.
 
-    The chat pipeline always assigns an active agent. A scored request without
-    one would be attributed to a role the grader cannot recognise, so it fails
+    The chat pipeline always assigns an active agent. A request without one
+    would be attributed to a role with no call classification, so it fails
     loudly instead of reporting ``unknown``.
     """
     if inputs.active_agent:
         return inputs.active_agent.value
-    if inputs.g8e_context.evaluation_context is not None:
-        raise ValidationError(
-            "active_agent is required for evaluation requests",
-            field="active_agent",
-            component="g8ee",
-        )
-    return "unknown"
+    raise ValidationError(
+        "active_agent is required for every agent model call",
+        field="active_agent",
+        component="g8ee",
+    )
 
 
 def _agent_generation_stream(

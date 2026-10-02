@@ -727,6 +727,7 @@ func (e *campaignComplianceWitnessExecutor) ExecuteAssignment(ctx context.Contex
 		"controlled_role_assignment": map[string]any{"designated_model_role": role},
 		"model_calls": []any{map[string]any{
 			"agent_role":              "sage",
+			"classification":          "scored_chain",
 			"model_role":              role,
 			"provider":                "G8EProvider",
 			"governed_transaction_id": "tx-1",

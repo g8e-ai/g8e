@@ -361,6 +361,7 @@ func TestConformance_PerPolicyTrajectoryOutcomes(t *testing.T) {
 			trace["model_calls"] = []any{
 				EvaluationTrace{
 					"agent_role":     "primary",
+					"classification": "scored_chain",
 					"tools_declared": []any{"recursive_grep_search", "file_read_on_operator"},
 				},
 			}

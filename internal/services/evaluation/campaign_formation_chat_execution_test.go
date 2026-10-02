@@ -87,6 +87,7 @@ func heterogeneousFormationTraces(t *testing.T, baseAttempt string, outputs map[
 func g8eeModelCall(role FormationRole, turn int, ttftSeconds float64, inputTokens, outputTokens int) EvaluationTrace {
 	return EvaluationTrace{
 		"agent_role":                  "sage",
+		"classification":              "scored_chain",
 		"model_role":                  string(role),
 		"provider":                    "G8EProvider",
 		"succeeded":                   true,

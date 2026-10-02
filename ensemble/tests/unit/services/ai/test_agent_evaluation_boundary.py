@@ -321,7 +321,9 @@ class TestAgentRoleAttribution:
         with pytest.raises(ValidationError):
             _agent_role_for_telemetry(self._inputs(scored=True, active_agent=None))
 
-    def test_an_unscored_request_without_an_active_agent_keeps_the_legacy_label(self):
+    def test_an_unscored_request_without_an_active_agent_fails_loudly(self):
+        from app.errors import ValidationError
         from app.services.ai.agent import _agent_role_for_telemetry
 
-        assert _agent_role_for_telemetry(self._inputs(scored=False, active_agent=None)) == "unknown"
+        with pytest.raises(ValidationError):
+            _agent_role_for_telemetry(self._inputs(scored=False, active_agent=None))

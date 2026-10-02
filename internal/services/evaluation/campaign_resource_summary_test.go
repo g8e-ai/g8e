@@ -20,6 +20,11 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+const (
+	callScoredChain = evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN
+	callPostTurn    = evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_POST_TURN
+)
+
 func TestBuildPublicResourceSummary(t *testing.T) {
 	reported := evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
 	zero := uint32(0)
@@ -39,7 +44,7 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 		{
 			name: "reported prompt output zeros remain observed while optional counters stay unavailable",
 			result: &evalv1.EvaluationAssignmentResult{
-				ModelInferences:          []*evalv1.ModelInferenceRecord{{UsageAvailability: reported, RetryCount: &zero}},
+				ModelInferences:          []*evalv1.ModelInferenceRecord{{Classification: callScoredChain, UsageAvailability: reported, RetryCount: &zero}},
 				ScoredInferenceSpanNanos: proto.Uint64(2_000_000),
 			},
 			assertions: func(t *testing.T, summary *PublicResourceSummary) {
@@ -61,6 +66,7 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 			name: "explicit zero optional counters remain observed",
 			result: &evalv1.EvaluationAssignmentResult{
 				ModelInferences: []*evalv1.ModelInferenceRecord{{
+					Classification:    callScoredChain,
 					UsageAvailability: reported,
 					ThinkingTokens:    &zero,
 					CacheTokens:       &zero,
@@ -77,8 +83,8 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 			name: "cache absent on one call leaves input output observed and cache unavailable",
 			result: &evalv1.EvaluationAssignmentResult{
 				ModelInferences: []*evalv1.ModelInferenceRecord{
-					{UsageAvailability: reported, PromptTokens: 3, CompletionTokens: 4, CacheTokens: &zero},
-					{UsageAvailability: reported, PromptTokens: 1, CompletionTokens: 2},
+					{Classification: callScoredChain, UsageAvailability: reported, PromptTokens: 3, CompletionTokens: 4, CacheTokens: &zero},
+					{Classification: callScoredChain, UsageAvailability: reported, PromptTokens: 1, CompletionTokens: 2},
 				},
 			},
 			assertions: func(t *testing.T, summary *PublicResourceSummary) {
@@ -94,8 +100,8 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 			name: "mixed thinking presence is incomplete without affecting complete cache",
 			result: &evalv1.EvaluationAssignmentResult{
 				ModelInferences: []*evalv1.ModelInferenceRecord{
-					{UsageAvailability: reported, ThinkingTokens: proto.Uint32(2), CacheTokens: &zero},
-					{UsageAvailability: reported, CacheTokens: &zero},
+					{Classification: callScoredChain, UsageAvailability: reported, ThinkingTokens: proto.Uint32(2), CacheTokens: &zero},
+					{Classification: callScoredChain, UsageAvailability: reported, CacheTokens: &zero},
 				},
 			},
 			assertions: func(t *testing.T, summary *PublicResourceSummary) {
@@ -108,7 +114,7 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 		{
 			name: "missing one contributor does not become zero",
 			result: &evalv1.EvaluationAssignmentResult{
-				ModelInferences: []*evalv1.ModelInferenceRecord{{UsageAvailability: reported}, {UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE}},
+				ModelInferences: []*evalv1.ModelInferenceRecord{{Classification: callScoredChain, UsageAvailability: reported}, {Classification: callScoredChain, UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE}},
 			},
 			assertions: func(t *testing.T, summary *PublicResourceSummary) {
 				assert.Nil(t, summary.InputTokens.Value)
@@ -124,18 +130,18 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 		})
 	}
 
-	_, err := BuildPublicResourceSummary(&evalv1.EvaluationAssignmentResult{ModelInferences: []*evalv1.ModelInferenceRecord{{UsageAvailability: reported}}, ScoredInferenceSpanNanos: proto.Uint64(math.MaxUint64)})
+	_, err := BuildPublicResourceSummary(&evalv1.EvaluationAssignmentResult{ModelInferences: []*evalv1.ModelInferenceRecord{{Classification: callScoredChain, UsageAvailability: reported}}, ScoredInferenceSpanNanos: proto.Uint64(math.MaxUint64)})
 	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
 }
 
 func TestBuildPublicResourceSummary_ExcludesMemoryCodexCalls(t *testing.T) {
 	reported := evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
 	scored := &evalv1.ModelInferenceRecord{
-		AgentPersona: "sage", UsageAvailability: reported, PromptTokens: 10, CompletionTokens: 5,
+		AgentPersona: "sage", Classification: callScoredChain, UsageAvailability: reported, PromptTokens: 10, CompletionTokens: 5,
 		ThinkingTokens: proto.Uint32(2), CacheTokens: proto.Uint32(1), RetryCount: proto.Uint32(1),
 	}
 	codex := &evalv1.ModelInferenceRecord{
-		AgentPersona: "codex", UsageAvailability: reported, PromptTokens: 700, CompletionTokens: 300,
+		AgentPersona: "codex", Classification: callPostTurn, UsageAvailability: reported, PromptTokens: 700, CompletionTokens: 300,
 		ThinkingTokens: proto.Uint32(40), CacheTokens: proto.Uint32(30), RetryCount: proto.Uint32(9),
 	}
 	span := proto.Uint64(3_000_000)
@@ -168,11 +174,11 @@ func TestBuildPublicResourceSummary_ExcludesGraderCalls(t *testing.T) {
 	reported := evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
 	scoredCalls := []*evalv1.ModelInferenceRecord{
 		{
-			AgentPersona: "triage", UsageAvailability: reported, PromptTokens: 4, CompletionTokens: 1,
+			AgentPersona: "triage", Classification: callScoredChain, UsageAvailability: reported, PromptTokens: 4, CompletionTokens: 1,
 			ThinkingTokens: proto.Uint32(0), CacheTokens: proto.Uint32(2), RetryCount: proto.Uint32(0),
 		},
 		{
-			AgentPersona: "sage", UsageAvailability: reported, PromptTokens: 10, CompletionTokens: 5,
+			AgentPersona: "sage", Classification: callScoredChain, UsageAvailability: reported, PromptTokens: 10, CompletionTokens: 5,
 			ThinkingTokens: proto.Uint32(2), CacheTokens: proto.Uint32(1), RetryCount: proto.Uint32(1),
 		},
 	}

@@ -497,6 +497,7 @@ func buildCompletedCampaignTrace(assignment *evalv1.EvaluationAssignment, attemp
 		"model_calls": []any{
 			map[string]any{
 				"agent_role":              "sage",
+				"classification":          "scored_chain",
 				"model_role":              role,
 				"provider":                "G8EProvider",
 				"governed_transaction_id": "tx-1",

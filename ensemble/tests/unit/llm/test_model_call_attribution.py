@@ -5,6 +5,9 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import pytest
+
+from app.errors import ValidationError
 from app.llm.model_call_attribution import (
     build_model_call_telemetry,
     governed_telemetry_fields,
@@ -129,6 +132,37 @@ def test_build_model_call_telemetry_ignores_a_provider_without_the_capture():
         governed_dispatch_evidence = None
 
     assert _telemetry(_NoCapture()).tools_declared is None
+
+
+@pytest.mark.parametrize(
+    ("agent_role", "classification"),
+    [("sage", "scored_chain"), ("codex", "post_turn"), ("judge", "grader")],
+)
+def test_build_model_call_telemetry_states_the_chain_classification(agent_role, classification):
+    telemetry = build_model_call_telemetry(
+        provider=_RecordingProvider(),
+        agent_role=agent_role,
+        model_role="lite",
+        model="model-a",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+        input_artifact_hash="e" * 64,
+    )
+
+    assert telemetry.classification == classification
+
+
+def test_build_model_call_telemetry_rejects_an_unregistered_agent_role():
+    with pytest.raises(ValidationError):
+        build_model_call_telemetry(
+            provider=_RecordingProvider(),
+            agent_role="unknown",
+            model_role="lite",
+            model="model-a",
+            monotonic_start=1.0,
+            monotonic_end=2.0,
+            input_artifact_hash="e" * 64,
+        )
 
 
 def test_build_model_call_telemetry_includes_governed_fields():

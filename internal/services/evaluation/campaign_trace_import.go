@@ -497,6 +497,28 @@ func requiredUint32FromTraceCall(call EvaluationTrace, name string) (uint32, err
 	return converted, nil
 }
 
+// traceScoredChainClassification is the wire spelling of
+// EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN in a g8ee trace model call.
+const traceScoredChainClassification = "scored_chain"
+
+// callClassificationFromTrace reads the chain a producer stated for a model
+// call. A missing or unknown value is an error: the importer never guesses a
+// chain from the agent role or timing.
+func callClassificationFromTrace(call EvaluationTrace) (evalv1.EvaluationCallClassification, error) {
+	raw, _ := call["classification"].(string)
+	switch raw {
+	case traceScoredChainClassification:
+		return evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN, nil
+	case "post_turn":
+		return evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_POST_TURN, nil
+	case "grader":
+		return evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_GRADER, nil
+	default:
+		return evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_UNSPECIFIED,
+			fmt.Errorf("evaluation: trace model call classification %q: %w", raw, constants.ErrEvidenceArtifactMalformed)
+	}
+}
+
 func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, attemptID string, candidate *evalv1.ModelVariant, trace EvaluationTrace, newID func(string) string) ([]*evalv1.ModelInferenceRecord, *uint64, error) {
 	schemaVersion := traceSchemaVersion(trace)
 	modelCalls, ok := trace["model_calls"].([]any)
@@ -523,7 +545,15 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 		if providerAttemptID == "" {
 			continue
 		}
+		classification, err := callClassificationFromTrace(call)
+		if err != nil {
+			return nil, nil, err
+		}
+		if classification == evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_GRADER {
+			return nil, nil, fmt.Errorf("evaluation: grader call %q in model_calls: %w", providerAttemptID, constants.ErrEvidenceArtifactMalformed)
+		}
 		record := &evalv1.ModelInferenceRecord{
+			Classification:      classification,
 			InferenceRecordId:   newID("inference"),
 			ProviderAttemptId:   providerAttemptID,
 			AssignmentId:        assignment.GetAssignmentId(),
@@ -614,8 +644,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 				SchemaRef:    "g8e.operator.v1.ActionReceipt",
 			}
 		}
-		agentRole := stringValue(call["agent_role"])
-		if agentRole != memoryCodexAgentRole {
+		if classification == evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN {
 			scoredCallsCount++
 			if start, end, complete, err := monotonicCallBounds(call); err != nil {
 				return nil, nil, err

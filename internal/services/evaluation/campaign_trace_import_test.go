@@ -380,6 +380,7 @@ func TestImportAssignmentResultFromTrace_CodexCallsExcludedFromScoredInferenceSp
 
 	codexCall := EvaluationTrace{
 		"agent_role":              "codex",
+		"classification":          "post_turn",
 		"model_role":              "primary",
 		"provider":                "G8EProvider",
 		"governed_transaction_id": "tx-2",
@@ -432,6 +433,7 @@ func completedHomogeneousTrace(t *testing.T, role string) EvaluationTrace {
 		"model_calls": []any{
 			EvaluationTrace{
 				"agent_role":              "sage",
+				"classification":          "scored_chain",
 				"model_role":              role,
 				"provider":                "G8EProvider",
 				"governed_transaction_id": "tx-1",
