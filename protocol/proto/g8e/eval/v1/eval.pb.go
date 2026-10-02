@@ -9682,6 +9682,262 @@ func (x *PublicAssignmentResultProjection) GetSourceRevision() string {
 	return ""
 }
 
+// One scalar in a live event's metric_delta. value is presence-tracked so a
+// measured zero (a failed assignment's binary pass) is emitted, never dropped;
+// exactly one of value and unavailable_reason is set.
+type PublicLiveMetricValue struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Value             *float64               `protobuf:"fixed64,1,opt,name=value,proto3,oneof" json:"value,omitempty"`
+	UnavailableReason string                 `protobuf:"bytes,2,opt,name=unavailable_reason,json=unavailableReason,proto3" json:"unavailable_reason,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PublicLiveMetricValue) Reset() {
+	*x = PublicLiveMetricValue{}
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublicLiveMetricValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublicLiveMetricValue) ProtoMessage() {}
+
+func (x *PublicLiveMetricValue) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublicLiveMetricValue.ProtoReflect.Descriptor instead.
+func (*PublicLiveMetricValue) Descriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *PublicLiveMetricValue) GetValue() float64 {
+	if x != nil && x.Value != nil {
+		return *x.Value
+	}
+	return 0
+}
+
+func (x *PublicLiveMetricValue) GetUnavailableReason() string {
+	if x != nil {
+		return x.UnavailableReason
+	}
+	return ""
+}
+
+// One disclosure-safe Explorer live event. kind, quality_state,
+// lifecycle_status, and role carry the Explorer view contract's closed string
+// vocabularies, which publicdisclosure.ValidatePublicFeedRecord enforces.
+// completed and total are presence-tracked: zero progress is a value, and a
+// producer that leaves either unset is rejected at validation.
+type PublicLiveEvent struct {
+	state               protoimpl.MessageState            `protogen:"open.v1"`
+	SchemaVersion       string                            `protobuf:"bytes,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	Kind                string                            `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	DatasetId           string                            `protobuf:"bytes,3,opt,name=dataset_id,json=datasetId,proto3" json:"dataset_id,omitempty"`
+	QualityState        string                            `protobuf:"bytes,4,opt,name=quality_state,json=qualityState,proto3" json:"quality_state,omitempty"`
+	ObservedAt          string                            `protobuf:"bytes,5,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	SourceRevisionLabel string                            `protobuf:"bytes,6,opt,name=source_revision_label,json=sourceRevisionLabel,proto3" json:"source_revision_label,omitempty"`
+	Release             string                            `protobuf:"bytes,7,opt,name=release,proto3" json:"release,omitempty"`
+	ReleaseBasis        PublicReleaseBasis                `protobuf:"varint,8,opt,name=release_basis,json=releaseBasis,proto3,enum=g8e.eval.v1.PublicReleaseBasis" json:"release_basis,omitempty"`
+	SourceRevision      string                            `protobuf:"bytes,9,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	EventId             string                            `protobuf:"bytes,10,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	RunId               string                            `protobuf:"bytes,11,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	AssignmentId        string                            `protobuf:"bytes,12,opt,name=assignment_id,json=assignmentId,proto3" json:"assignment_id,omitempty"`
+	VariantId           string                            `protobuf:"bytes,13,opt,name=variant_id,json=variantId,proto3" json:"variant_id,omitempty"`
+	Role                string                            `protobuf:"bytes,14,opt,name=role,proto3" json:"role,omitempty"`
+	LifecycleStatus     string                            `protobuf:"bytes,15,opt,name=lifecycle_status,json=lifecycleStatus,proto3" json:"lifecycle_status,omitempty"`
+	Completed           *uint32                           `protobuf:"varint,16,opt,name=completed,proto3,oneof" json:"completed,omitempty"`
+	Total               *uint32                           `protobuf:"varint,17,opt,name=total,proto3,oneof" json:"total,omitempty"`
+	StageLabel          string                            `protobuf:"bytes,18,opt,name=stage_label,json=stageLabel,proto3" json:"stage_label,omitempty"`
+	TaskId              string                            `protobuf:"bytes,19,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	MetricDelta         map[string]*PublicLiveMetricValue `protobuf:"bytes,20,rep,name=metric_delta,json=metricDelta,proto3" json:"metric_delta,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *PublicLiveEvent) Reset() {
+	*x = PublicLiveEvent{}
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublicLiveEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublicLiveEvent) ProtoMessage() {}
+
+func (x *PublicLiveEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublicLiveEvent.ProtoReflect.Descriptor instead.
+func (*PublicLiveEvent) Descriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{73}
+}
+
+func (x *PublicLiveEvent) GetSchemaVersion() string {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetDatasetId() string {
+	if x != nil {
+		return x.DatasetId
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetQualityState() string {
+	if x != nil {
+		return x.QualityState
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetObservedAt() string {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetSourceRevisionLabel() string {
+	if x != nil {
+		return x.SourceRevisionLabel
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetRelease() string {
+	if x != nil {
+		return x.Release
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetReleaseBasis() PublicReleaseBasis {
+	if x != nil {
+		return x.ReleaseBasis
+	}
+	return PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNSPECIFIED
+}
+
+func (x *PublicLiveEvent) GetSourceRevision() string {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetAssignmentId() string {
+	if x != nil {
+		return x.AssignmentId
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetVariantId() string {
+	if x != nil {
+		return x.VariantId
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetLifecycleStatus() string {
+	if x != nil {
+		return x.LifecycleStatus
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetCompleted() uint32 {
+	if x != nil && x.Completed != nil {
+		return *x.Completed
+	}
+	return 0
+}
+
+func (x *PublicLiveEvent) GetTotal() uint32 {
+	if x != nil && x.Total != nil {
+		return *x.Total
+	}
+	return 0
+}
+
+func (x *PublicLiveEvent) GetStageLabel() string {
+	if x != nil {
+		return x.StageLabel
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *PublicLiveEvent) GetMetricDelta() map[string]*PublicLiveMetricValue {
+	if x != nil {
+		return x.MetricDelta
+	}
+	return nil
+}
+
 var File_g8e_eval_v1_eval_proto protoreflect.FileDescriptor
 
 const file_g8e_eval_v1_eval_proto_rawDesc = "" +
@@ -10483,7 +10739,43 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x0etools_declared\x18\x17 \x03(\tR\rtoolsDeclared\x12\x18\n" +
 	"\arelease\x18\x18 \x01(\tR\arelease\x12D\n" +
 	"\rrelease_basis\x18\x19 \x01(\x0e2\x1f.g8e.eval.v1.PublicReleaseBasisR\freleaseBasis\x12'\n" +
-	"\x0fsource_revision\x18\x1a \x01(\tR\x0esourceRevision*\x8b\x01\n" +
+	"\x0fsource_revision\x18\x1a \x01(\tR\x0esourceRevision\"k\n" +
+	"\x15PublicLiveMetricValue\x12\x19\n" +
+	"\x05value\x18\x01 \x01(\x01H\x00R\x05value\x88\x01\x01\x12-\n" +
+	"\x12unavailable_reason\x18\x02 \x01(\tR\x11unavailableReasonB\b\n" +
+	"\x06_value\"\xe9\x06\n" +
+	"\x0fPublicLiveEvent\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\tR\rschemaVersion\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1d\n" +
+	"\n" +
+	"dataset_id\x18\x03 \x01(\tR\tdatasetId\x12#\n" +
+	"\rquality_state\x18\x04 \x01(\tR\fqualityState\x12\x1f\n" +
+	"\vobserved_at\x18\x05 \x01(\tR\n" +
+	"observedAt\x122\n" +
+	"\x15source_revision_label\x18\x06 \x01(\tR\x13sourceRevisionLabel\x12\x18\n" +
+	"\arelease\x18\a \x01(\tR\arelease\x12D\n" +
+	"\rrelease_basis\x18\b \x01(\x0e2\x1f.g8e.eval.v1.PublicReleaseBasisR\freleaseBasis\x12'\n" +
+	"\x0fsource_revision\x18\t \x01(\tR\x0esourceRevision\x12\x19\n" +
+	"\bevent_id\x18\n" +
+	" \x01(\tR\aeventId\x12\x15\n" +
+	"\x06run_id\x18\v \x01(\tR\x05runId\x12#\n" +
+	"\rassignment_id\x18\f \x01(\tR\fassignmentId\x12\x1d\n" +
+	"\n" +
+	"variant_id\x18\r \x01(\tR\tvariantId\x12\x12\n" +
+	"\x04role\x18\x0e \x01(\tR\x04role\x12)\n" +
+	"\x10lifecycle_status\x18\x0f \x01(\tR\x0flifecycleStatus\x12!\n" +
+	"\tcompleted\x18\x10 \x01(\rH\x00R\tcompleted\x88\x01\x01\x12\x19\n" +
+	"\x05total\x18\x11 \x01(\rH\x01R\x05total\x88\x01\x01\x12\x1f\n" +
+	"\vstage_label\x18\x12 \x01(\tR\n" +
+	"stageLabel\x12\x17\n" +
+	"\atask_id\x18\x13 \x01(\tR\x06taskId\x12P\n" +
+	"\fmetric_delta\x18\x14 \x03(\v2-.g8e.eval.v1.PublicLiveEvent.MetricDeltaEntryR\vmetricDelta\x1ab\n" +
+	"\x10MetricDeltaEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x128\n" +
+	"\x05value\x18\x02 \x01(\v2\".g8e.eval.v1.PublicLiveMetricValueR\x05value:\x028\x01B\f\n" +
+	"\n" +
+	"_completedB\b\n" +
+	"\x06_total*\x8b\x01\n" +
 	"\x0eEvaluationLane\x12\x1f\n" +
 	"\x1bEVALUATION_LANE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18EVALUATION_LANE_PLATFORM\x10\x01\x12\x1e\n" +
@@ -10747,7 +11039,7 @@ func file_g8e_eval_v1_eval_proto_rawDescGZIP() []byte {
 }
 
 var file_g8e_eval_v1_eval_proto_enumTypes = make([]protoimpl.EnumInfo, 40)
-var file_g8e_eval_v1_eval_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
+var file_g8e_eval_v1_eval_proto_msgTypes = make([]protoimpl.MessageInfo, 75)
 var file_g8e_eval_v1_eval_proto_goTypes = []any{
 	(EvaluationLane)(0),                           // 0: g8e.eval.v1.EvaluationLane
 	(ModelCampaignRole)(0),                        // 1: g8e.eval.v1.ModelCampaignRole
@@ -10861,63 +11153,66 @@ var file_g8e_eval_v1_eval_proto_goTypes = []any{
 	(*PublicEvidenceBinding)(nil),                 // 109: g8e.eval.v1.PublicEvidenceBinding
 	(*PublicVerificationMetadata)(nil),            // 110: g8e.eval.v1.PublicVerificationMetadata
 	(*PublicAssignmentResultProjection)(nil),      // 111: g8e.eval.v1.PublicAssignmentResultProjection
-	(*v1.VersionedReference)(nil),                 // 112: g8e.compliance.v1.VersionedReference
-	(*v1.ComplianceEvidenceReference)(nil),        // 113: g8e.compliance.v1.ComplianceEvidenceReference
-	(*timestamppb.Timestamp)(nil),                 // 114: google.protobuf.Timestamp
+	(*PublicLiveMetricValue)(nil),                 // 112: g8e.eval.v1.PublicLiveMetricValue
+	(*PublicLiveEvent)(nil),                       // 113: g8e.eval.v1.PublicLiveEvent
+	nil,                                           // 114: g8e.eval.v1.PublicLiveEvent.MetricDeltaEntry
+	(*v1.VersionedReference)(nil),                 // 115: g8e.compliance.v1.VersionedReference
+	(*v1.ComplianceEvidenceReference)(nil),        // 116: g8e.compliance.v1.ComplianceEvidenceReference
+	(*timestamppb.Timestamp)(nil),                 // 117: google.protobuf.Timestamp
 }
 var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	23,  // 0: g8e.eval.v1.EvaluationRuntimeBoundary.component:type_name -> g8e.eval.v1.EvaluationRuntimeComponent
-	112, // 1: g8e.eval.v1.EvaluationDeploymentIdentity.topology_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 1: g8e.eval.v1.EvaluationDeploymentIdentity.topology_ref:type_name -> g8e.compliance.v1.VersionedReference
 	40,  // 2: g8e.eval.v1.EvaluationDeploymentIdentity.runtime_boundaries:type_name -> g8e.eval.v1.EvaluationRuntimeBoundary
-	113, // 3: g8e.eval.v1.EvaluationValue.artifact_reference:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	112, // 4: g8e.eval.v1.EvaluationRun.suite_ref:type_name -> g8e.compliance.v1.VersionedReference
+	116, // 3: g8e.eval.v1.EvaluationValue.artifact_reference:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	115, // 4: g8e.eval.v1.EvaluationRun.suite_ref:type_name -> g8e.compliance.v1.VersionedReference
 	41,  // 5: g8e.eval.v1.EvaluationRun.deployment:type_name -> g8e.eval.v1.EvaluationDeploymentIdentity
 	22,  // 6: g8e.eval.v1.EvaluationRun.active_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
 	0,   // 7: g8e.eval.v1.EvaluationRun.lane:type_name -> g8e.eval.v1.EvaluationLane
-	114, // 8: g8e.eval.v1.EvaluationRun.started_at:type_name -> google.protobuf.Timestamp
-	114, // 9: g8e.eval.v1.EvaluationRun.completed_at:type_name -> google.protobuf.Timestamp
-	113, // 10: g8e.eval.v1.EvaluationRun.final_verification_report_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	117, // 8: g8e.eval.v1.EvaluationRun.started_at:type_name -> google.protobuf.Timestamp
+	117, // 9: g8e.eval.v1.EvaluationRun.completed_at:type_name -> google.protobuf.Timestamp
+	116, // 10: g8e.eval.v1.EvaluationRun.final_verification_report_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	51,  // 11: g8e.eval.v1.EvaluationRun.campaign_binding:type_name -> g8e.eval.v1.ModelCampaignBinding
-	112, // 12: g8e.eval.v1.EvaluationAttempt.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 12: g8e.eval.v1.EvaluationAttempt.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
 	24,  // 13: g8e.eval.v1.EvaluationAttempt.status:type_name -> g8e.eval.v1.EvaluationAttemptStatus
-	114, // 14: g8e.eval.v1.EvaluationAttempt.started_at:type_name -> google.protobuf.Timestamp
-	114, // 15: g8e.eval.v1.EvaluationAttempt.completed_at:type_name -> google.protobuf.Timestamp
-	112, // 16: g8e.eval.v1.EvaluationObservation.observation_type:type_name -> g8e.compliance.v1.VersionedReference
+	117, // 14: g8e.eval.v1.EvaluationAttempt.started_at:type_name -> google.protobuf.Timestamp
+	117, // 15: g8e.eval.v1.EvaluationAttempt.completed_at:type_name -> google.protobuf.Timestamp
+	115, // 16: g8e.eval.v1.EvaluationObservation.observation_type:type_name -> g8e.compliance.v1.VersionedReference
 	25,  // 17: g8e.eval.v1.EvaluationObservation.source:type_name -> g8e.eval.v1.EvaluationObservationSource
-	114, // 18: g8e.eval.v1.EvaluationObservation.observed_at:type_name -> google.protobuf.Timestamp
+	117, // 18: g8e.eval.v1.EvaluationObservation.observed_at:type_name -> google.protobuf.Timestamp
 	26,  // 19: g8e.eval.v1.EvaluationObservation.authority:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
 	42,  // 20: g8e.eval.v1.EvaluationObservation.value:type_name -> g8e.eval.v1.EvaluationValue
-	113, // 21: g8e.eval.v1.EvaluationObservation.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	114, // 22: g8e.eval.v1.EvaluationTargetState.observed_at:type_name -> google.protobuf.Timestamp
+	116, // 21: g8e.eval.v1.EvaluationObservation.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	117, // 22: g8e.eval.v1.EvaluationTargetState.observed_at:type_name -> google.protobuf.Timestamp
 	27,  // 23: g8e.eval.v1.EvaluationAssertion.comparator:type_name -> g8e.eval.v1.EvaluationComparator
 	42,  // 24: g8e.eval.v1.EvaluationAssertion.expected:type_name -> g8e.eval.v1.EvaluationValue
-	112, // 25: g8e.eval.v1.EvaluationAssertion.required_observation_types:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 25: g8e.eval.v1.EvaluationAssertion.required_observation_types:type_name -> g8e.compliance.v1.VersionedReference
 	26,  // 26: g8e.eval.v1.EvaluationAssertion.required_authorities:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
-	112, // 27: g8e.eval.v1.EvaluationVerdict.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 27: g8e.eval.v1.EvaluationVerdict.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
 	28,  // 28: g8e.eval.v1.EvaluationVerdict.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	113, // 29: g8e.eval.v1.EvaluationVerdict.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	112, // 30: g8e.eval.v1.EvaluationVerdict.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
-	114, // 31: g8e.eval.v1.EvaluationVerdict.evaluated_at:type_name -> google.protobuf.Timestamp
+	116, // 29: g8e.eval.v1.EvaluationVerdict.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	115, // 30: g8e.eval.v1.EvaluationVerdict.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	117, // 31: g8e.eval.v1.EvaluationVerdict.evaluated_at:type_name -> google.protobuf.Timestamp
 	31,  // 32: g8e.eval.v1.EvaluationMetric.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
 	29,  // 33: g8e.eval.v1.EvaluationMetric.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
-	112, // 34: g8e.eval.v1.EvaluationMetric.eligible_population_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 34: g8e.eval.v1.EvaluationMetric.eligible_population_ref:type_name -> g8e.compliance.v1.VersionedReference
 	30,  // 35: g8e.eval.v1.EvaluationMetric.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
-	113, // 36: g8e.eval.v1.EvaluationMetric.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 36: g8e.eval.v1.EvaluationMetric.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	43,  // 37: g8e.eval.v1.EvaluationReport.run:type_name -> g8e.eval.v1.EvaluationRun
 	44,  // 38: g8e.eval.v1.EvaluationReport.attempts:type_name -> g8e.eval.v1.EvaluationAttempt
 	45,  // 39: g8e.eval.v1.EvaluationReport.observations:type_name -> g8e.eval.v1.EvaluationObservation
 	47,  // 40: g8e.eval.v1.EvaluationReport.assertions:type_name -> g8e.eval.v1.EvaluationAssertion
 	48,  // 41: g8e.eval.v1.EvaluationReport.verdicts:type_name -> g8e.eval.v1.EvaluationVerdict
 	49,  // 42: g8e.eval.v1.EvaluationReport.metrics:type_name -> g8e.eval.v1.EvaluationMetric
-	113, // 43: g8e.eval.v1.EvaluationReport.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 43: g8e.eval.v1.EvaluationReport.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	28,  // 44: g8e.eval.v1.EvaluationReport.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	86,  // 45: g8e.eval.v1.EvaluationReport.assignment_results:type_name -> g8e.eval.v1.EvaluationAssignmentResult
 	89,  // 46: g8e.eval.v1.EvaluationReport.campaign_verification_report:type_name -> g8e.eval.v1.EvaluationVerificationReport
-	112, // 47: g8e.eval.v1.ModelCampaignBinding.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
-	112, // 48: g8e.eval.v1.EvaluationCampaignSpec.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 47: g8e.eval.v1.ModelCampaignBinding.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 48: g8e.eval.v1.EvaluationCampaignSpec.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
 	59,  // 49: g8e.eval.v1.EvaluationCampaignSpec.model_registry:type_name -> g8e.eval.v1.ModelVariant
 	22,  // 50: g8e.eval.v1.EvaluationCampaignSpec.governance_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
-	112, // 51: g8e.eval.v1.EvaluationScenarioCatalog.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 51: g8e.eval.v1.EvaluationScenarioCatalog.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
 	58,  // 52: g8e.eval.v1.EvaluationScenarioCatalog.scenarios:type_name -> g8e.eval.v1.EvaluationScenarioDefinition
 	4,   // 53: g8e.eval.v1.PublicScenarioCriterion.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
 	20,  // 54: g8e.eval.v1.PublicToolScoreDimensionRequirement.dimension:type_name -> g8e.eval.v1.PublicToolScoreDimension
@@ -10925,8 +11220,8 @@ var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	56,  // 56: g8e.eval.v1.PromptHint.arguments:type_name -> g8e.eval.v1.PromptHintArgument
 	2,   // 57: g8e.eval.v1.EvaluationScenarioDefinition.category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
 	4,   // 58: g8e.eval.v1.EvaluationScenarioDefinition.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
-	113, // 59: g8e.eval.v1.EvaluationScenarioDefinition.input_fixture_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	113, // 60: g8e.eval.v1.EvaluationScenarioDefinition.gold_criteria_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 59: g8e.eval.v1.EvaluationScenarioDefinition.input_fixture_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 60: g8e.eval.v1.EvaluationScenarioDefinition.gold_criteria_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	54,  // 61: g8e.eval.v1.EvaluationScenarioDefinition.public_criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
 	55,  // 62: g8e.eval.v1.EvaluationScenarioDefinition.public_tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
 	1,   // 63: g8e.eval.v1.EvaluationScenarioDefinition.eligible_roles:type_name -> g8e.eval.v1.ModelCampaignRole
@@ -10939,12 +11234,12 @@ var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	61,  // 70: g8e.eval.v1.HeterogeneousStackDefinition.primary_slot:type_name -> g8e.eval.v1.RoleAssignment
 	61,  // 71: g8e.eval.v1.HeterogeneousStackDefinition.assistant_slot:type_name -> g8e.eval.v1.RoleAssignment
 	61,  // 72: g8e.eval.v1.HeterogeneousStackDefinition.lite_slot:type_name -> g8e.eval.v1.RoleAssignment
-	112, // 73: g8e.eval.v1.EvaluationAssignment.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 73: g8e.eval.v1.EvaluationAssignment.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
 	0,   // 74: g8e.eval.v1.EvaluationAssignment.lane:type_name -> g8e.eval.v1.EvaluationLane
 	3,   // 75: g8e.eval.v1.EvaluationAssignment.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	114, // 76: g8e.eval.v1.EvaluationAssignment.queued_at:type_name -> google.protobuf.Timestamp
-	114, // 77: g8e.eval.v1.EvaluationAssignment.started_at:type_name -> google.protobuf.Timestamp
-	114, // 78: g8e.eval.v1.EvaluationAssignment.completed_at:type_name -> google.protobuf.Timestamp
+	117, // 76: g8e.eval.v1.EvaluationAssignment.queued_at:type_name -> google.protobuf.Timestamp
+	117, // 77: g8e.eval.v1.EvaluationAssignment.started_at:type_name -> google.protobuf.Timestamp
+	117, // 78: g8e.eval.v1.EvaluationAssignment.completed_at:type_name -> google.protobuf.Timestamp
 	64,  // 79: g8e.eval.v1.EvaluationAssignment.homogeneous:type_name -> g8e.eval.v1.HomogeneousAssignmentTarget
 	65,  // 80: g8e.eval.v1.EvaluationAssignment.heterogeneous:type_name -> g8e.eval.v1.HeterogeneousAssignmentTarget
 	59,  // 81: g8e.eval.v1.HomogeneousAssignmentTarget.candidate_variant:type_name -> g8e.eval.v1.ModelVariant
@@ -10969,29 +11264,29 @@ var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	59,  // 100: g8e.eval.v1.ModelInferenceRecord.model_variant:type_name -> g8e.eval.v1.ModelVariant
 	7,   // 101: g8e.eval.v1.ModelInferenceRecord.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
 	6,   // 102: g8e.eval.v1.ModelInferenceRecord.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
-	113, // 103: g8e.eval.v1.ModelInferenceRecord.governed_receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	113, // 104: g8e.eval.v1.ModelInferenceRecord.provider_boundary_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 103: g8e.eval.v1.ModelInferenceRecord.governed_receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 104: g8e.eval.v1.ModelInferenceRecord.provider_boundary_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	8,   // 105: g8e.eval.v1.ModelInferenceRecord.classification:type_name -> g8e.eval.v1.EvaluationCallClassification
 	28,  // 106: g8e.eval.v1.ToolDecisionRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	28,  // 107: g8e.eval.v1.ToolCallRecord.schema_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	28,  // 108: g8e.eval.v1.ToolCallRecord.semantic_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	113, // 109: g8e.eval.v1.ToolCallRecord.governed_binding_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 109: g8e.eval.v1.ToolCallRecord.governed_binding_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	1,   // 110: g8e.eval.v1.EscalationRecord.from_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	1,   // 111: g8e.eval.v1.EscalationRecord.to_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	1,   // 112: g8e.eval.v1.HandoffRecord.from_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	1,   // 113: g8e.eval.v1.HandoffRecord.to_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	28,  // 114: g8e.eval.v1.RecoveryRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	113, // 115: g8e.eval.v1.GovernedActionBinding.receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	113, // 116: g8e.eval.v1.GovernedActionBinding.persistence_attestation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	113, // 117: g8e.eval.v1.GovernedActionBinding.effect_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 115: g8e.eval.v1.GovernedActionBinding.receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 116: g8e.eval.v1.GovernedActionBinding.persistence_attestation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 117: g8e.eval.v1.GovernedActionBinding.effect_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	28,  // 118: g8e.eval.v1.DeterministicGrade.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	37,  // 119: g8e.eval.v1.DeterministicGrade.basis:type_name -> g8e.eval.v1.GradeBasis
 	28,  // 120: g8e.eval.v1.SemanticGrade.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	113, // 121: g8e.eval.v1.SemanticGrade.grader_call_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 121: g8e.eval.v1.SemanticGrade.grader_call_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	31,  // 122: g8e.eval.v1.DecomposedScoreRecord.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
 	29,  // 123: g8e.eval.v1.DecomposedScoreRecord.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
 	30,  // 124: g8e.eval.v1.DecomposedScoreRecord.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
-	113, // 125: g8e.eval.v1.GraderModelCallRecord.inference_record_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	116, // 125: g8e.eval.v1.GraderModelCallRecord.inference_record_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
 	9,   // 126: g8e.eval.v1.PolicyDecisionRecord.outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
 	0,   // 127: g8e.eval.v1.EvaluationAssignmentResult.lane:type_name -> g8e.eval.v1.EvaluationLane
 	3,   // 128: g8e.eval.v1.EvaluationAssignmentResult.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
@@ -11006,21 +11301,21 @@ var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	82,  // 137: g8e.eval.v1.EvaluationAssignmentResult.semantic_grades:type_name -> g8e.eval.v1.SemanticGrade
 	83,  // 138: g8e.eval.v1.EvaluationAssignmentResult.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
 	84,  // 139: g8e.eval.v1.EvaluationAssignmentResult.grader_calls:type_name -> g8e.eval.v1.GraderModelCallRecord
-	113, // 140: g8e.eval.v1.EvaluationAssignmentResult.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	114, // 141: g8e.eval.v1.EvaluationAssignmentResult.completed_at:type_name -> google.protobuf.Timestamp
+	116, // 140: g8e.eval.v1.EvaluationAssignmentResult.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	117, // 141: g8e.eval.v1.EvaluationAssignmentResult.completed_at:type_name -> google.protobuf.Timestamp
 	85,  // 142: g8e.eval.v1.EvaluationAssignmentResult.policy_decisions:type_name -> g8e.eval.v1.PolicyDecisionRecord
 	12,  // 143: g8e.eval.v1.EvaluationAssignmentResult.trajectory_outcome:type_name -> g8e.eval.v1.EvaluationTrajectoryOutcome
 	38,  // 144: g8e.eval.v1.CampaignComplianceSourceInventory.provider_observation_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
 	38,  // 145: g8e.eval.v1.CampaignComplianceSourceInventory.model_provenance_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
 	87,  // 146: g8e.eval.v1.CampaignComplianceSourceInventory.artifacts:type_name -> g8e.eval.v1.CampaignComplianceSourceArtifact
 	28,  // 147: g8e.eval.v1.EvaluationVerificationReport.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	113, // 148: g8e.eval.v1.EvaluationVerificationReport.report_digest_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	114, // 149: g8e.eval.v1.EvaluationVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
+	116, // 148: g8e.eval.v1.EvaluationVerificationReport.report_digest_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	117, // 149: g8e.eval.v1.EvaluationVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
 	38,  // 150: g8e.eval.v1.EvaluationVerificationReport.provider_observation_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
 	38,  // 151: g8e.eval.v1.EvaluationVerificationReport.model_provenance_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
 	3,   // 152: g8e.eval.v1.EvaluationVerifiedPopulationEntry.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
 	1,   // 153: g8e.eval.v1.EvaluationVerifiedPopulationEntry.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	112, // 154: g8e.eval.v1.EvaluationVerifiedPopulation.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	115, // 154: g8e.eval.v1.EvaluationVerifiedPopulation.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
 	0,   // 155: g8e.eval.v1.EvaluationVerifiedPopulation.lane:type_name -> g8e.eval.v1.EvaluationLane
 	90,  // 156: g8e.eval.v1.EvaluationVerifiedPopulation.entries:type_name -> g8e.eval.v1.EvaluationVerifiedPopulationEntry
 	0,   // 157: g8e.eval.v1.PublicCampaignIdentity.lane:type_name -> g8e.eval.v1.EvaluationLane
@@ -11029,7 +11324,7 @@ var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	0,   // 160: g8e.eval.v1.PublicAssignmentLifecycleRecord.lane:type_name -> g8e.eval.v1.EvaluationLane
 	1,   // 161: g8e.eval.v1.PublicAssignmentLifecycleRecord.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	3,   // 162: g8e.eval.v1.PublicAssignmentLifecycleRecord.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	114, // 163: g8e.eval.v1.PublicAssignmentLifecycleRecord.observed_at:type_name -> google.protobuf.Timestamp
+	117, // 163: g8e.eval.v1.PublicAssignmentLifecycleRecord.observed_at:type_name -> google.protobuf.Timestamp
 	39,  // 164: g8e.eval.v1.PublicAssignmentLifecycleRecord.release_basis:type_name -> g8e.eval.v1.PublicReleaseBasis
 	1,   // 165: g8e.eval.v1.PublicModelCallSummary.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
 	7,   // 166: g8e.eval.v1.PublicModelCallSummary.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
@@ -11085,7 +11380,7 @@ var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	3,   // 216: g8e.eval.v1.PublicAssignmentResultProjection.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
 	28,  // 217: g8e.eval.v1.PublicAssignmentResultProjection.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
 	83,  // 218: g8e.eval.v1.PublicAssignmentResultProjection.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
-	114, // 219: g8e.eval.v1.PublicAssignmentResultProjection.completed_at:type_name -> google.protobuf.Timestamp
+	117, // 219: g8e.eval.v1.PublicAssignmentResultProjection.completed_at:type_name -> google.protobuf.Timestamp
 	96,  // 220: g8e.eval.v1.PublicAssignmentResultProjection.scenario_summary:type_name -> g8e.eval.v1.PublicScenarioSummary
 	97,  // 221: g8e.eval.v1.PublicAssignmentResultProjection.semantic_grade_summaries:type_name -> g8e.eval.v1.PublicSemanticGradeSummary
 	108, // 222: g8e.eval.v1.PublicAssignmentResultProjection.activity_summary:type_name -> g8e.eval.v1.PublicAssignmentActivitySummary
@@ -11093,11 +11388,14 @@ var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	110, // 224: g8e.eval.v1.PublicAssignmentResultProjection.verification_metadata:type_name -> g8e.eval.v1.PublicVerificationMetadata
 	12,  // 225: g8e.eval.v1.PublicAssignmentResultProjection.trajectory_outcome:type_name -> g8e.eval.v1.EvaluationTrajectoryOutcome
 	39,  // 226: g8e.eval.v1.PublicAssignmentResultProjection.release_basis:type_name -> g8e.eval.v1.PublicReleaseBasis
-	227, // [227:227] is the sub-list for method output_type
-	227, // [227:227] is the sub-list for method input_type
-	227, // [227:227] is the sub-list for extension type_name
-	227, // [227:227] is the sub-list for extension extendee
-	0,   // [0:227] is the sub-list for field type_name
+	39,  // 227: g8e.eval.v1.PublicLiveEvent.release_basis:type_name -> g8e.eval.v1.PublicReleaseBasis
+	114, // 228: g8e.eval.v1.PublicLiveEvent.metric_delta:type_name -> g8e.eval.v1.PublicLiveEvent.MetricDeltaEntry
+	112, // 229: g8e.eval.v1.PublicLiveEvent.MetricDeltaEntry.value:type_name -> g8e.eval.v1.PublicLiveMetricValue
+	230, // [230:230] is the sub-list for method output_type
+	230, // [230:230] is the sub-list for method input_type
+	230, // [230:230] is the sub-list for extension type_name
+	230, // [230:230] is the sub-list for extension extendee
+	0,   // [0:230] is the sub-list for field type_name
 }
 
 func init() { file_g8e_eval_v1_eval_proto_init() }
@@ -11118,13 +11416,15 @@ func file_g8e_eval_v1_eval_proto_init() {
 	file_g8e_eval_v1_eval_proto_msgTypes[34].OneofWrappers = []any{}
 	file_g8e_eval_v1_eval_proto_msgTypes[46].OneofWrappers = []any{}
 	file_g8e_eval_v1_eval_proto_msgTypes[58].OneofWrappers = []any{}
+	file_g8e_eval_v1_eval_proto_msgTypes[72].OneofWrappers = []any{}
+	file_g8e_eval_v1_eval_proto_msgTypes[73].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_eval_v1_eval_proto_rawDesc), len(file_g8e_eval_v1_eval_proto_rawDesc)),
 			NumEnums:      40,
-			NumMessages:   72,
+			NumMessages:   75,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

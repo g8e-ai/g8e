@@ -385,17 +385,17 @@ func modelInferenceMetricDelta(record *evalv1.ModelInferenceRecord) PublicMetric
 		return nil
 	}
 	delta := PublicMetricDelta{
-		"input_tokens":  *publicMetricValue(float64(record.GetPromptTokens())),
-		"output_tokens": *publicMetricValue(float64(record.GetCompletionTokens())),
+		"input_tokens":  liveMetricValue(float64(record.GetPromptTokens())),
+		"output_tokens": liveMetricValue(float64(record.GetCompletionTokens())),
 	}
 	if generationNanos := record.GetGenerationDurationNanos(); generationNanos > 0 {
-		delta["latency_ms"] = *publicMetricValue(float64(generationNanos) / float64(time.Millisecond))
+		delta["latency_ms"] = liveMetricValue(float64(generationNanos) / float64(time.Millisecond))
 		if completionTokens := record.GetCompletionTokens(); completionTokens > 0 {
-			delta["tokens_per_second"] = *publicMetricValue(float64(completionTokens) / (float64(generationNanos) / float64(time.Second)))
+			delta["tokens_per_second"] = liveMetricValue(float64(completionTokens) / (float64(generationNanos) / float64(time.Second)))
 		}
 	}
 	if record.RetryCount != nil {
-		delta["retries"] = *publicMetricValue(float64(record.GetRetryCount()))
+		delta["retries"] = liveMetricValue(float64(record.GetRetryCount()))
 	}
 	return delta
 }

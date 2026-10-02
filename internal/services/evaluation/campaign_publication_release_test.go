@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -77,9 +78,13 @@ func TestCampaignPublication_ReleaseProvenanceReachesEveryPublicRecord(t *testin
 				require.NoError(t, json.Unmarshal([]byte(published.RecordBytes), &body))
 				payload := []byte(published.RecordBytes)
 				basis := tc.basis
+				// Protobuf-owned records (assignment messages and live events)
+				// carry the enum name; only the view snapshots keep the lowercase form.
 				if body.MessageType != "" {
 					payload = body.Record
 					body.Kind = body.MessageType
+				}
+				if body.MessageType != "" || published.RecordType == models.PublicFeedRecordTypeEvent {
 					basis = "PUBLIC_RELEASE_BASIS_" + map[string]string{"recorded": "RECORDED", "asserted": "ASSERTED", "unknown": "UNKNOWN"}[tc.basis]
 				}
 				var identity struct {

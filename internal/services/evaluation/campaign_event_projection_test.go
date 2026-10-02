@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -67,7 +68,7 @@ func TestProjectModelRoleInvocationEvent_ExcludesProviderBoundaryFields(t *testi
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "stage_updated", event.Kind)
-	assert.Equal(t, "ds-live-run-live-1", event.DatasetID)
+	assert.Equal(t, "ds-live-run-live-1", event.DatasetId)
 	assert.Contains(t, event.StageLabel, "model role invoked")
 	assert.Contains(t, event.StageLabel, "primary")
 
@@ -126,6 +127,70 @@ func TestProjectMetricAvailabilityEvent_ZeroDenominatorIsUnavailable(t *testing.
 	require.True(t, ok)
 	assert.Equal(t, "no_scored_calls", passRate.UnavailableReason)
 	assert.Nil(t, passRate.Value)
+}
+
+func TestMarshalPublicLiveEvent_KeepsZeroProgressAndAMeasuredZero(t *testing.T) {
+	zero := 0.0
+	event, err := ProjectMetricAvailabilityEvent(PublicMetricAvailabilitySignal{
+		RunID:        "run-live-1",
+		AssignmentID: "assign-1",
+		VariantID:    "qwen3-4b",
+		Role:         models.ModelRolePrimary,
+		MetricID:     assignmentPassMetricID,
+		Numerator:    0,
+		Denominator:  1,
+		Rate:         &zero,
+		ObservedAt:   "2026-09-24T12:00:05.000Z",
+		EventID:      "run-live-1:assign-1:metric:pass:46",
+		Completed:    0,
+		Total:        5,
+	})
+	require.NoError(t, err)
+	body, err := MarshalPublicLiveEvent(event)
+	require.NoError(t, err)
+
+	var wire struct {
+		Completed   *int                      `json:"completed"`
+		Total       *int                      `json:"total"`
+		MetricDelta map[string]map[string]any `json:"metric_delta"`
+	}
+	require.NoError(t, json.Unmarshal(body, &wire))
+	require.NotNil(t, wire.Completed, "zero progress is a value, not an omission")
+	assert.Equal(t, 0, *wire.Completed)
+	require.NotNil(t, wire.Total)
+	value, present := wire.MetricDelta[assignmentPassMetricID]["value"]
+	require.True(t, present, "a failed assignment's binary pass is a measured zero, not an omission")
+	assert.InDelta(t, 0.0, value, 0)
+
+	decoded := &evalv1.PublicLiveEvent{}
+	require.NoError(t, evalv1.UnmarshalCanonical(body, decoded), "the body is the canonical protojson form")
+	assert.True(t, proto.Equal(event, decoded))
+	require.NoError(t, publicdisclosure.ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, body))
+}
+
+func TestMarshalPublicLiveEvent_RejectsNil(t *testing.T) {
+	_, err := MarshalPublicLiveEvent(nil)
+	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestProjectLiveEvents_CarryTheCampaignReleaseIdentity(t *testing.T) {
+	release := CampaignRelease{Release: "v2.2.8", Basis: ReleaseBasisRecorded, SourceRevision: "abc123"}
+	invoked, err := ProjectModelRoleInvocationEvent(PublicModelRoleInvocationSignal{
+		Release: release, RunID: "run-live-1", AssignmentID: "assign-1", VariantID: "qwen3-4b", Role: models.ModelRolePrimary,
+		ObservedAt: "2026-09-24T12:00:00.000Z", EventID: "run-live-1:assign-1:invocation:primary:47", Completed: 0, Total: 5,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "v2.2.8", invoked.GetRelease())
+	assert.Equal(t, evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED, invoked.GetReleaseBasis())
+	assert.Equal(t, "abc123", invoked.GetSourceRevision())
+
+	unknown, err := ProjectModelRoleInvocationEvent(PublicModelRoleInvocationSignal{
+		RunID: "run-live-1", AssignmentID: "assign-1", VariantID: "qwen3-4b", Role: models.ModelRolePrimary,
+		ObservedAt: "2026-09-24T12:00:00.000Z", EventID: "run-live-1:assign-1:invocation:primary:48", Completed: 0, Total: 5,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, unknown.GetRelease(), "a campaign without a release is not given one")
+	assert.Equal(t, evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNKNOWN, unknown.GetReleaseBasis())
 }
 
 func TestHeadlineMetricID_RecognizesExplorerHeadlineMetrics(t *testing.T) {

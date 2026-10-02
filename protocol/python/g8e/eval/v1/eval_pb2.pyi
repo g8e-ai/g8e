@@ -1998,3 +1998,62 @@ class PublicAssignmentResultProjection(_message.Message):
     release_basis: PublicReleaseBasis
     source_revision: str
     def __init__(self, assignment_id: _Optional[str] = ..., run_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., scenario_category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., lane: _Optional[_Union[EvaluationLane, str]] = ..., designated_role: _Optional[_Union[ModelCampaignRole, str]] = ..., variant_id: _Optional[str] = ..., lifecycle_status: _Optional[_Union[EvaluationAssignmentLifecycleStatus, str]] = ..., summary_status: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., decomposed_scores: _Optional[_Iterable[_Union[DecomposedScoreRecord, _Mapping]]] = ..., result_digest: _Optional[str] = ..., verification_status: _Optional[str] = ..., unavailable_metric_reasons: _Optional[_Iterable[str]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., scenario_summary: _Optional[_Union[PublicScenarioSummary, _Mapping]] = ..., semantic_grade_summaries: _Optional[_Iterable[_Union[PublicSemanticGradeSummary, _Mapping]]] = ..., activity_summary: _Optional[_Union[PublicAssignmentActivitySummary, _Mapping]] = ..., evidence_bindings: _Optional[_Iterable[_Union[PublicEvidenceBinding, _Mapping]]] = ..., verification_metadata: _Optional[_Union[PublicVerificationMetadata, _Mapping]] = ..., trajectory_outcome: _Optional[_Union[EvaluationTrajectoryOutcome, str]] = ..., guided_retry_count: _Optional[int] = ..., failure_reason: _Optional[str] = ..., tools_declared: _Optional[_Iterable[str]] = ..., release: _Optional[str] = ..., release_basis: _Optional[_Union[PublicReleaseBasis, str]] = ..., source_revision: _Optional[str] = ...) -> None: ...
+
+class PublicLiveMetricValue(_message.Message):
+    __slots__ = ("value", "unavailable_reason")
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    UNAVAILABLE_REASON_FIELD_NUMBER: _ClassVar[int]
+    value: float
+    unavailable_reason: str
+    def __init__(self, value: _Optional[float] = ..., unavailable_reason: _Optional[str] = ...) -> None: ...
+
+class PublicLiveEvent(_message.Message):
+    __slots__ = ("schema_version", "kind", "dataset_id", "quality_state", "observed_at", "source_revision_label", "release", "release_basis", "source_revision", "event_id", "run_id", "assignment_id", "variant_id", "role", "lifecycle_status", "completed", "total", "stage_label", "task_id", "metric_delta")
+    class MetricDeltaEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: PublicLiveMetricValue
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[PublicLiveMetricValue, _Mapping]] = ...) -> None: ...
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    DATASET_ID_FIELD_NUMBER: _ClassVar[int]
+    QUALITY_STATE_FIELD_NUMBER: _ClassVar[int]
+    OBSERVED_AT_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_REVISION_LABEL_FIELD_NUMBER: _ClassVar[int]
+    RELEASE_FIELD_NUMBER: _ClassVar[int]
+    RELEASE_BASIS_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_REVISION_FIELD_NUMBER: _ClassVar[int]
+    EVENT_ID_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    VARIANT_ID_FIELD_NUMBER: _ClassVar[int]
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    LIFECYCLE_STATUS_FIELD_NUMBER: _ClassVar[int]
+    COMPLETED_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_FIELD_NUMBER: _ClassVar[int]
+    STAGE_LABEL_FIELD_NUMBER: _ClassVar[int]
+    TASK_ID_FIELD_NUMBER: _ClassVar[int]
+    METRIC_DELTA_FIELD_NUMBER: _ClassVar[int]
+    schema_version: str
+    kind: str
+    dataset_id: str
+    quality_state: str
+    observed_at: str
+    source_revision_label: str
+    release: str
+    release_basis: PublicReleaseBasis
+    source_revision: str
+    event_id: str
+    run_id: str
+    assignment_id: str
+    variant_id: str
+    role: str
+    lifecycle_status: str
+    completed: int
+    total: int
+    stage_label: str
+    task_id: str
+    metric_delta: _containers.MessageMap[str, PublicLiveMetricValue]
+    def __init__(self, schema_version: _Optional[str] = ..., kind: _Optional[str] = ..., dataset_id: _Optional[str] = ..., quality_state: _Optional[str] = ..., observed_at: _Optional[str] = ..., source_revision_label: _Optional[str] = ..., release: _Optional[str] = ..., release_basis: _Optional[_Union[PublicReleaseBasis, str]] = ..., source_revision: _Optional[str] = ..., event_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., variant_id: _Optional[str] = ..., role: _Optional[str] = ..., lifecycle_status: _Optional[str] = ..., completed: _Optional[int] = ..., total: _Optional[int] = ..., stage_label: _Optional[str] = ..., task_id: _Optional[str] = ..., metric_delta: _Optional[_Mapping[str, PublicLiveMetricValue]] = ...) -> None: ...

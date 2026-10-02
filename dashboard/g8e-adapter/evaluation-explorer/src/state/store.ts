@@ -29,6 +29,7 @@ import type {
   SnapshotRecord,
   SuiteSummary,
 } from '../contract/types';
+import { decodeLiveEventWire, isLiveEventKind } from '../contract/live-event-wire';
 import { decodeViewRecord, isProjectionRecord, ValidationError } from '../contract/validators';
 import {
   deriveFreshness,
@@ -420,7 +421,7 @@ export class EvalStore {
       if (typeof kind !== 'string' || kind.length === 0) {
         throw new ValidationError('expected string', 'projection.kind');
       }
-      const decoded = decodeViewRecord(kind, payload);
+      const decoded = isLiveEventKind(kind) ? decodeLiveEventWire(payload) : decodeViewRecord(kind, payload);
       this.indexRecord(state, decoded, record.sequence);
     } catch (error) {
       const message = error instanceof ValidationError ? `${error.path}: ${error.message}` : 'invalid public feed record';

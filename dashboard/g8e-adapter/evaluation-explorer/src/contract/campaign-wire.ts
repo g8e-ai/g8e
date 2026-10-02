@@ -329,7 +329,7 @@ export function mapCampaignRelease(record: WireReleaseProvenance): ReleaseProven
   };
 }
 
-function assertWireReleaseProvenance(value: Record<string, unknown>, path: string): void {
+export function assertWireReleaseProvenance(value: Record<string, unknown>, path: string): void {
   if (value.release_basis !== undefined) assertEnum(value.release_basis, Object.keys(WIRE_RELEASE_BASES), `${path}.release_basis`);
   const basis = value.release_basis as keyof typeof WIRE_RELEASE_BASES | undefined;
   assertReleaseProvenance({ ...value, release_basis: basis === undefined ? undefined : WIRE_RELEASE_BASES[basis] }, path);

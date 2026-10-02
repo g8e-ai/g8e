@@ -33,7 +33,7 @@ func TestPublicFeedReleaseIdentity_PreservesKnownAndUnknownProvenance(t *testing
 				kind models.PublicFeedRecordType
 				body string
 			}{
-				{"live event", models.PublicFeedRecordTypeEvent, `{"schema_version":"1.6.0","kind":"stage_updated","dataset_id":"ds","quality_state":"live_in_progress","observed_at":"2026-10-02T12:00:00Z","event_id":"event-1","run_id":"run-1","lifecycle_status":"running","completed":0,"total":1` + tc.view + `}`},
+				{"live event", models.PublicFeedRecordTypeEvent, `{"schema_version":"1.6.0","kind":"stage_updated","dataset_id":"ds","quality_state":"live_in_progress","observed_at":"2026-10-02T12:00:00Z","event_id":"event-1","run_id":"run-1","lifecycle_status":"running","completed":0,"total":1` + tc.wire + `}`},
 				{"view snapshot", models.PublicFeedRecordTypeProjection, `{"schema_version":"1.6.0","kind":"evaluation_summary","dataset_id":"ds","quality_state":"live_in_progress","observed_at":"2026-10-02T12:00:00Z"` + tc.view + `}`},
 				{"lifecycle", models.PublicFeedRecordTypeProjection, `{"schema_version":"1.0.0","message_type":"PublicAssignmentLifecycleRecord","idempotency_key":"run-1:assignment-1","record":{"assignment_id":"assignment-1","run_id":"run-1","scenario_id":"scenario-1"` + tc.wire + `}}`},
 				{"result", models.PublicFeedRecordTypeProjection, `{"schema_version":"1.2.0","message_type":"PublicAssignmentResultProjection","idempotency_key":"run-1:assignment-1","record":{"assignment_id":"assignment-1","run_id":"run-1","scenario_id":"scenario-1"` + tc.wire + `}}`},

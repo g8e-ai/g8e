@@ -133,6 +133,39 @@ func TestValidatePublicDisclosureEvents(t *testing.T) {
 	assert.ErrorIs(t, ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, []byte(`{"schema_version":"1.5.0","kind":"assignment_completed","dataset_id":"ds","quality_state":"live_in_progress","observed_at":"2026-01-01T00:00:00Z","event_id":"event-1","run_id":"run-1","lifecycle_status":"completed","completed":2,"total":1}`)), constants.ErrPublicFeedRecordSchemaInvalid)
 }
 
+func TestValidatePublicLiveEventIsTypedAndFailsClosed(t *testing.T) {
+	const head = `{"schema_version":"1.6.0","kind":"metric_updated","dataset_id":"ds","quality_state":"live_in_progress","observed_at":"2026-10-02T12:00:00Z","event_id":"event-1","run_id":"run-1","lifecycle_status":"running"`
+	tests := []struct {
+		name string
+		body string
+		ok   bool
+	}{
+		{name: "recorded release on the wire", ok: true, body: head + `,"release":"v2.2.8","release_basis":"PUBLIC_RELEASE_BASIS_RECORDED","completed":1,"total":2,"metric_delta":{"pass":{"value":1}}}`},
+		{name: "zero progress is a value", ok: true, body: head + `,"completed":0,"total":1}`},
+		{name: "measured zero metric is a value", ok: true, body: head + `,"completed":0,"total":1,"metric_delta":{"pass":{"value":0}}}`},
+		{name: "unavailable metric names its reason", ok: true, body: head + `,"completed":0,"total":1,"metric_delta":{"pass":{"unavailable_reason":"no_scored_calls"}}}`},
+		{name: "missing completed is not zero", body: head + `,"total":1}`},
+		{name: "missing total is not zero", body: head + `,"completed":0}`},
+		{name: "view-form release basis", body: head + `,"release":"v2.2.8","release_basis":"recorded","completed":0,"total":1}`},
+		{name: "client-stamped feed sequence is not a wire field", body: head + `,"completed":0,"total":1,"feed_sequence":3}`},
+		{name: "unknown field", body: head + `,"completed":0,"total":1,"served_model_tag":"qwen"}`},
+		{name: "role outside the vocabulary", body: head + `,"role":"sage","completed":0,"total":1}`},
+		{name: "metric with a value and a reason", body: head + `,"completed":0,"total":1,"metric_delta":{"pass":{"value":1,"unavailable_reason":"no_scored_calls"}}}`},
+		{name: "metric with neither", body: head + `,"completed":0,"total":1,"metric_delta":{"pass":{}}}`},
+		{name: "metric value is not finite", body: head + `,"completed":0,"total":1,"metric_delta":{"pass":{"value":"NaN"}}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, []byte(tt.body))
+			if tt.ok {
+				require.NoError(t, err)
+				return
+			}
+			assert.ErrorIs(t, err, constants.ErrPublicFeedRecordSchemaInvalid)
+		})
+	}
+}
+
 func TestValidatePublicProofManifestAndKeyRevocationRecords(t *testing.T) {
 	now := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 	manifest, err := json.Marshal(models.PublicProofManifest{SchemaVersion: "1.0.0", ProofRootSHA256: strings.Repeat("a", 64), CampaignID: "campaign-1", CampaignRevision: "revision-1", VerifiedIndexGenerationHash: strings.Repeat("b", 64), ArtifactCount: 1, Artifacts: []models.PublicProofCatalogEntry{{ArtifactID: "artifact-1"}}, VerifierInstructions: "offline", GeneratedAt: now, SigningKeyID: "key-1", Signature: "signature"})
@@ -141,11 +174,6 @@ func TestValidatePublicProofManifestAndKeyRevocationRecords(t *testing.T) {
 	revocation, err := json.Marshal(models.PublicKeyRevocationRecord{SourceID: "source-1", RevokedKeyID: "old-key", RevokedAt: now, NewKeyID: "new-key", RevocationSignature: "signature"})
 	require.NoError(t, err)
 	require.NoError(t, ValidatePublicFeedRecord(models.PublicFeedRecordTypeKeyRevocation, revocation))
-	value, err := integerField(map[string]json.RawMessage{"completed": json.RawMessage(`2`)}, "completed")
-	require.NoError(t, err)
-	assert.Equal(t, int64(2), value)
-	_, err = integerField(map[string]json.RawMessage{}, "completed")
-	assert.Error(t, err)
 }
 
 func TestValidatePublicDisclosureEnvelopeAndJSONDecoding(t *testing.T) {

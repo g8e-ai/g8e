@@ -56,6 +56,9 @@
     - [PublicEvidenceBinding](#g8e-eval-v1-PublicEvidenceBinding)
     - [PublicGovernedActionActivity](#g8e-eval-v1-PublicGovernedActionActivity)
     - [PublicGovernedActionActivityRecord](#g8e-eval-v1-PublicGovernedActionActivityRecord)
+    - [PublicLiveEvent](#g8e-eval-v1-PublicLiveEvent)
+    - [PublicLiveEvent.MetricDeltaEntry](#g8e-eval-v1-PublicLiveEvent-MetricDeltaEntry)
+    - [PublicLiveMetricValue](#g8e-eval-v1-PublicLiveMetricValue)
     - [PublicModelActivity](#g8e-eval-v1-PublicModelActivity)
     - [PublicModelActivityRecord](#g8e-eval-v1-PublicModelActivityRecord)
     - [PublicModelCallSummary](#g8e-eval-v1-PublicModelCallSummary)
@@ -1326,6 +1329,78 @@ to one governed inference provider attempt.
 | reported_policy_outcome | [EvaluationPolicyDecisionOutcome](#g8e-eval-v1-EvaluationPolicyDecisionOutcome) |  |  |
 | receipt_status | [PublicReceiptStatus](#g8e-eval-v1-PublicReceiptStatus) |  |  |
 | evidence_source | [PublicEvidenceSource](#g8e-eval-v1-PublicEvidenceSource) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicLiveEvent"></a>
+
+### PublicLiveEvent
+One disclosure-safe Explorer live event. kind, quality_state,
+lifecycle_status, and role carry the Explorer view contract&#39;s closed string
+vocabularies, which publicdisclosure.ValidatePublicFeedRecord enforces.
+completed and total are presence-tracked: zero progress is a value, and a
+producer that leaves either unset is rejected at validation.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| schema_version | [string](#string) |  |  |
+| kind | [string](#string) |  |  |
+| dataset_id | [string](#string) |  |  |
+| quality_state | [string](#string) |  |  |
+| observed_at | [string](#string) |  |  |
+| source_revision_label | [string](#string) |  |  |
+| release | [string](#string) |  |  |
+| release_basis | [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis) |  |  |
+| source_revision | [string](#string) |  |  |
+| event_id | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| assignment_id | [string](#string) |  |  |
+| variant_id | [string](#string) |  |  |
+| role | [string](#string) |  |  |
+| lifecycle_status | [string](#string) |  |  |
+| completed | [uint32](#uint32) | optional |  |
+| total | [uint32](#uint32) | optional |  |
+| stage_label | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| metric_delta | [PublicLiveEvent.MetricDeltaEntry](#g8e-eval-v1-PublicLiveEvent-MetricDeltaEntry) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicLiveEvent-MetricDeltaEntry"></a>
+
+### PublicLiveEvent.MetricDeltaEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [PublicLiveMetricValue](#g8e-eval-v1-PublicLiveMetricValue) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicLiveMetricValue"></a>
+
+### PublicLiveMetricValue
+One scalar in a live event&#39;s metric_delta. value is presence-tracked so a
+measured zero (a failed assignment&#39;s binary pass) is emitted, never dropped;
+exactly one of value and unavailable_reason is set.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| value | [double](#double) | optional |  |
+| unavailable_reason | [string](#string) |  |  |
 
 
 

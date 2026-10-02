@@ -1236,3 +1236,39 @@ message PublicAssignmentResultProjection {
   PublicReleaseBasis release_basis = 25;
   string source_revision = 26;
 }
+
+// One scalar in a live event's metric_delta. value is presence-tracked so a
+// measured zero (a failed assignment's binary pass) is emitted, never dropped;
+// exactly one of value and unavailable_reason is set.
+message PublicLiveMetricValue {
+  optional double value = 1;
+  string unavailable_reason = 2;
+}
+
+// One disclosure-safe Explorer live event. kind, quality_state,
+// lifecycle_status, and role carry the Explorer view contract's closed string
+// vocabularies, which publicdisclosure.ValidatePublicFeedRecord enforces.
+// completed and total are presence-tracked: zero progress is a value, and a
+// producer that leaves either unset is rejected at validation.
+message PublicLiveEvent {
+  string schema_version = 1;
+  string kind = 2;
+  string dataset_id = 3;
+  string quality_state = 4;
+  string observed_at = 5;
+  string source_revision_label = 6;
+  string release = 7;
+  PublicReleaseBasis release_basis = 8;
+  string source_revision = 9;
+  string event_id = 10;
+  string run_id = 11;
+  string assignment_id = 12;
+  string variant_id = 13;
+  string role = 14;
+  string lifecycle_status = 15;
+  optional uint32 completed = 16;
+  optional uint32 total = 17;
+  string stage_label = 18;
+  string task_id = 19;
+  map<string, PublicLiveMetricValue> metric_delta = 20;
+}
