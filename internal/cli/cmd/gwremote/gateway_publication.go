@@ -381,7 +381,7 @@ func waitForPublicMirrorRetry(ctx context.Context, retryAfter string) error {
 
 func NewCampaignFeedExporter(cmd context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) (evaluation.CampaignFeedExporter, error) {
 	if !IsGatewayHealthy() {
-		return nil, fmt.Errorf("campaign publication: gateway is not healthy; start g8e-gateway with --public-spectator")
+		return nil, fmt.Errorf("campaign publication: start g8e-gateway with --public-spectator: %w", constants.ErrGatewayUnhealthy)
 	}
 	client, err := campaignPublicationAPIClientFactory(fileSvc, cfg)
 	if err != nil {
@@ -490,7 +490,7 @@ func (p *remoteGatewayCampaignProofPublisher) FlushProofCatalog(ctx context.Cont
 
 func NewCampaignProofPublisher(cmd context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) (evaluation.CampaignProofPublisher, error) {
 	if !IsGatewayHealthy() {
-		return nil, fmt.Errorf("campaign publication: gateway is not healthy; start g8e-gateway with --public-spectator")
+		return nil, fmt.Errorf("campaign publication: start g8e-gateway with --public-spectator: %w", constants.ErrGatewayUnhealthy)
 	}
 	client, err := campaignPublicationAPIClientFactory(fileSvc, cfg)
 	if err != nil {

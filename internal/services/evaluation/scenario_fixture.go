@@ -287,7 +287,7 @@ func buildScenarioArtifactReference(suiteID string, artifactType complianceevide
 	artifactID := complianceevidence.ContentAddress(artifactType, body)
 	_, digest, ok := complianceevidence.ParseContentAddress(artifactID)
 	if !ok {
-		return nil, fmt.Errorf("evaluation: build scenario artifact reference: invalid content address")
+		return nil, fmt.Errorf("evaluation: build scenario artifact reference: content address: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	freeze := timestamppb.New(scenarioCatalogFreezeTime)
 	return &compliancev1.ComplianceEvidenceReference{

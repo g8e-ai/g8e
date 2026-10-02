@@ -624,7 +624,7 @@ func normalizeRuntimeExportDir(runID, outputDir string) (string, error) {
 	}
 	outputDir = filepath.ToSlash(outputDir)
 	if filepath.IsAbs(outputDir) || outputDir == ".." || strings.HasPrefix(outputDir, "../") {
-		return "", fmt.Errorf("evaluation: export campaign run: output directory must be runtime-relative")
+		return "", fmt.Errorf("evaluation: export campaign run: %w", constants.ErrEvaluationExportDirNotRelative)
 	}
 	return outputDir, nil
 }

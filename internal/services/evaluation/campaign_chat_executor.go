@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -82,7 +83,7 @@ func NewCampaignChatExecutor(client CampaignChatClient, persona harnessclient.Pe
 // the terminal trace into a canonical assignment result.
 func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
 	if e == nil || e.client == nil {
-		return nil, fmt.Errorf("evaluation: execute assignment: chat executor is required")
+		return nil, fmt.Errorf("evaluation: execute assignment: chat executor: %w", constants.ErrMissingRequiredField)
 	}
 	ws, err := NewScenarioWorkspace(req.Binding.DataOperatorWorkingDirectory, req.Assignment.GetRunId(), req.AttemptID)
 	if err != nil {
@@ -117,7 +118,7 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	case req.OnTraceProgress != nil:
 		trace, err = WaitForCampaignTrace(ctx, fetchTrace, req.OnTraceProgress)
 	case e.waitForTrace == nil:
-		return nil, fmt.Errorf("evaluation: execute assignment: trace waiter is required")
+		return nil, fmt.Errorf("evaluation: execute assignment: trace waiter: %w", constants.ErrMissingRequiredField)
 	default:
 		trace, err = e.waitForTrace(ctx, fetchTrace)
 	}

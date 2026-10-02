@@ -194,7 +194,7 @@ func canarySeed(vector AgentToolGuidanceVector) *harnessclient.EnsembleInvestiga
 
 func runCanaryChat(ctx context.Context, deps CanaryDeps, runID, attemptID string, seed *harnessclient.EnsembleInvestigationSeed, ws *ScenarioWorkspace) (EvaluationTrace, error) {
 	if deps.Chat == nil || deps.WaitForTrace == nil {
-		return nil, fmt.Errorf("chat client and trace waiter are required")
+		return nil, fmt.Errorf("chat client and trace waiter: %w", constants.ErrMissingRequiredField)
 	}
 	probe := deps.Probe
 	probe.CampaignID = EnvironmentCanaryCampaignID
@@ -354,7 +354,7 @@ func checkWorkspaceReachable(ctx context.Context, deps CanaryDeps, runID, attemp
 		return "", wsErr
 	}
 	if deps.WorkspaceWriter == nil || deps.WorkspaceReader == nil {
-		return "", fmt.Errorf("workspace file writer and reader are required")
+		return "", fmt.Errorf("workspace file writer and reader: %w", constants.ErrMissingRequiredField)
 	}
 	absPath, err := ws.FilePath(canaryWorkspaceFile)
 	if err != nil {
@@ -400,7 +400,7 @@ func checkGuidanceDelivered(trace EvaluationTrace, vector AgentToolGuidanceVecto
 
 func checkRegistryAndMCP(ctx context.Context, deps CanaryDeps) (string, error) {
 	if deps.MCP == nil {
-		return "", fmt.Errorf("MCP verifier is required")
+		return "", fmt.Errorf("MCP verifier: %w", constants.ErrMissingRequiredField)
 	}
 	if err := deps.MCP.VerifyAgentIntegrations(ctx); err != nil {
 		return "", fmt.Errorf("agent registry verification: %w", err)

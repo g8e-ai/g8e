@@ -131,7 +131,7 @@ func BuildAssignmentFormationRunEvidenceReference(runID, assignmentID, attemptID
 	artifactID := complianceevidence.ContentAddress(complianceevidence.ArtifactTypeEvaluationAssignmentFormationRun, body)
 	_, digest, ok := complianceevidence.ParseContentAddress(artifactID)
 	if !ok {
-		return nil, fmt.Errorf("evaluation: build formation run evidence reference: invalid content address")
+		return nil, fmt.Errorf("evaluation: build formation run evidence reference: content address: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	if producedAt.IsZero() {
 		producedAt = time.Now().UTC()
@@ -177,14 +177,14 @@ func ComputeFormationRunEvidenceDigest(evidence *FormationRunEvidence) (string, 
 // ValidateFormationRunEvidenceDigest verifies one envelope digest binding.
 func ValidateFormationRunEvidenceDigest(evidence *FormationRunEvidence) error {
 	if evidence == nil || evidence.EvidenceDigest == "" {
-		return fmt.Errorf("evaluation: validate formation run evidence: missing evidence_digest")
+		return fmt.Errorf("evaluation: validate formation run evidence: evidence_digest: %w", constants.ErrMissingRequiredField)
 	}
 	expected, err := ComputeFormationRunEvidenceDigest(evidence)
 	if err != nil {
 		return err
 	}
 	if evidence.EvidenceDigest != expected {
-		return fmt.Errorf("evaluation: validate formation run evidence: evidence digest mismatch")
+		return fmt.Errorf("evaluation: validate formation run evidence: evidence digest: %w", constants.ErrChecksumMismatch)
 	}
 	return nil
 }
@@ -232,7 +232,7 @@ func VerifyFormationRunEvidenceMatchesResult(assignment *evalv1.EvaluationAssign
 		return fmt.Errorf("evaluation: verify formation run evidence matches result: %w", constants.ErrMissingRequiredField)
 	}
 	if evidence.AssignmentID != assignment.GetAssignmentId() || evidence.RunID != assignment.GetRunId() {
-		return fmt.Errorf("formation run evidence binding mismatch")
+		return fmt.Errorf("formation run evidence binding: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	formationResult, err := FormationRunResultFromEvidence(evidence)
 	if err != nil {
@@ -246,7 +246,7 @@ func VerifyFormationRunEvidenceMatchesResult(assignment *evalv1.EvaluationAssign
 		return err
 	}
 	if len(imported.GetModelInferences()) != len(result.GetModelInferences()) {
-		return fmt.Errorf("formation run evidence model inference count mismatch")
+		return fmt.Errorf("formation run evidence model inference count mismatch: %w", constants.ErrEvalRunVerificationFailed)
 	}
 	for index, expected := range imported.GetModelInferences() {
 		actual := result.GetModelInferences()[index]
@@ -258,11 +258,11 @@ func VerifyFormationRunEvidenceMatchesResult(assignment *evalv1.EvaluationAssign
 			expected.GetPromptTokens() != actual.GetPromptTokens() ||
 			expected.GetCompletionTokens() != actual.GetCompletionTokens() ||
 			expected.GetGenerationDurationNanos() != actual.GetGenerationDurationNanos() {
-			return fmt.Errorf("formation run evidence model inference %d mismatch", index)
+			return fmt.Errorf("formation run evidence model inference %d mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
 		}
 	}
 	if imported.GetLifecycleStatus() != result.GetLifecycleStatus() {
-		return fmt.Errorf("formation run evidence lifecycle mismatch")
+		return fmt.Errorf("formation run evidence lifecycle mismatch: %w", constants.ErrEvalRunVerificationFailed)
 	}
 	return nil
 }

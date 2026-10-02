@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
@@ -118,7 +119,7 @@ func canonicalJSONBytes(val any) ([]byte, error) {
 // chat-probe trace object with trace_digest cleared before canonicalization.
 func ComputeChatProbeTraceDigest(trace EvaluationTrace) (string, error) {
 	if len(trace) == 0 {
-		return "", fmt.Errorf("evaluation: compute chat probe trace digest: trace is required")
+		return "", fmt.Errorf("evaluation: compute chat probe trace digest: trace: %w", constants.ErrMissingRequiredField)
 	}
 	payload := make(EvaluationTrace, len(trace))
 	for key, value := range trace {

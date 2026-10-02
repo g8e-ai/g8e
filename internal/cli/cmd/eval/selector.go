@@ -72,10 +72,10 @@ func (s ModelSelector) describe() string {
 func (s ModelSelector) validate() error {
 	hasFilter := len(s.Family) > 0 || s.MaxParams != ""
 	if len(s.IDs) > 0 && (hasFilter || s.All) {
-		return fmt.Errorf("evaluation: model selector: positional models cannot be combined with --family, --max-params, or --all")
+		return fmt.Errorf("evaluation: model selector: positional models cannot be combined with --family, --max-params, or --all: %w", constants.ErrEvaluationFlagsInvalid)
 	}
 	if s.All && hasFilter {
-		return fmt.Errorf("evaluation: model selector: --all cannot be combined with --family or --max-params")
+		return fmt.Errorf("evaluation: model selector: --all cannot be combined with --family or --max-params: %w", constants.ErrEvaluationFlagsInvalid)
 	}
 	return nil
 }
@@ -89,7 +89,7 @@ func (s ModelSelector) maxParameters() (uint64, error) {
 		return 0, err
 	}
 	if maxParams == 0 {
-		return 0, fmt.Errorf("evaluation: model selector: --max-params must be greater than zero")
+		return 0, fmt.Errorf("evaluation: model selector: --max-params must be greater than zero: %w", constants.ErrEvaluationFlagsInvalid)
 	}
 	return maxParams, nil
 }

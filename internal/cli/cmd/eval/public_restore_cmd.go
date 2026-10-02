@@ -15,6 +15,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 
 	"github.com/spf13/cobra"
@@ -44,10 +45,10 @@ func PublicRestoreCmdWithConfig(configLoader func(string) (*config.Config, error
 				runID = args[0]
 			}
 			if !queue && runID == "" {
-				return fmt.Errorf("public restore: specify --queue or --run-id")
+				return fmt.Errorf("public restore: specify --queue or --run-id: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			if queue && runID != "" {
-				return fmt.Errorf("public restore: --queue and --run-id are mutually exclusive")
+				return fmt.Errorf("public restore: --queue and --run-id are mutually exclusive: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			cfg, err := configLoader(projectRoot)
 			if err != nil {

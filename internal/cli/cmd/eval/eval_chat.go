@@ -101,7 +101,7 @@ the harness is broken rather than the model:
 The model must be in the frozen inventory (g8e eval models).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
-				return fmt.Errorf("evaluation: gates chat: --model is required")
+				return fmt.Errorf("evaluation: gates chat: %w", constants.ErrEvaluationModelRequired)
 			}
 			caseIDs, err := parseChatAcceptanceCases(casesCSV)
 			if err != nil {
@@ -600,7 +600,7 @@ func parseChatAcceptanceCases(raw string) ([]evaluation.ChatAcceptanceCaseID, er
 		caseIDs = append(caseIDs, evaluation.ChatAcceptanceCaseID(part))
 	}
 	if len(caseIDs) == 0 {
-		return nil, fmt.Errorf("evaluation: chat accept: no cases selected")
+		return nil, fmt.Errorf("evaluation: chat accept: %w", constants.ErrEvaluationNoCasesSelected)
 	}
 	return caseIDs, nil
 }

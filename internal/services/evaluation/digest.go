@@ -30,7 +30,7 @@ func ComputeCampaignSpecDigest(spec *evalv1.EvaluationCampaignSpec) (string, err
 	}
 	clone, ok := proto.Clone(spec).(*evalv1.EvaluationCampaignSpec)
 	if !ok {
-		return "", fmt.Errorf("evaluation: compute campaign spec digest: invalid clone")
+		return "", fmt.Errorf("evaluation: compute campaign spec digest: clone: %w", constants.ErrEvaluationDigestComputeFailed)
 	}
 	clone.CampaignDigest = ""
 	return digestProto(clone)
@@ -46,7 +46,7 @@ func ValidateCampaignSpecDigest(spec *evalv1.EvaluationCampaignSpec) error {
 		return err
 	}
 	if spec.GetCampaignDigest() != expected {
-		return fmt.Errorf("evaluation: validate campaign spec digest: digest mismatch")
+		return fmt.Errorf("evaluation: validate campaign spec digest: %w", constants.ErrChecksumMismatch)
 	}
 	return nil
 }
@@ -59,7 +59,7 @@ func ComputeScenarioCatalogDigest(catalog *evalv1.EvaluationScenarioCatalog) (st
 	}
 	clone, ok := proto.Clone(catalog).(*evalv1.EvaluationScenarioCatalog)
 	if !ok {
-		return "", fmt.Errorf("evaluation: compute scenario catalog digest: invalid clone")
+		return "", fmt.Errorf("evaluation: compute scenario catalog digest: clone: %w", constants.ErrEvaluationDigestComputeFailed)
 	}
 	clone.CatalogDigest = ""
 	sort.Slice(clone.Scenarios, func(i, j int) bool {
@@ -78,7 +78,7 @@ func ValidateScenarioCatalogDigest(catalog *evalv1.EvaluationScenarioCatalog) er
 		return err
 	}
 	if catalog.GetCatalogDigest() != expected {
-		return fmt.Errorf("evaluation: validate scenario catalog digest: digest mismatch")
+		return fmt.Errorf("evaluation: validate scenario catalog digest: %w", constants.ErrChecksumMismatch)
 	}
 	return nil
 }
@@ -110,7 +110,7 @@ func ComputeHeterogeneousStackDigest(stack *evalv1.HeterogeneousStackDefinition)
 	}
 	clone, ok := proto.Clone(stack).(*evalv1.HeterogeneousStackDefinition)
 	if !ok {
-		return "", fmt.Errorf("evaluation: compute heterogeneous stack digest: invalid clone")
+		return "", fmt.Errorf("evaluation: compute heterogeneous stack digest: clone: %w", constants.ErrEvaluationDigestComputeFailed)
 	}
 	clone.StackDigest = ""
 	return digestProto(clone)
@@ -126,7 +126,7 @@ func ValidateHeterogeneousStackDigest(stack *evalv1.HeterogeneousStackDefinition
 		return err
 	}
 	if stack.GetStackDigest() != expected {
-		return fmt.Errorf("evaluation: validate heterogeneous stack digest: digest mismatch")
+		return fmt.Errorf("evaluation: validate heterogeneous stack digest: %w", constants.ErrChecksumMismatch)
 	}
 	return nil
 }
@@ -190,7 +190,7 @@ func ComputeAssignmentDeterministicIdentity(assignment *evalv1.EvaluationAssignm
 		}
 		parts = append(parts, "heterogeneous", target.Heterogeneous.GetStack().GetStackId())
 	default:
-		return "", fmt.Errorf("evaluation: compute assignment identity: missing target binding")
+		return "", fmt.Errorf("evaluation: compute assignment identity: target binding: %w", constants.ErrMissingRequiredField)
 	}
 	return models.SHA256Hex([]byte(strings.Join(parts, "\x1e"))), nil
 }
@@ -203,7 +203,7 @@ func ComputeAssignmentResultDigest(result *evalv1.EvaluationAssignmentResult) (s
 	}
 	clone, ok := proto.Clone(result).(*evalv1.EvaluationAssignmentResult)
 	if !ok {
-		return "", fmt.Errorf("evaluation: compute assignment result digest: invalid clone")
+		return "", fmt.Errorf("evaluation: compute assignment result digest: clone: %w", constants.ErrEvaluationDigestComputeFailed)
 	}
 	clone.ResultDigest = ""
 	return digestProto(clone)
@@ -219,7 +219,7 @@ func ValidateAssignmentResultDigest(result *evalv1.EvaluationAssignmentResult) e
 		return err
 	}
 	if result.GetResultDigest() != expected {
-		return fmt.Errorf("evaluation: validate assignment result digest: digest mismatch")
+		return fmt.Errorf("evaluation: validate assignment result digest: %w", constants.ErrChecksumMismatch)
 	}
 	return nil
 }

@@ -234,40 +234,40 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 		return err
 	}
 	if len(expectedInferences) != len(result.GetModelInferences()) {
-		return fmt.Errorf("model inference count mismatch")
+		return fmt.Errorf("model inference count mismatch: %w", constants.ErrEvalRunVerificationFailed)
 	}
 	for index, expected := range expectedInferences {
 		actual := result.GetModelInferences()[index]
 		expected.InferenceRecordId = actual.GetInferenceRecordId()
 		if !proto.Equal(expected, actual) {
-			return fmt.Errorf("model inference %d mismatch", index)
+			return fmt.Errorf("model inference %d mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
 		}
 	}
 	actualSpan := result.GetScoredInferenceSpanNanos()
 	if (expectedSpan == nil) != (result.ScoredInferenceSpanNanos == nil) || expectedSpan != nil && *expectedSpan != actualSpan {
-		return fmt.Errorf("scored inference span mismatch")
+		return fmt.Errorf("scored inference span mismatch: %w", constants.ErrEvalRunVerificationFailed)
 	}
 	expectedPolicy, err := policyDecisionRecordsFromTrace(assignment, trace)
 	if err != nil {
 		return err
 	}
 	if len(expectedPolicy) != len(result.GetPolicyDecisions()) {
-		return fmt.Errorf("policy decision records mismatch")
+		return fmt.Errorf("policy decision records mismatch: %w", constants.ErrEvalRunVerificationFailed)
 	}
 	for index, expected := range expectedPolicy {
 		if !proto.Equal(expected, result.GetPolicyDecisions()[index]) {
-			return fmt.Errorf("policy decision record %d mismatch", index)
+			return fmt.Errorf("policy decision record %d mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
 		}
 	}
 	expectedToolCalls := toolCallRecordsFromTrace(assignment, trace, func(prefix string) string { return prefix })
 	if len(expectedToolCalls) != len(result.GetToolCalls()) {
-		return fmt.Errorf("tool call records mismatch")
+		return fmt.Errorf("tool call records mismatch: %w", constants.ErrEvalRunVerificationFailed)
 	}
 	for index, expected := range expectedToolCalls {
 		actual := result.GetToolCalls()[index]
 		expected.CallId = actual.GetCallId()
 		if !proto.Equal(expected, actual) {
-			return fmt.Errorf("tool call record %d mismatch", index)
+			return fmt.Errorf("tool call record %d mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
 		}
 	}
 	for field, expected := range map[string]bool{
@@ -288,7 +288,7 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 			actual = result.GetPolicyDecisionsCaptured()
 		}
 		if actual != expected {
-			return fmt.Errorf("%s capture presence mismatch", field)
+			return fmt.Errorf("%s capture presence mismatch: %w", field, constants.ErrEvalRunVerificationFailed)
 		}
 	}
 	return nil
@@ -297,7 +297,7 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 func designatedRoleFromAssignment(assignment *evalv1.EvaluationAssignment) (string, error) {
 	homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous)
 	if !ok || homogeneous.Homogeneous == nil {
-		return "", fmt.Errorf("evaluation: designated role lookup: homogeneous target required")
+		return "", fmt.Errorf("evaluation: designated role lookup: homogeneous target: %w", constants.ErrEvaluationTargetKindMismatch)
 	}
 	return modelCampaignRoleLabel(homogeneous.Homogeneous.GetDesignatedRole())
 }

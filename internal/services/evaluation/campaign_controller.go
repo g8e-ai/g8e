@@ -505,7 +505,7 @@ func (c *CampaignController) ResumeNextAssignment(ctx context.Context, runID str
 // persists the terminal result, and updates assignment lifecycle state.
 func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID string, binding CampaignExecutionBinding, artifacts map[string]ScenarioArtifacts) (*evalv1.EvaluationAssignmentResult, bool, error) {
 	if c == nil || c.executor == nil {
-		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor is required")
+		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor: %w", constants.ErrMissingRequiredField)
 	}
 	assignment, ok, err := c.ResumeNextAssignment(ctx, runID)
 	if err != nil || !ok {
@@ -590,7 +590,7 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 		return failureResult, true, nil
 	}
 	if result == nil {
-		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor returned nil result")
+		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor returned nil result: %w", constants.ErrEvaluationAssignmentExecutionFailed)
 	}
 	if err := c.persistTerminalAssignment(ctx, assignment, result); err != nil {
 		return nil, false, err

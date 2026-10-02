@@ -126,7 +126,7 @@ func TestBuildModelVariantsFromProviderInventory_RequiresGovernedProbeRunnerWhen
 	}
 	_, err := BuildModelVariantsFromProviderInventory(context.Background(), entries, ModelInventoryOptions{RunCapabilityProbes: true})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "governed probe runner")
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }
 
 func TestBuildModelVariantsFromProviderInventory_RejectsEmptyInventory(t *testing.T) {

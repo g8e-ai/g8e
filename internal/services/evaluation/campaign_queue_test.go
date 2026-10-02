@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 
@@ -47,7 +46,7 @@ func TestCampaignQueueNextPendingSelectsFirstPendingEntry(t *testing.T) {
 		{
 			name:    "no pending entry",
 			queue:   &CampaignQueue{Models: []CampaignQueueModel{{Status: "verified"}}},
-			wantErr: fmt.Errorf("evaluation: init campaign queue: no pending models"),
+			wantErr: constants.ErrNotFound,
 		},
 	}
 
@@ -56,11 +55,7 @@ func TestCampaignQueueNextPendingSelectsFirstPendingEntry(t *testing.T) {
 			entry, err := test.queue.NextPending()
 			if test.wantErr != nil {
 				require.Error(t, err)
-				if test.wantErr == constants.ErrMissingRequiredField {
-					assert.ErrorIs(t, err, test.wantErr)
-				} else {
-					assert.EqualError(t, err, test.wantErr.Error())
-				}
+				assert.ErrorIs(t, err, test.wantErr)
 				return
 			}
 			require.NoError(t, err)
@@ -85,7 +80,7 @@ func TestCampaignQueueFindByTagOrVariantIDResolvesTrimmedQueries(t *testing.T) {
 		{name: "served tag", query: "qwen3:4b", want: "eval-init-qwen3-4b"},
 		{name: "variant ID", query: " qwen3-4b ", want: "eval-init-qwen3-4b"},
 		{name: "blank query", wantErr: constants.ErrMissingRequiredField},
-		{name: "unknown model", query: "missing", wantErr: fmt.Errorf(`evaluation: init campaign queue: model %q not found`, "missing")},
+		{name: "unknown model", query: "missing", wantErr: constants.ErrNotFound},
 	}
 
 	for _, test := range tests {
@@ -93,11 +88,7 @@ func TestCampaignQueueFindByTagOrVariantIDResolvesTrimmedQueries(t *testing.T) {
 			entry, err := queue.FindByTagOrVariantID(test.query)
 			if test.wantErr != nil {
 				require.Error(t, err)
-				if test.wantErr == constants.ErrMissingRequiredField {
-					assert.ErrorIs(t, err, test.wantErr)
-				} else {
-					assert.EqualError(t, err, test.wantErr.Error())
-				}
+				assert.ErrorIs(t, err, test.wantErr)
 				return
 			}
 			require.NoError(t, err)

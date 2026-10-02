@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -51,7 +52,7 @@ type ScenarioTrajectoryGradingResult struct {
 // against its frozen catalog gold criteria and imported g8ee trace.
 func GradeHomogeneousScenario(req ScenarioGradingRequest) (*ScenarioGradingResult, error) {
 	if req.AssignmentID == "" || req.ScenarioID == "" || len(req.Trace) == 0 {
-		return nil, fmt.Errorf("evaluation: grade homogeneous scenario: assignment, scenario, and trace are required")
+		return nil, fmt.Errorf("evaluation: grade homogeneous scenario: assignment, scenario, and trace: %w", constants.ErrMissingRequiredField)
 	}
 	role, err := gradeRole(req)
 	if err != nil {
@@ -209,7 +210,7 @@ type HeterogeneousScenarioGradingRequest struct {
 // trace.
 func GradeHeterogeneousScenario(req HeterogeneousScenarioGradingRequest) (*ScenarioGradingResult, error) {
 	if req.AssignmentID == "" || req.ScenarioID == "" || len(req.RoleTraces) == 0 {
-		return nil, fmt.Errorf("evaluation: grade heterogeneous scenario: assignment, scenario, and role traces are required")
+		return nil, fmt.Errorf("evaluation: grade heterogeneous scenario: assignment, scenario, and role traces: %w", constants.ErrMissingRequiredField)
 	}
 	result := &ScenarioGradingResult{
 		DeterministicGrades: []*evalv1.DeterministicGrade{},

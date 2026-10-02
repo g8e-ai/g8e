@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -239,7 +240,8 @@ func TestValidateChatProbeTrace_SeedEchoIsComparedAfterTypedDecoding(t *testing.
 			err := ValidateChatProbeTrace(req, trace)
 
 			if tt.wantErr {
-				require.ErrorContains(t, err, "evaluation_context.seed mismatch")
+				require.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
+				require.ErrorContains(t, err, "evaluation_context.seed")
 				return
 			}
 			require.NoError(t, err)
@@ -253,7 +255,8 @@ func TestValidateChatProbeTrace_RequiresTheEchoedSeedWhenOneWasSent(t *testing.T
 
 	err := ValidateChatProbeTrace(req, trace)
 
-	require.ErrorContains(t, err, "evaluation_context.seed is required")
+	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+	require.ErrorContains(t, err, "evaluation_context.seed")
 }
 
 func TestBuildChatProbeRequest_MarshalsEmptyGoldToolListsAsArrays(t *testing.T) {

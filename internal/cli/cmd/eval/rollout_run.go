@@ -94,10 +94,10 @@ Examples:
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Until < 0 {
-				return fmt.Errorf("evaluation: rollout run: --until must not be negative")
+				return fmt.Errorf("evaluation: rollout run: --until must not be negative: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			if opts.PromoteOnPass && !opts.GateSmoke {
-				return fmt.Errorf("evaluation: rollout run: --promote-on-pass requires --gate-smoke")
+				return fmt.Errorf("evaluation: rollout run: --promote-on-pass requires --gate-smoke: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			return runRollout(cmd, deps, opts)
 		},
@@ -432,7 +432,7 @@ func preflightRollout(cmd *cobra.Command, ensembleHealthURL, mirrorBootstrapURL 
 func checkHTTPReachable(ctx context.Context, rawURL string) error {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return fmt.Errorf("missing URL")
+		return fmt.Errorf("evaluation: check HTTP reachable: %w", constants.ErrEndpointRequired)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {

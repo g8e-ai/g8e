@@ -210,8 +210,7 @@ func TestNewCampaignFeedExporter_RequiresHealthyGateway(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 	_, err := NewCampaignFeedExporter(context.Background(), fileSvc, cfg)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "gateway is not healthy")
+	assert.ErrorIs(t, err, constants.ErrGatewayUnhealthy)
 }
 
 func TestNewCampaignFeedExporter_UsesGatewaySnapshot(t *testing.T) {

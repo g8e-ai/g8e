@@ -153,7 +153,7 @@ func ValidateSmokeGateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog,
 		return fmt.Errorf("evaluation: validate smoke scenario catalog: %w", constants.ErrMissingRequiredField)
 	}
 	if catalog.GetCatalogRef().GetId() != SmokeSuiteID || catalog.GetCatalogRef().GetVersion() != DefaultSuiteVersion {
-		return fmt.Errorf("evaluation: validate smoke scenario catalog: catalog identity mismatch")
+		return fmt.Errorf("evaluation: validate smoke scenario catalog: catalog identity: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	if len(catalog.GetScenarios()) != SmokeGateScenarioCount {
 		return fmt.Errorf("evaluation: validate smoke scenario catalog: expected %d scenarios, got %d", SmokeGateScenarioCount, len(catalog.GetScenarios()))
@@ -168,7 +168,7 @@ func ValidateDefaultSuiteCatalog(catalog *evalv1.EvaluationScenarioCatalog, arti
 		return fmt.Errorf("evaluation: validate scenario catalog: %w", constants.ErrMissingRequiredField)
 	}
 	if catalog.GetCatalogRef().GetId() != DefaultSuiteID || catalog.GetCatalogRef().GetVersion() != DefaultSuiteVersion {
-		return fmt.Errorf("evaluation: validate scenario catalog: catalog identity mismatch")
+		return fmt.Errorf("evaluation: validate scenario catalog: catalog identity: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	if len(catalog.GetScenarios()) != DefaultSuiteScenarioCount {
 		return fmt.Errorf("evaluation: validate scenario catalog: %w: expected %d scenarios, got %d", constants.ErrEvaluationScenarioContractInvalid, DefaultSuiteScenarioCount, len(catalog.GetScenarios()))
@@ -191,7 +191,7 @@ func ValidateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog, artifact
 		return fmt.Errorf("evaluation: validate scenario catalog: %w: catalog identity", constants.ErrMissingRequiredField)
 	}
 	if catalog.GetSchemaVersion() != CampaignSchemaVersion {
-		return fmt.Errorf("evaluation: validate scenario catalog: unsupported schema version")
+		return fmt.Errorf("evaluation: validate scenario catalog: %w", constants.ErrEvidenceSchemaMismatch)
 	}
 	if err := ValidateScenarioCatalogDigest(catalog); err != nil {
 		return err
@@ -349,13 +349,13 @@ func validateScenarioArtifactBinding(reference *compliancev1.ComplianceEvidenceR
 		return fmt.Errorf("%w: missing reference", constants.ErrMissingRequiredField)
 	}
 	if reference.GetArtifactId() != artifact.Reference.GetArtifactId() {
-		return fmt.Errorf("artifact ID mismatch")
+		return fmt.Errorf("artifact ID: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	if reference.GetSha256() != artifact.Reference.GetSha256() {
-		return fmt.Errorf("artifact digest mismatch")
+		return fmt.Errorf("artifact digest: %w", constants.ErrChecksumMismatch)
 	}
 	if !contentMatchesReference(artifact.Body, artifact.Reference) {
-		return fmt.Errorf("artifact body does not match its digest")
+		return fmt.Errorf("artifact body: %w", constants.ErrChecksumMismatch)
 	}
 	return nil
 }

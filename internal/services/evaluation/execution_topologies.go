@@ -435,7 +435,7 @@ func RemoveFormation(topologies *ExecutionTopologies, id string) (*ExecutionTopo
 		return nil, nil, fmt.Errorf("formation %q was not found: %w", id, constants.ErrFormationInvalid)
 	}
 	if len(remaining) == 0 {
-		return nil, nil, fmt.Errorf("evaluation: remove formation: cannot remove the last catalog formation")
+		return nil, nil, fmt.Errorf("evaluation: remove formation: %w", constants.ErrEvaluationLastEntryRemoval)
 	}
 
 	return &ExecutionTopologies{formations: remaining}, removed, nil

@@ -385,7 +385,7 @@ func runsRepairCmd(deps nativeEvalDeps) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runID := args[0]
 			if results == traceDigests {
-				return fmt.Errorf("evaluation: runs repair: pass exactly one of --results or --trace-digests")
+				return fmt.Errorf("evaluation: runs repair: pass exactly one of --results or --trace-digests: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {

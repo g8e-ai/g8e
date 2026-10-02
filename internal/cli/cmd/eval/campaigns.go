@@ -470,7 +470,7 @@ Examples:
 			selector = selector.withArgs(args[1:])
 			formationCampaign := allFormations || len(formations) > 0
 			if allFormations && len(formations) > 0 {
-				return fmt.Errorf("evaluation: campaigns create: --formations and --all-formations are mutually exclusive")
+				return fmt.Errorf("evaluation: campaigns create: --formations and --all-formations are mutually exclusive: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			if formationCampaign && selector.IsSet() {
 				msg := fmt.Sprintf("evaluation: campaigns create: formations take no model selector, but got %s", selector.describe())

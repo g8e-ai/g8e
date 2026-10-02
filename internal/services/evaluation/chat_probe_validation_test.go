@@ -86,34 +86,39 @@ func TestValidateChatProbeTrace_AcceptsTheBaseTrace(t *testing.T) {
 
 func TestValidateChatProbeTrace_RejectsMalformedTraces(t *testing.T) {
 	t.Parallel()
+	// wantErr is the typed failure; wantField names the check that raised it,
+	// since several checks share one sentinel.
 	tests := []struct {
-		name    string
-		mutate  func(trace EvaluationTrace)
-		wantErr string
+		name      string
+		mutate    func(trace EvaluationTrace)
+		wantErr   error
+		wantField string
 	}{
-		{name: "status is not terminal", mutate: func(trace EvaluationTrace) { trace["status"] = "running" }, wantErr: `trace status "running" is not terminal`},
-		{name: "status is missing", mutate: func(trace EvaluationTrace) { delete(trace, "status") }, wantErr: `trace status "" is not terminal`},
-		{name: "assignment failed without a recorded error", mutate: func(trace EvaluationTrace) { trace["status"] = "failed" }, wantErr: "assignment failed without a recorded error"},
+		{name: "status is not terminal", mutate: func(trace EvaluationTrace) { trace["status"] = "running" }, wantErr: constants.ErrEvidenceArtifactMalformed, wantField: `trace status "running"`},
+		{name: "status is missing", mutate: func(trace EvaluationTrace) { delete(trace, "status") }, wantErr: constants.ErrEvidenceArtifactMalformed, wantField: `trace status ""`},
+		{name: "assignment failed without a recorded error", mutate: func(trace EvaluationTrace) { trace["status"] = "failed" }, wantErr: constants.ErrEvidenceArtifactMalformed, wantField: "without a recorded error"},
 		{name: "assignment failed with the recorded error", mutate: func(trace EvaluationTrace) {
 			trace["status"] = "failed"
 			trace["error"] = "dispatch: command delivered to no operator subscribers"
-		}, wantErr: "assignment failed: dispatch: command delivered to no operator subscribers"},
-		{name: "evaluation_context missing", mutate: func(trace EvaluationTrace) { delete(trace, "evaluation_context") }, wantErr: "missing evaluation_context"},
-		{name: "evaluation_context of the wrong type", mutate: func(trace EvaluationTrace) { trace["evaluation_context"] = "x" }, wantErr: "missing evaluation_context"},
-		{name: "chat_execution_id missing", mutate: func(trace EvaluationTrace) { delete(trace, "chat_execution_id") }, wantErr: "missing chat_execution_id"},
-		{name: "completed_at missing", mutate: func(trace EvaluationTrace) { delete(trace, "completed_at") }, wantErr: "missing completed_at"},
-		{name: "model_calls missing", mutate: func(trace EvaluationTrace) { delete(trace, "model_calls") }, wantErr: "missing model_calls"},
-		{name: "model_calls empty", mutate: func(trace EvaluationTrace) { trace["model_calls"] = []any{} }, wantErr: "missing model_calls"},
-		{name: "model_calls of the wrong type", mutate: func(trace EvaluationTrace) { trace["model_calls"] = "x" }, wantErr: "missing model_calls"},
+		}, wantErr: constants.ErrEvaluationAssignmentExecutionFailed, wantField: "dispatch: command delivered to no operator subscribers"},
+		{name: "evaluation_context missing", mutate: func(trace EvaluationTrace) { delete(trace, "evaluation_context") }, wantErr: constants.ErrMissingRequiredField, wantField: "evaluation_context"},
+		{name: "evaluation_context of the wrong type", mutate: func(trace EvaluationTrace) { trace["evaluation_context"] = "x" }, wantErr: constants.ErrMissingRequiredField, wantField: "evaluation_context"},
+		{name: "chat_execution_id missing", mutate: func(trace EvaluationTrace) { delete(trace, "chat_execution_id") }, wantErr: constants.ErrMissingRequiredField, wantField: "chat_execution_id"},
+		{name: "completed_at missing", mutate: func(trace EvaluationTrace) { delete(trace, "completed_at") }, wantErr: constants.ErrMissingRequiredField, wantField: "completed_at"},
+		{name: "model_calls missing", mutate: func(trace EvaluationTrace) { delete(trace, "model_calls") }, wantErr: constants.ErrMissingRequiredField, wantField: "model_calls"},
+		{name: "model_calls empty", mutate: func(trace EvaluationTrace) { trace["model_calls"] = []any{} }, wantErr: constants.ErrMissingRequiredField, wantField: "model_calls"},
+		{name: "model_calls of the wrong type", mutate: func(trace EvaluationTrace) { trace["model_calls"] = "x" }, wantErr: constants.ErrMissingRequiredField, wantField: "model_calls"},
 		{
-			name:    "only a non-governed provider",
-			mutate:  func(trace EvaluationTrace) { trace["model_calls"] = []any{EvaluationTrace{"provider": "ollama"}} },
-			wantErr: "no governed model calls recorded",
+			name:      "only a non-governed provider",
+			mutate:    func(trace EvaluationTrace) { trace["model_calls"] = []any{EvaluationTrace{"provider": "ollama"}} },
+			wantErr:   constants.ErrMissingRequiredField,
+			wantField: "governed model calls",
 		},
 		{
-			name:    "only non-object calls",
-			mutate:  func(trace EvaluationTrace) { trace["model_calls"] = []any{"junk"} },
-			wantErr: "no governed model calls recorded",
+			name:      "only non-object calls",
+			mutate:    func(trace EvaluationTrace) { trace["model_calls"] = []any{"junk"} },
+			wantErr:   constants.ErrMissingRequiredField,
+			wantField: "governed model calls",
 		},
 		{
 			name: "only failed governed calls",
@@ -122,7 +127,8 @@ func TestValidateChatProbeTrace_RejectsMalformedTraces(t *testing.T) {
 				call["succeeded"] = false
 				trace["model_calls"] = []any{call}
 			},
-			wantErr: "no governed model calls recorded",
+			wantErr:   constants.ErrMissingRequiredField,
+			wantField: "governed model calls",
 		},
 		{
 			name: "governed call without a transaction id",
@@ -131,7 +137,8 @@ func TestValidateChatProbeTrace_RejectsMalformedTraces(t *testing.T) {
 				delete(call, "governed_transaction_id")
 				trace["model_calls"] = []any{call}
 			},
-			wantErr: "governed model call missing governed_transaction_id",
+			wantErr:   constants.ErrMissingRequiredField,
+			wantField: "governed_transaction_id",
 		},
 		{
 			name: "governed call without a result digest",
@@ -140,7 +147,8 @@ func TestValidateChatProbeTrace_RejectsMalformedTraces(t *testing.T) {
 				call["governed_result_digest"] = ""
 				trace["model_calls"] = []any{call}
 			},
-			wantErr: "governed model call missing governed_result_digest",
+			wantErr:   constants.ErrMissingRequiredField,
+			wantField: "governed_result_digest",
 		},
 		{
 			name: "governed call without a provider attempt id",
@@ -149,15 +157,16 @@ func TestValidateChatProbeTrace_RejectsMalformedTraces(t *testing.T) {
 				delete(call, "provider_attempt_id")
 				trace["model_calls"] = []any{call}
 			},
-			wantErr: "governed model call missing provider_attempt_id",
+			wantErr:   constants.ErrMissingRequiredField,
+			wantField: "provider_attempt_id",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateChatProbeTrace(probeRequest(), sealedProbeTrace(t, tt.mutate))
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Contains(t, err.Error(), tt.wantField)
 		})
 	}
 }
@@ -172,13 +181,15 @@ func TestValidateChatProbeTrace_RejectsAnEmptyTraceAndDigestProblems(t *testing.
 		t.Parallel()
 		trace := sealedProbeTrace(t, nil)
 		delete(trace, "trace_digest")
-		require.ErrorContains(t, ValidateChatProbeTrace(probeRequest(), trace), "missing trace_digest")
+		err := ValidateChatProbeTrace(probeRequest(), trace)
+		require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+		assert.Contains(t, err.Error(), "trace_digest")
 	})
 	t.Run("digest that does not match the body", func(t *testing.T) {
 		t.Parallel()
 		trace := sealedProbeTrace(t, nil)
 		trace["chat_execution_id"] = "tampered"
-		require.ErrorContains(t, ValidateChatProbeTrace(probeRequest(), trace), "trace digest mismatch")
+		require.ErrorIs(t, ValidateChatProbeTrace(probeRequest(), trace), constants.ErrEvaluationTraceDigestMismatch)
 	})
 	t.Run("a tampered tool call is caught by the digest", func(t *testing.T) {
 		t.Parallel()
@@ -186,7 +197,7 @@ func TestValidateChatProbeTrace_RejectsAnEmptyTraceAndDigestProblems(t *testing.
 			trace["tool_calls"] = []any{toolCall("c1", toolGrep, false, nil)}
 		})
 		trace["tool_calls"] = []any{toolCall("c1", toolGrep, true, nil)}
-		require.ErrorContains(t, ValidateChatProbeTrace(probeRequest(), trace), "trace digest mismatch")
+		require.ErrorIs(t, ValidateChatProbeTrace(probeRequest(), trace), constants.ErrEvaluationTraceDigestMismatch)
 	})
 }
 
@@ -198,14 +209,14 @@ func TestValidateChatProbeTrace_EveryEvaluationContextBindingMustMatchTheRequest
 			t.Parallel()
 			trace := sealedProbeTrace(t, func(trace EvaluationTrace) { evalContextOf(trace)[field] = "another-value" })
 			err := ValidateChatProbeTrace(probeRequest(), trace)
-			require.Error(t, err)
+			require.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
 			assert.Contains(t, err.Error(), "evaluation_context."+field)
 		})
 		t.Run(field+" absent", func(t *testing.T) {
 			t.Parallel()
 			trace := sealedProbeTrace(t, func(trace EvaluationTrace) { delete(evalContextOf(trace), field) })
 			err := ValidateChatProbeTrace(probeRequest(), trace)
-			require.Error(t, err)
+			require.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
 			assert.Contains(t, err.Error(), "evaluation_context."+field)
 		})
 	}
@@ -263,7 +274,7 @@ func TestValidateChatProbeTrace_Lane(t *testing.T) {
 				require.NoError(t, err)
 				return
 			}
-			require.Error(t, err)
+			require.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
@@ -286,23 +297,23 @@ func TestValidateChatProbeTrace_WorkspaceIsEchoedAndDerivedFromRunAndAttempt(t *
 		name    string
 		req     ChatProbeRequest
 		mutate  func(trace EvaluationTrace)
-		wantErr string
+		wantErr error
 	}{
 		{name: "the echoed workspace", req: withWorkspace(), mutate: func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = workspaceEcho(ws) }},
-		{name: "workspace not echoed", req: withWorkspace(), wantErr: "evaluation_context.workspace is required"},
-		{name: "workspace echoed as null", req: withWorkspace(), mutate: func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = nil }, wantErr: "evaluation_context.workspace is required"},
-		{name: "workspace echoed as a string", req: withWorkspace(), mutate: func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = "/x" }, wantErr: "evaluation_context.workspace must be an object"},
+		{name: "workspace not echoed", req: withWorkspace(), wantErr: constants.ErrMissingRequiredField},
+		{name: "workspace echoed as null", req: withWorkspace(), mutate: func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = nil }, wantErr: constants.ErrMissingRequiredField},
+		{name: "workspace echoed as a string", req: withWorkspace(), mutate: func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = "/x" }, wantErr: constants.ErrEvidenceArtifactMalformed},
 		{
 			name: "a different root than the request carried", req: withWorkspace(),
 			mutate:  func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = workspaceEcho(otherAttempt) },
-			wantErr: "evaluation_context.workspace mismatch",
+			wantErr: constants.ErrEvidenceScopeMismatch,
 		},
 		{
 			name: "a different operator working directory", req: withWorkspace(),
 			mutate: func(trace EvaluationTrace) {
 				evalContextOf(trace)["workspace"] = map[string]any{"root": ws.Root, "operator_working_directory": "/elsewhere"}
 			},
-			wantErr: "evaluation_context.workspace mismatch",
+			wantErr: constants.ErrEvidenceScopeMismatch,
 		},
 		{
 			name: "a request and trace that agree on a root this attempt could not have derived",
@@ -312,7 +323,7 @@ func TestValidateChatProbeTrace_WorkspaceIsEchoedAndDerivedFromRunAndAttempt(t *
 				return req
 			}(),
 			mutate:  func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = workspaceEcho(otherAttempt) },
-			wantErr: "attempt-scoped root",
+			wantErr: constants.ErrEvaluationWorkspaceUnavailable,
 		},
 		{
 			name:   "an unrequested workspace that this attempt derives is accepted",
@@ -323,7 +334,7 @@ func TestValidateChatProbeTrace_WorkspaceIsEchoedAndDerivedFromRunAndAttempt(t *
 			name:    "an unrequested workspace belonging to another attempt is rejected",
 			req:     probeRequest(),
 			mutate:  func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = workspaceEcho(otherAttempt) },
-			wantErr: "attempt-scoped root",
+			wantErr: constants.ErrEvaluationWorkspaceUnavailable,
 		},
 		{
 			name:   "an unrequested workspace echoed as null is ignored",
@@ -334,19 +345,18 @@ func TestValidateChatProbeTrace_WorkspaceIsEchoedAndDerivedFromRunAndAttempt(t *
 			name:    "an unrequested workspace echoed as a string is rejected",
 			req:     probeRequest(),
 			mutate:  func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = "/x" },
-			wantErr: "evaluation_context.workspace must be an object",
+			wantErr: constants.ErrEvidenceArtifactMalformed,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateChatProbeTrace(tt.req, sealedProbeTrace(t, tt.mutate))
-			if tt.wantErr == "" {
+			if tt.wantErr == nil {
 				require.NoError(t, err)
 				return
 			}
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
+			require.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }

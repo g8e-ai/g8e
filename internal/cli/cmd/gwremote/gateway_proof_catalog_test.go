@@ -259,9 +259,8 @@ func TestNewCampaignProofPublisher(t *testing.T) {
 		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 		publisher, err := NewCampaignProofPublisher(context.Background(), fileSvc, cfg)
-		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrGatewayUnhealthy)
 		assert.Nil(t, publisher)
-		assert.Contains(t, err.Error(), "gateway is not healthy")
 	})
 
 	t.Run("returns a gateway-backed publisher when the gateway is healthy", func(t *testing.T) {

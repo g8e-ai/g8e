@@ -14,6 +14,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
@@ -37,7 +38,7 @@ func runDockerInitCampaignMirrorRestore(ctx context.Context, timeout time.Durati
 func ReconcileVerifiedCampaignMirrorFromDockerInit(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) (*evaluation.CampaignMirrorReconcileResult, error) {
 	return runDockerInitCampaignMirrorRestore(ctx, DockerInitCampaignMirrorRestoreTimeout, func(restoreCtx context.Context) (*evaluation.CampaignMirrorReconcileResult, error) {
 		if !gwremote.IsGatewayHealthy() {
-			return nil, fmt.Errorf("gateway is not healthy")
+			return nil, fmt.Errorf("docker init: verified campaign mirror restore: %w", constants.ErrGatewayUnhealthy)
 		}
 		publication, err := newCampaignPublicationCoordinatorFromConfig(restoreCtx, fileSvc, cfg)
 		if err != nil {

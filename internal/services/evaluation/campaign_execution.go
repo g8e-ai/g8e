@@ -40,11 +40,11 @@ func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: %w", constants.ErrMissingRequiredField)
 	}
 	if IsHeterogeneousAssignment(assignment) {
-		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: heterogeneous assignments execute through formation runner")
+		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: heterogeneous assignments execute through formation runner: %w", constants.ErrEvaluationTargetKindMismatch)
 	}
 	homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous)
 	if !ok || homogeneous.Homogeneous == nil || homogeneous.Homogeneous.GetCandidateVariant() == nil {
-		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: homogeneous target required")
+		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: homogeneous target: %w", constants.ErrMissingRequiredField)
 	}
 	role, err := modelCampaignRoleLabel(homogeneous.Homogeneous.GetDesignatedRole())
 	if err != nil {
@@ -306,7 +306,7 @@ func CampaignModelBindingsFromSpec(spec *evalv1.EvaluationCampaignSpec) ([]Campa
 	}
 	variants := spec.GetModelRegistry()
 	if len(variants) == 0 {
-		return nil, fmt.Errorf("evaluation: campaign model bindings: empty model registry")
+		return nil, fmt.Errorf("evaluation: campaign model bindings: empty model registry: %w", constants.ErrInferenceModelRegistryInvalid)
 	}
 	bindings := make([]CampaignModelBinding, 0, len(variants))
 	for _, variant := range variants {

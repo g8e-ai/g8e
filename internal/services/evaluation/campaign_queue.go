@@ -117,7 +117,7 @@ func (queue *CampaignQueue) NextPending() (*CampaignQueueModel, error) {
 			return &selected, nil
 		}
 	}
-	return nil, fmt.Errorf("evaluation: init campaign queue: no pending models")
+	return nil, fmt.Errorf("evaluation: init campaign queue: no pending models: %w", constants.ErrNotFound)
 }
 
 // FindByTagOrVariantID resolves one queue entry by served tag or variant ID.

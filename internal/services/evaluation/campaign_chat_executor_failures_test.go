@@ -117,7 +117,7 @@ func TestCampaignChatExecutor_MissingTraceWaiterIsAWiringErrorNotARecoverableOne
 	_, err := executorWith(client, nil, nil).ExecuteAssignment(context.Background(), homogeneousAssignmentExecutionRequest(t, "primary"))
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "trace waiter is required")
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
 	assert.NotErrorIs(t, err, constants.ErrEvaluationAssignmentExecutionFailed)
 	assert.Equal(t, []string{"chat"}, client.stages)
 }
