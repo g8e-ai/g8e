@@ -339,14 +339,16 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext Evaluation
 			return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
 		}
 	} else if rawWs, hasWs := evalContext["workspace"]; hasWs && rawWs != nil {
-		if wsMap, ok := evaluationTrace(rawWs); ok {
-			traceWs := ScenarioWorkspace{
-				Root:                     stringValue(wsMap["root"]),
-				OperatorWorkingDirectory: stringValue(wsMap["operator_working_directory"]),
-			}
-			if err := traceWs.Validate(req.RunID, req.EvaluationAttemptID); err != nil {
-				return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
-			}
+		wsMap, ok := evaluationTrace(rawWs)
+		if !ok {
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace must be an object")
+		}
+		traceWs := ScenarioWorkspace{
+			Root:                     stringValue(wsMap["root"]),
+			OperatorWorkingDirectory: stringValue(wsMap["operator_working_directory"]),
+		}
+		if err := traceWs.Validate(req.RunID, req.EvaluationAttemptID); err != nil {
+			return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
 		}
 	}
 	return nil

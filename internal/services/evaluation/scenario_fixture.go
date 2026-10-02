@@ -235,6 +235,10 @@ type ScenarioEscalationExpectation struct {
 	Detail   string `json:"detail,omitempty"`
 }
 
+// recoveryKindMissingResource marks a recovery scenario whose tool call fails by
+// design (its target does not exist) and whose answer must explain the failure.
+const recoveryKindMissingResource = "missing_resource"
+
 // ScenarioRecoveryExpectation records whether recovery behavior is expected.
 type ScenarioRecoveryExpectation struct {
 	Expected bool   `json:"expected"`

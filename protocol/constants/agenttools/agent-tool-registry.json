@@ -17,6 +17,15 @@
       "vector_id": "run_commands_with_operator.privilege_escalation"
     }
   ],
+  "policy_deny_error_types": [
+    "blacklist.violation",
+    "g8e.resolution.error",
+    "permission.denied",
+    "risk.analysis.blocked",
+    "security.violation",
+    "validation.error",
+    "whitelist.violation"
+  ],
   "schema_version": "1",
   "tools": [
     {

@@ -611,6 +611,7 @@ class HTTPClient:
                         "request_method": method,
                         "request_url": final_url,
                         "response_status": wrapped.status_code,
+                        "response": error_detail,
                         "duration_ms": trace.duration_ms,
                         "error": str(error),
                         "execution_id": trace.execution_id,

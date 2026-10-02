@@ -98,7 +98,7 @@ func runTrajectoryCases(t *testing.T, cases []trajectoryCase) {
 			req.ScenarioGold.ArgumentValidators = grepValidators()
 			req.ScenarioInput.Seed.HistoryEvents = tt.inputSeed
 
-			res := readTrajectory(req, ws)
+			res := readTrajectoryFor(t, req, ws)
 
 			assert.Equal(t, tt.wantOutcome, res.Outcome, "outcome")
 			assert.Equal(t, tt.wantPassed, res.Passed, "passed")
@@ -128,7 +128,7 @@ func TestReadTrajectory_VerdictPrecedence(t *testing.T) {
 			rejected["tool_turn_limit_reached"] = true
 			req := evidenceRequest(rejected, policy)
 			req.ScenarioTools.ExpectedTools = []string{toolGrep}
-			res := readTrajectory(req, ws)
+			res := readTrajectoryFor(t, req, ws)
 			assert.Equal(t, outcomeRejected, res.Outcome, "a provider rejection outranks everything, even a perfect call and an exhausted loop")
 			assert.False(t, res.Passed)
 
@@ -136,7 +136,7 @@ func TestReadTrajectory_VerdictPrecedence(t *testing.T) {
 			exhausted["tool_turn_limit_reached"] = true
 			req = evidenceRequest(exhausted, policy)
 			req.ScenarioTools.ExpectedTools = []string{toolGrep}
-			res = readTrajectory(req, ws)
+			res = readTrajectoryFor(t, req, ws)
 			assert.Equal(t, outcomeLoop, res.Outcome, "an exhausted loop fails under every policy, ANSWER included")
 			assert.False(t, res.Passed)
 
@@ -151,7 +151,7 @@ func TestReadTrajectory_VerdictPrecedence(t *testing.T) {
 				}
 				req = evidenceRequest(trace, policy)
 				req.ScenarioTools.ExpectedTools = []string{toolGrep}
-				assert.NotContains(t, []evalv1.EvaluationTrajectoryOutcome{outcomeRejected, outcomeLoop}, readTrajectory(req, ws).Outcome, "%v must not trigger a terminal outcome", inert)
+				assert.NotContains(t, []evalv1.EvaluationTrajectoryOutcome{outcomeRejected, outcomeLoop}, readTrajectoryFor(t, req, ws).Outcome, "%v must not trigger a terminal outcome", inert)
 			}
 		})
 	}
@@ -548,13 +548,14 @@ func TestReadTrajectory_UnspecifiedPolicyIsNeutral(t *testing.T) {
 
 func TestTraceToolCall_DenialAndGuidanceClassification(t *testing.T) {
 	t.Parallel()
-	denialTypes := []string{"security.violation", "risk.analysis.blocked", "blacklist.violation", "whitelist.violation", "permission.denied", "approval.denied", "user.denied"}
+	denialTypes := []string{"security.violation", "risk.analysis.blocked", "validation.error", "g8e.resolution.error", "blacklist.violation", "whitelist.violation", "permission.denied"}
 	assert.Len(t, deniedErrorTypes, len(denialTypes), "the denial set is the documented one")
 	for _, errorType := range denialTypes {
 		assert.True(t, traceToolCall{ErrorType: errorType}.IsDenied(), errorType)
 		assert.False(t, traceToolCall{ErrorType: errorType, Success: true}.IsDenied(), errorType+" on a successful call")
 	}
-	for _, errorType := range []string{"", "execution.error", "validation.error", "runtime.error", "Security.Violation"} {
+	// g8ee records an approval or user refusal as `refused`, not `deny`.
+	for _, errorType := range []string{"", "execution.error", "approval.denied", "user.denied", "runtime.error", "Security.Violation"} {
 		assert.False(t, traceToolCall{ErrorType: errorType}.IsDenied(), "%q is not a denial", errorType)
 	}
 
@@ -819,7 +820,7 @@ func TestFailureSentences_OpeningStatesWhetherTheToolWasDeclaredAndHinted(t *tes
 		t.Parallel()
 		req := sentenceRequest(t, []string{toolGrep}, []any{toolGrep, toolRead}, hint, "")
 		private, public := failureSentences(req, noCall, false, "", ws)
-		assert.Equal(t, "`recursive_grep_search` was declared to the model and named in the prompt (hint: pattern `SECRET_HINT` from the prompt, path `"+ws.Root+"/logs` from the workspace, target_operators `` from the operator context, justification `untargeted` from the model). The model made no tool call.", private)
+		assert.Equal(t, "`recursive_grep_search` was declared to the model and named in the prompt (hint: pattern `SECRET_HINT` from the prompt, path `"+ws.Root+"/logs` from the workspace, target_operators from the operator context, justification `untargeted` from the model). The model made no tool call.", private)
 		assert.Equal(t, "`recursive_grep_search` was declared to the model and hinted by the prompt (arguments: pattern from the prompt, path from the workspace, target_operators from the operator context, justification from the model). The model made no tool call.", public)
 		assert.NotContains(t, public, "SECRET_HINT")
 		assert.NotContains(t, public, ws.Root)
@@ -862,7 +863,7 @@ func TestFailureSentences_OutcomeSentences(t *testing.T) {
 		{name: "wrong tool that is forbidden", tools: []string{toolGrep}, forbidden: []string{toolRun}, traj: trajectoryResult{Outcome: outcomeWrongTool, FirstWrongTool: toolRun}, wantPrivate: "The model called forbidden tool `run_commands_with_operator`."},
 		{name: "wrong tool that is merely unexpected", tools: []string{toolGrep}, forbidden: []string{toolRun}, traj: trajectoryResult{Outcome: outcomeWrongTool, FirstWrongTool: toolRead}, wantPrivate: "The model called `file_read_on_operator` instead."},
 		{name: "wrong tool with no name", tools: []string{toolGrep}, traj: trajectoryResult{Outcome: outcomeWrongTool}, wantPrivate: "The model called a wrong tool instead."},
-		{name: "wrong arguments", tools: []string{toolGrep}, traj: trajectoryResult{Outcome: outcomeWrongArgs, FailedArgument: "path", FailedRule: "not under the workspace"}, wantPrivate: "The model called `recursive_grep_search` but argument `path` failed: not under the workspace."},
+		{name: "wrong arguments", tools: []string{toolGrep}, traj: trajectoryResult{Outcome: outcomeWrongArgs, FailedArgument: "path", FailedRule: "not under the workspace"}, wantPrivate: "The model called `recursive_grep_search` but argument `path` failed: not under the workspace.", wantPublic: "The model called `recursive_grep_search` but argument `path` failed validation."},
 		{
 			name: "ignored guidance quotes the error privately only", tools: []string{toolGrep},
 			traj:        trajectoryResult{Outcome: outcomeIgnored, LastFailedCall: &traceToolCall{ToolName: toolGrep, Error: "path is required"}},
@@ -981,6 +982,7 @@ func TestFailureSentences_PublicSentenceNeverCarriesPrivateText(t *testing.T) {
 	outcomes := []trajectoryResult{
 		{Outcome: outcomeNoToolCall},
 		{Outcome: outcomeWrongTool, FirstWrongTool: toolRead},
+		{Outcome: outcomeWrongArgs, FailedArgument: "path", FailedRule: `resolved path "/var/run/g8e/workspaces/ws-RULE_TEXT_SECRET" not under "GOLD_SAMPLE_SECRET"`},
 		{Outcome: outcomeIgnored, LastFailedCall: &traceToolCall{ToolName: toolGrep, Error: "ERROR_TEXT_SECRET"}},
 		{Outcome: outcomeAbandoned, LastFailedCall: &traceToolCall{ToolName: toolGrep, Error: "ERROR_TEXT_SECRET"}},
 		{Outcome: outcomeCircumvented, DeniedTool: toolRun, CircumventTool: toolWrite},
@@ -993,7 +995,7 @@ func TestFailureSentences_PublicSentenceNeverCarriesPrivateText(t *testing.T) {
 			t.Parallel()
 			req := sentenceRequest(t, []string{toolGrep}, []any{toolGrep}, hint, "OUTPUT_PREFIX_SECRET")
 			_, public := failureSentences(req, traj, false, "content rule", ws)
-			for _, secret := range []string{"HINT_VALUE_SECRET", "OUTPUT_PREFIX_SECRET", "ERROR_TEXT_SECRET"} {
+			for _, secret := range []string{"HINT_VALUE_SECRET", "OUTPUT_PREFIX_SECRET", "ERROR_TEXT_SECRET", "RULE_TEXT_SECRET", "GOLD_SAMPLE_SECRET"} {
 				assert.NotContains(t, public, secret)
 			}
 		})

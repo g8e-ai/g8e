@@ -136,20 +136,20 @@ func (c *ObserveProducerController) handleAgentState(w http.ResponseWriter, r *h
 	}
 	body, err := readRequestBody(r, c.maxBodyBytes)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, r.URL.Path, err)
 		return
 	}
 	var req models.ObserveProducerAgentStateRequest
 	if err := decodeProducerRequest(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, r.URL.Path, err)
 		return
 	}
 	if err := validateAgentProducerRequest(req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, r.URL.Path, err)
 		return
 	}
 	if err := validateProducerRouting(req.WebSessionID, req.CLISessionID); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, r.URL.Path, err)
 		return
 	}
 	route := buildProducerRoute(userID, req.WebSessionID, req.CLISessionID)
@@ -199,20 +199,20 @@ func (c *ObserveProducerController) handleRunState(w http.ResponseWriter, r *htt
 	}
 	body, err := readRequestBody(r, c.maxBodyBytes)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, r.URL.Path, err)
 		return
 	}
 	var req models.ObserveProducerRunStateRequest
 	if err := decodeProducerRequest(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, r.URL.Path, err)
 		return
 	}
 	if err := validateRunProducerRequest(req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, r.URL.Path, err)
 		return
 	}
 	if err := validateProducerRouting(req.WebSessionID, req.CLISessionID); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, r.URL.Path, err)
 		return
 	}
 	route := buildProducerRoute(userID, req.WebSessionID, req.CLISessionID)
@@ -260,12 +260,22 @@ func (c *ObserveProducerController) mapProducerError(w http.ResponseWriter, err 
 		errors.Is(err, constants.ErrGatewaySSERouteUserIDRequired),
 		errors.Is(err, constants.ErrGatewaySSERouteSessionRequired),
 		errors.Is(err, constants.ErrGatewaySSERouteSessionMutuallyExclusive):
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.rejectProducerRequest(w, op, err)
 	case errors.Is(err, constants.ErrObserveAgentNotFound),
 		errors.Is(err, constants.ErrObserveRunNotFound):
+		// The response is deliberately non-disclosing; the reason stays in the log.
+		c.logger.Warn("observe producer: request forbidden", "operation", op, "error", err)
 		c.responder.Error(w, http.StatusForbidden, constants.ErrForbidden.Error())
 	default:
 		c.logger.Error("observe producer: "+op+" failed", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 	}
+}
+
+// rejectProducerRequest answers 400 and logs the rejection reason. The reason
+// is returned to the caller, but a caller that treats the status as best-effort
+// (the ensemble does) never surfaces it, so the Gateway records it too.
+func (c *ObserveProducerController) rejectProducerRequest(w http.ResponseWriter, operation string, err error) {
+	c.logger.Warn("observe producer: request rejected", "operation", operation, "error", err)
+	c.responder.Error(w, http.StatusBadRequest, err.Error())
 }
