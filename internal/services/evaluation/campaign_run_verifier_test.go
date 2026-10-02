@@ -195,7 +195,7 @@ func TestCampaignRunVerifier_PassesCompletedAssignment(t *testing.T) {
 
 	report := f.verify(t)
 
-	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, report.GetStatus())
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, report.GetStatus(), report.GetFailureReasons())
 	require.NoError(t, f.store.SaveCampaignVerification(context.Background(), f.req.RunID, report))
 }
 

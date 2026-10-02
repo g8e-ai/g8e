@@ -191,12 +191,7 @@ func DerivePublicSummaryStatus(result *evalv1.EvaluationAssignmentResult) evalv1
 	}
 	switch result.GetLifecycleStatus() {
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
-		for _, grade := range result.GetDeterministicGrades() {
-			if grade.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL {
-				return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
-			}
-		}
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
+		return verdictFromGrades(result.GetDeterministicGrades())
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL:
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNAVAILABLE:

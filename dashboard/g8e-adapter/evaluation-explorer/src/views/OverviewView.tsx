@@ -12,6 +12,7 @@ import { useDatasetOptions } from '../state/dataset';
 import { useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
 import { LiveEventStream } from '../components/LiveEventStream';
+import { WhatAmILookingAt } from '../components/WhatAmILookingAt';
 import { formatNumber } from '../components/shared';
 import { formatRelativeTime } from '../utils/format';
 import { recentCampaignRows } from './derived';
@@ -264,6 +265,7 @@ export function OverviewView() {
       />
 
       <div className="ov-grid-bottom">
+        <WhatAmILookingAt />
         <RecentCampaigns catalogs={catalogs} evaluations={allEvaluations} />
         <DownloadsPanel />
       </div>

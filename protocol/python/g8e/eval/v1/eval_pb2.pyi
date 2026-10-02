@@ -316,6 +316,13 @@ class ModelProvenanceObservationAttemptStatus(int, metaclass=_enum_type_wrapper.
     MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED: _ClassVar[ModelProvenanceObservationAttemptStatus]
     MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_FAILED: _ClassVar[ModelProvenanceObservationAttemptStatus]
 
+class GradeBasis(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    GRADE_BASIS_UNSPECIFIED: _ClassVar[GradeBasis]
+    GRADE_BASIS_OBSERVATION: _ClassVar[GradeBasis]
+    GRADE_BASIS_DERIVED: _ClassVar[GradeBasis]
+    GRADE_BASIS_STRUCTURAL: _ClassVar[GradeBasis]
+
 class EvaluationWitnessPolicy(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     EVALUATION_WITNESS_POLICY_UNSPECIFIED: _ClassVar[EvaluationWitnessPolicy]
@@ -515,6 +522,10 @@ MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED: ModelProvenanceObservat
 MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS: ModelProvenanceObservationAttemptStatus
 MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED: ModelProvenanceObservationAttemptStatus
 MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_FAILED: ModelProvenanceObservationAttemptStatus
+GRADE_BASIS_UNSPECIFIED: GradeBasis
+GRADE_BASIS_OBSERVATION: GradeBasis
+GRADE_BASIS_DERIVED: GradeBasis
+GRADE_BASIS_STRUCTURAL: GradeBasis
 EVALUATION_WITNESS_POLICY_UNSPECIFIED: EvaluationWitnessPolicy
 EVALUATION_WITNESS_POLICY_INTERIM: EvaluationWitnessPolicy
 EVALUATION_WITNESS_POLICY_STRICT: EvaluationWitnessPolicy
@@ -1338,18 +1349,20 @@ class GovernedActionBinding(_message.Message):
     def __init__(self, binding_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., transaction_id: _Optional[str] = ..., operator_id: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., receipt_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., persistence_attestation_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., policy_decision: _Optional[str] = ..., effect_observation_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ...) -> None: ...
 
 class DeterministicGrade(_message.Message):
-    __slots__ = ("grade_id", "criterion_id", "status", "score", "detail")
+    __slots__ = ("grade_id", "criterion_id", "status", "score", "detail", "basis")
     GRADE_ID_FIELD_NUMBER: _ClassVar[int]
     CRITERION_ID_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
     SCORE_FIELD_NUMBER: _ClassVar[int]
     DETAIL_FIELD_NUMBER: _ClassVar[int]
+    BASIS_FIELD_NUMBER: _ClassVar[int]
     grade_id: str
     criterion_id: str
     status: EvaluationVerdictStatus
     score: float
     detail: str
-    def __init__(self, grade_id: _Optional[str] = ..., criterion_id: _Optional[str] = ..., status: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., score: _Optional[float] = ..., detail: _Optional[str] = ...) -> None: ...
+    basis: GradeBasis
+    def __init__(self, grade_id: _Optional[str] = ..., criterion_id: _Optional[str] = ..., status: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., score: _Optional[float] = ..., detail: _Optional[str] = ..., basis: _Optional[_Union[GradeBasis, str]] = ...) -> None: ...
 
 class SemanticGrade(_message.Message):
     __slots__ = ("grade_id", "criterion_id", "status", "judge_variant_id", "grader_call_ref", "detail")

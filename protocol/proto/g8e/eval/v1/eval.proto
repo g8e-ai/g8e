@@ -848,12 +848,25 @@ message GovernedActionBinding {
   g8e.compliance.v1.ComplianceEvidenceReference effect_observation_ref = 9;
 }
 
+// GradeBasis states what a deterministic grade measures, so each independent
+// observation counts once in the verdict and the pass rate. OBSERVATION is a
+// fact read from the trace or workspace and is the only counted basis. DERIVED
+// is a boolean function of other grades in the same result. STRUCTURAL is a
+// harness precondition, not a model result. UNSPECIFIED is never valid.
+enum GradeBasis {
+  GRADE_BASIS_UNSPECIFIED = 0;
+  GRADE_BASIS_OBSERVATION = 1;
+  GRADE_BASIS_DERIVED = 2;
+  GRADE_BASIS_STRUCTURAL = 3;
+}
+
 message DeterministicGrade {
   string grade_id = 1;
   string criterion_id = 2;
   EvaluationVerdictStatus status = 3;
   double score = 4;
   string detail = 5;
+  GradeBasis basis = 6;
 }
 
 message SemanticGrade {

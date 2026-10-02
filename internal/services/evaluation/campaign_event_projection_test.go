@@ -199,6 +199,7 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 		}},
 		DeterministicGrades: []*evalv1.DeterministicGrade{{
 			CriterionId: "role-invoked",
+			Basis:       basisStructural,
 			Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		}},
 	}

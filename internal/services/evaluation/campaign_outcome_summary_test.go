@@ -16,15 +16,15 @@ func TestAssignmentOutcomeSummary_NamesEveryFailedGrade(t *testing.T) {
 	result := &evalv1.EvaluationAssignmentResult{
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		DeterministicGrades: []*evalv1.DeterministicGrade{
-			{CriterionId: "trajectory", Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, Detail: "DIRECT"},
-			{CriterionId: "scenario-content", Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, Detail: "missing required term"},
-			{CriterionId: "primary-responsibility", Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, Detail: "designated role did not satisfy: content check"},
+			{CriterionId: "trajectory", Basis: basisObservation, Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, Detail: "DIRECT"},
+			{CriterionId: "scenario-content", Basis: basisObservation, Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, Detail: "missing required term"},
+			{CriterionId: "primary-responsibility", Basis: basisDerived, Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, Detail: "designated role did not satisfy: content check"},
 		},
-		DecomposedScores: []*evalv1.DecomposedScoreRecord{{Dimension: "deterministic_pass_rate", Value: 0.7272727}},
+		DecomposedScores: []*evalv1.DecomposedScoreRecord{{Dimension: "deterministic_pass_rate", Value: 0.5}},
 	}
 
 	assert.Equal(t,
-		"COMPLETED verdict=FAIL pass_rate=72.7% failed=[scenario-content (missing required term); primary-responsibility (designated role did not satisfy: content check)]",
+		"COMPLETED verdict=FAIL pass_rate=50.0% failed=[scenario-content [observation] (missing required term); primary-responsibility [derived] (designated role did not satisfy: content check)]",
 		AssignmentOutcomeSummary(result))
 }
 
@@ -32,7 +32,7 @@ func TestAssignmentOutcomeSummary_PassingResultListsNoFailures(t *testing.T) {
 	result := &evalv1.EvaluationAssignmentResult{
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		DeterministicGrades: []*evalv1.DeterministicGrade{
-			{CriterionId: "trajectory", Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS},
+			{CriterionId: "trajectory", Basis: basisObservation, Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS},
 		},
 		DecomposedScores: []*evalv1.DecomposedScoreRecord{{Dimension: "deterministic_pass_rate", Value: 1}},
 	}

@@ -34,6 +34,7 @@ func TestCollectRunAggregateState(t *testing.T) {
 			AssignmentId:    "assign-1",
 			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Basis:  basisObservation,
 				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 			}},
 		},
@@ -63,6 +64,7 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 			AssignmentId:    "assign-1",
 			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Basis:  basisObservation,
 				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 			}},
 		},
@@ -152,6 +154,7 @@ func TestBuildRunAggregateViewRecordsPartialProgress(t *testing.T) {
 			AssignmentId:    "assign-1",
 			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Basis:  basisObservation,
 				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 			}},
 		},
@@ -184,6 +187,7 @@ func TestBuildRunCompletionViewRecords(t *testing.T) {
 			AssignmentId:    "assign-1",
 			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Basis:  basisObservation,
 				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 			}},
 		},
@@ -233,6 +237,7 @@ func TestBuildRunVerificationViewRecords(t *testing.T) {
 			AssignmentId:    "assign-1",
 			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Basis:  basisObservation,
 				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 			}},
 		},
@@ -483,6 +488,7 @@ func terminalResultWithEvidence(assignmentID string, spanNanos *uint64, calls ..
 		AssignmentId:    assignmentID,
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		DeterministicGrades: []*evalv1.DeterministicGrade{{
+			Basis:  basisObservation,
 			Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		}},
 		ModelInferences: calls,
@@ -686,6 +692,7 @@ func TestCollectVariantRoleMetricsPairwiseAgreement(t *testing.T) {
 			AssignmentId:    "assign-2",
 			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Basis:  basisObservation,
 				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 			}},
 		},

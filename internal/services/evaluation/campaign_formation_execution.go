@@ -332,6 +332,7 @@ func classifyFormationAssignmentOutcome(req AssignmentExecutionRequest, formatio
 		CriterionId: "formation-roles",
 		Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		Detail:      "heterogeneous formation did not complete all three roles",
+		Basis:       basisStructural,
 	}
 	if formationResult == nil {
 		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, []*evalv1.DeterministicGrade{grade}

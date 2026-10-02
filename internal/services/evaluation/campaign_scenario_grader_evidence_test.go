@@ -21,6 +21,8 @@ const (
 	verdictPass = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
 	verdictFail = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
 
+	verdictInvalidEvidence = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE
+
 	outcomeDirect    = evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_DIRECT
 	outcomeRecovered = evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_RECOVERED
 )
@@ -364,8 +366,9 @@ func TestRequiredEvidenceGrade_Recovery(t *testing.T) {
 			calls: []EvaluationTrace{toolCall("c1", "file_read_on_operator", false, nil)}, contentPassed: true, want: verdictPass,
 		},
 		{
+			// The explanation is graded once, by scenario-content; recovery reads only the call.
 			name: "tool failure with a wrong explanation", recoveryKind: recoveryKindMissingResource, policy: policyGuided, expected: []string{"file_read_on_operator"},
-			calls: []EvaluationTrace{toolCall("c1", "file_read_on_operator", false, nil)}, contentPassed: false, want: verdictFail,
+			calls: []EvaluationTrace{toolCall("c1", "file_read_on_operator", false, nil)}, contentPassed: false, want: verdictPass,
 		},
 		{
 			name: "tool failure scenario where the read unexpectedly succeeded", recoveryKind: recoveryKindMissingResource, policy: policyGuided, expected: []string{"file_read_on_operator"},
@@ -432,7 +435,7 @@ func TestRequiredEvidenceGrade_FinalResponse(t *testing.T) {
 		want          evalv1.EvaluationVerdictStatus
 	}{
 		{name: "non-empty output that passed the content check", output: "Diagnosis: timeout.", contentPassed: true, want: verdictPass},
-		{name: "non-empty output that failed the content check", output: "Diagnosis: timeout.", contentPassed: false, want: verdictFail},
+		{name: "non-empty output that failed the content check", output: "Diagnosis: timeout.", contentPassed: false, want: verdictPass}, // content is graded once, by scenario-content
 		{name: "empty output", output: "", contentPassed: true, want: verdictFail},
 		{name: "whitespace-only output", output: " \n\t ", contentPassed: true, want: verdictFail},
 	}
@@ -660,7 +663,7 @@ func TestGradeTriage(t *testing.T) {
 func TestDeriveScenarioDecomposedScores_TriageIsReportedButNeverScored(t *testing.T) {
 	t.Parallel()
 	grade := func(id string, status evalv1.EvaluationVerdictStatus) *evalv1.DeterministicGrade {
-		return &evalv1.DeterministicGrade{CriterionId: id, Status: status}
+		return &evalv1.DeterministicGrade{CriterionId: id, Status: status, Basis: basisObservation}
 	}
 	unavailable := evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE
 	tests := []struct {
@@ -698,7 +701,8 @@ func TestDeriveScenarioDecomposedScores_TriageIsReportedButNeverScored(t *testin
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			scores := deriveScenarioDecomposedScores("a-1", tt.grades)
+			scores, err := deriveScenarioDecomposedScores("a-1", tt.grades)
+			require.NoError(t, err)
 			if tt.wantNil {
 				assert.Nil(t, scores)
 				return

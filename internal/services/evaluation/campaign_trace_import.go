@@ -221,6 +221,7 @@ func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (
 		CriterionId: "role-invoked",
 		Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		Detail:      "designated model role was not invoked",
+		Basis:       basisStructural,
 	}
 	if status == "failed" && trace["provider_tool_rejection"] != nil {
 		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, grade

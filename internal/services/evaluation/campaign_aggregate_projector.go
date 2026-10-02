@@ -1588,10 +1588,14 @@ func deriveExplorerTerminalStatus(result *evalv1.EvaluationAssignmentResult) str
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED:
 		return "invalid_evidence"
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
-		if DerivePublicSummaryStatus(result) == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		switch DerivePublicSummaryStatus(result) {
+		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS:
 			return "completed"
+		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE:
+			return "invalid_evidence"
+		default:
+			return "model_failed"
 		}
-		return "model_failed"
 	default:
 		return "model_failed"
 	}

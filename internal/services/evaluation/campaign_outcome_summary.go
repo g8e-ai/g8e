@@ -37,7 +37,7 @@ func AssignmentOutcomeSummary(result *evalv1.EvaluationAssignmentResult) string 
 	var failed []string
 	for _, grade := range result.GetDeterministicGrades() {
 		if grade.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL {
-			failed = append(failed, fmt.Sprintf("%s (%s)", grade.GetCriterionId(), grade.GetDetail()))
+			failed = append(failed, fmt.Sprintf("%s [%s] (%s)", grade.GetCriterionId(), gradeBasisLabel(grade.GetBasis()), grade.GetDetail()))
 		}
 	}
 	if len(failed) > 0 {

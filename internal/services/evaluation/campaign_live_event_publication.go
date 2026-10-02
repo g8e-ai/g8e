@@ -404,7 +404,10 @@ func buildAssignmentPassMetricSignal(
 	total int,
 ) (PublicMetricAvailabilitySignal, bool, error) {
 	status := DerivePublicSummaryStatus(result)
-	if status == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED {
+	// An unspecified or invalid-evidence verdict is not a model pass or fail, so
+	// it emits no binary metric.
+	if status == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED ||
+		status == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE {
 		return PublicMetricAvailabilitySignal{}, false, nil
 	}
 	variantID, err := primaryVariantIDForAssignment(assignment)

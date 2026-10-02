@@ -20,6 +20,7 @@ import {
   SPONSORSHIP_USES,
   WORKSTATION_SPECS,
 } from '../content/platform';
+import { EXECUTION_STAGES } from '../content/execution-stages';
 import { MODEL_ROLES } from '../content/roles';
 import { SCENARIO_CATALOG_ID, SCENARIO_CATEGORY_META } from '../content/scenario-task';
 import {
@@ -85,45 +86,6 @@ const EVALUATION_PROGRAMS = [
     purpose: 'Scores real models through production chat, governed inference, host tools, provider telemetry, and storage-side model provenance.',
     path: 'g8ee chat → Gateway → bound Inference / Data Operators + independent witnesses',
     excludes: 'No direct Ollama calls from the campaign CLI or g8ee',
-  },
-] as const;
-
-const EXECUTION_STAGES = [
-  {
-    label: 'Freeze',
-    system: 'Campaign controller',
-    detail: 'Binds the scenario catalog, model registry, role, repetitions, and exact Operator sessions before work starts.',
-    output: 'Campaign + assignment identity',
-  },
-  {
-    label: 'Admit',
-    system: 'Gateway · PDP',
-    detail: 'Authenticates ingress, constructs or verifies the GovernanceEnvelope, and applies posture-required L1–L3 policy.',
-    output: 'State-bound envelope',
-  },
-  {
-    label: 'Execute',
-    system: 'Operator · PEP',
-    detail: 'The exact bound Operator independently re-runs L1–L4, then performs L5 against its own runtime boundary.',
-    output: 'Signed local receipt',
-  },
-  {
-    label: 'Witness',
-    system: 'Observer + Provenance',
-    detail: 'Separate sessions bind GPU/RAM samples and model-weight hashes to the provider attempt without executor self-report.',
-    output: 'Observation windows',
-  },
-  {
-    label: 'Verify',
-    system: 'Offline verifier',
-    detail: 'Recomputes digests, signatures, bindings, populations, verdicts, and metrics without executing another mutation.',
-    output: 'report.json + verification.json',
-  },
-  {
-    label: 'Project',
-    system: 'Public mirror',
-    detail: 'Emits an allowlisted, public-safe projection. Private prompts, outputs, identities, paths, and receipt bodies stay owner-local.',
-    output: 'Bootstrap + history + SSE',
   },
 ] as const;
 

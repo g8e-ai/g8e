@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { CatalogSnapshot, EvaluationSummary, LiveEvent, SnapshotRecord, SuiteSummary } from '../src/contract/types';
 import { evalStore } from '../src/state/store';
@@ -133,6 +134,24 @@ describe('OverviewView', () => {
     expect(screen.queryByRole('region', { name: 'System overview' })).not.toBeInTheDocument();
     expect(screen.queryByText('Active campaign')).not.toBeInTheDocument();
     expect(screen.queryByText(/live deployment of the g8e AI governance suite/i)).not.toBeInTheDocument();
+  });
+
+  it('offers a condensed, interactive guide that links to Docs and Tasks', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <OverviewView />
+      </MemoryRouter>,
+    );
+
+    const guide = within(screen.getByRole('region', { name: 'What am I looking at?' }));
+    expect(guide.getByRole('tab', { name: /Freeze/ })).toHaveAttribute('aria-selected', 'true');
+    await user.click(guide.getByRole('tab', { name: /Verify/ }));
+    expect(guide.getByRole('tab', { name: /Verify/ })).toHaveAttribute('aria-selected', 'true');
+    expect(guide.getByText(/report\.json \+ verification\.json/)).toBeInTheDocument();
+    expect(guide.getByRole('link', { name: /Read the Docs/ })).toHaveAttribute('href', '/methodology');
+    expect(guide.getByRole('link', { name: /Browse all \d+ tasks/ })).toHaveAttribute('href', '/tasks');
+    expect(guide.getByRole('link', { name: /Tool selection/ })).toHaveAttribute('href', '/tasks#category-tool_selection');
   });
 
   it('presents campaign coverage and public-safe data surfaces for engineers', async () => {

@@ -99,6 +99,7 @@
     - [EvaluationUsageAvailability](#g8e-eval-v1-EvaluationUsageAvailability)
     - [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus)
     - [EvaluationWitnessPolicy](#g8e-eval-v1-EvaluationWitnessPolicy)
+    - [GradeBasis](#g8e-eval-v1-GradeBasis)
     - [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole)
     - [ModelCapabilityKind](#g8e-eval-v1-ModelCapabilityKind)
     - [ModelManifestVerificationStatus](#g8e-eval-v1-ModelManifestVerificationStatus)
@@ -198,6 +199,7 @@
 | status | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
 | score | [double](#double) |  |  |
 | detail | [string](#string) |  |  |
+| basis | [GradeBasis](#g8e-eval-v1-GradeBasis) |  |  |
 
 
 
@@ -2067,6 +2069,24 @@ trajectory the model produced in its guided loop.
 | EVALUATION_WITNESS_POLICY_UNSPECIFIED | 0 |  |
 | EVALUATION_WITNESS_POLICY_INTERIM | 1 |  |
 | EVALUATION_WITNESS_POLICY_STRICT | 2 |  |
+
+
+
+<a name="g8e-eval-v1-GradeBasis"></a>
+
+### GradeBasis
+GradeBasis states what a deterministic grade measures, so each independent
+observation counts once in the verdict and the pass rate. OBSERVATION is a
+fact read from the trace or workspace and is the only counted basis. DERIVED
+is a boolean function of other grades in the same result. STRUCTURAL is a
+harness precondition, not a model result. UNSPECIFIED is never valid.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| GRADE_BASIS_UNSPECIFIED | 0 |  |
+| GRADE_BASIS_OBSERVATION | 1 |  |
+| GRADE_BASIS_DERIVED | 2 |  |
+| GRADE_BASIS_STRUCTURAL | 3 |  |
 
 
 

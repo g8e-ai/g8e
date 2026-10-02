@@ -65,6 +65,7 @@ func TestDerivePublicSummaryStatus(t *testing.T) {
 	pass := &evalv1.EvaluationAssignmentResult{
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		DeterministicGrades: []*evalv1.DeterministicGrade{{
+			Basis:  basisObservation,
 			Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		}},
 	}

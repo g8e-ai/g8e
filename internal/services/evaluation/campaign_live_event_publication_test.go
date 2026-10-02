@@ -36,7 +36,7 @@ func TestBuildAssignmentPassMetricSignal_IsBinaryPassNotRate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := &evalv1.EvaluationAssignmentResult{
 				LifecycleStatus:     evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
-				DeterministicGrades: []*evalv1.DeterministicGrade{{CriterionId: "trajectory", Status: tc.grade}},
+				DeterministicGrades: []*evalv1.DeterministicGrade{{CriterionId: "trajectory", Basis: basisObservation, Status: tc.grade}},
 			}
 			signal, ok, err := buildAssignmentPassMetricSignal(assignment, result, "2026-10-02T12:00:00.000Z", 1, 5)
 			require.NoError(t, err)
