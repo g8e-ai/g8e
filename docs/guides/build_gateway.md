@@ -71,6 +71,8 @@ The resulting `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` is req
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`
+>
+> The Linux and macOS scripts also install the toolchain `make ci` needs; add `--build-only` to skip it and stop after `make build`.
 
 ### Build from Source
 
@@ -376,6 +378,8 @@ Run the local platform, Ensemble, and Dashboard CI targets, including protocol g
 ```bash
 make ci
 ```
+
+`make ci` starts with `make dev-check`, which lists every missing tool at once. A machine set up with `scripts/linux-setup.sh` or `scripts/macos-setup.sh` (without `--build-only`) passes it; otherwise run `make dev-setup` after installing the operating-system prerequisites.
 
 ---
 

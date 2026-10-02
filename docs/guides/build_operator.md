@@ -83,7 +83,7 @@ npm run build
 cd ../../..
 ```
 
-The repository setup scripts validate the development tools, offer to install missing tools, build the evaluation explorer when needed, and run `make build`:
+The repository setup scripts validate the development tools, offer to install missing tools, build the evaluation explorer when needed, and run `make build`. The Linux and macOS scripts also install the toolchain behind `make ci` unless you pass `--build-only`:
 
 - Linux: `bash scripts/linux-setup.sh`
 - macOS: `bash scripts/macos-setup.sh`

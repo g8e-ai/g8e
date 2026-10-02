@@ -167,13 +167,15 @@ The Docker build runs the Go compiler and build dependencies inside the builder 
 | Go | 1.26.6, required to build from source |
 | Make | Any recent version, required to run build targets |
 | Git | Any recent version, required to clone the repository |
-| Python | 3.10+, optional, required only for protocol library development |
+| Python | 3.10+, optional, required only for protocol library development. Contributors running `make ci` also need `uv`, `ripgrep`, `bc`, and a C compiler; the setup script installs them (see below) |
 | Node.js and npm | Node.js 22+, required to build the embedded evaluation explorer before a local `make build` |
 
-> **Don't have the local build toolchain installed?** Run the setup script for your platform to detect and install `git`, `make`, Go (from `go.mod`), and Node.js 22+, build the evaluation explorer, and compile `g8e` (see [scripts.md](../architecture/scripts.md) for details):
+> **Don't have the local build toolchain installed?** Run the setup script for your platform to detect and install `git`, `make`, `curl`, Go (from `go.mod`), and Node.js 22+, build the evaluation explorer, and compile `g8e` (see [scripts.md](../architecture/scripts.md) for details):
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`
+>
+> On Linux and macOS the script also installs everything a contributor needs to run `make ci` (Python, `uv`, `ripgrep`, `bc`, a C compiler, the protobuf and lint tools, a Python venv, and Node dependencies). Add `--build-only` when you only want the `g8e` binary. Windows contributors run the Linux script inside WSL 2.
 
 ---
 

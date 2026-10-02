@@ -8,6 +8,9 @@
 # g8e Windows dev setup: validate toolchain, build evaluation-explorer, make build,
 # and add the repository root to PATH.
 # Requires PowerShell 7+ (pwsh). See docs/architecture/scripts.md.
+# This script sets up the build toolchain only. The contributor toolchain that
+# `make ci` needs (Go dev tools, Python venv, ripgrep, ...) is installed by
+# scripts/linux-setup.sh, which Windows contributors run inside WSL 2.
 
 #Requires -Version 7.0
 
@@ -233,6 +236,8 @@ function Show-NextSteps {
     Write-Host ""
     Write-Host "  Owner enrollment against a running gateway:"
     Write-Host "    $binary auth enroll user -e localhost"
+    Write-Host ""
+    Write-Host "Contributing? 'make ci' needs the Linux toolchain: open WSL 2 and run 'bash scripts/linux-setup.sh'." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Docs: docs/guides/getting_started.md"
     Write-Host "Note: open a new terminal for PATH changes to take effect." -ForegroundColor Yellow

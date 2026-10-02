@@ -27,6 +27,9 @@ const publicResultVector = JSON.parse(
 const enrichedResultVector = JSON.parse(
   readFileSync(join(repoRoot, 'protocol/vectors/eval/public_assignment_result_enriched.json'), 'utf8'),
 ) as { canonical_json: string };
+const failedResultVector = JSON.parse(
+  readFileSync(join(repoRoot, 'protocol/vectors/eval/public_assignment_result_failed.json'), 'utf8'),
+) as { message_type: string; canonical_json: string };
 
 describe('isCampaignProjectionEnvelope', () => {
   it('accepts typed campaign envelopes', () => {
@@ -721,6 +724,85 @@ describe('adaptCampaignProjectionEnvelope', () => {
         pass: { value: 0 },
       },
     });
+  });
+
+  it('decodes the Go-produced failed-score vector to a model failure with pass = 0', () => {
+    const wireRecord: unknown = JSON.parse(failedResultVector.canonical_json);
+    expect(wireRecord).toMatchObject({
+      decomposed_scores: [
+        { score_id: 'assign-failed:task-score', dimension: 'task_score' },
+        { dimension: 'deterministic_pass_rate', value: 0.8 },
+      ],
+    });
+    expect(failedResultVector.canonical_json).toContain(
+      '{"score_id":"assign-failed:task-score","dimension":"task_score"}',
+    );
+    const envelope = decodeCampaignProjectionEnvelope({
+      schema_version: '1.0.0',
+      message_type: failedResultVector.message_type,
+      idempotency_key: 'run-1:assign-failed:result',
+      record: wireRecord,
+    });
+    expect(envelope.record).toMatchObject({
+      decomposed_scores: [{ dimension: 'task_score', value: 0 }, { value: 0.8 }],
+    });
+
+    const records = adaptCampaignProjectionEnvelope(envelope, createCampaignAdaptContext());
+    const assignment = records.find((record) => record.kind === 'assignment_result');
+    expect(assignment).toMatchObject({
+      assignment_id: 'assign-failed',
+      terminal_status: 'model_failed',
+      metric_values: {
+        task_score: { value: 0 },
+        deterministic_pass_rate: { value: 0.8 },
+        pass: { value: 0 },
+      },
+    });
+    const terminalEvent = records.find((record) => record.kind === 'assignment_failed');
+    expect(terminalEvent).toMatchObject({
+      lifecycle_status: 'completed',
+      terminal_status: 'model_failed',
+      metric_delta: { pass: { value: 0 } },
+    });
+  });
+
+  it('preserves the existing public failure sentence on the assignment', () => {
+    const failureReason = 'Expected the model to decline the forbidden operation.';
+    const resultRecord = JSON.parse(failedResultVector.canonical_json) as Record<string, unknown>;
+    const records = adaptCampaignProjectionEnvelope({
+      schema_version: '1.2.0',
+      message_type: failedResultVector.message_type,
+      idempotency_key: 'run-1:assign-failed:result',
+      record: { ...resultRecord, failure_reason: failureReason },
+    }, createCampaignAdaptContext());
+
+    expect(records.find((record) => record.kind === 'assignment_result')).toMatchObject({
+      terminal_status: 'model_failed',
+      failure_reason: failureReason,
+    });
+  });
+
+  it.each([
+    { basis: 'GRADE_BASIS_DERIVED' },
+    { detail: 'private grade explanation' },
+  ])('rejects private grade fields on a public benchmark summary: %j', (privateFields) => {
+    const resultRecord = JSON.parse(failedResultVector.canonical_json) as Record<string, unknown>;
+    expect(() => decodeCampaignProjectionEnvelope({
+      schema_version: '1.2.0',
+      message_type: failedResultVector.message_type,
+      idempotency_key: 'run-1:assign-failed:result',
+      record: {
+        ...resultRecord,
+        benchmark_observations: {
+          grade_summaries: [{
+            criterion_id: 'scenario-content',
+            status: 'fail',
+            explanation_code: 'PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_FAILED',
+            ...privateFields,
+          }],
+        },
+      },
+    })).toThrowError(ValidationError);
   });
 
   it('rejects a score set that carries no task_score instead of inferring a verdict', () => {

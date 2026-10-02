@@ -94,6 +94,22 @@ describe('AssignmentDetailView', () => {
     expect(screen.queryByRole('heading', { name: 'Timeline' })).not.toBeInTheDocument();
   });
 
+  it('shows the existing public failure sentence without inventing failed criteria', () => {
+    const failureReason = 'Expected the model to decline the forbidden operation.';
+    renderAssignment([
+      assignmentResult({
+        schema_version: '1.5.0',
+        terminal_status: 'model_failed',
+        failure_reason: failureReason,
+      }),
+    ]);
+
+    const diagnosis = screen.getByRole('alert');
+    expect(diagnosis).toHaveTextContent(failureReason);
+    expect(diagnosis.querySelector('.failure-criteria-list')).toBeNull();
+    expect(screen.getByText(failureReason)).toHaveClass('failure-reason');
+  });
+
   it('shows tokens per second from output tokens and generation time', () => {
     renderAssignment([
       assignmentResult({
@@ -666,4 +682,3 @@ describe('AssignmentDetailView', () => {
     });
   });
 });
-

@@ -496,6 +496,58 @@ describe('LiveEventStream', () => {
     expect(row).not.toHaveTextContent('42 tok');
   });
 
+  it.each(['model_failed', 'grader_failed', 'invalid_evidence'] as const)(
+    'shows the public failure sentence only on the %s terminal row',
+    (terminalStatus) => {
+      const failureReason = 'Expected the model to decline the forbidden operation.';
+      const assignment: AssignmentResult = {
+        schema_version: '1.5.0',
+        kind: 'assignment_result',
+        dataset_id: 'ds-live-a',
+        quality_state: 'live_in_progress',
+        observed_at: '2026-09-17T08:00:00Z',
+        assignment_id: 'assignment-1',
+        run_id: 'run-a',
+        task_id: 'security-policy-deny-delete',
+        variant_id: 'model-1',
+        role: 'primary',
+        repetition: 1,
+        terminal_status: terminalStatus,
+        metric_values: {},
+        stage_summary: [],
+        failure_reason: failureReason,
+      };
+      evalStore.loadFixtures([assignment], []);
+
+      render(
+        <MemoryRouter>
+          <LiveEventStream
+            events={[
+              liveEvent({ event_id: 'evt-started', kind: 'assignment_started', assignment_id: 'assignment-1' }),
+              liveEvent({ event_id: 'evt-metric', kind: 'metric_updated', assignment_id: 'assignment-1' }),
+              liveEvent({ event_id: 'evt-passed', kind: 'assignment_completed', assignment_id: 'assignment-1' }),
+              liveEvent({ event_id: 'evt-other-run', kind: 'assignment_failed', assignment_id: 'assignment-1', run_id: 'run-b' }),
+              liveEvent({
+                event_id: 'evt-failed',
+                kind: 'assignment_failed',
+                assignment_id: 'assignment-1',
+                terminal_status: terminalStatus,
+                lifecycle_status: 'completed',
+              }),
+            ]}
+            connection="live"
+            streamConnection="connected"
+          />
+        </MemoryRouter>,
+      );
+
+      const tooltip = screen.getByTitle(failureReason);
+      expect(tooltip).toHaveTextContent(terminalStatus.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()));
+      expect(tooltip.closest('tr')).toHaveTextContent('Assignment Failed');
+      expect(screen.getAllByTitle(failureReason)).toHaveLength(1);
+    },
+  );
+
   it('shows per-role metrics on stage_updated rows instead of assignment aggregates', () => {
     const assignment: AssignmentResult = {
       schema_version: '1.3.0',
@@ -1061,4 +1113,3 @@ describe('LiveEventStream', () => {
     expect(stageUpdatedRow).toHaveTextContent('—');
   });
 });
-

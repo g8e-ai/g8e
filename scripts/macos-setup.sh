@@ -6,8 +6,10 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-# g8e macOS dev setup: validate toolchain, build evaluation-explorer, make build,
-# and add the repository root to PATH.
+# g8e macOS dev setup: install the toolchain, build evaluation-explorer, make
+# build, install the contributor toolchain that `make ci` needs (Go dev tools,
+# Python venv, Node deps), and add the repository root to PATH.
+# Pass --build-only to stop after `make build`.
 # See docs/architecture/scripts.md and docs/guides/getting_started.md
 
 set -euo pipefail
@@ -28,6 +30,7 @@ g8e_macos_brew_install() {
 g8e_macos_install_missing() {
     local missing=("$@")
     local brew_packages=()
+    local item
 
     for item in "${missing[@]}"; do
         case "$item" in
@@ -35,29 +38,48 @@ g8e_macos_install_missing() {
             make) brew_packages+=("make") ;;
             go) brew_packages+=("go") ;;
             node) brew_packages+=("node") ;;
+            python3) brew_packages+=("python") ;;
+            rg) brew_packages+=("ripgrep") ;;
+            bc) brew_packages+=("bc") ;;
+            cc)
+                echo "A C compiler is required by the Go race detector. Install the Xcode Command Line Tools:"
+                echo "  xcode-select --install"
+                echo "Finish that installer, then rerun: bash scripts/macos-setup.sh"
+                ;;
+            curl) echo "curl ships with macOS; check that /usr/bin is on PATH." ;;
         esac
     done
 
-    if [[ ${#brew_packages[@]} -eq 0 ]]; then
-        return 0
+    if [[ ${#brew_packages[@]} -gt 0 ]]; then
+        echo "They can be installed via: brew install ${brew_packages[*]}"
+        if g8e_setup_confirm "Install with Homebrew now? [y/N] "; then
+            g8e_macos_brew_install "${brew_packages[@]}"
+        fi
     fi
 
-    echo "They can be installed via: brew install ${brew_packages[*]}"
-    if g8e_setup_confirm "Install with Homebrew now? [y/N] "; then
-        g8e_macos_brew_install "${brew_packages[@]}"
-    fi
+    for item in "${missing[@]}"; do
+        if [[ "$item" == "uv" ]]; then
+            if g8e_setup_confirm "Install uv ${G8E_UV_VERSION} to ~/.local/bin now? [y/N] "; then
+                g8e_install_uv || echo "  uv install failed; see https://docs.astral.sh/uv/getting-started/installation/"
+            fi
+        fi
+    done
 }
 
 g8e_setup_init "$@"
 
-echo -e "\n[SETUP] g8e macOS dev environment setup\n"
-echo "[STEP 1/4] Checking prerequisites (git, make, go >= ${G8E_GO_MIN}, node >= ${G8E_NODE_MIN_MAJOR})..."
+if [[ "$G8E_BUILD_ONLY" == true ]]; then
+    TOTAL_STEPS=4
+    PREREQS="git, make, curl, go >= ${G8E_GO_MIN}, node >= ${G8E_NODE_MIN_MAJOR}"
+else
+    TOTAL_STEPS=6
+    PREREQS="git, make, curl, go >= ${G8E_GO_MIN}, node >= ${G8E_NODE_MIN_MAJOR}, python3, uv, rg, bc, C compiler"
+fi
 
-MISSING=()
-g8e_check_git || MISSING+=("git")
-g8e_check_make || MISSING+=("make")
-g8e_check_go || MISSING+=("go")
-g8e_check_node || MISSING+=("node")
+echo -e "\n[SETUP] g8e macOS dev environment setup\n"
+echo "[STEP 1/${TOTAL_STEPS}] Checking prerequisites (${PREREQS})..."
+
+g8e_collect_missing
 
 if [[ ${#MISSING[@]} -gt 0 ]]; then
     echo
@@ -65,11 +87,7 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
     g8e_macos_install_missing "${MISSING[@]}"
     echo
     echo "Re-checking prerequisites..."
-    MISSING=()
-    g8e_check_git || MISSING+=("git")
-    g8e_check_make || MISSING+=("make")
-    g8e_check_go || MISSING+=("go")
-    g8e_check_node || MISSING+=("node")
+    g8e_collect_missing
     if [[ ${#MISSING[@]} -gt 0 ]]; then
         echo "FATAL: still missing: ${MISSING[*]}"
         echo "Install the remaining tools, then rerun: bash scripts/macos-setup.sh"
@@ -77,13 +95,26 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
     fi
 fi
 
-echo -e "\n[STEP 2/4] Building evaluation-explorer assets..."
+echo -e "\n[STEP 2/${TOTAL_STEPS}] Building evaluation-explorer assets..."
 g8e_build_evaluation_explorer
 
-echo -e "\n[STEP 3/4] Building g8e..."
+echo -e "\n[STEP 3/${TOTAL_STEPS}] Building g8e..."
 g8e_run_make_build
 echo "Build successful."
 
-echo -e "\n[STEP 4/4] Adding repository root to PATH..."
+if [[ "$G8E_BUILD_ONLY" == true ]]; then
+    echo -e "\n[STEP 4/${TOTAL_STEPS}] Adding repository root to PATH..."
+    g8e_configure_path_unix
+    g8e_print_next_steps_unix
+    exit 0
+fi
+
+echo -e "\n[STEP 4/${TOTAL_STEPS}] Installing the contributor toolchain (Go dev tools, Python venv, Node deps)..."
+g8e_run_dev_setup
+
+echo -e "\n[STEP 5/${TOTAL_STEPS}] Adding repository root and dev tool directories to PATH..."
 g8e_configure_path_unix
+
+echo -e "\n[STEP 6/${TOTAL_STEPS}] Verifying the toolchain (make dev-check)..."
+make dev-check
 g8e_print_next_steps_unix

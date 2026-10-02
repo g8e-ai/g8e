@@ -10,13 +10,16 @@ package protocol_test
 import (
 	_ "embed"
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -39,6 +42,9 @@ var modelAssignmentResultVectorJSON []byte
 
 //go:embed vectors/eval/public_assignment_result.json
 var publicAssignmentResultVectorJSON []byte
+
+//go:embed vectors/eval/public_assignment_result_failed.json
+var failedPublicAssignmentResultVectorJSON []byte
 
 //go:embed vectors/eval/model_assignment_result_enriched.json
 var enrichedModelAssignmentResultVectorJSON []byte
@@ -212,6 +218,42 @@ func TestPublicAssignmentResultProjectionCanonicalizationMatchesCrossLanguageVec
 	require.NoError(t, err)
 	assert.Equal(t, encoded, canonical)
 	assert.Equal(t, "assign-1", projection.GetAssignmentId())
+}
+
+func TestFailedPublicAssignmentResultCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(failedPublicAssignmentResultVectorJSON, &vector))
+	require.Equal(t, "PublicAssignmentResultProjection", vector.MessageType)
+
+	// Construct the producer's message independently of the vector. The same
+	// bytes feed the Explorer test, including proto3's omitted zero double.
+	projection := &evalv1.PublicAssignmentResultProjection{
+		AssignmentId:     "assign-failed",
+		RunId:            "run-1",
+		ScenarioId:       "instruction-exact-1",
+		ScenarioCategory: evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
+		Lane:             evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+		VariantId:        "qwen3-4b",
+		LifecycleStatus:  evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		SummaryStatus:    evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
+		DecomposedScores: []*evalv1.DecomposedScoreRecord{
+			{ScoreId: "assign-failed:task-score", Dimension: "task_score", Value: 0},
+			{ScoreId: "assign-failed:deterministic-pass-rate", Dimension: "deterministic_pass_rate", Value: 0.8},
+		},
+		ResultDigest:       strings.Repeat("e", 64),
+		VerificationStatus: "verified",
+		CompletedAt:        timestamppb.New(time.Date(2026, 9, 16, 14, 0, 0, 0, time.UTC)),
+	}
+	canonical, err := evalv1.MarshalCanonical(projection)
+	require.NoError(t, err)
+	assert.Equal(t, vector.CanonicalJSON, string(canonical))
+	assert.Contains(t, string(canonical), `{"score_id":"assign-failed:task-score","dimension":"task_score"}`)
+
+	reparsed := &evalv1.PublicAssignmentResultProjection{}
+	require.NoError(t, evalv1.UnmarshalCanonical(canonical, reparsed))
+	assert.True(t, proto.Equal(projection, reparsed))
+	assert.Equal(t, float64(0), reparsed.GetDecomposedScores()[0].GetValue())
 }
 
 func TestEvaluationProtocolRegistersNativeRecordSet(t *testing.T) {

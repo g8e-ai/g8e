@@ -668,9 +668,12 @@ Alternatively, to schedule first and execute separately:
 
 ```bash
 ./g8e eval runs show "$RUN_ID"
+./g8e eval runs assignments "$RUN_ID" --failed
 ./g8e eval runs verify "$RUN_ID" --coverage
 cd dashboard/g8e-adapter/evaluation-explorer && npm run health
 ```
+
+`runs assignments --failed` lists terminal results that did not pass, including `INVALID_EVIDENCE`, with scenario, target (model/role or stack), repetition, duration, verdict, deterministic pass rate, and failed grades with their recorded causes. Use `--assignment <id>` to inspect every grade and its basis for one assignment, or `--json` for canonical assignment/result protojson with explicit verdict and pass rate (`0` for a scored failure, `null` when unscored). Execution logs identify each result as `Executed <id> [<scenario> | <target> | rep N, <duration>]: <lifecycle> verdict=… pass_rate=… failed=[…]`.
 
 After the Observer Operator is enrolled, verify hardware coverage:
 

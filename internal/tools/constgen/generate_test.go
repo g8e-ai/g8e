@@ -8,6 +8,7 @@
 package main
 
 import (
+	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
@@ -151,6 +152,11 @@ func TestGenerateAll_ProducesParseableGoAndEveryRegistryEvent(t *testing.T) {
 	require.NoError(t, err)
 	requireParsesAsGo(t, out.EventsGo)
 	requireParsesAsGo(t, out.ActionTypesGo)
+	for name, source := range map[string]string{"events": out.EventsGo, "actions": out.ActionTypesGo} {
+		formatted, err := format.Source([]byte(source))
+		require.NoError(t, err)
+		assert.Equal(t, source, string(formatted), "%s constants must already be gofmt-clean", name)
+	}
 	for _, entry := range events.Events {
 		assert.Contains(t, out.EventsGo, entry.GoConst)
 		assert.Contains(t, out.DashboardJS, entry.Value)

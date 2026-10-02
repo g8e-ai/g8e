@@ -220,7 +220,7 @@ The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full m
 | Claim | Path | Verify |
 | --- | --- | --- |
 | Go version and module | `go.mod` | `go` directive is `1.26.6` |
-| Setup prerequisites | `scripts/lib/dev-setup-common.sh`, `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, `scripts/windows-setup.ps1` | Scripts read `go.mod`, check `git`, `make`, Node.js 22+, and `npm`, offer to install missing prerequisites, build `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` when it is absent, run `make build`, and add the repo root to the user path |
+| Setup prerequisites | `scripts/lib/dev-setup-common.sh`, `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, `scripts/windows-setup.ps1`, `scripts/dev-check.sh` | Scripts read the Go version from `go.mod` and other tool pins from the `Makefile`, check `git`, `make`, `curl`, Node.js 22+, `npm`, and (unless `--build-only`) `python3`, `uv`, `rg`, `bc`, and a C compiler, offer to install what is missing, build `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` when it is absent, run `make build` and `make dev-setup`, add the repo root and dev tool directories to the user path, and finish with `make dev-check`; the `ci` targets run `make dev-check` first |
 | Platform CLI binary | `Makefile` (`MAIN_PKG := ./cmd/g8e`), `cmd/g8e` | `make build` writes `bin/g8e-<os>-<arch>` and copies a runnable binary to the repo root |
 | Cobra root and groups | `internal/cli/cmd/main.go`, `internal/cli/cmd/<group>/` | `./g8e --help` |
 | Sentinel errors | `internal/constants/errors.go` | `constants.Err*` declarations, including `ErrFileServiceInit` |

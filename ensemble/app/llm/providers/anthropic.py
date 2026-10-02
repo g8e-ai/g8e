@@ -13,7 +13,6 @@ from collections.abc import AsyncGenerator
 
 import anthropic
 
-from app.errors import ConfigurationError
 from app.llm.thinking import translate_for_anthropic
 from ._capability import translate_capability_error
 from app.models.model_configs import get_model_config
@@ -260,6 +259,10 @@ class AnthropicProvider(LLMProvider):
             else (model_config.max_output_tokens if model_config else None)
         )
         if effective_max_tokens is None:
+            # Lazy import to avoid circular dependency: app.errors -> app.models ->
+            # app.llm -> providers -> this module.
+            from app.errors import ConfigurationError
+
             raise ConfigurationError(
                 f"Anthropic requires max_tokens and model '{model}' declares no output ceiling",
                 details={"model": model},

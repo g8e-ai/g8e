@@ -652,6 +652,9 @@ export function LiveEventStream({
                 const assignment = event.assignment_id
                   ? assignments.get(recordKey(event.dataset_id, event.assignment_id))
                   : undefined;
+                const failureReason = event.kind === 'assignment_failed' && assignment?.run_id === event.run_id
+                  ? assignment.failure_reason
+                  : undefined;
                 const parts = eventParts(event, assignment);
                 const eventHref = event.assignment_id
                   ? `/evaluations/${event.dataset_id}/${event.run_id}/assignments/${event.assignment_id}`
@@ -706,7 +709,7 @@ export function LiveEventStream({
                           {parts.kind}
                         </Link>
                       </td>
-                      <td>{parts.status}</td>
+                      <td title={failureReason}>{parts.status}</td>
                       <td>
                         {categoryHref ? (
                           <Link to={categoryHref} className="stream-category-link">

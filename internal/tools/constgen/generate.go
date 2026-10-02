@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,14 +38,22 @@ func generateAll(root string, reg registryFile, actionTypes map[string]actionTyp
 	if err != nil {
 		return generationOutputs{}, err
 	}
+	formattedEvents, err := format.Source([]byte(eventsGo))
+	if err != nil {
+		return generationOutputs{}, fmt.Errorf("format generated event constants: %w", err)
+	}
+	formattedActionTypes, err := format.Source([]byte(actionTypesGo))
+	if err != nil {
+		return generationOutputs{}, fmt.Errorf("format generated action constants: %w", err)
+	}
 	dashboardJS, err := generateDashboardEventsJS(reg)
 	if err != nil {
 		return generationOutputs{}, err
 	}
 
 	return generationOutputs{
-		EventsGo:      eventsGo,
-		ActionTypesGo: actionTypesGo,
+		EventsGo:      string(formattedEvents),
+		ActionTypesGo: string(formattedActionTypes),
 		DashboardJS:   dashboardJS,
 	}, nil
 }

@@ -9,7 +9,12 @@
 # Industry standard orchestration for multi-component proto generation and builds.
 
 SHELL := /bin/bash
-export PATH := $(HOME)/go/bin:$(PATH)
+# `go install` writes to GOBIN, else GOPATH/bin. Put it (and ~/.local/bin, where
+# the uv installer places `uv`) on PATH so the dev tools installed by
+# `make dev-tools` resolve for every recipe even when the invoking shell has not
+# sourced the profile the setup scripts updated.
+GO_BIN_DIR := $(or $(shell go env GOBIN 2>/dev/null),$(if $(shell go env GOPATH 2>/dev/null),$(shell go env GOPATH)/bin,$(HOME)/go/bin))
+export PATH := $(GO_BIN_DIR):$(HOME)/.local/bin:$(PATH)
 GOTOOLCHAIN ?= auto
 export GOTOOLCHAIN
 TMPDIR ?= /tmp
@@ -149,7 +154,31 @@ PROTOC_GEN_GO_GRPC_VERSION := v1.6.2
 PROTOC_GEN_DOC_VERSION := v1.5.1
 PROTOC_MIN_VERSION := 21
 
-BUF := $(shell command -v buf 2>/dev/null || echo "./buf")
+# Developer toolchain pins. Keep in sync with .github/workflows/build-and-test.yml;
+# `make dev-tools`, `make dev-python`, and `make dev-check` read these.
+BUF_VERSION := v1.70.0
+GOLANGCI_LINT_VERSION := v2.12.2
+UV_VERSION := 0.11.21
+PYTHON_VERSION := 3.12
+
+# buf runs these as local plugins from PATH (see buf.gen.yaml); the committed
+# generated code is produced by exactly these versions.
+PROTO_PLUGIN_PKGS := \
+	google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION) \
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION) \
+	github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@$(PROTOC_GEN_DOC_VERSION)
+# govulncheck and swag track @latest, matching CI.
+GO_DEV_TOOL_PKGS := \
+	github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION) \
+	$(PROTO_PLUGIN_PKGS) \
+	github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) \
+	golang.org/x/vuln/cmd/govulncheck@latest \
+	github.com/swaggo/swag/cmd/swag@latest
+
+# Recursive (=) so the lookup runs when a recipe uses it, after buf-install has
+# had the chance to put buf on PATH. $(shell) does not see the exported PATH on
+# GNU make < 4.4, so the Go bin dir is added explicitly.
+BUF = $(shell export PATH="$(GO_BIN_DIR):$$PATH"; command -v buf 2>/dev/null || echo "./buf")
 PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
 PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "$(PROTOC_GEN_GO_VERSION)")
 
@@ -161,6 +190,13 @@ help:
 	@echo "g8e Platform Root Makefile"
 	@echo ""
 	@echo "Note: On Windows, use build.ps1 instead of make"
+	@echo ""
+	@echo "Developer Setup (first run: scripts/linux-setup.sh or scripts/macos-setup.sh):"
+	@echo "  dev-setup     Install everything 'make ci' needs: dev-tools + dev-python + dev-node"
+	@echo "  dev-tools     Install pinned Go tools (buf, protoc plugins, golangci-lint, govulncheck, swag)"
+	@echo "  dev-python    Create .venv (Python $(PYTHON_VERSION)) with protocol + ensemble deps via uv"
+	@echo "  dev-node      npm ci for protocol/node, dashboard, and dashboard/g8e-adapter"
+	@echo "  dev-check     Verify every tool 'make ci' needs is installed (runs before ci targets)"
 	@echo ""
 	@echo "CI/CD (Local):"
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
@@ -297,7 +333,7 @@ proto: proto-go proto-python proto-node proto-lockfiles
 	@echo "Protobuf generation complete."
 
 .PHONY: proto-go
-proto-go: buf-install
+proto-go: buf-install proto-tools-install
 	@echo "Generating Go Protobuf code with Buf..."
 	@$(BUF) generate protocol/proto
 	@echo "Go Protobuf generation complete."
@@ -350,14 +386,26 @@ proto-force: proto
 buf-install:
 	@if ! command -v buf &> /dev/null && [ ! -f "./buf" ]; then \
 		if command -v go &> /dev/null; then \
-			echo "Installing Buf natively via Go toolchain..."; \
-			GOBIN=$(HOME)/go/bin go install github.com/bufbuild/buf/cmd/buf@v1.70.0; \
+			echo "Installing Buf $(BUF_VERSION) natively via Go toolchain..."; \
+			go install github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION); \
 		else \
 			echo "Go not found, attempting direct download..."; \
 			curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$$(uname -s)-$$(uname -m)" -o ./buf && chmod +x ./buf || \
 			echo "Warning: Failed to download Buf. Proceeding with existing protocol files if available."; \
 		fi \
 	fi
+
+# Installs any missing protoc plugin that buf.gen.yaml invokes. Existing binaries
+# are left alone; `make dev-tools` reinstalls them at the pinned versions.
+.PHONY: proto-tools-install
+proto-tools-install:
+	@for pkg in $(PROTO_PLUGIN_PKGS); do \
+		bin=$${pkg%@*}; bin=$${bin##*/}; \
+		if ! command -v $$bin &> /dev/null; then \
+			echo "Installing $$bin ($$pkg)..."; \
+			go install $$pkg || exit 1; \
+		fi; \
+	done
 
 .PHONY: protoc-install
 protoc-install:
@@ -392,6 +440,53 @@ protoc-install:
 		exit 1; \
 	fi
 	@echo "protoc version $$PROTOC_VERSION is compatible."
+
+# =============================================================================
+# DEVELOPER TOOLCHAIN
+#
+# OS-level prerequisites (git, make, go, node, python3, uv, rg, bc, a C compiler)
+# are installed by scripts/linux-setup.sh, scripts/macos-setup.sh, or
+# scripts/windows-setup.ps1. Everything those need on top is pinned above and
+# installed here, so the setup scripts and a manual install share one definition.
+# =============================================================================
+.PHONY: dev-setup
+dev-setup: dev-tools dev-python dev-node
+	@echo "Developer toolchain installed. Verify with: make dev-check"
+
+# Go-based tools (buf, protoc plugins, golangci-lint, govulncheck, swag), always
+# reinstalled at the pinned versions.
+.PHONY: dev-tools
+dev-tools:
+	@echo "Installing Go dev tools into $(GO_BIN_DIR)..."
+	@for pkg in $(GO_DEV_TOOL_PKGS); do \
+		echo "  go install $$pkg"; \
+		go install $$pkg || exit 1; \
+	done
+
+# Repo-root .venv (the interpreter the ensemble and proto targets prefer, see
+# PYTHON below) with the in-tree protocol package and ensemble test/lint deps.
+# uv provisions Python $(PYTHON_VERSION) itself when the system has none.
+.PHONY: dev-python
+dev-python:
+	@command -v uv &> /dev/null || { echo "Error: uv not found. Run the setup script for your platform in scripts/ or see https://docs.astral.sh/uv/" >&2; exit 1; }
+	@echo "Preparing .venv (Python $(PYTHON_VERSION)) with protocol and ensemble dependencies..."
+	@uv venv --python $(PYTHON_VERSION) --seed --allow-existing .venv
+	@# --no-sources: ensemble's [tool.uv.sources] pins g8e to a non-editable path, which
+	@# conflicts with the editable protocol/python install that lets protocol edits show up live.
+	@uv pip install --python .venv/bin/python --no-sources -e protocol/python -e "ensemble[test]"
+
+.PHONY: dev-node
+dev-node:
+	@echo "Installing Node dependencies (protocol/node, dashboard, g8e-adapter)..."
+	@npm ci --prefix protocol/node
+	@npm ci --prefix dashboard
+	@npm ci --prefix dashboard/g8e-adapter
+	@npm run build --prefix dashboard/g8e-adapter
+
+# Preflight for `make ci`: reports every missing or mismatched tool at once.
+.PHONY: dev-check
+dev-check:
+	@bash scripts/dev-check.sh
 
 # =============================================================================
 # BUILD
@@ -927,15 +1022,15 @@ ci: ci-platform ci-ensemble ci-dashboard
 	@echo "CI complete."
 
 .PHONY: ci-platform
-ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test check-bsl-headers
+ci-platform: dev-check _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test check-bsl-headers
 	@echo "Platform CI complete."
 
 .PHONY: ci-ensemble
-ci-ensemble: ensemble-lint ensemble-test
+ci-ensemble: dev-check ensemble-lint ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-dashboard
-ci-dashboard: dashboard-lint dashboard-boundary-check dashboard-test
+ci-dashboard: dev-check dashboard-lint dashboard-boundary-check dashboard-test
 	@echo "Dashboard CI complete."
 
 .PHONY: check-bsl-headers

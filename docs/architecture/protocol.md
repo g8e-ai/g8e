@@ -273,6 +273,8 @@ Governed execution yields an `ActionReceipt` carrying five-layer execution evide
 
 #### Cross-language vectors
 
+Evaluation protobuf JSON uses `evalv1.MarshalCanonical` and `evalv1.UnmarshalCanonical` in `protocol/proto/g8e/eval/v1/canonical.go`. The encoder uses protobuf field names and omits proto3 scalar defaults. `protocol/vectors/eval/public_assignment_result_failed.json` contains Go-produced bytes for a completed assignment with verdict `FAIL` and a zero `task_score` whose `value` key is omitted. `TestFailedPublicAssignmentResultCanonicalizationMatchesCrossLanguageVector` constructs the producer message and checks byte equality; the Explorer's `tests/campaign-adapter.test.ts` decodes the same bytes through `decodeCampaignProjectionEnvelope` and checks `task_score = 0`, `pass = 0`, and `model_failed`. The decoder applies the proto3 default only to a present score record; a missing score record does not imply zero.
+
 `protocol/vectors/` contains cross-language verification vectors ensuring bit-for-bit parity:
 
 - `action_receipt_canonicalization.json`: Canonical UTF-8 JSON encoding and Ed25519 verification vectors.
