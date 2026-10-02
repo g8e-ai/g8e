@@ -345,7 +345,7 @@ func TestConformance_PerPolicyTrajectoryOutcomes(t *testing.T) {
 			wantOutcome:         evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS,
 			wantPassed:          false,
 			wantPrivSentenceSub: "The model called `recursive_grep_search` but argument `pattern` failed:",
-			wantPubSentenceSub:  "The model called `recursive_grep_search` but argument `pattern` failed:",
+			wantPubSentenceSub:  "The model called `recursive_grep_search` but argument `pattern` failed validation.",
 		},
 	}
 

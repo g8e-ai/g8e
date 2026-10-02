@@ -329,6 +329,12 @@ func TestValidateChatProbeTrace_WorkspaceIsEchoedAndDerivedFromRunAndAttempt(t *
 			req:    probeRequest(),
 			mutate: func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = nil },
 		},
+		{
+			name:    "an unrequested workspace echoed as a string is rejected",
+			req:     probeRequest(),
+			mutate:  func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = "/x" },
+			wantErr: "evaluation_context.workspace must be an object",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

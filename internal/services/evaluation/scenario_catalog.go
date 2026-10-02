@@ -345,6 +345,9 @@ func validateScenarioArtifactBinding(reference *compliancev1.ComplianceEvidenceR
 	if reference.GetSha256() != artifact.Reference.GetSha256() {
 		return fmt.Errorf("artifact digest mismatch")
 	}
+	if !contentMatchesReference(artifact.Body, artifact.Reference) {
+		return fmt.Errorf("artifact body does not match its digest")
+	}
 	return nil
 }
 

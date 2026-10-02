@@ -56,10 +56,11 @@ def _error_analysis_summary(result: object) -> EvaluationErrorAnalysisSummary | 
     return None
 
 
-def _policy_outcome_from_result(result: CommandExecutionResult) -> str:
-    if result.success:
-        return "allow"
-    if result.error_type in {
+# Failures recorded as a ``deny`` policy decision. The Go grader reads the same
+# set from the generated agent tool registry to tell a denied call from any
+# other failed call, so this is its single source.
+POLICY_DENY_ERROR_TYPES: frozenset[CommandErrorType] = frozenset(
+    {
         CommandErrorType.SECURITY_VIOLATION,
         CommandErrorType.RISK_ANALYSIS_BLOCKED,
         CommandErrorType.VALIDATION_ERROR,
@@ -67,7 +68,14 @@ def _policy_outcome_from_result(result: CommandExecutionResult) -> str:
         CommandErrorType.BLACKLIST_VIOLATION,
         CommandErrorType.WHITELIST_VIOLATION,
         CommandErrorType.PERMISSION_DENIED,
-    }:
+    }
+)
+
+
+def _policy_outcome_from_result(result: CommandExecutionResult) -> str:
+    if result.success:
+        return "allow"
+    if result.error_type in POLICY_DENY_ERROR_TYPES:
         return "deny"
     return "refused"
 
@@ -151,7 +159,7 @@ def record_tool_call_completed(
     operator_session_id = ""
     if g8e_context.bound_operators:
         operator = g8e_context.bound_operators[0]
-        operator_id = operator.id or ""
+        operator_id = operator.operator_id or ""
         operator_session_id = operator.operator_session_id or ""
     state.governed_actions.append(
         EvaluationGovernedActionRecord(

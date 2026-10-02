@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -98,17 +99,38 @@ func TestVerifyCampaignRunReadOnly_BindsIncompletePopulationWithoutPersistingVer
 	require.Error(t, err)
 }
 
-func TestCampaignRunVerifier_PassesCompletedAssignment(t *testing.T) {
-	t.Parallel()
+// completedRunFixture is a persisted one-assignment run whose imported result
+// verifies, under the catalog ref it was frozen with.
+type completedRunFixture struct {
+	store    *Store
+	req      CampaignInitRequest
+	catalog  *evalv1.EvaluationScenarioCatalog
+	imported *evalv1.EvaluationAssignmentResult
+}
+
+func (f completedRunFixture) verify(t *testing.T) *evalv1.EvaluationVerificationReport {
+	t.Helper()
+	report, err := NewCampaignRunVerifier(func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }).VerifyRun(context.Background(), f.store, f.req.RunID, f.catalog, f.req.ScenarioArtifacts)
+	require.NoError(t, err)
+	return report
+}
+
+// newCompletedRunFixture freezes a three-scenario catalog under catalogRef (the
+// helper's own ref when nil), runs and imports one assignment, and persists it.
+func newCompletedRunFixture(t *testing.T, catalogRef *compliancev1.VersionedReference) completedRunFixture {
+	t.Helper()
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	executor := &stubCampaignExecutor{}
 	controller := NewCampaignController(store, executor, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
+	if catalogRef == nil {
+		catalogRef = catalog.GetCatalogRef()
+	}
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
-		CatalogRef:    catalog.GetCatalogRef(),
+		CatalogRef:    catalogRef,
 		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
@@ -164,11 +186,62 @@ func TestCampaignRunVerifier_PassesCompletedAssignment(t *testing.T) {
 	}, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	require.NoError(t, store.SaveAssignmentResult(context.Background(), imported))
+	return completedRunFixture{store: store, req: req, catalog: truncated, imported: imported}
+}
 
-	report, err := NewCampaignRunVerifier(func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }).VerifyRun(context.Background(), store, req.RunID, truncated, req.ScenarioArtifacts)
-	require.NoError(t, err)
+func TestCampaignRunVerifier_PassesCompletedAssignment(t *testing.T) {
+	t.Parallel()
+	f := newCompletedRunFixture(t, nil)
+
+	report := f.verify(t)
+
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, report.GetStatus())
-	require.NoError(t, store.SaveCampaignVerification(context.Background(), req.RunID, report))
+	require.NoError(t, f.store.SaveCampaignVerification(context.Background(), f.req.RunID, report))
+}
+
+// forgeFirstGrade flips one stored deterministic grade and reseals the result
+// digest, so only grade recomputation can notice.
+func (f completedRunFixture) forgeFirstGrade(t *testing.T) {
+	t.Helper()
+	forged := proto.Clone(f.imported).(*evalv1.EvaluationAssignmentResult)
+	grade := forged.GetDeterministicGrades()[0]
+	if grade.GetStatus() == verdictPass {
+		grade.Status, grade.Score = verdictFail, 0
+	} else {
+		grade.Status, grade.Score = verdictPass, 1
+	}
+	digest, err := ComputeAssignmentResultDigest(forged)
+	require.NoError(t, err)
+	forged.ResultDigest = digest
+	require.NoError(t, f.store.SaveAssignmentResult(context.Background(), forged))
+}
+
+// R8: a run frozen from an older built-in default suite keeps every digest and
+// evidence check but is not regraded, so it is not marked failed by fixtures
+// this build no longer carries. A run under the current catalog is regraded and a
+// forged grade fails it.
+func TestCampaignRunVerifier_RegradesOnlyCatalogsThisBuildStillCarries(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		ref        *compliancev1.VersionedReference
+		wantStatus evalv1.EvaluationVerdictStatus
+	}{
+		{name: "the current catalog is regraded", ref: &compliancev1.VersionedReference{Id: DefaultSuiteID, Version: DefaultSuiteVersion}, wantStatus: verdictFail},
+		{name: "an older default suite version is not regraded", ref: &compliancev1.VersionedReference{Id: DefaultSuiteID, Version: "1.0.0"}, wantStatus: verdictPass},
+		{name: "the pre-rename default suite id is not regraded", ref: &compliancev1.VersionedReference{Id: LegacyDefaultSuiteID, Version: "1.0.0"}, wantStatus: verdictPass},
+		{name: "a custom suite is always regraded", ref: &compliancev1.VersionedReference{Id: "custom-suite", Version: "1.0.0"}, wantStatus: verdictFail},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newCompletedRunFixture(t, tt.ref)
+			require.Equal(t, verdictPass, f.verify(t).GetStatus(), "the honest result verifies under every catalog")
+			f.forgeFirstGrade(t)
+
+			assert.Equal(t, tt.wantStatus, f.verify(t).GetStatus())
+		})
+	}
 }
 
 func TestCampaignRunVerifier_PassesHeterogeneousFormationAssignment(t *testing.T) {
