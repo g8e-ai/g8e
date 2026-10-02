@@ -333,7 +333,11 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 			opts.ResultOutput(result)
 		}
 		if !opts.JSONOutput {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %s: %s\n", result.GetAssignmentId(), evaluation.AssignmentOutcomeSummary(result))
+			executedAssignment, err := store.LoadAssignment(cmd.Context(), opts.RunID, result.GetAssignmentId())
+			if err != nil {
+				return executed, fmt.Errorf("evaluation: run execute: load executed assignment: %w", err)
+			}
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), executedAssignmentLine(executedAssignment, result))
 		}
 	}
 	if stopped && !opts.JSONOutput {

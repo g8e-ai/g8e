@@ -96,6 +96,73 @@ func TestCampaignAssignmentVerifier_RecomputesTheTrajectoryAndFailureReasonsItSt
 	})
 }
 
+// The scores are published and drive every pass rate, so the verifier recomputes
+// them from the grades it just verified instead of trusting a resealed digest.
+func TestCampaignAssignmentVerifier_RecomputesTheScoresItStored(t *testing.T) {
+	t.Parallel()
+	current := catalogRef(DefaultSuiteID, DefaultSuiteVersion)
+	const wantFailure = "stored decomposed scores do not match recomputation"
+
+	t.Run("the honest result carries scores and verifies", func(t *testing.T) {
+		t.Parallel()
+		f := newSeededImportFixture(t, "recovery-error-guided-retry", nil)
+		result := f.importResult(t)
+		require.NotEmpty(t, result.GetDecomposedScores(), "a result with no scores would verify vacuously")
+
+		report := verifyAssignment(t, f, result, current)
+
+		assert.Equal(t, verdictPass, report.GetStatus(), "%v", report.GetFailureReasons())
+	})
+
+	tamper := map[string]func(result *evalv1.EvaluationAssignmentResult){
+		"a task score": func(result *evalv1.EvaluationAssignmentResult) {
+			for _, score := range result.GetDecomposedScores() {
+				if score.GetDimension() == "task_score" {
+					score.Value = 1 - score.GetValue()
+				}
+			}
+		},
+		"a pass rate": func(result *evalv1.EvaluationAssignmentResult) {
+			for _, score := range result.GetDecomposedScores() {
+				if score.GetDimension() == "deterministic_pass_rate" {
+					score.Value = 0.123
+				}
+			}
+		},
+		"every score dropped": func(result *evalv1.EvaluationAssignmentResult) { result.DecomposedScores = nil },
+		"an invented score": func(result *evalv1.EvaluationAssignmentResult) {
+			result.DecomposedScores = append(result.DecomposedScores, &evalv1.DecomposedScoreRecord{ScoreId: "invented", Dimension: "invented", Value: 1})
+		},
+	}
+	for name, mutate := range tamper {
+		t.Run("a re-digested result with "+name+" fails verification", func(t *testing.T) {
+			t.Parallel()
+			f := newSeededImportFixture(t, "recovery-error-guided-retry", nil)
+			result := f.importResult(t)
+			mutate(result)
+			redigest(t, result)
+
+			report := verifyAssignment(t, f, result, current)
+
+			assert.Equal(t, verdictFail, report.GetStatus())
+			assert.Contains(t, report.GetFailureReasons(), wantFailure)
+			assert.NotContains(t, report.GetFailureReasons(), "stored deterministic grades do not match recomputation", "the grades are honest; only the scores drifted")
+		})
+	}
+
+	t.Run("a legacy catalog result is not regraded, so its scores are not compared", func(t *testing.T) {
+		t.Parallel()
+		f := newSeededImportFixture(t, "recovery-error-guided-retry", nil)
+		result := f.importResult(t)
+		result.DecomposedScores = nil
+		redigest(t, result)
+
+		report := verifyAssignment(t, f, result, catalogRef(LegacyDefaultSuiteID, "1.0.0"))
+
+		assert.Equal(t, verdictPass, report.GetStatus(), "%v", report.GetFailureReasons())
+	})
+}
+
 // TestCampaignAssignmentVerifier_OldCatalogRunsKeepEveryIntegrityCheck is R8:
 // a run frozen from an older built-in catalog skips only the regrading, never
 // the digest and evidence checks.

@@ -18,6 +18,7 @@ import { decodeCampaignProjectionEnvelope } from '../src/contract/campaign-wire'
 import type { LiveEvent } from '../src/contract/types';
 import { EvalStore } from '../src/state/store';
 import { fixtureCampaignResultEnvelope } from '../src/fixtures/fixtures';
+import { isScenarioNotApplicableMetric } from '../src/views/derived';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const publicResultVector = JSON.parse(
@@ -766,19 +767,25 @@ describe('adaptCampaignProjectionEnvelope', () => {
       return records.find((record) => record.kind === 'assignment_result');
     }
 
+    // Every accepted pair names its outcome. The model-failure outcome comes
+    // only from a FAIL verdict on a lifecycle that ran to a verdict, never from
+    // an unrecognized value.
     it.each([
-      [`${L}COMPLETED`, `${V}PASS`, 'live_in_progress'],
-      [`${L}COMPLETED`, `${V}FAIL`, 'terminal_failed'],
-      [`${L}COMPLETED`, `${V}INVALID_EVIDENCE`, 'terminal_failed'],
-      [`${L}COMPLETED`, `${V}UNAVAILABLE`, 'terminal_failed'],
-      [`${L}COMPLETED`, `${V}UNSUPPORTED`, 'terminal_failed'],
-      [`${L}FAILED`, `${V}FAIL`, 'terminal_failed'],
-      [`${L}PROVIDER_FAILED`, `${V}FAIL`, 'terminal_failed'],
-      [`${L}GRADER_FAILED`, `${V}UNAVAILABLE`, 'terminal_failed'],
-      [`${L}POLICY_REJECTED`, `${V}FAIL`, 'terminal_failed'],
-      [`${L}STOPPED`, `${V}FAIL`, 'terminal_failed'],
-    ])('accepts %s with %s', (lifecycle, verdict, quality) => {
-      expect(adaptResult(lifecycle, verdict)).toMatchObject({ quality_state: quality });
+      [`${L}COMPLETED`, `${V}PASS`, 'completed', 'live_in_progress'],
+      [`${L}COMPLETED`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
+      [`${L}COMPLETED`, `${V}INVALID_EVIDENCE`, 'invalid_evidence', 'terminal_failed'],
+      [`${L}COMPLETED`, `${V}UNAVAILABLE`, 'invalid_evidence', 'terminal_failed'],
+      [`${L}COMPLETED`, `${V}UNSUPPORTED`, 'invalid_evidence', 'terminal_failed'],
+      [`${L}FAILED`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
+      [`${L}PARTIAL`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
+      [`${L}ESCALATED`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
+      [`${L}PROVIDER_FAILED`, `${V}FAIL`, 'model_failed', 'terminal_failed'],
+      [`${L}UNAVAILABLE`, `${V}UNAVAILABLE`, 'invalid_evidence', 'terminal_failed'],
+      [`${L}GRADER_FAILED`, `${V}UNAVAILABLE`, 'grader_failed', 'terminal_failed'],
+      [`${L}POLICY_REJECTED`, `${V}FAIL`, 'invalid_evidence', 'terminal_failed'],
+      [`${L}STOPPED`, `${V}FAIL`, 'stopped', 'terminal_failed'],
+    ])('maps %s with %s to %s', (lifecycle, verdict, terminal, quality) => {
+      expect(adaptResult(lifecycle, verdict)).toMatchObject({ terminal_status: terminal, quality_state: quality });
     });
 
     it.each([
@@ -907,10 +914,33 @@ describe('adaptCampaignProjectionEnvelope', () => {
       ],
       tool_scorecard: {
         tool_selection: { value: 0 },
-        tool_recognition: { unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE' },
+        // Normalized by the one metric decoder, as resource_summary is; the wire
+        // token never reaches the view.
+        tool_recognition: { unavailable_reason: 'scenario_not_applicable' },
       },
     });
+    // The detail view hides not-applicable rows by this predicate, which only
+    // matches the normalized reason.
+    const recognition = assignment?.benchmark_observations?.tool_scorecard?.tool_recognition;
+    expect(recognition !== undefined && isScenarioNotApplicableMetric(recognition)).toBe(true);
     expect(() => decodeViewRecord('assignment_result', assignment)).not.toThrow();
+  });
+
+  it('rejects benchmark observation fields the wire does not publish', () => {
+    const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
+    for (const field of ['escalation_disposition', 'security_privacy_events', 'correlated_failure']) {
+      expect(() =>
+        adaptCampaignProjectionEnvelope(
+          {
+            schema_version: '1.1.0',
+            message_type: 'PublicAssignmentResultProjection',
+            idempotency_key: 'run-1:assign-1:result',
+            record: { ...resultRecord, benchmark_observations: { [field]: {} } },
+          },
+          createCampaignAdaptContext(),
+        ),
+      ).toThrow(ValidationError);
+    }
   });
 });
 

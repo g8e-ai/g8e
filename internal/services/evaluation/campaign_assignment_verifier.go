@@ -122,6 +122,8 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 			} else {
 				if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputed.DeterministicGrades) {
 					failures = append(failures, "stored deterministic grades do not match recomputation")
+				} else {
+					failures = append(failures, verifyStoredScores(req.Result)...)
 				}
 				// The outcome and both failure sentences are published, so they
 				// are recomputed from the digest-bound trace like the grades.
@@ -181,9 +183,28 @@ func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(ctx context.C
 			failures = append(failures, "formation grade recomputation failed: "+err.Error())
 		} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputedGrades) {
 			failures = append(failures, "stored deterministic grades do not match formation recomputation")
+		} else if _, gradedFromTraces := formationEvidenceRoleTraces(req.FormationRunEvidence); gradedFromTraces {
+			// A direct-dispatch run derives its grades from the lifecycle and
+			// stores no scores, so only a trace-graded run has scores to verify.
+			failures = append(failures, verifyStoredScores(req.Result)...)
 		}
 	}
 	return failures
+}
+
+// verifyStoredScores is the verifier's metric recomputation: the stored
+// `task_score`, `deterministic_pass_rate`, `triage_ok`, and tier scores must be
+// what the one tally yields from the grades that just verified.
+func verifyStoredScores(result *evalv1.EvaluationAssignmentResult) []string {
+	matches, err := storedScoresMatchGrades(result)
+	switch {
+	case err != nil:
+		return []string{"decomposed score recomputation failed: " + err.Error()}
+	case !matches:
+		return []string{"stored decomposed scores do not match recomputation"}
+	default:
+		return nil
+	}
 }
 
 func finalizeCampaignVerificationReport(report *evalv1.EvaluationVerificationReport, failures []string) *evalv1.EvaluationVerificationReport {

@@ -484,7 +484,7 @@ func TestRequiredEvidenceGrade_SemanticGrade(t *testing.T) {
 // that cannot be reached, and a type outside the vocabulary fails closed.
 func TestRequiredEvidenceGrade_NoEvidenceTypeIsEverUnavailable(t *testing.T) {
 	t.Parallel()
-	vocabulary := []string{"model_inference", "deterministic_grade", "semantic_grade", "tool_decision", "tool_call", "governed_action", "policy_decision", "state_observation", "recovery", "final_response"}
+	vocabulary := []string{"model_inference", "semantic_grade", "tool_decision", "tool_call", "governed_action", "policy_decision", "state_observation", "recovery", "final_response"}
 	for _, evidenceType := range vocabulary {
 		t.Run(evidenceType, func(t *testing.T) {
 			t.Parallel()
@@ -494,7 +494,7 @@ func TestRequiredEvidenceGrade_NoEvidenceTypeIsEverUnavailable(t *testing.T) {
 			}
 		})
 	}
-	for _, removed := range []string{"handoff", "escalation", "", "made_up"} {
+	for _, removed := range []string{"handoff", "escalation", "deterministic_grade", "", "made_up"} {
 		t.Run("removed or unknown: "+removed, func(t *testing.T) {
 			t.Parallel()
 			status, detail, score := evidenceGrade(t, evidenceRequest(completedHomogeneousTrace(t, "primary"), policyAnswer), removed, trajectoryResult{}, true)

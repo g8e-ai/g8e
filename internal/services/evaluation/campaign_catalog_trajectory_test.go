@@ -268,7 +268,7 @@ func TestCatalogReplay_RequiredEvidenceTypesAreSatisfiableForEveryScenario(t *te
 	catalog, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	handled := map[string]bool{
-		"model_inference": true, "deterministic_grade": true, "semantic_grade": true, "tool_decision": true, "tool_call": true,
+		"model_inference": true, "semantic_grade": true, "tool_decision": true, "tool_call": true,
 		"governed_action": true, "policy_decision": true, "state_observation": true, "recovery": true, "final_response": true,
 	}
 	for _, scenario := range catalog.GetScenarios() {

@@ -38,6 +38,8 @@ import {
   type CampaignLifecycleEnvelope,
   type CampaignResultEnvelope,
   type WireActivitySummary,
+  type WireBenchmarkGradeSummary,
+  type WireBenchmarkObservations,
   type WireEvidenceBinding,
   type WireGovernedActionActivityRecord,
   type WireMetric,
@@ -589,164 +591,49 @@ function mapVerificationState(value: string): VerifierState {
 }
 
 
-function mapBenchmarkObservations(value: unknown): BenchmarkObservations | undefined {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const observations = value as Record<string, unknown>;
-  const unavailableReasons = Array.isArray(observations.unavailable_reasons)
-    ? observations.unavailable_reasons.filter((reason): reason is string => typeof reason === 'string')
-    : [];
-  const gradeSummaries = mapGradeSummaries(observations.grade_summaries);
-  const toolScorecard = mapToolScorecard(observations.tool_scorecard);
-  const escalationDisposition = mapEscalationDisposition(observations.escalation_disposition);
-  const securityPrivacyEvents = mapSecurityPrivacyEvents(observations.security_privacy_events);
-  const timing = mapBenchmarkTiming(observations.timing);
-  const gpu = mapGPUObservation(observations.gpu);
-  const correlatedFailure = mapCorrelatedFailure(observations.correlated_failure);
-  if (
-    !gradeSummaries &&
-    !toolScorecard &&
-    !escalationDisposition &&
-    !securityPrivacyEvents &&
-    !timing &&
-    !gpu &&
-    !correlatedFailure &&
-    unavailableReasons.length === 0
-  ) {
+// The wire admits only grade summaries, the tool scorecard, timing, GPU, and
+// unavailable reasons (`assertBenchmarkObservations`), so those are the only
+// fields read here; the view's escalation, security-event, and correlated-failure
+// fields are never published on this path.
+function mapBenchmarkObservations(value: WireBenchmarkObservations | undefined): BenchmarkObservations | undefined {
+  if (value === undefined) return undefined;
+  const unavailableReasons = value.unavailable_reasons ?? [];
+  const gradeSummaries = mapGradeSummaries(value.grade_summaries);
+  const toolScorecard = mapMetricRecord(value.tool_scorecard);
+  const timing = mapMetricRecord(value.timing);
+  const gpu = mapMetricRecord(value.gpu);
+  if (!gradeSummaries && !toolScorecard && !timing && !gpu && unavailableReasons.length === 0) {
     return undefined;
   }
   return {
     grade_summaries: gradeSummaries,
     tool_scorecard: toolScorecard,
-    escalation_disposition: escalationDisposition,
-    security_privacy_events: securityPrivacyEvents,
     timing,
     gpu,
-    correlated_failure: correlatedFailure,
     unavailable_reasons: unavailableReasons,
   };
 }
 
-function mapGradeSummaries(value: unknown): BenchmarkObservations['grade_summaries'] {
-  if (!Array.isArray(value)) return undefined;
-  const summaries = value
-    .map((entry) => {
-      if (typeof entry !== 'object' || entry === null) return undefined;
-      const summary = entry as Record<string, unknown>;
-      const criterionId = optionalString(summary.criterion_id);
-      const status = optionalString(summary.status);
-      if (!criterionId || !status) return undefined;
-      return {
-        criterion_id: criterionId,
-        status,
-        explanation_code: mapExplanationCode(optionalString(summary.explanation_code) ?? 'evidence_unavailable'),
-        detail: optionalString(summary.detail),
-      };
-    })
-    .filter((summary): summary is NonNullable<typeof summary> => summary !== undefined);
-  return summaries.length > 0 ? summaries : undefined;
+function mapGradeSummaries(value: WireBenchmarkGradeSummary[] | undefined): BenchmarkObservations['grade_summaries'] {
+  if (value === undefined || value.length === 0) return undefined;
+  return value.map((summary) => ({
+    criterion_id: summary.criterion_id,
+    status: summary.status,
+    explanation_code: mapExplanationCode(summary.explanation_code),
+  }));
 }
 
-function mapToolScorecard(value: unknown): BenchmarkObservations['tool_scorecard'] {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const scorecard = value as Record<string, unknown>;
-  const mapped = compactMetricRecord(
-    Object.fromEntries(Object.entries(scorecard).map(([key, metric]) => [key, mapMetricValue(metric)])) as Record<
-      string,
-      MetricValue | undefined
-    >,
-  );
-  return Object.keys(mapped).length > 0 ? mapped : undefined;
-}
-
-function mapEscalationDisposition(value: unknown): BenchmarkObservations['escalation_disposition'] {
-  if (typeof value !== 'string') return undefined;
-  const normalized = value.replace(/-/g, '_');
-  if (
-    normalized === 'correct_autonomous_completion' ||
-    normalized === 'correct_escalation' ||
-    normalized === 'false_escalation' ||
-    normalized === 'missed_escalation'
-  ) {
-    return normalized;
-  }
-  return undefined;
-}
-
-function mapSecurityPrivacyEvents(value: unknown): BenchmarkObservations['security_privacy_events'] {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const events = value as Record<string, unknown>;
-  const mapped: NonNullable<BenchmarkObservations['security_privacy_events']> = {};
-  for (const [key, count] of Object.entries(events)) {
-    if (typeof count === 'number' && Number.isFinite(count)) {
-      mapped[key as keyof typeof mapped] = count;
-    }
+/** A metric group (tool scorecard, timing, GPU) with each wire metric decoded by
+ *  the one metric decoder, so an unavailable reason is normalized the same way
+ *  everywhere it is published. */
+function mapMetricRecord<K extends string>(value: Partial<Record<K, WireMetric>> | undefined): Partial<Record<K, MetricValue>> | undefined {
+  if (value === undefined) return undefined;
+  const mapped: Partial<Record<K, MetricValue>> = {};
+  for (const key of Object.keys(value) as K[]) {
+    const metric = mapWireMetric(value[key]);
+    if (metric !== undefined) mapped[key] = metric;
   }
   return Object.keys(mapped).length > 0 ? mapped : undefined;
-}
-
-function mapCorrelatedFailure(value: unknown): BenchmarkObservations['correlated_failure'] {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const failure = value as Record<string, unknown>;
-  const clusterId = optionalString(failure.cluster_id);
-  const semanticErrorCode = optionalString(failure.semantic_error_code);
-  if (!clusterId || !semanticErrorCode) return undefined;
-  const affectedRoles = Array.isArray(failure.affected_roles)
-    ? failure.affected_roles.filter((role): role is 'primary' | 'assistant' | 'lite' => role === 'primary' || role === 'assistant' || role === 'lite')
-    : [];
-  return {
-    cluster_id: clusterId,
-    semantic_error_code: semanticErrorCode,
-    affected_roles: affectedRoles,
-  };
-}
-
-function mapBenchmarkTiming(value: unknown): BenchmarkObservations['timing'] {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const timing = value as Record<string, unknown>;
-  const mapped = compactMetricRecord({
-    model_load_ms: mapMetricValue(timing.model_load_ms),
-    time_to_first_token_ms: mapMetricValue(timing.time_to_first_token_ms),
-    generation_ms: mapMetricValue(timing.generation_ms),
-    whole_task_ms: mapMetricValue(timing.whole_task_ms),
-  });
-  return Object.keys(mapped).length > 0 ? mapped : undefined;
-}
-
-function mapGPUObservation(value: unknown): BenchmarkObservations['gpu'] {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const gpu = value as Record<string, unknown>;
-  const mapped = compactMetricRecord({
-    vram_before_bytes: mapMetricValue(gpu.vram_before_bytes),
-    vram_peak_bytes: mapMetricValue(gpu.vram_peak_bytes),
-    system_ram_peak_bytes: mapMetricValue(gpu.system_ram_peak_bytes),
-    utilization_percent: mapMetricValue(gpu.utilization_percent),
-    temperature_celsius: mapMetricValue(gpu.temperature_celsius),
-    power_watts: mapMetricValue(gpu.power_watts),
-    clock_mhz: mapMetricValue(gpu.clock_mhz),
-  });
-  return Object.keys(mapped).length > 0 ? mapped : undefined;
-}
-
-function compactMetricRecord<T extends Record<string, MetricValue | undefined>>(value: T): Partial<Record<keyof T, MetricValue>> {
-  const mapped: Partial<Record<keyof T, MetricValue>> = {};
-  for (const [key, metric] of Object.entries(value)) {
-    if (metric !== undefined) {
-      mapped[key as keyof T] = metric;
-    }
-  }
-  return mapped;
-}
-
-function mapMetricValue(value: unknown): MetricValue | undefined {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const metric = value as Record<string, unknown>;
-  if (typeof metric.value === 'number' && Number.isFinite(metric.value)) {
-    return { value: metric.value };
-  }
-  if (typeof metric.unavailable_reason === 'string') {
-    return { unavailable_reason: metric.unavailable_reason };
-  }
-  return undefined;
 }
 
 function decomposedScoreKey(score: WireScore): string | undefined {
@@ -968,6 +855,3 @@ function normalizeEnumToken(value?: string): string {
   return value;
 }
 
-function optionalString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}

@@ -7,7 +7,7 @@
 // before any adapter conversion is allowed.
 
 import { parseWireActivityFamily, WIRE_UNAVAILABLE_REASONS, type WireActivityFamily } from './activity-family';
-import { PUBLIC_UNAVAILABLE_REASONS, type RoleTranscript } from './types';
+import { PUBLIC_UNAVAILABLE_REASONS, TOOL_SCORE_DIMENSIONS, type RoleTranscript, type ToolScoreDimension } from './types';
 import { assertRoleTranscripts, ValidationError } from './validators';
 
 export const CAMPAIGN_LIFECYCLE_SCHEMA_VERSION = '1.0.0' as const;
@@ -204,6 +204,34 @@ export interface WireSemanticGradeSummary {
   explanation_code: (typeof EXPLANATION_CODES)[number];
 }
 
+const BENCHMARK_TIMING_FIELDS = ['model_load_ms', 'time_to_first_token_ms', 'generation_ms', 'whole_task_ms'] as const;
+const BENCHMARK_GPU_FIELDS = [
+  'vram_before_bytes',
+  'vram_peak_bytes',
+  'system_ram_peak_bytes',
+  'utilization_percent',
+  'temperature_celsius',
+  'power_watts',
+  'clock_mhz',
+] as const;
+
+export interface WireBenchmarkGradeSummary {
+  criterion_id: string;
+  status: string;
+  explanation_code: (typeof EXPLANATION_CODES)[number];
+}
+
+/** Every field the wire admits under `benchmark_observations`
+ *  (`assertBenchmarkObservations` rejects any other key), so the adapter reads
+ *  this shape and never re-narrows an unknown object. */
+export interface WireBenchmarkObservations {
+  grade_summaries?: WireBenchmarkGradeSummary[];
+  tool_scorecard?: Partial<Record<ToolScoreDimension, WireMetric>>;
+  timing?: Partial<Record<(typeof BENCHMARK_TIMING_FIELDS)[number], WireMetric>>;
+  gpu?: Partial<Record<(typeof BENCHMARK_GPU_FIELDS)[number], WireMetric>>;
+  unavailable_reasons?: string[] | null;
+}
+
 export interface WireModelActivityRecord {
   model_role: (typeof ROLES)[number];
   agent_persona?: string;
@@ -315,7 +343,7 @@ export interface CampaignResultRecord {
   activity_summary?: WireActivitySummary;
   evidence_bindings?: WireEvidenceBinding[];
   verification_metadata?: WireVerificationMetadata;
-  benchmark_observations?: Record<string, unknown>;
+  benchmark_observations?: WireBenchmarkObservations;
   resource_summary?: WireResourceSummary;
   model_response?: string;
   failure_output?: string;
@@ -678,13 +706,10 @@ function assertBenchmarkObservations(value: unknown, path: string): void {
   }
   if (value.tool_scorecard !== undefined) {
     assertObject(value.tool_scorecard, `${path}.tool_scorecard`);
-    rejectUnknown(value.tool_scorecard, ['tool_recognition', 'tool_selection', 'argument_schema', 'argument_semantics', 'permission_compliance', 'result_interpretation', 'follow_up_decision', 'unnecessary_tool_calls', 'looping', 'recovery'], `${path}.tool_scorecard`);
+    rejectUnknown(value.tool_scorecard, TOOL_SCORE_DIMENSIONS, `${path}.tool_scorecard`);
     for (const [key, metric] of Object.entries(value.tool_scorecard)) assertMetric(metric, `${path}.tool_scorecard.${key}`);
   }
-  for (const [family, fields] of Object.entries({
-    timing: ['model_load_ms', 'time_to_first_token_ms', 'generation_ms', 'whole_task_ms'],
-    gpu: ['vram_before_bytes', 'vram_peak_bytes', 'system_ram_peak_bytes', 'utilization_percent', 'temperature_celsius', 'power_watts', 'clock_mhz'],
-  })) {
+  for (const [family, fields] of Object.entries({ timing: BENCHMARK_TIMING_FIELDS, gpu: BENCHMARK_GPU_FIELDS })) {
     if (value[family] === undefined) continue;
     assertObject(value[family], `${path}.${family}`);
     rejectUnknown(value[family], fields, `${path}.${family}`);

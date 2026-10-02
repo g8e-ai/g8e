@@ -418,12 +418,12 @@ func gradeRequiredEvidenceTypes(req ScenarioGradingRequest, traj trajectoryResul
 // requiredEvidenceBasis states what a required-evidence grade measures. Most
 // read a fact from the trace or workspace. `policy_decision` restates the
 // policy outcome and the content check, so it is derived, as is an
-// answer-policy `recovery`. `model_inference` and `deterministic_grade` are
-// harness preconditions. `semantic_grade` is an observation only when the judge
-// returned a verdict: a missing or unavailable judge is a harness property.
+// answer-policy `recovery`. `model_inference` is a harness precondition.
+// `semantic_grade` is an observation only when the judge returned a verdict: a
+// missing or unavailable judge is a harness property.
 func requiredEvidenceBasis(req ScenarioGradingRequest, evidenceType string) evalv1.GradeBasis {
 	switch evidenceType {
-	case "model_inference", "deterministic_grade":
+	case "model_inference":
 		return basisStructural
 	case "policy_decision":
 		return basisDerived

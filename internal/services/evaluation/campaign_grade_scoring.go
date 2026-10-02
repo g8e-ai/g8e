@@ -10,6 +10,8 @@ package evaluation
 import (
 	"fmt"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -109,8 +111,43 @@ func verdictFromGrades(grades []*evalv1.DeterministicGrade) evalv1.EvaluationVer
 	}
 }
 
-// gradeBasisLabel is the basis name an operator reads next to a grade.
-func gradeBasisLabel(basis evalv1.GradeBasis) string {
+// storedScoresMatchGrades reports whether a result's decomposed scores are the
+// ones the grader derives from its deterministic grades. The verifier calls it
+// after the grades themselves verified against the trace, so the verdict, the
+// scores, and the trace cannot drift apart without a digest-resealed forgery
+// being caught.
+func storedScoresMatchGrades(result *evalv1.EvaluationAssignmentResult) (bool, error) {
+	derived, err := deriveScenarioDecomposedScores(result.GetAssignmentId(), result.GetDeterministicGrades())
+	if err != nil {
+		return false, err
+	}
+	stored := result.GetDecomposedScores()
+	if len(stored) != len(derived) {
+		return false, nil
+	}
+	for i := range derived {
+		if !proto.Equal(stored[i], derived[i]) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// DeterministicPassRate is the published share of counted observations that
+// passed. It reads the score the grader derived from the same tally as the
+// verdict, and reports false when the result carries none (INVALID_EVIDENCE, or
+// no counted observation).
+func DeterministicPassRate(result *evalv1.EvaluationAssignmentResult) (float64, bool) {
+	for _, score := range result.GetDecomposedScores() {
+		if score.GetDimension() == deterministicPassRateID {
+			return score.GetValue(), true
+		}
+	}
+	return 0, false
+}
+
+// GradeBasisLabel is the basis name an operator reads next to a grade.
+func GradeBasisLabel(basis evalv1.GradeBasis) string {
 	switch basis {
 	case evalv1.GradeBasis_GRADE_BASIS_OBSERVATION:
 		return "observation"

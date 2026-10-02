@@ -29,15 +29,13 @@ func AssignmentOutcomeSummary(result *evalv1.EvaluationAssignmentResult) string 
 	verdict := strings.TrimPrefix(DerivePublicSummaryStatus(result).String(), verdictStatusPrefix)
 	var line strings.Builder
 	fmt.Fprintf(&line, "%s verdict=%s", lifecycle, verdict)
-	for _, score := range result.GetDecomposedScores() {
-		if score.GetDimension() == deterministicPassRateID {
-			fmt.Fprintf(&line, " pass_rate=%.1f%%", score.GetValue()*100)
-		}
+	if rate, ok := DeterministicPassRate(result); ok {
+		fmt.Fprintf(&line, " pass_rate=%.1f%%", rate*100)
 	}
 	var failed []string
 	for _, grade := range result.GetDeterministicGrades() {
 		if grade.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL {
-			failed = append(failed, fmt.Sprintf("%s [%s] (%s)", grade.GetCriterionId(), gradeBasisLabel(grade.GetBasis()), grade.GetDetail()))
+			failed = append(failed, fmt.Sprintf("%s [%s] (%s)", grade.GetCriterionId(), GradeBasisLabel(grade.GetBasis()), grade.GetDetail()))
 		}
 	}
 	if len(failed) > 0 {
