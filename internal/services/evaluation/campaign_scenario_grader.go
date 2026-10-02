@@ -463,8 +463,6 @@ func requiredEvidenceGrade(req ScenarioGradingRequest, evidenceType string, traj
 	switch evidenceType {
 	case "model_inference":
 		return evidenceVerdict(hasGovernedModelCalls(req.Trace), "governed model inference evidence is present", "governed model inference evidence is missing")
-	case "deterministic_grade":
-		return evidenceVerdict(true, "deterministic grading executed", "")
 	case "tool_decision", "tool_call":
 		return evidenceVerdict(len(view.Calls) > 0, evidenceType+" evidence is present", evidenceType+" evidence is missing")
 	case "policy_decision":

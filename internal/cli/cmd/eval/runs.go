@@ -496,15 +496,19 @@ func loadRunCells(ctx context.Context, store *evaluation.Store, runID string) (m
 			}
 			cell.Status = strings.ToLower(strings.TrimPrefix(result.GetLifecycleStatus().String(), "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_"))
 			cell.Passed = result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
-			var total float64
+			var passed, counted int64
 			for _, grade := range result.GetDeterministicGrades() {
-				total += grade.GetScore()
-				if grade.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
-					cell.Passed = false
+				if grade.GetBasis() == evalv1.GradeBasis_GRADE_BASIS_OBSERVATION {
+					counted++
+					if grade.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+						passed++
+					} else {
+						cell.Passed = false
+					}
 				}
 			}
-			if grades := len(result.GetDeterministicGrades()); grades > 0 {
-				cell.Score = total / float64(grades)
+			if counted > 0 {
+				cell.Score = float64(passed) / float64(counted)
 			}
 		}
 		cells[runCellKey(assignment)] = cell
