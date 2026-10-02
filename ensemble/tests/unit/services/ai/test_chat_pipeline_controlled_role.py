@@ -68,6 +68,7 @@ async def test_finalize_evaluation_assignment_records_role_not_invoked():
         posture_confidence=TriageConfidence.HIGH,
         model_call=ModelCallTelemetry(
             agent_role="triage",
+            classification="scored_chain",
             model_role="lite",
             provider="G8EProvider",
             model="candidate",
@@ -101,6 +102,7 @@ async def test_finalize_evaluation_assignment_records_role_not_invoked():
         model_calls=[
             ModelCallTelemetry(
                 agent_role="sage",
+                classification="scored_chain",
                 model_role="primary",
                 provider="G8EProvider",
                 model="candidate",

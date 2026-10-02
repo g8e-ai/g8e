@@ -408,6 +408,31 @@ func TestImportAssignmentResultFromTrace_CodexCallsExcludedFromScoredInferenceSp
 	assert.Equal(t, spanWithout, spanWith)
 }
 
+func TestImportAssignmentResultFromTrace_RejectsUnusableCallClassification(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		apply func(call EvaluationTrace)
+	}{
+		{name: "missing", apply: func(call EvaluationTrace) { delete(call, "classification") }},
+		{name: "unknown", apply: func(call EvaluationTrace) { call["classification"] = "background" }},
+		{name: "grader inside the scored trace", apply: func(call EvaluationTrace) { call["classification"] = "grader" }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			trace := completedHomogeneousTrace(t, "primary")
+			tc.apply(trace["model_calls"].([]any)[0].(EvaluationTrace))
+			digest, err := ComputeChatProbeTraceDigest(trace)
+			require.NoError(t, err)
+			trace["trace_digest"] = digest
+
+			_, err = ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix })
+			assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
+		})
+	}
+}
+
 func completedHomogeneousTrace(t *testing.T, role string) EvaluationTrace {
 	t.Helper()
 	trace := EvaluationTrace{

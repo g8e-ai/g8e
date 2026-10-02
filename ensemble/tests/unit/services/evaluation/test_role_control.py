@@ -161,6 +161,7 @@ def test_resolve_role_outcome_requires_scored_agent_call():
             [
                 ModelCallTelemetry(
                     agent_role="triage",
+                    classification="scored_chain",
                     model_role="lite",
                     provider="G8EProvider",
                     model="m",
@@ -169,6 +170,7 @@ def test_resolve_role_outcome_requires_scored_agent_call():
                 ),
                 ModelCallTelemetry(
                     agent_role="dash",
+                    classification="scored_chain",
                     model_role="primary",
                     provider="G8EProvider",
                     model="m",
@@ -185,6 +187,7 @@ def test_resolve_role_outcome_requires_scored_agent_call():
             [
                 ModelCallTelemetry(
                     agent_role="dash",
+                    classification="scored_chain",
                     model_role="assistant",
                     provider="G8EProvider",
                     model="m",

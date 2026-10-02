@@ -60,6 +60,7 @@ async def test_grade_campaign_assignment_semantically_records_passing_grade():
         model_calls=[
             ModelCallTelemetry(
                 agent_role="judge",
+                classification="grader",
                 provider="GeminiProvider",
                 model="judge-model",
                 monotonic_start=1.0,

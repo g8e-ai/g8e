@@ -52,6 +52,7 @@ async def test_finalize_evaluation_assignment_waits_for_memory_barrier():
     g8e_context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -60,6 +61,7 @@ async def test_finalize_evaluation_assignment_waits_for_memory_barrier():
     )
     memory_call = ModelCallTelemetry(
         agent_role="codex",
+        classification="post_turn",
         model_role="lite",
         provider="G8EProvider",
         model="model-a",
@@ -144,6 +146,7 @@ async def test_finalize_records_the_eval_tool_gate_and_keeps_per_call_declared_t
     g8e_context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -320,6 +323,7 @@ def _memory_barrier_fixture():
     g8e_context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",

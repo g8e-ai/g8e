@@ -130,7 +130,7 @@ class ModelCallTelemetry(G8eBaseModel):
     agent_role: str
     # Chain the call belongs to, stated at the call site. Aggregators select
     # scored calls by this field, never by agent_role or timing.
-    classification: CallClassification | None = None
+    classification: CallClassification
     model_role: Literal["primary", "assistant", "lite"] | None = None
     provider: str
     model: str

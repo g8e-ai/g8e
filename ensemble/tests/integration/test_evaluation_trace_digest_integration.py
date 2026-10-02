@@ -52,6 +52,7 @@ def test_evaluation_trace_service_persists_digest_binding(trace_service):
     context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",

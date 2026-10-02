@@ -59,6 +59,7 @@ def test_token_usage_keeps_absent_thinking_and_cache_counts_distinct():
 def test_model_call_telemetry_keeps_absent_thinking_and_cache_counts_distinct():
     telemetry = ModelCallTelemetry(
         agent_role="primary",
+        classification="scored_chain",
         provider="fake",
         model="test-model",
         monotonic_start=1.0,
@@ -73,6 +74,7 @@ def test_model_call_telemetry_keeps_absent_thinking_and_cache_counts_distinct():
 def test_model_call_telemetry_omits_absent_counts_from_json():
     telemetry = ModelCallTelemetry(
         agent_role="primary",
+        classification="scored_chain",
         provider="fake",
         model="test-model",
         monotonic_start=1.0,
@@ -87,6 +89,7 @@ def test_model_call_telemetry_omits_absent_counts_from_json():
 
     absent = ModelCallTelemetry(
         agent_role="primary",
+        classification="scored_chain",
         provider="fake",
         model="test-model",
         monotonic_start=1.0,

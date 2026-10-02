@@ -24,7 +24,9 @@ const (
 )
 
 // isScoredAgentRole reports whether an agent_role names the active agent that
-// answers the scored turn (never triage, memory, tribunal, or a grader).
+// answers the scored turn (never triage, memory, tribunal, or a grader). It
+// identifies the answering agent only; which chain a call belongs to is the
+// producer-stated classification (see scoredInferenceRecords).
 func isScoredAgentRole(role string) bool {
 	return role == "sage" || role == "dash"
 }

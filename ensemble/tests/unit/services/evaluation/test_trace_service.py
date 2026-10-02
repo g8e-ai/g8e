@@ -10,6 +10,7 @@ import json
 import pytest
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
+from app.constants.chat_model_call_sites import classification_for_agent_role
 from app.errors import ValidationError
 from app.models.evaluation_trace import (
     EvaluationAssignmentTrace,
@@ -75,6 +76,7 @@ def test_trace_persist_finalize_and_load(trace_service):
     context = _context()
     triage_call = ModelCallTelemetry(
         agent_role="triage",
+        classification="scored_chain",
         model_role="lite",
         provider="G8EProvider",
         model="model-a",
@@ -85,6 +87,7 @@ def test_trace_persist_finalize_and_load(trace_service):
 
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -213,6 +216,7 @@ def test_trace_finalize_records_the_proof_that_the_opportunity_was_real(trace_se
     trace_service.begin(context)
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -268,6 +272,7 @@ def test_trace_distinguishes_no_tools_declared_from_not_reported(trace_service):
     def _call(role: str, tools: list[str] | None) -> ModelCallTelemetry:
         return ModelCallTelemetry(
             agent_role=role,
+            classification=classification_for_agent_role(role),
             provider="G8EProvider",
             model="model-a",
             monotonic_start=1.0,
@@ -381,6 +386,7 @@ def test_finalize_crashed_closes_a_running_trace_as_failed_and_keeps_triage(trac
     context = _context()
     triage_call = ModelCallTelemetry(
         agent_role="triage",
+        classification="scored_chain",
         model_role="lite",
         provider="G8EProvider",
         model="model-a",
@@ -474,6 +480,7 @@ def test_trace_digest_binds_declared_tools_and_gate():
     def _call(tools: list[str]) -> ModelCallTelemetry:
         return ModelCallTelemetry(
             agent_role="sage",
+            classification="scored_chain",
             provider="G8EProvider",
             model="model-a",
             monotonic_start=1.0,
@@ -524,6 +531,7 @@ def test_trace_digest_changes_when_model_calls_change():
             "model_calls": [
                 ModelCallTelemetry(
                     agent_role="sage",
+                    classification="scored_chain",
                     provider="G8EProvider",
                     model="model-a",
                     monotonic_start=1.0,
