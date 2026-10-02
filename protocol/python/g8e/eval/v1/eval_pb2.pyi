@@ -791,7 +791,7 @@ class ModelCampaignBinding(_message.Message):
     def __init__(self, campaign_id: _Optional[str] = ..., campaign_digest: _Optional[str] = ..., catalog_ref: _Optional[_Union[_compliance_pb2.VersionedReference, _Mapping]] = ..., catalog_digest: _Optional[str] = ..., model_registry_digest: _Optional[str] = ..., inference_operator_session_id: _Optional[str] = ..., data_operator_session_id: _Optional[str] = ...) -> None: ...
 
 class EvaluationCampaignSpec(_message.Message):
-    __slots__ = ("schema_version", "campaign_id", "catalog_ref", "catalog_digest", "model_registry", "model_registry_digest", "campaign_digest", "governance_posture", "scenario_count", "repetition_count")
+    __slots__ = ("schema_version", "campaign_id", "catalog_ref", "catalog_digest", "model_registry", "model_registry_digest", "campaign_digest", "governance_posture", "scenario_count", "repetition_count", "platform_release", "source_revision")
     SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     CAMPAIGN_ID_FIELD_NUMBER: _ClassVar[int]
     CATALOG_REF_FIELD_NUMBER: _ClassVar[int]
@@ -802,6 +802,8 @@ class EvaluationCampaignSpec(_message.Message):
     GOVERNANCE_POSTURE_FIELD_NUMBER: _ClassVar[int]
     SCENARIO_COUNT_FIELD_NUMBER: _ClassVar[int]
     REPETITION_COUNT_FIELD_NUMBER: _ClassVar[int]
+    PLATFORM_RELEASE_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_REVISION_FIELD_NUMBER: _ClassVar[int]
     schema_version: str
     campaign_id: str
     catalog_ref: _compliance_pb2.VersionedReference
@@ -812,7 +814,9 @@ class EvaluationCampaignSpec(_message.Message):
     governance_posture: EvaluationGovernancePosture
     scenario_count: int
     repetition_count: int
-    def __init__(self, schema_version: _Optional[str] = ..., campaign_id: _Optional[str] = ..., catalog_ref: _Optional[_Union[_compliance_pb2.VersionedReference, _Mapping]] = ..., catalog_digest: _Optional[str] = ..., model_registry: _Optional[_Iterable[_Union[ModelVariant, _Mapping]]] = ..., model_registry_digest: _Optional[str] = ..., campaign_digest: _Optional[str] = ..., governance_posture: _Optional[_Union[EvaluationGovernancePosture, str]] = ..., scenario_count: _Optional[int] = ..., repetition_count: _Optional[int] = ...) -> None: ...
+    platform_release: str
+    source_revision: str
+    def __init__(self, schema_version: _Optional[str] = ..., campaign_id: _Optional[str] = ..., catalog_ref: _Optional[_Union[_compliance_pb2.VersionedReference, _Mapping]] = ..., catalog_digest: _Optional[str] = ..., model_registry: _Optional[_Iterable[_Union[ModelVariant, _Mapping]]] = ..., model_registry_digest: _Optional[str] = ..., campaign_digest: _Optional[str] = ..., governance_posture: _Optional[_Union[EvaluationGovernancePosture, str]] = ..., scenario_count: _Optional[int] = ..., repetition_count: _Optional[int] = ..., platform_release: _Optional[str] = ..., source_revision: _Optional[str] = ...) -> None: ...
 
 class EvaluationScenarioCatalog(_message.Message):
     __slots__ = ("schema_version", "catalog_ref", "catalog_digest", "scenarios")

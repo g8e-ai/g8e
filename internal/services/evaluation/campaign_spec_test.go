@@ -13,10 +13,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
+
+// testPlatform is the build identity campaign fixtures freeze under.
+var testPlatform = PlatformIdentity{Release: "v2.2.8", SourceRevision: "0123abc"}
 
 func TestMaterializeCampaignSpec_BindsCatalogAndInventory(t *testing.T) {
 	t.Parallel()
@@ -25,7 +29,7 @@ func TestMaterializeCampaignSpec_BindsCatalogAndInventory(t *testing.T) {
 	inventory, err := MaterializeModelRegistry("smoke-campaign", []*evalv1.ModelVariant{testModelVariant()})
 	require.NoError(t, err)
 
-	spec, err := MaterializeCampaignSpec("smoke-campaign", catalog, inventory, 0)
+	spec, err := MaterializeCampaignSpec("smoke-campaign", catalog, inventory, 0, testPlatform)
 	require.NoError(t, err)
 	assert.Equal(t, CampaignSchemaVersion, spec.GetSchemaVersion())
 	assert.Equal(t, "smoke-campaign", spec.GetCampaignId())
@@ -33,6 +37,8 @@ func TestMaterializeCampaignSpec_BindsCatalogAndInventory(t *testing.T) {
 	assert.Equal(t, catalog.GetCatalogDigest(), spec.GetCatalogDigest())
 	assert.Equal(t, inventory.RegistryDigest, spec.GetModelRegistryDigest())
 	assert.NotEmpty(t, spec.GetCampaignDigest())
+	assert.Equal(t, testPlatform.Release, spec.GetPlatformRelease())
+	assert.Equal(t, testPlatform.SourceRevision, spec.GetSourceRevision())
 	assert.Equal(t, uint32(len(catalog.GetScenarios())), spec.GetScenarioCount())
 }
 
@@ -56,7 +62,7 @@ func TestMaterializeCampaignSpec_RejectsMissingInputs(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := MaterializeCampaignSpec(test.campaignID, test.catalog, test.inventory, 1)
+			_, err := MaterializeCampaignSpec(test.campaignID, test.catalog, test.inventory, 1, testPlatform)
 			require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 		})
 	}
@@ -100,5 +106,34 @@ func TestMemoryCampaignPublicationStateStore_RejectsMissingFields(t *testing.T) 
 	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 
 	err = store.Save(ctx, &CampaignPublicationState{SchemaVersion: campaignPublicationStateSchemaVersion})
+	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestMaterializeCampaignSpec_ReleaseIsPartOfTheDigest(t *testing.T) {
+	t.Parallel()
+	catalog, _, err := LoadScenarioCatalog()
+	require.NoError(t, err)
+	inventory, err := MaterializeModelRegistry("smoke-campaign", []*evalv1.ModelVariant{testModelVariant()})
+	require.NoError(t, err)
+
+	base, err := MaterializeCampaignSpec("smoke-campaign", catalog, inventory, 1, testPlatform)
+	require.NoError(t, err)
+	next, err := MaterializeCampaignSpec("smoke-campaign", catalog, inventory, 1, PlatformIdentity{Release: "v2.2.9", SourceRevision: testPlatform.SourceRevision})
+	require.NoError(t, err)
+	assert.NotEqual(t, base.GetCampaignDigest(), next.GetCampaignDigest())
+
+	relabeled := proto.Clone(base).(*evalv1.EvaluationCampaignSpec)
+	relabeled.PlatformRelease = "v2.2.9"
+	require.ErrorIs(t, ValidateCampaignSpecDigest(relabeled), constants.ErrChecksumMismatch)
+}
+
+func TestMaterializeCampaignSpec_RequiresARelease(t *testing.T) {
+	t.Parallel()
+	catalog, _, err := LoadScenarioCatalog()
+	require.NoError(t, err)
+	inventory, err := MaterializeModelRegistry("smoke-campaign", []*evalv1.ModelVariant{testModelVariant()})
+	require.NoError(t, err)
+
+	_, err = MaterializeCampaignSpec("smoke-campaign", catalog, inventory, 1, PlatformIdentity{SourceRevision: "0123abc"})
 	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }

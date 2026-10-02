@@ -47,6 +47,7 @@ func markVerifiedOn(t *testing.T, env *runEnv, suiteID string) {
 	env.mustRun(t, "rollout", "add", "qwen3:4b")
 	campaignID := "verified-on-" + suiteID
 	_, err := createCampaign(context.Background(), env.deps, env.fileSvc(t), campaignCreateSpec{
+		Platform:    testPlatform,
 		CampaignID:  campaignID,
 		Variants:    []*evalv1.ModelVariant{testQwenVariant()},
 		Repetitions: 1,

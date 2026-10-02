@@ -3569,8 +3569,15 @@ type EvaluationCampaignSpec struct {
 	GovernancePosture   EvaluationGovernancePosture `protobuf:"varint,8,opt,name=governance_posture,json=governancePosture,proto3,enum=g8e.eval.v1.EvaluationGovernancePosture" json:"governance_posture,omitempty"`
 	ScenarioCount       uint32                      `protobuf:"varint,9,opt,name=scenario_count,json=scenarioCount,proto3" json:"scenario_count,omitempty"`
 	RepetitionCount     uint32                      `protobuf:"varint,10,opt,name=repetition_count,json=repetitionCount,proto3" json:"repetition_count,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// platform_release is the g8e build version that froze the campaign. It is
+	// part of campaign_digest, so a campaign cannot be re-labeled. Empty only
+	// on campaigns frozen before v2.2.8; their release is an operator-asserted
+	// tag held outside the digest.
+	PlatformRelease string `protobuf:"bytes,11,opt,name=platform_release,json=platformRelease,proto3" json:"platform_release,omitempty"`
+	// source_revision is the source commit of the build that froze the campaign.
+	SourceRevision string `protobuf:"bytes,12,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *EvaluationCampaignSpec) Reset() {
@@ -3671,6 +3678,20 @@ func (x *EvaluationCampaignSpec) GetRepetitionCount() uint32 {
 		return x.RepetitionCount
 	}
 	return 0
+}
+
+func (x *EvaluationCampaignSpec) GetPlatformRelease() string {
+	if x != nil {
+		return x.PlatformRelease
+	}
+	return ""
+}
+
+func (x *EvaluationCampaignSpec) GetSourceRevision() string {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return ""
 }
 
 // EvaluationScenarioCatalog is the immutable 25-scenario private catalog.
@@ -9684,7 +9705,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x0ecatalog_digest\x18\x04 \x01(\tR\rcatalogDigest\x122\n" +
 	"\x15model_registry_digest\x18\x05 \x01(\tR\x13modelRegistryDigest\x12A\n" +
 	"\x1dinference_operator_session_id\x18\x06 \x01(\tR\x1ainferenceOperatorSessionId\x127\n" +
-	"\x18data_operator_session_id\x18\a \x01(\tR\x15dataOperatorSessionId\"\x99\x04\n" +
+	"\x18data_operator_session_id\x18\a \x01(\tR\x15dataOperatorSessionId\"\xed\x04\n" +
 	"\x16EvaluationCampaignSpec\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\tR\rschemaVersion\x12\x1f\n" +
 	"\vcampaign_id\x18\x02 \x01(\tR\n" +
@@ -9698,7 +9719,9 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x12governance_posture\x18\b \x01(\x0e2(.g8e.eval.v1.EvaluationGovernancePostureR\x11governancePosture\x12%\n" +
 	"\x0escenario_count\x18\t \x01(\rR\rscenarioCount\x12)\n" +
 	"\x10repetition_count\x18\n" +
-	" \x01(\rR\x0frepetitionCount\"\xfa\x01\n" +
+	" \x01(\rR\x0frepetitionCount\x12)\n" +
+	"\x10platform_release\x18\v \x01(\tR\x0fplatformRelease\x12'\n" +
+	"\x0fsource_revision\x18\f \x01(\tR\x0esourceRevision\"\xfa\x01\n" +
 	"\x19EvaluationScenarioCatalog\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\tR\rschemaVersion\x12F\n" +
 	"\vcatalog_ref\x18\x02 \x01(\v2%.g8e.compliance.v1.VersionedReferenceR\n" +

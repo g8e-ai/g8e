@@ -32,6 +32,7 @@ func TestCampaignControllerCreateCampaignIsIdempotentForTheSameFrozenSpec(t *tes
 	f := newArchiveFixture(t)
 	ctx := context.Background()
 	create := CampaignCreateRequest{
+		Platform:          testPlatform,
 		CampaignID:        f.req.CampaignID,
 		Catalog:           f.req.Catalog,
 		Inventory:         f.req.Inventory,
@@ -52,6 +53,7 @@ func TestCampaignControllerCreateCampaignRejectsADifferentSpecUnderTheSameID(t *
 	require.NoError(t, err)
 
 	_, err = f.controller.CreateCampaign(context.Background(), CampaignCreateRequest{
+		Platform:          testPlatform,
 		CampaignID:        f.req.CampaignID,
 		Catalog:           f.req.Catalog,
 		Inventory:         other,
@@ -62,7 +64,7 @@ func TestCampaignControllerCreateCampaignRejectsADifferentSpecUnderTheSameID(t *
 
 func TestCampaignControllerCreateCampaignRequiresInputs(t *testing.T) {
 	f := newArchiveFixture(t)
-	_, err := f.controller.CreateCampaign(context.Background(), CampaignCreateRequest{CampaignID: f.req.CampaignID})
+	_, err := f.controller.CreateCampaign(context.Background(), CampaignCreateRequest{Platform: testPlatform, CampaignID: f.req.CampaignID})
 	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }
 
@@ -71,6 +73,7 @@ func TestCampaignControllerStartRunBindsANewRunToAnExistingCampaign(t *testing.T
 	ctx := context.Background()
 
 	run, err := f.controller.StartRun(ctx, RunStartRequest{
+		PlatformRelease:            testPlatform.Release,
 		CampaignID:                 f.req.CampaignID,
 		RunID:                      "run-c",
 		InferenceOperatorSessionID: "inf-2",
@@ -92,6 +95,7 @@ func createMultiModelCampaign(t *testing.T, f *archiveFixture, campaignID string
 	inventory, err := MaterializeModelRegistry(campaignID, []*evalv1.ModelVariant{testModelVariant(), secondTestModelVariant()})
 	require.NoError(t, err)
 	_, err = f.controller.CreateCampaign(context.Background(), CampaignCreateRequest{
+		Platform:          testPlatform,
 		CampaignID:        campaignID,
 		Catalog:           f.req.Catalog,
 		Inventory:         inventory,
@@ -108,7 +112,7 @@ func TestCampaignControllerStartRunRejectsAMultiModelModelRoleCampaign(t *testin
 		evalv1.EvaluationLane_EVALUATION_LANE_UNSPECIFIED,
 		evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
 	} {
-		_, err := f.controller.StartRun(context.Background(), RunStartRequest{CampaignID: "multi-model", RunID: "run-multi", Lane: lane})
+		_, err := f.controller.StartRun(context.Background(), RunStartRequest{PlatformRelease: testPlatform.Release, CampaignID: "multi-model", RunID: "run-multi", Lane: lane})
 		require.ErrorIs(t, err, constants.ErrEvaluationCampaignSubjectInvalid, lane.String())
 	}
 	exists, err := f.store.RunExists(context.Background(), "run-multi")
@@ -121,9 +125,10 @@ func TestCampaignControllerStartRunAllowsAMultiModelSystemCampaign(t *testing.T)
 	createMultiModelCampaign(t, f, "multi-system")
 
 	run, err := f.controller.StartRun(context.Background(), RunStartRequest{
-		CampaignID: "multi-system",
-		RunID:      "run-system",
-		Lane:       evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM,
+		PlatformRelease: testPlatform.Release,
+		CampaignID:      "multi-system",
+		RunID:           "run-system",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM, run.GetLane())
@@ -133,13 +138,13 @@ func TestCampaignControllerStartRunRejectsExistingRunAndMissingCampaign(t *testi
 	f := newArchiveFixture(t)
 	ctx := context.Background()
 
-	_, err := f.controller.StartRun(ctx, RunStartRequest{CampaignID: f.req.CampaignID, RunID: "run-a"})
+	_, err := f.controller.StartRun(ctx, RunStartRequest{PlatformRelease: testPlatform.Release, CampaignID: f.req.CampaignID, RunID: "run-a"})
 	require.ErrorContains(t, err, "run already exists")
 
-	_, err = f.controller.StartRun(ctx, RunStartRequest{CampaignID: "no-such-campaign", RunID: "run-x"})
+	_, err = f.controller.StartRun(ctx, RunStartRequest{PlatformRelease: testPlatform.Release, CampaignID: "no-such-campaign", RunID: "run-x"})
 	require.Error(t, err)
 
-	_, err = f.controller.StartRun(ctx, RunStartRequest{CampaignID: f.req.CampaignID})
+	_, err = f.controller.StartRun(ctx, RunStartRequest{PlatformRelease: testPlatform.Release, CampaignID: f.req.CampaignID})
 	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }
 
@@ -208,4 +213,22 @@ func TestCampaignControllerCancelRunStopsAnUnresolvedRunningAssignment(t *testin
 func TestCampaignControllerCancelRunRequiresAStoreAndKnownRun(t *testing.T) {
 	_, err := (*CampaignController)(nil).CancelRun(context.Background(), "run-a")
 	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestCampaignControllerStartRunRejectsABuildThatIsNotTheRecordedRelease(t *testing.T) {
+	f := newArchiveFixture(t)
+
+	_, err := f.controller.StartRun(context.Background(), RunStartRequest{CampaignID: f.req.CampaignID, RunID: "run-other-build", PlatformRelease: "v2.2.9"})
+	require.ErrorIs(t, err, constants.ErrEvaluationPlatformReleaseMismatch)
+	exists, err := f.store.RunExists(context.Background(), "run-other-build")
+	require.NoError(t, err)
+	assert.False(t, exists, "a rejected start must not persist a run")
+}
+
+func TestCampaignControllerStartRunEnforcesNoReleaseOnACampaignFrozenBeforeReleasesWereRecorded(t *testing.T) {
+	f := newArchiveFixture(t)
+	saveLegacyCampaign(t, f, "legacy-campaign")
+
+	_, err := f.controller.StartRun(context.Background(), RunStartRequest{CampaignID: "legacy-campaign", RunID: "run-legacy", PlatformRelease: "v2.2.9"})
+	require.NoError(t, err)
 }

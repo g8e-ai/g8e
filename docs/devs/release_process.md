@@ -64,6 +64,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-REL-VER-02 | PR preparation MUST synchronize `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, the editable package entry in `protocol/python/uv.lock`, and the `Version: vX.Y.Z` headers in `protocol/docs/a2a.md`, `protocol/docs/constants.md`, `protocol/docs/mcp.md`, and `protocol/docs/spec.md`. |
 | INV-REL-VER-03 | `make proto` MUST be run during release PR prep to regenerate downstream `ensemble/uv.lock` and protocol bindings so locked CI checks pass. |
 | INV-REL-VER-04 | `CHANGELOG.md` MUST include a row under the minor-version section (`## vX.Y.x`) linking to the new release notes file `docs/release_notes/vX.Y.x/vX.Y.Z.md`. |
+| INV-REL-VER-05 | Before tagging, every verified evaluation campaign MUST state the release it measured: campaigns frozen by v2.2.8 or later record it in their digest; older campaigns MUST carry an asserted tag (`g8e eval campaigns tag --release vX.Y.Z <campaign>...`). `g8e eval campaigns list` shows any campaign whose release is `unknown`. |
 
 ### Compliance evidence (`INV-REL-COMP`)
 

@@ -76,6 +76,10 @@ func (l evalLayout) campaignSpecPath(campaignID string) string {
 	return filepath.Join(l.campaignDir(campaignID), constants.EvaluationCampaignSpecFilename)
 }
 
+func (l evalLayout) campaignReleaseTagPath(campaignID string) string {
+	return filepath.Join(l.campaignDir(campaignID), constants.EvaluationCampaignReleaseTagFilename)
+}
+
 func (l evalLayout) heterogeneousStackSetPath(campaignID string) string {
 	return filepath.Join(l.campaignDir(campaignID), constants.EvaluationHeterogeneousStackSetFilename)
 }

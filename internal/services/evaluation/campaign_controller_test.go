@@ -51,6 +51,7 @@ func testCampaignInitRequest(t *testing.T) CampaignInitRequest {
 	inventory, err := MaterializeModelRegistry("smoke-campaign", []*evalv1.ModelVariant{testModelVariant()})
 	require.NoError(t, err)
 	return CampaignInitRequest{
+		Platform:                   testPlatform,
 		CampaignID:                 "smoke-campaign",
 		RunID:                      "run-smoke-1",
 		Catalog:                    catalog,

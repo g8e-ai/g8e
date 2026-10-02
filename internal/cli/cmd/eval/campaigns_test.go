@@ -221,6 +221,7 @@ func TestCreateCampaign_VersionsOnCatalogChange(t *testing.T) {
 	require.NoError(t, err)
 
 	changedCatalog := campaignCreateSpec{
+		Platform:    testPlatform,
 		CampaignID:  "eval-a",
 		Variants:    []*evalv1.ModelVariant{testQwenVariant()},
 		Repetitions: 1,
@@ -251,6 +252,7 @@ func TestCreateCampaign_VersioningKeepsTheCampaignIDWhileTheCatalogIsUnchanged(t
 	env.createCampaign(t, "eval-a")
 
 	result, err := createCampaign(context.Background(), env.deps, env.fileSvc(t), campaignCreateSpec{
+		Platform:               testPlatform,
 		CampaignID:             "eval-a",
 		Variants:               []*evalv1.ModelVariant{testQwenVariant()},
 		Repetitions:            1,
@@ -267,6 +269,7 @@ func TestCreateCampaign_VersioningStillConflictsOnNonCatalogDrift(t *testing.T) 
 	env.createCampaign(t, "eval-a")
 
 	_, err := createCampaign(context.Background(), env.deps, env.fileSvc(t), campaignCreateSpec{
+		Platform:               testPlatform,
 		CampaignID:             "eval-a",
 		Variants:               []*evalv1.ModelVariant{testQwenVariant()},
 		Repetitions:            3,

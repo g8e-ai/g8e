@@ -802,6 +802,7 @@ const (
 	EvaluationReportFilename                      = "report.json"
 	EvaluationVerificationFilename                = "verification.json"
 	EvaluationCampaignSpecFilename                = "campaign-spec.json"
+	EvaluationCampaignReleaseTagFilename          = "release-tag.json"
 	EvaluationHeterogeneousStackSetFilename       = "heterogeneous-stack-set.json"
 	EvaluationScenarioCatalogFilename             = "scenario-catalog.json"
 	EvaluationScenarioArtifactsDirname            = "scenario-artifacts"

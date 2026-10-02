@@ -307,6 +307,7 @@ func runRolloutGate(cmd *cobra.Command, deps nativeEvalDeps, fileSvc fs.RuntimeF
 		Repetitions:            1,
 		SuiteID:                suiteID,
 		VersionOnCatalogChange: true,
+		Platform:               platformIdentity(cmd),
 	})
 	if err != nil {
 		return nil, err

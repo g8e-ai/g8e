@@ -466,6 +466,13 @@ message EvaluationCampaignSpec {
   EvaluationGovernancePosture governance_posture = 8;
   uint32 scenario_count = 9;
   uint32 repetition_count = 10;
+  // platform_release is the g8e build version that froze the campaign. It is
+  // part of campaign_digest, so a campaign cannot be re-labeled. Empty only
+  // on campaigns frozen before v2.2.8; their release is an operator-asserted
+  // tag held outside the digest.
+  string platform_release = 11;
+  // source_revision is the source commit of the build that froze the campaign.
+  string source_revision = 12;
 }
 
 // EvaluationScenarioCatalog is the immutable 25-scenario private catalog.

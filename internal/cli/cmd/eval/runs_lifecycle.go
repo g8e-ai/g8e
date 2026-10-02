@@ -166,6 +166,7 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 		DataOperatorSessionID:      sessions.DataSessionID,
 		Deployment:                 nativeEvalDeployment(cfg, authContext, runID, ""),
 		Lane:                       lane,
+		PlatformRelease:            platformIdentity(cmd).Release,
 	}); err != nil {
 		return nil, fmt.Errorf("evaluation: runs start: %w", err)
 	}

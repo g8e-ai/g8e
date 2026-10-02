@@ -1553,6 +1553,8 @@ var (
 	ErrEvaluationProviderModelsResident    = errors.New("evaluation: provider has resident models")
 	ErrEvaluationRecoveredResultMissing    = errors.New("evaluation: recovered terminal assignment has no persisted result")
 	ErrEvaluationCampaignConflict          = errors.New("evaluation: campaign already exists with a different frozen spec")
+	ErrEvaluationPlatformReleaseMismatch   = errors.New("evaluation: executing platform release differs from the release the campaign recorded")
+	ErrEvaluationReleaseRecorded           = errors.New("evaluation: campaign recorded its release at freeze time; the digest-bound release cannot be re-tagged")
 	ErrEvaluationCampaignSubjectInvalid    = errors.New("evaluation: a model-role campaign must freeze exactly one model; qualify many models through rollout or a formation campaign")
 	ErrEvaluationArchived                  = errors.New("evaluation: campaign or run is archived")
 	ErrEvaluationNotArchived               = errors.New("evaluation: campaign or run is not archived")
