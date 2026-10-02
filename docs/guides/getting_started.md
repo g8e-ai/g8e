@@ -143,7 +143,7 @@ The Dashboard is a static browser host; the browser authenticates directly to th
 
 ### CLI-managed alternative
 
-If a current `g8e` binary is already available on the workstation, `./g8e docker start --full` starts the default stack, enrolls or reuses the CLI owner interactively, and prompts for platform workload approvals. Use `./g8e docker start --full --skip-enroll` only when enrollment and approvals are managed separately. For automated evaluation bootstrap with a remote Ollama provider, use `./g8e docker init` with `G8E_OLLAMA_ENDPOINT` set in the repository-root `.env`; see the [Unified Docker Stack Guide](unified_stack.md).
+If a current `g8e` binary is already available on the workstation, `./g8e docker start` starts the default stack, enrolls or reuses the CLI owner interactively, and prompts for platform workload approvals. Use `./g8e docker start --skip-enroll` only when enrollment and approvals are managed separately. For automated evaluation bootstrap with a remote Ollama provider, use `./g8e docker init` with `G8E_OLLAMA_ENDPOINT` set in the repository-root `.env`; see the [Unified Docker Stack Guide](unified_stack.md).
 
 ---
 

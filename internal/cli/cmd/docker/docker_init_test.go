@@ -204,10 +204,6 @@ func TestDockerOwnerEnrollmentOptions(t *testing.T) {
 	})
 }
 
-func TestDockerFullStackProfiles(t *testing.T) {
-	assert.Empty(t, dockerFullStackProfiles(), "unified stack now runs in default profile without requiring compose profiles")
-}
-
 func TestReportDockerPublicSpectatorReady_PrintsBootstrapSequence(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/bootstrap", r.URL.Path)

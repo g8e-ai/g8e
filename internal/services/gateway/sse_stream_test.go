@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
@@ -395,4 +396,48 @@ func TestHandleInternalSSEStream_TruncationSentinelOnFullReplay(t *testing.T) {
 	// R6: the truncation sentinel must be present.
 	assert.Contains(t, body, `"type":"truncated"`)
 	assert.Contains(t, body, `"limit":1000`)
+}
+
+// ---------------------------------------------------------------------------
+// Browser cookie auth through the full router + auth middleware
+// ---------------------------------------------------------------------------
+
+// TestSSEStream_BrowserWebSessionCookieThroughRouter drives the real router
+// (auth middleware included) with only a web session cookie, the way the
+// Console's EventSource does. Every other stream test seeds context directly
+// and so cannot catch a middleware-to-handler identity gap.
+func TestSSEStream_BrowserWebSessionCookieThroughRouter(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+	require.NotNil(t, h.authMiddleware)
+
+	userID := "user-browser-sse"
+	webSessionID := "web-browser-sse"
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	sessBytes, err := json.Marshal(&models.WebSession{
+		ID:              webSessionID,
+		UserID:          userID,
+		CreatedAtUnixMs: time.Now().UnixMilli(),
+		ExpiresAtUnixMs: time.Now().Add(time.Hour).UnixMilli(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, sessBytes))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.SSEStream, nil).WithContext(ctx)
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
+	rr := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		h.ServeHTTP(rr, req)
+		close(done)
+	}()
+	time.Sleep(150 * time.Millisecond)
+	cancel()
+	<-done
+
+	assert.Equal(t, http.StatusOK, rr.Code, "body: %s", rr.Body.String())
+	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 }

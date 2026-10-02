@@ -365,11 +365,10 @@ func TestDockerReset_WithComposeFileButNoDocker(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestResolveDockerProfiles(t *testing.T) {
-	assert.Nil(t, resolveDockerProfiles(false, ""))
-	assert.Equal(t, dockerFullStackProfiles(), resolveDockerProfiles(true, ""))
-	assert.Equal(t, []string{constants.DockerBootstrappedProfile}, resolveDockerProfiles(false, constants.DockerBootstrappedProfile))
-	assert.Equal(t, []string{"custom"}, resolveDockerProfiles(true, "custom"), "explicit profile overrides --full")
+func TestExplicitProfile(t *testing.T) {
+	assert.Nil(t, explicitProfile(""))
+	assert.Equal(t, []string{constants.DockerBootstrappedProfile}, explicitProfile(constants.DockerBootstrappedProfile))
+	assert.Equal(t, []string{"custom"}, explicitProfile("custom"))
 }
 
 func TestDockerTeardownProfiles(t *testing.T) {

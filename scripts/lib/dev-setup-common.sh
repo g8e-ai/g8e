@@ -536,7 +536,7 @@ EOF
 Recommended next steps:
   Docker stack (no local Go toolchain after this build):
     cp .env.example .env
-    $binary docker start --full
+    $binary docker start
 
   Native gateway:
     $binary gw start

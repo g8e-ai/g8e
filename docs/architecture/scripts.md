@@ -93,7 +93,7 @@ The Linux and macOS scripts accept `-y` / `--yes` (or `G8E_SETUP_YES=1`) to inst
 
 With `--build-only`, the scripts check only `git`, `make`, `curl`, `go`, `node`, and `npm`, then run steps 2, 3, and 5 as a four-step flow. Use it when only the `g8e` binary is needed.
 
-After setup, scripts print next steps: `./g8e --version`, `make dev-check` and `make ci` (full flow only), `g8e docker start --full`, `g8e gw start`, and `g8e auth enroll user -e localhost`.
+After setup, scripts print next steps: `./g8e --version`, `make dev-check` and `make ci` (full flow only), `g8e docker start`, `g8e gw start`, and `g8e auth enroll user -e localhost`.
 
 `windows-setup.ps1` requires PowerShell 7+ (`pwsh`). It builds `g8e` natively but does not install the contributor toolchain, because the `Makefile` targets assume a POSIX shell and `.venv/bin`. Windows contributors run `bash scripts/linux-setup.sh` inside WSL 2. It is not a substitute for WSL when native Windows build tooling is incomplete; use Docker quick-start when local compiler toolchain is unavailable.
 

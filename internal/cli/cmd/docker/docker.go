@@ -3,7 +3,7 @@
 // included in the LICENSE file.
 //
 // As of the Change Date listed in the LICENSE file, this software is
-// released under the Apache License, Version 0.0.
+// released under the Apache License, Version 2.0.
 
 package docker
 
@@ -93,26 +93,21 @@ func confirmDockerVolumeWipe(
 // prepareDockerHostRuntime ensures the host-side .g8e tree exists and is
 // writable before Docker Compose starts the gateway container.
 func prepareDockerHostRuntime(ctx context.Context, fileSvc fs.RuntimeFileService) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := fs.EnsureDockerHostRuntimeLayout(ctx, fileSvc); err != nil {
 		return fmt.Errorf("docker: prepare host runtime: %w", err)
 	}
 	return nil
 }
 
-// runDockerCompose builds and runs a `docker compose` command against the root
-// compose file, streaming stdout/stderr to the console. The optional profiles
-// activate compose profiles (e.g. bootstrapped, cross-enrollment) so multiple
-// workloads can be started together.
-func RunDockerCompose(args []string, profiles ...string) error {
+// composeCommand builds a `docker compose` invocation against the root compose
+// file after confirming Docker is available. Empty profile names are skipped.
+func composeCommand(args []string, profiles []string) (*exec.Cmd, error) {
 	composePath, err := dockerComposePath()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := demos.CheckDockerAvailable(); err != nil {
-		return err
+		return nil, err
 	}
 	fullArgs := []string{"compose", "-f", demos.ToDockerPath(composePath)}
 	for _, profile := range profiles {
@@ -120,36 +115,30 @@ func RunDockerCompose(args []string, profiles ...string) error {
 			fullArgs = append(fullArgs, "--profile", profile)
 		}
 	}
-	fullArgs = append(fullArgs, args...)
+	return exec.Command("docker", append(fullArgs, args...)...), nil
+}
 
-	c := exec.Command("docker", fullArgs...)
+// RunDockerCompose runs a `docker compose` command against the root compose
+// file, streaming stdout/stderr to the console. Optional profiles activate
+// compose profiles.
+func RunDockerCompose(args []string, profiles ...string) error {
+	c, err := composeCommand(args, profiles)
+	if err != nil {
+		return err
+	}
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()
 }
 
 // runDockerComposeOutput runs a `docker compose` command against the root
-// compose file and returns its combined stdout/stderr output. Unlike
-// runDockerCompose it does not stream to the console, so callers can embed the
-// output in a larger status view (e.g. `g8e gw status`). The optional profiles
-// activate compose profiles.
+// compose file and returns its combined output instead of streaming it, so
+// callers can embed it in a larger status view (e.g. `g8e gw status`).
 func runDockerComposeOutput(args []string, profiles ...string) (string, error) {
-	composePath, err := dockerComposePath()
+	c, err := composeCommand(args, profiles)
 	if err != nil {
 		return "", err
 	}
-	if err := demos.CheckDockerAvailable(); err != nil {
-		return "", err
-	}
-	fullArgs := []string{"compose", "-f", demos.ToDockerPath(composePath)}
-	for _, profile := range profiles {
-		if profile != "" {
-			fullArgs = append(fullArgs, "--profile", profile)
-		}
-	}
-	fullArgs = append(fullArgs, args...)
-
-	c := exec.Command("docker", fullArgs...)
 	out, err := c.CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("%w: %w", constants.ErrInternal, err)
@@ -256,17 +245,9 @@ so they align with the current host-mounted binary (from 'make build').`,
 	return cmd
 }
 
-// dockerFullStackProfiles returns the compose profiles required for the full
-// evaluation topology. Because the unified stack now starts in the default profile,
-// this returns nil.
-func dockerFullStackProfiles() []string {
-	return nil
-}
-
-// resolveDockerProfiles returns compose profiles to activate for start/build.
-// Because the unified stack runs in the default profile, returns nil unless an
-// explicit profile is specified.
-func resolveDockerProfiles(full bool, profile string) []string {
+// explicitProfile returns the requested compose profile as an argument list,
+// or nil so the unified stack runs in the default profile.
+func explicitProfile(profile string) []string {
 	if profile != "" {
 		return []string{profile}
 	}
@@ -368,7 +349,7 @@ already-enrolled CLI.`,
 					return fmt.Errorf("docker init: build arguments: %w", err)
 				}
 				cmd.Println("Building Docker images for the unified stack...")
-				if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, dockerFullStackProfiles()...); err != nil {
+				if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs); err != nil {
 					return err
 				}
 				cmd.Println("Docker images built and runtime binary exported to ./g8e.")
@@ -406,8 +387,8 @@ already-enrolled CLI.`,
 			}
 
 			cmd.Println()
-			cmd.Println("Starting full stack (bootstrapped + evaluation profiles)...")
-			if err := RunDockerCompose([]string{"up", "-d"}, dockerFullStackProfiles()...); err != nil {
+			cmd.Println("Starting full stack...")
+			if err := RunDockerCompose([]string{"up", "-d"}); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 
@@ -579,7 +560,6 @@ func dockerStartCmdWithConfig(
 	checkOperatorRunning func(*config.Config) error,
 	enrollerFactory authcmd.EnrollerFactory,
 ) *cobra.Command {
-	var full bool
 	var profile string
 	var skipEnroll bool
 
@@ -604,7 +584,7 @@ Use --skip-enroll to start the stack without the interactive walkthrough
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
-			profiles := resolveDockerProfiles(full, profile)
+			profiles := explicitProfile(profile)
 			scope := "unified stack"
 			if len(profiles) > 0 {
 				scope = fmt.Sprintf("unified stack (profiles %s)", strings.Join(profiles, ", "))
@@ -654,7 +634,6 @@ Use --skip-enroll to start the stack without the interactive walkthrough
 			return runDockerStartWalkthrough(cmd, *walkthroughDeps)
 		},
 	}
-	cmd.Flags().BoolVar(&full, "full", true, "Start the full stack (enabled by default)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (optional)")
 	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Start without the interactive enrollment walkthrough")
 	return cmd
@@ -1070,7 +1049,7 @@ func dockerBuildCmd() *cobra.Command {
 				return fmt.Errorf("docker: build arguments: %w", err)
 			}
 			cmd.Println("Building Docker images...")
-			if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, resolveDockerProfiles(true, profile)...); err != nil {
+			if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, explicitProfile(profile)...); err != nil {
 				return err
 			}
 			cmd.Println("\nDocker images built and runtime binary exported to ./g8e.")
@@ -1132,7 +1111,6 @@ the gateway, not just the default-profile gateway container.`,
 }
 
 func dockerResetCmd() *cobra.Command {
-	var full bool
 	var profile string
 	var assumeYes bool
 	var skipBackup bool
@@ -1165,7 +1143,7 @@ skip the confirmation (the backup still runs) and --skip-backup to opt out.`,
 			if err := prepareDockerHostRuntime(shared.CommandContext(cmd), fileSvc); err != nil {
 				return err
 			}
-			profiles := resolveDockerProfiles(full, profile)
+			profiles := explicitProfile(profile)
 			scope := "gateway"
 			if len(profiles) > 0 {
 				scope = fmt.Sprintf("full stack (profiles %s)", strings.Join(profiles, ", "))
@@ -1178,7 +1156,6 @@ skip the confirmation (the backup still runs) and --skip-backup to opt out.`,
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	cmd.Flags().BoolVar(&assumeYes, shared.FlagYes, false, "Skip the confirmation prompt (the backup still runs unless --skip-backup)")
 	shared.AddSkipBackupFlag(cmd, &skipBackup)
@@ -1187,7 +1164,6 @@ skip the confirmation (the backup still runs) and --skip-backup to opt out.`,
 
 func dockerRebuildCmd() *cobra.Command {
 	var noCache bool
-	var full bool
 	var profile string
 
 	cmd := &cobra.Command{
@@ -1219,7 +1195,7 @@ Use --no-cache=false to reuse the Docker build cache.`,
 			if err := prepareDockerHostRuntime(shared.CommandContext(cmd), fileSvc); err != nil {
 				return err
 			}
-			profiles := resolveDockerProfiles(full, profile)
+			profiles := explicitProfile(profile)
 			scope := "unified stack"
 			if len(profiles) > 0 {
 				scope = fmt.Sprintf("unified stack (profiles %s)", strings.Join(profiles, ", "))
@@ -1233,7 +1209,6 @@ Use --no-cache=false to reuse the Docker build cache.`,
 		},
 	}
 	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Rebuild without using the Docker cache")
-	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	return cmd
 }

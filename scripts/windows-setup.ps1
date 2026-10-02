@@ -229,7 +229,7 @@ function Show-NextSteps {
     Write-Host "Recommended next steps:"
     Write-Host "  Docker stack:"
     Write-Host "    Copy-Item .env.example .env"
-    Write-Host "    $binary docker start --full"
+    Write-Host "    $binary docker start"
     Write-Host ""
     Write-Host "  Native gateway:"
     Write-Host "    $binary gw start"

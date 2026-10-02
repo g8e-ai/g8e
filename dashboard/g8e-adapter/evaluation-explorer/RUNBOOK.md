@@ -15,7 +15,7 @@ See [Unified Docker Stack Guide](../../../docs/guides/unified_stack.md#provider-
 
 ```bash
 cd /home/bob/g8e
-./g8e docker start --full --skip-enroll
+./g8e docker start --skip-enroll
 ./g8e auth enroll pending
 ./g8e docker status
 ./g8e auth context

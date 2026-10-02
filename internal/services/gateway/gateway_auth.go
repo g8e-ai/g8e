@@ -1201,16 +1201,17 @@ func (s *AuthService) ValidateWebSessionCookie(r *http.Request) (webSessionID, u
 		return "", "", constants.ErrWebSessionExpired
 	}
 
-	if user, err := s.getAndValidateUser(webSession.UserID); err != nil {
+	if _, err := s.getAndValidateUser(webSession.UserID); err != nil {
 		if ae, ok := err.(*AuthError); ok {
 			return "", "", ae
 		}
 		s.logger.Error("gateway: auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), err)
 		return "", "", constants.ErrIdentityValidationFailed
-	} else if user != nil {
-		return webSession.ID, webSession.UserID, nil
 	}
 
+	// The persisted session body does not carry its own ID; the document key
+	// (the cookie value looked up above) is the web session ID. Returning
+	// webSession.ID would hand downstream SSE routing an empty session.
 	return webSessionID, webSession.UserID, nil
 }
 
