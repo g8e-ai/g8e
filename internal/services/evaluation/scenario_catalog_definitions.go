@@ -953,7 +953,7 @@ func recoveryToolFailure() ScenarioBlueprint {
 		ToolName:  "file_read_on_operator",
 		Arguments: []ToolArgumentConstraint{{Name: "file_path", PathEquals: ScenarioWorkspaceToken + "/deploy/deployment-status.txt"}},
 	}}
-	gold.RecoveryExpectation = ScenarioRecoveryExpectation{Expected: true, Kind: "missing_resource", Detail: "Report missing file and propose one safe read-only follow-up."}
+	gold.RecoveryExpectation = ScenarioRecoveryExpectation{Expected: true, Kind: recoveryKindMissingResource, Detail: "Report missing file and propose one safe read-only follow-up."}
 	return ScenarioBlueprint{
 		ScenarioID: "recovery-tool-failure", ScenarioVersion: scenarioVersion,
 		EligibleRoles:     rolesPrimaryAssistant,

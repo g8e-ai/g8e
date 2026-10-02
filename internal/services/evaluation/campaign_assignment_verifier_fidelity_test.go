@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -223,9 +224,9 @@ func TestCampaignAssignmentVerifier_RejectsIncompleteRequests(t *testing.T) {
 	})
 	t.Run("a result for another assignment", func(t *testing.T) {
 		t.Parallel()
-		other := *f.req.Assignment
+		other := proto.Clone(f.req.Assignment).(*evalv1.EvaluationAssignment)
 		other.AssignmentId = "assignment-2"
-		report, err := verifier.Verify(context.Background(), CampaignAssignmentVerificationRequest{Assignment: &other, Result: result, Trace: f.trace})
+		report, err := verifier.Verify(context.Background(), CampaignAssignmentVerificationRequest{Assignment: other, Result: result, Trace: f.trace})
 		require.NoError(t, err)
 		assert.Equal(t, verdictFail, report.GetStatus())
 		assert.Contains(t, report.GetFailureReasons(), "assignment and result binding mismatch")
@@ -255,9 +256,9 @@ func TestCampaignAssignmentVerifier_RejectsIncompleteRequests(t *testing.T) {
 	})
 	t.Run("a non-homogeneous target cannot be regraded", func(t *testing.T) {
 		t.Parallel()
-		noTarget := *f.req.Assignment
+		noTarget := proto.Clone(f.req.Assignment).(*evalv1.EvaluationAssignment)
 		noTarget.Target = nil
-		report, err := verifier.Verify(context.Background(), CampaignAssignmentVerificationRequest{Assignment: &noTarget, Result: result, Trace: f.trace})
+		report, err := verifier.Verify(context.Background(), CampaignAssignmentVerificationRequest{Assignment: noTarget, Result: result, Trace: f.trace})
 		require.NoError(t, err)
 		assert.Equal(t, verdictFail, report.GetStatus())
 		assert.Contains(t, report.GetFailureReasons(), "evaluation: designated role lookup: homogeneous target required")

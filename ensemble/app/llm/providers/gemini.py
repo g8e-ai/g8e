@@ -209,7 +209,7 @@ def _tool_group_to_genai(tool_group: ToolGroup) -> list:
             {
                 "name": tool.name,
                 "description": tool.description,
-                "parameters": tool.parameters,
+                "parameters_json_schema": tool.parameters.to_json_schema(),
             }
         )
     if funcs:

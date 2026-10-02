@@ -39,12 +39,14 @@ from app.llm.llm_dataclasses import (
     InlineData,
     Part,
     ResponseFormat,
+    Schema,
     ToolCall,
     ToolCallingConfig,
     ToolConfig,
     ToolDeclaration,
     ToolGroup,
     ToolResponse,
+    Type,
 )
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -402,7 +404,6 @@ class TestG8EProviderDispatch:
                         ToolDeclaration(
                             name="inspect",
                             description="Inspect a target",
-                            parameters={"type": "object"},
                         )
                     ]
                 )
@@ -506,11 +507,11 @@ class TestG8EProviderDispatch:
                         ToolDeclaration(
                             name="inspect",
                             description="Inspect a target",
-                            parameters={
-                                "required": ["path"],
-                                "properties": {"path": {"type": "string"}},
-                                "type": "object",
-                            },
+                            parameters=Schema(
+                                type=Type.OBJECT,
+                                properties={"path": Schema(type=Type.STRING)},
+                                required=["path"],
+                            ),
                         )
                     ]
                 )
@@ -731,7 +732,6 @@ def _tool_settings(*names: str) -> PrimaryLLMSettings:
                     ToolDeclaration(
                         name=name,
                         description=f"{name} tool",
-                        parameters={"type": "object", "properties": {}},
                     )
                     for name in names
                 ]

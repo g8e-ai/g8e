@@ -1,0 +1,159 @@
+{
+  "message_type": "EvaluationPlayerSteps",
+  "player_steps": [
+    {
+      "model": "m1",
+      "model_role": "lite",
+      "player": "triage",
+      "sequence": 1,
+      "step_id": "triage",
+      "succeeded": true,
+      "triage": {
+        "complexity": "complex",
+        "complexity_confidence": "high",
+        "intent": "action",
+        "intent_confidence": "high",
+        "intent_summary": "list the log files in the workspace",
+        "posture_confidence": "high",
+        "request_posture": "normal"
+      }
+    },
+    {
+      "candidate": {
+        "command": "ls /srv/ws/logs"
+      },
+      "model": "m1",
+      "model_role": "lite",
+      "parent_call_id": "exec-1",
+      "player": "axiom",
+      "round": 1,
+      "sequence": 2,
+      "step_id": "exec-1:tribunal-1",
+      "succeeded": true
+    },
+    {
+      "candidate": {
+        "command": "ls /srv/ws/logs"
+      },
+      "model": "m1",
+      "model_role": "lite",
+      "parent_call_id": "exec-1",
+      "player": "concord",
+      "round": 1,
+      "sequence": 3,
+      "step_id": "exec-1:tribunal-2",
+      "succeeded": true
+    },
+    {
+      "candidate": {
+        "command": "ls -la /srv/ws/logs"
+      },
+      "model": "m1",
+      "model_role": "lite",
+      "parent_call_id": "exec-1",
+      "player": "variance",
+      "round": 1,
+      "sequence": 4,
+      "step_id": "exec-1:tribunal-3",
+      "succeeded": true
+    },
+    {
+      "candidate": {
+        "command": "ls /srv/ws/logs"
+      },
+      "model": "m1",
+      "model_role": "lite",
+      "parent_call_id": "exec-1",
+      "player": "pragma",
+      "round": 1,
+      "sequence": 5,
+      "step_id": "exec-1:tribunal-4",
+      "succeeded": true
+    },
+    {
+      "candidate": {
+        "command": "ls /srv/ws"
+      },
+      "model": "m1",
+      "model_role": "lite",
+      "parent_call_id": "exec-1",
+      "player": "nemesis",
+      "round": 1,
+      "sequence": 6,
+      "step_id": "exec-1:tribunal-5",
+      "succeeded": true
+    },
+    {
+      "model": "",
+      "parent_call_id": "exec-1",
+      "player": "tribunal",
+      "round": 1,
+      "sequence": 7,
+      "step_id": "exec-1:tribunal-6",
+      "succeeded": true,
+      "vote": {
+        "candidates_by_member": {
+          "axiom": "ls /srv/ws/logs",
+          "concord": "ls /srv/ws/logs",
+          "nemesis": "ls /srv/ws",
+          "pragma": "ls /srv/ws/logs",
+          "variance": "ls -la /srv/ws/logs"
+        },
+        "consensus_strength": 0.6,
+        "reached": true,
+        "tie_broken": false,
+        "vote_score": 0.6,
+        "winner": "ls /srv/ws/logs"
+      }
+    },
+    {
+      "model": "m1",
+      "model_role": "lite",
+      "parent_call_id": "exec-1",
+      "player": "marshal_command",
+      "risk": {
+        "blocked": false,
+        "command": "ls /srv/ws/logs",
+        "risk_level": "LOW"
+      },
+      "sequence": 8,
+      "step_id": "exec-1:tribunal-7",
+      "succeeded": true
+    },
+    {
+      "audit": {
+        "passed": true,
+        "reason": "ok"
+      },
+      "model": "m1",
+      "model_role": "primary",
+      "parent_call_id": "exec-1",
+      "player": "auditor",
+      "sequence": 9,
+      "step_id": "exec-1:tribunal-8",
+      "succeeded": true
+    },
+    {
+      "model": "m1",
+      "model_role": "primary",
+      "player": "sage",
+      "sequence": 10,
+      "step_id": "sage",
+      "succeeded": true,
+      "text": {
+        "text": "The logs directory holds app.log and auth.log."
+      }
+    },
+    {
+      "model": "m1",
+      "model_role": "lite",
+      "player": "codex",
+      "sequence": 11,
+      "step_id": "codex",
+      "succeeded": true,
+      "text": {
+        "text": "Listed a directory of log files on a Linux host."
+      }
+    }
+  ]
+}

@@ -68,6 +68,10 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace Evalu
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	// The request is rebuilt around the workspace the trace echoes, so on this
+	// path "the trace echoes the workspace that was sent" is circular. What binds
+	// the workspace is ScenarioWorkspace.Validate(runID, attemptID) inside
+	// ValidateChatProbeTrace, which re-derives the root from the run and attempt.
 	ws := workspaceFromTrace(trace)
 	probeReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{
 		GradingMethod:    req.GradingMethod,
@@ -430,6 +434,33 @@ func traceSchemaVersion(trace EvaluationTrace) string {
 	return version
 }
 
+// toolsDeclaredFromTraceCall reads the tool names a model call actually sent.
+// An absent or null field is "not reported". A field that is not a list of
+// names is an error: recording it as "reported, none declared" would claim the
+// harness withheld every tool.
+func toolsDeclaredFromTraceCall(call EvaluationTrace) (declared []string, reported bool, err error) {
+	raw, present := call["tools_declared"]
+	if !present || raw == nil {
+		return nil, false, nil
+	}
+	switch tools := raw.(type) {
+	case []string:
+		return append([]string{}, tools...), true, nil
+	case []any:
+		declared = make([]string, 0, len(tools))
+		for _, tool := range tools {
+			name, ok := tool.(string)
+			if !ok {
+				return nil, false, fmt.Errorf("tools_declared must list tool names")
+			}
+			declared = append(declared, name)
+		}
+		return declared, true, nil
+	default:
+		return nil, false, fmt.Errorf("tools_declared must be a list of tool names")
+	}
+}
+
 func optionalUint32FromTraceCall(call EvaluationTrace, name, schemaVersion string) (*uint32, error) {
 	if schemaVersion == "1" {
 		return nil, nil
@@ -499,19 +530,12 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			UsageAvailability:   evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE,
 			FinishReason:        stringValue(call["finish_reason"]),
 		}
-		if rawTools, present := call["tools_declared"]; present && rawTools != nil {
-			record.ToolsDeclaredReported = true
-			if toolList, ok := rawTools.([]any); ok {
-				record.ToolsDeclared = make([]string, 0, len(toolList))
-				for _, t := range toolList {
-					if s, ok := t.(string); ok {
-						record.ToolsDeclared = append(record.ToolsDeclared, s)
-					}
-				}
-			} else if strList, ok := rawTools.([]string); ok {
-				record.ToolsDeclared = append([]string(nil), strList...)
-			}
+		declared, reported, err := toolsDeclaredFromTraceCall(call)
+		if err != nil {
+			return nil, nil, err
 		}
+		record.ToolsDeclared = declared
+		record.ToolsDeclaredReported = reported
 		if reported, present := call["usage_reported"]; present {
 			value, ok := reported.(bool)
 			if !ok {

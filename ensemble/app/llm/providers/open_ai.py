@@ -29,7 +29,6 @@ from app.llm.llm_types import (
 )
 
 from app.llm.provider import LLMProvider
-from app.llm.utils import schema_to_dict
 from app.llm.providers._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
@@ -110,14 +109,13 @@ def _tools_to_openai(tools: list[ToolGroup] | None) -> list[dict] | None:
     openai_tools = []
     for tool in tools:
         for decl in tool.tools:
-            params = schema_to_dict(decl.parameters) if decl.parameters else None
             openai_tools.append(
                 {
                     "type": "function",
                     "function": {
                         "name": decl.name,
                         "description": decl.description,
-                        "parameters": params,
+                        "parameters": decl.parameters.to_json_schema(),
                     },
                 }
             )

@@ -20,6 +20,7 @@ from app.models.evaluation_trace import (
     EvaluationControlledRoleAssignment,
     EvaluationGovernedActionRecord,
     EvaluationGraderCallRecord,
+    EvaluationPlayerStep,
     EvaluationPolicyDecisionRecord,
     EvaluationProviderToolRejection,
     EvaluationRoleOutcome,
@@ -50,7 +51,10 @@ logger = logging.getLogger(__name__)
 # Adds `seed_application` (counts of what the seed wrote), `user_memories_suppressed`,
 # and `tool_turn_limit_reached`. The seed and workspace themselves are echoed
 # whole inside `evaluation_context`.
-_TRACE_SCHEMA_VERSION = "6"
+# 7: records the chain. Adds `player_steps`: one typed record per player that
+# did its job in the turn (Triage, Sage or Dash, the Tribunal seats and vote,
+# Marshal, the Auditor, Codex), each with the output it produced.
+_TRACE_SCHEMA_VERSION = "7"
 
 
 def _trace_root() -> Path:
@@ -123,6 +127,7 @@ class EvaluationTraceService:
         g8e_context: G8eHttpContext,
         *,
         model_calls: list[ModelCallTelemetry],
+        player_steps: list[EvaluationPlayerStep] | None = None,
         triage_model_call: ModelCallTelemetry | None = None,
         controlled_role_assignment: EvaluationControlledRoleAssignment | None = None,
         role_outcome: EvaluationRoleOutcome | None = None,
@@ -163,6 +168,7 @@ class EvaluationTraceService:
             user_memories_suppressed=user_memories_suppressed,
             seed_application=seed_application,
             model_calls=list(model_calls),
+            player_steps=list(player_steps or []),
             role_outcome=role_outcome,
             designated_role_output=designated_role_output,
             tool_decisions=list(tool_decisions or []),

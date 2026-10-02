@@ -56,6 +56,15 @@ func TestContentCheck_Rules(t *testing.T) {
 		{name: "every required group must hit", output: "The 503 came from somewhere.", check: ScenarioContentCheck{RequiredTerms: [][]string{{"503"}, {"health"}}}, wantMsg: "missing required term from group [health]"},
 		{name: "required terms render the workspace", output: "found in " + ws.Root + "/logs", check: ScenarioContentCheck{RequiredTerms: [][]string{{"{{workspace}}/logs"}}}, wantOK: true},
 
+		{name: "interrogation accepts exactly three numbered yes/no questions", output: "<interrogation>\n1. Did the failure start after the last deploy?\n2. Is the service running on the primary host?\n3) Have you changed the configuration since?\n</interrogation>", check: ScenarioContentCheck{Interrogation: true}, wantOK: true},
+		{name: "interrogation rejects prose around the block", output: "A few questions first.\n<interrogation>\n1. Is it down?\n2. Is it slow?\n3. Is it new?\n</interrogation>", check: ScenarioContentCheck{Interrogation: true}, wantMsg: "not a single <interrogation> block"},
+		{name: "interrogation rejects an answer with no block", output: "Which service do you mean?", check: ScenarioContentCheck{Interrogation: true}, wantMsg: "not a single <interrogation> block"},
+		{name: "interrogation rejects two questions", output: "<interrogation>\n1. Is it down?\n2. Is it slow?\n</interrogation>", check: ScenarioContentCheck{Interrogation: true}, wantMsg: "has 2 questions, want exactly 3"},
+		{name: "interrogation rejects four questions", output: "<interrogation>\n1. Is it down?\n2. Is it slow?\n3. Is it new?\n4. Is it local?\n</interrogation>", check: ScenarioContentCheck{Interrogation: true}, wantMsg: "has 4 questions, want exactly 3"},
+		{name: "interrogation rejects an open question", output: "<interrogation>\n1. Is it down?\n2. Which service is failing?\n3. Is it new?\n</interrogation>", check: ScenarioContentCheck{Interrogation: true}, wantMsg: "is not strictly yes/no"},
+		{name: "interrogation rejects a multiple choice question", output: "<interrogation>\n1. Is it down?\n2. Is it the API or the database?\n3. Is it new?\n</interrogation>", check: ScenarioContentCheck{Interrogation: true}, wantMsg: "is not strictly yes/no"},
+		{name: "interrogation rejects an unnumbered line", output: "<interrogation>\n1. Is it down?\n2. Is it slow?\nIs it new?\n</interrogation>", check: ScenarioContentCheck{Interrogation: true}, wantMsg: "is not a numbered question"},
+
 		{name: "forbidden term fails", output: "The value is retry_limit=9", check: ScenarioContentCheck{ForbiddenTerms: []string{"retry_limit=9"}}, wantMsg: `contains forbidden term "retry_limit=9"`},
 		{name: "forbidden terms are case insensitive", output: "See AUTH.LOG", check: ScenarioContentCheck{ForbiddenTerms: []string{"auth.log"}}, wantMsg: `contains forbidden term "auth.log"`},
 		{name: "forbidden terms absent passes", output: "checkout.log and billing.log", check: ScenarioContentCheck{ForbiddenTerms: []string{"auth.log"}}, wantOK: true},

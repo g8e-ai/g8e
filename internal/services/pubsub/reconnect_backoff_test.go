@@ -9,7 +9,6 @@ package pubsub
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/x509"
 	"fmt"
 	"sync"
@@ -18,9 +17,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/g8e-ai/g8e/v2/internal/services/governance"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 func TestNextReconnectDelay_ExponentialProgression(t *testing.T) {
@@ -57,32 +53,65 @@ func TestNextReconnectDelay_ExactDoubleBelowCap(t *testing.T) {
 	assert.Equal(t, 16*time.Second, delay, "8s*2=16s is below cap")
 }
 
-func TestShouldGiveUp_AtMaxAttempts(t *testing.T) {
-	t.Parallel()
-	assert.True(t, shouldGiveUp(3, 3), "attempts==max should give up")
+// outageClient is a PubSubClient whose Gateway is unreachable for the first
+// failures Subscribe calls and reachable afterwards. A reachable subscription
+// stays open until the test ends.
+type outageClient struct {
+	mu        sync.Mutex
+	failures  int
+	calls     int
+	err       error
+	recovered chan struct{}
 }
 
-func TestShouldGiveUp_BelowMaxAttempts(t *testing.T) {
-	t.Parallel()
-	assert.False(t, shouldGiveUp(2, 3), "attempts<max should not give up")
-	assert.False(t, shouldGiveUp(0, 3), "zero attempts should not give up")
-	assert.False(t, shouldGiveUp(1, 3))
+func newOutageClient(failures int, err error) *outageClient {
+	return &outageClient{failures: failures, err: err, recovered: make(chan struct{})}
 }
 
-func TestShouldGiveUp_ExceedsMaxAttempts(t *testing.T) {
-	t.Parallel()
-	assert.True(t, shouldGiveUp(5, 3), "attempts>max should give up")
+func (c *outageClient) Subscribe(ctx context.Context, _ string) (<-chan []byte, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls++
+	if c.calls <= c.failures {
+		return nil, c.err
+	}
+	if c.calls == c.failures+1 {
+		close(c.recovered)
+	}
+	ch := make(chan []byte)
+	go func() {
+		<-ctx.Done()
+		close(ch)
+	}()
+	return ch, nil
 }
 
-func TestListenForCommands_MaxReconnectAttemptsGiveUp(t *testing.T) {
+func (c *outageClient) Publish(_ context.Context, _ string, _ []byte) error { return nil }
+
+func (c *outageClient) Close() {}
+
+func (c *outageClient) subscribeCalls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
+}
+
+// The Gateway can be down for hours. The command listener must outlive any
+// number of failed subscribes and re-establish the cmd channel as soon as the
+// Gateway returns: an Operator that heartbeats over its publish socket but has
+// no cmd subscription is unreachable and still reported active.
+func TestListenForCommands_SurvivesLongGatewayOutage(t *testing.T) {
 	t.Parallel()
 	f := newPubsubFixture(t)
 
-	// Configure the mock client to always fail Subscribe with a non-TLS error.
-	f.DB.SetSubscribeError(fmt.Errorf("connection refused"))
+	// 200 failed subscribes at the 30x backoff cap is hours of outage at the
+	// production 1s base delay.
+	client := newOutageClient(200, fmt.Errorf("connection refused"))
+	f.Svc.client = client
+	f.Svc.reconnectBaseDelay = time.Microsecond
 
-	// Use a very short base delay so the test completes quickly.
-	f.Svc.reconnectBaseDelay = 1 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	f.Svc.ctx = ctx
 
 	done := make(chan struct{})
 	go func() {
@@ -91,10 +120,80 @@ func TestListenForCommands_MaxReconnectAttemptsGiveUp(t *testing.T) {
 	}()
 
 	select {
+	case <-client.recovered:
+	case <-done:
+		t.Fatal("listenForCommands exited during the Gateway outage")
+	case <-time.After(10 * time.Second):
+		t.Fatal("listenForCommands did not re-subscribe after the Gateway returned")
+	}
+	require.Greater(t, client.subscribeCalls(), 200)
+
+	select {
+	case <-done:
+		t.Fatal("listenForCommands exited while subscribed")
+	default:
+	}
+
+	cancel()
+	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("listenForCommands did not give up after max reconnect attempts")
+		t.Fatal("listenForCommands did not exit after context cancellation")
 	}
+}
+
+// A subscription that the Gateway drops (restart) is re-established, repeatedly.
+func TestListenForCommands_ResubscribesAfterEveryDroppedChannel(t *testing.T) {
+	t.Parallel()
+	f := newPubsubFixture(t)
+
+	client := &droppingClient{}
+	f.Svc.client = client
+	f.Svc.reconnectBaseDelay = time.Microsecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f.Svc.ctx = ctx
+
+	done := make(chan struct{})
+	go func() {
+		f.Svc.listenForCommands("test-channel")
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool { return client.subscribeCalls() > 20 }, 10*time.Second, time.Millisecond,
+		"listener must keep re-subscribing after each dropped channel")
+
+	select {
+	case <-done:
+		t.Fatal("listenForCommands exited after a dropped channel")
+	default:
+	}
+}
+
+// droppingClient hands out a subscription that the "Gateway" closes at once.
+type droppingClient struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (c *droppingClient) Subscribe(_ context.Context, _ string) (<-chan []byte, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls++
+	ch := make(chan []byte)
+	close(ch)
+	return ch, nil
+}
+
+func (c *droppingClient) Publish(_ context.Context, _ string, _ []byte) error { return nil }
+
+func (c *droppingClient) Close() {}
+
+func (c *droppingClient) subscribeCalls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
 }
 
 func TestListenForCommands_TLSCertErrorTriggersShutdown(t *testing.T) {
@@ -140,80 +239,6 @@ func TestListenForCommands_ContextCancellationExits(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("listenForCommands did not exit after context cancellation")
-	}
-}
-
-// subscribeOnceThenFailClient is a test PubSubClient whose first Subscribe
-// call succeeds and delivers a single message before closing the channel.
-// Subsequent Subscribe calls return the configured error. This verifies that
-// a successful message receipt resets the reconnect attempt counter.
-type subscribeOnceThenFailClient struct {
-	mu         sync.Mutex
-	subscribed bool
-	failErr    error
-}
-
-func (c *subscribeOnceThenFailClient) Subscribe(_ context.Context, _ string) (<-chan []byte, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.subscribed {
-		return nil, c.failErr
-	}
-	c.subscribed = true
-	ch := make(chan []byte, 1)
-	ch <- []byte("test-message")
-	close(ch)
-	return ch, nil
-}
-
-func (c *subscribeOnceThenFailClient) Publish(_ context.Context, _ string, _ []byte) error {
-	return nil
-}
-
-func (c *subscribeOnceThenFailClient) Close() {}
-
-func TestListenForCommands_SuccessfulReceiptResetsAttempts(t *testing.T) {
-	t.Parallel()
-
-	cfg := testutil.NewTestConfig(t)
-	logger := testutil.NewTestLogger()
-
-	mockClient := &subscribeOnceThenFailClient{
-		failErr: fmt.Errorf("connection refused"),
-	}
-
-	svc, err := NewOperatorPubSubService(CommandServiceConfig{
-		Config:             cfg,
-		Logger:             logger,
-		PubSubClient:       mockClient,
-		ActuatorSigningKey: ed25519.PrivateKey(make([]byte, ed25519.PrivateKeySize)),
-		ActuatorKeyID:      "test-key",
-	}, OutboundModeDeps{
-		GovernanceCoreDeps: GovernanceCoreDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
-			Doctrine:          governance.NewL1Doctrine(),
-		},
-	})
-	require.NoError(t, err)
-	svc.reconnectBaseDelay = 1 * time.Millisecond
-
-	done := make(chan struct{})
-	go func() {
-		svc.listenForCommands("test-channel")
-		close(done)
-	}()
-
-	// First Subscribe succeeds and delivers a message (resets attempts to 0).
-	// Then the channel closes (attempts=1). Subsequent Subscribe calls fail
-	// with "connection refused" — it should take 3 failures (attempts 1→2→3)
-	// to give up, not 2, because the message receipt reset the counter.
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("listenForCommands did not exit after reset + max reconnect attempts")
 	}
 }
 

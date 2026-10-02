@@ -248,6 +248,33 @@ class Schema:
     items: Schema | None = None
     enum: list[str] | None = None
 
+    def to_json_schema(self) -> dict[str, Any]:
+        """Render as JSON Schema, the single wire form every provider receives.
+
+        An OBJECT always carries ``properties`` (empty for a tool that takes no
+        arguments): strict provider renderers reject an object schema without
+        it, e.g. Ollama's qwen3.5 template fails the whole request with HTTP 500
+        "properties must be an object".
+        """
+        rendered: dict[str, Any] = {"type": self.type.value.lower()}
+        if self.description:
+            rendered["description"] = self.description
+        if self.enum:
+            rendered["enum"] = list(self.enum)
+        if self.type is Type.OBJECT:
+            rendered["properties"] = {
+                name: prop.to_json_schema() for name, prop in (self.properties or {}).items()
+            }
+        if self.required:
+            rendered["required"] = list(self.required)
+        if self.items is not None:
+            rendered["items"] = self.items.to_json_schema()
+        return rendered
+
+
+def _no_arguments() -> Schema:
+    return Schema(type=Type.OBJECT)
+
 
 @dataclass
 class ToolDeclaration:
@@ -255,7 +282,7 @@ class ToolDeclaration:
 
     name: str
     description: str
-    parameters: dict[str, Any] | Schema
+    parameters: Schema = field(default_factory=_no_arguments)
 
 
 @dataclass

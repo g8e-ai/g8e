@@ -38,6 +38,7 @@ from app.models.investigations import EnrichedInvestigationContext
 from app.services.ai.tool_registry import TOOL_SPECS
 from app.services.ai.tool_service import forbidden_command_violation, tool_execution_failure
 from app.services.ai.tools import recursive_grep
+from app.services.evaluation.tool_evidence import POLICY_DENY_ERROR_TYPES
 from g8e.models.context import BoundOperator
 
 AGENT_TOOL_REGISTRY_SCHEMA_VERSION = "1"
@@ -77,6 +78,7 @@ class AgentToolRegistry(G8eBaseModel):
     schema_version: str = AGENT_TOOL_REGISTRY_SCHEMA_VERSION
     tools: list[AgentToolSchema] = Field(default_factory=list)
     guidance_vectors: list[AgentToolGuidanceVector] = Field(default_factory=list)
+    policy_deny_error_types: list[str] = Field(default_factory=list)
 
 
 def _tool_schemas() -> list[AgentToolSchema]:
@@ -162,6 +164,7 @@ def build_agent_tool_registry() -> AgentToolRegistry:
     return AgentToolRegistry(
         tools=_tool_schemas(),
         guidance_vectors=[_recursive_grep_missing_path(), _run_commands_privilege_escalation()],
+        policy_deny_error_types=sorted(str(error_type.value) for error_type in POLICY_DENY_ERROR_TYPES),
     )
 
 

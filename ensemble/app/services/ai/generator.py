@@ -214,7 +214,10 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
 
     correlation_id = generate_tribunal_correlation_id()
     emitter = TribunalEmitter(
-        request.event_service, request.g8e_context, correlation_id=correlation_id
+        request.event_service,
+        request.g8e_context,
+        correlation_id=correlation_id,
+        observer=request.step_observer,
     )
     investigation_id = request.g8e_context.investigation_id if request.g8e_context else None
 
@@ -475,6 +478,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         context=RequestContext.from_app_context(request.g8e_context),
         whitelisting_enabled=request.whitelisting_enabled,
         blacklisting_enabled=request.blacklisting_enabled,
+        model_role="primary" if auditor_provider else "lite",
     )
 
     result = await _build_and_emit_result(

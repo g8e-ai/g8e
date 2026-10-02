@@ -83,6 +83,20 @@ describe('campaign projection wire contract', () => {
     ).not.toThrow();
   });
 
+  it('accepts scenario summaries with protojson-omitted empty repeated fields', () => {
+    const record = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
+    const summary: Record<string, unknown> = { ...record.scenario_summary };
+    for (const field of ['allowed_tools', 'expected_tools', 'forbidden_tools', 'criteria', 'tool_score_dimensions']) {
+      delete summary[field];
+    }
+    expect(() =>
+      decodeCampaignProjectionEnvelope({
+        ...fixtureCampaignResultEnvelope,
+        record: { ...record, scenario_summary: summary },
+      }),
+    ).not.toThrow();
+  });
+
   it('rejects enriched fields on historical result envelopes', () => {
     const enriched = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
     expect(() =>

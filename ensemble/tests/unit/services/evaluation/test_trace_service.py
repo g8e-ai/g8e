@@ -11,9 +11,12 @@ from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
 from app.errors import ValidationError
 from app.models.evaluation_trace import (
     EvaluationAssignmentTrace,
+    EvaluationPlayerStep,
     EvaluationProviderToolRejection,
     EvaluationSeedApplication,
+    EvaluationTextOutput,
     EvaluationToolCallRecord,
+    EvaluationTriageOutput,
     ToolGate,
 )
 from app.models.http_context import G8eHttpContext
@@ -102,6 +105,58 @@ def test_trace_persist_finalize_and_load(trace_service):
     assert compute_trace_digest(
         loaded.model_copy(update={"trace_digest": ""})
     ) == loaded.trace_digest
+
+
+def test_trace_finalize_persists_the_chain_and_binds_it_into_the_digest(trace_service):
+    context = _context()
+    trace_service.begin(context)
+    steps = [
+        EvaluationPlayerStep(
+            step_id="triage",
+            sequence=1,
+            player="triage",
+            model_role="lite",
+            model="model-a",
+            triage=EvaluationTriageOutput(
+                complexity="simple",
+                complexity_confidence="high",
+                intent="information",
+                intent_confidence="high",
+                request_posture="normal",
+                posture_confidence="high",
+            ),
+        ),
+        EvaluationPlayerStep(
+            step_id="dash",
+            sequence=2,
+            player="dash",
+            model_role="assistant",
+            model="model-a",
+            text=EvaluationTextOutput(text="Blue"),
+        ),
+    ]
+
+    finalized = trace_service.finalize(
+        context,
+        model_calls=[],
+        player_steps=steps,
+        finish_reason="stop",
+        status="completed",
+    )
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.schema_version == "7"
+    assert [step.player for step in loaded.player_steps] == ["triage", "dash"]
+    assert loaded.player_steps[1].text is not None
+    assert loaded.player_steps[1].text.text == "Blue"
+    assert loaded.trace_digest == finalized.trace_digest
+
+    tampered = loaded.model_copy(
+        update={"player_steps": [loaded.player_steps[0], loaded.player_steps[1].model_copy(
+            update={"text": EvaluationTextOutput(text="Red")}
+        )]}
+    )
+    assert compute_trace_digest(tampered) != loaded.trace_digest
 
 
 def test_trace_finalize_persists_designated_role_output(trace_service):
@@ -240,7 +295,7 @@ def test_trace_persists_per_call_trajectory_and_guidance(trace_service):
 def test_trace_schema_version_covers_the_seed_and_divergence_fields(trace_service):
     context = _context()
 
-    assert trace_service.begin(context).schema_version == "6"
+    assert trace_service.begin(context).schema_version == "7"
 
 
 def test_trace_records_seed_application_and_the_eval_only_divergences(trace_service):

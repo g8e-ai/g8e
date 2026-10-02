@@ -347,7 +347,6 @@ func TestModelInferenceRecords_ToolsDeclaredIsReportedOnlyWhenTheTraceSaysSo(t *
 		{name: "null", set: true, declared: nil, wantReported: false},
 		{name: "two tools", set: true, declared: []any{toolGrep, toolRead}, wantReported: true, wantTools: []string{toolGrep, toolRead}},
 		{name: "an explicit empty list is reported as empty", set: true, declared: []any{}, wantReported: true, wantTools: []string{}},
-		{name: "non-string entries are dropped", set: true, declared: []any{toolGrep, 1, nil, toolRead}, wantReported: true, wantTools: []string{toolGrep, toolRead}},
 		{name: "an in-memory string slice", set: true, declared: []string{toolGrep}, wantReported: true, wantTools: []string{toolGrep}},
 	}
 	for _, tt := range tests {
@@ -362,6 +361,24 @@ func TestModelInferenceRecords_ToolsDeclaredIsReportedOnlyWhenTheTraceSaysSo(t *
 			require.Len(t, records, 1)
 			assert.Equal(t, tt.wantReported, records[0].GetToolsDeclaredReported())
 			assert.Equal(t, tt.wantTools, records[0].GetToolsDeclared())
+		})
+	}
+}
+
+// A malformed tools_declared must not read as "the harness declared no tools".
+func TestModelInferenceRecords_ToolsDeclaredThatIsNotAListOfNamesIsAnImportError(t *testing.T) {
+	t.Parallel()
+	for name, declared := range map[string]any{
+		"a string":                 toolGrep,
+		"an object":                map[string]any{toolGrep: true},
+		"a list with a non-string": []any{toolGrep, 1},
+		"a list with a null":       []any{toolGrep, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, _, err := inferencesOf(t, "6", importModelCall("p1", map[string]any{"tools_declared": declared}))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "tools_declared")
 		})
 	}
 }

@@ -18,11 +18,17 @@ import json
 
 import pytest
 
+from app.constants import CommandErrorType
+from app.models.tool_results import CommandExecutionResult
 from app.services.evaluation.agent_tool_registry_export import (
     REGISTRY_PATH,
     build_agent_tool_registry,
     main,
     render_agent_tool_registry,
+)
+from app.services.evaluation.tool_evidence import (
+    POLICY_DENY_ERROR_TYPES,
+    _policy_outcome_from_result,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -58,6 +64,22 @@ def test_guidance_vectors_carry_the_text_the_model_is_shown():
     escalation = vectors["run_commands_with_operator.privilege_escalation"]
     assert escalation.error.startswith("SECURITY VIOLATION: Command contains forbidden pattern 'sudo'.")
     assert escalation.error_type == "security.violation"
+
+
+def test_registry_exports_the_error_types_g8ee_records_as_a_deny_decision():
+    exported = set(build_agent_tool_registry().policy_deny_error_types)
+
+    assert exported == {error_type.value for error_type in POLICY_DENY_ERROR_TYPES}
+    assert "security.violation" in exported
+    assert {"approval.denied", "user.denied"}.isdisjoint(exported)
+
+
+@pytest.mark.parametrize("error_type", sorted(CommandErrorType, key=lambda value: value.value))
+def test_policy_outcome_is_deny_exactly_for_the_exported_error_types(error_type):
+    result = CommandExecutionResult(success=False, error_type=error_type)
+
+    expected = "deny" if error_type in POLICY_DENY_ERROR_TYPES else "refused"
+    assert _policy_outcome_from_result(result) == expected
 
 
 def test_check_mode_fails_when_the_committed_registry_is_stale(tmp_path):

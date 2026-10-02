@@ -92,7 +92,11 @@ func TestValidateChatProbeTrace_RejectsMalformedTraces(t *testing.T) {
 	}{
 		{name: "status is not terminal", mutate: func(trace EvaluationTrace) { trace["status"] = "running" }, wantErr: `trace status "running" is not terminal`},
 		{name: "status is missing", mutate: func(trace EvaluationTrace) { delete(trace, "status") }, wantErr: `trace status "" is not terminal`},
-		{name: "assignment failed", mutate: func(trace EvaluationTrace) { trace["status"] = "failed" }, wantErr: "assignment failed"},
+		{name: "assignment failed without a recorded error", mutate: func(trace EvaluationTrace) { trace["status"] = "failed" }, wantErr: "assignment failed without a recorded error"},
+		{name: "assignment failed with the recorded error", mutate: func(trace EvaluationTrace) {
+			trace["status"] = "failed"
+			trace["error"] = "dispatch: command delivered to no operator subscribers"
+		}, wantErr: "assignment failed: dispatch: command delivered to no operator subscribers"},
 		{name: "evaluation_context missing", mutate: func(trace EvaluationTrace) { delete(trace, "evaluation_context") }, wantErr: "missing evaluation_context"},
 		{name: "evaluation_context of the wrong type", mutate: func(trace EvaluationTrace) { trace["evaluation_context"] = "x" }, wantErr: "missing evaluation_context"},
 		{name: "chat_execution_id missing", mutate: func(trace EvaluationTrace) { delete(trace, "chat_execution_id") }, wantErr: "missing chat_execution_id"},
@@ -324,6 +328,12 @@ func TestValidateChatProbeTrace_WorkspaceIsEchoedAndDerivedFromRunAndAttempt(t *
 			name:   "an unrequested workspace echoed as null is ignored",
 			req:    probeRequest(),
 			mutate: func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = nil },
+		},
+		{
+			name:    "an unrequested workspace echoed as a string is rejected",
+			req:     probeRequest(),
+			mutate:  func(trace EvaluationTrace) { evalContextOf(trace)["workspace"] = "/x" },
+			wantErr: "evaluation_context.workspace must be an object",
 		},
 	}
 	for _, tt := range tests {

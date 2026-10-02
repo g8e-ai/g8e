@@ -165,7 +165,7 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 			BoundOperators: []harnessclient.EnsembleBoundOperator{{
 				OperatorID:        dataOperatorID,
 				OperatorSessionID: dataOperatorSessionID,
-				Status:            "BOUND",
+				Status:            string(constants.OperatorStatusBound),
 			}},
 		},
 		Message:              message,
@@ -206,7 +206,11 @@ func ValidateChatProbeTrace(req ChatProbeRequest, trace EvaluationTrace) error {
 		return fmt.Errorf("evaluation: validate chat probe trace: trace status %q is not terminal", status)
 	}
 	if status != "completed" {
-		return fmt.Errorf("evaluation: validate chat probe trace: assignment failed")
+		reason, _ := trace["error"].(string)
+		if reason == "" {
+			return fmt.Errorf("evaluation: validate chat probe trace: assignment failed without a recorded error")
+		}
+		return fmt.Errorf("evaluation: validate chat probe trace: assignment failed: %s", reason)
 	}
 	if err := validateTraceDigest(trace); err != nil {
 		return err
@@ -335,14 +339,16 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext Evaluation
 			return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
 		}
 	} else if rawWs, hasWs := evalContext["workspace"]; hasWs && rawWs != nil {
-		if wsMap, ok := evaluationTrace(rawWs); ok {
-			traceWs := ScenarioWorkspace{
-				Root:                     stringValue(wsMap["root"]),
-				OperatorWorkingDirectory: stringValue(wsMap["operator_working_directory"]),
-			}
-			if err := traceWs.Validate(req.RunID, req.EvaluationAttemptID); err != nil {
-				return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
-			}
+		wsMap, ok := evaluationTrace(rawWs)
+		if !ok {
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace must be an object")
+		}
+		traceWs := ScenarioWorkspace{
+			Root:                     stringValue(wsMap["root"]),
+			OperatorWorkingDirectory: stringValue(wsMap["operator_working_directory"]),
+		}
+		if err := traceWs.Validate(req.RunID, req.EvaluationAttemptID); err != nil {
+			return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
 		}
 	}
 	return nil

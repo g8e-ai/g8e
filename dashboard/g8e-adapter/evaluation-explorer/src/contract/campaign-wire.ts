@@ -184,13 +184,13 @@ interface WireScenarioSummary {
   category: (typeof SCENARIO_CATEGORIES)[number];
   public_description: string;
   grading_method: (typeof GRADING_METHODS)[number];
-  allowed_tools: string[];
-  expected_tools: string[];
-  forbidden_tools: string[];
+  allowed_tools?: string[];
+  expected_tools?: string[];
+  forbidden_tools?: string[];
   trajectory_policy?: (typeof TRAJECTORY_POLICIES)[number];
   prompt_hint?: WirePromptHint;
-  criteria: WireScenarioCriterion[];
-  tool_score_dimensions: Array<{ dimension: (typeof TOOL_DIMENSIONS)[number]; required: boolean }>;
+  criteria?: WireScenarioCriterion[];
+  tool_score_dimensions?: Array<{ dimension: (typeof TOOL_DIMENSIONS)[number]; required: boolean }>;
 }
 
 interface WireSemanticGradeSummary {
@@ -484,13 +484,17 @@ function assertScenarioSummary(value: unknown, path: string): void {
   assertEnum(value.category, SCENARIO_CATEGORIES, `${path}.category`);
   assertString(value.public_description, `${path}.public_description`, 512);
   assertEnum(value.grading_method, GRADING_METHODS, `${path}.grading_method`);
-  for (const field of ['allowed_tools', 'expected_tools', 'forbidden_tools'] as const) assertStringArray(value[field], `${path}.${field}`, 64);
-  assert(Array.isArray(value.criteria), `${path}.criteria`, 'expected array');
-  assert(value.criteria.length <= 64, `${path}.criteria`, 'expected at most 64 entries');
+  // protojson omits empty repeated fields, so absence means an empty list.
+  for (const field of ['allowed_tools', 'expected_tools', 'forbidden_tools'] as const) {
+    if (value[field] !== undefined) assertStringArray(value[field], `${path}.${field}`, 64);
+  }
+  const criteria: unknown = value.criteria ?? [];
+  assert(Array.isArray(criteria), `${path}.criteria`, 'expected array');
+  assert(criteria.length <= 64, `${path}.criteria`, 'expected at most 64 entries');
   const criterionIds = new Set<string>();
-  for (let index = 0; index < value.criteria.length; index++) {
+  for (let index = 0; index < criteria.length; index++) {
     const criterionPath = `${path}.criteria[${index}]`;
-    const criterion: unknown = value.criteria[index];
+    const criterion: unknown = criteria[index];
     assertObject(criterion, criterionPath);
     rejectUnknown(criterion, ['criterion_id', 'public_label', 'public_description', 'grading_method', 'required'], criterionPath);
     assertString(criterion.criterion_id, `${criterionPath}.criterion_id`);
@@ -501,11 +505,12 @@ function assertScenarioSummary(value: unknown, path: string): void {
     assertEnum(criterion.grading_method, GRADING_METHODS, `${criterionPath}.grading_method`);
     assertBoolean(criterion.required, `${criterionPath}.required`);
   }
-  assert(Array.isArray(value.tool_score_dimensions), `${path}.tool_score_dimensions`, 'expected array');
-  assert(value.tool_score_dimensions.length <= 64, `${path}.tool_score_dimensions`, 'expected at most 64 entries');
-  for (let index = 0; index < value.tool_score_dimensions.length; index++) {
+  const dimensions: unknown = value.tool_score_dimensions ?? [];
+  assert(Array.isArray(dimensions), `${path}.tool_score_dimensions`, 'expected array');
+  assert(dimensions.length <= 64, `${path}.tool_score_dimensions`, 'expected at most 64 entries');
+  for (let index = 0; index < dimensions.length; index++) {
     const dimensionPath = `${path}.tool_score_dimensions[${index}]`;
-    const dimension: unknown = value.tool_score_dimensions[index];
+    const dimension: unknown = dimensions[index];
     assertObject(dimension, dimensionPath);
     rejectUnknown(dimension, ['dimension', 'required'], dimensionPath);
     assertEnum(dimension.dimension, TOOL_DIMENSIONS, `${dimensionPath}.dimension`);
