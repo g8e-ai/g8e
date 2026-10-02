@@ -571,6 +571,14 @@ const (
 	ProtocolObserveAPIJSONFilename                   = "observe_api.json"
 	ProtocolObserveEventPayloadsJSONFilename         = "observe_event_payloads.json"
 	ProtocolPublicFeedJSONFilename                   = "public_feed.json"
+
+	// Evaluation contract vectors under protocol/vectors/eval, resolved from
+	// internal/services/evaluation. The ensemble pins the same file, so the
+	// g8ee trace and the Go grader cannot drift apart.
+	ProtocolSourceTreeRootFromEvaluationPkg = "../../../"
+	ProtocolVectorsDirname                  = "vectors"
+	ProtocolEvalVectorsDirname              = "eval"
+	ProtocolPlayerStepsVectorFilename       = "player_steps.json"
 )
 
 // Consensus bootstrap config filename for declarative consensus seeding.

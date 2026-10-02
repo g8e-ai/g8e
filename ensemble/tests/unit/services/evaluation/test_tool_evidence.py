@@ -24,6 +24,7 @@ from app.services.evaluation.tool_evidence import (
     record_tool_call_started,
 )
 from g8e.eval.v1.trace_digest import marshal_canonical_json
+from g8e.models.context import BoundOperator
 from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 
@@ -269,3 +270,103 @@ def test_record_tool_call_completed_captures_governed_action_and_policy_denial()
     assert len(state.policy_decisions) == 1
     assert state.policy_decisions[0].outcome == "deny"
     assert len(state.governed_actions) == 0
+
+
+def test_successful_operator_call_binds_the_governed_action_to_the_bound_operator():
+    state = AgentStreamState()
+    context = G8eHttpContext(
+        user_id="user-1",
+        evaluation_context=_evaluation_context(),
+        bound_operators=[
+            BoundOperator(operator_id="op-1", operator_session_id="op-session-1"),
+            BoundOperator(operator_id="op-2", operator_session_id="op-session-2"),
+        ],
+    )
+
+    record_tool_call_completed(
+        state,
+        context,
+        StreamChunkData(
+            tool_name="file_read_on_operator",
+            execution_id="exec-3",
+            success=True,
+            is_operator_tool=True,
+            result=CommandExecutionResult(success=True, output="retry_limit=3"),
+        ),
+    )
+
+    assert len(state.governed_actions) == 1
+    action = state.governed_actions[0]
+    assert action.binding_id == "exec-3"
+    assert action.operator_id == "op-1"
+    assert action.operator_session_id == "op-session-1"
+    assert action.policy_decision == "allow"
+    assert action.receipt_status == "completed"
+
+
+def test_successful_operator_call_without_a_bound_operator_records_empty_operator_ids():
+    state = AgentStreamState()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+
+    record_tool_call_completed(
+        state,
+        context,
+        StreamChunkData(
+            tool_name="file_read_on_operator",
+            execution_id="exec-4",
+            success=True,
+            is_operator_tool=True,
+            result=CommandExecutionResult(success=True, output="x"),
+        ),
+    )
+
+    assert [(a.operator_id, a.operator_session_id) for a in state.governed_actions] == [("", "")]
+
+
+def test_requests_without_an_evaluation_context_record_nothing():
+    state = AgentStreamState()
+    context = G8eHttpContext(user_id="user-1")
+    chunk = StreamChunkData(
+        tool_name="recursive_grep_search",
+        execution_id="exec-5",
+        success=True,
+        result=CommandExecutionResult(success=True, output="x"),
+    )
+
+    record_tool_call_started(state, context, chunk)
+    record_tool_call_completed(state, context, chunk)
+
+    assert (state.tool_decisions, state.tool_calls, state.policy_decisions, state.governed_actions) == (
+        [],
+        [],
+        [],
+        [],
+    )
+
+
+def test_chunks_without_a_tool_name_record_nothing():
+    state = AgentStreamState()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    chunk = StreamChunkData(tool_name="  ", execution_id="exec-6", success=True)
+
+    record_tool_call_started(state, context, chunk)
+    record_tool_call_completed(state, context, chunk)
+
+    assert (state.tool_decisions, state.tool_calls) == ([], [])
+
+
+def test_non_command_results_record_the_call_but_no_policy_or_governed_evidence():
+    state = AgentStreamState()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+
+    _completed(
+        state,
+        context,
+        success=True,
+        loop_turn=1,
+        result=FsGrepToolResult(success=True),
+    )
+
+    assert len(state.tool_calls) == 1
+    assert state.policy_decisions == []
+    assert state.governed_actions == []

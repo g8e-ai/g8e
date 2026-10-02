@@ -70,6 +70,7 @@ from app.services.ai.generator import (
     generate_command,
 )
 from app.services.ai.tribunal.utils import member_for_pass
+from app.services.evaluation.player_steps import PlayerStepRecorder
 from app.services.ai.tribunal.stages.generation import _run_generation_pass
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
@@ -1260,6 +1261,87 @@ class TestGenerateCommandHappyPath:
         assert EventType.AI_CONSENSUS_VOTING_AUDIT_STARTED in emitted_types
         assert EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED in emitted_types
         assert EventType.AI_CONSENSUS_SESSION_COMPLETED in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_an_observer_sees_every_player_of_a_verified_run_in_chain_order(self):
+        """The real pipeline reports each seat, the vote, and the Auditor to the observer."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+        recorder = PlayerStepRecorder()
+
+        request = make_tribunal_generation_request(
+            request="find all log files under /var/log",
+            event_service=mock_event_service,
+            g8e_context=G8eHttpContext(
+                web_session_id="ws-observed-1",
+                user_id="user-observed-1",
+                case_id="case-observed-1",
+                investigation_id="inv-observed-1",
+                source_component=G8EE_COMPONENT,
+            ),
+            settings=self._settings(auditor=True),
+        )
+        request.step_observer = recorder
+
+        with patch(
+            "app.services.ai.generator.get_llm_provider",
+            return_value=self._provider_returning("find /var/log -name '*.log'", "ok"),
+        ):
+            await generate_command(request)
+
+        steps = recorder.steps
+        assert [step.player for step in steps] == [
+            "axiom",
+            "concord",
+            "variance",
+            "tribunal",
+            "auditor",
+        ]
+        assert [step.sequence for step in steps] == [1, 2, 3, 4, 5]
+        assert [step.round for step in steps] == [1, 1, 1, 1, None]
+        assert all(
+            step.candidate is not None and step.candidate.command == "find /var/log -name '*.log'"
+            for step in steps[:3]
+        )
+        assert steps[3].vote is not None
+        assert steps[3].vote.reached
+        assert steps[3].vote.winner == "find /var/log -name '*.log'"
+        assert steps[4].audit is not None
+        assert steps[4].audit.passed
+        assert steps[4].model_role == "primary"
+
+    @pytest.mark.asyncio
+    async def test_the_auditor_is_attributed_to_the_lite_tier_when_no_primary_provider_exists(self):
+        """Falling back to the lite provider for the Auditor is reported, not hidden."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+        recorder = PlayerStepRecorder()
+        lite_provider = self._provider_returning("find /var/log -name '*.log'", "ok")
+
+        def _provider_for(llm_settings, is_assistant=False, is_lite=False):
+            if is_lite:
+                return lite_provider
+            raise RuntimeError("no primary provider configured")
+
+        request = make_tribunal_generation_request(
+            request="find all log files under /var/log",
+            event_service=mock_event_service,
+            g8e_context=G8eHttpContext(
+                web_session_id="ws-observed-2",
+                user_id="user-observed-2",
+                case_id="case-observed-2",
+                investigation_id="inv-observed-2",
+                source_component=G8EE_COMPONENT,
+            ),
+            settings=self._settings(auditor=True),
+        )
+        request.step_observer = recorder
+
+        with patch("app.services.ai.generator.get_llm_provider", side_effect=_provider_for):
+            await generate_command(request)
+
+        (auditor_step,) = [step for step in recorder.steps if step.player == "auditor"]
+        assert auditor_step.model_role == "lite"
 
     @pytest.mark.asyncio
     async def test_verification_failed_path_auditor_revises(self):

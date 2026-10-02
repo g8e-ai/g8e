@@ -2,7 +2,7 @@
 
 **Give AI systems a governed path to real infrastructure—without giving them direct authority over it.**
 
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Version](https://img.shields.io/badge/version-v2.2.6-green.svg)](VERSION) [![FIPS 140-3](https://img.shields.io/badge/FIPS%20140--3-Go%20Cryptographic%20Module-006400.svg)](docs/reference/fips140-3.md) [![MCP](https://img.shields.io/badge/MCP-governed-5D3FD3.svg)](protocol/docs/mcp.md)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Version](https://img.shields.io/badge/version-v2.2.7-green.svg)](VERSION) [![FIPS 140-3](https://img.shields.io/badge/FIPS%20140--3-Go%20Cryptographic%20Module-006400.svg)](docs/reference/fips140-3.md) [![MCP](https://img.shields.io/badge/MCP-governed-5D3FD3.svg)](protocol/docs/mcp.md)
 
 g8e is a zero-trust execution and evidence platform for AI agents, human operators, and distributed target runtimes. An AI client or operator proposes typed intent. A central **Gateway** authenticates the ingress, binds identity and state roots, and screens policy. A host-side **Operator** on the target machine independently verifies the exact transaction before executing anything, mints a short-lived capability, and records signed cryptographic receipts and commitment chains at the local execution boundary.
 
@@ -355,10 +355,10 @@ Integrate with the g8e protocol in Go or Python:
 
 ```bash
 # Go module (canonical protobuf bindings, models, hashing, and verifiers)
-go get github.com/g8e-ai/g8e/v2@v2.2.6
+go get github.com/g8e-ai/g8e/v2@v2.2.7
 
 # Python package (FastAPI clients, envelope models, and receipt validation)
-pip install g8e==2.2.6
+pip install g8e==2.2.7
 ```
 
 See [Protocol Library](docs/architecture/protocol.md).

@@ -50,7 +50,7 @@ func TestReadTrajectory_ToolArgGrepPattern_WrongArguments(t *testing.T) {
 		Trace: trace,
 	}
 
-	res := readTrajectory(req, ws)
+	res := readTrajectoryFor(t, req, ws)
 	assert.False(t, res.Passed)
 	assert.Equal(t, evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS, res.Outcome)
 }
@@ -105,7 +105,7 @@ func TestReadTrajectory_GuidedRetry_Recovered(t *testing.T) {
 		Trace: trace,
 	}
 
-	res := readTrajectory(req, ws)
+	res := readTrajectoryFor(t, req, ws)
 	assert.True(t, res.Passed)
 	assert.Equal(t, evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_RECOVERED, res.Outcome)
 	assert.EqualValues(t, 1, res.GuidedRetries)
@@ -157,7 +157,7 @@ func TestReadTrajectory_GuidedRetry_IgnoredGuidance(t *testing.T) {
 		Trace: trace,
 	}
 
-	res := readTrajectory(req, ws)
+	res := readTrajectoryFor(t, req, ws)
 	assert.False(t, res.Passed)
 	assert.Equal(t, evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE, res.Outcome)
 }

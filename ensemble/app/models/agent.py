@@ -35,6 +35,7 @@ from app.models.agents import TriageResult
 from app.models.evaluation_trace import (
     EvaluationControlledRoleAssignment,
     EvaluationGovernedActionRecord,
+    EvaluationPlayerStep,
     EvaluationPolicyDecisionRecord,
     EvaluationProviderToolRejection,
     EvaluationToolCallRecord,
@@ -249,6 +250,7 @@ class AgentStreamState(G8eBaseModel):
     tool_calls: list[EvaluationToolCallRecord] = Field(default_factory=list)
     governed_actions: list[EvaluationGovernedActionRecord] = Field(default_factory=list)
     policy_decisions: list[EvaluationPolicyDecisionRecord] = Field(default_factory=list)
+    player_steps: list[EvaluationPlayerStep] = Field(default_factory=list)
     provider_tool_rejection: EvaluationProviderToolRejection | None = None
     tool_turn_limit_reached: bool = False
     tool_response_sizes: list[int] = Field(
@@ -305,6 +307,10 @@ class StreamChunkData(G8eBaseModel):
     tool_turn_limit_reached: bool | None = Field(
         default=None,
         description="COMPLETE: the tool loop reached AGENT_MAX_TOOL_TURNS during this run",
+    )
+    player_steps: list[EvaluationPlayerStep] = Field(
+        default_factory=list,
+        description="TOOL_RESULT: the Tribunal-chain steps this call ran (scored requests only)",
     )
 
 

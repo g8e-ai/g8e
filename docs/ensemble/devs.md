@@ -4,7 +4,7 @@ title: Ensemble Development Guide
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-01
-version: v2.2.6
+version: v2.2.7
 owners:
   - ensemble/
   - ensemble/app/
@@ -152,7 +152,7 @@ Production chat declares tools through `AIToolService.get_tools()`, which consul
 
 ### Agent tool registry export
 
-The Go evaluation catalog must lint each scenario prompt against the real tool schemas and seed prior failed tool calls with the guidance g8ee really returns. It never copies either by hand. [ensemble/app/services/evaluation/agent_tool_registry_export.py](../../ensemble/app/services/evaluation/agent_tool_registry_export.py) renders them from `TOOL_SPECS` and from the real tool handlers (`forbidden_command_violation`, `tool_execution_failure`, and the recursive grep path validation) into [protocol/constants/agenttools/agent-tool-registry.json](../../protocol/constants/agenttools/agent-tool-registry.json): per tool its name, scope, agent modes, required arguments, and arguments, plus named guidance vectors such as `recursive_grep_search.missing_path`.
+The Go evaluation catalog must lint each scenario prompt against the real tool schemas and seed prior failed tool calls with the guidance g8ee really returns. It never copies either by hand. [ensemble/app/services/evaluation/agent_tool_registry_export.py](../../ensemble/app/services/evaluation/agent_tool_registry_export.py) renders them from `TOOL_SPECS` and from the real tool handlers (`forbidden_command_violation`, `tool_execution_failure`, and the recursive grep path validation) into [protocol/constants/agenttools/agent-tool-registry.json](../../protocol/constants/agenttools/agent-tool-registry.json): per tool its name, scope, agent modes, required arguments, and arguments, plus named guidance vectors such as `recursive_grep_search.missing_path`, and `policy_deny_error_types`, the tool failures recorded as a `deny` policy decision (`POLICY_DENY_ERROR_TYPES` in `app/services/evaluation/tool_evidence.py`), which the Go grader uses to recognize a denied call.
 
 - `make agent-tool-registry` regenerates the JSON, which the Go package `protocol/constants/agenttools` embeds. Never hand-edit the JSON.
 - `make agent-tool-registry-check` fails when the committed registry no longer matches what g8ee produces. Run it after changing a tool schema, a tool's validation, or a guidance message; the same comparison runs in `ensemble/tests/unit/services/evaluation/test_agent_tool_registry_export.py`, so a pydantic upgrade that rewords a validation error also fails the unit suite.

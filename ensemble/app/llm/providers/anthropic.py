@@ -34,7 +34,6 @@ from app.llm.llm_types import (
 from app.models.base import G8eBaseModel
 
 from app.llm.provider import LLMProvider
-from app.llm.utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -137,19 +136,11 @@ def _tools_to_anthropic(tools: list[ToolGroup] | None) -> list[dict] | None:
     anthropic_tools = []
     for tool in tools:
         for decl in tool.tools:
-            input_schema = (
-                schema_to_dict(decl.parameters)
-                if decl.parameters
-                else {
-                    "type": "object",
-                    "properties": {},
-                }
-            )
             anthropic_tools.append(
                 {
                     "name": decl.name,
                     "description": decl.description,
-                    "input_schema": input_schema,
+                    "input_schema": decl.parameters.to_json_schema(),
                 }
             )
 

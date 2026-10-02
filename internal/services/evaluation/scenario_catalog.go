@@ -218,6 +218,9 @@ func ValidateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog, artifact
 		if scenario.GetGradingMethod() == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_UNSPECIFIED {
 			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s has unspecified grading method", scenario.GetScenarioId())
 		}
+		if err := validatePublicScenarioCriteria(scenario); err != nil {
+			return fmt.Errorf("evaluation: validate scenario catalog: %w: %v", constants.ErrEvaluationScenarioContractInvalid, err)
+		}
 		if scenario.GetInputFixtureRef() == nil || scenario.GetGoldCriteriaRef() == nil {
 			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s missing fixture references", scenario.GetScenarioId())
 		}
@@ -260,21 +263,27 @@ func materializeScenarioBlueprint(suiteID string, blueprint ScenarioBlueprint, r
 	if err != nil {
 		return nil, ScenarioArtifacts{}, err
 	}
+	publicCriteria, err := publicCriteriaForBlueprint(blueprint)
+	if err != nil {
+		return nil, ScenarioArtifacts{}, err
+	}
 	return &evalv1.EvaluationScenarioDefinition{
-		ScenarioId:        blueprint.ScenarioID,
-		ScenarioVersion:   blueprint.ScenarioVersion,
-		Category:          blueprint.Category,
-		PublicDescription: blueprint.PublicDescription,
-		GradingMethod:     blueprint.GradingMethod,
-		AllowedTools:      append([]string(nil), blueprint.AllowedTools...),
-		ExpectedTools:     append([]string(nil), blueprint.ExpectedTools...),
-		ForbiddenTools:    append([]string(nil), blueprint.ForbiddenTools...),
-		RequiredConcepts:  append([]string(nil), blueprint.RequiredConcepts...),
-		EligibleRoles:     append([]evalv1.ModelCampaignRole(nil), blueprint.EligibleRoles...),
-		InputFixtureRef:   inputArtifact.Reference,
-		GoldCriteriaRef:   goldArtifact.Reference,
-		TrajectoryPolicy:  blueprint.TrajectoryPolicy,
-		PromptHint:        publicPromptHint(blueprint.Gold.PromptHint),
+		ScenarioId:                blueprint.ScenarioID,
+		ScenarioVersion:           blueprint.ScenarioVersion,
+		Category:                  blueprint.Category,
+		PublicDescription:         blueprint.PublicDescription,
+		GradingMethod:             blueprint.GradingMethod,
+		AllowedTools:              append([]string(nil), blueprint.AllowedTools...),
+		ExpectedTools:             append([]string(nil), blueprint.ExpectedTools...),
+		ForbiddenTools:            append([]string(nil), blueprint.ForbiddenTools...),
+		RequiredConcepts:          append([]string(nil), blueprint.RequiredConcepts...),
+		EligibleRoles:             append([]evalv1.ModelCampaignRole(nil), blueprint.EligibleRoles...),
+		InputFixtureRef:           inputArtifact.Reference,
+		GoldCriteriaRef:           goldArtifact.Reference,
+		TrajectoryPolicy:          blueprint.TrajectoryPolicy,
+		PromptHint:                publicPromptHint(blueprint.Gold.PromptHint),
+		PublicCriteria:            publicCriteria,
+		PublicToolScoreDimensions: publicToolScoreDimensionsForBlueprint(blueprint),
 	}, ScenarioArtifacts{Input: inputArtifact, Gold: goldArtifact}, nil
 }
 
@@ -344,6 +353,9 @@ func validateScenarioArtifactBinding(reference *compliancev1.ComplianceEvidenceR
 	}
 	if reference.GetSha256() != artifact.Reference.GetSha256() {
 		return fmt.Errorf("artifact digest mismatch")
+	}
+	if !contentMatchesReference(artifact.Body, artifact.Reference) {
+		return fmt.Errorf("artifact body does not match its digest")
 	}
 	return nil
 }

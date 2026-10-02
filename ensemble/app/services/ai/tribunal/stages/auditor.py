@@ -7,6 +7,7 @@
 
 import logging
 import time
+from typing import Literal
 
 from app.constants import (
     CommandGenerationOutcome,
@@ -83,8 +84,12 @@ class TribunalAuditor:
         tied_candidates: list[CandidateCommand] | None = None,
         whitelisting_enabled: bool = False,
         blacklisting_enabled: bool = False,
+        model_role: Literal["primary", "assistant", "lite"] = "primary",
     ) -> TribunalAuditResult:
-        """Execute the audit stage and handle all side effects."""
+        """Execute the audit stage and handle all side effects.
+
+        ``model_role`` is the tier ``provider`` and ``model`` were resolved from.
+        """
         if not auditor_enabled:
             return TribunalAuditResult(
                 final_command=vote_winner,
@@ -163,6 +168,7 @@ class TribunalAuditor:
                     auditor_persona,
                     attempt,
                     g8e_context=self.emitter.g8e_context,
+                    model_role=model_role,
                 )
                 model_calls.append(call_result.telemetry)
                 if call_result.error:

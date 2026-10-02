@@ -55,7 +55,6 @@ from app.llm.llm_types import (
 from app.llm.provider import LLMProvider
 from app.llm.providers._capability import translate_governed_tool_rejection
 from app.llm.thinking import translate_for_ollama
-from app.llm.utils import schema_to_dict
 from app.models.model_configs import get_model_config
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (
@@ -210,12 +209,11 @@ def _tools_to_declarations(tools: list[ToolGroup] | None) -> list[InferenceToolD
     declarations: list[InferenceToolDeclaration] = []
     for group in tools or []:
         for tool in group.tools:
-            schema = schema_to_dict(tool.parameters) if tool.parameters else {}
             declarations.append(
                 InferenceToolDeclaration(
                     name=tool.name,
                     description=tool.description,
-                    json_schema=_canonical_json(schema),
+                    json_schema=_canonical_json(tool.parameters.to_json_schema()),
                 )
             )
     return declarations

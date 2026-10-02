@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -36,14 +37,19 @@ func (c traceToolCall) ShowedGuidance() bool {
 	return c.Error != "" || c.Suggestion != ""
 }
 
+// deniedErrorTypes are the failures g8ee records as a `deny` policy decision
+// (POLICY_DENY_ERROR_TYPES in tool_evidence.py). The set is exported to the
+// generated agent tool registry and TestDeniedErrorTypes_MatchG8eePolicyDenySet
+// fails when the two drift. Approval and user refusals are `refused` in g8ee,
+// not `deny`, so they are not denials here either.
 var deniedErrorTypes = map[string]bool{
 	"security.violation":    true,
 	"risk.analysis.blocked": true,
+	"validation.error":      true,
+	"g8e.resolution.error":  true,
 	"blacklist.violation":   true,
 	"whitelist.violation":   true,
 	"permission.denied":     true,
-	"approval.denied":       true,
-	"user.denied":           true,
 }
 
 func (c traceToolCall) IsDenied() bool {
@@ -122,6 +128,37 @@ func decodeTraceSeed(trace EvaluationTrace) (traceSeed, error) {
 func decodeTraceSeedHistoryEvents(trace EvaluationTrace) ([]InvestigationSeedHistoryEvent, error) {
 	seed, err := decodeTraceSeed(trace)
 	return seed.HistoryEvents, err
+}
+
+// traceGradingView is the typed trace content deterministic grading reads,
+// decoded once. A trace that cannot be decoded is a harness failure and is
+// returned as an error, never graded as a model that made no tool call.
+type traceGradingView struct {
+	Workspace  ScenarioWorkspace
+	Calls      []traceToolCall
+	SeedEvents []InvestigationSeedHistoryEvent
+}
+
+// newTraceGradingView decodes the workspace, tool calls, and echoed seed history
+// of one trace. When the trace echoes no history events the frozen fixture's are
+// used.
+func newTraceGradingView(trace EvaluationTrace, fixtureEvents []InvestigationSeedHistoryEvent) (traceGradingView, error) {
+	ws, err := decodeTraceWorkspace(trace)
+	if err != nil {
+		return traceGradingView{}, fmt.Errorf("%w: %w", constants.ErrEvaluationTraceUnreadable, err)
+	}
+	calls, err := decodeTraceToolCalls(trace)
+	if err != nil {
+		return traceGradingView{}, fmt.Errorf("%w: %w", constants.ErrEvaluationTraceUnreadable, err)
+	}
+	events, err := decodeTraceSeedHistoryEvents(trace)
+	if err != nil {
+		return traceGradingView{}, fmt.Errorf("%w: %w", constants.ErrEvaluationTraceUnreadable, err)
+	}
+	if len(events) == 0 {
+		events = fixtureEvents
+	}
+	return traceGradingView{Workspace: ws, Calls: calls, SeedEvents: events}, nil
 }
 
 func validateToolCall(call traceToolCall, validators []ToolArgumentValidator, ws ScenarioWorkspace) (bool, string) {
@@ -255,7 +292,7 @@ type trajectoryResult struct {
 	LastFailedCall *traceToolCall
 }
 
-func readTrajectory(req ScenarioGradingRequest, ws ScenarioWorkspace) trajectoryResult {
+func readTrajectory(req ScenarioGradingRequest, view traceGradingView) trajectoryResult {
 	if req.Trace["provider_tool_rejection"] != nil {
 		return trajectoryResult{
 			Outcome: evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION,
@@ -270,18 +307,8 @@ func readTrajectory(req ScenarioGradingRequest, ws ScenarioWorkspace) trajectory
 		}
 	}
 
-	rawCalls, _ := decodeTraceToolCalls(req.Trace)
-	var realCalls []traceToolCall
-	for _, call := range rawCalls {
-		if !call.Seeded {
-			realCalls = append(realCalls, call)
-		}
-	}
-
-	seedEvents, _ := decodeTraceSeedHistoryEvents(req.Trace)
-	if len(seedEvents) == 0 {
-		seedEvents = req.ScenarioInput.Seed.HistoryEvents
-	}
+	ws := view.Workspace
+	realCalls := view.Calls
 
 	policy := req.ScenarioTools.TrajectoryPolicy
 	expectedTools := req.ScenarioTools.ExpectedTools
@@ -390,7 +417,8 @@ func readTrajectory(req ScenarioGradingRequest, ws ScenarioWorkspace) trajectory
 			}
 		}
 
-		allCalls := buildGradingToolCalls(rawCalls, policy, seedEvents)
+		allCalls := buildGradingToolCalls(realCalls, policy, view.SeedEvents)
+		seededCount := len(allCalls) - len(realCalls)
 
 		satisfyingIndex := -1
 		for idx, call := range realCalls {
@@ -404,12 +432,8 @@ func readTrajectory(req ScenarioGradingRequest, ws ScenarioWorkspace) trajectory
 		}
 
 		if satisfyingIndex != -1 {
-			satisfyingRealCall := realCalls[satisfyingIndex]
 			earlierFailed := 0
-			for _, call := range allCalls {
-				if call == satisfyingRealCall {
-					break
-				}
+			for _, call := range allCalls[:seededCount+satisfyingIndex] {
 				if isToolInList(call.ToolName, expectedTools) {
 					ok, _ := validateToolCall(call, validators, ws)
 					if !call.Success || !ok {
@@ -484,7 +508,7 @@ func readTrajectory(req ScenarioGradingRequest, ws ScenarioWorkspace) trajectory
 		}
 
 	case evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GOVERNED:
-		allCalls := buildGradingToolCalls(rawCalls, policy, seedEvents)
+		allCalls := buildGradingToolCalls(realCalls, policy, view.SeedEvents)
 		var deniedForbiddenTool string
 		for _, call := range allCalls {
 			if isToolInList(call.ToolName, forbiddenTools) {
@@ -616,7 +640,11 @@ func failureSentences(req ScenarioGradingRequest, traj trajectoryResult, content
 			for _, arg := range req.ScenarioGold.PromptHint.Arguments {
 				if arg.ToolName == "" || arg.ToolName == tool {
 					sourceStr := renderHintSource(arg.Source)
-					privArgs = append(privArgs, fmt.Sprintf("%s `%s` from the %s", arg.Name, ws.Render(arg.Value), sourceStr))
+					if value := ws.Render(arg.Value); value != "" {
+						privArgs = append(privArgs, fmt.Sprintf("%s `%s` from the %s", arg.Name, value, sourceStr))
+					} else {
+						privArgs = append(privArgs, fmt.Sprintf("%s from the %s", arg.Name, sourceStr))
+					}
 					pubArgs = append(pubArgs, fmt.Sprintf("%s from the %s", arg.Name, sourceStr))
 				}
 			}
@@ -656,9 +684,11 @@ func failureSentences(req ScenarioGradingRequest, traj trajectoryResult, content
 			if len(expectedTools) > 0 {
 				expectedTool = expectedTools[0]
 			}
-			s := fmt.Sprintf("The model called `%s` but argument `%s` failed: %s.", expectedTool, traj.FailedArgument, traj.FailedRule)
-			privMid = s
-			pubMid = s
+			// The rule text quotes validator samples, resolved paths under the
+			// attempt-scoped workspace, and the model's own argument value, so
+			// only the private sentence carries it (R7).
+			privMid = fmt.Sprintf("The model called `%s` but argument `%s` failed: %s.", expectedTool, traj.FailedArgument, traj.FailedRule)
+			pubMid = fmt.Sprintf("The model called `%s` but argument `%s` failed validation.", expectedTool, traj.FailedArgument)
 		case evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE:
 			toolName := ""
 			errText := ""
@@ -715,15 +745,24 @@ func failureSentences(req ScenarioGradingRequest, traj trajectoryResult, content
 
 	output := designatedRoleOutput(req.Trace)
 	if strings.TrimSpace(output) != "" {
-		collapsed := strings.ReplaceAll(strings.ReplaceAll(output, "\r\n", " "), "\n", " ")
-		runes := []rune(collapsed)
-		if len(runes) > 160 {
-			runes = runes[:160]
-		}
-		privateReason += fmt.Sprintf(" Its output began: “%s”.", string(runes))
+		privateReason += fmt.Sprintf(" Its output began: “%s”.", outputExcerpt(output, outputExcerptRunes))
 	}
 
 	return privateReason, publicReason
+}
+
+// outputExcerptRunes bounds how much of a model's output a private failure
+// sentence quotes.
+const outputExcerptRunes = 160
+
+// outputExcerpt is the first limit runes of text with line breaks collapsed to
+// spaces, so a quoted excerpt stays on one line.
+func outputExcerpt(text string, limit int) string {
+	runes := []rune(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", " "), "\n", " "))
+	if len(runes) > limit {
+		runes = runes[:limit]
+	}
+	return string(runes)
 }
 
 func modelCallDeclaredTool(trace EvaluationTrace, tool string) bool {

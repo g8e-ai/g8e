@@ -37,6 +37,8 @@ from app.llm.llm_types import (
     LiteLLMSettings,
     ResponseFormat,
     ResponseJsonSchema,
+    Schema,
+    Type,
 )
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.providers.gemini import (
@@ -359,7 +361,7 @@ class TestGeminiProvider:
     def test_tool_group_to_genai(self):
         from app.llm.providers.gemini import _tool_group_to_genai
 
-        params = {"type": "OBJECT", "properties": {"loc": {"type": "STRING"}}}
+        params = Schema(type=Type.OBJECT, properties={"loc": Schema(type=Type.STRING)})
         tool_decl = ToolDeclaration(
             name="get_weather", description="Get weather info", parameters=params
         )
@@ -372,8 +374,10 @@ class TestGeminiProvider:
         funcs = genai_tools[0].function_declarations
         assert funcs[0].name == "get_weather"
         assert funcs[0].description == "Get weather info"
-        # The SDK might return a Schema object; just check we can access it
-        assert funcs[0].parameters is not None
+        assert funcs[0].parameters_json_schema == {
+            "type": "object",
+            "properties": {"loc": {"type": "string"}},
+        }
 
         # Check google search
         assert genai_tools[1].google_search is not None
@@ -552,7 +556,7 @@ class TestGeminiProvider:
         provider = GeminiProvider(api_key="key")
         settings = PrimaryLLMSettings(
             max_output_tokens=100,
-            tools=[ToolGroup(tools=[ToolDeclaration(name="t1", description="d1", parameters={})])],
+            tools=[ToolGroup(tools=[ToolDeclaration(name="t1", description="d1")])],
         )
 
         async def mock_stream(*args, **kwargs):
@@ -783,7 +787,7 @@ class TestGeminiProvider:
         provider = GeminiProvider(api_key="key")
         settings = PrimaryLLMSettings(
             max_output_tokens=100,
-            tools=[ToolGroup(tools=[ToolDeclaration(name="t1", description="d1", parameters={})])],
+            tools=[ToolGroup(tools=[ToolDeclaration(name="t1", description="d1")])],
         )
         with patch.object(
             provider, "_generate_with_retry", return_value=GenerateContentResponse()

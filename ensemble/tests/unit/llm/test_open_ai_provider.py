@@ -211,13 +211,7 @@ class TestOpenAIProvider:
 
         settings = PrimaryLLMSettings(
             max_output_tokens=100,
-            tools=[
-                ToolGroup(
-                    tools=[
-                        ToolDeclaration(name="get_weather", description="Weather", parameters=None)
-                    ]
-                )
-            ],
+            tools=[ToolGroup(tools=[ToolDeclaration(name="get_weather", description="Weather")])],
             system_instructions="be helpful",
         )
 

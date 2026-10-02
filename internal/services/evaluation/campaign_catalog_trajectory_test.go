@@ -276,9 +276,9 @@ func TestCatalogReplay_RequiredEvidenceTypesAreSatisfiableForEveryScenario(t *te
 		require.NoError(t, json.Unmarshal(artifacts[scenario.GetScenarioId()].Gold.Body, &gold))
 		for _, evidenceType := range gold.RequiredEvidenceTypes {
 			assert.True(t, handled[evidenceType], "scenario %s requires evidence type %q", scenario.GetScenarioId(), evidenceType)
-			status, detail, _ := requiredEvidenceGrade(
+			status, detail, _ := evidenceGrade(t,
 				ScenarioGradingRequest{AssignmentID: "a", ScenarioID: scenario.GetScenarioId(), Trace: completedHomogeneousTrace(t, "primary")},
-				evidenceType, trajectoryResult{}, true, ScenarioWorkspace{})
+				evidenceType, trajectoryResult{}, true)
 			assert.NotContains(t, detail, "unknown required evidence type", "scenario %s requires %q but the grader has no rule for it (status %v)", scenario.GetScenarioId(), evidenceType, status)
 		}
 	}

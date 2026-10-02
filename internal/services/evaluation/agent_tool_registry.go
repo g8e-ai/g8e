@@ -46,6 +46,9 @@ type AgentToolRegistry struct {
 	SchemaVersion   string                    `json:"schema_version"`
 	Tools           []AgentToolSchema         `json:"tools"`
 	GuidanceVectors []AgentToolGuidanceVector `json:"guidance_vectors"`
+	// PolicyDenyErrorTypes are the tool failures g8ee records as a `deny`
+	// policy decision. The grader's denial classification must equal this set.
+	PolicyDenyErrorTypes []string `json:"policy_deny_error_types"`
 }
 
 // LoadAgentToolRegistry decodes the embedded generated registry and rejects a

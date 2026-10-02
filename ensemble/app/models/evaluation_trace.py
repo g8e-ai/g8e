@@ -12,7 +12,7 @@ from typing import Literal
 
 from g8e.models.internal_api import EvaluationInferenceContext
 
-from app.models.base import Field, G8eBaseModel
+from app.models.base import Field, G8eBaseModel, model_validator
 from app.models.model_telemetry import ModelCallTelemetry
 from app.constants import TriageComplexityClassification
 
@@ -170,6 +170,131 @@ class EvaluationSeedApplication(G8eBaseModel):
     case_memory: bool = False
 
 
+EvaluationPlayer = Literal[
+    "triage",
+    "sage",
+    "dash",
+    "axiom",
+    "concord",
+    "variance",
+    "pragma",
+    "nemesis",
+    "tribunal",
+    "marshal_command",
+    "marshal_error",
+    "auditor",
+    "scribe",
+    "codex",
+]
+
+
+class EvaluationTriageOutput(G8eBaseModel):
+    """What Triage classified: the whole ``TriageResult`` contract, as returned."""
+
+    complexity: str
+    complexity_confidence: str
+    intent: str
+    intent_confidence: str
+    request_posture: str
+    posture_confidence: str
+    intent_summary: str = ""
+    error_code: str | None = None
+
+
+class EvaluationCandidateOutput(G8eBaseModel):
+    """A Tribunal seat's candidate command, after normalisation and safety validation.
+
+    ``command`` is ``None`` when the seat produced nothing usable; the step's
+    ``error`` and ``error_type`` then say why.
+    """
+
+    command: str | None = None
+
+
+class EvaluationVoteOutput(G8eBaseModel):
+    """The deterministic Tribunal vote over one round's candidates."""
+
+    reached: bool
+    winner: str | None = None
+    vote_score: float = 0.0
+    consensus_strength: float = 0.0
+    tie_broken: bool = False
+    candidates_by_member: dict[str, str] = Field(default_factory=dict)
+
+
+class EvaluationRiskOutput(G8eBaseModel):
+    """A Marshal command-risk classification of the command the Tribunal chose."""
+
+    risk_level: str
+    command: str = ""
+    blocked: bool = False
+
+
+class EvaluationAuditOutput(G8eBaseModel):
+    """The Auditor's verdict on the Tribunal's winning command."""
+
+    passed: bool
+    reason: str = ""
+    revision: str | None = None
+    swap_to_member: str | None = None
+
+
+class EvaluationTextOutput(G8eBaseModel):
+    """Free text a player produced: Sage or Dash's answer, a Scribe title, a Codex memory."""
+
+    text: str = ""
+
+
+class EvaluationPlayerStep(G8eBaseModel):
+    """One player's job in the chain, with the typed output it produced.
+
+    A scored turn runs the real g8ee chain: Triage, then Sage or Dash, then for
+    a host command the five Tribunal seats, the vote, Marshal and the Auditor,
+    then the answer, then Codex's memory update. Each step is recorded where
+    the player finishes, from the objects g8ee itself produced, so a grader can
+    judge a player on its own job and a reader can see what every player did.
+
+    ``model_role`` is the tier the call resolved from (``None`` for the
+    deterministic vote). ``parent_call_id`` ties a Tribunal-chain step to the
+    tool call that triggered it. ``round`` is the Tribunal round (1, or 2 after
+    a first round without consensus). At most one output field is set, and
+    none is set when the player failed before producing one.
+    """
+
+    step_id: str = Field(..., min_length=1)
+    sequence: int = Field(..., ge=1)
+    player: EvaluationPlayer
+    model_role: DesignatedModelRole | None = None
+    model: str = Field(default="")
+    round: int | None = Field(default=None, ge=1)
+    parent_call_id: str | None = None
+    succeeded: bool = True
+    error_type: str | None = None
+    error: str | None = None
+    triage: EvaluationTriageOutput | None = None
+    candidate: EvaluationCandidateOutput | None = None
+    vote: EvaluationVoteOutput | None = None
+    risk: EvaluationRiskOutput | None = None
+    audit: EvaluationAuditOutput | None = None
+    error_analysis: EvaluationErrorAnalysisSummary | None = None
+    text: EvaluationTextOutput | None = None
+
+    @model_validator(mode="after")
+    def _at_most_one_output(self) -> EvaluationPlayerStep:
+        outputs = [
+            self.triage,
+            self.candidate,
+            self.vote,
+            self.risk,
+            self.audit,
+            self.error_analysis,
+            self.text,
+        ]
+        if sum(output is not None for output in outputs) > 1:
+            raise ValueError("a player step carries at most one output")
+        return self
+
+
 class EvaluationAssignmentTrace(G8eBaseModel):
     """Immutable application-owned record of one scored chat assignment.
 
@@ -185,6 +310,10 @@ class EvaluationAssignmentTrace(G8eBaseModel):
     continue-approval at ``AGENT_MAX_TOOL_TURNS`` is denied immediately instead
     of waiting for a human who is not there). ``seed_application`` records what
     the investigation seed wrote.
+
+    ``player_steps`` is the chain: one typed record per player that did its job
+    in this turn (Triage, Sage or Dash, the Tribunal seats and vote, Marshal,
+    the Auditor, Codex), each carrying the output it produced.
     """
 
     schema_version: str = Field(default="1")
@@ -199,6 +328,7 @@ class EvaluationAssignmentTrace(G8eBaseModel):
     user_memories_suppressed: bool = False
     seed_application: EvaluationSeedApplication | None = None
     model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
+    player_steps: list[EvaluationPlayerStep] = Field(default_factory=list)
     role_outcome: EvaluationRoleOutcome | None = None
     designated_role_output: str | None = None
     tool_decisions: list[EvaluationToolDecisionRecord] = Field(default_factory=list)

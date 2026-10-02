@@ -529,12 +529,14 @@ func (rs *OperatorPubSubService) Stop() error {
 	return nil
 }
 
+// listenForCommands holds the Operator's cmd-channel subscription for the life
+// of the service. The Gateway is allowed to be down for any length of time (a
+// restart, an upgrade), so a lost subscription is retried with capped backoff
+// until the service context ends; giving up would leave an Operator that still
+// heartbeats over its publish socket but can never receive a command.
 func (rs *OperatorPubSubService) listenForCommands(channelName string) {
-	const maxReconnectAttempts = 3
-
 	reconnectDelay := rs.reconnectBaseDelay
 	maxReconnectDelay := 30 * rs.reconnectBaseDelay
-	attempts := 0
 
 	for {
 		select {
@@ -566,14 +568,8 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 				rs.ShutdownChan <- "SSL_CERT_FAILURE"
 				return
 			}
-			attempts++
-			if shouldGiveUp(attempts, maxReconnectAttempts) {
-				rs.logger.Error("[RECONNECT] Max reconnection attempts reached, giving up",
-					"attempts", attempts, string(constants.ConnectionStateError), err)
-				return
-			}
 			rs.logger.Warn("[RECONNECT] Failed to connect, will retry...",
-				"attempt", attempts, "max", maxReconnectAttempts, string(constants.ConnectionStateError), err)
+				"retry_in_seconds", reconnectDelay.Seconds(), string(constants.ConnectionStateError), err)
 			if !waitForReconnect(rs.ctx, reconnectDelay) {
 				return
 			}
@@ -583,14 +579,12 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 
 		rs.logger.Info("Channel established - Ready to receive")
 		reconnectDelay = rs.reconnectBaseDelay
-		attempts = 0
 
 		if err := rs.heartbeat.SendAutomatic(); err != nil {
 			rs.logger.Error("Failed to send automatic heartbeat", "error", err)
 		}
 
 		disconnected := false
-		receivedMessage := false
 
 		for !disconnected {
 			select {
@@ -599,20 +593,9 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 				return
 			case payload, ok := <-msgCh:
 				if !ok {
-					attempts++
-					if shouldGiveUp(attempts, maxReconnectAttempts) {
-						rs.logger.Error("[RECONNECT] Channel closed repeatedly, max attempts reached - giving up",
-							"attempts", attempts)
-						return
-					}
-					rs.logger.Warn("[RECONNECT] Channel closed, reconnecting...",
-						"attempt", attempts, "max", maxReconnectAttempts)
+					rs.logger.Warn("[RECONNECT] Channel closed, reconnecting...")
 					disconnected = true
 					break
-				}
-				if !receivedMessage {
-					receivedMessage = true
-					attempts = 0
 				}
 				rs.wg.Add(1)
 				go func(p []byte) {
@@ -693,12 +676,6 @@ func waitForReconnect(ctx context.Context, delay time.Duration) bool {
 
 func nextReconnectDelay(current, max time.Duration) time.Duration {
 	return min(current*2, max)
-}
-
-// shouldGiveUp returns true when the attempt count has reached or exceeded the
-// maximum allowed reconnect attempts.
-func shouldGiveUp(attempts, maxAttempts int) bool {
-	return attempts >= maxAttempts
 }
 
 func (rs *OperatorPubSubService) handleCommandPayload(payload []byte) {
