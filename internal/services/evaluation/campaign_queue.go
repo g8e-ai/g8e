@@ -132,7 +132,7 @@ func (queue *CampaignQueue) FindByTagOrVariantID(query string) (*CampaignQueueMo
 			return &selected, nil
 		}
 	}
-	return nil, fmt.Errorf("evaluation: init campaign queue: model %q not found", query)
+	return nil, fmt.Errorf("evaluation: init campaign queue: model %q: %w", query, constants.ErrNotFound)
 }
 
 // FilterByStatus returns queue entries matching one status, or all entries when status is empty or "all".

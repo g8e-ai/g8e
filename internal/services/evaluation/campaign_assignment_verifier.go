@@ -98,7 +98,7 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 	} else if err := validateTraceDigest(req.Trace); err != nil {
 		failures = append(failures, "trace digest validation failed: "+err.Error())
 	} else if err := verifyImportedEvidence(req.Assignment, req.Result, req.Trace); err != nil {
-		failures = append(failures, "imported evidence does not match trace: "+err.Error())
+		failures = append(failures, err.Error())
 	}
 	skipGradeRecomputation := !CatalogRecomputesGrades(req.CatalogRef)
 	if !skipGradeRecomputation {
@@ -234,40 +234,40 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 		return err
 	}
 	if len(expectedInferences) != len(result.GetModelInferences()) {
-		return fmt.Errorf("model inference count mismatch: %w", constants.ErrEvalRunVerificationFailed)
+		return fmt.Errorf("model inference count mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	for index, expected := range expectedInferences {
 		actual := result.GetModelInferences()[index]
 		expected.InferenceRecordId = actual.GetInferenceRecordId()
 		if !proto.Equal(expected, actual) {
-			return fmt.Errorf("model inference %d mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
+			return fmt.Errorf("model inference %d mismatch: %w", index, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	actualSpan := result.GetScoredInferenceSpanNanos()
 	if (expectedSpan == nil) != (result.ScoredInferenceSpanNanos == nil) || expectedSpan != nil && *expectedSpan != actualSpan {
-		return fmt.Errorf("scored inference span mismatch: %w", constants.ErrEvalRunVerificationFailed)
+		return fmt.Errorf("scored inference span mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	expectedPolicy, err := policyDecisionRecordsFromTrace(assignment, trace)
 	if err != nil {
 		return err
 	}
 	if len(expectedPolicy) != len(result.GetPolicyDecisions()) {
-		return fmt.Errorf("policy decision records mismatch: %w", constants.ErrEvalRunVerificationFailed)
+		return fmt.Errorf("policy decision records mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	for index, expected := range expectedPolicy {
 		if !proto.Equal(expected, result.GetPolicyDecisions()[index]) {
-			return fmt.Errorf("policy decision record %d mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
+			return fmt.Errorf("policy decision record %d mismatch: %w", index, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	expectedToolCalls := toolCallRecordsFromTrace(assignment, trace, func(prefix string) string { return prefix })
 	if len(expectedToolCalls) != len(result.GetToolCalls()) {
-		return fmt.Errorf("tool call records mismatch: %w", constants.ErrEvalRunVerificationFailed)
+		return fmt.Errorf("tool call records mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	for index, expected := range expectedToolCalls {
 		actual := result.GetToolCalls()[index]
 		expected.CallId = actual.GetCallId()
 		if !proto.Equal(expected, actual) {
-			return fmt.Errorf("tool call record %d mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
+			return fmt.Errorf("tool call record %d mismatch: %w", index, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	for field, expected := range map[string]bool{
@@ -288,7 +288,7 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 			actual = result.GetPolicyDecisionsCaptured()
 		}
 		if actual != expected {
-			return fmt.Errorf("%s capture presence mismatch: %w", field, constants.ErrEvalRunVerificationFailed)
+			return fmt.Errorf("%s capture presence mismatch: %w", field, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	return nil

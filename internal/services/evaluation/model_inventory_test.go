@@ -303,9 +303,9 @@ func TestRemoveModelVariant(t *testing.T) {
 
 	// Non-existent model fails
 	_, _, err = RemoveModelVariant(freeze, "non-existent:1b")
-	require.Error(t, err)
+	require.ErrorIs(t, err, constants.ErrNotFound)
 
 	// Removing the last model fails
 	_, _, err = RemoveModelVariant(updated, "model-b:2b")
-	require.Error(t, err)
+	require.ErrorIs(t, err, constants.ErrEvaluationLastEntryRemoval)
 }

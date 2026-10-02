@@ -146,7 +146,7 @@ func TestRemoveFormationRejectsRemovingLastEntry(t *testing.T) {
 	topologies := &ExecutionTopologies{formations: []Formation{newTestFormation("only-formation")}}
 
 	_, _, err := RemoveFormation(topologies, "only-formation")
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvaluationLastEntryRemoval)
 }
 
 type formationTestProvenance struct {

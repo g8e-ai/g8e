@@ -9,6 +9,7 @@ package evaluation
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -210,7 +212,7 @@ func TestCampaignAssignmentVerifier_OldCatalogRunsKeepEveryIntegrityCheck(t *tes
 				redigest(t, result)
 				report := verifyAssignment(t, f, result, ref)
 				assert.Equal(t, verdictFail, report.GetStatus())
-				assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: model inference 0 mismatch")
+				assert.Contains(t, report.GetFailureReasons(), "model inference 0 mismatch: "+constants.ErrEvaluationEvidenceTraceMismatch.Error())
 			})
 			t.Run("a tool call record rewritten after the fact still fails", func(t *testing.T) {
 				result := f.importResult(t)
@@ -219,7 +221,7 @@ func TestCampaignAssignmentVerifier_OldCatalogRunsKeepEveryIntegrityCheck(t *tes
 				redigest(t, result)
 				report := verifyAssignment(t, f, result, ref)
 				assert.Equal(t, verdictFail, report.GetStatus())
-				assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: tool call record 0 mismatch")
+				assert.Contains(t, report.GetFailureReasons(), "tool call record 0 mismatch: "+constants.ErrEvaluationEvidenceTraceMismatch.Error())
 			})
 			t.Run("a tool call record dropped from the result still fails", func(t *testing.T) {
 				result := f.importResult(t)
@@ -227,7 +229,7 @@ func TestCampaignAssignmentVerifier_OldCatalogRunsKeepEveryIntegrityCheck(t *tes
 				redigest(t, result)
 				report := verifyAssignment(t, f, result, ref)
 				assert.Equal(t, verdictFail, report.GetStatus())
-				assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: tool call records mismatch")
+				assert.Contains(t, report.GetFailureReasons(), "tool call records mismatch: "+constants.ErrEvaluationEvidenceTraceMismatch.Error())
 			})
 			t.Run("a trace that no longer matches its digest still fails", func(t *testing.T) {
 				result := f.importResult(t)
@@ -328,7 +330,8 @@ func TestCampaignAssignmentVerifier_RejectsIncompleteRequests(t *testing.T) {
 		report, err := verifier.Verify(context.Background(), CampaignAssignmentVerificationRequest{Assignment: noTarget, Result: result, Trace: f.trace})
 		require.NoError(t, err)
 		assert.Equal(t, verdictFail, report.GetStatus())
-		assert.Contains(t, report.GetFailureReasons(), "evaluation: designated role lookup: homogeneous target required")
+		// Failure reasons are persisted strings, so the typed sentinel is matched by its text.
+		assert.Contains(t, strings.Join(report.GetFailureReasons(), "\n"), constants.ErrEvaluationTargetKindMismatch.Error())
 	})
 }
 

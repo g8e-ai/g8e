@@ -1592,6 +1592,7 @@ var (
 	ErrEvaluationFlagsInvalid              = errors.New("evaluation: invalid flag combination or value")
 	ErrEvaluationDigestComputeFailed       = errors.New("evaluation: digest computation failed")
 	ErrEvaluationTargetKindMismatch        = errors.New("evaluation: assignment target kind does not match the executor")
+	ErrEvaluationEvidenceTraceMismatch     = errors.New("evaluation: imported evidence does not match its trace")
 	ErrEvaluationLastEntryRemoval          = errors.New("evaluation: cannot remove the last entry from a catalog or inventory")
 	ErrEvaluationFormationSmokeFailed      = errors.New("evaluation: formation smoke failed")
 )

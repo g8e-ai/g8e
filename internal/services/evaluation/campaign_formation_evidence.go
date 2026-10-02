@@ -246,7 +246,7 @@ func VerifyFormationRunEvidenceMatchesResult(assignment *evalv1.EvaluationAssign
 		return err
 	}
 	if len(imported.GetModelInferences()) != len(result.GetModelInferences()) {
-		return fmt.Errorf("formation run evidence model inference count mismatch: %w", constants.ErrEvalRunVerificationFailed)
+		return fmt.Errorf("formation run evidence model inference count mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	for index, expected := range imported.GetModelInferences() {
 		actual := result.GetModelInferences()[index]
@@ -258,11 +258,11 @@ func VerifyFormationRunEvidenceMatchesResult(assignment *evalv1.EvaluationAssign
 			expected.GetPromptTokens() != actual.GetPromptTokens() ||
 			expected.GetCompletionTokens() != actual.GetCompletionTokens() ||
 			expected.GetGenerationDurationNanos() != actual.GetGenerationDurationNanos() {
-			return fmt.Errorf("formation run evidence model inference %d mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
+			return fmt.Errorf("formation run evidence model inference %d mismatch: %w", index, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	if imported.GetLifecycleStatus() != result.GetLifecycleStatus() {
-		return fmt.Errorf("formation run evidence lifecycle mismatch: %w", constants.ErrEvalRunVerificationFailed)
+		return fmt.Errorf("formation run evidence lifecycle mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	return nil
 }

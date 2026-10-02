@@ -393,3 +393,14 @@ func TestBuildAssignmentResultsCSV_EmitsHeaderAndRow(t *testing.T) {
 	assert.Contains(t, text, "assignment-1,run-1,scenario-1")
 	assert.Contains(t, text, "42.500")
 }
+
+func TestNormalizeRuntimeExportDir_RejectsAbsoluteAndEscapingPaths(t *testing.T) {
+	t.Parallel()
+	for _, dir := range []string{"/etc/export", "..", "../outside", "../../outside"} {
+		_, err := normalizeRuntimeExportDir("run-1", dir)
+		assert.ErrorIs(t, err, constants.ErrEvaluationExportDirNotRelative, dir)
+	}
+	got, err := normalizeRuntimeExportDir("run-1", "nested/export")
+	require.NoError(t, err)
+	assert.Equal(t, "nested/export", got)
+}
