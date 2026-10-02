@@ -605,6 +605,66 @@ func TestComplianceReportGenerateCmdWithConfig_RejectsIncompleteCampaignSource(t
 	assert.Contains(t, err.Error(), "campaign")
 }
 
+func TestBuildCampaignReportSource_ProtectsRecordedReleaseAndExcludesAssertions(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		name := "recorded release"
+		if legacy {
+			name = "operator assertion stays outside the bundle"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+			store := evaluation.NewStore(fileSvc)
+			req := cmdtest.EvaluationTestCampaignInitRequest(t)
+			controller := evaluation.NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+			run, err := controller.InitializeCampaign(ctx, req)
+			require.NoError(t, err)
+			spec, err := store.LoadCampaignSpec(ctx, req.CampaignID)
+			require.NoError(t, err)
+			require.NotEmpty(t, spec.GetPlatformRelease())
+			if legacy {
+				spec.PlatformRelease, spec.SourceRevision = "", ""
+				spec.CampaignDigest, err = evaluation.ComputeCampaignSpecDigest(spec)
+				require.NoError(t, err)
+				require.NoError(t, store.SaveCampaignSpec(ctx, spec))
+				run.CampaignBinding.CampaignDigest = spec.GetCampaignDigest()
+				require.NoError(t, store.SaveRun(ctx, run))
+				require.NoError(t, store.TagCampaignRelease(ctx, req.CampaignID, "v2.2.7", time.Now().UTC()))
+			}
+			_, err = controller.ScheduleHomogeneousRun(ctx, req.RunID)
+			require.NoError(t, err)
+			admission := &compliancev1.AssessmentSourceAdmission{
+				AdmissionId: "campaign-release", RunId: req.RunID, SourceKind: constants.EvaluationSourceKindCampaign,
+				VerifierRef:               &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion},
+				ProviderObservationPolicy: compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT,
+				ModelProvenancePolicy:     compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT,
+			}
+			_, artifacts, err := buildCampaignReportSource(ctx, fileSvc, admission, time.Now().UTC())
+			require.NoError(t, err)
+			foundSpec := false
+			for _, artifact := range artifacts {
+				assert.NotEqual(t, constants.EvaluationCampaignReleaseTagFilename, path.Base(artifact.BundlePath))
+				if path.Base(artifact.BundlePath) == constants.EvaluationCampaignSpecFilename {
+					foundSpec = true
+					captured := &evalv1.EvaluationCampaignSpec{}
+					require.NoError(t, evalv1.UnmarshalCanonical(artifact.Body, captured))
+					assert.Equal(t, spec.GetPlatformRelease(), captured.GetPlatformRelease())
+					assert.Equal(t, spec.GetSourceRevision(), captured.GetSourceRevision())
+					require.NoError(t, evaluation.ValidateCampaignSpecDigest(captured))
+				}
+				if path.Base(artifact.BundlePath) == constants.CampaignSourceInventoryFilename {
+					inventory := &evalv1.CampaignComplianceSourceInventory{}
+					require.NoError(t, evalv1.UnmarshalCanonical(artifact.Body, inventory))
+					for _, entry := range inventory.GetArtifacts() {
+						assert.NotEqual(t, constants.EvaluationCampaignReleaseTagFilename, path.Base(entry.GetRuntimePath()))
+					}
+				}
+			}
+			require.True(t, foundSpec, "the digest-bound campaign spec must be protected in the bundle")
+		})
+	}
+}
+
 func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
 	req := cmdtest.EvaluationTestCampaignInitRequest(t)

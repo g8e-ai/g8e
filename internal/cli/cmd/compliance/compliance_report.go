@@ -714,9 +714,14 @@ func buildCampaignReportSource(ctx context.Context, fileSvc fs.RuntimeFileServic
 		}
 		for _, artifact := range captured {
 			runtimePath := strings.TrimPrefix(artifact.BundlePath, runtimeBundleRoot+"/")
+			// Operator assertions are campaign-store metadata, not protected
+			// compliance evidence. The recorded release remains in the spec.
+			if runtimePath == path.Join(roots[1], constants.EvaluationCampaignReleaseTagFilename) {
+				continue
+			}
 			bodies[filepath.FromSlash(runtimePath)] = append([]byte(nil), artifact.Body...)
+			artifacts = append(artifacts, artifact)
 		}
-		artifacts = append(artifacts, captured...)
 	}
 	assignments, err := store.ListAssignments(ctx, runID)
 	if err != nil {
