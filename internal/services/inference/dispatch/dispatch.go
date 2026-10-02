@@ -182,8 +182,8 @@ type DispatchInferenceRequest struct {
 	// use the backend default.
 	Temperature float32
 
-	// MaxTokens overrides the backend's default max tokens. Zero means use
-	// the backend default.
+	// MaxTokens is the caller's output limit. Zero states no limit and the
+	// executing backend runs under constants.InferenceMaxOutputTokens.
 	MaxTokens int32
 
 	// KeepAlive overrides the config default keep-alive duration. Empty

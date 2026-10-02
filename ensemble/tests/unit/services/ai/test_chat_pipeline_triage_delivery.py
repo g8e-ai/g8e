@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     AgentMode,
     EventType,
     ThinkingLevel,
@@ -100,12 +99,11 @@ def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentS
         sentinel_mode=True,
         operator_bound=False,
         model_to_use="lite-model",
-        max_tokens=None,
         conversation_history=[],
         system_instructions="",
         contents=[],
         generation_config=PrimaryLLMSettings(
-            max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+            max_output_tokens=None,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
             stop_sequences=[],

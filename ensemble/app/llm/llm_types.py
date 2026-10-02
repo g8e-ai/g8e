@@ -16,10 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.constants import (
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
-    ThinkingLevel,
-)
+from app.constants import ThinkingLevel
 
 # Import pure dataclasses/enums from separate module
 from app.llm.llm_dataclasses import (
@@ -135,7 +132,7 @@ class PrimaryLLMSettings:
     applies when platform settings omit overrides.
     """
 
-    max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    max_output_tokens: int | None = None
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
     random_seed: int | None = None
@@ -159,7 +156,7 @@ class AssistantLLMSettings:
     defaults.
     """
 
-    max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    max_output_tokens: int | None = None
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
     random_seed: int | None = None
@@ -177,7 +174,7 @@ class LiteLLMSettings:
     defaults.
     """
 
-    max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    max_output_tokens: int | None = None
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
     random_seed: int | None = None
@@ -188,7 +185,7 @@ class LiteLLMSettings:
 
 @dataclass
 class GenerateContentConfig:
-    max_output_tokens: int
+    max_output_tokens: int | None
     system_instructions: str | None = None
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None

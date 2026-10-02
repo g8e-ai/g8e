@@ -1,7 +1,6 @@
-Search for a regex pattern recursively within a directory on the operator host.
-Returns matching lines with their file paths and line numbers.
-Supports filtering files by glob patterns via the includes parameter.
-Limits results to max_matches (default 100, max 500) to prevent excessive output.
-Skips hidden directories (like .git) automatically.
-Use this for read-only context gathering when you need to find specific strings or patterns across many files.
-This tool is safe for automated execution as it is read-only and enforces symlink boundary constraints.
+Regex search, recursive, in a directory on the operator host, returning matching lines with paths and line numbers. Read-only and safe for automated use. Use it to find strings or patterns across many files.
+
+<behavior>
+- Filter files with the `includes` globs. Results are capped at `max_matches` (default 100, max 500).
+- Skips hidden directories such as `.git`. Enforces symlink boundaries.
+</behavior>

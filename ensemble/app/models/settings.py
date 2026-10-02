@@ -312,7 +312,6 @@ class LLMSettings(_ProtocolLLMSettings):
 
     jev_model: str | None = Field(default=JEV_DEFAULT_MODEL)
 
-    llm_max_tokens: int | None = Field(default=None)
     llm_command_gen_enabled: bool = Field(default=True)
     llm_command_gen_auditor: bool = Field(default=True)
     llm_command_gen_passes: int = Field(default=5)

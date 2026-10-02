@@ -755,6 +755,8 @@ export interface LiveEvent extends ViewRecordEnvelope {
   variant_id?: string;
   role?: ModelRole;
   lifecycle_status: LifecycleStatus;
+  /** Outcome of the assignment; present only on terminal assignment events. */
+  terminal_status?: TerminalStatus;
   completed: number;
   total: number;
   stage_label?: string;

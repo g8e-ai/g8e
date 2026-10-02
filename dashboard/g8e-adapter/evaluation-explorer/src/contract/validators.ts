@@ -950,7 +950,7 @@ export function isMethodologySnapshot(value: unknown): asserts value is Methodol
 
 export function isLiveEvent(value: unknown): asserts value is LiveEvent {
   assertObject(value, 'live_event');
-  rejectUnknown(value, [...ENVELOPE_FIELDS, 'event_id', 'run_id', 'assignment_id', 'task_id', 'variant_id', 'role', 'lifecycle_status', 'completed', 'total', 'stage_label', 'metric_delta', 'feed_sequence'], 'live_event');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'event_id', 'run_id', 'assignment_id', 'task_id', 'variant_id', 'role', 'lifecycle_status', 'terminal_status', 'completed', 'total', 'stage_label', 'metric_delta', 'feed_sequence'], 'live_event');
   assertEnvelope(value, 'live_event', LIVE_EVENT_KINDS as unknown as string[]);
   assertString(value.event_id, 'live_event.event_id');
   assertString(value.run_id, 'live_event.run_id');
@@ -959,6 +959,7 @@ export function isLiveEvent(value: unknown): asserts value is LiveEvent {
   assertOptional(value.variant_id, 'live_event.variant_id', assertString);
   assertOptional(value.role, 'live_event.role', (role) => assertEnum(role, MODEL_ROLES, 'live_event.role'));
   assertEnum(value.lifecycle_status, LIFECYCLE_STATUSES, 'live_event.lifecycle_status');
+  assertOptional(value.terminal_status, 'live_event.terminal_status', (status) => assertEnum(status, TERMINAL_STATUSES, 'live_event.terminal_status'));
   assertInteger(value.completed, 'live_event.completed');
   assertInteger(value.total, 'live_event.total');
   assert(value.completed >= 0, 'live_event.completed', 'must be >= 0');

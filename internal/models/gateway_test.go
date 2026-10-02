@@ -143,7 +143,7 @@ func TestUserSettingsDocument_UnmarshalsProtocolShape(t *testing.T) {
 		"settings": {
 			"llm": {"llm_primary_provider": "ollama", "llm_model": "qwen3"},
 			"search": {"enabled": true, "location": "global"},
-			"eval_judge": {"eval_judge_model": "judge", "eval_judge_max_tokens": 1024},
+			"eval_judge": {"eval_judge_model": "judge"},
 			"command_validation": {"enable_whitelisting": false, "enable_blacklisting": true},
 			"batch_execution": {"max_concurrency": 4, "fail_fast": true}
 		},
@@ -160,7 +160,6 @@ func TestUserSettingsDocument_UnmarshalsProtocolShape(t *testing.T) {
 	assert.True(t, doc.Settings.Search.Enabled)
 	assert.Equal(t, "global", doc.Settings.Search.Location)
 	assert.Equal(t, "judge", doc.Settings.EvalJudge.Model)
-	assert.Equal(t, 1024, doc.Settings.EvalJudge.MaxTokens)
 	assert.False(t, doc.Settings.CommandValidation.EnableWhitelisting)
 	assert.True(t, doc.Settings.CommandValidation.EnableBlacklisting)
 	assert.Equal(t, 4, doc.Settings.BatchExecution.MaxConcurrency)

@@ -30,6 +30,15 @@ const (
 	maxInferenceResponsePartTextBytes = 256 << 10
 )
 
+// resolveOutputTokenLimit returns the stated limit, or the platform ceiling when
+// the request states none (0). Validation has already rejected values above it.
+func resolveOutputTokenLimit(requested int32) int32 {
+	if requested == 0 {
+		return constants.InferenceMaxOutputTokens
+	}
+	return requested
+}
+
 func validateKeepAlive(value string) error {
 	if value == "" {
 		return nil

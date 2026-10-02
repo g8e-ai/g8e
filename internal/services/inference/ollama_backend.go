@@ -296,7 +296,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		Format:   format,
 		Options: ollamaChatOptions{
 			Temperature: req.Temperature,
-			NumPredict:  req.MaxTokens,
+			NumPredict:  resolveOutputTokenLimit(req.MaxTokens),
 			TopP:        req.TopP,
 			TopK:        req.TopK,
 			Seed:        req.Seed,

@@ -171,7 +171,6 @@ class TestAgentInputsImmutability:
             request_settings=request_settings,
             operator_bound=True,
             model_to_use="test-model",
-            max_tokens=2048,
             conversation_history=conversation_history,
             system_instructions="You are a helpful assistant",
             contents=[{"role": "user", "parts": [{"text": "hello"}]}],
@@ -214,7 +213,6 @@ class TestAgentInputsImmutability:
         assert reconstructed.sentinel_mode == original_inputs.sentinel_mode
         assert reconstructed.operator_bound == original_inputs.operator_bound
         assert reconstructed.model_to_use == original_inputs.model_to_use
-        assert reconstructed.max_tokens == original_inputs.max_tokens
         assert reconstructed.system_instructions == original_inputs.system_instructions
         assert len(reconstructed.conversation_history) == len(original_inputs.conversation_history)
         assert len(reconstructed.contents) == len(original_inputs.contents)

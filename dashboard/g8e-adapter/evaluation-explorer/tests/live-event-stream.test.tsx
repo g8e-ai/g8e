@@ -412,18 +412,16 @@ describe('LiveEventStream', () => {
     expect(roleCell?.querySelector('.status-dot')).not.toBeInTheDocument();
   });
 
-  it('maps pass_rate metric_delta onto pass and pass rate columns', () => {
+  it('shows the binary pass metric as Fail and invents no pass rate', () => {
     render(
       <MemoryRouter>
         <LiveEventStream
           events={[
             liveEvent({
-              event_id: 'evt-pass-rate',
+              event_id: 'evt-pass',
               kind: 'metric_updated',
               assignment_id: 'assignment-1',
-              metric_delta: {
-                pass_rate: { value: 1 },
-              },
+              metric_delta: { pass: { value: 0 } },
             }),
           ]}
           connection="live"
@@ -432,8 +430,70 @@ describe('LiveEventStream', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('Pass', { selector: '.stream-metric-value' })).toBeInTheDocument();
-    expect(screen.getByText('100.0%')).toBeInTheDocument();
+    expect(screen.getByText('Fail', { selector: '.stream-metric-value' })).toBeInTheDocument();
+    expect(screen.queryByText('0.0%')).not.toBeInTheDocument();
+  });
+
+  it('shows the outcome, not the lifecycle, on a terminal row', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-terminal',
+              kind: 'assignment_failed',
+              assignment_id: 'assignment-1',
+              lifecycle_status: 'completed',
+              terminal_status: 'model_failed',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const row = screen.getByRole('link', { name: 'Assignment Failed' }).closest('tr');
+    expect(row).toHaveTextContent('Model Failed');
+    expect(row).not.toHaveTextContent('Completed');
+  });
+
+  it('does not show the assignment final result on its started row', () => {
+    const assignment: AssignmentResult = {
+      schema_version: '1.3.0',
+      kind: 'assignment_result',
+      dataset_id: 'ds-live-a',
+      quality_state: 'live_in_progress',
+      observed_at: '2026-09-17T08:00:00Z',
+      assignment_id: 'assignment-1',
+      run_id: 'run-a',
+      task_id: 'task-started',
+      variant_id: 'model-started',
+      role: 'primary',
+      repetition: 1,
+      terminal_status: 'model_failed',
+      metric_values: { pass: { value: 0 }, deterministic_pass_rate: { value: 0.818 } },
+      stage_summary: [],
+      resource_summary: { input_tokens: { value: 42 } },
+    };
+    evalStore.loadFixtures([assignment], []);
+
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({ event_id: 'evt-started', kind: 'assignment_started', assignment_id: 'assignment-1' }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const row = screen.getByRole('link', { name: 'Assignment Started' }).closest('tr');
+    expect(row).not.toHaveTextContent('81.8%');
+    expect(row).not.toHaveTextContent('Fail');
+    expect(row).not.toHaveTextContent('42 tok');
   });
 
   it('shows per-role metrics on stage_updated rows instead of assignment aggregates', () => {

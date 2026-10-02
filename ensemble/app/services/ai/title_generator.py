@@ -15,7 +15,6 @@ Uses a lightweight model optimized for quick text generation tasks.
 import logging
 import time
 
-from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.errors import OllamaEmptyResponseError
 from app.llm import get_generative_lite_provider, Role
 from app.llm.llm_types import Content, Part, LiteLLMSettings
@@ -25,6 +24,7 @@ from app.models.agents.title_generator import CaseTitleResult
 from app.models.http_context import G8eHttpContext
 from app.models.model_configs import get_model_config
 from app.models.settings import G8eeUserSettings
+from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
@@ -78,13 +78,10 @@ async def generate_case_title(
         )
 
         model_config = get_model_config(model)
-        max_output_tokens = (
-            model_config.max_output_tokens
-            if model_config and model_config.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
         lite_llm_settings = LiteLLMSettings(
-            max_output_tokens=max_output_tokens,
+            max_output_tokens=AIGenerationConfigBuilder.resolve_max_output_tokens(
+                model_config, None
+            ),
             top_p_nucleus_sampling=model_config.top_p,
             top_k_filtering=model_config.top_k,
             stop_sequences=model_config.stop_sequences,
@@ -138,7 +135,7 @@ async def generate_case_title(
                     prompt_eval_count=None,
                     eval_count=None,
                     num_ctx=0,
-                    num_predict=0,
+                    num_predict=None,
                     thinking_len=0,
                     tool_calls_count=0,
                     ctx_overflow_suspected=False,

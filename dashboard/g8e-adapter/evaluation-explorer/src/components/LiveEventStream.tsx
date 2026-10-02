@@ -44,24 +44,8 @@ function isAssignmentLevelEvent(event: LiveEvent): boolean {
   );
 }
 
-function normalizeMetricDelta(delta: Record<string, MetricValue> | undefined): Record<string, MetricValue> {
-  if (!delta) return {};
-  const values: Record<string, MetricValue> = { ...delta };
-  const passRate = values.pass_rate;
-  if (passRate !== undefined) {
-    if (values.deterministic_pass_rate === undefined) {
-      values.deterministic_pass_rate = passRate;
-    }
-    if (values.pass === undefined) {
-      if (passRate.value !== undefined) {
-        values.pass = { value: passRate.value >= 1 ? 1 : 0 };
-      } else if (passRate.unavailable_reason) {
-        values.pass = { unavailable_reason: passRate.unavailable_reason };
-      }
-    }
-    delete values.pass_rate;
-  }
-  return values;
+function isTerminalAssignmentEvent(event: LiveEvent): boolean {
+  return event.kind === 'assignment_completed' || event.kind === 'assignment_failed';
 }
 
 function findModelActivityRecord(
@@ -177,20 +161,17 @@ function roleGradeMetricValues(event: LiveEvent, assignment: AssignmentResult | 
 }
 
 function assignmentMetricValues(event: LiveEvent, assignment: AssignmentResult | undefined): Record<string, MetricValue> {
-  const normalizedDelta = normalizeMetricDelta(event.metric_delta);
-  if (isAssignmentLevelEvent(event)) {
-    return applyAssignmentResourceSummary(
-      {
-        ...normalizedDelta,
-        ...(assignment?.metric_values ?? {}),
-      },
-      assignment,
-    );
+  const delta = event.metric_delta ?? {};
+  if (isTerminalAssignmentEvent(event)) {
+    return applyAssignmentResourceSummary({ ...delta, ...(assignment?.metric_values ?? {}) }, assignment);
   }
+  // Started and metric_updated rows show only what their event stated; the
+  // assignment's final values belong to its terminal event.
+  if (isAssignmentLevelEvent(event)) return { ...delta };
 
   const roleRecord = findModelActivityRecord(event, assignment);
   return {
-    ...normalizedDelta,
+    ...delta,
     ...(roleRecord ? roleActivityMetricValues(roleRecord) : {}),
     ...roleGradeMetricValues(event, assignment),
   };
@@ -200,7 +181,10 @@ function displayLabel(value: string | undefined): string | undefined {
   return value?.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+/** A terminal assignment row shows its outcome; the lifecycle (`completed` for a
+ *  failed model) stays on `lifecycle_status` for the detail view. */
 function eventStatus(event: LiveEvent): string | undefined {
+  if (event.terminal_status) return event.terminal_status;
   if (event.kind === 'assignment_started' && event.lifecycle_status === 'running') return 'started';
   return event.lifecycle_status;
 }

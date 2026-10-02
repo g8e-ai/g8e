@@ -301,7 +301,9 @@ class TestG8EProviderDispatch:
         assert request.role == MODEL_ROLE_PRIMARY
         assert request.model == "gemma3:4b"
         assert request.provider_attempt_id
-        assert request.max_tokens == PrimaryLLMSettings().max_output_tokens
+        # Unset on the Python side; the proto3 default tells the Gateway to use the backend default.
+        assert PrimaryLLMSettings().max_output_tokens is None
+        assert request.max_tokens == 0
         assert resp.candidates[0].content.parts[0].text == "generated output"
         assert resp.usage_metadata.total_token_count == 18
         assert resp.usage_metadata.usage_reported is True

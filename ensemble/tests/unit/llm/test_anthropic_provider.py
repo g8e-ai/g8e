@@ -20,9 +20,9 @@ from app.constants import (
     ANTHROPIC_CLAUDE_HAIKU_4_5,
     ANTHROPIC_CLAUDE_OPUS_4_6,
     ANTHROPIC_CLAUDE_SONNET_4_6,
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
 )
+from app.errors import ConfigurationError
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Content,
@@ -77,9 +77,13 @@ class TestBuildKwargs:
         request = self._build()
         assert "top_p" not in request.model_dump(mode="json", exclude_none=True)
 
-    def test_max_tokens_defaults_when_none(self):
-        request = self._build(max_tokens=None)
-        assert request.max_tokens == LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    def test_max_tokens_resolves_from_model_ceiling_when_unset(self):
+        request = self._build(model=ANTHROPIC_CLAUDE_HAIKU_4_5, max_tokens=None)
+        assert request.max_tokens == 64_000
+
+    def test_max_tokens_unset_without_model_ceiling_raises_configuration_error(self):
+        with pytest.raises(ConfigurationError):
+            self._build(model="model-without-registry-entry", max_tokens=None)
 
     def test_top_k_included_when_provided(self):
         request = self._build(top_k=40)

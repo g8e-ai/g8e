@@ -13,7 +13,7 @@ from collections.abc import AsyncGenerator
 
 import anthropic
 
-from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.errors import ConfigurationError
 from app.llm.thinking import translate_for_anthropic
 from ._capability import translate_capability_error
 from app.models.model_configs import get_model_config
@@ -239,7 +239,7 @@ class AnthropicProvider(LLMProvider):
         *,
         model: str,
         messages: list[dict],
-        max_tokens: int,
+        max_tokens: int | None,
         top_k: int | None,
         system_instructions: str,
         anthropic_tools: list[dict] | None = None,
@@ -250,15 +250,25 @@ class AnthropicProvider(LLMProvider):
         Anthropic constraints enforced here:
         - Extended thinking requires no other sampling params
         """
+        model_config = get_model_config(model)
+
+        # The Messages API requires max_tokens. Use the caller's value, else the
+        # model's documented ceiling; with neither there is nothing honest to send.
         effective_max_tokens = (
-            max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+            max_tokens
+            if max_tokens is not None
+            else (model_config.max_output_tokens if model_config else None)
         )
+        if effective_max_tokens is None:
+            raise ConfigurationError(
+                f"Anthropic requires max_tokens and model '{model}' declares no output ceiling",
+                details={"model": model},
+            )
 
         # Translate the canonical ThinkingConfig to Anthropic's extended-thinking
         # wire shape. The translator enforces per-level budgets (from the model
         # config's thinking_budgets map or the default table) and signals whether
         # the call must switch into thinking mode (temp=1, no top_k).
-        model_config = get_model_config(model)
         if thinking_config is not None:
             translation = translate_for_anthropic(
                 thinking_config.thinking_level,
@@ -390,7 +400,7 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_primary: model=%s contents=%d "
-            "max_output_tokens=%d top_k=%s top_p=%s "
+            "max_output_tokens=%s top_k=%s top_p=%s "
             "system_instructions_len=%d tools_count=%d",
             model,
             len(contents),
@@ -578,7 +588,7 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_assistant: model=%s contents=%d "
-            "max_output_tokens=%d top_k=%s top_p=%s "
+            "max_output_tokens=%s top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
@@ -616,7 +626,7 @@ class AnthropicProvider(LLMProvider):
     ) -> GenerateContentResponse:
         logger.info(
             "[ANTHROPIC] generate_content_assistant: model=%s contents=%d "
-            "max_output_tokens=%d top_k=%s top_p=%s "
+            "max_output_tokens=%s top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
@@ -654,7 +664,7 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_lite: model=%s contents=%d "
-            "max_output_tokens=%d top_k=%s top_p=%s "
+            "max_output_tokens=%s top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
@@ -692,7 +702,7 @@ class AnthropicProvider(LLMProvider):
     ) -> GenerateContentResponse:
         logger.info(
             "[ANTHROPIC] generate_content_lite: model=%s contents=%d "
-            "max_output_tokens=%d top_k=%s top_p=%s "
+            "max_output_tokens=%s top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),

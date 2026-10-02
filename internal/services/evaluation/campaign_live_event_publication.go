@@ -392,6 +392,10 @@ func reportedModelInferences(result *evalv1.EvaluationAssignmentResult) []*evalv
 	return records
 }
 
+// assignmentPassMetricID names the binary per-assignment verdict metric (1 pass,
+// 0 fail). It is not a rate: run-level `pass_rate` is a different metric.
+const assignmentPassMetricID = "pass"
+
 func buildAssignmentPassMetricSignal(
 	assignment *evalv1.EvaluationAssignment,
 	result *evalv1.EvaluationAssignmentResult,
@@ -422,12 +426,12 @@ func buildAssignmentPassMetricSignal(
 		AssignmentID: assignment.GetAssignmentId(),
 		VariantID:    variantID,
 		Role:         models.ModelRole(role),
-		MetricID:     "pass_rate",
+		MetricID:     assignmentPassMetricID,
 		Numerator:    numerator,
 		Denominator:  1,
 		Rate:         &rate,
 		ObservedAt:   observedAt,
-		EventID:      MetricAvailabilityIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), "pass_rate") + ":event",
+		EventID:      MetricAvailabilityIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), assignmentPassMetricID) + ":event",
 		Completed:    completed,
 		Total:        total,
 	}, true, nil

@@ -41,8 +41,7 @@
       },
       "eval_judge": {
         "_description": "Maps to EvalJudgeSettings model. Keys use alias names.",
-        "eval_judge_model":       { "type": "string",  "required": false },
-        "eval_judge_max_tokens":  { "type": "integer", "required": false }
+        "eval_judge_model":       { "type": "string",  "required": false }
       },
       "command_validation": {
         "_description": "Maps to CommandValidationSettings model. Operator command safety and validation configuration.",

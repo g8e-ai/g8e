@@ -839,6 +839,26 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 			err: constants.ErrInferenceGenerationOptionsInvalid,
 		},
 		{
+			name: "max tokens above the platform ceiling",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				MaxTokens:            constants.InferenceMaxOutputTokens + 1,
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "negative max tokens",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				MaxTokens:            -1,
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
 			name: "unsupported response media type",
 			req: &operatorv1.InferenceRequested{
 				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,

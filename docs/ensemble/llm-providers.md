@@ -69,6 +69,9 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 | INV-LLM-MODELS-01 | The model registry in [model_configs.py](../../ensemble/app/models/model_configs.py) declares thinking levels, thinking budgets, output reserves, tool support, structured-output support, context limits, output limits, stop sequences, and sampling defaults for all known model names. |
 | INV-LLM-MODELS-02 | Unknown model names use the shared `UNKNOWN_MODEL_CONFIG` which disables thinking, tools, and provider-enforced structured-output decisions. Register a model profile before relying on reasoning, tools, or structured output for a custom model. |
 | INV-LLM-MODELS-03 | Ollama-registered models MUST declare `thinking_dialect` explicitly (`NONE` for no reasoning, `NATIVE_TOGGLE` for native `think=true/false`). Missing dialect at import time raises `ValueError`. |
+| INV-LLM-MODELS-04 | `max_output_tokens` on a model profile is the provider's documented ceiling, or unset. The platform declares no output limit of its own: local Ollama and g8e inference models and OpenAI profiles leave it unset. |
+| INV-LLM-MODELS-05 | `AIGenerationConfigBuilder.resolve_max_output_tokens` is the only resolver: the caller's value, else the model ceiling, else unset. An unset limit is omitted from the provider request. Anthropic requires `max_tokens`, so it uses the model ceiling and raises `ConfigurationError` when the model declares none. |
+| INV-LLM-MODELS-06 | The Gateway inference path has one platform ceiling, `constants.InferenceMaxOutputTokens` (256,000). The executing Operator rejects a `max_tokens` above it or below zero with `ErrInferenceGenerationOptionsInvalid`, and a request that states no limit (0) runs under the ceiling. The ceiling bounds a runaway generation; it is never a default tuning value. |
 
 ### Generation call shapes (`INV-LLM-CALLS`)
 
@@ -133,7 +136,6 @@ The LLM settings model carries these cross-provider controls:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `llm_max_tokens` | Unset | Overrides the registry output limit or the 20,000-token system fallback when set |
 | `llm_command_gen_enabled` | `true` | Enables Tribunal command generation; disabling it makes command requests fail closed |
 | `llm_command_gen_auditor` | `true` | Enables the Auditor stage after Tribunal candidate generation |
 | `llm_command_gen_passes` | `5` | Sets the number of Tribunal generation passes; runtime resolution enforces at least one pass |

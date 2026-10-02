@@ -246,7 +246,7 @@ class MemoryGenerationService:
                     prompt_eval_count=None,
                     eval_count=None,
                     num_ctx=0,
-                    num_predict=0,
+                    num_predict=None,
                     thinking_len=0,
                     tool_calls_count=0,
                     ctx_overflow_suspected=False,

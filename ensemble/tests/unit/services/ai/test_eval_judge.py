@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants import ANTHROPIC_CLAUDE_HAIKU_4_5
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.settings import EvalJudgeSettings
 from app.services.ai.eval_judge import (
@@ -181,27 +182,20 @@ class TestEvalJudgeConstruction:
 
     def test_construction_with_settings(self):
         provider = MagicMock()
-        settings = EvalJudgeSettings(
-            model="settings-model",
-            max_output_tokens=8192,
-        )
+        settings = EvalJudgeSettings(model="settings-model")
         judge = EvalJudge(provider=provider, settings=settings)
         assert judge._model == "settings-model"
-        assert judge._settings.max_output_tokens == 8192
 
     def test_construction_with_model_overrides_settings(self):
         provider = MagicMock()
-        settings = EvalJudgeSettings(
-            model="settings-model",
-            max_output_tokens=8192,
-        )
+        settings = EvalJudgeSettings(model="settings-model")
         judge = EvalJudge(provider=provider, model="override-model", settings=settings)
         assert judge._model == "override-model"
 
     def test_construction_with_default_settings(self):
         provider = MagicMock()
         judge = EvalJudge(provider=provider, model="some-model")
-        assert judge._settings.max_output_tokens == 4096
+        assert judge._settings.model is None
 
 
 class TestGradeTurnHappyPath:
@@ -261,19 +255,23 @@ class TestGradeTurnHappyPath:
         settings = call_args.kwargs["lite_llm_settings"]
         assert settings.response_format is not None
 
-    async def test_settings_used_in_grade_turn(self, mock_provider):
-        custom_settings = EvalJudgeSettings(
-            model="custom-model",
-            max_output_tokens=2048,
-        )
-        judge = EvalJudge(provider=mock_provider, model="custom-model", settings=custom_settings)
+    async def test_judge_call_carries_no_invented_output_cap(self, mock_provider):
+        judge = EvalJudge(provider=mock_provider, model="model-without-registry-entry")
         mock_provider.generate_content_lite.return_value = _build_response(
             _build_grade_json(4, "Good")
         )
         await judge.grade_turn(**GRADE_KWARGS)
-        call_args = mock_provider.generate_content_lite.call_args
-        settings = call_args.kwargs["lite_llm_settings"]
-        assert settings.max_output_tokens == 2048
+        settings = mock_provider.generate_content_lite.call_args.kwargs["lite_llm_settings"]
+        assert settings.max_output_tokens is None
+
+    async def test_judge_call_uses_model_documented_ceiling(self, mock_provider):
+        judge = EvalJudge(provider=mock_provider, model=ANTHROPIC_CLAUDE_HAIKU_4_5)
+        mock_provider.generate_content_lite.return_value = _build_response(
+            _build_grade_json(4, "Good")
+        )
+        await judge.grade_turn(**GRADE_KWARGS)
+        settings = mock_provider.generate_content_lite.call_args.kwargs["lite_llm_settings"]
+        assert settings.max_output_tokens == 64_000
 
     async def test_model_passed_to_provider(self, mock_provider):
         judge = EvalJudge(provider=mock_provider, model="custom-eval-model")

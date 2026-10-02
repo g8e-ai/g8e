@@ -13,7 +13,6 @@ from collections.abc import AsyncGenerator
 from ollama import AsyncClient, Message as OllamaMessage
 
 from app.constants import (
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     LLM_OLLAMA_DEFAULT_NUM_CTX,
     OLLAMA_DEFAULT_PROTOCOL,
     ThinkingLevel,
@@ -165,7 +164,7 @@ def _raise_on_empty_content(
     model: str,
     channel: str,
     num_ctx: int,
-    num_predict: int,
+    num_predict: int | None,
 ) -> None:
     """Raise OllamaEmptyResponseError when Ollama returns HTTP 200 with no content.
 
@@ -286,7 +285,7 @@ class OllamaProvider(LLMProvider):
         *,
         model: str,
         messages: list,
-        effective_max_tokens: int,
+        effective_max_tokens: int | None,
         top_p: float | None,
         stop: list[str] | None,
         thinking_config,
@@ -340,11 +339,7 @@ class OllamaProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
-        effective_max_tokens = (
-            primary_llm_settings.max_output_tokens
-            if primary_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = primary_llm_settings.max_output_tokens
 
         chat_kwargs = self._build_primary_chat_kwargs(
             model=model,
@@ -435,11 +430,7 @@ class OllamaProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
-        effective_max_tokens = (
-            primary_llm_settings.max_output_tokens
-            if primary_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = primary_llm_settings.max_output_tokens
 
         chat_kwargs = self._build_primary_chat_kwargs(
             model=model,
@@ -510,11 +501,7 @@ class OllamaProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
-        effective_max_tokens = (
-            assistant_llm_settings.max_output_tokens
-            if assistant_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = assistant_llm_settings.max_output_tokens
 
         chat_kwargs: dict = {
             "model": model,
@@ -559,11 +546,7 @@ class OllamaProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
-        effective_max_tokens = (
-            assistant_llm_settings.max_output_tokens
-            if assistant_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = assistant_llm_settings.max_output_tokens
 
         chat_kwargs: dict = {
             "model": model,
@@ -615,11 +598,7 @@ class OllamaProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
-        effective_max_tokens = (
-            lite_llm_settings.max_output_tokens
-            if lite_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = lite_llm_settings.max_output_tokens
 
         chat_kwargs: dict = {
             "model": model,
@@ -664,11 +643,7 @@ class OllamaProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
-        effective_max_tokens = (
-            lite_llm_settings.max_output_tokens
-            if lite_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = lite_llm_settings.max_output_tokens
 
         chat_kwargs: dict = {
             "model": model,

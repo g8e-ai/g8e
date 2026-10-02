@@ -234,7 +234,6 @@ class TestGetGenerationConfig:
         settings = G8eeUserSettings(
             llm=LLMSettings(
                 llm_model="gemini-1.5-pro",
-                llm_max_tokens=2048,
                 llm_parallel_tool_calls=False,
             )
         )
@@ -246,7 +245,7 @@ class TestGetGenerationConfig:
         )
 
         assert config.system_instructions == "instructions"
-        assert config.max_output_tokens == 2048
+        assert config.max_output_tokens is None
         assert config.parallel_tool_calls is False
         mock_tool_executor.get_tools.assert_called_once_with(
             AgentMode.G8E_BOUND, "gemini-1.5-pro", evaluation_context=None

@@ -458,9 +458,6 @@ DEFAULT_OPERATOR_CONFIG = {
     "heartbeat_interval_seconds": 30,
 }
 
-# System-wide LLM generation defaults
-# These are used when user/platform settings do not specify values
-LLM_DEFAULT_MAX_OUTPUT_TOKENS = 20000
 # Ollama-only: default context window passed as options.num_ctx.
 # Ollama's server default is 4096, which silently truncates real-world prompts
 # (system + chat history) and leaves thinking models with no budget for visible

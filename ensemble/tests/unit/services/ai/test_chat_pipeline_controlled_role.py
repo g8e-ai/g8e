@@ -91,7 +91,6 @@ async def test_finalize_evaluation_assignment_records_role_not_invoked():
         active_agent=ReasoningAgent.DASH,
         operator_bound=True,
         model_to_use="candidate",
-        max_tokens=1024,
         conversation_history=[],
         system_instructions="",
         contents=[],

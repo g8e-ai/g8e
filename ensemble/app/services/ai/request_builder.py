@@ -229,7 +229,6 @@ class AIRequestBuilder:
         system_instructions: str,
         settings: G8eeUserSettings,
         agent_mode: AgentMode,
-        max_tokens: int | None = None,
         model_override: str | None = None,
         evaluation_context: EvaluationInferenceContext | None = None,
     ) -> PrimaryLLMSettings:
@@ -240,7 +239,6 @@ class AIRequestBuilder:
             system_instructions: System instructions with senior engineer methodologies
             settings: Request-scoped Settings object
             agent_mode: G8E_BOUND (execute) or G8E_NOT_BOUND (advise)
-            max_tokens: Maximum output tokens override
             model_override: Model name override (Pro, Flash, etc.)
             evaluation_context: Set for scored evaluation requests; the full
                 production tool set is then declared regardless of the model's
@@ -262,7 +260,7 @@ class AIRequestBuilder:
 
         return AIGenerationConfigBuilder.build_primary_settings(
             model=model,
-            max_tokens=max_tokens or settings.llm.llm_max_tokens,
+            max_tokens=None,
             system_instructions=system_instructions,
             tools=tools,
             parallel_tool_calls=settings.llm.llm_parallel_tool_calls,

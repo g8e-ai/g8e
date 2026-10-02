@@ -412,8 +412,6 @@ class ChatPipelineService:
                 "No LLM model configured. Set a primary_model and/or assistant_model in platform settings."
             )
 
-        max_tokens = request_settings.llm.llm_max_tokens
-
         logger.info(
             "[CHAT] Triage: complexity=%s (conf=%s) intent=%s (conf=%s) posture=%s (conf=%s) model=%s",
             triage_result.complexity,
@@ -477,7 +475,6 @@ class ChatPipelineService:
             system_instructions=system_instructions,
             settings=request_settings,
             agent_mode=agent_mode,
-            max_tokens=max_tokens,
             model_override=model_to_use,
             evaluation_context=g8e_context.evaluation_context,
         )
@@ -513,7 +510,6 @@ class ChatPipelineService:
             request_settings=request_settings,
             operator_bound=operator_bound,
             model_to_use=model_to_use,
-            max_tokens=max_tokens,
             conversation_history=conversation_history,
             system_instructions=system_instructions,
             contents=built_contents.contents,
@@ -1244,11 +1240,10 @@ class ChatPipelineService:
         )
 
         logger.info(
-            "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
+            "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d",
             inputs.model_to_use,
             inputs.agent_mode,
             len(inputs.contents),
-            inputs.max_tokens,
         )
 
         if inputs.model_to_use and inputs.generation_config:

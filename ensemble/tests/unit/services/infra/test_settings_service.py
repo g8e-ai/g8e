@@ -103,55 +103,6 @@ class TestSettingsService:
         )
         assert cache_mock.get_document_with_cache.call_count == 2
 
-    async def test_llm_settings_no_overrides(self):
-        """Test that llm_max_tokens is None if not provided in user settings."""
-        cache_mock = MagicMock()
-        cache_mock.get_document_with_cache = AsyncMock()
-
-        user_id = "user_temp"
-        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-
-        user_settings = G8eeUserSettings(
-            llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA,
-                primary_model="gemma3:12b",
-            )
-        )
-        user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
-
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
-            user_doc.model_dump() if document_id == user_doc_id else None
-        )
-
-        service = SettingsService(cache_aside_service=cache_mock)
-        settings = await service.get_user_settings(user_id)
-
-        assert settings.llm.llm_max_tokens is None
-
-    async def test_llm_settings_with_overrides(self):
-        """Test that llm_max_tokens ARE set if provided in user settings."""
-        cache_mock = MagicMock()
-        cache_mock.get_document_with_cache = AsyncMock()
-
-        user_id = "user_override"
-        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-
-        user_settings = G8eeUserSettings(
-            llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA, primary_model="gemma3:12b", llm_max_tokens=2048
-            )
-        )
-        user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
-
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
-            user_doc.model_dump() if document_id == user_doc_id else None
-        )
-
-        service = SettingsService(cache_aside_service=cache_mock)
-        settings = await service.get_user_settings(user_id)
-
-        assert settings.llm.llm_max_tokens == 2048
-
     async def test_command_gen_defaults_preserved_when_db_has_no_values(self):
         """Regression: llm_command_gen_passes=None caused TypeError in max(1, None).
 

@@ -32,31 +32,32 @@ import {
   type TerminalStatus,
   type VerifierState,
 } from '../contract/types';
-import { normalizeActivityFamily, parseWireActivityFamily } from '../contract/activity-family';
-import { decodeCampaignProjectionEnvelope } from '../contract/campaign-wire';
-import { assertRoleTranscripts, ValidationError } from '../contract/validators';
+import { normalizeActivityFamily, type WireActivityFamily } from '../contract/activity-family';
+import {
+  decodeCampaignProjectionEnvelope,
+  type CampaignLifecycleEnvelope,
+  type CampaignResultEnvelope,
+  type WireActivitySummary,
+  type WireEvidenceBinding,
+  type WireGovernedActionActivityRecord,
+  type WireMetric,
+  type WireModelActivityRecord,
+  type WirePolicyDecisionActivityRecord,
+  type WirePromptHint,
+  type WireResourceSummary,
+  type WireScenarioCriterion,
+  type WireScenarioSummary,
+  type WireScore,
+  type WireSemanticGradeSummary,
+  type WireToolCallActivityRecord,
+  type WireToolDecisionActivityRecord,
+  type WireVerificationMetadata,
+} from '../contract/campaign-wire';
+import { ValidationError } from '../contract/validators';
 
 export const CAMPAIGN_SOURCE_REVISION = 'g8e-eval-campaign';
 
-export interface CampaignProjectionEnvelope {
-  schema_version: string;
-  message_type: string;
-  idempotency_key: string;
-  record: Record<string, unknown>;
-}
-
-export function isCampaignProjectionEnvelope(value: unknown): value is CampaignProjectionEnvelope {
-  try {
-    decodeCampaignProjectionEnvelope(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function validateCampaignEnvelope(value: unknown): CampaignProjectionEnvelope {
-  return decodeCampaignProjectionEnvelope(value) as unknown as CampaignProjectionEnvelope;
-}
+export { isCampaignProjectionEnvelope } from '../contract/campaign-wire';
 
 export interface CampaignAdaptContext {
   assignmentMeta: Map<string, AssignmentMeta>;
@@ -209,41 +210,37 @@ export function adaptCampaignProjectionEnvelope(
   envelope: unknown,
   context: CampaignAdaptContext,
 ): Array<SnapshotRecord | LiveEvent> {
-  const validatedEnvelope = validateCampaignEnvelope(envelope);
-  const adaptedEnvelope = validatedEnvelope;
-  switch (adaptedEnvelope.message_type) {
+  const decoded = decodeCampaignProjectionEnvelope(envelope);
+  switch (decoded.message_type) {
     case 'PublicAssignmentLifecycleRecord':
-      return adaptLifecycleRecord(adaptedEnvelope, context);
+      return adaptLifecycleRecord(decoded, context);
     case 'PublicAssignmentResultProjection':
-      return adaptResultProjection(adaptedEnvelope, context);
-    default:
-      throw new Error(`unsupported campaign projection message_type ${adaptedEnvelope.message_type}`);
+      return adaptResultProjection(decoded, context);
   }
 }
 
 function adaptLifecycleRecord(
-  envelope: CampaignProjectionEnvelope,
+  envelope: CampaignLifecycleEnvelope,
   context: CampaignAdaptContext,
 ): Array<SnapshotRecord | LiveEvent> {
   const record = envelope.record;
-  const runId = requiredString(record, 'run_id');
-  const assignmentId = requiredString(record, 'assignment_id');
+  const { run_id: runId, assignment_id: assignmentId } = record;
   const datasetId = campaignDatasetId(runId);
-  const observedAt = timestampString(record.observed_at) ?? new Date().toISOString();
-  const lifecycle = mapLifecycleStatus(requiredString(record, 'lifecycle_status'));
-  const scenarioCategory = mapScenarioCategory(optionalString(record.scenario_category));
-  const role = mapModelRole(optionalString(record.designated_role));
-  const evaluationUnit = mapEvaluationUnit(optionalString(record.lane));
-  const repetition = optionalInteger(record.repetition) ?? 1;
+  const observedAt = new Date(record.observed_at).toISOString();
+  const lifecycle = mapLifecycleStatus(record.lifecycle_status);
+  const scenarioCategory = mapScenarioCategory(record.scenario_category);
+  const role = mapModelRole(record.designated_role);
+  const evaluationUnit = mapEvaluationUnit(record.lane);
+  const repetition = record.repetition ?? 1;
 
   context.assignmentMeta.set(metaKey(runId, assignmentId), {
     repetition,
-    scenarioId: optionalString(record.scenario_id) ?? assignmentId,
+    scenarioId: record.scenario_id,
     scenarioCategory,
-    variantId: optionalString(record.variant_id),
+    variantId: record.variant_id,
     role,
     evaluationUnit,
-    stackId: optionalString(record.stack_id),
+    stackId: record.stack_id,
   });
 
   const records: Array<SnapshotRecord | LiveEvent> = [];
@@ -266,13 +263,13 @@ function adaptLifecycleRecord(
       event_id: envelope.idempotency_key,
       run_id: runId,
       assignment_id: assignmentId,
-      task_id: optionalString(record.scenario_id),
-      variant_id: optionalString(record.variant_id),
+      task_id: record.scenario_id,
+      variant_id: record.variant_id,
       role,
       lifecycle_status: lifecycle,
       completed,
       total,
-      stage_label: buildStageLabel(lifecycle, scenarioCategory, optionalString(record.scenario_id)),
+      stage_label: buildStageLabel(lifecycle, scenarioCategory, record.scenario_id),
     });
   }
 
@@ -280,21 +277,19 @@ function adaptLifecycleRecord(
 }
 
 function adaptResultProjection(
-  envelope: CampaignProjectionEnvelope,
+  envelope: CampaignResultEnvelope,
   context: CampaignAdaptContext,
 ): Array<SnapshotRecord | LiveEvent> {
   const record = envelope.record;
-  const runId = requiredString(record, 'run_id');
-  const assignmentId = requiredString(record, 'assignment_id');
+  const { run_id: runId, assignment_id: assignmentId } = record;
   const datasetId = campaignDatasetId(runId);
-  const observedAt = timestampString(record.completed_at) ?? new Date().toISOString();
+  const observedAt = new Date(record.completed_at).toISOString();
   const meta = context.assignmentMeta.get(metaKey(runId, assignmentId));
-  const lifecycle = mapLifecycleStatus(requiredString(record, 'lifecycle_status'));
-  const summaryStatus = optionalString(record.summary_status);
-  const terminalStatus = mapTerminalStatus(lifecycle, summaryStatus);
+  const lifecycle = mapLifecycleStatus(record.lifecycle_status);
+  const terminalStatus = mapTerminalStatus(record.lifecycle_status, record.summary_status);
   const qualityState: QualityState = terminalStatus === 'completed' ? 'live_in_progress' : 'terminal_failed';
-  const variantId = optionalString(record.variant_id) ?? meta?.variantId ?? 'unknown';
-  const role = meta?.role ?? mapModelRole(optionalString(record.designated_role)) ?? 'primary';
+  const variantId = record.variant_id ?? meta?.variantId ?? 'unknown';
+  const role = meta?.role ?? mapModelRole(record.designated_role) ?? 'primary';
 
   const { progress } = markTerminalAssignment(context, runId, assignmentId, terminalStatus);
   const { completed, total } = campaignProgressCounts(progress);
@@ -308,13 +303,13 @@ function adaptResultProjection(
     source_revision_label: CAMPAIGN_SOURCE_REVISION,
     assignment_id: assignmentId,
     run_id: runId,
-    task_id: meta?.scenarioId ?? optionalString(record.scenario_id) ?? assignmentId,
+    task_id: meta?.scenarioId ?? record.scenario_id,
     variant_id: variantId,
     role,
     repetition: meta?.repetition ?? 1,
-    scenario_category: meta?.scenarioCategory ?? mapScenarioCategory(optionalString(record.scenario_category)),
-    evaluation_unit: meta?.evaluationUnit ?? mapEvaluationUnit(optionalString(record.lane)),
-    stack_id: meta?.stackId ?? optionalString(record.stack_id),
+    scenario_category: meta?.scenarioCategory ?? mapScenarioCategory(record.scenario_category),
+    evaluation_unit: meta?.evaluationUnit ?? mapEvaluationUnit(record.lane),
+    stack_id: meta?.stackId,
     scenario_summary: mapScenarioSummary(record.scenario_summary),
     semantic_grade_summaries: mapSemanticGradeSummaries(record.semantic_grade_summaries),
     activity_summary: mapActivitySummary(record.activity_summary),
@@ -325,15 +320,15 @@ function adaptResultProjection(
     benchmark_observations: mapBenchmarkObservations(record.benchmark_observations),
     stage_summary: [],
     resource_summary: mapResourceSummary(record.resource_summary),
-    verification_disposition: mapVerificationDisposition(optionalString(record.verification_status)),
+    verification_disposition: mapVerificationDisposition(record.verification_status),
     verification_metadata: mapVerificationMetadata(record.verification_metadata),
-    model_response: optionalString(record.model_response),
-    failure_output: optionalString(record.failure_output),
-    role_transcripts: mapRoleTranscripts(record.role_transcripts),
-    ...(typeof record.trajectory_outcome === 'string' ? { trajectory_outcome: mapTrajectoryOutcome(record.trajectory_outcome) } : {}),
-    ...(optionalInteger(record.guided_retry_count) !== undefined ? { guided_retry_count: optionalInteger(record.guided_retry_count) } : {}),
-    ...(optionalString(record.failure_reason) !== undefined ? { failure_reason: optionalString(record.failure_reason) } : {}),
-    ...(Array.isArray(record.tools_declared) ? { tools_declared: stringArray(record.tools_declared) } : {}),
+    model_response: record.model_response,
+    failure_output: record.failure_output,
+    role_transcripts: record.role_transcripts,
+    ...(record.trajectory_outcome !== undefined ? { trajectory_outcome: mapTrajectoryOutcome(record.trajectory_outcome) } : {}),
+    ...(record.guided_retry_count !== undefined ? { guided_retry_count: record.guided_retry_count } : {}),
+    ...(record.failure_reason !== undefined ? { failure_reason: record.failure_reason } : {}),
+    ...(record.tools_declared !== undefined ? { tools_declared: record.tools_declared } : {}),
   };
 
   const records: Array<SnapshotRecord | LiveEvent> = [assignment];
@@ -353,6 +348,7 @@ function adaptResultProjection(
     variant_id: assignment.variant_id,
     role: assignment.role,
     lifecycle_status: lifecycle === 'completed' ? 'completed' : 'failed',
+    terminal_status: terminalStatus,
     completed,
     total,
     stage_label: buildStageLabel(lifecycle, assignment.scenario_category, assignment.task_id),
@@ -395,185 +391,175 @@ function buildStageLabel(
   return parts.join(' · ');
 }
 
-function mapScenarioSummary(value: unknown): AssignmentResult['scenario_summary'] {
-  if (!isRecord(value)) return undefined;
+function mapScenarioSummary(value: WireScenarioSummary | undefined): AssignmentResult['scenario_summary'] {
+  if (value === undefined) return undefined;
   return {
-    scenario_id: requiredString(value, 'scenario_id'),
-    scenario_version: requiredString(value, 'scenario_version'),
-    category: mapScenarioCategory(requiredString(value, 'category')) ?? 'instruction_adherence',
-    public_description: requiredString(value, 'public_description'),
-    grading_method: mapGradingMethod(requiredString(value, 'grading_method')),
-    allowed_tools: stringArray(value.allowed_tools),
-    expected_tools: stringArray(value.expected_tools),
-    forbidden_tools: stringArray(value.forbidden_tools),
-    ...(typeof value.trajectory_policy === 'string' ? { trajectory_policy: mapTrajectoryPolicy(value.trajectory_policy) } : {}),
-    ...(isRecord(value.prompt_hint) ? { prompt_hint: mapPromptHint(value.prompt_hint) } : {}),
-    criteria: Array.isArray(value.criteria) ? value.criteria.map(mapScenarioCriterion) : [],
-    tool_score_dimensions: Array.isArray(value.tool_score_dimensions)
-      ? value.tool_score_dimensions.map(mapToolScoreDimension)
-      : [],
+    scenario_id: value.scenario_id,
+    scenario_version: value.scenario_version,
+    category: requiredScenarioCategory(value.category),
+    public_description: value.public_description,
+    grading_method: mapGradingMethod(value.grading_method),
+    allowed_tools: value.allowed_tools ?? [],
+    expected_tools: value.expected_tools ?? [],
+    forbidden_tools: value.forbidden_tools ?? [],
+    ...(value.trajectory_policy !== undefined ? { trajectory_policy: mapTrajectoryPolicy(value.trajectory_policy) } : {}),
+    ...(value.prompt_hint !== undefined ? { prompt_hint: mapPromptHint(value.prompt_hint) } : {}),
+    criteria: (value.criteria ?? []).map(mapScenarioCriterion),
+    tool_score_dimensions: (value.tool_score_dimensions ?? []).map(mapToolScoreDimension),
   };
 }
 
-function mapPromptHint(value: Record<string, unknown>): PublicPromptHint {
+function mapPromptHint(value: WirePromptHint): PublicPromptHint {
   return {
-    hinted_tools: stringArray(value.hinted_tools),
-    arguments: Array.isArray(value.arguments)
-      ? value.arguments.map((entry) => {
-          const argument = asRecord(entry);
-          return {
-            tool_name: requiredString(argument, 'tool_name'),
-            argument_name: requiredString(argument, 'argument_name'),
-            source: mapHintArgumentSource(requiredString(argument, 'source')),
-          };
-        })
-      : [],
+    hinted_tools: value.hinted_tools ?? [],
+    arguments: (value.arguments ?? []).map((argument) => ({
+      tool_name: argument.tool_name,
+      argument_name: argument.argument_name,
+      source: mapHintArgumentSource(argument.source),
+    })),
   };
 }
 
-function mapScenarioCriterion(value: unknown): NonNullable<AssignmentResult['scenario_summary']>['criteria'][number] {
-  const criterion = asRecord(value);
+function mapScenarioCriterion(criterion: WireScenarioCriterion): NonNullable<AssignmentResult['scenario_summary']>['criteria'][number] {
   return {
-    criterion_id: requiredString(criterion, 'criterion_id'),
-    public_label: requiredString(criterion, 'public_label'),
-    public_description: requiredString(criterion, 'public_description'),
-    grading_method: mapGradingMethod(requiredString(criterion, 'grading_method')),
-    required: criterion.required === true,
+    criterion_id: criterion.criterion_id,
+    public_label: criterion.public_label,
+    public_description: criterion.public_description,
+    grading_method: mapGradingMethod(criterion.grading_method),
+    required: criterion.required,
   };
 }
 
-function mapToolScoreDimension(value: unknown): NonNullable<AssignmentResult['scenario_summary']>['tool_score_dimensions'][number] {
-  const dimension = asRecord(value);
+function mapToolScoreDimension(
+  dimension: NonNullable<WireScenarioSummary['tool_score_dimensions']>[number],
+): NonNullable<AssignmentResult['scenario_summary']>['tool_score_dimensions'][number] {
   return {
-    dimension: mapToolScoreDimensionName(requiredString(dimension, 'dimension')),
-    required: dimension.required === true,
+    dimension: mapToolScoreDimensionName(dimension.dimension),
+    required: dimension.required,
   };
 }
 
-function mapSemanticGradeSummaries(value: unknown): AssignmentResult['semantic_grade_summaries'] {
-  if (!Array.isArray(value)) return undefined;
-  return value.map((entry) => {
-    const grade = asRecord(entry);
-    return {
-      criterion_id: requiredString(grade, 'criterion_id'),
-      status: mapNativeResultStatus(requiredString(grade, 'status')),
-      grading_method: mapGradingMethod(requiredString(grade, 'grading_method')),
-      judge_variant_id: optionalString(grade.judge_variant_id),
-      explanation_code: mapExplanationCode(requiredString(grade, 'explanation_code')),
-    };
+function mapSemanticGradeSummaries(value: WireSemanticGradeSummary[] | undefined): AssignmentResult['semantic_grade_summaries'] {
+  if (value === undefined) return undefined;
+  return value.map((grade) => ({
+    criterion_id: grade.criterion_id,
+    status: mapNativeResultStatus(grade.status),
+    grading_method: mapGradingMethod(grade.grading_method),
+    judge_variant_id: grade.judge_variant_id,
+    explanation_code: mapExplanationCode(grade.explanation_code),
+  }));
+}
+
+function mapActivitySummary(value: WireActivitySummary | undefined): AssignmentResult['activity_summary'] {
+  if (value === undefined) return undefined;
+  return {
+    model_activity: mapActivityFamily(value.model_activity, mapModelActivityRecord),
+    tool_decisions: mapActivityFamily(value.tool_decisions, mapToolDecisionRecord),
+    tool_calls: mapActivityFamily(value.tool_calls, mapToolCallRecord),
+    policy_decisions: mapActivityFamily(value.policy_decisions, mapPolicyDecisionRecord),
+    governed_actions: mapActivityFamily(value.governed_actions, mapGovernedActionRecord),
+  };
+}
+
+function mapActivityFamily<W, T>(family: WireActivityFamily<W>, mapRecord: (record: W) => T): PublicActivityFamily<T> {
+  return normalizeActivityFamily({
+    availability: family.availability,
+    unavailable_reason: family.unavailable_reason,
+    records: family.records?.map(mapRecord),
   });
 }
 
-function mapActivitySummary(value: unknown): AssignmentResult['activity_summary'] {
-  if (!isRecord(value)) return undefined;
-  const path = 'assignment_result.activity_summary';
+function mapModelActivityRecord(record: WireModelActivityRecord): PublicModelActivityRecord {
   return {
-    model_activity: mapActivityFamily(value.model_activity, mapModelActivityRecord, `${path}.model_activity`),
-    tool_decisions: mapActivityFamily(value.tool_decisions, mapToolDecisionRecord, `${path}.tool_decisions`),
-    tool_calls: mapActivityFamily(value.tool_calls, mapToolCallRecord, `${path}.tool_calls`),
-    policy_decisions: mapActivityFamily(value.policy_decisions, mapPolicyDecisionRecord, `${path}.policy_decisions`),
-    governed_actions: mapActivityFamily(value.governed_actions, mapGovernedActionRecord, `${path}.governed_actions`),
+    model_role: requiredModelRole(record.model_role),
+    agent_persona: record.agent_persona,
+    variant_id: record.variant_id,
+    usage_availability: mapUsageAvailability(record.usage_availability),
+    input_tokens: mapDecimalStringMetric(record.input_tokens),
+    output_tokens: mapDecimalStringMetric(record.output_tokens),
+    thinking_tokens: mapDecimalStringMetric(record.thinking_tokens),
+    cache_tokens: mapDecimalStringMetric(record.cache_tokens),
+    total_duration_nanos: mapDecimalStringMetric(record.total_duration_nanos),
+    generation_duration_nanos: mapDecimalStringMetric(record.generation_duration_nanos),
+    retry_count: record.retry_count === undefined ? undefined : { value: record.retry_count },
+    finish_state: mapFinishState(record.finish_state),
+    load_state: mapLoadState(record.load_state),
   };
 }
 
-function mapActivityFamily<T>(value: unknown, mapper: (value: unknown, path: string) => T, path: string): PublicActivityFamily<T> {
-  const wire = parseWireActivityFamily(value, path, mapper);
-  return normalizeActivityFamily({ ...wire, records: wire.records });
-}
-
-function mapModelActivityRecord(value: unknown, _path: string): PublicModelActivityRecord {
-  const record = asRecord(value);
+function mapToolDecisionRecord(record: WireToolDecisionActivityRecord): PublicToolDecisionActivityRecord {
   return {
-    model_role: mapModelRole(requiredString(record, 'model_role')) ?? 'primary',
-    agent_persona: optionalString(record.agent_persona),
-    variant_id: requiredString(record, 'variant_id'),
-    usage_availability: mapUsageAvailability(requiredString(record, 'usage_availability')),
-    input_tokens: mapWireMetric(record.input_tokens, true),
-    output_tokens: mapWireMetric(record.output_tokens, true),
-    thinking_tokens: mapWireMetric(record.thinking_tokens, true),
-    cache_tokens: mapWireMetric(record.cache_tokens, true),
-    total_duration_nanos: mapWireMetric(record.total_duration_nanos, true),
-    generation_duration_nanos: mapWireMetric(record.generation_duration_nanos, true),
-    retry_count: mapWireMetric(record.retry_count),
-    finish_state: mapFinishState(requiredString(record, 'finish_state')),
-    load_state: mapLoadState(requiredString(record, 'load_state')),
-  };
-}
-
-function mapToolDecisionRecord(value: unknown, _path: string): PublicToolDecisionActivityRecord {
-  const record = asRecord(value);
-  return { tool_label: requiredString(record, 'tool_label'), recognized: record.recognized === true, selected: record.selected === true, permission_compliant: record.permission_compliant === true, unnecessary: record.unnecessary === true, outcome: mapSemanticOutcome(requiredString(record, 'outcome')), evidence_source: 'application_reported' };
-}
-
-function mapToolCallRecord(value: unknown, _path: string): PublicToolCallActivityRecord {
-  const record = asRecord(value);
-  const loopTurn = optionalInteger(record.loop_turn);
-  const errorType = optionalString(record.error_type);
-  return {
-    tool_label: requiredString(record, 'tool_label'),
-    execution_outcome: mapExecutionOutcome(requiredString(record, 'execution_outcome')),
-    semantic_outcome: mapSemanticOutcome(requiredString(record, 'semantic_outcome')),
+    tool_label: record.tool_label,
+    recognized: record.recognized === true,
+    selected: record.selected === true,
+    permission_compliant: record.permission_compliant === true,
+    unnecessary: record.unnecessary === true,
+    outcome: mapSemanticOutcome(record.outcome),
     evidence_source: 'application_reported',
-    ...(loopTurn !== undefined ? { loop_turn: loopTurn } : {}),
-    ...(errorType !== undefined ? { error_type: errorType } : {}),
+  };
+}
+
+function mapToolCallRecord(record: WireToolCallActivityRecord): PublicToolCallActivityRecord {
+  return {
+    tool_label: record.tool_label,
+    execution_outcome: mapExecutionOutcome(record.execution_outcome),
+    semantic_outcome: mapSemanticOutcome(record.semantic_outcome),
+    evidence_source: 'application_reported',
+    ...(record.loop_turn !== undefined ? { loop_turn: record.loop_turn } : {}),
+    ...(record.error_type !== undefined ? { error_type: record.error_type } : {}),
     ...(record.guidance_shown === true ? { guidance_shown: true } : {}),
   };
 }
 
-function mapPolicyDecisionRecord(value: unknown, _path: string): PublicPolicyDecisionActivityRecord {
-  const record = asRecord(value);
-  return { tool_label: requiredString(record, 'tool_label'), outcome: mapToolOutcome(requiredString(record, 'outcome')), evidence_source: 'application_reported' };
+function mapPolicyDecisionRecord(record: WirePolicyDecisionActivityRecord): PublicPolicyDecisionActivityRecord {
+  return { tool_label: record.tool_label, outcome: mapToolOutcome(record.outcome), evidence_source: 'application_reported' };
 }
 
-function mapGovernedActionRecord(value: unknown, _path: string): PublicGovernedActionActivityRecord {
-  const record = asRecord(value);
-  return { action_label: 'governed action', reported_policy_outcome: mapReportedPolicyOutcome(requiredString(record, 'reported_policy_outcome')), receipt_status: mapReceiptStatus(requiredString(record, 'receipt_status')), evidence_source: mapEvidenceSource(requiredString(record, 'evidence_source')) };
+function mapGovernedActionRecord(record: WireGovernedActionActivityRecord): PublicGovernedActionActivityRecord {
+  return {
+    action_label: 'governed action',
+    reported_policy_outcome: mapReportedPolicyOutcome(record.reported_policy_outcome),
+    receipt_status: mapReceiptStatus(record.receipt_status),
+    evidence_source: mapEvidenceSource(record.evidence_source),
+  };
 }
 
-function mapRoleTranscripts(value: unknown): AssignmentResult['role_transcripts'] {
+function mapEvidenceBindings(value: WireEvidenceBinding[] | undefined): AssignmentResult['evidence_bindings'] {
   if (value === undefined) return undefined;
-  assertRoleTranscripts(value, 'role_transcripts');
-  return value;
+  return value.map((binding) => ({ sha256: binding.sha256, schema_ref: binding.schema_ref, kind: binding.kind }));
 }
 
-function mapEvidenceBindings(value: unknown): AssignmentResult['evidence_bindings'] {
-  if (!Array.isArray(value)) return undefined;
-  return value.map((entry) => {
-    const binding = asRecord(entry);
-    return { sha256: requiredString(binding, 'sha256'), schema_ref: requiredString(binding, 'schema_ref'), kind: requiredString(binding, 'kind') as NonNullable<AssignmentResult['evidence_bindings']>[number]['kind'] };
-  });
-}
-
-function mapResourceSummary(value: unknown): AssignmentResult['resource_summary'] {
-  if (!isRecord(value)) return undefined;
+function mapResourceSummary(value: WireResourceSummary | undefined): AssignmentResult['resource_summary'] {
+  if (value === undefined) return undefined;
   const result: NonNullable<AssignmentResult['resource_summary']> = {};
-  for (const [key, metric] of Object.entries(value)) {
-    if (['latency_ms', 'input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'retries'].includes(key)) {
-      result[key as keyof typeof result] = mapWireMetric(metric);
-    }
+  for (const key of Object.keys(value) as Array<keyof WireResourceSummary>) {
+    result[key] = mapWireMetric(value[key]);
   }
   return result;
 }
 
-function mapVerificationMetadata(value: unknown): AssignmentResult['verification_metadata'] {
-  if (!isRecord(value)) return undefined;
+function mapVerificationMetadata(value: WireVerificationMetadata | undefined): AssignmentResult['verification_metadata'] {
+  if (value === undefined) return undefined;
   return {
-    provenance: requiredString(value, 'provenance') === 'PUBLIC_VERIFICATION_PROVENANCE_BOUND' ? 'bound' : 'legacy_unbound',
-    verifier_state: mapVerificationState(requiredString(value, 'verifier_state')),
-    verifier_release_version: optionalString(value.verifier_release_version),
-    verifier_contract_version: optionalString(value.verifier_contract_version),
-    report_digest: optionalString(value.report_digest),
-    population_digest: optionalString(value.population_digest),
+    provenance: value.provenance === 'PUBLIC_VERIFICATION_PROVENANCE_BOUND' ? 'bound' : 'legacy_unbound',
+    verifier_state: mapVerificationState(value.verifier_state),
+    verifier_release_version: value.verifier_release_version,
+    verifier_contract_version: value.verifier_contract_version,
+    report_digest: value.report_digest,
+    population_digest: value.population_digest,
   };
 }
 
-function mapWireMetric(value: unknown, decimalString = false): MetricValue<number> | undefined {
-  if (value === undefined) return undefined;
-  if (decimalString && typeof value === 'string') return { value: Number(value) };
-  if (typeof value === 'number' && Number.isFinite(value)) return { value };
-  if (isRecord(value) && typeof value.value === 'number' && Number.isFinite(value.value)) return { value: value.value };
-  if (isRecord(value) && typeof value.unavailable_reason === 'string') return { unavailable_reason: mapUnavailableReason(value.unavailable_reason) };
-  return undefined;
+function mapWireMetric(metric: WireMetric | undefined): MetricValue<number> | undefined {
+  if (metric === undefined) return undefined;
+  if (metric.value !== undefined) return { value: metric.value };
+  if (metric.unavailable_reason !== undefined) return { unavailable_reason: mapUnavailableReason(metric.unavailable_reason) };
+  throw new ValidationError('metric carries neither value nor unavailable_reason', 'resource_summary');
+}
+
+/** Activity-record counters are uint64 protojson decimal strings. */
+function mapDecimalStringMetric(value: string | undefined): MetricValue<number> | undefined {
+  return value === undefined ? undefined : { value: Number(value) };
 }
 
 function mapGradingMethod(value: string): 'deterministic' | 'semantic_judge' { return value.endsWith('SEMANTIC_JUDGE') ? 'semantic_judge' : 'deterministic'; }
@@ -602,9 +588,6 @@ function mapVerificationState(value: string): VerifierState {
   return 'not_applicable';
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
-function asRecord(value: unknown): Record<string, unknown> { if (!isRecord(value)) throw new Error('campaign projection expected object'); return value; }
-function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }
 
 function mapBenchmarkObservations(value: unknown): BenchmarkObservations | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
@@ -766,13 +749,10 @@ function mapMetricValue(value: unknown): MetricValue | undefined {
   return undefined;
 }
 
-function decomposedScoreKey(score: Record<string, unknown>): string | undefined {
-  const dimension = optionalString(score.dimension);
-  if (dimension) return dimension;
-  const scoreId = optionalString(score.score_id);
-  if (!scoreId) return undefined;
-  if (!scoreId.includes(':')) return scoreId;
-  const suffix = scoreId.slice(scoreId.lastIndexOf(':') + 1).replace(/-/g, '_');
+function decomposedScoreKey(score: WireScore): string | undefined {
+  if (score.dimension) return score.dimension;
+  if (!score.score_id.includes(':')) return score.score_id;
+  const suffix = score.score_id.slice(score.score_id.lastIndexOf(':') + 1).replace(/-/g, '_');
   return suffix || undefined;
 }
 
@@ -786,25 +766,17 @@ function taskScoreAsPass(metrics: Record<string, MetricValue>): void {
   metrics.pass = metrics.task_score;
 }
 
-function mapDecomposedScores(value: unknown): Record<string, MetricValue> {
-  if (!Array.isArray(value)) {
+function mapDecomposedScores(value: WireScore[] | undefined): Record<string, MetricValue> {
+  if (value === undefined) {
     return { pass: { unavailable_reason: 'decomposed scores not published' } };
   }
   const metrics: Record<string, MetricValue> = {};
-  for (const [index, entry] of value.entries()) {
-    if (typeof entry !== 'object' || entry === null) {
-      throw new ValidationError('expected score object', `decomposed_scores[${index}]`);
-    }
-    const score = entry as Record<string, unknown>;
+  for (const [index, score] of value.entries()) {
     const key = decomposedScoreKey(score);
     if (!key) {
       throw new ValidationError('score has neither dimension nor score_id', `decomposed_scores[${index}]`);
     }
-    // The wire decoder materializes the proto3 default, so a score without a
-    // finite value has bypassed it.
-    if (typeof score.value !== 'number' || !Number.isFinite(score.value)) {
-      throw new ValidationError('score value was not decoded', `decomposed_scores[${index}].value`);
-    }
+    // `score.value` is a number: the wire decoder materialized the proto3 default.
     metrics[key] = { value: score.value };
   }
   taskScoreAsPass(metrics);
@@ -826,26 +798,71 @@ function mapVerificationDisposition(status?: string): VerifierState {
   }
 }
 
-function mapTerminalStatus(lifecycle: LifecycleStatus, summaryStatus?: string): TerminalStatus {
-  const summary = normalizeEnumToken(summaryStatus);
-  const verdict = summary.startsWith('VERDICT_STATUS_')
-    ? summary.slice('VERDICT_STATUS_'.length)
-    : summary;
-  if (lifecycle === 'stopped') return 'stopped';
-  if (verdict.includes('GRADER') || lifecycle === 'failed' && summary.includes('GRADER')) return 'grader_failed';
-  if (verdict.includes('POLICY') || summary.includes('POLICY') || verdict.includes('INVALID')) return 'invalid_evidence';
-  if (lifecycle === 'completed' && verdict.includes('PASS')) return 'completed';
-  if (lifecycle === 'completed') return 'model_failed';
-  if (verdict.includes('UNAVAILABLE')) return 'model_failed';
-  return 'model_failed';
+const LIFECYCLE_TOKEN_PREFIX = 'ASSIGNMENT_LIFECYCLE_STATUS_';
+const VERDICT_TOKEN_PREFIX = 'VERDICT_STATUS_';
+
+function lifecycleToken(value: string): string {
+  const normalized = normalizeEnumToken(value);
+  if (!normalized.startsWith(LIFECYCLE_TOKEN_PREFIX)) {
+    throw new ValidationError(`unknown assignment lifecycle status: ${value}`, 'lifecycle_status');
+  }
+  return normalized.slice(LIFECYCLE_TOKEN_PREFIX.length);
+}
+
+function verdictToken(value: string | undefined): string {
+  const normalized = normalizeEnumToken(value);
+  if (!normalized.startsWith(VERDICT_TOKEN_PREFIX)) {
+    throw new ValidationError(`unknown verdict status: ${value ?? '(missing)'}`, 'summary_status');
+  }
+  return normalized.slice(VERDICT_TOKEN_PREFIX.length);
+}
+
+/**
+ * Maps a terminal result to its outcome. Every wire value is named; a value
+ * this function does not know is a contract violation, never a model failure.
+ */
+function mapTerminalStatus(lifecycleValue: string, summaryStatus: string | undefined): TerminalStatus {
+  const lifecycle = lifecycleToken(lifecycleValue);
+  const verdict = verdictToken(summaryStatus);
+  switch (lifecycle) {
+    case 'STOPPED':
+      return 'stopped';
+    case 'GRADER_FAILED':
+      return 'grader_failed';
+    case 'POLICY_REJECTED':
+      return 'invalid_evidence';
+    case 'QUEUED':
+    case 'RUNNING':
+      throw new ValidationError(`result projection carries a non-terminal lifecycle: ${lifecycle}`, 'lifecycle_status');
+    case 'COMPLETED':
+    case 'FAILED':
+    case 'PARTIAL':
+    case 'ESCALATED':
+    case 'PROVIDER_FAILED':
+    case 'UNAVAILABLE':
+      break;
+    default:
+      throw new ValidationError(`unknown assignment lifecycle status: ${lifecycle}`, 'lifecycle_status');
+  }
+  switch (verdict) {
+    case 'PASS':
+      if (lifecycle !== 'COMPLETED') {
+        throw new ValidationError(`verdict PASS contradicts lifecycle ${lifecycle}`, 'summary_status');
+      }
+      return 'completed';
+    case 'FAIL':
+      return 'model_failed';
+    case 'INVALID_EVIDENCE':
+    case 'UNAVAILABLE':
+    case 'UNSUPPORTED':
+      return 'invalid_evidence';
+    default:
+      throw new ValidationError(`unknown verdict status: ${verdict}`, 'summary_status');
+  }
 }
 
 function mapLifecycleStatus(value: string): LifecycleStatus {
-  const normalized = normalizeEnumToken(value);
-  const token = normalized.startsWith('ASSIGNMENT_LIFECYCLE_STATUS_')
-    ? normalized.slice('ASSIGNMENT_LIFECYCLE_STATUS_'.length)
-    : normalized;
-  switch (token) {
+  switch (lifecycleToken(value)) {
     case 'QUEUED':
       return 'queued';
     case 'RUNNING':
@@ -854,8 +871,16 @@ function mapLifecycleStatus(value: string): LifecycleStatus {
       return 'completed';
     case 'STOPPED':
       return 'stopped';
-    default:
+    case 'FAILED':
+    case 'PARTIAL':
+    case 'ESCALATED':
+    case 'PROVIDER_FAILED':
+    case 'GRADER_FAILED':
+    case 'POLICY_REJECTED':
+    case 'UNAVAILABLE':
       return 'failed';
+    default:
+      throw new ValidationError(`unknown assignment lifecycle status: ${value}`, 'lifecycle_status');
   }
 }
 
@@ -893,6 +918,18 @@ function mapScenarioCategoryToken(token: string): ScenarioCategory | undefined {
   }
 }
 
+function requiredScenarioCategory(value: string): ScenarioCategory {
+  const category = mapScenarioCategory(value);
+  if (category === undefined) throw new ValidationError(`unknown scenario category: ${value}`, 'scenario_category');
+  return category;
+}
+
+function requiredModelRole(value: string): ModelRole {
+  const role = mapModelRole(value);
+  if (role === undefined) throw new ValidationError(`unknown model role: ${value}`, 'model_role');
+  return role;
+}
+
 function mapModelRole(value?: string): ModelRole | undefined {
   if (!value) return undefined;
   const normalized = normalizeEnumToken(value);
@@ -911,9 +948,9 @@ function mapEvaluationUnit(value?: string): EvaluationUnit | undefined {
   return undefined;
 }
 
-function unavailableMetricReason(value: unknown): string | undefined {
-  if (!Array.isArray(value) || value.length === 0) return undefined;
-  return value.map(String).join('; ');
+function unavailableMetricReason(value: string[] | undefined): string | undefined {
+  if (value === undefined || value.length === 0) return undefined;
+  return value.join('; ');
 }
 
 function metaKey(runId: string, assignmentId: string): string {
@@ -931,25 +968,6 @@ function normalizeEnumToken(value?: string): string {
   return value;
 }
 
-function requiredString(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`campaign projection missing ${key}`);
-  }
-  return value;
-}
-
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function optionalInteger(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isInteger(value) ? value : undefined;
-}
-
-function timestampString(value: unknown): string | undefined {
-  if (typeof value !== 'string' || value.length === 0) return undefined;
-  const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) return undefined;
-  return new Date(parsed).toISOString();
 }

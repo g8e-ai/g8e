@@ -177,6 +177,32 @@ describe('adaptCampaignProjectionEnvelope', () => {
     expect(failEvent).toMatchObject({ completed: 1, total: 1 });
   });
 
+  it('carries the outcome on the terminal event: a completed lifecycle with a FAIL verdict is model_failed', () => {
+    const context = createCampaignAdaptContext();
+    const records = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-1:result',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          result_digest: '0'.repeat(64),
+          verification_status: 'unverified',
+          completed_at: '2026-09-16T14:00:05Z',
+        },
+      },
+      context,
+    );
+    expect(records.find((record) => record.kind === 'assignment_failed')).toMatchObject({
+      lifecycle_status: 'completed',
+      terminal_status: 'model_failed',
+    });
+  });
+
   it('reports finished assignments against the full queued matrix size', () => {
     const context = createCampaignAdaptContext();
     for (const assignmentId of ['assign-1', 'assign-2', 'assign-3', 'assign-4']) {
@@ -714,6 +740,55 @@ describe('adaptCampaignProjectionEnvelope', () => {
         context,
       ),
     ).toThrow(ValidationError);
+  });
+
+  describe('terminal status mapping', () => {
+    const L = 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_';
+    const V = 'EVALUATION_VERDICT_STATUS_';
+
+    function adaptResult(lifecycle: string, verdict: string) {
+      const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
+      const records = adaptCampaignProjectionEnvelope(
+        {
+          schema_version: '1.0.0',
+          message_type: 'PublicAssignmentResultProjection',
+          idempotency_key: 'run-1:assign-6:result',
+          record: {
+            ...resultRecord,
+            assignment_id: 'assign-6',
+            lifecycle_status: lifecycle,
+            summary_status: verdict,
+            decomposed_scores: [{ score_id: 'assign-6:task-score', dimension: 'task_score', value: 1 }],
+          },
+        },
+        createCampaignAdaptContext(),
+      );
+      return records.find((record) => record.kind === 'assignment_result');
+    }
+
+    it.each([
+      [`${L}COMPLETED`, `${V}PASS`, 'live_in_progress'],
+      [`${L}COMPLETED`, `${V}FAIL`, 'terminal_failed'],
+      [`${L}COMPLETED`, `${V}INVALID_EVIDENCE`, 'terminal_failed'],
+      [`${L}COMPLETED`, `${V}UNAVAILABLE`, 'terminal_failed'],
+      [`${L}COMPLETED`, `${V}UNSUPPORTED`, 'terminal_failed'],
+      [`${L}FAILED`, `${V}FAIL`, 'terminal_failed'],
+      [`${L}PROVIDER_FAILED`, `${V}FAIL`, 'terminal_failed'],
+      [`${L}GRADER_FAILED`, `${V}UNAVAILABLE`, 'terminal_failed'],
+      [`${L}POLICY_REJECTED`, `${V}FAIL`, 'terminal_failed'],
+      [`${L}STOPPED`, `${V}FAIL`, 'terminal_failed'],
+    ])('accepts %s with %s', (lifecycle, verdict, quality) => {
+      expect(adaptResult(lifecycle, verdict)).toMatchObject({ quality_state: quality });
+    });
+
+    it.each([
+      ['an unknown lifecycle', 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_MYSTERY', `${V}FAIL`],
+      ['an unknown verdict', `${L}COMPLETED`, 'EVALUATION_VERDICT_STATUS_MYSTERY'],
+      ['a non-terminal lifecycle', `${L}RUNNING`, `${V}FAIL`],
+      ['PASS on a failed lifecycle', `${L}FAILED`, `${V}PASS`],
+    ])('rejects %s instead of defaulting to model_failed', (_name, lifecycle, verdict) => {
+      expect(() => adaptResult(lifecycle, verdict)).toThrow(ValidationError);
+    });
   });
 
   it('maps published benchmark_observations onto assignment_result records', () => {

@@ -146,7 +146,7 @@ const TOOL_DIMENSIONS = [
 
 type WireMetricUnavailableReason = (typeof WIRE_UNAVAILABLE_REASONS)[number] | (typeof PUBLIC_UNAVAILABLE_REASONS)[number];
 
-interface WireMetric {
+export interface WireMetric {
   value?: number;
   unavailable_reason?: WireMetricUnavailableReason;
 }
@@ -163,7 +163,7 @@ export interface WireScore {
   missing_data_policy?: string;
 }
 
-interface WireScenarioCriterion {
+export interface WireScenarioCriterion {
   criterion_id: string;
   public_label: string;
   public_description: string;
@@ -181,7 +181,7 @@ export interface WirePromptHint {
   }>;
 }
 
-interface WireScenarioSummary {
+export interface WireScenarioSummary {
   scenario_id: string;
   scenario_version: string;
   category: (typeof SCENARIO_CATEGORIES)[number];
@@ -196,7 +196,7 @@ interface WireScenarioSummary {
   tool_score_dimensions?: Array<{ dimension: (typeof TOOL_DIMENSIONS)[number]; required: boolean }>;
 }
 
-interface WireSemanticGradeSummary {
+export interface WireSemanticGradeSummary {
   criterion_id: string;
   status: (typeof VERDICT_STATUSES)[number];
   grading_method: (typeof GRADING_METHODS)[number];
@@ -204,7 +204,7 @@ interface WireSemanticGradeSummary {
   explanation_code: (typeof EXPLANATION_CODES)[number];
 }
 
-interface WireModelActivityRecord {
+export interface WireModelActivityRecord {
   model_role: (typeof ROLES)[number];
   agent_persona?: string;
   variant_id: string;
@@ -220,7 +220,7 @@ interface WireModelActivityRecord {
   load_state: (typeof LOAD_STATES)[number];
 }
 
-interface WireToolDecisionActivityRecord {
+export interface WireToolDecisionActivityRecord {
   tool_label: string;
   recognized?: boolean;
   selected?: boolean;
@@ -230,7 +230,7 @@ interface WireToolDecisionActivityRecord {
   evidence_source: (typeof EVIDENCE_SOURCES)[number];
 }
 
-interface WireToolCallActivityRecord {
+export interface WireToolCallActivityRecord {
   tool_label: string;
   execution_outcome: (typeof EXECUTION_OUTCOMES)[number];
   semantic_outcome: (typeof SEMANTIC_OUTCOMES)[number];
@@ -240,20 +240,20 @@ interface WireToolCallActivityRecord {
   guidance_shown?: boolean;
 }
 
-interface WirePolicyDecisionActivityRecord {
+export interface WirePolicyDecisionActivityRecord {
   tool_label: string;
   outcome: (typeof POLICY_OUTCOMES)[number];
   evidence_source: (typeof EVIDENCE_SOURCES)[number];
 }
 
-interface WireGovernedActionActivityRecord {
+export interface WireGovernedActionActivityRecord {
   action_label: 'governed action';
   reported_policy_outcome: (typeof POLICY_OUTCOMES)[number];
   receipt_status: (typeof RECEIPT_STATUSES)[number];
   evidence_source: (typeof EVIDENCE_SOURCES)[number];
 }
 
-interface WireActivitySummary {
+export interface WireActivitySummary {
   model_activity: WireActivityFamily<WireModelActivityRecord>;
   tool_decisions: WireActivityFamily<WireToolDecisionActivityRecord>;
   tool_calls: WireActivityFamily<WireToolCallActivityRecord>;
@@ -261,13 +261,13 @@ interface WireActivitySummary {
   governed_actions: WireActivityFamily<WireGovernedActionActivityRecord>;
 }
 
-interface WireEvidenceBinding {
+export interface WireEvidenceBinding {
   sha256: string;
   schema_ref: string;
   kind: (typeof EVIDENCE_KINDS)[number];
 }
 
-interface WireVerificationMetadata {
+export interface WireVerificationMetadata {
   provenance: 'PUBLIC_VERIFICATION_PROVENANCE_BOUND' | 'PUBLIC_VERIFICATION_PROVENANCE_LEGACY_UNBOUND';
   verifier_state: (typeof VERDICT_STATUSES)[number];
   verifier_release_version?: string;
@@ -275,6 +275,11 @@ interface WireVerificationMetadata {
   report_digest?: string;
   population_digest?: string;
 }
+
+/** The decoder rejects any other key. */
+export type WireResourceSummary = Partial<
+  Record<'latency_ms' | 'input_tokens' | 'output_tokens' | 'thinking_tokens' | 'cache_tokens' | 'retries', WireMetric>
+>;
 
 export interface CampaignLifecycleRecord {
   assignment_id: string;
@@ -311,7 +316,7 @@ export interface CampaignResultRecord {
   evidence_bindings?: WireEvidenceBinding[];
   verification_metadata?: WireVerificationMetadata;
   benchmark_observations?: Record<string, unknown>;
-  resource_summary?: Record<string, WireMetric>;
+  resource_summary?: WireResourceSummary;
   model_response?: string;
   failure_output?: string;
   role_transcripts?: RoleTranscript[];
@@ -322,12 +327,23 @@ export interface CampaignResultRecord {
   tools_declared?: string[];
 }
 
-export interface CampaignProjectionEnvelope {
+interface CampaignEnvelopeBase {
   schema_version: CampaignEnvelopeVersion;
-  message_type: CampaignMessageType;
   idempotency_key: string;
-  record: CampaignLifecycleRecord | CampaignResultRecord;
 }
+
+export interface CampaignLifecycleEnvelope extends CampaignEnvelopeBase {
+  message_type: 'PublicAssignmentLifecycleRecord';
+  record: CampaignLifecycleRecord;
+}
+
+export interface CampaignResultEnvelope extends CampaignEnvelopeBase {
+  message_type: 'PublicAssignmentResultProjection';
+  record: CampaignResultRecord;
+}
+
+/** A decoded envelope, narrowed by `message_type`. */
+export type CampaignProjectionEnvelope = CampaignLifecycleEnvelope | CampaignResultEnvelope;
 
 const ENVELOPE_FIELDS = ['schema_version', 'message_type', 'idempotency_key', 'record'] as const;
 const LIFECYCLE_FIELDS = [
