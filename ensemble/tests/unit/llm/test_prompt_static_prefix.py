@@ -206,6 +206,16 @@ def test_sentinel_mode_section_stays_within_budget():
     assert len(text) <= SENTINEL_MODE_BUDGET_CHARS
 
 
+@pytest.mark.parametrize(
+    ("persona_id", "budget"),
+    [("sage", 3_100), ("dash", DASH_PERSONA_BUDGET_CHARS), ("triage", 3_100), ("judge", 1_200)],
+)
+def test_persona_prompts_stay_within_budget(persona_id, budget):
+    size = len(get_agent_persona(persona_id).get_system_prompt())
+
+    assert size <= budget, f"{persona_id} persona is {size} chars, budget {budget}"
+
+
 def test_tool_descriptions_stay_within_budget():
     total = sum(len(path.read_text(encoding="utf-8")) for path in _TOOLS_DIR.glob("*.txt"))
 

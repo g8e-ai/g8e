@@ -27,7 +27,7 @@ const (
 func (s PipelineStage) String() string {
 	switch s {
 	case StageL1:
-		return "L1: Technical Bedrock"
+		return "L1: Doctrine"
 	case StageL2:
 		return "L2: Consensus"
 	case StageL3:

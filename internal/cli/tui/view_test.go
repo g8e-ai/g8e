@@ -60,7 +60,7 @@ func TestView_ContainsAllPipelineStages(t *testing.T) {
 	m.width = 120
 	m.height = 40
 	out := m.View()
-	assert.Contains(t, out, "L1: Technical Bedrock")
+	assert.Contains(t, out, "L1: Doctrine")
 	assert.Contains(t, out, "L2: Consensus")
 	assert.Contains(t, out, "L3: Notary")
 	assert.Contains(t, out, "L4: Warden")
@@ -154,7 +154,7 @@ func TestRenderPipeline_ExplicitDetailShown(t *testing.T) {
 func TestRenderPipeline_AllFiveStagesPresent(t *testing.T) {
 	m := NewModel(Options{})
 	out := m.renderPipeline(60, 30)
-	assert.Contains(t, out, "L1: Technical Bedrock")
+	assert.Contains(t, out, "L1: Doctrine")
 	assert.Contains(t, out, "L2: Consensus")
 	assert.Contains(t, out, "L3: Notary")
 	assert.Contains(t, out, "L4: Warden")
