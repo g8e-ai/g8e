@@ -180,7 +180,7 @@ Two programs exercise the evaluation topology:
 | Program | Suite / catalog | Proves | Does not use |
 | --- | --- | --- |
 | **Execution-boundary** | `core-execution-boundary@1.0.0` | One allowed governed mutation and one doctrine-prohibited equivalent through the real Gateway and remote Operator | g8ee, model providers, model judges, campaigns, synthetic simulators |
-| **Model campaign** | `default-suite@1.1.0` (built-in suite) or any custom suite (`g8e eval suites`) | Governed model-role scoring through production inference, tool scenarios, heterogeneous system-lane formations, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from campaign CLI or g8ee |
+| **Model campaign** | `default-suite@1.2.0` (built-in suite) or any custom suite (`g8e eval suites`) | Governed model-role scoring through production inference, tool scenarios, heterogeneous system-lane formations, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from campaign CLI or g8ee |
 
 Both programs persist canonical, content-addressed run evidence beneath `.g8e/data/eval/runs/` with campaign definitions and frozen artifacts stored separately beneath `.g8e/data/eval/campaigns/<campaign-id>/`. Verification is independent of execution: `g8e eval boundary verify` and `g8e eval runs verify` recompute bindings and signatures without executing new scored actions.
 
@@ -193,8 +193,8 @@ The `g8e eval` command tree groups platform evaluation commands across ten top-l
 | `g8e eval boundary …` | Run, list, verify, and show native execution-boundary test suites |
 | `g8e eval models …` | Catalog and registry management (list, show, add, remove, import, freeze, pull, diff) |
 | `g8e eval suites …` | Scenario suites (list, show, export, create, update, delete) |
-| `g8e eval campaigns …` | Campaign definitions (list, show, create, archive, unarchive) |
-| `g8e eval runs …` | Campaign execution and lifecycle (list, show, start, resume, cancel, logs, verify, publish, export, repair, compare, archive, unarchive) |
+| `g8e eval campaigns …` | Freeze, inspect, assert historical release identity, and archive campaign definitions |
+| `g8e eval runs …` | Execute, inspect assignments and logs, verify, publish, export, repair, compare, and archive runs |
 | `g8e eval rollout …` | Rollout qualification queue (list, add, remove, next, retry, skip, run) |
 | `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, add, remove, smoke) |
 | `g8e eval gates …` | Pre-campaign acceptance gates (chat, inference, probe) |
@@ -284,7 +284,7 @@ To accelerate high-throughput qualification, `g8e eval rollout run` supports a t
 
 1. **Tier 1 — Fast Smoke Gate** (`--gate-smoke`): Executes 5 high-discriminative scenarios under their eligible roles (8 assignments per model). Scenarios exercise syntax and tool execution, investigation and diagnostic reasoning, dissent and safety compliance, multi-step remediation, and fast-path direct instruction response. Requires 100% pass status on witness and verification gates.
 
-2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 41-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
+2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Promotes candidates that pass the smoke gate into the full 41-assignment matrix. Candidates that fail the gate do not run the full matrix; elapsed-time savings depend on the model and provider.
 
 ```bash
 ./g8e eval rollout run --gate-smoke --promote-on-pass
@@ -345,7 +345,7 @@ A scored assignment is one real chat turn in a prepared investigation. The scena
 
 **Public criteria and tool dimensions (INV-EVAL-CAMP-18).** The frozen catalog defines, for each scenario, the public criteria a reader of the projection sees. They cover the stable grade IDs the scored checks emit and are derived, never authored per scenario: `role-invoked`, `governed-inference`, and `trajectory` for every scenario; `scenario-content` when the scenario has a content check or is not judge-graded; `tool-allowlist` when `AllowedTools` is set; and `semantic-judge` (the one semantic criterion) when the scenario is judge-graded. All are required. The `trajectory` text follows the scenario's public trajectory policy and the `scenario-content` text its category. Role, pipeline, per-evidence-type, `triage`, and `player:<id>` grades are reported by ID without a public definition. Public tool score dimensions are derived from the scenario's shape: expected tools give `tool_recognition` and `tool_selection`; argument validators give `argument_schema` and `argument_semantics`; a `GOVERNED` scenario gives `permission_compliance`; a recovery scenario that expects a tool gives `result_interpretation`, `follow_up_decision`, and `recovery`. A dimension a scenario does not exercise publishes as `scenario_not_applicable`. One it does exercise publishes its grade when a grade maps to it (`gradeToToolScorecardDimension`), and `source_not_captured` otherwise. Only `role-invoked` and `governed-inference` grades are emitted today, so only `tool_recognition` and `follow_up_decision` carry a value; the other applicable dimensions read `source_not_captured` until a grade maps to them.
 
-**Failure sentences.** A failed assignment carries one exact sentence (INV-EVAL-EVID-07). A tool scenario opens with the proof the opportunity was real, then the reason: for example, in the private form, `` `recursive_grep_search` was declared to the model and named in the prompt (hint: pattern `AUTH_FAILURE` from the prompt, path `<workspace path>` from the workspace). The model made no tool call. Its output began: “…”. `` The public form drops hint values, quoted error text, validator rule text, and the output prefix. If the scored model call's `tools_declared` lacks the tool, the sentence says `was NOT declared to the model`, which marks a harness defect. The platform does not pre-judge what a model can do: a model that was offered and hinted at a tool and did not call it failed, whatever the cause.
+**Failure sentences.** A failed assignment carries separate private and public failure text (INV-EVAL-EVID-07). A tool scenario opens with the proof the opportunity was real, then the reason: for example, in the private form, `` `recursive_grep_search` was declared to the model and named in the prompt (hint: pattern `AUTH_FAILURE` from the prompt, path `<workspace path>` from the workspace). The model made no tool call. Its output began: “…”. `` The public form drops hint values, quoted error text, validator rule text, and the output prefix. If the scored model call's `tools_declared` lacks the tool, the sentence says `was NOT declared to the model`, which marks a harness defect. The platform does not pre-judge what a model can do: a model that was offered and hinted at a tool and did not call it failed, whatever the cause.
 
 **Formation roles.** A formation shares one workspace across its roles. Each earlier role's output reaches later roles as a seeded `assistant` turn rather than text in the user message, so every role sees the same prompt.
 
@@ -388,13 +388,13 @@ Only the remote Observer Operator supplies provider-boundary observation for mod
 
 The Observer has no Ollama management capability. Consecutive scored assignments keep the daemon resident; after a completed queue, the controller dispatches model-release commands through the exact Inference Operator. That governed command sends an empty `/api/generate` request with `keep_alive: 0` to the Operator's approved endpoint; the controller confirms campaign-owned tags are absent.
 
-**Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
+**Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected fail verification with `--require-observation`. Enroll the observer before starting or resuming a run; verification cannot reconstruct uncaptured hardware windows.
 
 **Storage-side Provenance Operator:** Deploy at the model storage site where Ollama manifests and content-addressed weight blobs live (for example `~/.ollama/models`). On FINALIZE, the operator resolves the served tag with Ollama's canonical name parser and reads the matching manifest. The operator hashes every referenced blob and compares the manifest digest to the expected campaign model digest. The operator publishes `ModelProvenanceObservationCompleted` on its results channel.
 
 **Fail closed:** If the served tag cannot be resolved, a referenced blob is missing, or observed and expected model digests do not match, FINALIZE fails and the attestation window is not published. This is independent of the Inference Operator's own digest checks — the Provenance Operator is a storage-side witness, not self-report from the inference executor.
 
-**Timing rule:** Assignments that reached a terminal state before the Provenance Operator was enrolled and pub/sub-connected will lack attestation windows. Enroll the provenance operator before `execute` when chain-of-custody claims are required.
+**Timing rule:** Assignments that reached a terminal state before the Provenance Operator was enrolled and pub/sub-connected lack attestation windows. Enroll the provenance operator before starting or resuming a run when chain-of-custody claims are required.
 
 ### Evidence and verification
 
@@ -425,7 +425,7 @@ Campaign assignment results use the enriched campaign projection envelope (`1.2.
 
 Assignment activity preserves the distinction between an observed empty list, unavailable source capture, and scenario-not-applicable. Resource metrics preserve an observed zero and identify unavailable token, retry, or latency values explicitly. The closed public unavailable-reason vocabulary is `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`.
 
-Current campaign aggregate records use Evaluation Explorer view schema `1.5.0`. The `evaluation_summary` projection emits typed pass-rate, scored-inference latency p50, and output-throughput p50 metrics with units and observed, eligible, and unavailable contributor counts. A passing campaign verification report publishes `quality_state: exploratory_verified` only for the exact run-derived dataset and eligible `(variant_id, role)` aggregate covered by the verified population. Other datasets, roles, incomplete populations, failed reports, and mismatched bindings remain at their existing quality state, normally `exploratory_partial` or `unavailable`. `exploratory_verified` means the named run evidence passed the verifier's scope; it does not mean universal model quality, complete optional telemetry, or `verified_public`.
+Current campaign aggregate records use Evaluation Explorer view schema `1.6.0`. The `evaluation_summary` projection emits typed pass-rate, scored-inference latency p50, and output-throughput p50 metrics with units and observed, eligible, and unavailable contributor counts. A passing campaign verification report publishes `quality_state: exploratory_verified` only for the exact run-derived dataset and eligible `(variant_id, role)` aggregate covered by the verified population. Other datasets, roles, incomplete populations, failed reports, and mismatched bindings remain at their existing quality state, normally `exploratory_partial` or `unavailable`. `exploratory_verified` means the named run evidence passed the verifier's scope; it does not mean universal model quality, complete optional telemetry, or `verified_public`.
 
 ## Anti-patterns
 

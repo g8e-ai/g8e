@@ -380,7 +380,8 @@ func publicLoopRecord(sequence int64, campaignID string) (models.PublicFeedRecor
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED,
 		Repetition:      1,
 	}
-	projection, err := evaluation.BuildAssignmentLifecycleProjection(assignment, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE, time.Unix(sequence, 0).UTC())
+	// This synthetic transport fixture has no measured campaign release.
+	projection, err := evaluation.BuildAssignmentLifecycleProjection(assignment, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE, time.Unix(sequence, 0).UTC(), evaluation.CampaignRelease{Basis: evaluation.ReleaseBasisUnknown})
 	if err != nil {
 		return models.PublicFeedRecord{}, fmt.Errorf("public loop: build campaign projection: %w", err)
 	}

@@ -2,7 +2,7 @@
 
 Status: frozen at schema_version 1.6.0 on 2026-10-02. Explorer records emit 1.6.0; the validator continues to decode historical view records from 1.0.0 through 1.5.0. Campaign lifecycle envelopes remain 1.0.0, while enriched campaign result envelopes emit 1.2.0 and historical result envelopes from 1.0.0 and 1.1.0 remain readable. View schema 1.6.0 adds campaign release provenance and retains the typed headline and verification requirements of 1.5.0.
 
-This is the single typed source of truth for the public-safe read model the browser renders. The Go evaluation publication service, the frontend `campaign-adapter`, the mock replay producer, the deterministic fixtures, and the frontend validators all consume this contract. No consumer hand-defines enums or record shapes. A change to any enum value or required field is a contract revision: bump `VIEW_SCHEMA_VERSION` in `types.ts`, update `descriptor.json`, and update the Go projector plus frontend adapter together.
+This document describes the public read model the browser renders. `types.ts` owns the view types; the protobuf messages own campaign and live-event wire shapes. Go projectors, browser adapters, fixtures, and validators must agree at those boundaries. A change to an enum value or required field is a contract revision: update the owning schema, `VIEW_SCHEMA_VERSION` in `types.ts`, `descriptor.json`, and the Go projector plus frontend adapter together. Changes within the same unreleased contract revision share its version.
 
 ## Canonical sources
 
@@ -51,11 +51,7 @@ The enum values are reconciled against canonical protocol vectors and checked-in
 
 ## Dataset IDs
 
-- `exploratory_baseline` maps to dataset id `exploratory-baseline-r2` with quality state `exploratory_partial`.
-- `verified_public_snapshot` is the retained wire kind for historical public snapshots. The current fixture maps to dataset id `verified-public-snapshot-current` with quality state `legacy_unverified` because its older verifier result does not satisfy the current contract.
-- `live_run` maps to dataset id `live-run` with quality state `live_in_progress`. A real live run uses a fresh dataset id per run; `live-run` is the fixture and replay default.
-
-The fixtures currently use `ds-exploratory-baseline-20260914-r2`, `ds-legacy-public-20260914`, and `ds-live-demo-20260914` as concrete dataset id strings. Production campaign projections use run-scoped dataset IDs such as `ds-live-<run-id>`; the store keys by the exact `dataset_id` string and never combines incompatible datasets. Fixture IDs and producer IDs must agree within their respective replay or live source.
+Dataset kind and dataset identity are separate fields. `src/fixtures/fixtures.ts` owns fixture IDs; production campaign projections use run-scoped IDs such as `ds-live-<run-id>`. The store keys by the exact `dataset_id` and never combines incompatible datasets. A historical `verified_public_snapshot` kind does not by itself establish a current verified quality state.
 
 ## Routes
 
@@ -63,12 +59,15 @@ The application uses `BrowserRouter` for client-side routing, which relies on se
 
 - `/` overview: feed state, live panel, dataset selector, aggregate counts, role leaders, recent runs.
 - `/models` models: model catalog with search, filters, sorting, and comparison.
-- `#/models/:variantId` model-detail: per-model identity, metrics, suite results, repeatability, performance, tokens, outcomes, source runs.
-- `#/evaluations` evaluations: evaluation list with dataset, suite, status, quality, model, role, and date filters.
-- `#/evaluations/:runId` evaluation-detail: run status, progress, quality, model-role map, metrics, verification, resources, assignment table.
-- `#/evaluations/:runId/assignments/:assignmentId` assignment-detail: assignment identity, status, metric values, missingness, stage and resource summaries.
-- `#/compare` compare: two to four model comparison within one dataset, or across datasets only when every dataset declares the same `provider_environment` (every field equal) and has the same set of evaluation `suite_id`s. A model-role campaign freezes one model, so each model lives in its own run-scoped dataset and this rule is what makes them comparable. It fails closed: a dataset with no declared environment or no evaluation suite is incompatible. Each value stays attributed to its own run; nothing is pooled or averaged. The Go projector emits `provider_environment` on a run's `catalog_snapshot` records once the run is complete, derived from the provider-boundary observation windows of its scored inferences, always with `source: observed` and only `memory` (system RAM total) and `graphics` (GPU memory total, as `<N> GiB VRAM`), each rounded to whole GiB. The observer reports no processor and no model names, so none are emitted and a match is on capacity only; the panel says so. The field is omitted while a run is in progress, when no window reported a capacity, and when the run's windows disagree about a capacity. `declared` remains a valid wire value, but nothing emits it.
-- `#/methodology` methodology: dataset definitions, metric direction and denominator, uncertainty, quality states, and limitations.
+- `/models/:datasetId?/:variantId` model detail: per-model identity and measurements.
+- `/evaluations` evaluations: campaign list and filters.
+- `/evaluations/:datasetId?/:runId` evaluation detail: progress, verification, resources, and assignments.
+- `/evaluations/:datasetId?/:runId/assignments/:assignmentId` assignment detail: identity, verdict, metrics, and diagnostics.
+- `/compare` redirects to `/models`, preserving query parameters; model comparison lives on the model list.
+- `/tasks` and `/tasks/:taskId` show the generated scenario catalog.
+- `/methodology` explains metrics and limitations; `/about` describes the platform.
+
+`src/App.tsx` owns route definitions. Comparisons across datasets require matching observed provider environments and suite sets; see [Evaluation Architecture](../../../../../docs/architecture/evals.md#evidence-and-verification) for the producer contract. Each value stays attributed to its run; nothing is pooled or averaged.
 
 ## Record and event shapes
 
@@ -94,7 +93,7 @@ The campaign-wire validator checks the version-specific allowlist, canonical pro
 
 The closed public unavailable reasons are `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. `observed` activity with zero records is distinct from `unavailable`; `not_applicable` is reserved for a scenario that does not define the activity family. `no_scored_calls` means resource observations are unavailable, not observed zero. The adapter maps the canonical wire spellings to the lowercase view enums without widening the vocabulary or replacing missingness with zero.
 
-The public boundary permits approved scenario descriptions and criterion labels, closed grade explanation codes, grouped reported activity outcomes, bounded scored-inference resources, verification metadata, and content bindings. It excludes prompts, outputs, reasoning, private grade detail, provider or session identity, call or transaction identifiers, receipt bodies, filesystem paths, private artifact locations, and unrestricted free text. A content binding identifies an approved artifact reference; it is not proof that the artifact is publicly accessible or independently verified.
+The public boundary permits approved scenario descriptions and criterion labels, closed grade explanation codes, grouped reported activity outcomes, bounded scored-inference resources, verification metadata, and content bindings. The optional `model_response`, `failure_output`, and `role_transcripts` extensions carry bounded model and tool text under the checks described in [Public Spectator Architecture](../../../../../docs/architecture/public_spectator.md#public-live-projections). These checks do not perform general secret detection or redact arbitrary paths in model text. Private prompts, reasoning, grade detail, execution identities, receipts, and artifact locations have no general public field. A content binding identifies an approved artifact reference; it does not prove public accessibility or independent verification.
 
 ## Transport and publication
 
@@ -105,39 +104,25 @@ Records are published as g8e public feed records. The JSONL input shape for `g8e
 
 The publisher rejects any record whose JSON contains a prohibited field. The prohibited field set is listed in `descriptor.json` and includes raw prompts, outputs, chain-of-thought, private evidence, identities, credentials, machine paths, private endpoints, Gateway URLs, PKI identities, audit internals, envelopes, and receipt internals. The Go publication coordinator must never emit these fields; the publisher is the last line of defense, not the first.
 
-## File ownership
+## Implementation ownership
 
-Workers do not edit the same files concurrently. Worker 0 assigns concrete file ownership here. Cross-worker changes are proposed through a fixture or contract change and integrated by Worker 0.
-
-- Worker 1B (Explorer contracts): `src/contract/types.ts`, `src/contract/validators.ts`, `src/contract/campaign-wire.ts`, `src/contract/descriptor.json`, `src/contract/CONTRACT.md`, `src/fixtures/fixtures.ts`, `tests/validators.test.ts`, `tests/contract-conformance.test.ts`, `tests/descriptor-sync.test.ts`, and `tests/campaign-wire.test.ts`.
-- Go evaluation publication (`internal/services/evaluation/campaign_publication.go` and related projection builders): emits public-safe envelopes from canonical campaign state.
-- Worker 2 (Mirror and local runtime): `dev.mjs`, `scripts/seed.mjs`, `scripts/replay.mjs`, local mirror startup, and the runtime fixture. Worker 2 does not edit contract or fixture files.
-- Worker 3 (UX shell and navigation): `src/App.tsx`, `src/main.tsx`, `src/state/*`, `src/components/*`, `src/utils/*`, global styles, and the route shell. Worker 3 imports enums and types from `src/contract/types.ts` and never redefines them.
-- Worker 4 (Metrics and detail views): `src/views/*` (model, evaluation, assignment, comparison, methodology detail views). Worker 4 imports shared components from `src/components/*` and types from `src/contract/types.ts`.
-- Frontend campaign adapter (`src/state/campaign-adapter.ts`): decodes Go publication envelopes from the mirror into frozen view records.
-- Worker 6 (Runtime and live eval): runtime recovery and the bounded real eval. Worker 6 does not edit frontend or contract files.
-- Worker 7 (UX QA and browser acceptance): `tests/*` (excluding the contract conformance and descriptor sync tests owned by Worker 0), `e2e/*`, and the accessibility harness. Worker 7 extends `tests/setup.ts` only through Worker 0.
-- Worker 8 (Junior runbook and handoff): the runbook document and handoff captures. Worker 8 does not edit source files.
-
-## Integration decisions
-
-1. The contract is frozen before Worker 1 builds the projector and before Workers 4 and 5 implement against it. The enum reconciliation (especially `model_failed` and `not_applicable`) is applied now so the projector emits faithful records without remapping.
-2. The descriptor.json plus sync test replaces a TS-to-JSON generator. A generator that parses TypeScript source text is fragile; a sync test that asserts equality is robust and runs in milliseconds. Worker 1 and Worker 5 generate Python enums from descriptor.json.
-3. The fixtures are test data that exercises every quality state and every record/event kind. Tests inject them into the typed store; production code does not import or load them.
-4. The read-only mirror is authoritative for browser-visible state. The browser never imports local generated JSON, substitutes fixture data, or falls back to another endpoint in production.
-5. Integration order: static historical snapshot, model pages, evaluation pages, assignment pages, live fixture events, then real eval events.
+- `internal/services/evaluation/campaign_publication.go` and its projection builders emit public records from persisted campaign evidence.
+- `src/state/campaign-adapter.ts` converts decoded campaign envelopes into view records; `src/contract/live-event-wire.ts` decodes event bodies.
+- `src/state/store.ts` indexes accepted records. Views and components consume the shared types rather than defining alternate wire shapes.
+- `descriptor.json` and `tests/descriptor-sync.test.ts` keep the cross-language enum vocabulary aligned.
+- Fixtures exercise every quality state and record/event kind in tests. Production reads the public mirror and never substitutes fixtures for unavailable data.
 
 ## Rejection criteria
 
-Worker 0 rejects any integration that hides verification failures, collapses unavailable into zero, leaks restricted fields, requires the browser to reach the private listener, makes a provider request from the browser, combines incompatible datasets or denominators, or labels exploratory, partial, failed-verification, synthetic, or live-in-progress data as verified unless the named verifier actually passed.
+Reject changes that hide verification failures, collapse unavailable into zero, leak restricted fields, require the browser to reach the private listener, make provider requests from the browser, combine incompatible datasets or denominators, or label data as verified unless the named verifier actually passed.
 
 ## Verification
 
 Run the contract tests in isolation from the in-progress views:
 
 ```bash
-cd /home/bob/g8e/dashboard/g8e-adapter/evaluation-explorer
-npx vitest run tests/contract-conformance.test.ts tests/descriptor-sync.test.ts
+cd dashboard/g8e-adapter/evaluation-explorer
+npx vitest run tests/contract-conformance.test.ts tests/descriptor-sync.test.ts tests/campaign-wire.test.ts tests/campaign-adapter.test.ts tests/live-event-wire.test.ts
 ```
 
-The focused contract suite validates every fixture and generated historical record against the guards, asserts full kind coverage, and checks that every descriptor enum matches `types.ts`. Campaign wire tests separately cover lifecycle 1.0.0, historical result 1.0.0, enriched result 1.1.0, canonical enum conversion inputs, and fail-closed malformed nested data.
+The focused suite validates fixtures and historical records, asserts kind coverage and descriptor parity, and exercises lifecycle 1.0.0 and result 1.0.0/1.1.0/1.2.0 boundaries. The shared failed-result and live-event vectors verify zero preservation across Go and TypeScript; malformed wire data fails closed.

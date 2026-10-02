@@ -248,8 +248,9 @@ func runsStartCmd(deps nativeEvalDeps) *cobra.Command {
 persists its full assignment matrix, and then executes it. Progress is
 resumable (g8e eval runs resume) and cancellable (g8e eval runs cancel).
 
-Operator sessions come from --inference-session and --data-session, or the single
-active session of each role.
+Operator sessions are resolved from the active Inference Operator and the stack's
+data-operator. The data-operator is bound to the CLI session unless --no-auto-bind
+is set.
 
 Examples:
   g8e eval runs start eval-qwen

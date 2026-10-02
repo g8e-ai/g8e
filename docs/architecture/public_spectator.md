@@ -57,7 +57,7 @@ Every exported record passes through a closed allowlist before becoming browser-
 
 ### Signed export binding
 
-Every exported batch is a cryptographically signed, append-only record bound to source deployment, schema version, monotonic sequence, prior-batch hash, timestamp, content hash, and signature. The chain cannot be reordered, duplicated, or equivocated.
+Every exported batch is a cryptographically signed, append-only record bound to source deployment, schema version, monotonic sequence, prior-batch hash, timestamp, content hash, and signature. The mirror checks sequence and predecessor continuity. Conflicting chains are detectable by comparing signed batch hashes; a signature alone cannot prevent a compromised source from sending different chains to different mirrors.
 
 ### Network isolation
 
@@ -159,9 +159,9 @@ A failed row's Status tooltip shows the assignment's existing bounded public `fa
 
 ### Disclosure enforcement and offline reproduction
 
-Disclosure enforcement is layered. The Go projector builds only typed approved fields and rejects extension collisions; the producer-side public disclosure validator rejects unknown or prohibited assignment fields and validates the canonical protobuf projection; the publisher and mirror reject malformed records, prohibited patterns, traversal, symlinks, and invalid proof packages; and the frontend validates raw campaign envelopes before adaptation and validates adapted view records before indexing. The receiver remains a fail-closed boundary rather than trusting the producer or the contract description. Private prompts, outputs, reasoning, identities, credentials, endpoints, paths, envelopes, receipt internals, audit data, and evidence bodies remain prohibited at every layer.
+Disclosure enforcement is layered. The Go projector builds approved fields and rejects extension collisions; the producer-side public disclosure validator rejects unknown or prohibited assignment fields and validates the protobuf projection; the publisher and mirror validate records and proof packages; and the frontend validates campaign envelopes before adaptation and view records before indexing. The bounded model-text and role-transcript exceptions described above still apply. A field allowlist and the restricted-text checks do not establish that arbitrary model or tool output contains no secrets, paths, or private fixture content.
 
-Offline reproduction uses the signed public package, not the mirror's availability. A verifier downloads the proof manifest, proof catalog, and content-addressed artifact bytes, records the source pseudonym and feed high-water metadata, then disables network access. It checks that every artifact's SHA-256 matches its catalog entry, that catalog entries match the manifest, that the manifest root recomputes from the declared artifact hashes and metadata, and that the Ed25519 signature verifies against the published signing key. It then validates the exported projection and event records against the frozen `1.5.0` view contract, replays records in sequence order, and compares the resulting high-water and feed-chain hashes with the snapshot. A failed hash, signature, schema, disclosure, binding, or sequence check stops reproduction; it does not produce a partial verified result. The browser explorer performs structural and disclosure validation and does not replace the offline cryptographic verifier. Mirror recovery can republish the same signed package, but it never recomputes evaluation results or upgrades their quality state.
+Offline reproduction requires the signed public package and an independently trusted signing key, not mirror availability alone. A verifier checks artifact hashes, catalog and manifest bindings, signatures, and signed feed-batch continuity against the recorded snapshot. Records must satisfy their declared wire contracts: current view records use `1.6.0`, campaign envelopes retain their own versions, and live events use `PublicLiveEvent`. Record bodies alone do not contain enough batch metadata to recompute a signed feed chain. The browser performs structural and disclosure validation; it is not the offline cryptographic verifier. Mirror recovery does not recompute evaluation results or upgrade their quality state.
 
 ### Public immutable proofs
 
@@ -197,7 +197,7 @@ Public metadata includes:
 
 The following never cross the projection boundary:
 
-- Raw prompts and model outputs.
+- Private prompts and unrestricted model outputs; only the bounded model-text and transcript fields described above are allowed.
 - Chain-of-thought, reasoning traces, and intermediate generation tokens.
 - Private evidence, encrypted evidence envelopes, and evidence-key metadata.
 - Owner-only projections and user-scoped observe data.
@@ -235,7 +235,7 @@ A source transition never splices, renumbers, or deletes an existing accepted ch
 
 ### Key rotation and revocation
 
-Signing keys are owner-only secrets stored in the host g8e runtime tree. They never appear in frontend runtime JSON, logs, events, reports, proofs, or contract packs. Key rotation proceeds as follows:
+Private signing keys are owner-only secrets stored in the publisher's runtime tree: the Gateway volume for Gateway-owned publication, or the host runtime for a remote publisher. They never appear in frontend runtime JSON, logs, events, reports, proofs, or contract packs. Public verification keys are distributable. Key rotation proceeds as follows:
 
 Key rotation is coordinated by `g8e public rotate-key` or the publisher's `RotateKey` operation:
 
@@ -313,10 +313,10 @@ A projection or proof accidentally includes a prohibited field. Mitigation: the 
 | Surface | Limit | Default |
 | --- | --- | --- |
 | Bootstrap response | One bounded snapshot per request | Fixed size, no pagination |
-| Cursor-paginated cycles/runs/evals | Page size 1-500 | Default 20 |
+| Cursor-paginated `/history` records | Page size 1-500 | Default 20 |
 | SSE live stream | Globally bounded concurrent connections with one bounded queue per connection | 1,000 connections; 100-event in-memory buffer per connection |
 | Proof download | One download per request, byte-counted | Maximum artifact size enforced |
-| Anonymous read rate | Requests per minute per client IP | Configured by mirror operator; exactly one valid unicast `CF-Connecting-IP` is accepted only when the socket peer belongs to an explicit trusted-proxy CIDR |
+| Anonymous read rate | Requests per minute per client IP | 600 per 60 seconds by default; exactly one valid unicast `CF-Connecting-IP` is accepted only when the socket peer belongs to an explicit trusted-proxy CIDR |
 
 Anonymous reads never expose mutation, producer, audit, filesystem, pub/sub, MCP, A2A, or tool routes. The public contract contains no mutation or producer operation.
 
@@ -328,7 +328,7 @@ The SSE stream has a bounded in-memory queue. If a connected consumer falls behi
 
 | Data class | Retention | Cleanup |
 | --- | --- | --- |
-| Event history (feed records and batches) | Bounded retained prefix | The mirror retains up to 25,000 batches by default and advances the retained predecessor hash when older batches are pruned |
+| Event history (feed records and batches) | Bounded recent history | The mirror retains up to 25,000 batches by default and advances the retained predecessor hash when older batches are pruned |
 | Proof artifacts and metadata | Append-only in the mirror state | Content-addressed artifacts remain available while their catalog and manifest remain valid; the current implementation has no tombstone cleanup job |
 | Snapshots | Current publisher and mirror checkpoints | A snapshot records the current high-water sequence and feed-chain hash; clients reconcile against the retained chain |
 | Publisher outbox | Until mirror acknowledgment | The publisher prunes acknowledged entries after its configured acknowledgment window; failed entries remain retryable |
@@ -337,7 +337,7 @@ The publisher never silently deletes reports, encrypted evidence, indexes, or pr
 
 ### Cache policy
 
-Proof downloads are served with `Cache-Control: immutable` because they are content-addressed. Bootstrap and paginated reads are served with short cache durations because they reflect live state. History responses use negotiated gzip compression. SSE streams are never cached. A deployment may place a CDN in front of proof artifacts, but that is outside the Gateway runtime; live projections and SSE streams should bypass it to preserve freshness. The Evaluation Explorer persists accepted public records and their sealed snapshot in browser IndexedDB. On reload it resumes from that cursor only after the mirror confirms the cached source, protocol, sequence, and feed-chain checkpoint; an incompatible or pruned checkpoint is discarded and replay starts from retained history.
+Proof downloads carry `Cache-Control: public, max-age=31536000, immutable`; SSE carries `no-cache, no-transform`. Bootstrap and history handlers do not set a cache lifetime, so deployments must keep those changing reads out of shared caches. History responses use negotiated gzip compression. The Evaluation Explorer persists accepted public records and their sealed snapshot in browser IndexedDB. On reload it resumes from that cursor only after the mirror confirms the cached source, protocol, sequence, and feed-chain checkpoint; an incompatible or pruned checkpoint is discarded and replay starts from retained history.
 
 ### Stale and offline semantics
 
@@ -401,14 +401,11 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 
 ### Publishing campaign records
 
-1. Run `g8e public init --source-id=<source-id> --mirror-origin=<mirror-url>` on the host to initialize the publisher.
-2. The publisher consumes public-safe campaign records supplied to `g8e public publish <records.jsonl>`.
-3. The publisher validates each record against the closed allowlist using [internal/services/publicdisclosure/validator.go](../../internal/services/publicdisclosure/validator.go).
-4. Valid records are signed, batched, and persisted in the publisher's durable outbox.
-5. `g8e public publish <records.jsonl>` sends the batch to the private mirror listener on the authenticated `/api/v1/public-feed/batches` route.
-6. The mirror validates the batch signature and compliance, then stores it in public-mirror/state.json.
-7. The mirror acknowledges the batch back to the publisher.
-8. `g8e public push` retries the durable outbox against the mirror; acknowledged entries are pruned and failed entries remain retryable.
+1. The unified stack initializes its Gateway-owned publisher. For a separately configured remote mirror, initialize the host publisher with `g8e public init --source-id=<source-id> --mirror-origin=<mirror-url>`.
+2. Supply public records to `g8e public publish <records.jsonl>`. When the local Gateway publication route is available, the CLI sends them through owner-authenticated `POST /api/v1/public-feed/batches`; otherwise the configured host publisher owns publication.
+3. The publisher validates the records, signs an ordered batch, persists it in its durable outbox, and sends it to the mirror's private `/ingest` endpoint.
+4. The mirror validates the batch signature, record contracts, and sequence bindings, persists accepted state, and acknowledges the batch.
+5. `g8e public push` retries the publisher's durable outbox. Acknowledged entries are pruned under the acknowledgment policy; failed entries remain retryable.
 
 ### Key rotation
 
@@ -431,15 +428,15 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 ### Offline verification
 
 1. Download the proof manifest, proof catalog, and all content-addressed artifact bytes.
-2. Record the source pseudonym and feed high-water metadata.
+2. Record the source pseudonym and snapshot high-water metadata, and retain the signed feed batches needed for chain verification.
 3. Disable network access.
 4. Verify each artifact's SHA-256 against the catalog entry.
 5. Verify that catalog entries match the manifest.
 6. Verify that the manifest root recomputes from declared artifact hashes and metadata.
-7. Verify the Ed25519 signature against the published signing key.
-8. Validate the exported projection and event records against the frozen `1.5.0` view contract.
+7. Verify signatures against an independently trusted public signing key.
+8. Validate projection and event records against their declared wire contracts (current view schema `1.6.0`, versioned campaign envelopes, and `PublicLiveEvent`).
 9. Replay records in sequence order.
-10. Compare the resulting high-water and feed-chain hashes with the snapshot.
+10. Verify signed batch continuity and compare its high-water and feed-chain hash with the snapshot. Public record bodies alone are insufficient for this check.
 11. If any check fails, stop and report the failure; do not produce a partial result.
 
 ## Links out
