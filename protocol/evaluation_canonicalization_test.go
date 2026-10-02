@@ -52,6 +52,9 @@ var boundVerificationReportVectorJSON []byte
 //go:embed vectors/eval/chat_probe_trace.json
 var chatProbeTraceVectorJSON []byte
 
+//go:embed vectors/eval/canonical_json_numbers.json
+var canonicalJSONValuesVectorJSON []byte
+
 func TestEvaluationReportCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector evaluationCanonicalizationVector
 	require.NoError(t, json.Unmarshal(evaluationCanonicalizationVectorJSON, &vector))
@@ -170,6 +173,30 @@ func TestChatProbeTraceDigestMatchesCrossLanguageVector(t *testing.T) {
 	got, err := evaluation.ComputeChatProbeTraceDigest(vector.Trace)
 	require.NoError(t, err)
 	assert.Equal(t, vector.TraceDigest, got)
+}
+
+func TestCanonicalJSONValuesMatchCrossLanguageVector(t *testing.T) {
+	var vector struct {
+		MessageType string `json:"message_type"`
+		Cases       []struct {
+			Name      string `json:"name"`
+			Input     string `json:"input"`
+			Canonical string `json:"canonical"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(canonicalJSONValuesVectorJSON, &vector))
+	assert.Equal(t, "CanonicalJSONValues", vector.MessageType)
+	require.NotEmpty(t, vector.Cases)
+
+	for _, tc := range vector.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			var decoded any
+			require.NoError(t, json.Unmarshal([]byte(tc.Input), &decoded))
+			got, err := evaluation.MarshalCanonicalJSONObject(decoded)
+			require.NoError(t, err)
+			assert.Equal(t, tc.Canonical, string(got))
+		})
+	}
 }
 
 func TestPublicAssignmentResultProjectionCanonicalizationMatchesCrossLanguageVector(t *testing.T) {

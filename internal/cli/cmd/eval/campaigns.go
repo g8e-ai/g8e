@@ -325,6 +325,11 @@ type campaignCreateSpec struct {
 	FormationIDs []string
 	// SuiteID names the suite the campaign freezes; empty means the default suite.
 	SuiteID string
+	// VersionOnCatalogChange freezes a new campaign, under CampaignID plus the
+	// catalog digest, when CampaignID already froze a different catalog. Without
+	// it that case is a frozen-spec conflict. The resolved ID is on the result's
+	// Spec.
+	VersionOnCatalogChange bool
 }
 
 type campaignCreateResult struct {
@@ -342,6 +347,21 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 	if !complianceevidence.ValidPathElement(spec.CampaignID) {
 		return nil, fmt.Errorf("evaluation: campaigns create: invalid campaign ID %q: %w", spec.CampaignID, constants.ErrMissingRequiredField)
 	}
+	store := evaluation.NewStore(fileSvc)
+	suiteID := spec.SuiteID
+	if suiteID == "" {
+		suiteID = evaluation.DefaultSuiteID
+	}
+	catalog, artifacts, err := store.LoadSuiteCatalog(ctx, suiteID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
+	}
+	if spec.VersionOnCatalogChange {
+		spec.CampaignID, err = evaluation.ResolveCampaignIDForCatalog(ctx, store, spec.CampaignID, catalog.GetCatalogDigest())
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
+		}
+	}
 	if _, archived, err := evaluation.LocateCampaign(ctx, fileSvc, spec.CampaignID); err == nil && archived {
 		return nil, fmt.Errorf("evaluation: campaigns create: campaign %q: %w", spec.CampaignID, constants.ErrEvaluationArchived)
 	} else if err != nil && !errors.Is(err, constants.ErrNotFound) {
@@ -352,15 +372,6 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
 	if err := evaluation.ValidateModelRegistry(freeze); err != nil {
-		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
-	}
-	store := evaluation.NewStore(fileSvc)
-	suiteID := spec.SuiteID
-	if suiteID == "" {
-		suiteID = evaluation.DefaultSuiteID
-	}
-	catalog, artifacts, err := store.LoadSuiteCatalog(ctx, suiteID)
-	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
 	var stackSet *evaluation.HeterogeneousStackSet

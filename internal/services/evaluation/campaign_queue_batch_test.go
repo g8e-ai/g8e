@@ -48,3 +48,21 @@ func TestCampaignQueueBuildBatchPlan(t *testing.T) {
 func TestStrictWitnessVerifyNotes(t *testing.T) {
 	assert.Equal(t, "witness verify PASS (--require-provider-observation --require-model-provenance); run run-abc", StrictWitnessVerifyNotes("run-abc"))
 }
+
+func TestCampaignQueueBuildBatchPlan_SkipVerifiedKeepsStaleVerifiedEntries(t *testing.T) {
+	queue := &CampaignQueue{
+		Models: []CampaignQueueModel{
+			{VariantID: "current", Status: QueueStatusVerified},
+			{VariantID: "stale", Status: QueueStatusVerified},
+			{VariantID: "pending", Status: QueueStatusPending},
+		},
+	}
+	isStale := func(entry CampaignQueueModel) bool { return entry.VariantID == "stale" }
+
+	var got []string
+	for _, entry := range queue.BuildBatchPlan(CampaignQueueBatchPlanRequest{SkipVerified: true, VerifiedIsStale: isStale}) {
+		got = append(got, entry.VariantID)
+	}
+
+	assert.Equal(t, []string{"stale", "pending"}, got)
+}

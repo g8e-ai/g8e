@@ -95,7 +95,7 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 	}
 	if len(req.Trace) == 0 {
 		failures = append(failures, "imported assignment trace is required for verification")
-	} else if err := validateImportedTraceDigest(req.Trace); err != nil {
+	} else if err := validateTraceDigest(req.Trace); err != nil {
 		failures = append(failures, "trace digest validation failed: "+err.Error())
 	} else if err := verifyImportedEvidence(req.Assignment, req.Result, req.Trace); err != nil {
 		failures = append(failures, "imported evidence does not match trace: "+err.Error())
@@ -195,13 +195,6 @@ func finalizeCampaignVerificationReport(report *evalv1.EvaluationVerificationRep
 	}
 	report.Status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
 	return report
-}
-
-func validateImportedTraceDigest(trace EvaluationTrace) error {
-	if err := validateTraceDigest(trace); err != nil {
-		return err
-	}
-	return nil
 }
 
 func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, trace EvaluationTrace) error {

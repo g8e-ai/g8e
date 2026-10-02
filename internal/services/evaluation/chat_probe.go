@@ -248,7 +248,7 @@ func validateTraceDigest(trace EvaluationTrace) error {
 		return err
 	}
 	if digest != expected {
-		return fmt.Errorf("evaluation: validate chat probe trace: trace digest mismatch")
+		return fmt.Errorf("evaluation: validate chat probe trace: %w", constants.ErrEvaluationTraceDigestMismatch)
 	}
 	return nil
 }

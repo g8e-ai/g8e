@@ -183,6 +183,7 @@ Keep internal plan vocabulary separate from public campaign branding.
 Rules:
 
 - Campaigns score a suite (`g8e eval campaigns create --suite <id>`); the default is the built-in `default-suite`. Campaigns frozen before the suite rename carry the legacy catalog ID `north-star-25` in their frozen spec; that identity is historical and is never used for new campaigns, run IDs, or campaign IDs.
+- A campaign ID freezes its suite catalog. When the catalog changes, `g8e eval rollout run` qualifies the entry under `<campaign-id>-<8 characters of the catalog digest>` instead of failing with `campaign already exists with a different frozen spec`; `g8e eval campaigns create` still fails, so pick a new ID there.
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
 - Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` **unset** in `.env`. Campaign authority travels on each governed dispatch from g8ee; do not rebind the inference operator per model.
@@ -215,6 +216,7 @@ Optional rollout queue (multi-model tracking):
 # Defaults: --require-witness, --verify, --publish, --daemon, and --skip-verified are all true.
 ./g8e eval rollout run
 
+# --skip-verified skips an entry only while it is verified on the current catalog.
 # Exclude specific variants or re-run verified entries:
 ./g8e eval rollout skip granite3-3-2b
 ./g8e eval rollout run --skip-verified=false

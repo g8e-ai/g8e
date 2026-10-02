@@ -62,6 +62,15 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace Evalu
 	if req.Assignment == nil || req.AttemptID == "" || len(trace) == 0 {
 		return nil, fmt.Errorf("evaluation: import assignment result from trace: assignment, attempt, and trace are required")
 	}
+	// The digest binds every field the result is derived from, so it is checked
+	// before the trace is classified or graded, for every status. Classification
+	// reads the trace first and reports a validation error as a scored FAILED
+	// outcome whose reason this function drops, and it skips validation entirely
+	// for a failed or role-not-invoked trace; a trace whose digest does not hold is
+	// a harness failure and never a model result.
+	if err := validateTraceDigest(trace); err != nil {
+		return nil, fmt.Errorf("evaluation: import assignment result from trace: %w", err)
+	}
 	if newID == nil {
 		newID = func(prefix string) string { return prefix }
 	}

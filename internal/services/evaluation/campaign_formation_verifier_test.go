@@ -119,7 +119,7 @@ func TestCampaignAssignmentVerifier_RejectsTamperedFormationRoleTrace(t *testing
 	report := fixture.verify(t, fixture.result, fixture.evidence)
 
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
-	assert.Contains(t, report.GetFailureReasons(), "formation grade recomputation failed: role primary: evaluation: validate chat probe trace: trace digest mismatch")
+	assert.Contains(t, report.GetFailureReasons(), "formation grade recomputation failed: role primary: evaluation: validate chat probe trace: evaluation: trace digest mismatch; this is a harness failure, not a model result")
 }
 
 func TestCampaignAssignmentVerifier_StrictWitnessRejectsG8eeRoutedFormationWithoutWitnessEvidence(t *testing.T) {

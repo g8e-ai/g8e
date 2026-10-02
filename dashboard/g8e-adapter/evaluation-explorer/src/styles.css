@@ -1308,6 +1308,13 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .role-leader-empty td { color: var(--fg-muted); font-size: var(--text-lg); }
 .stream-time { color: var(--fg-dim); font-size: var(--overview-meta-size, var(--text-md)); white-space: nowrap; }
 .stream-role { display: inline-flex; align-items: center; gap: 6px; font-size: var(--overview-meta-size, var(--text-md)); font-weight: 600; }
+.stream-role-tag {
+  display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border);
+  font-size: var(--overview-label-size, var(--text-sm)); font-weight: 600; text-transform: uppercase; letter-spacing: 0.35px;
+}
+.stream-role-tag.graded { color: var(--accent); border-color: var(--accent); }
+.stream-role-tag.chain { color: var(--fg-dim); }
+.stream-row-chain { opacity: 0.72; }
 .stream-event-value, .stream-event-link, .stream-task-link, .stream-category-link, .stream-assignment-link { white-space: nowrap; }
 .stream-event-link, .stream-assignment-link { color: var(--fg-muted); font-size: var(--overview-meta-size, var(--text-md)); }
 .stream-event-link:hover, .stream-task-link:hover, .stream-category-link:hover, .stream-assignment-link:hover { color: var(--accent); }

@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -73,6 +74,36 @@ func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithModelCallsIsPar
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, result.GetLifecycleStatus())
+}
+
+// A trace whose digest does not hold is rejected at import whatever outcome it
+// reports, not scored as a failed assignment and not skipped as one that never
+// reached validation.
+func TestImportAssignmentResultFromTrace_RejectsDigestMismatchWhateverTheOutcome(t *testing.T) {
+	t.Parallel()
+	cases := map[string]func(EvaluationTrace){
+		"completed":              func(EvaluationTrace) {},
+		"role not invoked":       func(trace EvaluationTrace) { trace["role_outcome"] = "role_not_invoked" },
+		"failed before any call": func(trace EvaluationTrace) { trace["status"] = "failed"; trace["model_calls"] = []any{} },
+		"provider tool rejected": func(trace EvaluationTrace) { trace["status"] = "failed"; trace["provider_tool_rejection"] = "rejected" },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			trace := completedHomogeneousTrace(t, "primary")
+			mutate(trace)
+			digest, err := ComputeChatProbeTraceDigest(trace)
+			require.NoError(t, err)
+			trace["trace_digest"] = digest
+			trace["chat_execution_id"] = "rewritten-after-the-digest"
+			req := homogeneousAssignmentExecutionRequest(t, "primary")
+
+			result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+
+			require.ErrorIs(t, err, constants.ErrEvaluationTraceDigestMismatch)
+			assert.Nil(t, result)
+		})
+	}
 }
 
 func homogeneousAssignmentExecutionRequest(t *testing.T, role string) AssignmentExecutionRequest {

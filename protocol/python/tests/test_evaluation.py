@@ -14,7 +14,7 @@ import pytest
 from google.protobuf.json_format import ParseError
 
 from g8e.compliance.v1.canonical import parse_canonical, serialize_canonical
-from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest
+from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest, marshal_canonical_json
 from g8e.eval.v1 import eval_pb2
 from g8e.eval.v1.eval_pb2 import (
     EvaluationAssignmentResult,
@@ -33,6 +33,7 @@ ENRICHED_MODEL_ASSIGNMENT_RESULT_VECTOR_FILENAME = "model_assignment_result_enri
 ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME = "public_assignment_result_enriched.json"
 BOUND_VERIFICATION_REPORT_VECTOR_FILENAME = "run_verification_bound.json"
 CHAT_PROBE_TRACE_VECTOR_FILENAME = "chat_probe_trace.json"
+CANONICAL_JSON_VALUES_VECTOR_FILENAME = "canonical_json_numbers.json"
 PROTOCOL_ROOT = Path(__file__).resolve().parents[2]
 EVAL_VECTOR_DIR = PROTOCOL_ROOT / VECTORS_DIRECTORY_NAME / EVALUATION_DIRECTORY_NAME
 PHASE1_REPORT_VECTOR_PATH = EVAL_VECTOR_DIR / PHASE1_REPORT_VECTOR_FILENAME
@@ -43,6 +44,7 @@ ENRICHED_MODEL_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / ENRICHED_MODEL_
 ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME
 BOUND_VERIFICATION_REPORT_VECTOR_PATH = EVAL_VECTOR_DIR / BOUND_VERIFICATION_REPORT_VECTOR_FILENAME
 CHAT_PROBE_TRACE_VECTOR_PATH = EVAL_VECTOR_DIR / CHAT_PROBE_TRACE_VECTOR_FILENAME
+CANONICAL_JSON_VALUES_VECTOR_PATH = EVAL_VECTOR_DIR / CANONICAL_JSON_VALUES_VECTOR_FILENAME
 
 
 def test_evaluation_report_canonicalization_matches_cross_language_vector():
@@ -93,6 +95,22 @@ def test_chat_probe_trace_digest_matches_cross_language_vector():
     assert vector["message_type"] == "ChatProbeTrace"
     got = compute_chat_probe_trace_digest(vector["trace"])
     assert got == vector["trace_digest"]
+
+
+_CANONICAL_JSON_VALUES_VECTOR = json.loads(CANONICAL_JSON_VALUES_VECTOR_PATH.read_text())
+
+
+@pytest.mark.parametrize(
+    "case", _CANONICAL_JSON_VALUES_VECTOR["cases"], ids=lambda case: case["name"]
+)
+def test_canonical_json_values_match_cross_language_vector(case):
+    assert marshal_canonical_json(json.loads(case["input"])).decode() == case["canonical"]
+
+
+def test_canonical_json_rejects_non_finite_floats():
+    for value in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError):
+            marshal_canonical_json(value)
 
 
 def test_public_assignment_result_projection_canonicalization_matches_cross_language_vector():

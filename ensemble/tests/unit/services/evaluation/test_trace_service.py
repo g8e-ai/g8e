@@ -5,6 +5,8 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import json
+
 import pytest
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
@@ -17,6 +19,7 @@ from app.models.evaluation_trace import (
     EvaluationTextOutput,
     EvaluationToolCallRecord,
     EvaluationTriageOutput,
+    EvaluationVoteOutput,
     ToolGate,
 )
 from app.models.http_context import G8eHttpContext
@@ -26,6 +29,7 @@ from app.services.evaluation.trace_service import (
     compute_trace_digest,
     validated_trace_ids,
 )
+from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest
 from g8e.models.internal_api import (
     EvaluationInferenceContext,
     EvaluationInvestigationSeed,
@@ -157,6 +161,34 @@ def test_trace_finalize_persists_the_chain_and_binds_it_into_the_digest(trace_se
         )]}
     )
     assert compute_trace_digest(tampered) != loaded.trace_digest
+
+
+def test_trace_digest_survives_a_reader_that_decodes_integral_floats_as_integers(trace_service):
+    # The Go verifier decodes every number to float64 and re-encodes it, so a
+    # vote of exactly 0.0 or 1.0 comes back as 0 or 1. The digest has to be the
+    # same for the trace as persisted and for that re-encoded copy.
+    context = _context()
+    trace_service.begin(context)
+    vote = EvaluationPlayerStep(
+        step_id="vote",
+        sequence=1,
+        player="tribunal",
+        round=1,
+        vote=EvaluationVoteOutput(reached=False, vote_score=0.0, consensus_strength=1.0),
+    )
+
+    finalized = trace_service.finalize(
+        context,
+        model_calls=[],
+        player_steps=[vote],
+        finish_reason="stop",
+        status="completed",
+    )
+
+    persisted = trace_service.trace_file("assignment-1", "attempt-1").read_text(encoding="utf-8")
+    assert '"vote_score":0}' in persisted
+    assert '"consensus_strength":1,' in persisted
+    assert compute_chat_probe_trace_digest(json.loads(persisted)) == finalized.trace_digest
 
 
 def test_trace_finalize_persists_designated_role_output(trace_service):

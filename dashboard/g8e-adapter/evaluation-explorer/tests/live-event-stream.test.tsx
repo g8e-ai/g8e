@@ -597,6 +597,98 @@ describe('LiveEventStream', () => {
     expect(completedRow).toHaveTextContent('Pass');
   });
 
+  describe('graded and chain role rows', () => {
+    const stageRows = () =>
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .filter((row) => row.querySelector('.stream-event-link')?.textContent === 'Stage Updated');
+    const rowForRole = (role: string) =>
+      stageRows().find((row) => row.querySelector('.stream-role')?.textContent === role);
+
+    const stageEvents = [
+      liveEvent({ event_id: 'evt-start', kind: 'assignment_started', assignment_id: 'assignment-chain', role: 'assistant', variant_id: 'gemma4-e2b' }),
+      liveEvent({ event_id: 'evt-lite', kind: 'stage_updated', assignment_id: 'assignment-chain', role: 'lite', variant_id: 'gemma4-e2b' }),
+      liveEvent({ event_id: 'evt-assistant', kind: 'stage_updated', assignment_id: 'assignment-chain', role: 'assistant', variant_id: 'gemma4-e2b' }),
+      liveEvent({ event_id: 'evt-primary', kind: 'stage_updated', assignment_id: 'assignment-chain', role: 'primary', variant_id: 'gemma4-e2b' }),
+    ];
+
+    function chainAssignment(terminal: AssignmentResult['terminal_status']): AssignmentResult {
+      return {
+        schema_version: '1.3.0',
+        kind: 'assignment_result',
+        dataset_id: 'ds-live-a',
+        quality_state: 'live_in_progress',
+        observed_at: '2026-09-17T08:00:00Z',
+        assignment_id: 'assignment-chain',
+        run_id: 'run-a',
+        task_id: 'security-policy-deny-delete',
+        variant_id: 'gemma4-e2b',
+        role: 'assistant',
+        repetition: 1,
+        terminal_status: terminal,
+        metric_values: {
+          pass: { value: 0 },
+          deterministic_pass_rate: { value: 0.5 },
+          tier_assistant: { value: 0 },
+          tier_lite: { value: 1 },
+        },
+        stage_summary: [],
+      };
+    }
+
+    it('marks the designated role Graded and other roles Chain from assignment events, with -- before completion', () => {
+      evalStore.loadFixtures([], []);
+      render(
+        <MemoryRouter>
+          <LiveEventStream events={stageEvents} connection="live" streamConnection="connected" />
+        </MemoryRouter>,
+      );
+
+      expect(rowForRole('Assistant')).toHaveTextContent('Graded');
+      expect(rowForRole('Lite')).toHaveTextContent('Chain');
+      expect(rowForRole('Primary')).toHaveTextContent('Chain');
+      expect(rowForRole('Primary')).toHaveClass('stream-row-chain');
+      expect(rowForRole('Assistant')).not.toHaveClass('stream-row-chain');
+      for (const row of stageRows()) {
+        expect(row.querySelectorAll('.stream-metric-value.unavailable').length).toBeGreaterThanOrEqual(2);
+        expect(row).not.toHaveTextContent('Pass');
+        expect(row).not.toHaveTextContent('%');
+      }
+    });
+
+    it('fills chain Pass and Pass Rate from tier scores once the assignment completes', () => {
+      evalStore.loadFixtures([chainAssignment('completed')], []);
+      render(
+        <MemoryRouter>
+          <LiveEventStream events={stageEvents} connection="live" streamConnection="connected" />
+        </MemoryRouter>,
+      );
+
+      const lite = rowForRole('Lite');
+      expect(lite).toHaveTextContent('Pass');
+      expect(lite).toHaveTextContent('100.0%');
+      const assistant = rowForRole('Assistant');
+      expect(assistant).toHaveTextContent('Fail');
+      expect(assistant).toHaveTextContent('50.0%');
+      // No player gold for the primary tier: stays absent rather than inventing a score.
+      const primary = rowForRole('Primary');
+      expect(primary).toHaveTextContent('Chain');
+      expect(primary).not.toHaveTextContent('%');
+    });
+
+    it('keeps chain rows at -- while the assignment is still running', () => {
+      evalStore.loadFixtures([chainAssignment('running')], []);
+      render(
+        <MemoryRouter>
+          <LiveEventStream events={stageEvents} connection="live" streamConnection="connected" />
+        </MemoryRouter>,
+      );
+
+      expect(rowForRole('Lite')).not.toHaveTextContent('100.0%');
+    });
+  });
+
   it('links active evaluation details to the live page without duplicating the event stream', () => {
     const evaluation: EvaluationSummary = {
       schema_version: '1.3.0',

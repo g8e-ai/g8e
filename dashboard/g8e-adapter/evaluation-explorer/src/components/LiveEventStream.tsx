@@ -17,7 +17,14 @@ import {
 } from '../views/derived';
 import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
 import { SCENARIO_TASK_BY_ID } from '../content/scenario-task';
-import { MODEL_ROLES, type AssignmentResult, type LiveEvent, type MetricValue, type PublicModelActivityRecord } from '../contract/types';
+import {
+  MODEL_ROLES,
+  type AssignmentResult,
+  type LiveEvent,
+  type MetricValue,
+  type ModelRole,
+  type PublicModelActivityRecord,
+} from '../contract/types';
 import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
 const STREAM_PAGE_SIZE = 25;
 const STREAM_EMPTY_METRIC = '--';
@@ -103,6 +110,58 @@ function applyAssignmentResourceSummary(
   return values;
 }
 
+/** Whether a stage row is the assignment's designated (graded) role or another
+ *  role of the same g8ee chat turn. Unknown until the designated role is known. */
+type StreamRoleGrading = 'graded' | 'chain';
+
+function isTerminalAssignment(assignment: AssignmentResult | undefined): assignment is AssignmentResult {
+  return assignment !== undefined && assignment.terminal_status !== 'running' && assignment.terminal_status !== 'queued';
+}
+
+/** Designated role per assignment, from assignment-level events (they carry the
+ *  designated role) so rows are classified before the assignment result lands. */
+function designatedRolesByAssignment(events: LiveEvent[]): Map<string, ModelRole> {
+  const designated = new Map<string, ModelRole>();
+  for (const event of events) {
+    if (event.assignment_id && event.role && isAssignmentLevelEvent(event) && event.kind !== 'metric_updated') {
+      designated.set(`${event.run_id}:${event.assignment_id}`, event.role);
+    }
+  }
+  return designated;
+}
+
+function streamRoleGrading(
+  event: LiveEvent,
+  assignment: AssignmentResult | undefined,
+  designatedRoles: Map<string, ModelRole>,
+): StreamRoleGrading | undefined {
+  if (event.kind !== 'stage_updated' || !event.role || !event.assignment_id) return undefined;
+  const designated = assignment?.role ?? designatedRoles.get(`${event.run_id}:${event.assignment_id}`);
+  if (!designated) return undefined;
+  return event.role === designated ? 'graded' : 'chain';
+}
+
+/** Pass and Pass Rate for a stage row, available once the assignment is terminal.
+ *  The designated role carries the assignment verdict; a chain role carries the
+ *  share of its own graded players that passed (`tier_<role>`), and stays absent
+ *  when the scenario declares no player gold for that tier. */
+function roleGradeMetricValues(event: LiveEvent, assignment: AssignmentResult | undefined): Record<string, MetricValue> {
+  if (event.kind !== 'stage_updated' || !event.role || !isTerminalAssignment(assignment)) return {};
+  const metrics = assignment.metric_values;
+  if (event.role === assignment.role) {
+    const values: Record<string, MetricValue> = {};
+    if (metrics.pass) values.pass = metrics.pass;
+    if (metrics.deterministic_pass_rate) values.deterministic_pass_rate = metrics.deterministic_pass_rate;
+    return values;
+  }
+  const tier = metrics[`tier_${event.role}`];
+  if (tier?.value === undefined) return {};
+  return {
+    pass: { value: tier.value >= 1 ? 1 : 0 },
+    deterministic_pass_rate: { value: tier.value },
+  };
+}
+
 function assignmentMetricValues(event: LiveEvent, assignment: AssignmentResult | undefined): Record<string, MetricValue> {
   const normalizedDelta = normalizeMetricDelta(event.metric_delta);
   if (isAssignmentLevelEvent(event)) {
@@ -116,14 +175,11 @@ function assignmentMetricValues(event: LiveEvent, assignment: AssignmentResult |
   }
 
   const roleRecord = findModelActivityRecord(event, assignment);
-  if (roleRecord) {
-    return {
-      ...normalizedDelta,
-      ...roleActivityMetricValues(roleRecord),
-    };
-  }
-
-  return normalizedDelta;
+  return {
+    ...normalizedDelta,
+    ...(roleRecord ? roleActivityMetricValues(roleRecord) : {}),
+    ...roleGradeMetricValues(event, assignment),
+  };
 }
 
 function displayLabel(value: string | undefined): string | undefined {
@@ -424,6 +480,8 @@ export function LiveEventStream({
     return Array.from(ids).sort();
   }, [events]);
 
+  const designatedRoles = useMemo(() => designatedRolesByAssignment(events), [events]);
+
   const sortedVisible = useMemo(() => {
     if (!sortField) return visible;
     return [...visible].sort((left, right) => {
@@ -605,6 +663,7 @@ export function LiveEventStream({
                 const modelHref = event.variant_id
                   ? `/models/${event.dataset_id}/${event.variant_id}${model?.role ? `?role=${model.role}` : ''}`
                   : undefined;
+                const roleGrading = streamRoleGrading(event, assignment, designatedRoles);
                 const roleLabelText = event.role
                   ? roleLabel(event.role)
                   : model
@@ -622,12 +681,24 @@ export function LiveEventStream({
                         </td>
                       </tr>
                     ) : null}
-                    <tr>
+                    <tr className={roleGrading === 'chain' ? 'stream-row-chain' : undefined}>
                       <td className="stream-time">{eventTime(event.observed_at)}</td>
                       <td>
                         <span className={`stream-role status-${eventRoleStatus(event)}`}>
                           {roleLabelText}
                         </span>
+                        {roleGrading === 'graded' ? (
+                          <span className="stream-role-tag graded" title="Designated role: the assignment verdict grades this role">
+                            Graded
+                          </span>
+                        ) : roleGrading === 'chain' ? (
+                          <span
+                            className="stream-role-tag chain"
+                            title="Chain role: runs in the same g8ee turn as the graded role. Its Pass is the share of its own graded players that passed."
+                          >
+                            Chain
+                          </span>
+                        ) : null}
                       </td>
                       <td className="stream-event-value">
                         <Link to={eventHref} className="stream-event-link">

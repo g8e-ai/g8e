@@ -1573,6 +1573,7 @@ var (
 	ErrEvaluationWorkspaceUnavailable      = errors.New("evaluation: scenario fixture workspace is unavailable")
 	ErrEvaluationEnvironmentCanaryFailed   = errors.New("evaluation: environment canary failed; this is a harness failure, not a model result")
 	ErrEvaluationTraceUnreadable           = errors.New("evaluation: trace cannot be read for grading; this is a harness failure, not a model result")
+	ErrEvaluationTraceDigestMismatch       = errors.New("evaluation: trace digest mismatch; this is a harness failure, not a model result")
 	ErrEvaluationBackupDestinationInvalid  = errors.New("evaluation: backup destination must be outside the runtime directory")
 	ErrEvaluationBackupEmpty               = errors.New("evaluation: no evaluation evidence to back up")
 	ErrEvaluationBackupManifestInvalid     = errors.New("evaluation: backup manifest is missing or invalid")
