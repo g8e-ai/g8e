@@ -118,6 +118,25 @@ describe('GatewayStream', () => {
     ]);
   });
 
+  it('delivers approvals.changed with id 0 even after a persisted event, without moving the resume cursor', () => {
+    const { events } = start();
+    const first = FakeSource.instances[0]!;
+    first.onopen?.();
+
+    first.emit(9, 'g8e.v1.app.case.created');
+    first.emit(0, 'g8e.v1.platform.approvals.changed', { subject: 'transactions' }, false);
+    first.emit(0, 'g8e.v1.platform.approvals.changed', { subject: 'transactions' }, false);
+
+    expect(events.map((e) => [e.type, e.id])).toEqual([
+      ['g8e.v1.app.case.created', 9],
+      ['g8e.v1.platform.approvals.changed', 0],
+      ['g8e.v1.platform.approvals.changed', 0],
+    ]);
+    first.onerror?.();
+    vi.advanceTimersByTime(1500);
+    expect(FakeSource.instances[1]!.url).toBe('/api/v1/sse/stream?since_id=9');
+  });
+
   it('treats a source that never opens as failed and retries', () => {
     start();
     vi.advanceTimersByTime(10_000);

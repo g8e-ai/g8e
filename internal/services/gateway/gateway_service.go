@@ -188,6 +188,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- Core services ---
 	userSvc := NewUserService(docStore, logger)
+	approvalsPublisher := NewApprovalsChangePublisher(docStore, userSvc, NewSSEEventPublisher(sseStore, wsHandler), logger)
 	res := response.NewWriter(logger)
 
 	var jwksProvider *JWKSProvider
@@ -394,7 +395,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	// --- Platform enrollment service (C2: concrete cmdSvc injected) ---
-	platformEnrollmentSvc := NewPlatformEnrollmentService(docStore, userSvc, cmdSvc, stateRootSvc, string(cfg.Gateway.Posture), logger)
+	platformEnrollmentSvc := NewPlatformEnrollmentService(docStore, userSvc, cmdSvc, stateRootSvc, string(cfg.Gateway.Posture), approvalsPublisher, logger)
 
 	// --- MCP gateway (C2: concrete cmdSvc, auditLogger, l2Deliberator injected) ---
 	var auditLogger mcp.AuditLogger
@@ -405,7 +406,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:                 logger,
 		Responder:              res,
-		SuspendedStore:         suspendedTxService,
+		SuspendedStore:         newNotifyingSuspendedStore(suspendedTxService, approvalsPublisher),
 		ScrubbingService:       scrubbingService,
 		ThreatScanner:          doctrine,
 		MaxPayloadBytes:        cfg.Gateway.MaxPayloadBytes,
@@ -436,7 +437,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	// --- Passkey orchestrator and handler ---
-	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, sseStore, wsHandler, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, newNotifyingSuspendedStore(suspendedTxService, approvalsPublisher), sseStore, wsHandler, logger)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey orchestrator: %w", err)
 	}

@@ -115,7 +115,7 @@ func (p *OperatorStatusPublisher) Publish(t OperatorStatusTransition) error {
 		return fmt.Errorf("%w: %q", constants.ErrOperatorStatusEventUnsupported, t.Status)
 	}
 
-	sessionIDs, err := p.ownerWebSessionIDs(t.UserID)
+	sessionIDs, err := ownerWebSessionIDs(p.docStore, t.UserID)
 	if err != nil {
 		return fmt.Errorf("operator status event: resolve web sessions of %s: %w", t.UserID, err)
 	}
@@ -138,8 +138,8 @@ func (p *OperatorStatusPublisher) Publish(t OperatorStatusTransition) error {
 
 // ownerWebSessionIDs returns the ids of userID's web sessions that have not
 // expired.
-func (p *OperatorStatusPublisher) ownerWebSessionIDs(userID string) ([]string, error) {
-	docs, err := p.docStore.DocQuery(marshaler.CollectionName(constants.CollectionWebSessions), []models.DocFilter{
+func ownerWebSessionIDs(docStore *DocumentStoreService, userID string) ([]string, error) {
+	docs, err := docStore.DocQuery(marshaler.CollectionName(constants.CollectionWebSessions), []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}, "", 0)
 	if err != nil {

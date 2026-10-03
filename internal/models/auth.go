@@ -161,6 +161,24 @@ type OperatorStatusUpdatedPayload struct {
 	Timestamp  time.Time                `json:"timestamp"`
 }
 
+// ApprovalsChangedPayload is the SSE payload of g8e.v1.platform.approvals.changed.
+// It announces that the owner's pending approval set (suspended L3 transactions
+// or platform enrollment requests) changed; it carries no approval content.
+// The approval stores stay the source of truth: consumers re-list on receipt.
+type ApprovalsChangedPayload struct {
+	Subject   ApprovalsChangedSubject `json:"subject"`
+	Timestamp time.Time               `json:"timestamp"`
+}
+
+// ApprovalsChangedSubject names which pending list an ApprovalsChangedPayload
+// invalidates.
+type ApprovalsChangedSubject string
+
+const (
+	ApprovalsChangedTransactions ApprovalsChangedSubject = "transactions"
+	ApprovalsChangedEnrollments  ApprovalsChangedSubject = "enrollments"
+)
+
 type TerminateOperatorRequest struct {
 	OperatorID string `json:"operator_id"`
 	UserID     string `json:"user_id"`

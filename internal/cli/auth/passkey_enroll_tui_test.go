@@ -16,28 +16,27 @@ import (
 )
 
 func TestNewEnrollModel(t *testing.T) {
-	m := newEnrollModel("http://localhost:8080/console")
-	assert.Equal(t, "http://localhost:8080/console", m.consoleURL)
+	m := newEnrollModel()
 	assert.False(t, m.done)
 	assert.Nil(t, m.err)
 }
 
 func TestEnrollModelInit(t *testing.T) {
-	m := newEnrollModel("http://localhost:8080/console")
+	m := newEnrollModel()
 	cmd := m.Init()
 	assert.NotNil(t, cmd)
 }
 
 func TestEnrollModelUpdate(t *testing.T) {
 	t.Run("tick increments counter and returns tick command", func(t *testing.T) {
-		m := newEnrollModel("http://localhost")
+		m := newEnrollModel()
 		next, cmd := m.Update(enrollTickMsg{})
 		assert.Equal(t, 1, next.(enrollModel).tick)
 		assert.NotNil(t, cmd)
 	})
 
 	t.Run("passkeyRegisteredMsg sets done and quits", func(t *testing.T) {
-		m := newEnrollModel("http://localhost")
+		m := newEnrollModel()
 		next, cmd := m.Update(passkeyRegisteredMsg{})
 		assert.True(t, next.(enrollModel).done)
 		assert.NotNil(t, cmd)
@@ -47,7 +46,7 @@ func TestEnrollModelUpdate(t *testing.T) {
 
 	t.Run("enrollErrMsg sets err and quits", func(t *testing.T) {
 		testErr := fmt.Errorf("timeout")
-		m := newEnrollModel("http://localhost")
+		m := newEnrollModel()
 		next, cmd := m.Update(enrollErrMsg{err: testErr})
 		assert.Equal(t, testErr, next.(enrollModel).err)
 		assert.NotNil(t, cmd)
@@ -56,7 +55,7 @@ func TestEnrollModelUpdate(t *testing.T) {
 	})
 
 	t.Run("q key quits", func(t *testing.T) {
-		m := newEnrollModel("http://localhost")
+		m := newEnrollModel()
 		next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 		assert.NotNil(t, cmd)
 		_, ok := cmd().(tea.QuitMsg)
@@ -65,7 +64,7 @@ func TestEnrollModelUpdate(t *testing.T) {
 	})
 
 	t.Run("ctrl+c quits", func(t *testing.T) {
-		m := newEnrollModel("http://localhost")
+		m := newEnrollModel()
 		next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 		assert.NotNil(t, cmd)
 		_, ok := cmd().(tea.QuitMsg)
@@ -74,7 +73,7 @@ func TestEnrollModelUpdate(t *testing.T) {
 	})
 
 	t.Run("other key is no-op", func(t *testing.T) {
-		m := newEnrollModel("http://localhost")
+		m := newEnrollModel()
 		next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 		assert.Nil(t, cmd)
 		assert.False(t, next.(enrollModel).done)
@@ -82,23 +81,33 @@ func TestEnrollModelUpdate(t *testing.T) {
 }
 
 func TestEnrollModelView(t *testing.T) {
-	t.Run("waiting view shows spinner and URL", func(t *testing.T) {
-		m := newEnrollModel("http://localhost:8080/console")
+	t.Run("waiting view shows spinner and pointer to the printed URL", func(t *testing.T) {
+		m := newEnrollModel()
 		view := m.View()
 		assert.Contains(t, view, "Waiting for passkey registration")
-		assert.Contains(t, view, "http://localhost:8080/console")
 		assert.Contains(t, view, "Press q to cancel")
 	})
 
+	t.Run("waiting view never renders the token-bearing URL", func(t *testing.T) {
+		// bubbletea truncates every view line wider than the terminal with no
+		// ellipsis. A clicked or copied truncated URL carries a truncated
+		// one-time token that the Gateway rejects as not found, so the secret
+		// URL must only reach the user through the unabridged Out sink.
+		view := newEnrollModel().View()
+		assert.NotContains(t, view, "token=")
+		assert.NotContains(t, view, "#enroll")
+		assert.Contains(t, view, "enrollment URL printed above")
+	})
+
 	t.Run("done view shows success", func(t *testing.T) {
-		m := newEnrollModel("http://localhost")
+		m := newEnrollModel()
 		m.done = true
 		view := m.View()
 		assert.Contains(t, view, "Passkey registered successfully")
 	})
 
 	t.Run("error view shows error message", func(t *testing.T) {
-		m := newEnrollModel("http://localhost")
+		m := newEnrollModel()
 		m.err = fmt.Errorf("connection failed")
 		view := m.View()
 		assert.Contains(t, view, "Enrollment failed")

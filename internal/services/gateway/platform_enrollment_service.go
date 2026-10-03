@@ -99,6 +99,7 @@ type PlatformEnrollmentService struct {
 	envProc   governance.EnvelopeProcessor
 	stateRoot governance.StateRootProvider
 	posture   string
+	approvals *ApprovalsChangePublisher
 	logger    *slog.Logger
 
 	cancel  context.CancelFunc
@@ -118,6 +119,7 @@ func NewPlatformEnrollmentService(
 	envProc governance.EnvelopeProcessor,
 	stateRoot governance.StateRootProvider,
 	posture string,
+	approvals *ApprovalsChangePublisher,
 	logger *slog.Logger,
 ) *PlatformEnrollmentService {
 	return &PlatformEnrollmentService{
@@ -126,6 +128,7 @@ func NewPlatformEnrollmentService(
 		envProc:   envProc,
 		stateRoot: stateRoot,
 		posture:   posture,
+		approvals: approvals,
 		logger:    logger,
 	}
 }
@@ -304,6 +307,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		"component_kind", string(req.ComponentKind),
 		"instance_id", req.InstanceID,
 		"expires_at", expiresAt)
+	s.approvals.EnrollmentsChanged()
 
 	return &models.PlatformEnrollmentCreateResponse{
 		RequestID:     requestID,
@@ -427,6 +431,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 		"request_id", req.RequestID,
 		"decision", string(req.Decision),
 		"actor_user_id", actorUserID)
+	s.approvals.EnrollmentsChanged()
 
 	return &models.PlatformEnrollmentDecisionResponse{
 		RequestID: req.RequestID,
@@ -1069,6 +1074,7 @@ func (s *PlatformEnrollmentService) expireRequest(req *models.PlatformEnrollment
 	}
 	if applied {
 		s.logger.Info("platform enrollment request expired", "request_id", req.ID)
+		s.approvals.EnrollmentsChanged()
 	}
 }
 

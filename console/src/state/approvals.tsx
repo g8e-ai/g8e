@@ -2,15 +2,21 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 // Owner decisions the Gateway is waiting on: L3 Notary approvals of suspended
-// transactions and platform workload enrollment requests. Neither is announced
-// over SSE, so the list is polled while the console is visible.
+// transactions and platform workload enrollment requests. The Gateway pushes
+// g8e.v1.platform.approvals.changed whenever either pending set changes; the
+// console re-lists on that event and never polls. The event is ephemeral (no
+// replay), so the list is also re-fetched each time the stream (re)opens.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../lib/api';
+import { Ev } from '../lib/events';
 import { Paths } from '../lib/paths';
 import type { PlatformEnrollmentRequest, SuspendedTransaction } from '../lib/types';
+import { useStream, useStreamEvents } from './stream';
 
-const POLL_MS = 15_000;
+// Coalesces a burst of changes (a bulk approval, several enrollments arriving
+// together) into one re-list.
+const RELOAD_DEBOUNCE_MS = 250;
 
 interface ApprovalsValue {
   transactions: SuspendedTransaction[];
@@ -43,13 +49,31 @@ export function ApprovalsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const { state: streamState } = useStream();
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     void reload();
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void reload();
-    }, POLL_MS);
-    return () => clearInterval(timer);
   }, [reload]);
+
+  // Anything pushed while the stream was down is lost, so every (re)open is a
+  // sync point.
+  useEffect(() => {
+    if (streamState === 'open') void reload();
+  }, [streamState, reload]);
+
+  useStreamEvents((ev) => {
+    if (ev.type !== Ev.ApprovalsChanged) return;
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => void reload(), RELOAD_DEBOUNCE_MS);
+  });
+
+  useEffect(
+    () => () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    },
+    [],
+  );
 
   const value = useMemo(
     () => ({

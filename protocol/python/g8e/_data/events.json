@@ -3928,6 +3928,18 @@
       ],
       "persistence": "ephemeral"
     },
+    "PlatformApprovalsChanged": {
+      "_go_const": "EventPlatformApprovalsChanged",
+      "value": "g8e.v1.platform.approvals.changed",
+      "kind": "fact",
+      "transport": [
+        "sse"
+      ],
+      "producers": [
+        "gateway"
+      ],
+      "persistence": "ephemeral"
+    },
     "PlatformEnrollmentCreateRequested": {
       "_go_const": "EventPlatformEnrollmentCreateRequested",
       "value": "g8e.v1.platform.enrollment.create.requested",

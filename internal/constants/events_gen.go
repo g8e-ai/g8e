@@ -319,6 +319,7 @@ const EventOperatorTerminalAuthStateChanged EventType = "g8e.v1.operator.termina
 const EventOperatorTerminalThinkingAppend EventType = "g8e.v1.operator.terminal.thinking.append"
 const EventOperatorTerminalThinkingComplete EventType = "g8e.v1.operator.terminal.thinking.complete"
 const EventOperatorUnbound EventType = "g8e.v1.operator.unbound"
+const EventPlatformApprovalsChanged EventType = "g8e.v1.platform.approvals.changed"
 const EventPlatformAuditChainCheckpointed EventType = "g8e.v1.platform.audit.chain.checkpointed"
 const EventPlatformAuthInfo EventType = "g8e.v1.platform.auth.info.updated"
 const EventPlatformAuthLoginFailed EventType = "g8e.v1.platform.auth.login.failed"
@@ -2781,6 +2782,13 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Kind:        EventKindOutcome,
 		Transport:   nil,
 		Producers:   []string{"dashboard", "operator"},
+		Persistence: "ephemeral",
+	},
+	EventPlatformApprovalsChanged: {
+		Key:         "PlatformApprovalsChanged",
+		Kind:        EventKindFact,
+		Transport:   []string{"sse"},
+		Producers:   []string{"gateway"},
 		Persistence: "ephemeral",
 	},
 	EventPlatformAuditChainCheckpointed: {

@@ -31,6 +31,8 @@ export const Ev = {
   StreamApprovalRequested: E.OPERATOR_STREAM_APPROVAL_REQUESTED,
   AgentContinueApprovalRequested: E.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
 
+  ApprovalsChanged: E.PLATFORM_APPROVALS_CHANGED,
+
   CaseCreated: E.APP_CASE_CREATED,
   CaseUpdated: E.APP_CASE_UPDATED,
 

@@ -309,6 +309,7 @@ export const EventType = Object.freeze({
     OPERATOR_TERMINAL_THINKING_APPEND: 'g8e.v1.operator.terminal.thinking.append',
     OPERATOR_TERMINAL_THINKING_COMPLETE: 'g8e.v1.operator.terminal.thinking.complete',
     OPERATOR_UNBOUND: 'g8e.v1.operator.unbound',
+    PLATFORM_APPROVALS_CHANGED: 'g8e.v1.platform.approvals.changed',
     PLATFORM_AUDIT_CHAIN_CHECKPOINTED: 'g8e.v1.platform.audit.chain.checkpointed',
     PLATFORM_AUTH_INFO: 'g8e.v1.platform.auth.info.updated',
     PLATFORM_AUTH_LOGIN_FAILED: 'g8e.v1.platform.auth.login.failed',
@@ -2220,6 +2221,12 @@ export const EventRegistry = Object.freeze({
     OPERATOR_UNBOUND: Object.freeze({
         kind: 'outcome',
         producers: ['dashboard', 'operator'],
+        persistence: 'ephemeral',
+    }),
+    PLATFORM_APPROVALS_CHANGED: Object.freeze({
+        kind: 'fact',
+        transport: ['sse'],
+        producers: ['gateway'],
         persistence: 'ephemeral',
     }),
     PLATFORM_AUDIT_CHAIN_CHECKPOINTED: Object.freeze({

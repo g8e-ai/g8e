@@ -80,6 +80,10 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-SSE-DEL-03 | Each live stream maintains a 100-event in-memory queue. If a consumer falls behind, the Gateway drops the oldest queued event; the consumer can recover via cursor-based replay on reconnect. A dropped event is not automatically backfilled on the same connection. |
 | INV-SSE-DEL-04 | The stream heartbeats every 30 seconds with an SSE comment; response headers are flushed immediately so clients may signal readiness before the first event. The maintenance loop (every 30 seconds) removes events older than one hour; this history window supports short reconnect windows and is not a durable audit record. |
 
+### Approvals invalidation event
+
+`g8e.v1.platform.approvals.changed` is an ephemeral, Gateway-produced invalidation: its payload names only the changed list (`transactions` or `enrollments`) and a timestamp. The Gateway publishes it to the owning user's unexpired web sessions whenever a suspended L3 transaction is stored, approved, deleted, or swept as expired, and whenever a platform enrollment request is created, decided, or expires. Transaction events go to the transaction's user; enrollment events go to the platform owner (the first user), the only reviewer. It is published through `SSEEventPublisher.PublishEphemeral`, which appends no row, so it carries no `id:` and cannot be replayed; consumers re-list on receipt and on every stream (re)open. A failed push is logged and never fails the mutation. Owners: `internal/services/gateway/approvals_events.go`.
+
 ## Owned surfaces
 
 | Claim | Path | Verify |
