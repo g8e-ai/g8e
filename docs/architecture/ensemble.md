@@ -103,6 +103,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | FastAPI Application & Lifespan | `ensemble/app/main.py` | Startup sequence, client init, service factory binding |
 | App Identity & Enrollment | `ensemble/app/services/infra/app_enrollment_service.py` | Resumable platform enrollment and mTLS key/cert lifecycle |
 | API Router Groups & Paths | `ensemble/app/routers/`, `ensemble/app/constants/api_paths.json` | Health, Chat, and Internal API route registration |
+| Wheel API path registry | `ensemble/pyproject.toml` (`tool.setuptools.package-data`) | `uv build` includes `app/constants/api_paths.json` in the wheel so installed applications can load their internal route registry |
 | Gateway Operator Client | `ensemble/app/clients/gateway_operator_client.py` | Operator protocol dispatch and audit record ingest |
 | Governed Application Client | `ensemble/app/clients/governance_client.py` | Canonical envelope construction and retry on state root mismatch |
 | Gateway Data Transport | `ensemble/app/clients/db_client.py`, `kv_cache_client.py`, `blob_client.py` | mTLS transport clients for Gateway-backed persistence |
@@ -173,6 +174,8 @@ All chat, investigation, case, and settings endpoints require authenticated cont
 | g8ee to Governed Inference | Routes model inference to an enrolled Inference Node. | `InternalHttpClient` dispatches model requests to `POST /api/v1/inference/dispatch` over mTLS when using provider `LLMProvider.G8E`. |
 
 The Gateway acts as the Policy Decision Point (PDP). The remote Operator is the Policy Execution Point (PEP) for its own host runtime and verifies the envelope independently before L5 actuator invocation.
+
+The signed browser-proxy stamp does not encrypt the default plain-HTTP Gateway-to-g8ee link. Its replay nonce cache is per g8ee process, so multiple workers can each accept the same stamp once. See [Authentication](auth.md#identity-and-authentication-inv-auth-id) for the confidentiality and replay-store limitations.
 
 ### Startup Sequence and App Identity Enrollment
 

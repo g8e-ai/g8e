@@ -420,7 +420,7 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 	// Unbound app document writes are the sole identity exception (INV-AUTH-ID-05).
 	unboundDocument := envelope.OperatorId == "" &&
 		(actionType == constants.ActionTypeDocumentUpdate || actionType == constants.ActionTypeDocumentDelete)
-	if !unboundDocument && (envelope.OperatorId == "" || tv.executionTarget == nil || !tv.executionTarget.ExecutesFor(envelope.OperatorId)) {
+	if tv.executionTarget == nil || (!unboundDocument && (envelope.OperatorId == "" || !tv.executionTarget.ExecutesFor(envelope.OperatorId))) {
 		return nil, "", fmt.Errorf("%w: %q", constants.ErrTxTargetOperatorMismatch, envelope.OperatorId)
 	}
 

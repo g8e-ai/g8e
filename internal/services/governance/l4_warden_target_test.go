@@ -47,7 +47,7 @@ func TestL4Warden_ExecutionTarget(t *testing.T) {
 		{"unbound host read", gateway, "", constants.ActionTypeFsRead, true},
 		{"unbound app update", gateway, "", constants.ActionTypeDocumentUpdate, false},
 		{"unbound app delete", gateway, "", constants.ActionTypeDocumentDelete, false},
-		{"unbound app update without target dependency", nil, "", constants.ActionTypeDocumentUpdate, false},
+		{"unbound app update without target dependency", nil, "", constants.ActionTypeDocumentUpdate, true},
 		{"bound document foreign Operator", gateway, "operator-1", constants.ActionTypeDocumentUpdate, true},
 	}
 	for _, tc := range cases {
