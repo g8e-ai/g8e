@@ -50,10 +50,7 @@ The startup command accepts numerous flags controlling enrollment, runtime behav
 | `-G, --no-git` | Disables Git integration for file ledger while retaining encrypted audit storage. |
 | `-l, --log <info\|error\|debug>` | Sets log level (default: info). |
 | `--inference-enabled` | Enables governed LLM inference backend (g8ellama). |
-| `--inference-primary-model <name>` | Ollama model name for the Primary chat tier. |
-| `--inference-lite-model <name>` | Ollama model name for the Lite chat tier. |
-| `--inference-assistant-model <name>` | Ollama model name for the Assistant chat tier. |
-| `--inference-ollama-endpoint <url>` | Remote Ollama provider endpoint (default: http://127.0.0.1:11434). |
+| `--inference-ollama-endpoint <url>` | Remote Ollama provider endpoint (default: http://127.0.0.1:11434). The Inference Operator configures no models; the user picks each role's model in the Console and every governed request carries it. |
 | `--inference-keep-alive <duration>` | Ollama keep-alive duration (default: -1 for infinite). |
 | `--provider-boundary-observer-enabled` | Enables read-only provider-boundary hardware observation. |
 | `--provider-boundary-observer-id <id>` | Stable observer identity pseudonym. |

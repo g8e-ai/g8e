@@ -193,10 +193,7 @@ The current worker path applies these options:
 | `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds and the accepted range is 0-30 (0 selects the default). Larger values are rejected at startup because the Gateway marks an Operator `stale` after 60 seconds without a heartbeat. |
 | `--lattice-endpoint <url>` and related `--lattice-*` flags | These flags are exposed by Cobra but `operatorStartCmd` does not copy their values into `ServeOperatorOptions`, so the flags currently have no effect. The service-layer environment path uses `LATTICE_ENDPOINT`, `LATTICE_CLIENT_ID`, `LATTICE_CLIENT_SECRET`, `SANDBOXES_TOKEN`, `LATTICE_ENTITY_NAME`, and `LATTICE_POSTURE_FLOOR`; the adapter remains incomplete. |
 | `--inference-enabled` | Enables the governed inference backend for an Inference Operator. |
-| `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. |
-| `--inference-primary-model <model>` | Selects the Ollama model name for the Primary chat tier. |
-| `--inference-assistant-model <model>` | Selects the Ollama model name for the Assistant chat tier. |
-| `--inference-lite-model <model>` | Selects the Ollama model name for the Lite chat tier. |
+| `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. The Operator holds no model configuration; each governed request names the model the user chose in the Console. |
 | `--inference-keep-alive <duration>` | Sets the Ollama keep-alive duration (default: -1 for infinite). |
 | `--provider-boundary-observer-enabled` | Enrolls a read-only provider-boundary hardware witness with no generic command or provider-lifecycle authority. |
 | `--provider-boundary-observer-id <id>` | Sets the stable Observer Operator identity pseudonym. |

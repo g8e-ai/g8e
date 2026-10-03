@@ -275,7 +275,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 | `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (approval links, CORS, WebAuthn); set only when you reach the stack by another name |
 | `G8E_USER_HOSTNAME` | `localhost` | Same role for the User Gateway (g8ellama profile) |
 
-Container names (`g8e-<service>`) and host ports (8080, 8443, and loopback 8000, 8081, 8082, 5173) are literals in `docker-compose.yml`. Operators use the `g8e operator start` default heartbeat interval of 30 seconds; the Gateway marks an Operator `stale` after 60 seconds without a heartbeat, so `--heartbeat-interval` accepts at most 30. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
+Container names (`g8e-<service>`) and host ports (8080, 8443, and loopback 8000, 8081, 8082, 5173) are literals in `docker-compose.yml`. Operators use the `g8e operator start` default heartbeat interval of 30 seconds; the Gateway marks an Operator `stale` after 60 seconds without a heartbeat, so `--heartbeat-interval` accepts at most 30. The Inference Operator has no model configuration: you choose each role's model in the Console Inference view and every governed request carries it. Its keep-alive comes from the `g8e operator start` default (`--inference-keep-alive`; `./g8e operator start --help` lists it). To run different ports or keep-alive, add a checked-in `docker-compose.override.yml` that changes the published ports or appends that flag to the Inference Operator `command`; do not set them in `.env`.
 
 ## Standard bootstrap workflow
 
@@ -745,7 +745,7 @@ docker compose logs <service>
 ### Inference dispatch returns 403
 
 - `campaign binding invalid` or `model registry invalid`: the campaign request's assignment correlation or registry is incomplete or does not match its digest. Start runs with `g8e eval runs start` so g8ee carries the campaign's frozen registry on each dispatch.
-- `model override not permitted by role authority`: a request without campaign authority named a model other than the Inference Operator's model for that role. g8ee binds every `g8e`-provider role to the Operator's model, so this points to a stale g8ee image or a direct caller sending its own model.
+- `model not permitted by the frozen campaign registry`: a campaign-bound request named a model outside its frozen registry. A chat request is never denied for its model; one with no model fails with `model reference invalid`, and one naming a model the Ollama provider lacks fails with `model not found`.
 
 ### Observer not receiving commands
 
