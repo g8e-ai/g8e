@@ -825,7 +825,7 @@ ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.ve
 .PHONY: ensemble-test
 ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
-	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api"
 
 .PHONY: test-external
 test-external:

@@ -37,6 +37,7 @@ func TestClassifyEnvelopeError_Exhaustive(t *testing.T) {
 		{governance.ErrPayloadDecodeFailed, http.StatusForbidden},
 		{governance.ErrL1ValidationFailed, http.StatusForbidden},
 		{fmt.Errorf("%w: %q", constants.ErrTxDocumentCollectionNotGoverned, "trusted_signers"), http.StatusForbidden},
+		{fmt.Errorf("%w: %q", constants.ErrTxTargetOperatorMismatch, "outbound-operator"), http.StatusForbidden},
 		{governance.ErrTransactionHashMissing, http.StatusForbidden},
 		{governance.ErrTransactionHashMismatch, http.StatusForbidden},
 		{governance.ErrTransactionExpired, http.StatusForbidden},

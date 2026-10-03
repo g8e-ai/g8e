@@ -59,6 +59,8 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-AUTH-ID-06 | A browser-session route derives the web session ID from the validated cookie value, which is the persisted web-session document's key. The stored session body does not carry its own ID, so downstream SSE routing and the ensemble browser proxy never receive an empty web session ID. |
 | INV-AUTH-ID-07 | g8ee accepts `X-Proxy-*` identity headers only on a request carrying a valid Gateway browser-proxy signature (`X-G8E-Proxy-Signature`, `-Key-Id`, `-Issued-At`, `-Nonce`). g8ee rebuilds the signed bytes from the request it received, verifies them against the key it fetches from `GET /api/v1/gateway/proxy-signing-key` over its app mTLS client, rejects a stamp more than 30 seconds from its clock or a nonce it has seen inside that window, and returns 401 with no identity on any failure. A request with proxy headers and no valid signature is rejected, never downgraded. |
 
+The Gateway-to-g8ee browser-proxy link uses plain HTTP by default. Its signed stamp authenticates the forwarded request and resists replay; it does not provide confidentiality for identity headers or request and response bodies. Deployments requiring confidentiality on that link must provide TLS or an equivalent encrypted transport. The replay nonce cache is per g8ee process: multiple workers each accept a first use of a valid stamp, and restarting a process clears its cache. A deployment requiring replay rejection across workers or restarts needs a shared durable nonce store; the current implementation does not provide one.
+
 ### Route classification (`INV-AUTH-ROUTE`)
 
 | ID | Rule |

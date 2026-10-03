@@ -49,6 +49,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/v2/internal/services/system"
 	vault "github.com/g8e-ai/g8e/v2/internal/services/vault"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -520,6 +521,7 @@ func Run(cfg Config) error {
 		doctrine,
 		knownActionTypes,
 		nil, // Clock defaults to RealClock
+		&testutil.MockExecutionTarget{OperatorIDs: []string{"chaos-operator"}},
 	)
 
 	// L5Actuator replaces Actuator - execution boundary with receipt signing

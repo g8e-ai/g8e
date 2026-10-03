@@ -29,6 +29,15 @@ type memStore struct {
 	docs map[string]map[string]map[string]json.RawMessage
 }
 
+func TestService_ExecutionTarget(t *testing.T) {
+	svc := New(newMemStore(), nil)
+	require.NoError(t, svc.RegisterPending())
+	require.True(t, svc.ExecutesFor(string(constants.DocIDEmbeddedOperator)), "bootstrap can execute before the embedded record is claimed")
+	require.False(t, svc.ExecutesFor("outbound-operator"))
+	require.False(t, svc.ExecutesFor(""))
+	require.False(t, (*Service)(nil).ExecutesFor(string(constants.DocIDEmbeddedOperator)))
+}
+
 func newMemStore() *memStore {
 	return &memStore{docs: map[string]map[string]map[string]json.RawMessage{}}
 }

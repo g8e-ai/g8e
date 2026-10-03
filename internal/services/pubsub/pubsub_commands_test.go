@@ -52,6 +52,7 @@ func TestNewOperatorPubSubService(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -76,6 +77,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -183,6 +185,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -227,6 +230,7 @@ func TestGatewayDispatchedVerificationContext_AcceptsPDPBoundRootDespiteLiveDrif
 		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider(liveRoot),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -266,6 +270,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope_AcceptsPDPBoundRootDespi
 		ActuatorKeyID:      "actuator-key",
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider(liveRoot),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -406,6 +411,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 
 				env := &govpkg.GovernanceEnvelope{
 					Id:              "tx-" + tc.name,
+					OperatorId:      "operator-1",
 					TransactionHash: "hash-" + tc.name,
 					ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 					Timestamp:       timestamppb.Now(),
@@ -470,6 +476,7 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 
 		env := &govpkg.GovernanceEnvelope{
 			Id:              "tx-cancel",
+			OperatorId:      "operator-1",
 			TransactionHash: "hash-cancel",
 			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
@@ -1001,6 +1008,7 @@ func TestOperatorPubSubService_Start(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1037,6 +1045,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 
 		env := &commonv1.GovernanceEnvelope{
 			Id:              "tx-sync",
+			OperatorId:      "operator-1",
 			TransactionHash: "hash-sync",
 			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
@@ -1135,6 +1144,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1609,6 +1619,7 @@ func TestOperatorPubSubService_SetL4Warden(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1635,6 +1646,7 @@ func TestOperatorPubSubService_handleEvalAnswerRequest(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1671,6 +1683,7 @@ func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1709,6 +1722,7 @@ func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1745,6 +1759,7 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 			ActuatorKeyID:      "test-key",
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1808,6 +1823,7 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1831,6 +1847,7 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, OutboundModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1859,6 +1876,7 @@ func TestNewOperatorPubSubService_NilOptionalGovDeps_PreservedAsNil(t *testing.T
 		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1886,6 +1904,7 @@ func TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite(t *testing.
 		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},

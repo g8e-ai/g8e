@@ -254,6 +254,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 		Scrubbing:          scrubbingSvc,
 		AuditStore:         infra.AuditStore,
 	}, pubsub.OutboundModeDeps{GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+		ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{operatorID}},
 		ReplayStore:       infra.ReplayStore,
 		StateRootProvider: infra.StateRootSvc,
 		TransactionAudit:  infra.AuditStore,
@@ -523,6 +524,7 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 		Inference:          inferenceHandler,
 		AuditStore:         infra.AuditStore,
 	}, pubsub.OutboundModeDeps{GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+		ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{operatorID}},
 		ReplayStore:       infra.ReplayStore,
 		StateRootProvider: stateRoots,
 		TransactionAudit:  infra.AuditStore,
@@ -579,6 +581,7 @@ func startFileEditOperator(t *testing.T, infra *TestInfrastructure, operatorID, 
 		Scrubbing:          scrubbingSvc,
 		AuditStore:         infra.AuditStore,
 	}, pubsub.OutboundModeDeps{GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+		ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{operatorID}},
 		ReplayStore:       infra.ReplayStore,
 		StateRootProvider: infra.StateRootSvc,
 		TransactionAudit:  infra.AuditStore,

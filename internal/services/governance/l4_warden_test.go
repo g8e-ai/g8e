@@ -55,6 +55,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		NewL1Doctrine(),          // doctrine required
 		constants.AllActionTypes, // Use SSOT for action types
 		nil,                      // Clock defaults to RealClock
+		&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 	), privKey
 }
 
@@ -314,6 +315,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, replayStore ReplayStore, sta
 		NewL1Doctrine(),
 		constants.AllActionTypes,
 		nil, // Clock defaults to RealClock
+		&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 	), privKey
 }
 

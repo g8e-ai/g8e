@@ -989,6 +989,7 @@ func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action c
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(5 * time.Minute)),
 			SourceComponent: commonv1.Component_COMPONENT_G8EO,
+			OperatorId:      string(constants.DocIDEmbeddedOperator),
 			ActionType:      string(action),
 			EventType:       string(platformEnrollmentRequestEvent(action)),
 			Payload:         payloadBytes,

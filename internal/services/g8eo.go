@@ -38,6 +38,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/system"
 )
 
+// ExecutesFor binds outbound execution to this runtime's enrolled Operator ID.
+func (vs *G8eoService) ExecutesFor(operatorID string) bool {
+	return vs != nil && vs.config != nil && operatorID != "" && operatorID == vs.config.OperatorID
+}
+
 type G8eoService struct {
 	config  *config.Config
 	logger  *slog.Logger
@@ -414,6 +419,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	outboundDeps, err := pubsub.NewOutboundModeDeps(pubsub.OutboundModeDeps{
 		GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+			ExecutionTarget:   vs,
 			ReplayStore:       vs.replayStore,
 			StateRootProvider: stateRootProvider,
 			TransactionAudit:  transactionAudit,

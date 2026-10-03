@@ -351,6 +351,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 			Posture:          string(cfg.Gateway.Posture),
 		}
 		govCore := pubsub.GovernanceCoreDeps{
+			ExecutionTarget:   embeddedOperator,
 			ReplayStore:       replayStore,
 			StateRootProvider: stateRootSvc,
 			TransactionAudit:  docStore,
@@ -1158,6 +1159,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GatewayModeDeps {
 
 	return &pubsub.GatewayModeDeps{
 		GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+			ExecutionTarget:   ls.embeddedOperator,
 			ReplayStore:       ls.replayStore,
 			StateRootProvider: ls.stateRootSvc,
 			TransactionAudit:  ls.docStore,

@@ -21,6 +21,7 @@ import (
 // outbound and gateway modes. Embedded by GatewayModeDeps and OutboundModeDeps
 // so the shared fields are declared once.
 type GovernanceCoreDeps struct {
+	ExecutionTarget   governance.ExecutionTarget
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
 	TransactionAudit  governance.TransactionAuditStore

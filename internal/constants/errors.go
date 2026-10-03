@@ -1054,6 +1054,7 @@ var (
 	ErrTxPayloadMissing                = errors.New("TX_PAYLOAD_MISSING: typed protobuf payload required")
 	ErrTxPayloadActionMismatch         = errors.New("TX_PAYLOAD_ACTION_MISMATCH: action type does not match typed payload")
 	ErrTxDocumentCollectionNotGoverned = errors.New("TX_DOCUMENT_COLLECTION_NOT_GOVERNED: document action targets a collection outside the governed document set")
+	ErrTxTargetOperatorMismatch        = errors.New("TX_TARGET_OPERATOR_MISMATCH: runtime does not execute for the envelope operator")
 	ErrTxL1ValidationFailed            = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns")
 	ErrTxDoctrineMissing               = errors.New("TX_DOCTRINE_MISSING: L1Doctrine required but not configured")
 	ErrTxInFlight                      = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")

@@ -158,6 +158,7 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 		AuditStore:         auditStore,
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-inference-int"}},
 			ReplayStore:       testutil.NewStatefulMockReplayStore(),
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -340,6 +341,7 @@ func TestInferenceDispatch_ProcessEnvelope_NilInferenceHandler_FailsClosed(t *te
 		AuditStore:         auditStore,
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-inference-int"}},
 			ReplayStore:       testutil.NewStatefulMockReplayStore(),
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},

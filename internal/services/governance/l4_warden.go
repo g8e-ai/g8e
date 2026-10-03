@@ -78,7 +78,13 @@ func newDeterministicStageEvidence(
 	}
 }
 
+// ExecutionTarget identifies the Operators whose actions this runtime executes.
+type ExecutionTarget interface {
+	ExecutesFor(operatorID string) bool
+}
+
 type L4Warden struct {
+	executionTarget      ExecutionTarget
 	logger               *slog.Logger
 	replayStore          ReplayStore
 	stateRootProvider    StateRootProvider
@@ -106,6 +112,7 @@ func NewL4Warden(
 	doctrine *L1Doctrine,
 	knownActionTypes []constants.ActionType,
 	clock system.Clock,
+	executionTarget ExecutionTarget,
 ) *L4Warden {
 	knownActions := make(map[constants.ActionType]struct{})
 	for _, action := range knownActionTypes {
@@ -118,6 +125,7 @@ func NewL4Warden(
 	}
 
 	return &L4Warden{
+		executionTarget:      executionTarget,
 		logger:               logger,
 		replayStore:          replayStore,
 		stateRootProvider:    stateRootProvider,
@@ -407,6 +415,13 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 	if err := verifyDocumentCollection(decodedPayload); err != nil {
 		tv.logger.Error("Document action rejected: collection not governed", "action_type", envelope.ActionType, string(constants.ConnectionStateError), err)
 		return nil, "", err
+	}
+
+	// Unbound app document writes are the sole identity exception (INV-AUTH-ID-05).
+	unboundDocument := envelope.OperatorId == "" &&
+		(actionType == constants.ActionTypeDocumentUpdate || actionType == constants.ActionTypeDocumentDelete)
+	if !unboundDocument && (envelope.OperatorId == "" || tv.executionTarget == nil || !tv.executionTarget.ExecutesFor(envelope.OperatorId)) {
+		return nil, "", fmt.Errorf("%w: %q", constants.ErrTxTargetOperatorMismatch, envelope.OperatorId)
 	}
 
 	if violations := tv.doctrine.ValidatePayload(decodedPayload); len(violations) > 0 {
