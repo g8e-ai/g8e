@@ -621,6 +621,38 @@
                 }
             }
         },
+        "/api/v1/gateway/proxy-signing-key": {
+            "get": {
+                "description": "Returns the Ed25519 public key (and its key ID) the Gateway uses to sign browser-proxy identity stamps. g8ee fetches it over its mTLS client and verifies every proxied request against it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "gateway"
+                ],
+                "summary": "Browser proxy signing key",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ActuatorPublicKeyExport"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable — no signing key is loaded",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/governance/envelopes": {
             "post": {
                 "description": "Accepts a GovernanceEnvelope, verifies it through the 5-layer gauntlet (L1–L3 pre-flight,\nL4 warden, L5 actuator), and returns the signed ActionReceipt. Transport-to-envelope\nidentity binding is enforced via mTLS certificate URI SAN matching.",
@@ -2974,6 +3006,20 @@
                     "type": "string"
                 },
                 "transaction_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ActuatorPublicKeyExport": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "key_id": {
+                    "type": "string"
+                },
+                "public_key": {
                     "type": "string"
                 }
             }

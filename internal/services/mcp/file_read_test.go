@@ -558,19 +558,18 @@ func TestFileReadTool_Execute_RelativePath(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := testutil.TempDir(t)
-	originalDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(originalDir)
-
-	err = os.Chdir(tmpDir)
+	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	testFile := "relative.txt"
 	testContent := "test content"
-	err = os.WriteFile(testFile, []byte(testContent), 0644)
+	absFile := filepath.Join(tmpDir, "relative.txt")
+	err = os.WriteFile(absFile, []byte(testContent), 0644)
 	require.NoError(t, err)
 
-	req := FileReadRequest{Path: testFile}
+	relPath, err := filepath.Rel(cwd, absFile)
+	require.NoError(t, err)
+
+	req := FileReadRequest{Path: relPath}
 	args, err := json.Marshal(req)
 	require.NoError(t, err)
 

@@ -79,7 +79,6 @@ class UserSettingsDocument(G8eIdentifiableModel):
 class AuthSettings(G8eBaseModel):
     """Authentication and security token configuration."""
 
-    session_encryption_key: str | None = Field(None, repr=False)
     operator_session_id: str | None = Field(None)
     operator_api_key: str | None = Field(None, repr=False)
     internal_api_key: str | None = Field(None, repr=False)

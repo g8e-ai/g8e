@@ -7,8 +7,8 @@
 
 """Tier 1 unit tests for secrets degradation behavior.
 
-The ensemble runs without `session_encryption_key` and `auditor_hmac_key` when
-its own runtime volume has no secrets directory (the post-enrollment state:
+The ensemble runs without `auditor_hmac_key` when its own runtime volume has
+no secrets directory (the post-enrollment state:
 the ensemble has its own `g8e-ensemble-data` volume, not the gateway's
 secrets volume). These tests assert the code degrades gracefully — logging
 the absence and proceeding with `None` — rather than crashing. If a test
@@ -37,15 +37,6 @@ class TestBootstrapServiceMissingSecretsDir:
     """BootstrapService must degrade gracefully when the secrets directory is
     empty or missing — returning `None` and logging the absence, not raising."""
 
-    def test_load_session_encryption_key_returns_none_when_dir_missing(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        # Point at a secrets dir that does not exist.
-        bootstrap = BootstrapService(secrets_dir=str(tmp_path / "nonexistent"), pki_dir=str(tmp_path))
-        with caplog.at_level(logging.INFO, logger="app.services.infra.bootstrap_service"):
-            result = bootstrap.load_session_encryption_key()
-        assert result is None
-
     def test_load_auditor_hmac_key_returns_none_when_dir_missing(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
@@ -53,13 +44,6 @@ class TestBootstrapServiceMissingSecretsDir:
         with caplog.at_level(logging.INFO, logger="app.services.infra.bootstrap_service"):
             result = bootstrap.load_auditor_hmac_key()
         assert result is None
-
-    def test_load_session_encryption_key_returns_none_when_dir_empty(
-        self, tmp_path: Path
-    ) -> None:
-        (tmp_path / "secrets").mkdir()
-        bootstrap = BootstrapService(secrets_dir=str(tmp_path / "secrets"), pki_dir=str(tmp_path))
-        assert bootstrap.load_session_encryption_key() is None
 
     def test_load_auditor_hmac_key_returns_none_when_dir_empty(
         self, tmp_path: Path
@@ -90,7 +74,6 @@ class TestSettingsServiceDegradesWithoutSecrets:
         service = SettingsService(bootstrap_service=bootstrap)
         with caplog.at_level(logging.INFO, logger="app.services.infra.settings_service"):
             settings = service.get_local_settings()
-        assert settings.auth.session_encryption_key is None
         assert settings.auth.auditor_hmac_key is None
         # The service must not raise; reaching this assertion proves graceful
         # degradation. The absence is logged so operators can diagnose why
@@ -104,13 +87,45 @@ class TestSettingsServiceDegradesWithoutSecrets:
 
     def test_get_local_settings_with_mocked_bootstrap_returning_none(self) -> None:
         bootstrap = MagicMock()
-        bootstrap.load_session_encryption_key.return_value = None
         bootstrap.load_auditor_hmac_key.return_value = None
         bootstrap.verify_against_manifest = MagicMock()
         service = SettingsService(bootstrap_service=bootstrap)
         settings = service.get_local_settings()
-        assert settings.auth.session_encryption_key is None
         assert settings.auth.auditor_hmac_key is None
         # verify_against_manifest must not be called when the secret is absent
         # (the SettingsService only verifies on the truthy branch).
         bootstrap.verify_against_manifest.assert_not_called()
+
+
+class TestG8eeHoldsNoOperatorSessionKey:
+    """The Operator's session encryption key was loaded into g8ee settings
+    long ago and nothing ever read it. g8ee has no Platform authority, so the
+    key is not loaded, not stored, and not even named by the bootstrap
+    service."""
+
+    def test_auth_settings_have_no_session_encryption_key(self) -> None:
+        from app.models.settings import AuthSettings
+
+        assert "session_encryption_key" not in AuthSettings.model_fields
+
+    def test_bootstrap_service_cannot_load_a_session_key(self) -> None:
+        assert not hasattr(BootstrapService, "load_session_encryption_key")
+
+    def test_settings_do_not_read_the_session_key_file(self, tmp_path: Path) -> None:
+        secrets = tmp_path / "secrets"
+        secrets.mkdir()
+        (secrets / "session_encryption_key").write_text("operator-session-key")
+        bootstrap = BootstrapService(secrets_dir=str(secrets), pki_dir=str(tmp_path))
+
+        settings = SettingsService(bootstrap_service=bootstrap).get_local_settings()
+
+        assert "operator-session-key" not in settings.model_dump_json()
+
+    def test_settings_load_with_no_secrets_directory_at_all(self, tmp_path: Path) -> None:
+        bootstrap = BootstrapService(
+            secrets_dir=str(tmp_path / "does-not-exist"), pki_dir=str(tmp_path / "does-not-exist")
+        )
+
+        settings = SettingsService(bootstrap_service=bootstrap).get_local_settings()
+
+        assert settings.auth.internal_api_key is None

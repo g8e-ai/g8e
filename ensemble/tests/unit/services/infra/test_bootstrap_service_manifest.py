@@ -72,54 +72,46 @@ def bootstrap(volume: Path) -> BootstrapService:
 
 def test_verify_passes_when_digest_matches(volume: Path, bootstrap: BootstrapService) -> None:
     encrypted_content = '{"version":1,"nonce":"abc","ciphertext":"encrypted-data"}'
-    _write_encrypted_secret(volume, "session_encryption_key", encrypted_content)
-    _write_manifest(volume, {"session_encryption_key": encrypted_content})
+    _write_encrypted_secret(volume, "auditor_hmac_key", encrypted_content)
+    _write_manifest(volume, {"auditor_hmac_key": encrypted_content})
 
-    bootstrap.verify_against_manifest("session_encryption_key", None)
+    bootstrap.verify_against_manifest("auditor_hmac_key", None)
 
 
 def test_verify_raises_when_digest_mismatches(volume: Path, bootstrap: BootstrapService) -> None:
     original_encrypted = '{"version":1,"nonce":"abc","ciphertext":"original"}'
     tampered_encrypted = '{"version":1,"nonce":"xyz","ciphertext":"tampered"}'
-    _write_encrypted_secret(volume, "session_encryption_key", tampered_encrypted)
-    _write_manifest(volume, {"session_encryption_key": original_encrypted})
+    _write_encrypted_secret(volume, "auditor_hmac_key", tampered_encrypted)
+    _write_manifest(volume, {"auditor_hmac_key": original_encrypted})
 
     with pytest.raises(BootstrapSecretTamperError, match="failed tamper-evidence check"):
-        bootstrap.verify_against_manifest("session_encryption_key", None)
+        bootstrap.verify_against_manifest("auditor_hmac_key", None)
 
 
 def test_verify_skips_when_manifest_missing(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_encrypted_secret(volume, "session_encryption_key", "any-encrypted")
-    bootstrap.verify_against_manifest("session_encryption_key", None)
+    _write_encrypted_secret(volume, "auditor_hmac_key", "any-encrypted")
+    bootstrap.verify_against_manifest("auditor_hmac_key", None)
 
 
 def test_verify_skips_when_manifest_has_no_entry(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_encrypted_secret(volume, "session_encryption_key", "encrypted")
-    _write_manifest(volume, {"auditor_hmac_key": "encrypted-hmac"})
+    _write_encrypted_secret(volume, "auditor_hmac_key", "encrypted")
+    _write_manifest(volume, {"some_other_secret": "encrypted-other"})
 
-    bootstrap.verify_against_manifest("session_encryption_key", None)
+    bootstrap.verify_against_manifest("auditor_hmac_key", None)
 
 
 def test_verify_raises_on_malformed_manifest(volume: Path, bootstrap: BootstrapService) -> None:
     (volume / BOOTSTRAP_DIGEST_MANIFEST_FILE).write_text("{not valid json")
 
     with pytest.raises(BootstrapSecretTamperError, match="unreadable or malformed"):
-        bootstrap.verify_against_manifest("session_encryption_key", None)
+        bootstrap.verify_against_manifest("auditor_hmac_key", None)
 
 
 def test_verify_raises_when_secret_file_missing(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_manifest(volume, {"session_encryption_key": "encrypted-content"})
+    _write_manifest(volume, {"auditor_hmac_key": "encrypted-content"})
 
     with pytest.raises(BootstrapSecretTamperError, match="does not exist"):
-        bootstrap.verify_against_manifest("session_encryption_key", None)
-
-
-def test_verify_session_key_independently(volume: Path, bootstrap: BootstrapService) -> None:
-    encrypted_key = '{"version":1,"nonce":"abc","ciphertext":"encrypted-key-a"}'
-    _write_encrypted_secret(volume, "session_encryption_key", encrypted_key)
-    _write_manifest(volume, {"session_encryption_key": encrypted_key})
-
-    bootstrap.verify_against_manifest("session_encryption_key", None)
+        bootstrap.verify_against_manifest("auditor_hmac_key", None)
 
 
 def test_verify_auditor_hmac_key_independently(volume: Path, bootstrap: BootstrapService) -> None:
@@ -128,17 +120,9 @@ def test_verify_auditor_hmac_key_independently(volume: Path, bootstrap: Bootstra
     # divergent key would silently poison the reputation commitment
     # chain with signatures that look valid to g8ee but cannot be
     # reproduced from the DB-authoritative key.
-    encrypted_session = '{"version":1,"nonce":"abc","ciphertext":"encrypted-session"}'
     encrypted_hmac = '{"version":1,"nonce":"def","ciphertext":"encrypted-hmac-d"}'
-    _write_encrypted_secret(volume, "session_encryption_key", encrypted_session)
     _write_encrypted_secret(volume, "auditor_hmac_key", encrypted_hmac)
-    _write_manifest(
-        volume,
-        {
-            "session_encryption_key": encrypted_session,
-            "auditor_hmac_key": encrypted_hmac,
-        },
-    )
+    _write_manifest(volume, {"auditor_hmac_key": encrypted_hmac})
 
     bootstrap.verify_against_manifest("auditor_hmac_key", None)
 

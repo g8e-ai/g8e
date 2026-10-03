@@ -8,15 +8,8 @@
 package constants
 
 import (
-	"errors"
 	"fmt"
 	"strings"
-)
-
-var (
-	ErrAuditIngestInvalidRequest = errors.New("AUDIT_INGEST_INVALID: audit record request is invalid")
-	ErrAuditIngestNoDelivery     = errors.New("AUDIT_INGEST_NO_DELIVERY: operator is not listening on audit channel")
-	ErrAuditIngestTimeout        = errors.New("AUDIT_INGEST_TIMEOUT: operator did not acknowledge audit record")
 )
 
 // ValidateAuditRecordRequest ensures the event is a registered LFAA audit ingest request

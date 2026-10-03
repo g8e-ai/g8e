@@ -8,16 +8,9 @@
 package constants
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/g8e-ai/g8e/v2/protocol"
-)
-
-var (
-	ErrSSEEventNotRegistered  = errors.New("SSE_EVENT_NOT_REGISTERED: event type not in registry")
-	ErrSSEEventNotOnTransport = errors.New("SSE_EVENT_NOT_ON_TRANSPORT: event is not on the sse transport")
-	ErrSSEProducerNotAllowed  = errors.New("SSE_PRODUCER_NOT_ALLOWED: producer is not registered for this event")
 )
 
 // SSEPushValidation is the result of validating an SSE push request.

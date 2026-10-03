@@ -231,7 +231,6 @@ class TestLLMEnvVarBootstrapDefaults:
 
     def _make_service(self) -> SettingsService:
         bootstrap = MagicMock()
-        bootstrap.load_session_encryption_key.return_value = None
         bootstrap.load_auditor_hmac_key.return_value = None
         return SettingsService(bootstrap_service=bootstrap)
 

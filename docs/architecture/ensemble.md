@@ -165,7 +165,7 @@ All chat, investigation, case, and settings endpoints require authenticated cont
 
 | Relationship | Purpose | Boundary and Identity Requirements |
 | --- | --- | --- |
-| Client to g8ee | Starts/resumes chat sessions, answers triage or approvals, reads case/investigation state. | Request must supply authentication validated by `AuthService` into a `G8eHttpContext`. g8ee does not trust arbitrary caller headers. |
+| Client to g8ee | Starts/resumes chat sessions, answers triage or approvals, reads case/investigation state. | Request must supply authentication validated by `AuthService` into a `G8eHttpContext`: a bearer Operator session confirmed by the Gateway, or browser-proxy identity carrying the Gateway's Ed25519 signature (INV-AUTH-ID-07). g8ee does not trust arbitrary caller headers, and its network position is not part of the decision. |
 | g8ee to Gateway Data Services | Reads/writes platform settings, user settings, documents, KV entries, and blobs. | g8ee connects over mTLS using its enrolled app certificate via `DBClient`, `KVCacheClient`, and `BlobClient`. Gateway owns durable storage. |
 | g8ee to Gateway Event Bridge | Publishes typed chat, approval, command, and reputation events. | `EventService` posts events to Gateway SSE push API (`POST /api/v1/sse/push`). Events without a `web_session_id` or `cli_session_id` are skipped. |
 | g8ee to Governed Dispatch | Dispatches host operations to an enrolled Operator and receives correlated results. | `GatewayOperatorClient.dispatch()` sends a registered `event_type` and base64-encoded protobuf payload to `POST /api/v1/operators/commands` over mTLS. |

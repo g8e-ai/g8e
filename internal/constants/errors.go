@@ -1603,4 +1603,23 @@ var (
 	ErrEvaluationEvidenceTraceMismatch     = errors.New("evaluation: imported evidence does not match its trace")
 	ErrEvaluationLastEntryRemoval          = errors.New("evaluation: cannot remove the last entry from a catalog or inventory")
 	ErrEvaluationFormationSmokeFailed      = errors.New("evaluation: formation smoke failed")
+
+	// Governed transaction errors
+	ErrTxUnknownEventType      = errors.New("TX_UNKNOWN_EVENT: event type not registered")
+	ErrTxEventNotRequest       = errors.New("TX_EVENT_NOT_REQUEST: event is not a governed request")
+	ErrTxEventNotGoverned      = errors.New("TX_EVENT_NOT_GOVERNED: event is not on the governed transport")
+	ErrTxEventActionMismatch   = errors.New("TX_EVENT_ACTION_MISMATCH: event_type and action_type disagree")
+	ErrTxOutcomeNotRegistered  = errors.New("TX_OUTCOME_NOT_REGISTERED: outcome event type not registered")
+	ErrTxOutcomeNotAllowed     = errors.New("TX_OUTCOME_NOT_ALLOWED: outcome event type not listed for request")
+	ErrTxPayloadDecoderMissing = errors.New("TX_PAYLOAD_DECODER_MISSING: no typed payload decoder for governed action")
+
+	// Audit ingest errors
+	ErrAuditIngestInvalidRequest = errors.New("AUDIT_INGEST_INVALID: audit record request is invalid")
+	ErrAuditIngestNoDelivery     = errors.New("AUDIT_INGEST_NO_DELIVERY: operator is not listening on audit channel")
+	ErrAuditIngestTimeout        = errors.New("AUDIT_INGEST_TIMEOUT: operator did not acknowledge audit record")
+
+	// SSE registry errors
+	ErrSSEEventNotRegistered  = errors.New("SSE_EVENT_NOT_REGISTERED: event type not in registry")
+	ErrSSEEventNotOnTransport = errors.New("SSE_EVENT_NOT_ON_TRANSPORT: event is not on the sse transport")
+	ErrSSEProducerNotAllowed  = errors.New("SSE_PRODUCER_NOT_ALLOWED: producer is not registered for this event")
 )

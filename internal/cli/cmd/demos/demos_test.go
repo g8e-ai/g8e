@@ -556,7 +556,7 @@ func TestGetProjectRoot(t *testing.T) {
 		// Save original working directory
 		originalWd, err := os.Getwd()
 		require.NoError(t, err)
-		defer os.Chdir(originalWd)
+		t.Cleanup(func() { _ = os.Chdir(originalWd) })
 
 		// Change to a temporary directory
 		tmpDir := testutil.TempDir(t)

@@ -121,7 +121,7 @@ The root `docker-compose.yml` defines the core platform services on the `g8e-net
 | `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS; 8081 private mirror ingest, 8082 public mirror read/SSE, 5173 evaluation explorer (loopback) | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A, public mirror, and evaluation explorer. |
 | `g8e-data-operator` | default | none | **Data Operator** (container hostname `data-operator`) — governed tool/filesystem/process boundary for the Operator container runtime. Evaluations identify it by that hostname and ignore every other enrolled data Operator. |
 | `g8e-inference-operator` | default | none | **Inference Operator** — governed inference to the remote Ollama provider. |
-| `ensemble` | default | 8000 (loopback) | g8ee chat pipeline (`POST /api/v1/chat`). Loopback only: g8ee trusts the Gateway browser-proxy identity stamp. |
+| `ensemble` | default | 8000 (loopback) | g8ee chat pipeline (`POST /api/v1/chat`). Published on loopback for host tools; g8ee accepts proxy identity only with the Gateway's signature, wherever the request comes from. |
 
 The Gateway and Operator containers use the same image and share the host binary mount. All four services start with `docker compose up -d`. The Observer Operator is a separately enrolled process on the remote provider host and is never a service in the unified Compose stack.
 

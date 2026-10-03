@@ -828,6 +828,15 @@ definitions:
       transaction_id:
         type: string
     type: object
+  models.ActuatorPublicKeyExport:
+    properties:
+      algorithm:
+        type: string
+      key_id:
+        type: string
+      public_key:
+        type: string
+    type: object
   models.AgentLifecycleStatus:
     enum:
     - idle
@@ -3309,6 +3318,29 @@ paths:
       summary: Get blob
       tags:
       - data
+  /api/v1/gateway/proxy-signing-key:
+    get:
+      description: Returns the Ed25519 public key (and its key ID) the Gateway uses
+        to sign browser-proxy identity stamps. g8ee fetches it over its mTLS client
+        and verifies every proxied request against it.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ActuatorPublicKeyExport'
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "503":
+          description: Service Unavailable — no signing key is loaded
+          schema:
+            type: string
+      summary: Browser proxy signing key
+      tags:
+      - gateway
   /api/v1/governance/envelopes:
     post:
       consumes:

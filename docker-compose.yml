@@ -257,9 +257,10 @@ services:
       g8e-data-operator:
         condition: service_started
     ports:
-      # Loopback only: g8ee trusts the Gateway browser-proxy identity stamp,
-      # so it must not be reachable from other hosts. The Gateway reaches it
-      # on the compose network; host tools (eval, e2e) use localhost.
+      # Published on loopback for host tools (eval, e2e) and for convenience.
+      # This is not a security control: g8ee accepts proxy identity only with
+      # the Gateway's Ed25519 signature on the request, so a caller that
+      # reaches port 8000 by any route still gets no identity without it.
       - "127.0.0.1:8000:8000"
     volumes:
       - g8e-ensemble-data:/root/.g8e

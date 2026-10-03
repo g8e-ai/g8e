@@ -33,10 +33,6 @@ class BootstrapSecretTamperError(RuntimeError):
 class BootstrapServiceProtocol(Protocol):
     """Protocol for bootstrap services that load host bootstrap data."""
 
-    def load_session_encryption_key(self) -> str | None:
-        """Load session encryption key from host bootstrap directory."""
-        ...
-
     def load_auditor_hmac_key(self) -> str | None:
         """Load Tribunal auditor HMAC-SHA256 signing key from host bootstrap directory."""
         ...
@@ -75,34 +71,15 @@ class BootstrapService:
         self._pki_dir = Path(pki_dir)
 
         self._logger = logging.getLogger(__name__)
-        self._cached_key: str | None = None
         self._cached_auditor_hmac_key: str | None = None
         self._cached_ca_path: str | None = None
-
-    def load_session_encryption_key(self) -> str | None:
-        """Load session encryption key from host secrets directory."""
-        if self._cached_key is not None:
-            return self._cached_key
-
-        try:
-            key_path = validate_safe_path("session_encryption_key", self._secrets_dir)
-            if key_path.exists():
-                self._cached_key = key_path.read_text().strip()
-                self._logger.info("Loaded session encryption key from host secrets directory")
-                return self._cached_key
-            self._logger.info("Session encryption key not found in host secrets directory")
-            return None
-        except Exception as e:
-            self._logger.warning("Failed to read session encryption key: %s", e)
-            return None
 
     def load_auditor_hmac_key(self) -> str | None:
         """Load Tribunal auditor HMAC-SHA256 signing key from host secrets directory.
 
-        Paired with ``session_encryption_key``:
-        the same SecretManager pattern on the g8eo side generates and
-        persists this key, and the same bootstrap_digest.json entry is
-        used for tamper verification by the caller.
+        The g8eo SecretManager generates and persists this key, and its
+        bootstrap_digest.json entry is used for tamper verification by the
+        caller.
         """
         if self._cached_auditor_hmac_key is not None:
             return self._cached_auditor_hmac_key
@@ -142,14 +119,11 @@ class BootstrapService:
     def is_available(self) -> bool:
         """Check if bootstrap data is available."""
         return self._secrets_dir.exists() and (
-            self.load_session_encryption_key() is not None
-            or self.load_auditor_hmac_key() is not None
-            or self.load_ca_cert_path() is not None
+            self.load_auditor_hmac_key() is not None or self.load_ca_cert_path() is not None
         )
 
     def clear_cache(self) -> None:
         """Clear cached values - useful for testing or re-initialization."""
-        self._cached_key = None
         self._cached_auditor_hmac_key = None
         self._cached_ca_path = None
 
@@ -173,7 +147,7 @@ class BootstrapService:
             return.
 
         Args:
-            resource_name: logical identifier of the bootstrap artifact (e.g. "session_encryption_key").
+            resource_name: logical identifier of the bootstrap artifact (e.g. "auditor_hmac_key").
             value: ignored - we read the encrypted file directly for verification.
 
         Raises:
@@ -183,7 +157,7 @@ class BootstrapService:
         manifest_path = self._secrets_dir / BOOTSTRAP_DIGEST_MANIFEST_FILE
         if not manifest_path.exists():
             # codeql[py/clear-text-logging-sensitive-data]: resource_name is a
-            # logical label (e.g. "session_encryption_key"), not the secret value;
+            # logical label (e.g. "auditor_hmac_key"), not the secret value;
             # manifest_path is a filesystem path. Both are non-sensitive identifiers
             # required for operational debugging of tamper-evidence failures.
             self._logger.warning(
@@ -211,7 +185,7 @@ class BootstrapService:
         expected = entry.get("sha256") if isinstance(entry.get("sha256"), str) else None
         if not expected:
             # codeql[py/clear-text-logging-sensitive-data]: resource_name is a
-            # logical label (e.g. "session_encryption_key"), not the secret value;
+            # logical label (e.g. "auditor_hmac_key"), not the secret value;
             # the manifest version is a schema integer. Neither is sensitive.
             self._logger.warning(
                 "Bootstrap digest manifest has no entry for %s (manifest_version=%s)",
@@ -245,7 +219,7 @@ class BootstrapService:
             )
 
         # codeql[py/clear-text-logging-sensitive-data]: resource_name is a
-        # logical label (e.g. "session_encryption_key"), not the secret value.
+        # logical label (e.g. "auditor_hmac_key"), not the secret value.
         # Logging which secret passed verification is required for audit trails.
         self._logger.info(
             "Bootstrap secret %s verified against digest manifest (encrypted content)",

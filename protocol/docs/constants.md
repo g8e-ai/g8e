@@ -199,7 +199,7 @@ HTTP header names and authentication-related constants:
 - Identity: `HeaderOperatorID`, `HeaderOperatorSessionID`, `HeaderWebSessionID`, `HeaderCLISessionID`, `HeaderUserID`, `HeaderOrganizationID`, `HeaderBoundOperators`
 - Context: `HeaderCaseID`, `HeaderExecutionID`, `HeaderInvestigationID`, `HeaderTaskID`
 - System: `HeaderRequestID`, `HeaderSourceComponent`, `HeaderSystemFingerprint`, `HeaderXAccelBuffering`
-- Proxy: `HeaderXForwardedFor`, `HeaderXForwardedHost`, `HeaderXForwardedProto`, `HeaderXProxyOrganizationID`, `HeaderXProxyUserID`, `HeaderXRequestTimestamp`
+- Proxy: `HeaderXForwardedFor`, `HeaderXForwardedHost`, `HeaderXForwardedProto`, `HeaderXProxyOrganizationID`, `HeaderXProxyUserID`, `HeaderProxyKeyID`, `HeaderProxyNonce`, `HeaderProxyIssuedAt`, `HeaderProxySignature`, `HeaderXRequestTimestamp`
 - Security: `HeaderXContentTypeOptions`, `HeaderXFrameOptions`, `HeaderContentSecurityPolicy`
 - Standard: `HeaderAuthorization`, `HeaderContentType`, `HeaderAccept`, `HeaderAcceptLanguage`, `HeaderCacheControl`, `HeaderCookie`, `HeaderUserAgent`, `HeaderPragma`, `HeaderSetCookie`, `HeaderConnection`, `HeaderVary`
 - Content: `HeaderContentDisposition`, `HeaderContentLanguage`, `HeaderContentLength`
