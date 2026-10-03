@@ -59,6 +59,20 @@ func (s *DocumentStoreService) NotifyOperatorStatusChanged(t OperatorStatusTrans
 	}
 }
 
+// NotifyOperatorEnrolled reports a brand-new Operator document, persisted as
+// active, to the bound observer. It satisfies pubsub.PlatformEnrollmentDocStore
+// with primitive args so the platform enrollment handlers (which must not
+// import this package) can announce an enrollment the same way
+// NotifyOperatorStatusChanged announces a later transition.
+func (s *DocumentStoreService) NotifyOperatorEnrolled(operatorID, userID, name string) {
+	s.NotifyOperatorStatusChanged(OperatorStatusTransition{
+		OperatorID: operatorID,
+		UserID:     userID,
+		Name:       name,
+		Status:     constants.OperatorStatusActive,
+	})
+}
+
 // NewDocumentStoreService creates a new document store service.
 func NewDocumentStoreService(db *sqliteutil.DB, logger *slog.Logger) *DocumentStoreService {
 	return &DocumentStoreService{

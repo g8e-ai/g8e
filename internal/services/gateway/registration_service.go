@@ -445,6 +445,15 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	if updateErr != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, updateErr)
 	}
+	// Claiming an offline slot moves it straight to active; announce it so an
+	// already-connected browser session sees the Operator without waiting for
+	// a later transition or a manual reload.
+	s.docStore.NotifyOperatorStatusChanged(OperatorStatusTransition{
+		OperatorID: operator.ID,
+		UserID:     userID,
+		Name:       operator.Name,
+		Status:     constants.OperatorStatusActive,
+	})
 
 	// Fetch trust bundle
 	hubBundle, err := s.pki.GatewayTrustBundle()

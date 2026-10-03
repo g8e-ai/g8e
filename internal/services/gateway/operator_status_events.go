@@ -26,9 +26,9 @@ const operatorStatusProducerID = "g8e-gateway-operator-status"
 // operatorStatusEvents maps each Operator status the Gateway pushes to the
 // status.updated event that announces the transition into it. Bound and
 // unbound transitions are published by g8ee after the session bind and are not
-// Gateway-originated, so they are absent. So is offline: the Gateway only
-// creates an Operator offline (an unenrolled slot) and never moves one there,
-// so there is no transition to announce.
+// Gateway-originated, so they are absent. So is offline: it is only ever the
+// status a slot is created with (RegistrationService.createSlot), never a
+// status anything transitions into, so there is no transition to announce.
 var operatorStatusEvents = map[constants.OperatorStatus]constants.EventType{
 	constants.OperatorStatusActive:     constants.EventOperatorStatusUpdatedActive,
 	constants.OperatorStatusStale:      constants.EventOperatorStatusUpdatedStale,

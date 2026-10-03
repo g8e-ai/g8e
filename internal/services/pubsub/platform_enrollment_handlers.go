@@ -468,6 +468,10 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	if err := h.supersedeOperatorLeases(user.ID, req.SystemFingerprint, operatorID); err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("supersede prior operator leases: %w", err)
 	}
+	// Announce the enrollment so an already-connected browser session sees
+	// the new Operator over SSE instead of only on its next reload or the
+	// next unrelated status event's debounced re-list.
+	h.deps.DocStore.NotifyOperatorEnrolled(operatorID, user.ID, req.Hostname)
 
 	creds := &models.PlatformEnrollmentOperatorCredentials{
 		OperatorCert:      operatorCertPEM,

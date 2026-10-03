@@ -30,6 +30,12 @@ type PlatformEnrollmentDocStore interface {
 	DocConditionalUpdate(collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error)
 	DocUpdate(collection, id string, data json.RawMessage) (*models.Document, error)
 	DocDelete(collection, id string) error
+	// NotifyOperatorEnrolled announces a just-persisted Operator document as
+	// newly active, so a browser session already connected over SSE sees the
+	// Operator without waiting for a later status transition or a manual
+	// reload. Defined with primitive args (rather than the gateway package's
+	// OperatorStatusTransition) so this interface does not import gateway.
+	NotifyOperatorEnrolled(operatorID, userID, name string)
 }
 
 // PlatformEnrollmentPKI is the PKI subset required by the platform
