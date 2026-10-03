@@ -43,9 +43,6 @@ func newOllamaMaintenanceEnv(t *testing.T, endpoint string) *ollamaMaintenanceEn
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	cfg.Inference.OllamaEndpoint = endpoint
-	cfg.Inference.PrimaryModel = "alias-one:latest"
-	cfg.Inference.AssistantModel = ""
-	cfg.Inference.LiteModel = "alias-two:latest"
 	client := pubsubtest.NewMockOperatorPubSubClient()
 	svc := NewOllamaMaintenanceService(cfg, testutil.NewTestLogger(), client)
 	audit := &mockAuditStore{}
@@ -152,20 +149,6 @@ func TestOllamaMaintenanceService_HandleInventoryRequest_PublishesTypedInventory
 	assert.Equal(t, []string{"completion", "tools"}, result.Entries[0].AdvertisedCapabilities)
 	assert.Equal(t, "alias-two:latest", result.Entries[1].ServedModelTag, "distinct served tags must stay distinct entries")
 	assert.Equal(t, ollamaTestDigestB, result.Entries[1].ModelDigest)
-}
-
-func TestOllamaMaintenanceService_HandleInventoryRequest_ReportsOperatorRoleBindings(t *testing.T) {
-	env := newOllamaMaintenanceEnv(t, fakeOllama(t, ollamaInventoryRoutes()))
-
-	env.svc.HandleInventoryRequest(t.Context(), ollamaInventoryMessage(t, "exec-roles"))
-
-	var result operatorv1.OllamaModelInventoryResult
-	env.publishedResult(t, &result)
-	require.Len(t, result.RoleBindings, 2, "roles with no configured model must be omitted")
-	assert.Equal(t, operatorv1.ModelRole_MODEL_ROLE_PRIMARY, result.RoleBindings[0].Role)
-	assert.Equal(t, "alias-one:latest", result.RoleBindings[0].ServedModelTag)
-	assert.Equal(t, operatorv1.ModelRole_MODEL_ROLE_LITE, result.RoleBindings[1].Role)
-	assert.Equal(t, "alias-two:latest", result.RoleBindings[1].ServedModelTag)
 }
 
 func TestOllamaMaintenanceService_HandleInventoryRequest_ExecutionIDFallsBackToMessageID(t *testing.T) {

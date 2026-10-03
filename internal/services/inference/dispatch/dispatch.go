@@ -383,10 +383,12 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 
 	// Decode the InferenceResult from the result envelope's payload.
 	if len(result.ResultPayload) == 0 {
+		s.finalizeFailedAttempt(ctx, req, result.TransactionID, attemptStartedAt)
 		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceResultDecode)
 	}
 	infResult := &operatorv1.InferenceResult{}
 	if err := proto.Unmarshal(result.ResultPayload, infResult); err != nil {
+		s.finalizeFailedAttempt(ctx, req, result.TransactionID, attemptStartedAt)
 		return nil, fmt.Errorf("inference dispatch: %w: %w", constants.ErrInferenceResultDecode, err)
 	}
 	if err := validateInferenceResult(infResult, req); err != nil {
@@ -523,6 +525,7 @@ func validateInferenceResult(result *operatorv1.InferenceResult, req DispatchInf
 		return constants.ErrInferenceProviderResponseInvalid
 	}
 	if result.GetProviderAttemptId() != req.ProviderAttemptID ||
+		result.GetModel() != result.GetRequestedModel() ||
 		(req.Model != "" && result.GetRequestedModel() != req.Model) ||
 		result.GetCampaignId() != req.CampaignID ||
 		result.GetRunId() != req.RunID ||

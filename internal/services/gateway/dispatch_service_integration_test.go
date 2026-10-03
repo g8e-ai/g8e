@@ -484,9 +484,6 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 	remoteCfg.OperatorSessionId = sessionID
 	remoteCfg.HeartbeatInterval = 0
 	remoteCfg.Inference.Enabled = true
-	remoteCfg.Inference.PrimaryModel = "primary-boundary"
-	remoteCfg.Inference.AssistantModel = "assistant-boundary"
-	remoteCfg.Inference.LiteModel = "lite-boundary"
 	remoteCfg.Inference.KeepAlive = "-1"
 
 	backend := &boundaryInferenceBackend{}
@@ -827,6 +824,7 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_VerifiesReceiptAuditAnd
 		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "primary-boundary",
 		Messages:                boundaryInferenceMessages("boundary prompt"),
 		TargetOperatorSessionID: "session-inference-boundary",
 		RequestorUserID:         userID,
@@ -890,6 +888,7 @@ func TestInferenceDispatch_HTTPRouterAppMTLSIdentityTraversesRealBrokerAndOutbou
 	body, err := protojson.Marshal(&operatorv1.InferenceDispatchRequest{
 		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		Role:                    operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
+		Model:                   "assistant-boundary",
 		Messages:                boundaryInferenceMessages("HTTP mTLS boundary"),
 		ProviderAttemptId:       "provider-attempt-http",
 		TargetOperatorSessionId: sessionID,
@@ -937,6 +936,7 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_RoutesAllModelRoles(t *
 				RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 				ProviderAttemptID:       "provider-attempt-integration",
 				Role:                    test.role,
+				Model:                   test.wantModel,
 				Messages:                boundaryInferenceMessages(test.name),
 				TargetOperatorSessionID: sessionID,
 				RequestorUserID:         userID,
@@ -967,6 +967,7 @@ func TestInferenceDispatch_TwoActiveSessions_ExplicitTargetReceivesOnlySelectedR
 		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "primary-boundary",
 		Messages:                boundaryInferenceMessages("selected operator only"),
 		TargetOperatorSessionID: "session-inference-b",
 		RequestorUserID:         userID,
@@ -1036,6 +1037,7 @@ func TestInferenceDispatch_RealStoresRejectInvalidSessionSelectionBeforeBackendI
 				RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 				ProviderAttemptID:       "provider-attempt-integration",
 				Role:                    models.InferenceModelRolePrimary,
+				Model:                   "primary-boundary",
 				Messages:                boundaryInferenceMessages("must not reach backend"),
 				TargetOperatorSessionID: test.target,
 				RequestorUserID:         userID,
@@ -1082,6 +1084,7 @@ func TestInferenceDispatch_CallerCancellationRemovesHandlerWhileRemoteExecutionC
 			RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 			ProviderAttemptID:       "provider-attempt-integration",
 			Role:                    models.InferenceModelRolePrimary,
+			Model:                   "primary-boundary",
 			Messages:                boundaryInferenceMessages("complete after caller cancellation"),
 			TargetOperatorSessionID: sessionID,
 			RequestorUserID:         userID,
@@ -1137,6 +1140,7 @@ func TestInferenceDispatch_StreamingProgressReconcilesToTerminalOutputHash(t *te
 		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "primary-boundary",
 		Messages:                boundaryInferenceMessages("streaming progress reconciliation"),
 		TargetOperatorSessionID: sessionID,
 		RequestorUserID:         userID,
@@ -1172,6 +1176,7 @@ func TestInferenceDispatch_StreamingProgressHashMismatchFailsClosed(t *testing.T
 		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "primary-boundary",
 		Messages:                boundaryInferenceMessages("streaming progress mismatch"),
 		TargetOperatorSessionID: sessionID,
 		RequestorUserID:         userID,
@@ -1197,6 +1202,7 @@ func TestInferenceDispatch_ResultMutatedAfterDigestComputationFailsClosed(t *tes
 		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "primary-boundary",
 		Messages:                boundaryInferenceMessages("digest substitution boundary"),
 		TargetOperatorSessionID: sessionID,
 		RequestorUserID:         userID,
@@ -1245,6 +1251,7 @@ func TestInferenceDispatch_ReplayedEnvelopeIsRejectedWithoutSecondBackendInvocat
 		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "primary-boundary",
 		Messages:                boundaryInferenceMessages("invoke exactly once"),
 		TargetOperatorSessionID: sessionID,
 		RequestorUserID:         userID,
@@ -1295,6 +1302,7 @@ func TestInferenceDispatch_NotaryPostureRejectsMutationBeforeBackendInvocation(t
 		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "primary-boundary",
 		Messages:                boundaryInferenceMessages("notary must reject"),
 		TargetOperatorSessionID: sessionID,
 		RequestorUserID:         userID,

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/stretchr/testify/assert"
@@ -31,58 +30,27 @@ func (nilStatusBackend) Status(ctx context.Context) (*models.BackendStatus, erro
 	return nil, nil
 }
 
-func readinessTestConfig() config.InferenceConfig {
-	return config.InferenceConfig{
-		Enabled:        true,
-		PrimaryModel:   "gemma3:4b",
-		AssistantModel: "llama3.2:3b",
-		LiteModel:      "qwen3:1.5b",
-	}
+func TestVerifyProviderReady_AvailableProviderPasses(t *testing.T) {
+	t.Parallel()
+	backend := &stubBackend{statusResp: &models.BackendStatus{Available: true}}
+
+	err := VerifyProviderReady(context.Background(), backend)
+	require.NoError(t, err, "the Operator configures no models, so readiness verifies only the provider")
 }
 
-func TestVerifyProviderReady_ConfiguredModelsPresent(t *testing.T) {
+func TestVerifyProviderReady_ProviderWithoutModelsPasses(t *testing.T) {
 	t.Parallel()
-	backend := &stubBackend{statusResp: &models.BackendStatus{
-		Available: true,
-		Models:    []string{"gemma3:4b", "llama3.2:3b", "qwen3:1.5b"},
-	}}
+	backend := &stubBackend{statusResp: &models.BackendStatus{Available: true, Models: []string{}}}
 
-	err := VerifyProviderReady(context.Background(), backend, readinessTestConfig())
-	require.NoError(t, err)
-}
-
-func TestVerifyProviderReady_UntaggedModelMatchesLatestTag(t *testing.T) {
-	t.Parallel()
-	backend := &stubBackend{statusResp: &models.BackendStatus{
-		Available: true,
-		Models:    []string{"gemma3:latest", "llama3.2:3b", "qwen3:1.5b"},
-	}}
-	cfg := readinessTestConfig()
-	cfg.PrimaryModel = "gemma3"
-
-	err := VerifyProviderReady(context.Background(), backend, cfg)
-	require.NoError(t, err, "Ollama resolves an untagged model name to :latest; readiness must match the provider's resolution")
-}
-
-func TestVerifyProviderReady_MissingConfiguredModelReturnsErrInferenceModelNotFound(t *testing.T) {
-	t.Parallel()
-	backend := &stubBackend{statusResp: &models.BackendStatus{
-		Available: true,
-		Models:    []string{"gemma3:4b", "qwen3:1.5b"},
-	}}
-
-	err := VerifyProviderReady(context.Background(), backend, readinessTestConfig())
-
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInferenceModelNotFound)
-	assert.Contains(t, err.Error(), "llama3.2:3b", "the error must name the missing configured model")
+	err := VerifyProviderReady(context.Background(), backend)
+	require.NoError(t, err, "a model the provider lacks fails the request that names it, not Operator startup")
 }
 
 func TestVerifyProviderReady_UnreachableProviderPropagatesUnavailable(t *testing.T) {
 	t.Parallel()
 	backend := &stubBackend{statusErr: constants.ErrInferenceBackendUnavailable}
 
-	err := VerifyProviderReady(context.Background(), backend, readinessTestConfig())
+	err := VerifyProviderReady(context.Background(), backend)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInferenceBackendUnavailable)
@@ -92,7 +60,7 @@ func TestVerifyProviderReady_MalformedStatusPropagatesInvalid(t *testing.T) {
 	t.Parallel()
 	backend := &stubBackend{statusErr: constants.ErrInferenceProviderResponseInvalid}
 
-	err := VerifyProviderReady(context.Background(), backend, readinessTestConfig())
+	err := VerifyProviderReady(context.Background(), backend)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
@@ -102,7 +70,7 @@ func TestVerifyProviderReady_UnavailableStatusReturnsErrInferenceBackendUnavaila
 	t.Parallel()
 	backend := &stubBackend{statusResp: &models.BackendStatus{Available: false}}
 
-	err := VerifyProviderReady(context.Background(), backend, readinessTestConfig())
+	err := VerifyProviderReady(context.Background(), backend)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInferenceBackendUnavailable)
@@ -111,7 +79,7 @@ func TestVerifyProviderReady_UnavailableStatusReturnsErrInferenceBackendUnavaila
 func TestVerifyProviderReady_NilStatusReturnsErrInferenceBackendUnavailable(t *testing.T) {
 	t.Parallel()
 
-	err := VerifyProviderReady(context.Background(), nilStatusBackend{}, readinessTestConfig())
+	err := VerifyProviderReady(context.Background(), nilStatusBackend{})
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInferenceBackendUnavailable)
@@ -120,20 +88,8 @@ func TestVerifyProviderReady_NilStatusReturnsErrInferenceBackendUnavailable(t *t
 func TestVerifyProviderReady_NilBackendFailsClosed(t *testing.T) {
 	t.Parallel()
 
-	err := VerifyProviderReady(context.Background(), nil, readinessTestConfig())
+	err := VerifyProviderReady(context.Background(), nil)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInferenceBackendNotRegistered)
-}
-
-func TestVerifyProviderReady_NoConfiguredModelsPasses(t *testing.T) {
-	t.Parallel()
-	backend := &stubBackend{statusResp: &models.BackendStatus{Available: true}}
-	cfg := readinessTestConfig()
-	cfg.PrimaryModel = ""
-	cfg.AssistantModel = ""
-	cfg.LiteModel = ""
-
-	err := VerifyProviderReady(context.Background(), backend, cfg)
-	require.NoError(t, err, "unconfigured roles fail closed at request time; readiness only verifies configured models")
 }

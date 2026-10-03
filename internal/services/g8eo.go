@@ -344,10 +344,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 			return fmt.Errorf("g8eo: inference attempt store: %w", err)
 		}
 		vs.logger.Info("Inference backend initialized",
-			"endpoint", vs.config.Inference.OllamaEndpoint,
-			"primary_model", vs.config.Inference.PrimaryModel,
-			"assistant_model", vs.config.Inference.AssistantModel,
-			"lite_model", vs.config.Inference.LiteModel)
+			"endpoint", vs.config.Inference.OllamaEndpoint)
 	}
 
 	var providerBoundaryObserver *provider_observer.Handler
@@ -503,24 +500,21 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 // verifyInferenceProvider builds the HTTP client to the remote Ollama provider
 // and runs the read-only readiness check against it. It fails closed when the
-// provider is unreachable, responds with a malformed status, or lacks a
-// configured role model. The check can block for inference.ProviderStatusTimeout
+// provider is unreachable or responds with a malformed status. The Operator
+// configures no models, so none is checked. The check can block for inference.ProviderStatusTimeout
 // against an unreachable host, so the endpoint and bound are logged before the
 // call to make a stalled startup attributable from the log alone.
 func (vs *G8eoService) verifyInferenceProvider(ctx context.Context) (*inference.OllamaBackend, error) {
 	icfg := vs.config.Inference
 	vs.logger.Info("Verifying inference provider readiness",
 		"endpoint", icfg.OllamaEndpoint,
-		"timeout", inference.ProviderStatusTimeout,
-		"primary_model", icfg.PrimaryModel,
-		"assistant_model", icfg.AssistantModel,
-		"lite_model", icfg.LiteModel)
+		"timeout", inference.ProviderStatusTimeout)
 
 	backend, err := inference.NewOllamaBackend(icfg.OllamaEndpoint, vs.logger)
 	if err != nil {
 		return nil, fmt.Errorf("g8eo: inference backend: %w", err)
 	}
-	if err := inference.VerifyProviderReady(ctx, backend, icfg); err != nil {
+	if err := inference.VerifyProviderReady(ctx, backend); err != nil {
 		return nil, fmt.Errorf("g8eo: %w", err)
 	}
 	vs.logger.Info("Inference provider ready", "endpoint", icfg.OllamaEndpoint)

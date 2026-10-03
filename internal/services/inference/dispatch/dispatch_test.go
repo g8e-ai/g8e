@@ -467,6 +467,7 @@ func TestDispatchInference_ResultIdentityMismatchFailsClosed(t *testing.T) {
 	}{
 		{name: "provider attempt", mutate: func(result *operatorv1.InferenceResult) { result.ProviderAttemptId = "other-attempt" }},
 		{name: "requested model", mutate: func(result *operatorv1.InferenceResult) { result.RequestedModel = "other-model" }},
+		{name: "served model", mutate: func(result *operatorv1.InferenceResult) { result.Model = "other-model" }},
 		{name: "campaign", mutate: func(result *operatorv1.InferenceResult) { result.CampaignId = "other-campaign" }},
 		{name: "model digest", mutate: func(result *operatorv1.InferenceResult) { result.RequestedModelDigest = "bb" + strings.Repeat("0", 62) }},
 		{name: "model registry digest", mutate: func(result *operatorv1.InferenceResult) { result.ModelRegistryDigest = strings.Repeat("b", 64) }},
@@ -608,6 +609,23 @@ type stubObservationNotifier struct {
 	finalizeErr   error
 	beginCalls    int
 	finalizeCalls int
+}
+
+func TestDispatchInference_UndecodableResultFinalizesObservation(t *testing.T) {
+	for _, payload := range [][]byte{nil, {0xff, 0xff, 0xff}} {
+		t.Run(fmt.Sprintf("payload_%x", payload), func(t *testing.T) {
+			dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{
+				TransactionID: "tx-1", ResultPayload: payload,
+			}}
+			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-inf")}}, testLogger())
+			notifier := &stubObservationNotifier{}
+			svc.SetProviderObservationNotifier(notifier)
+			_, err := svc.DispatchInference(context.Background(), baseRequest())
+			require.ErrorIs(t, err, constants.ErrInferenceResultDecode)
+			assert.Equal(t, 1, notifier.beginCalls)
+			assert.Equal(t, 1, notifier.finalizeCalls)
+		})
+	}
 }
 
 func (s *stubObservationNotifier) NotifyAttemptBegin(_ context.Context, _, _ string, _ int64, _ uint32) error {

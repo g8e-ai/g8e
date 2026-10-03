@@ -61,9 +61,6 @@ type ServeOperatorOptions struct {
 	// Node calling the configured remote Ollama provider.
 	InferenceEnabled        bool
 	InferenceOllamaEndpoint string
-	InferencePrimaryModel   string
-	InferenceAssistantModel string
-	InferenceLiteModel      string
 	InferenceKeepAlive      string
 
 	ProviderBoundaryObserverEnabled bool
@@ -256,9 +253,6 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 
 		InferenceEnabled:        opts.InferenceEnabled,
 		InferenceOllamaEndpoint: opts.InferenceOllamaEndpoint,
-		InferencePrimaryModel:   opts.InferencePrimaryModel,
-		InferenceAssistantModel: opts.InferenceAssistantModel,
-		InferenceLiteModel:      opts.InferenceLiteModel,
 		InferenceKeepAlive:      opts.InferenceKeepAlive,
 
 		ProviderBoundaryObserverEnabled: opts.ProviderBoundaryObserverEnabled,

@@ -168,36 +168,31 @@ func TestG8eoService_Start_InferenceReadinessGate(t *testing.T) {
 	tests := []struct {
 		name      string
 		endpoint  func(t *testing.T) string
-		primary   string
 		wantErr   error
 		wantReady bool
 	}{
 		{
-			name: "provider reachable and configured model installed",
+			name: "provider reachable",
 			endpoint: func(t *testing.T) string {
 				return fakeOllamaWithModels(t, `{"models":[{"name":"qwen3:4b","digest":"sha256:aa"}]}`, http.StatusOK)
 			},
-			primary:   "qwen3:4b",
 			wantReady: true,
 		},
 		{
-			name: "provider reachable but configured model missing",
+			name: "provider reachable with no models installed",
 			endpoint: func(t *testing.T) string {
-				return fakeOllamaWithModels(t, `{"models":[{"name":"other:1b","digest":"sha256:aa"}]}`, http.StatusOK)
+				return fakeOllamaWithModels(t, `{"models":[]}`, http.StatusOK)
 			},
-			primary: "qwen3:4b",
-			wantErr: constants.ErrInferenceModelNotFound,
+			wantReady: true,
 		},
 		{
 			name:     "provider unavailable",
 			endpoint: func(t *testing.T) string { return fakeOllamaWithModels(t, "", http.StatusServiceUnavailable) },
-			primary:  "qwen3:4b",
 			wantErr:  constants.ErrInferenceBackendUnavailable,
 		},
 		{
 			name:     "provider endpoint is invalid",
 			endpoint: func(*testing.T) string { return "not-a-url" },
-			primary:  "qwen3:4b",
 			wantErr:  constants.ErrInferenceEndpointInvalid,
 		},
 	}
@@ -205,7 +200,7 @@ func TestG8eoService_Start_InferenceReadinessGate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			endpoint := tt.endpoint(t)
 			service := newStartableG8eoService(t, func(cfg *config.Config) {
-				cfg.Inference = config.InferenceConfig{Enabled: true, OllamaEndpoint: endpoint, PrimaryModel: tt.primary}
+				cfg.Inference = config.InferenceConfig{Enabled: true, OllamaEndpoint: endpoint}
 			})
 
 			err := startWithTimeout(t, service)
@@ -231,7 +226,7 @@ func TestG8eoService_Start_InferenceProviderFailureDoesNotClaimSession(t *testin
 	endpoint := fakeOllamaWithModels(t, "", http.StatusServiceUnavailable)
 	service := newStartableG8eoService(t, func(cfg *config.Config) {
 		cfg.HTTPSPort = 1
-		cfg.Inference = config.InferenceConfig{Enabled: true, OllamaEndpoint: endpoint, PrimaryModel: "qwen3:4b"}
+		cfg.Inference = config.InferenceConfig{Enabled: true, OllamaEndpoint: endpoint}
 	})
 
 	sessionBefore := service.config.OperatorSessionId

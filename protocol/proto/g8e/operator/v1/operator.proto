@@ -811,23 +811,14 @@ message ProviderModelInventoryEntry {
   repeated string advertised_capabilities = 10;
 }
 
-// InferenceRoleBinding is the Inference Operator's authoritative binding of one
-// chat-tier role to the model it serves for that role. Callers (g8ee) learn
-// role models from the Operator; they never choose them.
-message InferenceRoleBinding {
-  ModelRole role = 1;
-  string served_model_tag = 2;
-}
-
 message OllamaModelInventoryResult {
   string execution_id = 1;
   ExecutionStatus status = 2;
   repeated ProviderModelInventoryEntry entries = 3;
   string error_message = 4;
   string error_type = 5;
-  // role_bindings lists the Operator's configured Primary/Assistant/Lite
-  // models. Each served_model_tag matches an entry in entries when installed.
-  repeated InferenceRoleBinding role_bindings = 6;
+  reserved 6;
+  reserved "role_bindings";
 }
 
 message OllamaModelResidencyRequested {

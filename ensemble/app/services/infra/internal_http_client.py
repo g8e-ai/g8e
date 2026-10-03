@@ -5,6 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import codecs
 import logging
 from collections.abc import AsyncIterator
 
@@ -541,6 +542,7 @@ class InternalHttpClient:
         """POST a streaming governed inference dispatch and yield NDJSON frames."""
         self._ensure_mtls()
         request.stream = True
+        decoder = codecs.getincrementaldecoder("utf-8")()
         buffer = ""
         try:
             async for chunk in self._http.stream(
@@ -553,7 +555,7 @@ class InternalHttpClient:
                 ),
                 timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
             ):
-                buffer += chunk.decode("utf-8")
+                buffer += decoder.decode(chunk)
                 while "\n" in buffer:
                     line, buffer = buffer.split("\n", 1)
                     if not line.strip():
@@ -561,6 +563,11 @@ class InternalHttpClient:
                     frame = InferenceDispatchStreamFrame()
                     json_format.Parse(line, frame)
                     yield frame
+            buffer += decoder.decode(b"", final=True)
+            if buffer.strip():
+                frame = InferenceDispatchStreamFrame()
+                json_format.Parse(buffer.strip(), frame)
+                yield frame
         except NetworkError:
             raise
         except Exception as e:
@@ -569,8 +576,3 @@ class InternalHttpClient:
                 component=G8EE_COMPONENT,
                 cause=e,
             ) from e
-
-        if buffer.strip():
-            frame = InferenceDispatchStreamFrame()
-            json_format.Parse(buffer.strip(), frame)
-            yield frame

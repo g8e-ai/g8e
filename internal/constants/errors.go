@@ -1490,7 +1490,7 @@ var (
 	ErrProvenanceOperatorAmbiguous        = errors.New("provenance operator: multiple provenance operator sessions; explicit target required")
 	ErrProvenanceOperatorNotCapable       = errors.New("provenance operator: target operator session is not a provenance operator")
 	ErrModelProvenanceDigestMismatch      = errors.New("model provenance: observed model digest does not match expected digest")
-	ErrInferenceModelOverrideDenied       = errors.New("inference: model override not permitted by role authority")
+	ErrInferenceModelOverrideDenied       = errors.New("inference: model not permitted by the frozen campaign registry")
 	ErrInferenceModelTagInvalid           = errors.New("inference: served model tag is invalid")
 	ErrInferenceOutcomeUnknown            = errors.New("inference: dispatch deadline exceeded; remote provider outcome unknown")
 	ErrInferenceGovernanceRejected        = errors.New("inference: governance rejected the transaction")
