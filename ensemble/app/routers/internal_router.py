@@ -1565,7 +1565,9 @@ async def list_llm_models(
     its typed inventory command; caller-supplied endpoint and key are ignored.
     """
     if request.provider is LLMProvider.G8E:
-        return await list_governed_models(gateway_operator_client, g8e_context, request.role)
+        return LLMModelListResponse(
+            models=await list_governed_models(gateway_operator_client, g8e_context)
+        )
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
     stored_endpoint, stored_key = stored_connection(
         user_settings.llm, request.role, request.provider

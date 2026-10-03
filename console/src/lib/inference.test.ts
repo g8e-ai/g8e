@@ -16,10 +16,9 @@ import {
 import type { LlmProviderOption, LlmSettings } from './types';
 
 const unset = { provider: null, model: null, endpoint: null, api_key_set: false };
-const openai: LlmProviderOption = { provider: 'openai', label: 'OpenAI', endpoint: 'optional', api_key: 'required', model: 'required', lists_models: true };
-const ollama: LlmProviderOption = { provider: 'ollama', label: 'Ollama', endpoint: 'optional', api_key: 'optional', model: 'required', lists_models: true };
-const g8e: LlmProviderOption = { provider: 'g8e', label: 'g8e governed inference', endpoint: 'none', api_key: 'none', model: 'none', lists_models: true };
-const g8eRole = { provider: 'g8e', model: null, endpoint: null, api_key_set: false };
+const openai: LlmProviderOption = { provider: 'openai', label: 'OpenAI', endpoint: 'optional', api_key: 'required', lists_models: true };
+const ollama: LlmProviderOption = { provider: 'ollama', label: 'Ollama', endpoint: 'optional', api_key: 'optional', lists_models: true };
+const g8e: LlmProviderOption = { provider: 'g8e', label: 'g8e governed inference', endpoint: 'none', api_key: 'none', lists_models: true };
 
 function settings(over: Partial<LlmSettings> = {}): LlmSettings {
   return {
@@ -65,14 +64,15 @@ describe('inference form', () => {
 
   it('requires a primary provider and a model for every set role', () => {
     const form = formFromSettings(settings({ primary: unset, lite: { provider: 'ollama', model: '', endpoint: null, api_key_set: false } }));
-    expect(Object.keys(formErrors(form, settings())).sort()).toEqual(['lite', 'primary']);
+    expect(Object.keys(formErrors(form)).sort()).toEqual(['lite', 'primary']);
   });
 
-  it('does not ask for a model when the provider binds it (g8e)', () => {
-    const s = settings({ primary: g8eRole, lite: g8eRole });
-    const form = formFromSettings(s);
-    expect(formErrors(form, s)).toEqual({});
-    expect(updateBody(form).primary).toEqual({ provider: 'g8e', model: null, endpoint: null });
+  it('asks for a model on a g8e role like on any other provider', () => {
+    const s = settings({ primary: { provider: 'g8e', model: '', endpoint: null, api_key_set: false } });
+    expect(Object.keys(formErrors(formFromSettings(s)))).toEqual(['primary']);
+    const chosen = settings({ primary: { provider: 'g8e', model: 'qwen3:4b', endpoint: null, api_key_set: false } });
+    expect(formErrors(formFromSettings(chosen))).toEqual({});
+    expect(updateBody(formFromSettings(chosen)).primary).toEqual({ provider: 'g8e', model: 'qwen3:4b', endpoint: null });
   });
 
   it('warns about a required key that is neither stored nor typed', () => {
@@ -92,18 +92,17 @@ describe('effective role', () => {
     expect(effectiveRole(settings(), 'lite')).toEqual({ provider: 'ollama', model: 'gemma4:e4b', inherited: true });
   });
 
-  it('is configured only when primary has a provider and a model, or a provider that binds it', () => {
+  it('is configured only when primary has a provider and a model', () => {
     expect(isConfigured(settings())).toBe(true);
     expect(isConfigured(settings({ primary: unset }))).toBe(false);
     expect(isConfigured(settings({ primary: { ...unset, provider: 'ollama' } }))).toBe(false);
-    expect(isConfigured(settings({ primary: g8eRole }))).toBe(true);
     expect(isConfigured(null)).toBe(false);
   });
 
-  it('labels a g8e role model as the Inference Operator model', () => {
-    const s = settings({ primary: g8eRole });
-    expect(roleModelLabel(s, 'primary')).toBe('Inference Operator model');
-    expect(roleModelLabel(s, 'lite')).toBe('Inference Operator model');
+  it('labels a role with the model the user chose, g8e included', () => {
+    const s = settings({ primary: { provider: 'g8e', model: 'qwen3:4b', endpoint: null, api_key_set: false } });
+    expect(roleModelLabel(s, 'primary')).toBe('qwen3:4b');
+    expect(roleModelLabel(s, 'lite')).toBe('qwen3:4b');
     expect(roleModelLabel(settings(), 'lite')).toBe('gemma4:e4b');
   });
 });

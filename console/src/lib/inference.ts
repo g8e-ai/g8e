@@ -3,9 +3,9 @@
 
 // Per-role model selection. The ensemble stores one provider, model, endpoint,
 // and API key per role and reads them on every chat request, so a saved change
-// applies to the next message. Keys are write-only from the console. A provider
-// whose option has model 'none' (g8e) binds each role's model itself, so the
-// role stores no model and the console shows the binding read-only.
+// applies to the next message. Keys are write-only from the console. Every
+// provider, g8e included, stores the model the user picks: the Inference Operator
+// is a worker and never decides it.
 
 import type { LlmProviderOption, LlmRole, LlmRoleView, LlmSettings } from './types';
 
@@ -66,11 +66,6 @@ export function providerOption(settings: LlmSettings | null, provider: string): 
   return settings?.providers.find((p) => p.provider === provider);
 }
 
-/** The provider binds the role's model itself (g8e: the Inference Operator's role bindings). */
-export function providerBindsModel(settings: LlmSettings | null, provider: string | null): boolean {
-  return Boolean(provider) && providerOption(settings, provider ?? '')?.model === 'none';
-}
-
 export function updateBody(form: InferenceForm): InferenceUpdateBody {
   const role = (f: RoleForm): RoleUpdateBody => {
     if (!f.provider) return { provider: null, model: null, endpoint: null };
@@ -83,13 +78,13 @@ export function updateBody(form: InferenceForm): InferenceUpdateBody {
 }
 
 /** Problems that block saving, keyed by role. */
-export function formErrors(form: InferenceForm, settings: LlmSettings): Partial<Record<LlmRole, string>> {
+export function formErrors(form: InferenceForm): Partial<Record<LlmRole, string>> {
   const errors: Partial<Record<LlmRole, string>> = {};
   for (const role of ROLES) {
     const f = form[role];
     if (!f.provider) {
       if (role === 'primary') errors[role] = 'Choose a provider for the primary role.';
-    } else if (!providerBindsModel(settings, f.provider) && !f.model.trim()) {
+    } else if (!f.model.trim()) {
       errors[role] = 'Choose a model.';
     }
   }
@@ -134,14 +129,12 @@ export function effectiveRole(settings: LlmSettings, role: LlmRole): EffectiveRo
   return { provider: null, model: null, inherited: false };
 }
 
-/** A role's model for display: the stored model, or who binds it. */
+/** A role's model for display. */
 export function roleModelLabel(settings: LlmSettings, role: LlmRole): string {
-  const effective = effectiveRole(settings, role);
-  if (effective.model) return effective.model;
-  return providerBindsModel(settings, effective.provider) ? 'Inference Operator model' : '—';
+  return effectiveRole(settings, role).model ?? '—';
 }
 
 export function isConfigured(settings: LlmSettings | null): boolean {
   const primary = settings?.primary;
-  return Boolean(primary?.provider && (primary.model || providerBindsModel(settings, primary.provider)));
+  return Boolean(primary?.provider && primary.model);
 }

@@ -66,7 +66,7 @@ class TestApplyRoleUpdates:
             _request(
                 _ollama(),
                 assistant=_ollama(model="qwen3:4b"),
-                lite=LLMRoleUpdate(provider=LLMProvider.G8E, endpoint="ignored"),
+                lite=LLMRoleUpdate(provider=LLMProvider.G8E, model="qwen3:1.7b", endpoint="ignored"),
             ),
         )
         assert llm.primary_provider is LLMProvider.OLLAMA
@@ -75,7 +75,7 @@ class TestApplyRoleUpdates:
         assert llm.assistant_model == "qwen3:4b"
         assert llm.lite_provider is LLMProvider.G8E
         assert llm.lite_endpoint is None
-        assert llm.lite_model is None
+        assert llm.lite_model == "qwen3:1.7b"
         assert llm.resolve("primary") == (
             "ollama",
             None,
@@ -99,13 +99,17 @@ class TestApplyRoleUpdates:
         with pytest.raises(ValidationError):
             apply_role_updates(LLMSettings(), _request(_ollama(model="  ")))
 
-    def test_g8e_role_rejects_a_model_because_the_operator_binds_it(self):
-        llm = LLMSettings(primary_provider=LLMProvider.G8E)
-        with pytest.raises(ValidationError) as exc:
-            apply_role_updates(
-                llm, _request(LLMRoleUpdate(provider=LLMProvider.G8E, model="gemma4:e2b"))
-            )
-        assert exc.value.error_detail.details["constraint"] == "provider_bound"
+    def test_g8e_role_stores_the_model_the_user_chose(self):
+        llm = LLMSettings()
+        apply_role_updates(
+            llm, _request(LLMRoleUpdate(provider=LLMProvider.G8E, model="qwen3:4b"))
+        )
+        assert llm.primary_provider is LLMProvider.G8E
+        assert llm.primary_model == "qwen3:4b"
+
+    def test_g8e_role_requires_a_model(self):
+        with pytest.raises(ValidationError):
+            apply_role_updates(LLMSettings(), _request(LLMRoleUpdate(provider=LLMProvider.G8E)))
 
     @pytest.mark.parametrize("provider", [LLMProvider.JEV, LLMProvider.FAKE])
     def test_rejects_providers_outside_the_console_set(self, provider):
@@ -175,15 +179,13 @@ class TestSettingsView:
         }
         assert options[LLMProvider.OLLAMA].default_endpoint == "http://ollama.lan:11434"
         assert options[LLMProvider.G8E].lists_models is True
-        assert options[LLMProvider.G8E].model == "none"
-        assert options[LLMProvider.OLLAMA].model == "required"
         assert options[LLMProvider.GEMINI].endpoint == "none"
 
-    def test_g8e_role_view_reports_no_stored_model(self):
-        llm = LLMSettings(primary_provider=LLMProvider.G8E, primary_model="stale-selection")
+    def test_g8e_role_view_reports_the_stored_model(self):
+        llm = LLMSettings(primary_provider=LLMProvider.G8E, primary_model="qwen3:4b")
         view = settings_view(llm)
         assert view.primary.provider is LLMProvider.G8E
-        assert view.primary.model is None
+        assert view.primary.model == "qwen3:4b"
 
 
 class TestStoredConnection:

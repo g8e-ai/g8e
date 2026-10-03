@@ -72,11 +72,10 @@ async def test_governed_model_list_ignores_browser_endpoint(request_context, g8e
         api_key="untrusted-key",
     )
     with patch("app.routers.internal_router.list_governed_models", new_callable=AsyncMock) as listing:
-        listing.return_value = LLMModelListResponse(models=["qwen3:4b"], bound_model="qwen3:4b")
+        listing.return_value = ["qwen3:4b"]
         result = await list_llm_models(request, settings_service, g8e_context, gateway_operator_client)
     assert result.models == ["qwen3:4b"]
-    assert result.bound_model == "qwen3:4b"
-    listing.assert_awaited_once_with(gateway_operator_client, g8e_context, "primary")
+    listing.assert_awaited_once_with(gateway_operator_client, g8e_context)
     settings_service.get_user_settings.assert_not_called()
 
 

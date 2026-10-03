@@ -24,12 +24,8 @@ from google.protobuf.message import DecodeError
 from app.constants import EventType, LLMProvider
 from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
 from app.models.http_context import G8eHttpContext
-from app.models.internal_api import LLMModelListResponse, LLMRole
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
-    MODEL_ROLE_ASSISTANT,
-    MODEL_ROLE_LITE,
-    MODEL_ROLE_PRIMARY,
     OllamaModelInventoryRequested,
     OllamaModelInventoryResult,
 )
@@ -177,33 +173,14 @@ async def request_governed_inventory(
     return result
 
 
-_PROTO_ROLES: dict[int, LLMRole] = {
-    MODEL_ROLE_PRIMARY: "primary",
-    MODEL_ROLE_ASSISTANT: "assistant",
-    MODEL_ROLE_LITE: "lite",
-}
-
-
-def role_models_from_inventory(result: OllamaModelInventoryResult) -> dict[LLMRole, str]:
-    """Return the Operator's role -> served model tag bindings."""
-    return {
-        _PROTO_ROLES[binding.role]: binding.served_model_tag
-        for binding in result.role_bindings
-        if binding.role in _PROTO_ROLES and binding.served_model_tag
-    }
-
-
 async def list_governed_models(
-    operator_client: GatewayOperatorClient, context: G8eHttpContext, role: LLMRole
-) -> LLMModelListResponse:
-    """List models at the caller's sole active, registered Inference Operator.
+    operator_client: GatewayOperatorClient, context: G8eHttpContext
+) -> list[str]:
+    """List the models served by the caller's sole active, registered Inference Operator.
 
-    bound_model is the model the Operator serves for role. Governed inference
-    always uses it; the listing is informational.
+    The user picks a role's model from this list in the Console; the Operator
+    only serves what each governed request names.
     """
     session_id = await inference_operator_session_id(operator_client, context.user_id)
     result = await request_governed_inventory(operator_client, context, session_id)
-    return LLMModelListResponse(
-        models=sorted({entry.served_model_tag for entry in result.entries if entry.served_model_tag}),
-        bound_model=role_models_from_inventory(result).get(role),
-    )
+    return sorted({entry.served_model_tag for entry in result.entries if entry.served_model_tag})

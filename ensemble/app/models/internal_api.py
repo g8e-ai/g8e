@@ -103,12 +103,6 @@ class LLMProviderOption(G8eBaseModel):
     label: str
     endpoint: FieldRequirement
     api_key: FieldRequirement
-    model: FieldRequirement = Field(
-        description=(
-            '"none" when the provider chooses each role\'s model itself (g8e: the '
-            "Inference Operator's role bindings); the role then stores no model"
-        )
-    )
     default_endpoint: str | None = Field(
         default=None, description="Endpoint used when the role leaves its endpoint empty"
     )
@@ -170,14 +164,9 @@ class LLMModelListRequest(G8eBaseModel):
 
 
 class LLMModelListResponse(G8eBaseModel):
-    """Response for /settings/llm/models.
-
-    bound_model is set only for the g8e provider: the model the Inference
-    Operator serves for the requested role. That role always uses it.
-    """
+    """Response for /settings/llm/models."""
 
     models: list[str]
-    bound_model: str | None = None
 
 
 class ChatMessageRequest(_G8eChatMessageRequest, RequestOverrides):

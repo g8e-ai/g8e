@@ -14,7 +14,6 @@ import {
   formFromSettings,
   isDirty,
   missingKey,
-  providerBindsModel,
   providerOption,
   updateBody,
   withProvider,
@@ -65,7 +64,7 @@ export function InferenceView() {
     );
   }
 
-  const errors = formErrors(form, settings);
+  const errors = formErrors(form);
   const dirty = isDirty(form, settings);
   const canSave = dirty && Object.keys(errors).length === 0 && !saving;
 
@@ -208,22 +207,12 @@ function RoleCard({ role, form, settings, error, onChange }: RoleCardProps) {
           </div>
         )}
 
-        {option &&
-          (option.model === 'none' ? (
-            <BoundModelField role={role} provider={form.provider} />
-          ) : (
-            <ModelField role={role} form={form} lists={option.lists_models} onChange={onChange} />
-          ))}
+        {option && <ModelField role={role} form={form} lists={option.lists_models} onChange={onChange} />}
       </div>
 
       {!form.provider && role !== 'primary' && (
         <div className="muted">
-          {inherited.provider && providerBindsModel(settings, inherited.provider) ? (
-            <>
-              Uses {providerOption(settings, inherited.provider)?.label ?? inherited.provider} with the Inference Operator&apos;s{' '}
-              {ROLE_INFO[role].label} model.
-            </>
-          ) : inherited.provider ? (
+          {inherited.provider ? (
             <>
               Uses <span className="mono">{inherited.model}</span> via {providerOption(settings, inherited.provider)?.label ?? inherited.provider}.
             </>
@@ -234,55 +223,6 @@ function RoleCard({ role, form, settings, error, onChange }: RoleCardProps) {
       )}
       {error && <div className="hint hint-error">{error}</div>}
     </section>
-  );
-}
-
-/**
- * The provider binds the role's model (g8e: the Inference Operator's
- * --inference-<role>-model). Shown read-only; it cannot be chosen here.
- */
-function BoundModelField({ role, provider }: { role: LlmRole; provider: string }) {
-  const [bound, setBound] = useState<string | null | undefined>(undefined);
-  const [listError, setListError] = useState<string | null>(null);
-  const fieldId = `llm-${role}-model`;
-
-  useEffect(() => {
-    let live = true;
-    setBound(undefined);
-    setListError(null);
-    api
-      .post<LlmModelList>(Paths.llmModels, { context: {}, role, provider })
-      .then((res) => {
-        if (live) setBound(res.bound_model ?? null);
-      })
-      .catch((err: unknown) => {
-        if (live) setListError(errorText(err));
-      });
-    return () => {
-      live = false;
-    };
-  }, [role, provider]);
-
-  return (
-    <div className="field field-wide">
-      <label htmlFor={fieldId}>Model</label>
-      <input
-        id={fieldId}
-        className="input mono"
-        readOnly
-        value={bound ?? ''}
-        placeholder={bound === undefined && !listError ? 'Loading…' : 'Not served'}
-      />
-      {listError ? (
-        <span className="hint hint-warn">Could not read the Inference Operator&apos;s model: {listError}</span>
-      ) : bound === null ? (
-        <span className="hint hint-warn">
-          The Inference Operator serves no {ROLE_INFO[role].label} model. Start it with --inference-{role}-model, or choose another provider.
-        </span>
-      ) : (
-        <span className="hint">Set by the Inference Operator (--inference-{role}-model).</span>
-      )}
-    </div>
   );
 }
 
@@ -311,7 +251,7 @@ function ModelField({ role, form, lists, onChange }: ModelFieldProps) {
     setListError(null);
     const f = current.current;
     try {
-      const res = await api.post<{ models?: string[] }>(Paths.llmModels, {
+      const res = await api.post<LlmModelList>(Paths.llmModels, {
         context: {},
         role,
         provider: f.provider,
