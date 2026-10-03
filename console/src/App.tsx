@@ -125,7 +125,13 @@ function Shell({ intent }: { intent: FragmentIntent }) {
         </div>
       </nav>
       <main className="main">
-        {view === 'cases' && <CasesView onManageOperators={() => setView('operators')} onManageInference={() => setView('inference')} />}
+        {view === 'cases' && (
+          <CasesView
+            onManageOperators={() => setView('operators')}
+            onManageInference={() => setView('inference')}
+            onViewApprovals={() => setView('approvals')}
+          />
+        )}
         {view === 'operators' && <OperatorsView />}
         {view === 'inference' && <InferenceView />}
         {view === 'approvals' && (

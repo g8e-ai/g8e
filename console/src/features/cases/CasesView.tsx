@@ -22,6 +22,7 @@ import {
   type TimelineState,
 } from '../../lib/timeline';
 import type { CaseSummary, ChatStartedResponse, ChatStopResponse, Investigation } from '../../lib/types';
+import { useApprovals } from '../../state/approvals';
 import { useStreamEvents } from '../../state/stream';
 import { errorText, useToast } from '../../state/toast';
 import { Composer } from './Composer';
@@ -60,19 +61,48 @@ function asInvestigations(res: unknown): Investigation[] {
   return Array.isArray(list) ? (list as Investigation[]) : [];
 }
 
-export function CasesView({ onManageOperators, onManageInference }: { onManageOperators: () => void; onManageInference: () => void }) {
+export function CasesView({
+  onManageOperators,
+  onManageInference,
+  onViewApprovals,
+}: {
+  onManageOperators: () => void;
+  onManageInference: () => void;
+  onViewApprovals?: () => void;
+}) {
   const toast = useToast();
+  const { enrollments } = useApprovals();
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [casesLoaded, setCasesLoaded] = useState(false);
+  const [ensembleStatus, setEnsembleStatus] = useState<'ready' | 'starting' | 'enrolling'>('ready');
   const [filter, setFilter] = useState('');
   const [sel, setSelState] = useState<Selection>(() => readSelection(window.location.search));
   const [caseInvestigations, setCaseInvestigations] = useState<Investigation[]>([]);
   const [timeline, setTimeline] = useState<TimelineState>(emptyTimeline);
 
+  const pendingEnrollment = useMemo(
+    () =>
+      enrollments.find(
+        (e) =>
+          (e.component_kind === 'ensemble' || e.component_name?.toLowerCase().includes('ensemble')) &&
+          e.state === 'pending',
+      ),
+    [enrollments],
+  );
+  const pendingEnrollmentRef = useRef(pendingEnrollment);
+  pendingEnrollmentRef.current = pendingEnrollment;
+
+  useEffect(() => {
+    if (pendingEnrollment && !casesLoaded) {
+      setEnsembleStatus('enrolling');
+    }
+  }, [pendingEnrollment, casesLoaded]);
+
   const selRef = useRef(sel);
   const recent = useRef<StreamEvent[]>([]);
   const keepTimelineFor = useRef<string | null>(null);
   const casesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadCasesRef = useRef<() => Promise<void>>();
 
   const setSel = useCallback((next: Selection) => {
     selRef.current = next;
@@ -80,24 +110,36 @@ export function CasesView({ onManageOperators, onManageInference }: { onManageOp
     writeSelection(next);
   }, []);
 
+  const scheduleCasesReload = useCallback((delay = 500) => {
+    if (casesTimer.current) clearTimeout(casesTimer.current);
+    casesTimer.current = setTimeout(() => void loadCasesRef.current?.(), delay);
+  }, []);
+
   const loadCases = useCallback(async () => {
     try {
       const res = await api.get<unknown>(`${Paths.investigations}?limit=100`);
       setCases(groupCases(asInvestigations(res)));
-    } catch (err) {
-      toast('error', `Could not load cases: ${errorText(err)}`);
-    } finally {
+      setEnsembleStatus('ready');
       setCasesLoaded(true);
+    } catch (err) {
+      const msg = errorText(err);
+      if (msg.toLowerCase().includes('ensemble upstream unavailable')) {
+        setEnsembleStatus(pendingEnrollmentRef.current ? 'enrolling' : 'starting');
+        scheduleCasesReload(2500);
+      } else {
+        toast('error', `Could not load cases: ${msg}`);
+        setCasesLoaded(true);
+      }
     }
-  }, [toast]);
+  }, [scheduleCasesReload, toast]);
 
-  const scheduleCasesReload = useCallback(() => {
-    if (casesTimer.current) clearTimeout(casesTimer.current);
-    casesTimer.current = setTimeout(() => void loadCases(), 500);
-  }, [loadCases]);
+  loadCasesRef.current = loadCases;
 
   useEffect(() => {
     void loadCases();
+    return () => {
+      if (casesTimer.current) clearTimeout(casesTimer.current);
+    };
   }, [loadCases]);
 
   // Load the selected case's investigations (with history) and open one.
@@ -127,7 +169,12 @@ export function CasesView({ onManageOperators, onManageInference }: { onManageOp
         }
         if (current.investigationId !== target.id) setSel({ caseId, investigationId: target.id, draft: null });
       } catch (err) {
-        if (!cancelled) toast('error', `Could not load case: ${errorText(err)}`);
+        if (!cancelled) {
+          const msg = errorText(err);
+          if (!msg.toLowerCase().includes('ensemble upstream unavailable')) {
+            toast('error', `Could not load case: ${msg}`);
+          }
+        }
       }
     })();
     return () => {
@@ -143,6 +190,8 @@ export function CasesView({ onManageOperators, onManageInference }: { onManageOp
       if (recent.current.length > RECENT_LIMIT) recent.current.shift();
     }
     if (ev.type === Ev.CaseCreated || ev.type === Ev.CaseUpdated) scheduleCasesReload();
+    if (ev.type === Ev.ApprovalsChanged) scheduleCasesReload(300);
+    if (ev.type.startsWith('g8e.v1.ai.') || ev.type.startsWith('g8e.v1.app.')) scheduleCasesReload(100);
     if (eventTargets(ev, selRef.current.investigationId)) setTimeline((t) => applyEvent(t, ev));
   });
 
@@ -266,6 +315,17 @@ export function CasesView({ onManageOperators, onManageInference }: { onManageOp
           />
         </div>
         <div className="case-items">
+          {!casesLoaded && ensembleStatus !== 'ready' && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 16px', gap: '8px', color: 'var(--muted)', textAlign: 'center' }}>
+              <div className="spinner" />
+              <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--fg)' }}>
+                {ensembleStatus === 'enrolling' ? 'Ensemble enrolling…' : 'Connecting to ensemble…'}
+              </span>
+              <span style={{ fontSize: '12px' }}>
+                {ensembleStatus === 'enrolling' ? 'Awaiting workload approval' : 'g8ee is starting up'}
+              </span>
+            </div>
+          )}
           {casesLoaded && visibleCases.length === 0 && (
             <Empty title={cases.length ? 'No matches' : 'No cases yet'}>{cases.length ? null : 'Start one with New case.'}</Empty>
           )}
@@ -333,7 +393,24 @@ export function CasesView({ onManageOperators, onManageInference }: { onManageOp
           </div>
         )}
 
-        {timeline.items.length === 0 && !timeline.busy ? (
+        {!casesLoaded && ensembleStatus !== 'ready' && timeline.items.length === 0 ? (
+          <div className="timeline">
+            <div className="empty">
+              <div className="spinner" style={{ width: 20, height: 20, marginBottom: 12 }} />
+              <strong>{ensembleStatus === 'enrolling' ? 'Ensemble enrolling' : 'Connecting to ensemble…'}</strong>
+              <span>
+                {ensembleStatus === 'enrolling'
+                  ? 'The agentic ensemble (g8ee) is enrolling with the Gateway and waiting for approval.'
+                  : 'Waiting for g8ee to finish starting up. This view will update automatically once ready.'}
+              </span>
+              {ensembleStatus === 'enrolling' && onViewApprovals && (
+                <button type="button" className="btn btn-sm btn-primary" style={{ marginTop: 12 }} onClick={onViewApprovals}>
+                  Review in Approvals
+                </button>
+              )}
+            </div>
+          </div>
+        ) : timeline.items.length === 0 && !timeline.busy ? (
           <div className="timeline">
             <Empty title={sel.draft === 'investigation' ? 'New investigation' : sel.draft === 'case' ? 'What are we investigating?' : 'No messages yet'}>
               {sel.draft === 'investigation'
@@ -346,8 +423,16 @@ export function CasesView({ onManageOperators, onManageInference }: { onManageOp
         )}
 
         <Composer
-          busy={timeline.busy}
-          placeholder={sel.draft === 'case' ? 'Describe what you are investigating…' : 'Message the ensemble…'}
+          busy={timeline.busy || (!casesLoaded && ensembleStatus !== 'ready')}
+          placeholder={
+            !casesLoaded && ensembleStatus === 'enrolling'
+              ? 'Waiting for ensemble enrollment…'
+              : !casesLoaded && ensembleStatus === 'starting'
+                ? 'Connecting to ensemble…'
+                : sel.draft === 'case'
+                  ? 'Describe what you are investigating…'
+                  : 'Message the ensemble…'
+          }
           onSend={send}
           onStop={() => void stop()}
           onManageOperators={onManageOperators}
