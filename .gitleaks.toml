@@ -45,6 +45,16 @@ paths = [
 ]
 
 [[allowlists]]
+description = "Historical dashboard settings registry: g8e_internal_*_url keys are setting names whose defaults are in-cluster URLs, not credentials"
+condition = "AND"
+paths = [
+  '''dashboard/models/settings_model\.js''',
+]
+regexes = [
+  '''^g8e_internal_[a-z_]+_url$''',
+]
+
+[[allowlists]]
 description = "Skip historical services directory (env var constants, not secrets)"
 paths = [
   '''services/.*''',
