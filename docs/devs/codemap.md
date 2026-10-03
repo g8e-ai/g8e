@@ -126,7 +126,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `test/` | Cross-package integration tests, `test/fixtures/`, and `test/e2e/`. |
 | `eval/` | Evaluation campaign inputs, `native-boundary-compose.yml`, and the eval data-layout README. The Go evaluator is `internal/services/evaluation/`, exposed by `internal/cli/cmd/eval/`. |
 | `ensemble/` | Python g8ee application. Index: [Ensemble documentation](../ensemble/index.md). |
-| `console/` | Gateway-embedded browser console (React + TypeScript). Docs: [Console Architecture](../architecture/console.md), [Console Development](../console/devs.md). |
+| `console/` | Gateway-embedded browser console (React + TypeScript). Docs: [Console Architecture & Development](../architecture/console.md). |
 | `g8e-adapter/` | Audited browser adapter and deterministic contract pack for generated observe frontends. |
 | `evaluation-explorer/` | Evaluation explorer SPA; its build is embedded in `internal/services/gateway/explorer/static`. |
 | `demos/` | Healthcare, finance, DHS, and FedRAMP demo environments. Index: [Demo index](../../demos/README.md). |
@@ -381,7 +381,7 @@ Evidence scope and signed artifacts are owned by the [Release Process](release_p
 | Component | Entry | Also |
 | --- | --- | --- |
 | Ensemble (g8ee) | `ensemble/app/main.py` | Application code in `ensemble/app/`. Tests in `ensemble/tests/`. Docs: [g8ee index](../ensemble/index.md). |
-| Console | `console/src/main.tsx` | React + TypeScript SPA; the Gateway serves its embedded build (`internal/services/gateway/console/`) at `/console/`. The browser calls only the Gateway. Tests in `console/src/**/*.test.ts(x)` and `console/tests/`. Docs: [Console Development](../console/devs.md). |
+| Console | `console/src/main.tsx` | React + TypeScript SPA; the Gateway serves its embedded build (`internal/services/gateway/console/`) at `/console/`. The browser calls only the Gateway. Tests in `console/src/**/*.test.ts(x)` and `console/tests/`. Docs: [Console Architecture & Development](../architecture/console.md). |
 | Demos | `demos/` | Containerized services and verification scripts. CLI: `internal/cli/cmd/demos/`. Reference client: `internal/tools/agent_harness/`. |
 | Website | `website/` | Renders the root `README.md`. `make website-test`, `make website-build`. Generation policy: [Documentation Guide](docs.md#generated-outputs-inv-doc-gen). |
 
@@ -505,4 +505,4 @@ make swagger-generate
 - [AI Agents and the g8e Governance Boundary](../architecture/agents.md): ingress limits.
 - [Protocol README](../../protocol/README.md) and [Protocol Specification](../../protocol/docs/spec.md).
 - [Getting Started](../guides/getting_started.md): deployment and enrollment.
-- Component indexes: [Ensemble](../ensemble/index.md), [Console](../console/devs.md), [Demos](../../demos/README.md).
+- Component indexes: [Ensemble](../ensemble/index.md), [Console](../architecture/console.md), [Demos](../../demos/README.md).

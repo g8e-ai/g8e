@@ -330,4 +330,4 @@ make lint
 - [Governance](../architecture/governance.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md): five-layer and posture model, and ingress limits.
 - [Protocol Specification](../../protocol/docs/spec.md): wire requirements.
 - [Scripts](../architecture/scripts.md): platform setup behavior.
-- Component workflows: [Protocol README](../../protocol/README.md), [Console Development](../console/devs.md), [Ensemble Development](../ensemble/devs.md), [Ensemble Testing](../ensemble/tests.md).
+- Component workflows: [Protocol README](../../protocol/README.md), [Console Architecture & Development](../architecture/console.md), [Ensemble Development](../ensemble/devs.md), [Ensemble Testing](../ensemble/tests.md).

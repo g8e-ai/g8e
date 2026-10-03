@@ -130,4 +130,4 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 - [Documentation Guide](docs.md): documentation audit, catalog, and formatting standards.
 - [Release Process](release_process.md): native evaluation acceptance and release verification.
 - [Ensemble Testing](../ensemble/tests.md): pytest fixtures, fakes, and external credential gates.
-- [Console Development](../console/devs.md#test): Vitest, typecheck, ESLint, and embed checks.
+- [Console Architecture & Development](../architecture/console.md#test): Vitest, typecheck, ESLint, and embed checks.
