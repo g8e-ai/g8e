@@ -23,7 +23,7 @@ import {
 } from '../../lib/timeline';
 import type { CaseSummary, ChatStartedResponse, ChatStopResponse, Investigation } from '../../lib/types';
 import { useApprovals } from '../../state/approvals';
-import { useStreamEvents } from '../../state/stream';
+import { useStream, useStreamEvents } from '../../state/stream';
 import { errorText, useToast } from '../../state/toast';
 import { Composer } from './Composer';
 import { Timeline } from './Timeline';
@@ -72,6 +72,7 @@ export function CasesView({
 }) {
   const toast = useToast();
   const { enrollments } = useApprovals();
+  const { state: streamState } = useStream();
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [casesLoaded, setCasesLoaded] = useState(false);
   const [ensembleStatus, setEnsembleStatus] = useState<'ready' | 'starting' | 'enrolling'>('ready');
@@ -102,6 +103,7 @@ export function CasesView({
   const recent = useRef<StreamEvent[]>([]);
   const keepTimelineFor = useRef<string | null>(null);
   const casesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const casesRetryCount = useRef(0);
   const loadCasesRef = useRef<() => Promise<void>>();
 
   const setSel = useCallback((next: Selection) => {
@@ -121,11 +123,15 @@ export function CasesView({
       setCases(groupCases(asInvestigations(res)));
       setEnsembleStatus('ready');
       setCasesLoaded(true);
+      casesRetryCount.current = 0;
     } catch (err) {
       const msg = errorText(err);
       if (msg.toLowerCase().includes('ensemble upstream unavailable')) {
         setEnsembleStatus(pendingEnrollmentRef.current ? 'enrolling' : 'starting');
-        scheduleCasesReload(2500);
+        if (!pendingEnrollmentRef.current && casesRetryCount.current < 3) {
+          casesRetryCount.current += 1;
+          scheduleCasesReload(casesRetryCount.current * 2000);
+        }
       } else {
         toast('error', `Could not load cases: ${msg}`);
         setCasesLoaded(true);
@@ -141,6 +147,14 @@ export function CasesView({
       if (casesTimer.current) clearTimeout(casesTimer.current);
     };
   }, [loadCases]);
+
+  // Sync when SSE stream opens or reconnects
+  useEffect(() => {
+    if (streamState === 'open' && !casesLoaded) {
+      casesRetryCount.current = 0;
+      void loadCases();
+    }
+  }, [streamState, casesLoaded, loadCases]);
 
   // Load the selected case's investigations (with history) and open one.
   useEffect(() => {
@@ -190,8 +204,16 @@ export function CasesView({
       if (recent.current.length > RECENT_LIMIT) recent.current.shift();
     }
     if (ev.type === Ev.CaseCreated || ev.type === Ev.CaseUpdated) scheduleCasesReload();
-    if (ev.type === Ev.ApprovalsChanged) scheduleCasesReload(300);
-    if (ev.type.startsWith('g8e.v1.ai.') || ev.type.startsWith('g8e.v1.app.')) scheduleCasesReload(100);
+    if (ev.type === Ev.ApprovalsChanged) {
+      casesRetryCount.current = 0;
+      scheduleCasesReload(300);
+    }
+    if (ev.type.startsWith('g8e.v1.ai.') || ev.type.startsWith('g8e.v1.app.')) {
+      if (!casesLoaded) {
+        casesRetryCount.current = 0;
+        scheduleCasesReload(100);
+      }
+    }
     if (eventTargets(ev, selRef.current.investigationId)) setTimeline((t) => applyEvent(t, ev));
   });
 

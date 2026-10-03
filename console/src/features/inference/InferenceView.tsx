@@ -27,8 +27,8 @@ import { errorText, useToast } from '../../state/toast';
 
 const MANUAL = '__manual__';
 
-export function InferenceView() {
-  const { settings, loaded, error, reload, save } = useInference();
+export function InferenceView({ onViewApprovals }: { onViewApprovals?: () => void } = {}) {
+  const { settings, loaded, error, ensembleStatus, reload, save } = useInference();
   const toast = useToast();
   const [form, setForm] = useState<InferenceForm | null>(null);
   const [saving, setSaving] = useState(false);
@@ -37,6 +37,13 @@ export function InferenceView() {
   useEffect(() => {
     if (settings) setForm(formFromSettings(settings));
   }, [settings]);
+
+  // When mounting or navigating to this view, ensure settings are refreshed if not loaded yet.
+  useEffect(() => {
+    if (!settings) {
+      void reload();
+    }
+  }, [settings, reload]);
 
   if (!loaded) {
     return (
@@ -47,6 +54,38 @@ export function InferenceView() {
   }
 
   if (!settings || !form) {
+    if (ensembleStatus !== 'ready') {
+      return (
+        <div className="page">
+          <div className="page-head">
+            <div>
+              <h1>Inference</h1>
+              <p>Choose the provider and model for each role. Changes apply to the next chat message.</p>
+            </div>
+          </div>
+          <div className="empty" style={{ margin: '48px auto', textAlign: 'center', maxWidth: 480 }}>
+            <div className="spinner" style={{ width: 24, height: 24, marginBottom: 16 }} />
+            <strong>{ensembleStatus === 'enrolling' ? 'Ensemble enrolling' : 'Connecting to ensemble…'}</strong>
+            <span style={{ display: 'block', marginTop: 8, color: 'var(--muted)', fontSize: '13px' }}>
+              {ensembleStatus === 'enrolling'
+                ? 'The agentic ensemble (g8ee) is enrolling with the Gateway and waiting for approval.'
+                : 'Waiting for g8ee to finish starting up. This view will update automatically once ready.'}
+            </span>
+            {ensembleStatus === 'enrolling' && onViewApprovals && (
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                style={{ marginTop: 16 }}
+                onClick={onViewApprovals}
+              >
+                Review in Approvals
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="page">
         <div className="page-head">

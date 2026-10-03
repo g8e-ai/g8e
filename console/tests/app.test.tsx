@@ -8,6 +8,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import { Ev } from '../src/lib/events';
 import { SessionProvider } from '../src/state/session';
 import { ToastProvider } from '../src/state/toast';
 
@@ -372,6 +373,63 @@ describe('inference', () => {
     expect(await screen.findByRole('button', { name: 'No model selected — choose one' })).toBeInTheDocument();
     await user.type(screen.getByLabelText('Message'), 'hello{Enter}');
     expect(await screen.findByText('No LLM model configured.')).toBeInTheDocument();
+  });
+
+  it('shows connecting state when ensemble upstream is unavailable and auto-recovers via SSE', async () => {
+    let settingsAvailable = false;
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () =>
+        settingsAvailable
+          ? [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b', endpoint: null, api_key_set: false })]
+          : [502, { error: 'ensemble upstream unavailable' }],
+      'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b'] }],
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    renderApp();
+
+    expect(await screen.findByText('Connecting to ensemble…')).toBeInTheDocument();
+    expect(screen.queryByText(/Could not load model settings/)).toBeNull();
+
+    // Simulate ensemble becoming ready and an SSE approval event firing
+    settingsAvailable = true;
+    act(() => {
+      FakeEventSource.last?.push(1, Ev.ApprovalsChanged, { subject: 'enrollments' });
+    });
+
+    const primary = await screen.findByRole('region', { name: 'Primary' });
+    expect(primary).toBeInTheDocument();
+    expect(within(primary).getByLabelText('Model')).toHaveValue('qwen3:4b');
+  });
+
+  it('shows enrolling state when pending platform enrollment exists and links to approvals', async () => {
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () => [502, { error: 'ensemble upstream unavailable' }],
+      'GET /api/v1/auth/platform-enrollments/pending': () => [
+        200,
+        {
+          requests: [
+            {
+              request_id: 'req-1',
+              component_kind: 'ensemble',
+              component_name: 'g8ee',
+              state: 'pending',
+              expires_at: '2026-10-04T00:00:00Z',
+              created_at: '2026-10-03T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByText('Ensemble enrolling')).toBeInTheDocument();
+    const reviewBtn = screen.getByRole('button', { name: 'Review in Approvals' });
+    expect(reviewBtn).toBeInTheDocument();
+    await user.click(reviewBtn);
+
+    expect(await screen.findByRole('heading', { name: 'Approvals' })).toBeInTheDocument();
   });
 });
 

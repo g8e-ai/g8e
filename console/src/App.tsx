@@ -133,7 +133,7 @@ function Shell({ intent }: { intent: FragmentIntent }) {
           />
         )}
         {view === 'operators' && <OperatorsView />}
-        {view === 'inference' && <InferenceView />}
+        {view === 'inference' && <InferenceView onViewApprovals={() => setView('approvals')} />}
         {view === 'approvals' && (
           <ApprovalsView
             autoApproveTxHash={intent.approveTxHash}
