@@ -30,6 +30,7 @@ const (
 	relPathConsoleTS         = "console/src/generated/events.ts"
 	relPathPythonEventsJSON  = "protocol/python/g8e/_data/events.json"
 	relPathProtocolEvents    = "protocol/constants/events.json"
+	relPathProtocolStatus    = "protocol/constants/status.json"
 	relPathOperatorHierarchy = "internal/tools/constgen/operator_hierarchy.json"
 )
 

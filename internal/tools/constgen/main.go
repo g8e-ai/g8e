@@ -112,8 +112,8 @@ func main() {
 // execute validates the registries under root, then either writes the
 // generated constant files (write) or verifies the committed ones match.
 func execute(root string, write bool, stdout io.Writer) error {
-	eventsPath := filepath.Join(root, "protocol/constants/events.json")
-	statusPath := filepath.Join(root, "protocol/constants/status.json")
+	eventsPath := filepath.Join(root, relPathProtocolEvents)
+	statusPath := filepath.Join(root, relPathProtocolStatus)
 
 	events, err := loadRegistry(eventsPath)
 	if err != nil {
@@ -159,7 +159,7 @@ func findRepoRoot() (string, error) {
 		return "", err
 	}
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "protocol/constants/events.json")); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, relPathProtocolEvents)); err == nil {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)

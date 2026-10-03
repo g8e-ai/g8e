@@ -652,10 +652,10 @@ func Run(cfg Config) error {
 	fmt.Printf("Use './g8e test summary' to see aggregate results across all test runs.\n")
 	fmt.Printf("\n")
 	fmt.Printf("Test vault: %s\n", dataDir)
-	fmt.Printf("Audit DB  : %s\n", filepath.Join(dataDir, "g8e.db"))
-	fmt.Printf("Ledger    : %s\n", filepath.Join(dataDir, "ledger"))
+	fmt.Printf("Audit DB  : %s\n", filepath.Join(dataDir, constants.DbFilename))
+	fmt.Printf("Ledger    : %s\n", filepath.Join(dataDir, constants.LedgerDirname))
 	fmt.Printf("\n")
-	printDemoQueries(filepath.Join(dataDir, "g8e.db"))
+	printDemoQueries(filepath.Join(dataDir, constants.DbFilename))
 	return nil
 }
 

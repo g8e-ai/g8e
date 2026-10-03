@@ -24,32 +24,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-func GetConnectivityStatus() []models.HeartbeatNetworkInterface {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return []models.HeartbeatNetworkInterface{}
-	}
-
-	var activeInterfaces []models.HeartbeatNetworkInterface
-	for _, iface := range interfaces {
-		if iface.Flags&net.FlagUp != 0 && iface.Flags&net.FlagLoopback == 0 {
-			addrs, err := iface.Addrs()
-			if err != nil {
-				continue
-			}
-			for _, addr := range addrs {
-				if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-					activeInterfaces = append(activeInterfaces, models.HeartbeatNetworkInterface{
-						Name: iface.Name,
-						IP:   ipnet.IP.String(),
-						MTU:  iface.MTU,
-					})
-				}
-			}
-		}
-	}
-	return activeInterfaces
-}
 
 func GetNetworkLatency() float64 {
 	start := time.Now().UTC()
