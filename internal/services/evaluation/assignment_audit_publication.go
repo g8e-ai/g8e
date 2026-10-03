@@ -46,6 +46,9 @@ func AssignmentAuditProofIdempotencyKey(runID, assignmentID string) string {
 // CollectAssignmentAuditEventsFromBodies maps signed public live-event bodies
 // into audit slice rows. Only record_type "event" payloads are accepted.
 func CollectAssignmentAuditEventsFromBodies(bodies [][]byte) ([]AssignmentAuditSliceEvent, error) {
+	if len(bodies) == 0 {
+		return nil, nil
+	}
 	events := make([]AssignmentAuditSliceEvent, 0, len(bodies))
 	for _, body := range bodies {
 		if len(body) == 0 {
@@ -111,9 +114,15 @@ func (c *CampaignPublicationCoordinator) BuildAssignmentAuditBindings(
 		return nil, nil
 	}
 	bodies := collectAssignmentAuditEventBodies(liveRequests)
+	if len(bodies) == 0 {
+		return nil, nil
+	}
 	events, err := CollectAssignmentAuditEventsFromBodies(bodies)
 	if err != nil {
 		return nil, err
+	}
+	if len(events) == 0 {
+		return nil, nil
 	}
 	artifacts, err := BuildAssignmentAuditSlice(assignment.GetAssignmentId(), events)
 	if err != nil {

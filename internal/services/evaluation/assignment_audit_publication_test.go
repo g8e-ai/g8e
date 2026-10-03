@@ -162,3 +162,43 @@ func TestCollectAssignmentAuditEventBodies_SkipsProjections(t *testing.T) {
 	})
 	require.Len(t, bodies, 1)
 }
+
+func TestCollectAssignmentAuditEventsFromBodies_EmptyBodiesReturnsNil(t *testing.T) {
+	events, err := CollectAssignmentAuditEventsFromBodies(nil)
+	require.NoError(t, err)
+	assert.Nil(t, events)
+
+	events, err = CollectAssignmentAuditEventsFromBodies([][]byte{})
+	require.NoError(t, err)
+	assert.Nil(t, events)
+}
+
+func TestCampaignPublicationCoordinator_BuildAssignmentAuditBindings_EmptyLiveRequests(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	exporter := &recordingCampaignFeedExporter{}
+	proofPublisher := &recordingCampaignProofPublisher{}
+	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil).
+		WithProofPublisher(proofPublisher)
+
+	assignment := &evalv1.EvaluationAssignment{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    "assign-empty-1",
+		RunId:           "run-empty-1",
+		CampaignId:      "campaign-1",
+		ScenarioId:      "scenario-1",
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED,
+	}
+	result := &evalv1.EvaluationAssignmentResult{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    "assign-empty-1",
+		RunId:           "run-empty-1",
+		CampaignId:      "campaign-1",
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED,
+	}
+
+	bindings, err := coordinator.BuildAssignmentAuditBindings(context.Background(), assignment, result, nil, true)
+	require.NoError(t, err)
+	assert.Nil(t, bindings)
+	assert.Empty(t, proofPublisher.inputs)
+}
+

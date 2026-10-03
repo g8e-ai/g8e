@@ -174,7 +174,7 @@ export function applyEvent(state: TimelineState, ev: StreamEvent): TimelineState
     case Ev.IterationStarted:
       return { ...state, busy: true, phase: 'Working' };
     case Ev.ThinkingStarted:
-      return { ...state, busy: true, phase: 'Thinking' };
+      return { ...state, busy: true, phase: d.phase === 'end' ? 'Working' : 'Thinking' };
     case Ev.ThinkingEnd:
       return { ...state, phase: 'Working' };
     case Ev.ConsensusStarted:
@@ -209,7 +209,7 @@ export function applyEvent(state: TimelineState, ev: StreamEvent): TimelineState
       return { items: closeStreaming(items), busy: false, phase: null };
     }
     case Ev.IterationCompleted:
-      return { items: closeStreaming(state.items), busy: false, phase: null };
+      return { ...state, items: closeStreaming(state.items), phase: 'Working' };
     case Ev.IterationStopped:
       return {
         items: [...closeStreaming(state.items), { kind: 'notice', key: `n:${ev.id || at}`, level: 'info', text: 'Stopped.', at }],
@@ -228,10 +228,30 @@ export function applyEvent(state: TimelineState, ev: StreamEvent): TimelineState
     case Ev.CommandRequested:
     case Ev.CommandStarted:
     case Ev.CommandCompleted:
-    case Ev.CommandFailed: {
+    case Ev.CommandFailed:
+    case Ev.ToolConstraintsRequested:
+    case Ev.ToolConstraintsCompleted:
+    case Ev.ToolConstraintsFailed:
+    case Ev.ToolInvestigationRequested:
+    case Ev.ToolInvestigationCompleted:
+    case Ev.ToolInvestigationFailed:
+    case Ev.ToolWebSearchRequested:
+    case Ev.ToolWebSearchCompleted:
+    case Ev.ToolWebSearchFailed: {
       const execId = str(d.execution_id) || String(ev.id);
+      const isCompleted =
+        ev.type === Ev.CommandCompleted ||
+        ev.type === Ev.ToolConstraintsCompleted ||
+        ev.type === Ev.ToolInvestigationCompleted ||
+        ev.type === Ev.ToolWebSearchCompleted;
+      const isFailed =
+        ev.type === Ev.CommandFailed ||
+        ev.type === Ev.ToolConstraintsFailed ||
+        ev.type === Ev.ToolInvestigationFailed ||
+        ev.type === Ev.ToolWebSearchFailed;
+      const isStarted = ev.type === Ev.CommandStarted;
       const status: ToolStatus =
-        ev.type === Ev.CommandCompleted ? 'completed' : ev.type === Ev.CommandFailed ? 'failed' : ev.type === Ev.CommandStarted ? 'running' : 'requested';
+        isCompleted ? 'completed' : isFailed ? 'failed' : isStarted ? 'running' : 'requested';
       const items = upsert(state.items, `t:${execId}`, (prev) => {
         const base = prev && prev.kind === 'tool' ? prev : undefined;
         return {
@@ -245,7 +265,11 @@ export function applyEvent(state: TimelineState, ev: StreamEvent): TimelineState
           at: base?.at ?? at,
         };
       });
-      return { ...state, items };
+      const phase =
+        status === 'running' || status === 'requested'
+          ? str(d.display_label) || (d.tool_name ? `Running ${str(d.tool_name)}` : 'Working')
+          : 'Working';
+      return { ...state, items, busy: true, phase };
     }
     default:
       if (APPROVAL_REQUEST_TYPES.has(ev.type)) {

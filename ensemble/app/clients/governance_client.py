@@ -194,6 +194,17 @@ def build_governance_envelope(
 
     action_type = action_for(message.event_type)
 
+    # For app document mutations (DOCUMENT_UPDATE, DOCUMENT_DELETE), the
+    # envelope represents an application platform-record write authenticated by
+    # the app's mTLS certificate (INV-AUTH-ID-05). Under INV-GOV-WARD-07, the
+    # Gateway executes for the embedded operator, so app document writes must
+    # remain unbound (empty operator_id and operator_session_id).
+    is_app_doc_mutation = action_type in ("DOCUMENT_UPDATE", "DOCUMENT_DELETE")
+    envelope_operator_id = "" if is_app_doc_mutation else (message.operator_id or "")
+    envelope_operator_session_id = (
+        "" if is_app_doc_mutation else (message.operator_session_id or "")
+    )
+
     now_utc = datetime.now(UTC)
     expires_at = now_utc + timedelta(minutes=5)
 
@@ -224,8 +235,8 @@ def build_governance_envelope(
         intent_data=payload_dict,
         requestor_user_id=requestor_user_id,
         acting_app_id=acting_app_id,
-        operator_id=message.operator_id or "",
-        operator_session_id=message.operator_session_id or "",
+        operator_id=envelope_operator_id,
+        operator_session_id=envelope_operator_session_id,
         case_id=message.case_id or "",
         investigation_id=message.investigation_id or "",
         task_id=message.task_id or "",
@@ -252,8 +263,8 @@ def build_governance_envelope(
         event_type=message.event_type,
         action_type=action_type,
         target_resource="localhost",
-        operator_id=message.operator_id or "",
-        operator_session_id=message.operator_session_id or "",
+        operator_id=envelope_operator_id,
+        operator_session_id=envelope_operator_session_id,
         web_session_id=message.web_session_id or "",
         cli_session_id=message.cli_session_id or "",
         state_merkle_root=state_merkle_root,
@@ -506,16 +517,17 @@ class GovernanceClient:
             NetworkError: If the HTTP request fails
             ValidationError: If the envelope is rejected by governance gates
         """
+        action_type = action_for(message.event_type)
+        if action_type in ("DOCUMENT_UPDATE", "DOCUMENT_DELETE"):
+            # App document mutations must remain unbound under INV-AUTH-ID-05 and
+            # INV-GOV-WARD-07 so they execute through the Gateway's embedded operator.
+            if message.operator_id or message.operator_session_id:
+                message = message.model_copy(
+                    update={"operator_id": None, "operator_session_id": None}
+                )
         # Inject the operator transport identity (operator_id +
-        # operator_session_id) when the message omits either field. The
-        # gateway's verifyEnvelopeIdentityBinding rejects mutation actions
-        # (DOCUMENT_UPDATE, DOCUMENT_DELETE, FILE_EDIT) with
-        # ErrIdentityBindingFailed when both are empty. The identity is
-        # resolved from the operator mTLS cert's SPIFFE URI SAN, which
-        # guarantees the stamped values match the transport identity the
-        # gateway verifies against. Resolution is lazy (first submission)
-        # and cached so the cert is read at most once.
-        if not message.operator_id or not message.operator_session_id:
+        # operator_session_id) when the message omits either field for host actions.
+        elif not message.operator_id or not message.operator_session_id:
             cert_op_id, cert_op_session = self._resolve_operator_identity_from_cert()
             updates: dict[str, str | None] = {}
             if not message.operator_id and cert_op_id:

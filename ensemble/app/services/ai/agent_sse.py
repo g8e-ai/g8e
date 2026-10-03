@@ -317,12 +317,16 @@ async def deliver_via_sse(
                         # Extract query if available
                         if chunk.data.result and hasattr(chunk.data.result, "query"):
                             query = chunk.data.result.query
+                        elif chunk.data.arguments and "query" in chunk.data.arguments:
+                            query = str(chunk.data.arguments["query"])
                     elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
                         event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED
                     elif fn == OperatorToolName.G8E_SEARCH_WEB:
                         event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED
                         if chunk.data.result and hasattr(chunk.data.result, "query"):
                             query = chunk.data.result.query
+                        elif chunk.data.arguments and "query" in chunk.data.arguments:
+                            query = str(chunk.data.arguments["query"])
 
                     if event_type:
                         await _publish(
@@ -344,6 +348,22 @@ async def deliver_via_sse(
                         # Agent and run enter waiting while a universal tool is executing.
                         await _push_agent_state("waiting")
                         await _push_run_state("waiting")
+                else:
+                    await _publish(
+                        EventType.OPERATOR_COMMAND_STARTED,
+                        AIToolLifecyclePayload(
+                            tool_name=fn,
+                            display_label=chunk.data.display_label,
+                            display_icon=chunk.data.display_icon,
+                            display_detail=chunk.data.display_detail,
+                            category=chunk.data.category,
+                            execution_id=exec_id,
+                            status=ToolCallStatus.STARTED,
+                            timestamp=now().isoformat(),
+                        ),
+                    )
+                    await _push_agent_state("waiting")
+                    await _push_run_state("waiting")
 
             elif chunk.type == StreamChunkFromModelType.TOOL_RESULT:
                 exec_id = chunk.data.execution_id
@@ -400,6 +420,50 @@ async def deliver_via_sse(
                         # Agent and run return to running after the universal tool result.
                         await _push_agent_state("running")
                         await _push_run_state("running")
+                else:
+                    content = None
+                    error = None
+                    if chunk.data.error:
+                        error = str(chunk.data.error)
+                    elif chunk.data.result is not None:
+                        if hasattr(chunk.data.result, "error") and chunk.data.result.error:
+                            error = str(chunk.data.result.error)
+                        elif hasattr(chunk.data.result, "content") and chunk.data.result.content is not None:
+                            content = str(chunk.data.result.content)
+                        elif hasattr(chunk.data.result, "output") and chunk.data.result.output is not None:
+                            content = str(chunk.data.result.output)
+                        elif hasattr(chunk.data.result, "data") and chunk.data.result.data is not None:
+                            content = str(chunk.data.result.data)
+                        elif isinstance(chunk.data.result, (str, dict, list)):
+                            content = str(chunk.data.result)
+
+                    is_failed = (
+                        bool(error)
+                        or chunk.data.status in (ToolCallStatus.FAILED, "failed", "error")
+                        or getattr(chunk.data, "success", True) is False
+                    )
+                    ev_type = (
+                        EventType.OPERATOR_COMMAND_FAILED
+                        if is_failed
+                        else EventType.OPERATOR_COMMAND_COMPLETED
+                    )
+                    await _publish(
+                        ev_type,
+                        AIToolLifecyclePayload(
+                            tool_name=fn,
+                            display_label=chunk.data.display_label,
+                            display_icon=chunk.data.display_icon,
+                            display_detail=chunk.data.display_detail,
+                            category=chunk.data.category,
+                            execution_id=exec_id,
+                            status=ToolCallStatus.FAILED if is_failed else ToolCallStatus.COMPLETED,
+                            content=content,
+                            error=error,
+                            timestamp=now().isoformat(),
+                        ),
+                    )
+                    await _push_agent_state("running")
+                    await _push_run_state("running")
 
                 _turn += 1
 
