@@ -24,7 +24,7 @@ related:
   - model-provenance.md
   - public_spectator.md
   - ensemble.md
-  - dashboard.md
+  - console.md
   - protocol.md
   - scripts.md
   - ../devs/docs.md
@@ -130,7 +130,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Sovereign audit and SQLite storage | `internal/services/storage/`, `internal/services/audit/` | Unit and integration tests in `internal/services/storage/` |
 | SSE event bridge and pub/sub broker | `internal/services/sse/`, `internal/services/pubsub/` | Unit and integration tests in `internal/services/sse/` |
 | Agentic Ensemble service (g8ee) | `ensemble/` | `cd ensemble && pytest` |
-| Dashboard static host and SPA (g8ed) | `dashboard/` | `cd dashboard && npm test` |
+| Console (Gateway-embedded browser frontend) | `console/`, `internal/services/gateway/console/` | `make console-test` |
 | Protocol definitions and bindings | `protocol/proto/g8e/`, `protocol/` | `make proto` and `make validate-doctrines` |
 | Compliance catalogs and KSI verification | `protocol/compliance/`, `internal/cli/cmd/compliance/` | `g8e compliance demo-run verify` |
 
@@ -149,7 +149,7 @@ The platform ships as a polyglot monorepo centered on a single Go binary, comple
 1. **Governance Gateway (`g8e gw start`)**: The central Policy Decision Point (PDP) and protocol coordinator. The Gateway admits client transactions, manages PKI, runs L1 Doctrine screening, coordinates L2 Consensus deliberation, manages L3 Notary approval suspensions, brokers outbound-only pub/sub WebSocket channels to Operators, and persists Gateway-local coordination state. For actions targeting the Gateway runtime itself, the Gateway executes through an in-process embedded Operator substrate (`internal/services/gateway/embedded/`). See [Gateway Architecture](gateway.md).
 2. **Governed Operator (`g8e operator start`)**: The Policy Execution Point (PEP) for target runtimes. The Operator exposes no inbound management listeners, initiates an outbound-only TLS 1.3 mTLS connection to the Gateway, pulls work exclusively from an exact session-specific command channel, verifies every transaction independently through the L4 Warden, and executes accepted actions through the L5 Actuator in its local runtime. See [Operator Architecture](operator.md).
 3. **Agentic Ensemble (`g8ee`)**: The optional first-party agentic ensemble runtime (`ensemble/`). Implemented in Python 3.12 with FastAPI, `g8ee` connects to the Gateway over mTLS with an enrolled app workload identity (`spiffe://g8e.local/app/g8ee`), dispatches governed host commands via the Gateway Operator command-relay endpoint, writes protected application records via the governance endpoint, and publishes real-time progress via the SSE event bridge. Its model reasoning, prompt templating, Tribunal deliberation, application approvals, and investigation memory remain outside protocol authorization. See [Ensemble Architecture](ensemble.md).
-4. **Dashboard (`g8ed`)**: The first-party operator interface (`dashboard/`). A framework-free vanilla JavaScript SPA hosted by a minimal Node.js 22 / Express 5 static server on port 3000. The browser authenticates via WebAuthn passkeys and dials the Gateway HTTPS listener directly; the static host container enrolls an owner-approved workload identity that is not used for outbound browser requests. See [Dashboard Architecture](dashboard.md).
+4. **Console**: The first-party browser frontend (`console/`). A React and TypeScript SPA embedded in the `g8e` binary and served by the Gateway at `https://<gateway>:8443/console/`. It covers passkey authentication, approvals, Operator inventory and binding, cases, investigations, and chat. The browser authenticates with WebAuthn passkeys and talks only to the Gateway; chat reaches the ensemble through the Gateway browser proxy. See [Console Architecture](console.md).
 5. **Evaluation Explorer**: A specialized web frontend served on port 5173 (`EvalExplorerDefaultPort`) for real-time inspection, progress tracking, model response rendering, and verification of model evaluation campaigns. See [Evaluations](evals.md).
 
 ### The Five-Layer Governance Pipeline
@@ -270,7 +270,6 @@ The platform enforces a zero-trust network model. All protected communications r
 | **8082** | HTTP | Public Mirror | Loopback / Anonymous | Public spectator mirror serving anonymous history, SSE, and content-addressed proofs |
 | **5173** | HTTP | Eval Explorer | Loopback / Direct | Embedded Evaluation Explorer SPA for live campaign telemetry |
 | **8000** | HTTP | Ensemble (g8ee) | mTLS to Gateway | First-party Python agentic ensemble |
-| **3000** | HTTP | Dashboard (g8ed) | Direct to Gateway | Node.js static host serving vanilla JavaScript SPA |
 | **11434** | HTTP | Ollama Provider | Remote Loopback / LAN | Remote Ollama inference provider dialed by Inference Operator |
 
 #### PKI Hierarchy
@@ -365,7 +364,6 @@ The root `docker-compose.yml` launches the complete platform in the default prof
 - `g8e-data-operator`: Governed Data Operator running in worker mode (container hostname `data-operator`).
 - `g8e-inference-operator`: Governed Inference Operator connecting to remote Ollama.
 - `g8e-ensemble`: First-party Python agentic ensemble on port 8000.
-- `g8e-dashboard`: Node.js static host and browser frontend on port 3000.
 
 **Binary Precedence Rule**: Host binaries mounted at `./bin:/opt/g8e/bin:ro` take precedence over image baked-in binaries (`/g8e`). Running `make build` and restarting containers immediately updates all services without rebuilding container images. See [Unified Docker Stack Guide](../guides/unified_stack.md).
 
@@ -395,7 +393,7 @@ The root `docker-compose.yml` launches the complete platform in the default prof
 - [Model Provenance](model-provenance.md): Model weight attestation and chain-of-custody verification.
 - [Public Spectator Architecture](public_spectator.md): Read-only spectator mirror and threat model.
 - [Ensemble Architecture](ensemble.md): First-party Python agentic ensemble runtime and tool loops.
-- [Dashboard Architecture](dashboard.md): Browser static host and SPA identity boundaries.
+- [Console Architecture](console.md): Gateway-embedded browser frontend and its trust boundaries.
 - [Protocol Library](protocol.md): Protobuf definitions, JSON registries, and code generation.
 - [Scripts Reference](scripts.md): Bootstrap, smoke test, deployment, and demo scripts.
 - [Documentation Guide](../devs/docs.md): Invariant definitions, metadata specifications, and audit workflows.

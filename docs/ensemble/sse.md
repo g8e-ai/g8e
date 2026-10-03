@@ -18,7 +18,7 @@ related:
   - governance.md
   - protocol.md
   - ../architecture/sse.md
-  - ../dashboard/sse.md
+  - ../architecture/console.md
 when_to_read: Understanding real-time event delivery, SSE infrastructure, stream lifecycle, approval workflows, and observe producer lifecycle projections in g8ee.
 do_not_use_for:
   - Ensemble architecture and chat pipeline (architecture.md)
@@ -419,4 +419,4 @@ Tests verify required routing dimensions, payload type safety, error event suppr
 - [Thinking](thinking.md) — Provider reasoning tokens, thought signatures, and thinking SSE events.
 - [Protocol](protocol.md) — Canonical wire contracts and GovernanceEnvelope schemas.
 - [Gateway SSE Streaming](../architecture/sse.md) — Gateway-side SSE push ingestion, filtering, and consumer endpoints.
-- [Dashboard SSE](../dashboard/sse.md) — Browser EventSource lifecycle, event dispatch, and reconnect behavior for dashboard consumers.
+- [Console Architecture](../architecture/console.md#event-delivery) — Browser EventSource lifecycle, event routing, and reconnect behavior.

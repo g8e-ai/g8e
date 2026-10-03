@@ -77,7 +77,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 Before running `make build` or `make build-compressed`, install the evaluation explorer dependencies and build its production bundle:
 
 ```bash
-cd dashboard/g8e-adapter/evaluation-explorer
+cd evaluation-explorer
 npm ci
 npm run build
 cd ../../..
@@ -97,7 +97,7 @@ cd g8e
 make build
 ```
 
-`make build` first copies the built evaluation explorer from `dashboard/g8e-adapter/evaluation-explorer/dist/` into the Go binary, then creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows). If the explorer bundle has not been built, `make build` stops with an instruction to build it first.
+`make build` first copies the built evaluation explorer from `evaluation-explorer/dist/` into the Go binary, then creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows). If the explorer bundle has not been built, `make build` stops with an instruction to build it first.
 
 The build sets `CGO_ENABLED=0`, uses the `netgo` and `osusergo` build tags, strips symbol and debug data, and embeds the platform version, build ID, build time, and target platform. The resulting binary does not require a Go toolchain or a system SQLite library on the target host.
 

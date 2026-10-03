@@ -180,7 +180,7 @@ g8e_linux_install_missing() {
                 fi
                 ;;
             node)
-                echo "Node.js ${G8E_NODE_MIN_MAJOR}+ is required (evaluation explorer, dashboard, protocol/node)."
+                echo "Node.js ${G8E_NODE_MIN_MAJOR}+ is required (evaluation explorer, console, protocol/node)."
                 if g8e_linux_init_sudo && g8e_have curl &&
                     g8e_setup_confirm "Download the official Node.js ${G8E_NODE_MIN_MAJOR}.x LTS tarball to /usr/local/lib/nodejs now? [y/N] "; then
                     g8e_linux_install_node || echo "  Node.js install failed; install Node ${G8E_NODE_MIN_MAJOR}+ manually from https://nodejs.org/"

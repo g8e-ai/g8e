@@ -126,7 +126,9 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `test/` | Cross-package integration tests, `test/fixtures/`, and `test/e2e/`. |
 | `eval/` | Evaluation campaign inputs, `native-boundary-compose.yml`, and the eval data-layout README. The Go evaluator is `internal/services/evaluation/`, exposed by `internal/cli/cmd/eval/`. |
 | `ensemble/` | Python g8ee application. Index: [Ensemble documentation](../ensemble/index.md). |
-| `dashboard/` | Node.js g8ed SPA host. Index: [Dashboard documentation](../dashboard/index.md). |
+| `console/` | Gateway-embedded browser console (React + TypeScript). Docs: [Console Architecture](../architecture/console.md), [Console Development](../console/devs.md). |
+| `g8e-adapter/` | Audited browser adapter and deterministic contract pack for generated observe frontends. |
+| `evaluation-explorer/` | Evaluation explorer SPA; its build is embedded in `internal/services/gateway/explorer/static`. |
 | `demos/` | Healthcare, finance, DHS, and FedRAMP demo environments. Index: [Demo index](../../demos/README.md). |
 | `docs/` | Architecture, guides, references, developer docs, and release notes. |
 | `scripts/` | Validation, generation, release, and build support scripts. |
@@ -217,7 +219,7 @@ Compose profile assignment is INV-TESTMAP-02. Service names are the Compose keys
 
 | Compose service | `profiles:` |
 | --- | --- |
-| `g8e-gateway`, `g8e-data-operator`, `g8e-inference-operator`, `ensemble`, `dashboard` | None. They start on `docker compose up -d`. |
+| `g8e-gateway`, `g8e-data-operator`, `g8e-inference-operator`, `ensemble` | None. They start on `docker compose up -d`. |
 | `g8e-gateway-secondary` | `cross-enrollment` |
 | `g8e-gateway-user`, `g8e-inference` | `g8ellama` |
 
@@ -354,7 +356,7 @@ Schemas live under `protocol/proto/g8e/`. Wire requirements: [Protocol Specifica
 | `protocol/node/` | TypeScript protocol package. |
 | `examples/` | Runnable Go/Python examples, external-console app, and MCP client configuration templates (demo environments stay in `demos/`). |
 | `protocol/docs/` | Protocol specifications and generated API references. |
-| `internal/tools/constgen/` | Regenerates event and action-type constants from `protocol/constants/events.json` and `protocol/constants/status.json`. `make constants` writes. `make constants-check` verifies. Outputs include `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `dashboard/public/js/constants/events.js`, and `protocol/python/g8e/_data/events.json`. |
+| `internal/tools/constgen/` | Regenerates event and action-type constants from `protocol/constants/events.json` and `protocol/constants/status.json`. `make constants` writes. `make constants-check` verifies. Outputs include `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `console/src/generated/events.ts`, and `protocol/python/g8e/_data/events.json`. |
 
 ### Adapters and native tools
 
@@ -379,7 +381,7 @@ Evidence scope and signed artifacts are owned by the [Release Process](release_p
 | Component | Entry | Also |
 | --- | --- | --- |
 | Ensemble (g8ee) | `ensemble/app/main.py` | Application code in `ensemble/app/`. Tests in `ensemble/tests/`. Docs: [g8ee index](../ensemble/index.md). |
-| Dashboard (g8ed) | `dashboard/server.js` | Resolves workload identity before listen, serves the SPA and `g8e-config.js`, and injects the browser Gateway origin. The browser calls the Gateway directly. App code in `dashboard/public/`. Enrollment in `dashboard/services/infra/`. Tests in `dashboard/test/`. Docs: [g8ed index](../dashboard/index.md). |
+| Console | `console/src/main.tsx` | React + TypeScript SPA; the Gateway serves its embedded build (`internal/services/gateway/console/`) at `/console/`. The browser calls only the Gateway. Tests in `console/src/**/*.test.ts(x)` and `console/tests/`. Docs: [Console Development](../console/devs.md). |
 | Demos | `demos/` | Containerized services and verification scripts. CLI: `internal/cli/cmd/demos/`. Reference client: `internal/tools/agent_harness/`. |
 | Website | `website/` | Renders the root `README.md`. `make website-test`, `make website-build`. Generation policy: [Documentation Guide](docs.md#generated-outputs-inv-doc-gen). |
 
@@ -399,7 +401,7 @@ Depth is [Testing](tests.md). `e2e-full` and Compose profiles: INV-TESTMAP-02, I
 | `./g8e test summary` | | Reads the chaos summary from the test vault. |
 | `./g8e test public-loop` | | Provider-free public-feed qualification. Stays in `testcmd` (INV-PKG-02). |
 
-Component test entry points named by the root Makefile: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make ensemble-test`, `make test-external`, `make dashboard-test`. `make test-external` is the Ensemble external-provider suite (Tier 4 in [Testing](tests.md)), not a `./g8e test` subcommand.
+Component test entry points named by the root Makefile: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make ensemble-test`, `make test-external`, `make console-test`. `make test-external` is the Ensemble external-provider suite (Tier 4 in [Testing](tests.md)), not a `./g8e test` subcommand.
 
 ### Build and validation
 
@@ -413,7 +415,7 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 | `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `validate-doctrines`, `validate-cosais`, `swagger-generate`, then `golangci-lint run`. |
 | `make test`, `make test-unit`, `make test-integration`, `make test-docker` | Platform tiers. `make test` is unit plus integration. |
 | `make python-build` | Python protocol distribution with bundled registries. |
-| `make dashboard-test`, `make ensemble-test`, `make test-external`, `make website-test` | Dashboard, Ensemble, external-provider, and website checks. |
+| `make console-test`, `make ensemble-test`, `make test-external`, `make website-test` | Console, Ensemble, external-provider, and website checks. |
 | `make build-fips`, `make verify-fips` | Pinned Linux AMD64 FIPS variant. Reference: [FIPS 140-3](../reference/fips140-3.md). |
 | `make validate-doctrines` | Doctrine JSON under `protocol/constants/doctrine/`. |
 | `make validate-cosais` | `go run ./internal/tools/cosais_validator`. |
@@ -503,4 +505,4 @@ make swagger-generate
 - [AI Agents and the g8e Governance Boundary](../architecture/agents.md): ingress limits.
 - [Protocol README](../../protocol/README.md) and [Protocol Specification](../../protocol/docs/spec.md).
 - [Getting Started](../guides/getting_started.md): deployment and enrollment.
-- Component indexes: [Ensemble](../ensemble/index.md), [Dashboard](../dashboard/index.md), [Demos](../../demos/README.md).
+- Component indexes: [Ensemble](../ensemble/index.md), [Console](../console/devs.md), [Demos](../../demos/README.md).

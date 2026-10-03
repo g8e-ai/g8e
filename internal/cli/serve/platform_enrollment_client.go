@@ -97,7 +97,7 @@ type operatorPendingState struct {
 
 // OperatorPlatformEnrollmentClient drives the owner-approved platform
 // enrollment protocol for the operator component. It mirrors the
-// dashboard JS client and the ensemble Python client: the same
+// ensemble Python client: the same
 // nine-step resumable sequence, the same canonical completion
 // transcript, and the same atomic credential writes.
 //
@@ -681,7 +681,7 @@ func buildOperatorCompletionTranscript(requestID, tokenHash, instanceID, operato
 // signTranscript signs the SHA-256 digest of the transcript with the
 // private key and returns the base64url-encoded ASN.1 DER signature.
 // Go's ecdsa.SignASN1 produces ASN.1 DER directly (no raw R||S
-// conversion needed, unlike WebCrypto in the dashboard JS client).
+// conversion needed, unlike WebCrypto's raw R||S signatures).
 func signTranscript(privateKey *ecdsa.PrivateKey, transcript []byte) (string, error) {
 	digest := sha256.Sum256(transcript)
 	signature, err := ecdsa.SignASN1(rand.Reader, privateKey, digest[:])

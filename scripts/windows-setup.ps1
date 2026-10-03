@@ -17,7 +17,7 @@
 $ErrorActionPreference = "Stop"
 
 $Script:RepoRoot = (Resolve-Path "$PSScriptRoot\..").Path
-$Script:ExplorerDir = Join-Path $Script:RepoRoot "dashboard\g8e-adapter\evaluation-explorer"
+$Script:ExplorerDir = Join-Path $Script:RepoRoot "evaluation-explorer"
 $Script:ExplorerDist = Join-Path $Script:ExplorerDir "dist\index.html"
 $Script:NodeMinMajor = 22
 $Script:AutoYes = $false

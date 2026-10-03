@@ -8,7 +8,7 @@ version: v2.2.3
 owners:
   - docs/guides/lovable.md
   - internal/cli/cmd/gw/gateway_connect.go
-  - dashboard/g8e-adapter/
+  - g8e-adapter/
 related:
   - docs/guides/build_frontend.md
   - docs/guides/build_observe_frontend.md
@@ -17,7 +17,7 @@ when_to_read: Connecting a Lovable app or other browser-hosted frontend to a loc
 do_not_use_for:
   - Production Gateway configuration beyond the browser origin (use [Cloudflare Tunnel Integration](./cloudflare_tunnel.md))
   - Operator or consensus configuration (use [Developer Guidelines](../devs/devs.md))
-  - Contract pack generation and testing (use [contract-pack/README.md](../../dashboard/g8e-adapter/contract-pack/README.md))
+  - Contract pack generation and testing (use [contract-pack/README.md](../../g8e-adapter/contract-pack/README.md))
 ---
 
 # Connect a Lovable App to the Gateway
@@ -57,8 +57,8 @@ For the complete browser API, WebAuthn, SSE, and frontend reference, see [Build 
 | --- | --- | --- |
 | gw connect command | [internal/cli/cmd/gw/gateway_connect.go](../../internal/cli/cmd/gw/gateway_connect.go) | `./g8e gw connect --help` |
 | gw start flags | [internal/cli/cmd/gw/gateway.go](../../internal/cli/cmd/gw/gateway.go) | `./g8e gw start --help` |
-| Contract pack generator | [dashboard/g8e-adapter/](../../dashboard/g8e-adapter/) | `npm run gen:contract-pack` from `dashboard/g8e-adapter/` |
-| Contract pack README | [contract-pack/README.md](../../dashboard/g8e-adapter/contract-pack/README.md) | Authoritative reference for contract pack contents and workflow |
+| Contract pack generator | [g8e-adapter/](../../g8e-adapter/) | `npm run gen:contract-pack` from `g8e-adapter/` |
+| Contract pack README | [contract-pack/README.md](../../g8e-adapter/contract-pack/README.md) | Authoritative reference for contract pack contents and workflow |
 
 ## Procedures
 
@@ -134,11 +134,11 @@ Open the resulting app in a new, top-level browser tab, not embedded in the Lova
 
 ### Observe Frontend Contract Pack
 
-For a read-only observe dashboard (agent and run lifecycle, eval summaries, downloads, live SSE narrative), use the deterministic contract pack instead of the short prompt. The pack lives at `dashboard/g8e-adapter/contract-pack/`.
+For a read-only observe dashboard (agent and run lifecycle, eval summaries, downloads, live SSE narrative), use the deterministic contract pack instead of the short prompt. The pack lives at `g8e-adapter/contract-pack/`.
 
 **Workflow:**
 
-1. **From `dashboard/g8e-adapter/`, regenerate the pack** (or verify it is current):
+1. **From `g8e-adapter/`, regenerate the pack** (or verify it is current):
    ```bash
    npm run gen:contract-pack       # regenerate all outputs
    npm run gen:contract-pack:check # fail if committed outputs are stale
@@ -161,7 +161,7 @@ For a read-only observe dashboard (agent and run lifecycle, eval summaries, down
    ./g8e gw connect <exact-origin-where-spa-is-deployed>
    ```
 
-See [Generator-Neutral Builder Guide](build_observe_frontend.md) for runtime requirements and [Build a g8e-Compatible Frontend](build_frontend.md) for the full reference. The contract-pack generator's acceptance commands are documented in [contract-pack/README.md](../../dashboard/g8e-adapter/contract-pack/README.md).
+See [Generator-Neutral Builder Guide](build_observe_frontend.md) for runtime requirements and [Build a g8e-Compatible Frontend](build_frontend.md) for the full reference. The contract-pack generator's acceptance commands are documented in [contract-pack/README.md](../../g8e-adapter/contract-pack/README.md).
 
 ### Browser Limitations
 
@@ -234,4 +234,4 @@ Validate that every origin is a valid origin for the selected RP ID. See [Build 
 - [Build a g8e-Compatible Frontend](build_frontend.md) — browser API, WebAuthn, SSE reference, and Gateway-side configuration.
 - [Generator-Neutral Builder Guide](build_observe_frontend.md) — runtime requirements for the observe frontend.
 - [Cloudflare Tunnel Integration](cloudflare_tunnel.md) — tunnel setup for public deployments and multi-user access.
-- [Gateway Documentation](../dashboard/index.md) — operator dashboard and monitoring.
+- [Console Architecture](../architecture/console.md) — the Gateway-embedded reference console.

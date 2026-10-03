@@ -58,7 +58,7 @@ This guide configures `cloudflared` to publish a local origin through a Cloudfla
 
 **Default origin**: Gateway HTTPS listener at `https://localhost:8443`. Use `--service` to publish an HTTP origin or alternate HTTPS listener (e.g., read-only public spectator).
 
-**Do not use this guide** to expose a private Gateway, Operator, Ensemble, Dashboard, or component-local volume unintentionally. For public spectator publication, follow [Public Spectator Operations](./public_spectator.md), which defines the permitted origin and acceptance checks.
+**Do not use this guide** to expose a private Gateway, Operator, Ensemble, or component-local volume unintentionally. For public spectator publication, follow [Public Spectator Operations](./public_spectator.md), which defines the permitted origin and acceptance checks.
 
 **For a frontend on the same machine as the Gateway**, use `./g8e gw connect <frontend-origin>` instead of a tunnel. A tunnel is appropriate when the browser or frontend runs outside the Gateway host.
 

@@ -903,7 +903,7 @@ AUDIT TRAIL:
 
 APPLICATION ENROLLMENT MODEL:
   Each agent is an application enrolled through the owner-approved platform
-  enrollment protocol (the same one g8ed and g8ee use). The first launch submits an
+  enrollment protocol (the same one g8ee uses). The first launch submits an
   enrollment request and waits; approve it in the Console or with
   'g8e auth enroll approve <request-id> --yes'. The launcher never approves its own
   request. The approved mTLS certificate (7-day validity, revocable by request ID)

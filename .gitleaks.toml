@@ -34,7 +34,7 @@ paths = [
   '''README\.md''',
   '''protocol/constants/.*''',
   '''internal/constants/.*''',
-  '''dashboard/public/js/constants/.*''',
+  '''console/src/generated/.*''',
   '''scripts/.*''',
 ]
 
@@ -108,7 +108,6 @@ description = "Skip env var name constants and empty .env.example templates (nam
 paths = [
   '''ensemble/app/constants/env_vars\.py''',
   '''ensemble/\.env\.example''',
-  '''dashboard/models/settings_model\.js''',
 ]
 
 [[allowlists]]
@@ -120,5 +119,5 @@ paths = [
 [[allowlists]]
 description = "Skip evaluation explorer mock fixture data"
 paths = [
-  '''dashboard/g8e-adapter/evaluation-explorer/src/fixtures/.*''',
+  '''evaluation-explorer/src/fixtures/.*''',
 ]

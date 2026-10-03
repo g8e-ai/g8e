@@ -84,9 +84,9 @@ pwsh scripts/windows-setup.ps1
 
 The Linux and macOS scripts accept `-y` / `--yes` (or `G8E_SETUP_YES=1`) to install without prompting, `--build-only` to stop after `make build`, and `-h` / `--help`. By default each script runs six steps:
 
-1. Checks `git`, `make`, `curl`, `go`, `node`, `npm`, `python3`, `uv`, `rg`, `bc`, and a C compiler. The required Go version is read from `go.mod` (currently 1.26.6) and compared including the patch component. Node.js 22+ is required because `make build` embeds the evaluation-explorer frontend and the dashboard runs on Node. A tool that resolves under `/mnt/<drive>/` does not count (INV-SCRIPTS-07).
+1. Checks `git`, `make`, `curl`, `go`, `node`, `npm`, `python3`, `uv`, `rg`, `bc`, and a C compiler. The required Go version is read from `go.mod` (currently 1.26.6) and compared including the patch component. Node.js 22+ is required because `make build` embeds the evaluation-explorer frontend and the console is built with Node. A tool that resolves under `/mnt/<drive>/` does not count (INV-SCRIPTS-07).
 2. If a prerequisite is missing or too old, prompts before installing it. Linux installs `git`, `make`, `curl`, `python3`, `ripgrep`, `bc`, and a compiler (`build-essential` or `gcc`) in one call through `apt`, `dnf`, `pacman`, or `zypper`; installs Go from the official tarball into `/usr/local/go` and Node.js from the latest 22.x tarball into `/usr/local/lib/nodejs` (links in `/usr/local/bin`), verifying the published SHA-256 of each; and installs the `uv` version pinned in the `Makefile` into `~/.local/bin`. The tarball route works on WSL, where `snap` frequently does not run. macOS uses Homebrew for packages, points to `xcode-select --install` for the compiler, and uses the same pinned `uv` installer. Windows prefers `winget` with Chocolatey fallback.
-3. Builds the evaluation-explorer asset when `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` is absent, then runs `make build`. The build writes the platform binary and SHA-256 sidecar under `bin/` and copies the host executable to the repository root.
+3. Builds the evaluation-explorer asset when `evaluation-explorer/dist/index.html` is absent, then runs `make build`. The build writes the platform binary and SHA-256 sidecar under `bin/` and copies the host executable to the repository root.
 4. Runs `make dev-setup` (see [Contributor Toolchain](#contributor-toolchain)).
 5. Updates the user PATH persistently: Linux and macOS append the repository root, the Go install directory (`GOBIN` or `GOPATH/bin`), `~/.local/bin`, and `/usr/local/go/bin` (when Go lives there) to `~/.zshrc`, `~/.bashrc`, or `~/.profile` based on detected shell, skipping any directory the profile already mentions; profiles are appended to and never rewritten. Windows updates user-level `Path`. The scripts also export PATH in the current shell, but that change is lost when the shell exits, so users MUST open a new terminal or source the profile before `g8e` is available in other shells.
 6. Runs `make dev-check` to confirm the machine can run `make ci`.
@@ -110,7 +110,7 @@ make dev-check    # verify; also runs automatically before every ci target
 | --- | --- |
 | `make dev-tools` | `buf`, `protoc-gen-go`, `protoc-gen-go-grpc`, `protoc-gen-doc`, `golangci-lint`, `govulncheck`, and `swag` through `go install` into `GOBIN` or `GOPATH/bin`. Pinned tools reinstall at the `Makefile` versions on every run; `govulncheck` and `swag` track `@latest`, matching CI. |
 | `make dev-python` | Repo-root `.venv` created by `uv` with `PYTHON_VERSION` (uv downloads the interpreter when the system has none), the in-tree `protocol/python` package, and `ensemble[test]` (pytest, ruff, pyright). An existing `.venv` is reused. |
-| `make dev-node` | `npm ci` in `protocol/node`, `dashboard`, and `dashboard/g8e-adapter`, then builds the adapter. |
+| `make dev-node` | `npm ci` in `protocol/node`, `console`, and `g8e-adapter`, then builds the adapter. |
 
 The `Makefile` puts the Go install directory and `~/.local/bin` on `PATH` for its own recipes, so these tools resolve under `make` even in a shell that has not sourced the updated profile. `make proto` installs any missing protoc plugin itself through `make proto-tools-install`; buf runs them as `local:` plugins from `PATH`, so a missing plugin otherwise fails with `executable file not found in $PATH`. The CI workflow `.github/workflows/build-and-test.yml` pins the same versions separately and must change together with the `Makefile` pins.
 
@@ -196,7 +196,7 @@ The `g8e demos` image commands read `demos/images.json` relative to the current 
 - `g8e demos export [output-dir]` saves each manifest image to a separate tar file and skips a tar path that already exists. Default directory is `demos/images-export/`.
 - `g8e demos import [input-dir]` loads every `.tar` file directly under the selected directory. Default directory is `demos/images-export/`.
 
-The manifest covers digest-pinned external base and service images. Export does not include locally built Gateway, Operator, demo, Ensemble, or Dashboard images; import does not validate tars against `demos/images.json`. Follow [Air-Gapped Deployment Guide](../guides/air_gap.md) for source staging, locally built image transfer, offline checks, and runtime egress verification. The [Demos README](../../demos/README.md) owns per-demo topology and operating workflow.
+The manifest covers digest-pinned external base and service images. Export does not include locally built Gateway, Operator, demo, or Ensemble images; import does not validate tars against `demos/images.json`. Follow [Air-Gapped Deployment Guide](../guides/air_gap.md) for source staging, locally built image transfer, offline checks, and runtime egress verification. The [Demos README](../../demos/README.md) owns per-demo topology and operating workflow.
 
 ## Anti-patterns
 

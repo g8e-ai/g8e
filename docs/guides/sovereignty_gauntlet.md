@@ -173,12 +173,11 @@ docker exec g8e-gateway /g8e version --fips | tee "${CAMPAIGN_DIR}/metadata/gate
 ./g8e auth enroll pending | tee "${CAMPAIGN_DIR}/logs/pending.txt"
 ```
 
-Approve or deny the operator, ensemble, and dashboard requests using the exact request IDs printed by the pending-enrollments command:
+Approve or deny the operator and ensemble requests using the exact request IDs printed by the pending-enrollments command:
 
 ```bash
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
-./g8e auth enroll approve <dashboard-request-id> --yes
 # ./g8e auth enroll deny <request-id> --yes
 ```
 

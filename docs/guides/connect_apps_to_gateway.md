@@ -565,7 +565,7 @@ The enrolled owner reviews requests with `g8e auth enroll pending`, approves wit
 
 The resumable client generates a P-256 key and CSR, submits a request (persisting the token and private key), polls status with bounded backoff, waits for owner approval, signs the canonical completion transcript with the private key, submits completion, validates the certificate against the pinned trust bundle and expected SPIFFE URI, and writes credentials atomically (temp-file-plus-rename).
 
-The in-tree Ensemble (`g8ee`) and Dashboard (`g8ed`) clients implement that reserved-component flow during startup and load-or-enroll on ready. See [Authentication Architecture](../architecture/auth.md), [Ensemble Architecture](../architecture/ensemble.md) (§ Startup Sequence and App Identity Enrollment), [Dashboard Architecture](../architecture/dashboard.md), and [Build a g8e-Compatible Frontend](./build_frontend.md) for their component-specific behavior.
+The in-tree Ensemble (`g8ee`) client and the Operator implement that reserved-component flow during startup and load-or-enroll on ready. See [Authentication Architecture](../architecture/auth.md) and [Ensemble Architecture](../architecture/ensemble.md) (§ Startup Sequence and App Identity Enrollment) for their component-specific behavior.
 
 ---
 

@@ -12,7 +12,7 @@ owners:
   - docs/architecture/
 related:
   - docs/architecture/sse.md
-  - docs/architecture/dashboard.md
+  - docs/architecture/console.md
   - docs/architecture/gateway.md
   - docs/architecture/network.md
   - docs/guides/public_spectator.md
@@ -69,7 +69,7 @@ g8e supports two separate browser observation modes.
 
 ### Owner-local observe mode
 
-An authenticated browser connects directly to the private Gateway. The browser authenticates with WebAuthn and receives an HttpOnly session cookie. The Gateway derives user identity from the authenticated session and scopes every read to that user's credentials. This mode is credentialed, user-scoped, and reaches the private Gateway directly. See [Dashboard (g8ed)](./dashboard.md) and [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the existing owner-local adapter and contract pack.
+An authenticated browser connects directly to the private Gateway. The browser authenticates with WebAuthn and receives an HttpOnly session cookie. The Gateway derives user identity from the authenticated session and scopes every read to that user's credentials. This mode is credentialed, user-scoped, and reaches the private Gateway directly. See [Console](./console.md) and [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the existing owner-local adapter and contract pack.
 
 ### Public spectator mode
 
@@ -369,13 +369,13 @@ The public spectator architecture extends the existing observe and SSE infrastru
 - The owner-local observe API (`GET /api/v1/observe/*`) remains credentialed and user-scoped. The public spectator surface does not add anonymous routes to the Gateway.
 - The SSE event bridge (`GET /api/v1/sse/stream`, `GET /api/v1/sse/events`) remains session-scoped. The public SSE stream is served by the mirror, not by the Gateway.
 - The remaining observe producer endpoints (`POST /api/v1/observe/producer/*`) remain mTLS-authenticated and ensemble-only. The CLI-local public publisher consumes only reviewed public-safe records, signs durable batches, and exports them through the private mirror listener; it does not expose a producer route to browsers.
-- The checked-in evaluation explorer in [dashboard/g8e-adapter/evaluation-explorer/](../../dashboard/g8e-adapter/evaluation-explorer/) connects to Go-native evaluation output. A minimal public-safe projector reads canonical native and campaign records from persisted runs under `.g8e/data/eval/runs/<run-id>/` and emits only the public-safe typed records required by the explorer contract. Enriched campaign assignment records use the `1.2.0` campaign result envelope and combine canonical protobuf JSON with named extensions for scenario context, grades, activity, resources, verification metadata, evidence bindings, and the optional bounded `model_response`, `failure_output`, and `role_transcripts` extensions. Historical `1.0.0` assignment result envelopes remain readable.
+- The checked-in evaluation explorer in [evaluation-explorer/](../../evaluation-explorer/) connects to Go-native evaluation output. A minimal public-safe projector reads canonical native and campaign records from persisted runs under `.g8e/data/eval/runs/<run-id>/` and emits only the public-safe typed records required by the explorer contract. Enriched campaign assignment records use the `1.2.0` campaign result envelope and combine canonical protobuf JSON with named extensions for scenario context, grades, activity, resources, verification metadata, evidence bindings, and the optional bounded `model_response`, `failure_output`, and `role_transcripts` extensions. Historical `1.0.0` assignment result envelopes remain readable.
 - Public assignment activity groups by model, tool decision, tool call, policy decision, and governed action families. Each family carries availability semantics so observed empty, unavailable capture, and scenario-not-applicable remain distinguishable. Resource summaries preserve explicit zero and expose bounded latency, token, cache, and retry observations only when their source capture supports them.
 - A passing, run-applicable campaign verification publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates and can backfill existing runs through verified catch-up. Catch-up probes the gateway-owned dataset and clears stale host publication idempotency only when the canonical dataset is missing, allowing mirror-volume recovery without manual state edits. The browser displays the stored quality state; it does not infer verification from assignment records or promote a partial model row itself.
 - The projected records pass disclosure and contract validation, enter the real `g8e public publish` flow, advance its durable high-water sequence, reach the local mirror, appear under the exact run ID in anonymous mirror history, and are delivered over the real SSE stream. Native evaluation verification is owned by `g8e eval boundary verify`, and campaign verification is owned by `g8e eval runs verify`; mirror availability is not verification evidence.
 - The public-safe projection omits all principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, execution identifier, and evidence body fields.
 
-See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](./dashboard.md) for the owner-local browser interface, [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack, [Public Spectator Operations Guide](../guides/public_spectator.md) for gateway-owned deployment procedure, and [Network Architecture](./network.md) for private platform PKI and transport boundaries.
+See [SSE Streaming](./sse.md) for the existing event bridge, [Console](./console.md) for the owner-local browser interface, [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack, [Public Spectator Operations Guide](../guides/public_spectator.md) for gateway-owned deployment procedure, and [Network Architecture](./network.md) for private platform PKI and transport boundaries.
 
 ## Anti-patterns
 
@@ -442,7 +442,7 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 ## Links out
 
 - [SSE Streaming](./sse.md): Gateway event publication and browser delivery surfaces.
-- [Dashboard (g8ed)](./dashboard.md): Owner-local browser interface and runtime boundaries.
+- [Console](./console.md): Owner-local browser interface and runtime boundaries.
 - [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): Audited adapter and contract pack for generated observe frontends.
 - [Public Spectator Operations Guide](../guides/public_spectator.md): Private ingest, anonymous public listener, tunnel, restart, and publication procedure.
 - [Network Architecture](./network.md): PKI, mTLS, and transport surfaces.

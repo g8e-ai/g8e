@@ -70,7 +70,7 @@ Ids are stable. Append the next free number in a group. Do not renumber.
 | --- | --- |
 | INV-AIR-BUILD-01 | Native binary builds MUST use `GOTOOLCHAIN=local GOFLAGS=-mod=vendor` to ensure the checked-in vendor tree provides all dependencies. Go 1.26.6 must already be installed; automatic toolchain selection is prohibited. |
 | INV-AIR-BUILD-02 | Container image builds on a connected host MUST complete fully (including `apt-get`, `pip`, and `npm` install steps) before transfer. Pre-pulling base images alone does not make Dockerfile builds offline. Final images MUST preserve exact repository names and tags for offline loading. |
-| INV-AIR-BUILD-03 | The evaluation-explorer asset at `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` MUST be built on the connected host before executing `make build`. `make build` refuses to proceed without this asset. |
+| INV-AIR-BUILD-03 | The evaluation-explorer asset at `evaluation-explorer/dist/index.html` MUST be built on the connected host before executing `make build`. `make build` refuses to proceed without this asset. |
 | INV-AIR-BUILD-04 | `make test-airgap` verifies vendor tree presence, vendored build success, demo manifest existence, and demo image pin patterns, but does NOT verify container build offline-capability, image completeness, runtime egress blocking, or endpoint configuration. |
 
 ### Runtime Behavior (`INV-AIR-RUNTIME`)
@@ -116,7 +116,7 @@ The Gateway exposes a consolidated two-port topology as default:
 
 Port configuration is derived from [internal/constants/ports.go](../../internal/constants/ports.go). Modify with `--http-port` and `--https-port` flags to `gw start`.
 
-The Operator initiates an outbound-only mTLS WebSocket connection to the Gateway and pulls work from its operator-specific channel. No inbound service port is opened. Gateway, Operator, CLI, dashboard, ensemble, consensus, and downstream service traffic can cross private networks; air-gapped does not mean localhost-only.
+The Operator initiates an outbound-only mTLS WebSocket connection to the Gateway and pulls work from its operator-specific channel. No inbound service port is opened. Gateway, Operator, CLI, console, ensemble, consensus, and downstream service traffic can cross private networks; air-gapped does not mean localhost-only.
 
 Outbound network integrations that require review before deployment:
 
@@ -152,7 +152,7 @@ Run these commands on a connected build host from the repository root:
 GOTOOLCHAIN=local GOFLAGS=-mod=vendor make test-airgap
 
 # If the evaluation-explorer asset is not already staged, build it while connected.
-cd dashboard/g8e-adapter/evaluation-explorer && npm run build
+cd evaluation-explorer && npm run build
 cd ../../../
 
 # Build for the connected host's OS and architecture.
@@ -199,13 +199,12 @@ Build container images on the connected host. The repository Dockerfiles are not
 
 - **Dockerfile**: Runs `apt-get` in both build and runtime stages to install g8e, Ollama integration tools, and runtime dependencies.
 - **Ensemble Dockerfile**: Installs Python packages with `pip`.
-- **Dashboard Dockerfile**: Installs packages with `npm` and `apk`.
 
 Pre-pulling only base images does not make these Dockerfiles offline-capable. Build the final images completely while connected, then preserve their exact repository names and tags in the exported archive.
 
 #### Unified stack
 
-Build all images for the default stack (Gateway, Operator, Ensemble, Dashboard, Inference Operator):
+Build all images for the default stack (Gateway, Operator, Ensemble, Inference Operator):
 
 ```bash
 docker compose build
@@ -233,7 +232,6 @@ docker compose up -d --no-build --pull never
 ./g8e auth enroll pending
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
-./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <inference-operator-request-id> --yes
 ```
 

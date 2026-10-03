@@ -16,7 +16,7 @@
 # so there is a single place to bump them (see g8e_make_var).
 
 G8E_NODE_MIN_MAJOR=22
-G8E_EXPLORER_DIR="dashboard/g8e-adapter/evaluation-explorer"
+G8E_EXPLORER_DIR="evaluation-explorer"
 G8E_EXPLORER_DIST="${G8E_EXPLORER_DIR}/dist/index.html"
 G8E_PATH_MARKER="# g8e: add repository root to PATH"
 
@@ -185,7 +185,7 @@ g8e_check_go() {
 
 g8e_check_node() {
     if ! g8e_have node; then
-        echo "  node: missing (need >= $G8E_NODE_MIN_MAJOR for the evaluation-explorer build and dashboard)"
+        echo "  node: missing (need >= $G8E_NODE_MIN_MAJOR for the evaluation-explorer and console builds)"
         return 1
     fi
     if ! g8e_have npm; then
@@ -241,7 +241,7 @@ g8e_check_ripgrep() {
         echo "  rg: detected"
         return 0
     fi
-    echo "  rg: missing (ripgrep; used by make dashboard-boundary-check)"
+    echo "  rg: missing (ripgrep)"
     return 1
 }
 
@@ -350,7 +350,7 @@ g8e_check_python_env() {
 
 g8e_check_node_deps() {
     local failed=0 dir
-    for dir in dashboard protocol/node dashboard/g8e-adapter; do
+    for dir in console protocol/node g8e-adapter; do
         if [[ -d "$dir/node_modules" ]]; then
             echo "  $dir/node_modules: present"
         else
@@ -526,7 +526,7 @@ EOF
   make dev-check        # confirms every tool 'make ci' needs is installed
 
 Contributor workflow:
-  make ci               # full local CI (platform, ensemble, dashboard)
+  make ci               # full local CI (platform, ensemble, console)
   make help             # all targets
 EOF
     fi

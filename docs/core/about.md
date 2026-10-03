@@ -48,9 +48,9 @@ The platform separates policy decisions from execution authority:
 | **g8eg Governance Gateway** | Acts as the Policy Decision Point for authentication, PKI, envelope construction, L1 Doctrine, required L2 Consensus coordination, L3 Notary workflows, routing, and platform APIs. It also contains an in-process Operator substrate for work executed on the Gateway host. |
 | **g8eo Governed Operator** | Acts as the Policy Execution Point on a managed host. It pulls work over outbound mTLS, verifies each envelope at its local L4 Warden, executes accepted work through L5, and retains authoritative local receipts. |
 | **Consensus service** | Evaluates transactions and emits Ed25519 votes over the transaction hash. Votes have protocol authority only when they come from enrolled members and satisfy the configured policy and quorum. |
-| **People, applications, and interfaces** | Humans, AI clients, g8ee, g8ed, MCP clients, A2A clients, and native applications propose actions and consume results without joining the trusted execution boundary. |
+| **People, applications, and interfaces** | Humans, AI clients, the console, g8ee, MCP clients, A2A clients, and native applications propose actions and consume results without joining the trusted execution boundary. |
 
-The reference Gateway and Operator are two modes of the same statically linked Go binary. The repository also includes the optional Python g8ee ensemble and JavaScript g8ed dashboard. These are reference implementations of separable protocol roles, not requirements for building a compatible client, Gateway, Operator, consensus service, or interface.
+The reference Gateway and Operator are two modes of the same statically linked Go binary. The repository also includes the optional Python g8ee ensemble and the Gateway-embedded browser console. These are reference implementations of separable protocol roles, not requirements for building a compatible client, Gateway, Operator, consensus service, or interface.
 
 ## The Verification Boundary
 

@@ -41,7 +41,7 @@ This guide covers building the root Docker image, running the unified Docker Com
 | --- | --- |
 | INV-DG-IMG-01 | The Dockerfile builds only the target platform binary (linux/amd64 or linux/arm64) and does not build the full cross-platform matrix. Host cross-platform artifacts require `make build-all` on the host. |
 | INV-DG-IMG-02 | The image entrypoint is `/entrypoint.sh`, which enforces binary precedence: G8E_BIN override, /opt/g8e/bin/g8e host mount, /opt/g8e/bin/g8e-linux-${ARCH} host mount, then /g8e image-baked binary. |
-| INV-DG-COMPOSE-01 | The root docker-compose.yml default profile runs the unified stack: g8e-gateway, g8e-data-operator, g8e-inference-operator, ensemble, and dashboard. No services require a profile to start. |
+| INV-DG-COMPOSE-01 | The root docker-compose.yml default profile runs the unified stack: g8e-gateway, g8e-data-operator, g8e-inference-operator, and ensemble. The Gateway serves the browser console at `/console/`. No services require a profile to start. |
 | INV-DG-COMPOSE-02 | The cross-enrollment profile adds g8e-gateway-secondary (operator mode, enrolls as outbound operator of primary). The g8ellama profile replaces the default gateway with g8e-gateway-user and g8e-inference (User Gateway topology). Do not combine profiles. |
 | INV-DG-COMPOSE-03 | Environment variables from `.env` or inline export override defaults. See .env.example for the complete reference. Port overrides do not change internal container listeners or service-network aliases (g8e.local, g8eg). |
 | INV-DG-ENROLL-01 | Workloads submit platform enrollment requests when reusable credentials are absent. Owner approval issues identity via the Gateway PKI. Each workload has its own runtime volume and enrolls independently. |
@@ -49,7 +49,7 @@ This guide covers building the root Docker image, running the unified Docker Com
 | INV-DG-HEALTH-01 | Gateway health endpoint is http://localhost:8080/api/v1/health. Healthchecks are declared per-service in docker-compose.yml; the image has no baked-in HEALTHCHECK. |
 | INV-DG-GATEWAY-01 | The gateway `gw start` command accepts flags: --posture (doctrine/consensus/ratify/notary, default doctrine), --cert-mode (full/localhost), --public-spectator, --eval-explorer-listen, --cors-origin, --passkey-rp-* and others. See internal/cli/cmd/gw/gateway.go for complete flag list. |
 | INV-DG-OPERATOR-01 | The operator `operator start` command accepts flags: -e endpoint, --heartbeat-interval, --inference-enabled, --inference-ollama-endpoint, and model/campaign configuration flags. See internal/cli/cmd/operator/operator.go for complete flag list. |
-| INV-DG-PORTS-01 | Gateway exposes container ports 8080 (HTTP) and 8443 (HTTPS/mTLS). Additional gateway surfaces: 8081 (public spectator private), 8082 (public spectator public), 5173 (evaluation explorer). Ensemble: 8000. Dashboard: 3000. All port bindings are overridable via environment variables. |
+| INV-DG-PORTS-01 | Gateway exposes container ports 8080 (HTTP) and 8443 (HTTPS/mTLS). Additional gateway surfaces: 8081 (public spectator private), 8082 (public spectator public), 5173 (evaluation explorer). Ensemble: 8000. All port bindings are overridable via environment variables. |
 | INV-DG-VOLUMES-01 | Each service has a persistent volume. Gateway volume at /root/.g8e contains data/, pki/, secrets/, vault/. Host CLI identity lives in the host .g8e tree, separate from container volumes. Removing gateway volume destroys the authority and requires re-enrollment. |
 
 ## Owned surfaces
@@ -110,7 +110,7 @@ until curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1; do sleep 2;
 ./g8e auth enroll user -e localhost
 ```
 
-The host CLI identity is stored in the host checkout's `.g8e` tree. It is separate from the Gateway's `/root/.g8e` state in `g8e-data`. A standalone container does not start the Data Operator, Inference Operator, ensemble, or dashboard.
+The host CLI identity is stored in the host checkout's `.g8e` tree. It is separate from the Gateway's `/root/.g8e` state in `g8e-data`. A standalone container does not start the Data Operator, Inference Operator, or ensemble.
 
 To change host ports while keeping the container listeners unchanged, publish different host ports:
 
@@ -128,7 +128,7 @@ If the listener ports themselves change, pass matching `--http-port` and `--http
 
 ### Start the unified Docker Compose stack
 
-The root `docker-compose.yml` defines a single-host reference deployment on the `g8e-net` bridge network. The default profile starts the unified stack: Gateway, Data Operator, Inference Operator, ensemble, and dashboard.
+The root `docker-compose.yml` defines a single-host reference deployment on the `g8e-net` bridge network. The default profile starts the unified stack: Gateway, Data Operator, Inference Operator, and ensemble.
 
 | Service | Profile | Published ports | Role | Persistent volume |
 | --- | --- | --- | --- | --- |
@@ -136,7 +136,6 @@ The root `docker-compose.yml` defines a single-host reference deployment on the 
 | `g8e-data-operator` | default | none | Data Operator (hostname `data-operator`) with outbound-only mTLS execution boundary | `g8e-operator-data` |
 | `g8e-inference-operator` | default | none | Inference Operator for remote Ollama inference | `g8e-inference-data` |
 | `ensemble` | default | 8000 | g8ee FastAPI agentic ensemble | `g8e-ensemble-data` |
-| `dashboard` | default | 3000 | g8ed Express operator dashboard | `g8e-dashboard-data` |
 | `g8e-gateway-secondary` | `cross-enrollment` | none | Secondary gateway in operator mode, enrolls against primary | `g8e-gateway-secondary-data` |
 | `g8e-gateway-user` | `g8ellama` | 8090, 8453 | User Gateway owning state Merkle root and governance for inference | `g8e-gateway-user-data` |
 | `g8e-inference` | `g8ellama` | none | Inference Node in operator mode, enrolls as outbound operator of User Gateway | `g8e-inference-data` |
@@ -161,7 +160,6 @@ Approve or deny each workload enrollment request:
 
 ```bash
 ./g8e auth enroll approve <data-operator-request-id> --yes
-./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <inference-operator-request-id> --yes
 ./g8e auth enroll deny <request-id> --yes
@@ -220,7 +218,6 @@ Container names (`g8e-<service>`) and host ports are literals in `docker-compose
 | --- | --- |
 | `g8e-gateway` | 8080 (HTTP), 8443 (HTTPS), and loopback-only 8081 (mirror ingest), 8082 (public mirror read/SSE), 5173 (evaluation explorer) |
 | `ensemble` | 8000 |
-| `dashboard` | 3000 |
 | `g8e-gateway-user` (g8ellama profile) | 8090 (HTTP), 8453 (HTTPS) |
 
 The Inference Operator model roles and keep-alive are the `g8e operator start` defaults; `./g8e operator start --help` lists them alongside the `--inference-*` flags. To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`. Do not put them in `.env`. The static campaign binding (`G8E_INFERENCE_CAMPAIGN_ID`, `G8E_INFERENCE_MODEL_REGISTRY_DIGEST`) is left unset; see the [Unified Docker Stack](./unified_stack.md#environment-configuration).
@@ -248,11 +245,10 @@ The root Compose resource settings are:
 | `g8e-data-operator` | 2 | 1G | 0.5 | 256M |
 | `g8e-inference-operator` | 4 | 4G | 1 | 1G |
 | `ensemble` | 2 | 2G | 0.5 | 512M |
-| `dashboard` | 1 | 512M | 0.25 | 128M |
 
 ### Dependencies and health checks
 
-The Data Operator, ensemble, and dashboard wait for the Gateway Compose health check. The ensemble waits for the Data Operator to start, not for its health check. The inference Operator waits for the Gateway and has its own certificate-file health check.
+The Data Operator and ensemble wait for the Gateway Compose health check. The ensemble waits for the Data Operator to start, not for its health check. The inference Operator waits for the Gateway and has its own certificate-file health check.
 
 | Service | Health check | What it means |
 | --- | --- | --- |
@@ -260,7 +256,6 @@ The Data Operator, ensemble, and dashboard wait for the Gateway Compose health c
 | `g8e-data-operator` | `test -f /root/.g8e/pki/operator.crt` | The Data Operator certificate exists in its runtime volume. |
 | `g8e-inference-operator` | `test -f /root/.g8e/pki/operator.crt` | The Inference Operator certificate exists in its runtime volume. |
 | `ensemble` | HTTP request to `http://localhost:8000/health` | FastAPI startup and client initialization have completed. |
-| `dashboard` | `wget --no-verbose --tries=1 --spider http://localhost:3000/` | Express is listening after startup enrollment. |
 
 The root image has no image-level `HEALTHCHECK`; service definitions provide the appropriate signal for Gateway and Operator modes.
 
@@ -271,7 +266,6 @@ Each workload has its own runtime volume and submits a platform enrollment reque
 - The Data Operator stores its certificate and key under `g8e-operator-data`.
 - The Inference Operator stores its certificate and key under `g8e-inference-data`.
 - The ensemble stores its application identity in `g8e-ensemble-data` and reads bootstrap secrets from the Data Operator volume mounted read-only at `/operator-state`.
-- The dashboard stores its runtime and application identity under `/data` in `g8e-dashboard-data`.
 
 The Gateway volume is mounted at `/root/.g8e` and contains its SQLite and ledger state under `data/`, generated PKI and trust material under `pki/`, platform secrets under `secrets/`, and vault state under `vault/`. The host CLI `.g8e` tree is not the Gateway volume. Compose does not bind-mount host campaign, mirror, inference, or provider-observation directories into the Gateway.
 
@@ -338,7 +332,7 @@ The primary gateway is reachable at the default ports (8080, 8443). The secondar
 
 | Command | Behavior |
 | --- | --- |
-| `./g8e docker start` | Builds and starts the unified stack (gateway, operator, inference-operator, ensemble, dashboard); runs interactive enrollment. |
+| `./g8e docker start` | Builds and starts the unified stack (gateway, operator, inference-operator, ensemble); runs interactive enrollment. |
 | `./g8e docker start --skip-enroll` | Starts the unified stack without enrollment prompts; workloads wait for approval. |
 | `./g8e docker init` | Builds and bootstraps the unified stack with evaluation inference; auto-approves all workloads and waits for ensemble health. Requires `G8E_OLLAMA_ENDPOINT` in `.env`. |
 | `./g8e docker stop` | Removes Compose containers while preserving volumes and networks. |

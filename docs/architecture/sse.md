@@ -15,7 +15,7 @@ related:
   - docs/architecture/auth.md
   - docs/architecture/network.md
   - docs/ensemble/sse.md
-  - docs/dashboard/sse.md
+  - docs/architecture/console.md
   - docs/guides/build_observe_frontend.md
 when_to_read: Understanding SSE event flow, integration patterns for telemetry producers, gateway stream architecture, or client reconnection behavior.
 do_not_use_for:
@@ -159,7 +159,7 @@ if _, err := s.stores.SSEStore.SSEEventsCleanup(time.Hour); err != nil {
 - [Authentication and Authorization](./auth.md): mTLS identities, CLI sessions, web sessions, and app policies.
 - [Network Architecture](./network.md): TLS listeners, PKI, and cross-component transport.
 - [Ensemble SSE](../ensemble/sse.md): First-party event production and application event types.
-- [Dashboard SSE](../dashboard/sse.md): Browser connection lifecycle and current integration constraints.
+- [Console Architecture](console.md#event-delivery): Browser connection lifecycle, reconnect, and event routing.
 - [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): The audited g8e-adapter and contract pack for generated observe frontends.
 - [Public Spectator Architecture and Threat Model](./public_spectator.md): The separate anonymous public-mirror SSE relay and outbound-only export architecture.
 - [AI Agents and the Governance Boundary](./agents.md): Distinction between event telemetry and governed execution.

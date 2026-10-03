@@ -113,7 +113,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Python protocol package | `protocol/python/` | `pytest protocol/python/tests -v` |
 | Python constants & enums | `protocol/python/g8e/constants.py`, `protocol/python/g8e/enums.py` | `pytest protocol/python/tests/test_constants.py -v` |
 | TypeScript protobuf package | `protocol/node/` | `npm --prefix protocol/node run typecheck` |
-| Observe contract generator | `dashboard/g8e-adapter/generator/gen-contract-pack.mjs` | `node dashboard/g8e-adapter/generator/gen-contract-pack.mjs --check` |
+| Observe contract generator | `g8e-adapter/generator/gen-contract-pack.mjs` | `node g8e-adapter/generator/gen-contract-pack.mjs --check` |
 | Cross-language test vectors | `protocol/vectors/` | `go test -v ./protocol` |
 | Conformance test suite | `protocol/conformance/` | `uv run --project protocol/python --extra dev pytest protocol/conformance -v` |
 | JSON constant registries | `protocol/constants/` | `make validate-doctrines && make validate-cosais` |
@@ -220,7 +220,7 @@ npm --prefix protocol/node run typecheck
 
 #### Observe frontend contract pack generator
 
-The deterministic generator at `dashboard/g8e-adapter/generator/gen-contract-pack.mjs` consumes canonical protocol JSON (`protocol/models/observe_api.json`, `protocol/models/observe_event_payloads.json`, `protocol/constants/event_dashboard_classification.json`) and the compiled adapter distribution to produce `contract-pack/models.ts`. This contract pack provides TypeScript models, runtime validators, type guards, and fixtures for browser-facing read projections and event payloads. Internal mTLS producer models are excluded. Re-running against identical inputs produces byte-identical files, verified in CI using `node dashboard/g8e-adapter/generator/gen-contract-pack.mjs --check`.
+The deterministic generator at `g8e-adapter/generator/gen-contract-pack.mjs` consumes canonical protocol JSON (`protocol/models/observe_api.json`, `protocol/models/observe_event_payloads.json`, `protocol/constants/event_dashboard_classification.json`) and the compiled adapter distribution to produce `contract-pack/models.ts`. This contract pack provides TypeScript models, runtime validators, type guards, and fixtures for browser-facing read projections and event payloads. Internal mTLS producer models are excluded. Re-running against identical inputs produces byte-identical files, verified in CI using `node g8e-adapter/generator/gen-contract-pack.mjs --check`.
 
 ### Shared protocol assets: constants registries, model schemas, and MCP configurations
 

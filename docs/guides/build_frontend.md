@@ -50,7 +50,7 @@ For minimal local Lovable setup with guided one-command configuration, see [Conn
 
 The browser SPA communicates with the g8e Gateway over HTTPS at the configured origin. Authentication uses WebAuthn passkeys (no passwords, no API keys). The Gateway issues an HttpOnly, Secure session cookie after successful passkey verification. All authenticated API calls include `credentials: 'include'` to send the session cookie cross-origin. Real-time telemetry arrives via Server-Sent Events (SSE), not WebSockets (the WebSocket endpoint at `/api/v1/pubsub/stream` requires mTLS and is not browser-accessible).
 
-The Gateway ships with an embedded single-file vanilla JavaScript console at `/console/` that implements passkey registration and authentication, transaction approvals, SSE audit streaming, passkey management, CLI recovery approval, and platform workload enrollment approval. The console is the canonical browser reference implementation for all ceremony contracts and error flows.
+The Gateway ships with an embedded console at `/console/` (React and TypeScript, source in `console/`) that implements passkey registration and authentication, transaction approvals, CLI recovery approval, platform workload enrollment approval, Operator inventory and binding, and cases, investigations, and chat through the ensemble browser proxy. The console is the canonical browser reference implementation for all ceremony contracts and error flows; its wire logic lives in `console/src/lib/` (`webauthn.ts`, `sse.ts`, `api.ts`, `paths.ts`). See [Console Architecture](../architecture/console.md).
 
 ## Prerequisites
 
@@ -161,6 +161,17 @@ The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (
 | `POST` | `/api/v1/auth/cli/recovery/approve` | Approve or deny a token-scoped CLI recovery request |
 | `GET` | `/api/v1/auth/platform-enrollments/pending` | List owner-visible pending workload enrollments |
 | `POST` | `/api/v1/auth/platform-enrollments/decision` | Approve or deny a workload enrollment |
+| `GET` | `/api/v1/operators` | List the user's Operators (`bound_web_session_id` marks session bindings) |
+| `GET` | `/api/v1/operators/{operatorId}` | Get one Operator owned by the user |
+| `POST` | `/api/v1/operators/bind` | Bind Operators to the current web session: `{ "operator_ids": [...] }` |
+| `POST` | `/api/v1/operators/unbind` | Unbind Operators from the current web session |
+| `POST` | `/api/v1/operators/{operatorId}/stop` | Stop an active remote Operator |
+| `POST` | `/api/v1/chat` | Send a chat message (ensemble proxy); `resource_creation.create_case` opens a case, `resource_creation.create_investigation` opens an investigation in `context.case_id` |
+| `POST` | `/api/v1/chat/stop` | Stop the active turn for `context.investigation_id` |
+| `GET` | `/api/v1/investigations?case_id=&limit=` | Query the user's investigations, including conversation history |
+| `POST` | `/api/v1/operator/approval/respond` | Answer an ensemble approval request: `{ "approval_id", "approved", "context" }` |
+
+The ensemble proxy routes (`/api/v1/chat`, `/api/v1/investigations`, `/api/v1/operator/`) forward to g8ee with Gateway-stamped `context.user_id`, `context.web_session_id`, and `context.bound_operators`. Browser-supplied values for those fields are replaced, and investigation queries are always scoped to the session user.
 
 ### Route Authentication
 
@@ -358,19 +369,7 @@ Clear secret-bearing enrollment and recovery tokens with `history.replaceState` 
 
 ## Reference UI/UX
 
-These choices describe the embedded console and are not compatibility requirements for external frontends.
-
-- **Dark theme** with design tokens for background, surface, border, text, muted, accent, success, warning, and danger colors
-- **Monospace font** for all hashes, credential IDs, and technical identifiers
-- **Truncate long hashes** to first 24 characters with `...` suffix
-- **Color-coded event type badges**: blue for events, red for errors, yellow for warnings, green for info/success
-- **Confirmation dialogs** before destructive actions (revoke passkey)
-- **Toast notifications** for success/error feedback on all async operations
-- **Loading states** on all buttons during async operations
-- **Responsive layout** - max-width 720px centered on desktop, full-width on mobile
-- **Header bar**: "g8e Console" title (accent color) + current user display name on the right
-- **Footer**: "g8e Gateway © 2026 Lateralus Labs, LLC."
-
+The embedded console's visual design is not a compatibility requirement for external frontends. Conventions worth keeping: monospace and truncation for hashes and identifiers, confirmation before destructive actions (revoking a passkey, stopping an Operator), visible loading state on every async action, and explicit error messages for each failure status above.
 
 ## Error Handling
 
@@ -464,7 +463,7 @@ The repository ships an audited adapter and a deterministic contract pack that t
 
 ### The audited g8e-adapter package
 
-The `dashboard/g8e-adapter/` package is the audited integration core. It owns:
+The `g8e-adapter/` package is the audited integration core. It owns:
 
 - `FrontendRuntimeConfig` parsing and validation (rejects credentials, tokens, user IDs, session IDs, URL fragments, userinfo, insecure non-loopback HTTP, and unknown fields).
 - A named endpoint allowlist of 20 browser-reachable operations. No generic arbitrary-path request helper is exported to components.
@@ -481,7 +480,7 @@ The adapter is verified by comprehensive unit tests, including contract-pack dri
 
 ### The deterministic contract pack
 
-The `dashboard/g8e-adapter/contract-pack/` directory contains deterministic, generator-neutral inputs. Regenerate it with `npm run gen:contract-pack` from `dashboard/g8e-adapter/`; verify committed outputs are current with `npm run gen:contract-pack:check`.
+The `g8e-adapter/contract-pack/` directory contains deterministic, generator-neutral inputs. Regenerate it with `npm run gen:contract-pack` from `g8e-adapter/`; verify committed outputs are current with `npm run gen:contract-pack:check`.
 
 Contents:
 
@@ -525,7 +524,7 @@ The SPA reads its `FrontendRuntimeConfig` from a JSON script tag and validates i
 
 The connected page must contain no fixture leakage, fabricated values, dead controls, unsupported claims, or mutation surface. Real-browser acceptance (exact-origin CORS, WebAuthn authenticator, SSE credentials, two-user isolation) is an owner-operated gate.
 
-See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for the runtime capability requirements a builder must satisfy, and the [contract pack README](../../dashboard/g8e-adapter/contract-pack/README.md) for the deterministic generation and acceptance commands.
+See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for the runtime capability requirements a builder must satisfy, and the [contract pack README](../../g8e-adapter/contract-pack/README.md) for the deterministic generation and acceptance commands.
 
 
 ## Invariants
@@ -543,8 +542,8 @@ See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for the runti
 | Claim | Path | Verify |
 | --- | --- | --- |
 | Browser API contract | `internal/services/gateway/passkey_*.go`, `internal/services/gateway/gateway_http_router.go` | Routes, authentication, ceremony wire shapes |
-| Embedded console implementation | `/console/` (single-file vanilla JS) | Canonical ceremony contracts and error flows |
-| g8e-adapter observe contracts | `dashboard/g8e-adapter/contract-pack/` | OpenAPI, event schemas, wire shape fixtures |
+| Embedded console implementation | `console/src/lib/`, served at `/console/` | Canonical ceremony contracts and error flows (`make console-test`) |
+| g8e-adapter observe contracts | `g8e-adapter/contract-pack/` | OpenAPI, event schemas, wire shape fixtures |
 | Gateway Swagger API reference | `/swagger/doc.json`, `/swagger/` | Auto-generated from Go Swagger annotations |
 
 ## Procedures

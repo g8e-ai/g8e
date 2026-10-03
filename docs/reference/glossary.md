@@ -27,7 +27,7 @@ do_not_use_for:
 Last Updated: 2026-09-28
 Version: v2.2.3
 
-Core terminology for the g8e Governance Suite, including the protocol, Governance Gateway, Governed Operator, g8ee ensemble, g8ed dashboard, compliance evidence, and MCP and A2A integrations. Terms are organized alphabetically. The Gateway and Operator entries describe separate runtime boundaries; see [Gateway Architecture](../architecture/gateway.md) and [Operator Architecture](../architecture/operator.md) for deployment-specific ownership.
+Core terminology for the g8e Governance Suite, including the protocol, Governance Gateway, Governed Operator, g8ee ensemble, console, compliance evidence, and MCP and A2A integrations. Terms are organized alphabetically. The Gateway and Operator entries describe separate runtime boundaries; see [Gateway Architecture](../architecture/gateway.md) and [Operator Architecture](../architecture/operator.md) for deployment-specific ownership.
 
 ---
 
@@ -121,6 +121,12 @@ A named L2 governance body defined by a `ConsensusPolicy` (`internal/models/auth
 
 ---
 
+## Console
+
+The first-party browser frontend (`console/`), embedded in the `g8e` binary and served by the Gateway at `/console/`. It provides passkey authentication, approvals, Operator inventory and binding, cases, investigations, and chat while remaining outside the Policy Decision Point and Policy Execution Point boundaries. The browser authenticates directly to the Gateway with WebAuthn and a Gateway-issued HttpOnly session cookie. See [Console Architecture](../architecture/console.md).
+
+---
+
 ## Control Assertion
 
 A framework-neutral, atomic statement of technical behavior defined in the protocol assertion catalog (`protocol/constants/compliance/assertion-catalog.json`, catalog version 2.0.0). Each assertion declares its identifier, version, title, statement, category, component scope, responsibility, applicable action classes, required evidence types, required grader and verifier references, minimum evidence level, validation cycle, missing-evidence policy, and passing rule. Typed crosswalks map these assertions to external framework controls (e.g. FedRAMP 20x CR26, NIST SP 800-53 Rev. 5).
@@ -184,12 +190,6 @@ The statically linked Go executable (`cmd/g8e/main.go`) that operates as a **Gov
 ## g8e Protocol
 
 The canonical wire contract and invariant set for g8e (`protocol/`). It defines protobuf schemas (`g8e.common.v1`, `g8e.operator.v1`, `g8e.compliance.v1`, `g8e.eval.v1`), Go and Python protocol libraries, JSON constant registries (`events.json`, `actions.json`), JSON model schemas, doctrine definitions, SPIFFE workload-identity helpers, receipt verification routines, and compliance crosswalks. Client-facing protobuf messages use protojson on wire boundaries.
-
----
-
-## g8ed
-
-The first-party browser dashboard (`dashboard/`). It provides passkey authentication and operator-facing visibility while remaining strictly outside the governance Policy Decision Point and Policy Execution Point boundaries. The browser authenticates directly to the Gateway using WebAuthn and a Gateway-issued HttpOnly session cookie; the dashboard service runs under its own enrolled application identity (`spiffe://g8e.local/app/g8ed`).
 
 ---
 

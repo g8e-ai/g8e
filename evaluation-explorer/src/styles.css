@@ -16,7 +16,7 @@
   --fs-title: 18px; /* section headings */
 }
 
-/* Dark theme (default — matches g8ed dashboard) */
+/* Dark theme (default) */
 :root,
 [data-theme="dark"] {
   --bg: #0d1117;

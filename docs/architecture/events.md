@@ -12,7 +12,7 @@ owners:
 related:
   - docs/architecture/gateway.md
   - docs/architecture/operator.md
-when_to_read: Designing, integrating, or auditing event flow across gateway, operator, ensemble, and dashboard; understanding governance envelopes and audit trails.
+when_to_read: Designing, integrating, or auditing event flow across gateway, operator, ensemble, and console; understanding governance envelopes and audit trails.
 do_not_use_for:
   - Gateway API endpoints (docs/architecture/gateway.md)
   - Operator command flow (docs/architecture/operator.md)
@@ -21,7 +21,7 @@ do_not_use_for:
 
 # Event and Action Protocol
 
-Defines the vocabulary and ownership boundary for protocol events. [protocol/constants/events.json](protocol/constants/events.json) is the authoritative registry; generated Go, Python, and dashboard views derive from it and do not define independent event names.
+Defines the vocabulary and ownership boundary for protocol events. [protocol/constants/events.json](protocol/constants/events.json) is the authoritative registry; generated Go, Python, and console views derive from it and do not define independent event names.
 
 ## Purpose
 

@@ -182,7 +182,7 @@ Re-binding to the identical ordered list of operator sessions is idempotent and 
 
 ### Platform workload enrollment
 
-Operators, the dashboard, the ensemble, and applications use owner-approved platform enrollment. Starting a gateway with no users issues no platform workload certificate. The first owner must exist before a workload can submit an enrollment request.
+Operators, the ensemble, and applications use owner-approved platform enrollment. Starting a gateway with no users issues no platform workload certificate. The first owner must exist before a workload can submit an enrollment request.
 
 The workload enrollment flow is:
 
@@ -194,7 +194,7 @@ The workload enrollment flow is:
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
 7. The active first owner can revoke the completed request by its request ID. Revocation records the actor, reason, timestamp, governance envelope, and receipt identifiers on the enrollment record.
 
-For dashboard, ensemble, and application identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active WebSockets authenticated as either identity.
+For ensemble and application identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active WebSockets authenticated as either identity.
 
 ### Identity binding and isolation
 

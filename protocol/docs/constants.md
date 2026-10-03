@@ -5,7 +5,7 @@ Version: v2.2.7
 
 ## Overview
 
-The g8e constants system maintains canonical constant definitions across the platform. JSON files in `protocol/constants/` are the single source of truth (SSOT). Go (`internal/constants/*_gen.go`), dashboard (`dashboard/public/js/constants/events.js`), and Python (`protocol/python/g8e/_data/`) are generated or bundled views of the same JSON.
+The g8e constants system maintains canonical constant definitions across the platform. JSON files in `protocol/constants/` are the single source of truth (SSOT). Go (`internal/constants/*_gen.go`), the console (`console/src/generated/events.ts`), and Python (`protocol/python/g8e/_data/`) are generated or bundled views of the same JSON.
 
 ## Constant Categories
 
@@ -59,7 +59,7 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. `make cons
 - AI LLM Config: requested, received, failed
 - AI LLM Lifecycle: requested, started, completed, failed, stopped, error occurred
 - AI LLM Tools: web search, investigation query, and command constraints event lifecycles
-- AI LLM Chat: submitted, filter updated, message sent/replayed/processing failed/dead lettered, iteration lifecycle events (started, completed, failed, stopped, retry), thinking lifecycle events (`thinking_phase` in payloads), citations received, text received/chunk received/completed/truncated, stream lifecycle events. Dashboard-local stop signals live in `dashboard/public/js/constants/ui-events.js`, not the protocol registry.
+- AI LLM Chat: submitted, filter updated, message sent/replayed/processing failed/dead lettered, iteration lifecycle events (started, completed, failed, stopped, retry), thinking lifecycle events (`thinking_phase` in payloads), citations received, text received/chunk received/completed/truncated, stream lifecycle events.
 - Platform: usage updated, notification sent
 - Platform Auth: login requested/succeeded/failed, logout requested/succeeded/failed, session validation requested/succeeded/failed, session expired, user authenticated/unauthenticated, component initialized (authstate, chat, operator), auth info updated
 - Platform SSE: keepalive sent, connection established/opened/closed/failed/error

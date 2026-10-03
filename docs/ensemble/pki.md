@@ -28,7 +28,7 @@ do_not_use_for:
 
 ## Purpose
 
-Documents how g8e applications (dashboard, ensemble, remote Operator, applications) enroll with the Gateway, manage certificates, discover trust anchors, and maintain identity credentials. This guide complements the canonical [Network Architecture](../architecture/network.md) reference by covering the client-side lifecycle: enrollment state management, renewal, revocation, and runtime storage.
+Documents how g8e applications (ensemble, remote Operator, applications) enroll with the Gateway, manage certificates, discover trust anchors, and maintain identity credentials. This guide complements the canonical [Network Architecture](../architecture/network.md) reference by covering the client-side lifecycle: enrollment state management, renewal, revocation, and runtime storage.
 
 The Gateway owns the deployment PKI, enrollment records, and revocation state. Applications own their enrolled certificates, private keys, trust bundles, and resumable enrollment state in their own runtime volumes. The Operator owns execution evidence. In unified Compose deployments, the read-only `/operator-state` mount supplies selected bootstrap material for initialization; it is not a general-purpose host filesystem or execution channel.
 
@@ -104,11 +104,11 @@ Applications initiate enrollment by discovering the Gateway's root CA and verify
 
 ### Platform application enrollment
 
-The dashboard, ensemble, applications, and remote Operator use owner-approved enrollment after the Gateway has an owner:
+The ensemble, applications, and remote Operator use owner-approved enrollment after the Gateway has an owner:
 
 1. **CSR Generation**: The application generates an ECDSA P-256 private key locally and creates a certificate signing request (CSR) containing the public key.
 2. **Request Submission**: The application submits the CSR and public-key fingerprint to `POST /api/v1/auth/platform-enrollments/request` over the plain HTTP discovery surface (no client certificate required). The Gateway returns an opaque token-scoped requester token that expires after 30 minutes.
-3. **Request Review**: An enrolled owner views pending requests via `g8e auth enroll pending` or the Console dashboard.
+3. **Request Review**: An enrolled owner views pending requests via `g8e auth enroll pending` or the console Approvals page.
 4. **Approval or Denial**: The owner approves with `g8e auth enroll approve <request-id> --yes` or denies with `g8e auth enroll deny <request-id> --yes`. Approval initiates a Gateway-side policy record and sends a 202 response indicating readiness for proof-of-possession.
 5. **Proof of Possession**: After approval, the application proves possession of the private key by submitting it in a request to `POST /api/v1/auth/platform-enrollments/complete` over mTLS, including a signed proof. A retry after successful completion returns the same issued identity (idempotent).
 6. **Credential Installation**: The Gateway returns the issued certificate chain, trust bundle, and session or application policy. The application atomically installs the certificate, key, and trust bundle in its runtime tree and becomes ready to serve.

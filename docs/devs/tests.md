@@ -27,7 +27,7 @@ do_not_use_for:
 
 ## Purpose
 
-Defines the four-tier test model, execution entry points, fixture lifecycle, and testing invariants for the g8e Go platform, Ensemble, Dashboard, and protocol packages.
+Defines the four-tier test model, execution entry points, fixture lifecycle, and testing invariants for the g8e Go platform, Ensemble, Console, and protocol packages.
 
 ## Quick index
 
@@ -131,4 +131,4 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 - [Documentation Guide](docs.md): documentation audit, catalog, and formatting standards.
 - [Release Process](release_process.md): native evaluation acceptance and release verification.
 - [Ensemble Testing](../ensemble/tests.md): pytest fixtures, fakes, and external credential gates.
-- [Dashboard Testing](../dashboard/tests.md): Vitest and ESLint testing.
+- [Console Development](../console/devs.md#test): Vitest, typecheck, ESLint, and embed checks.

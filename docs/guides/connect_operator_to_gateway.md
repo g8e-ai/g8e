@@ -163,7 +163,7 @@ A successful connection prints `Channel established - Ready to receive` in the l
 
 The root `docker-compose.yml` runs the Gateway and Operator as separate containers with separate process and network namespaces and named volumes. The Gateway publishes host ports 8080 and 8443 by default. The Operator container reaches the Gateway as `g8e.local:8080` and `g8e.local:8443` and exposes no host port. Each container has its own volume for credentials, vault keys, and local state; the Operator volume does not mount the Docker host filesystem.
 
-All core services (Gateway, Data Operator, Inference Operator, ensemble, and dashboard) start together in the default Compose profile; there is no bootstrap profile. Workloads submit their platform enrollment requests and poll for owner approval, so enroll the owner from the repository host once the Gateway is healthy:
+All core services (Gateway, Data Operator, Inference Operator, and ensemble) start together in the default Compose profile; there is no bootstrap profile. Workloads submit their platform enrollment requests and poll for owner approval, so enroll the owner from the repository host once the Gateway is healthy:
 
 ```bash
 docker compose up -d
@@ -183,7 +183,7 @@ Approve the request for the Data Operator (container `g8e-data-operator`, hostna
 ./g8e operator list
 ```
 
-The container runs `operator start -e g8e.local`. The same owner-approval workflow applies to the Inference Operator, dashboard, and ensemble. For profile details, volume ownership, and cleanup procedures, see [Unified Docker Stack](unified_stack.md).
+The container runs `operator start -e g8e.local`. The same owner-approval workflow applies to the Inference Operator and ensemble. For profile details, volume ownership, and cleanup procedures, see [Unified Docker Stack](unified_stack.md).
 
 ---
 
@@ -261,7 +261,7 @@ From an enrolled CLI identity, list Operators associated with your user:
 ./g8e operator list --endpoint <gateway-host>
 ```
 
-This displays each Operator's ID, type (e.g., data, dashboard, ensemble), hostname, session ID, and status. A status of `stale` means the Gateway has not received a heartbeat from that Operator for more than 60 seconds; it returns to `active` on the next heartbeat. A stopped or crashed Operator process therefore leaves `active` within about a minute without any manual cleanup. Use `g8e operator show <operator-id-or-session-id>` to display the last heartbeat time, the latest heartbeat snapshot, and performance metrics. Check the Operator process log for the `Channel established - Ready to receive` message as confirmation that it established its pub/sub channel subscription.
+This displays each Operator's ID, type (e.g., data, ensemble), hostname, session ID, and status. A status of `stale` means the Gateway has not received a heartbeat from that Operator for more than 60 seconds; it returns to `active` on the next heartbeat. A stopped or crashed Operator process therefore leaves `active` within about a minute without any manual cleanup. Use `g8e operator show <operator-id-or-session-id>` to display the last heartbeat time, the latest heartbeat snapshot, and performance metrics. Check the Operator process log for the `Channel established - Ready to receive` message as confirmation that it established its pub/sub channel subscription.
 
 ### Bind the CLI to Operators and Run Commands
 

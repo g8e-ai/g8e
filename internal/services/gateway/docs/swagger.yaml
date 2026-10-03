@@ -4241,8 +4241,8 @@ paths:
     get:
       consumes:
       - text/html
-      description: Serves the single-page application dashboard for WebAuthn/passkey
-        operations.
+      description: 'Serves the g8e Console: passkey authentication, approvals, Operator
+        inventory and binding, cases, investigations, and chat.'
       produces:
       - text/html
       responses:
