@@ -6,7 +6,6 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CURRENT_PLATFORM_RELEASE, matchesRelease, releaseLabel } from '../content/release';
-import { ReleaseSelector } from '../components/ReleaseSelector';
 import { useDatasetOptions } from '../state/dataset';
 import { useStoreState } from '../state/store';
 import { useMirrorOrigin } from '../state/mirror';
@@ -220,7 +219,6 @@ export function OverviewView() {
 
   return (
     <div className="overview">
-      <div className="eval-toolbar"><ReleaseSelector /></div>
       <LiveEventStream
         events={events}
         connection={connection}

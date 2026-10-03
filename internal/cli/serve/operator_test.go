@@ -18,7 +18,21 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 )
+
+func TestOperatorFingerprintOptions_ProvenanceIncludesRuntimePort(t *testing.T) {
+	opts := ServeOperatorOptions{ProvenanceOperatorEnabled: true}
+
+	got := operatorFingerprintOptions(opts, "/var/lib/ollama/models", "operator-user")
+
+	assert.Equal(t, auth.FingerprintOptions{
+		LocalDir: "/var/lib/ollama/models",
+		Account:  "operator-user",
+		Port:     constants.Ports.OperatorHttp,
+		Role:     string(constants.OperatorRoleProvenance),
+	}, got)
+}
 
 func TestServeOperatorOptions_ZeroValue(t *testing.T) {
 	var opts ServeOperatorOptions

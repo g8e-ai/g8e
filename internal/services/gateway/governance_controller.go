@@ -98,22 +98,32 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	sourceComponent := envelope.GetSourceComponent()
 	actionType := constants.ActionType(envelope.GetActionType())
 
+	wid := protocol.NewWorkloadIdentity()
+
 	// Fail closed for governed mutations: an envelope that performs a
 	// mutation MUST bind to a transport identity. An empty operator_id AND
-	// operator_session_id on a mutation means the envelope is unbound and
-	// must be rejected at the transport boundary rather than deferred to
-	// the downstream processor, which would otherwise admit it as a
-	// fail-open path. Non-mutation reads keep the pass-through behavior so
-	// the downstream processor validates them.
+	// operator_session_id means no delegated Operator authority is claimed, so
+	// the only admissible binding is the transport-level app workload identity:
+	// an AGENT/CLIENT envelope whose acting_app_id matches the mTLS app
+	// SPIFFE ID (e.g. g8ee persisting platform records for a browser session).
+	// Anything else is rejected at the transport boundary rather than deferred
+	// to the downstream processor, which would otherwise admit it as a
+	// fail-open path. Non-mutation reads keep the pass-through behavior so the
+	// downstream processor validates them.
 	if operatorSessionID == "" && operatorID == "" {
-		if actionType.IsMutation() {
-			return fmt.Errorf("%w: mutation action %q requires operator_id or operator_session_id binding",
-				constants.ErrIdentityBindingFailed, actionType)
+		if !actionType.IsMutation() {
+			return nil
 		}
-		return nil
+		if actingAppID != "" && isAppComponent(sourceComponent) {
+			for _, uri := range cert.URIs {
+				if wid.MatchesApp(uri.String(), actingAppID) {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("%w: mutation action %q requires operator_id or operator_session_id binding, or an acting_app_id matching the app certificate",
+			constants.ErrIdentityBindingFailed, actionType)
 	}
-
-	wid := protocol.NewWorkloadIdentity()
 
 	// Check if any certificate URI SAN matches the envelope's identity
 	for _, uri := range cert.URIs {

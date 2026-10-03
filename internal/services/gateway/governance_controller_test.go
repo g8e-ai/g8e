@@ -211,6 +211,49 @@ func TestVerifyEnvelopeIdentityBinding_FileEditEmptyIdentity_FailsClosed(t *test
 	require.True(t, errors.Is(err, constants.ErrIdentityBindingFailed), "expected ErrIdentityBindingFailed, got %v", err)
 }
 
+// appMutationEnvelopeBytes builds a DOCUMENT_UPDATE envelope with no operator
+// claims, acting as the given app from the given source component.
+func appMutationEnvelopeBytes(t *testing.T, actingAppID string, source commonv1.Component) []byte {
+	t.Helper()
+	b, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+		ActionType:      string(constants.ActionTypeDocumentUpdate),
+		ActingAppId:     actingAppID,
+		SourceComponent: source,
+	})
+	require.NoError(t, err)
+	return b
+}
+
+// TestVerifyEnvelopeIdentityBinding_AppMutationEmptyOperatorFields covers the
+// app-only write path (g8ee persisting platform records for a browser session,
+// where no Operator is in the loop): admitted only when acting_app_id matches
+// the mTLS app SPIFFE ID from an AGENT/CLIENT source.
+func TestVerifyEnvelopeIdentityBinding_AppMutationEmptyOperatorFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		spiffe  string
+		env     []byte
+		allowed bool
+	}{
+		{"app match agent", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "g8ee", commonv1.Component_COMPONENT_AGENT), true},
+		{"app match client", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "g8ee", commonv1.Component_COMPONENT_CLIENT), true},
+		{"app mismatch", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "other-app", commonv1.Component_COMPONENT_AGENT), false},
+		{"no acting app", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "", commonv1.Component_COMPONENT_AGENT), false},
+		{"non-app source", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "g8ee", commonv1.Component_COMPONENT_G8EO), false},
+		{"operator cert for app claim", "spiffe://g8e.local/operator/org-1/op-1/sess-1", appMutationEnvelopeBytes(t, "g8ee", commonv1.Component_COMPONENT_AGENT), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := verifyEnvelopeIdentityBinding(identityBindingRequest(t, tc.spiffe), tc.env)
+			if tc.allowed {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, constants.ErrIdentityBindingFailed)
+		})
+	}
+}
+
 // TestVerifyEnvelopeIdentityBinding_MutationWithMatchingOperatorCert_Admitted
 // is the positive counterpart: a DOCUMENT_UPDATE envelope carrying both
 // operator_id and operator_session_id, presented via a matching operator
