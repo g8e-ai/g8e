@@ -108,11 +108,11 @@ Component tests in `tests/app.test.tsx` stub `fetch` and `EventSource` with a fa
 
 ### Ship a change
 
-1. `make console-lint console-test`.
-2. `make console-build embed-console` and commit `internal/services/gateway/console/static/` with the source change.
+1. `make ci` (or `make ci-console`, which typechecks, lints, tests, builds the console SPA, and refreshes the embed automatically). Alternatively, `make embed-console` will build and embed directly.
+2. Commit `internal/services/gateway/console/static/` with the source change.
 3. If you changed the Gateway handler's Swagger annotations, run `make swagger-generate`.
 
-The `console-tests` CI job runs typecheck and lint, the Vitest suite, a fresh `npm run build` diffed against `internal/services/gateway/console/static`, and the `g8e-adapter` build with `npm run gen:contract-pack:check`. `make ci-console` runs lint, tests, and the embed check locally after `make dev-check`; the `g8e-adapter` build and contract-pack check run only in CI.
+The `console-tests` CI job runs typecheck and lint, the Vitest suite, a fresh `npm run build` diffed against `internal/services/gateway/console/static`, and the `g8e-adapter` build with `npm run gen:contract-pack:check`. `make ci-console` (and `make ci`) runs lint, tests, and refreshes the embed locally after `make dev-check`; the `g8e-adapter` build and contract-pack check run only in CI.
 
 ## Anti-patterns
 

@@ -372,7 +372,11 @@ jobs:
       - name: Verify the embedded console is current
         run: |
           npm run build --prefix console
-          diff -r console/dist internal/services/gateway/console/static
+          diff -r console/dist internal/services/gateway/console/static || {
+            echo "ERROR: The embedded console (internal/services/gateway/console/static) is stale."
+            echo "Run 'make ci' (or 'make embed-console') locally and commit the refreshed embed."
+            exit 1
+          }
 
       - name: Build g8e-adapter and verify its contract pack
         working-directory: g8e-adapter

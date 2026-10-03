@@ -264,7 +264,7 @@ help:
 	@echo ""
 	@echo "Console (Gateway-embedded browser frontend, served at /console/):"
 	@echo "  console-build        Build the console SPA (requires npm ci in console/)"
-	@echo "  embed-console        Copy console/dist into the Gateway's embedded static directory"
+	@echo "  embed-console        Rebuild console SPA and copy into Gateway's embedded static directory"
 	@echo "  console-test         Run the console vitest suite"
 	@echo "  console-lint         Typecheck and ESLint the console"
 	@echo "  console-embed-check  Fail if the embedded console differs from a fresh build"
@@ -520,15 +520,20 @@ CONSOLE_DIST := console/dist
 CONSOLE_EMBED := internal/services/gateway/console/static
 
 .PHONY: embed-console
-embed-console:
+embed-console: console-build
+	@rm -rf $(CONSOLE_EMBED) && cp -a $(CONSOLE_DIST) $(CONSOLE_EMBED)
+	@echo "Embedded console updated from fresh console build."
+
+.PHONY: _embed-console-if-built
+_embed-console-if-built:
 	@if [ -f $(CONSOLE_DIST)/index.html ]; then \
 		rm -rf $(CONSOLE_EMBED) && cp -a $(CONSOLE_DIST) $(CONSOLE_EMBED); \
 	else \
-		echo "console/dist not built; using the committed console embed (run 'make console-build' to refresh)"; \
+		echo "console/dist not built; using the committed console embed (run 'make embed-console' to refresh)"; \
 	fi
 
 .PHONY: build
-build: embed-explorer embed-console
+build: embed-explorer _embed-console-if-built
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
 	@rm -f $(BIN_DIR)/g8e-binaries.json
@@ -869,7 +874,7 @@ console-test:
 # Rebuilds the console and fails if the committed embed is stale.
 .PHONY: console-embed-check
 console-embed-check: console-build
-	@diff -r $(CONSOLE_DIST) $(CONSOLE_EMBED) >/dev/null || { echo "ERROR: $(CONSOLE_EMBED) is stale; run 'make console-build embed-console' and commit the result"; exit 1; }
+	@diff -r $(CONSOLE_DIST) $(CONSOLE_EMBED) >/dev/null || { echo "ERROR: $(CONSOLE_EMBED) is stale; run 'make embed-console' and commit the result"; exit 1; }
 	@echo "Embedded console is current."
 
 # Coverage tests
@@ -1027,7 +1032,7 @@ docker-build:
 # CI/CD (LOCAL)
 # =============================================================================
 .PHONY: ci
-ci: ci-platform ci-ensemble ci-console
+ci: ci-console ci-platform ci-ensemble
 	@echo "CI complete."
 
 .PHONY: ci-platform
@@ -1039,7 +1044,7 @@ ci-ensemble: dev-check ensemble-lint ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-console
-ci-console: dev-check console-lint console-test console-embed-check
+ci-console: dev-check console-lint console-test embed-console
 	@echo "Console CI complete."
 
 .PHONY: check-bsl-headers
