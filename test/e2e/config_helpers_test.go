@@ -204,55 +204,6 @@ func TestDeriveEnsembleURL(t *testing.T) {
 	}
 }
 
-func TestDeriveDashboardURL(t *testing.T) {
-	tests := []struct {
-		name          string
-		gatewayHTTP   string
-		expectedURL   string
-		expectError   bool
-		errorContains string
-	}{
-		{
-			name:        "standard gateway URL",
-			gatewayHTTP: "http://localhost:8443",
-			expectedURL: "http://localhost:3000",
-			expectError: false,
-		},
-		{
-			name:        "gateway with different port",
-			gatewayHTTP: "http://192.168.1.100:9000",
-			expectedURL: "http://192.168.1.100:3000",
-			expectError: false,
-		},
-		{
-			name:          "invalid scheme",
-			gatewayHTTP:   "ftp://localhost:8443",
-			expectError:   true,
-			errorContains: "expected http or https scheme",
-		},
-		{
-			name:        "empty host",
-			gatewayHTTP: "http://:8443",
-			expectedURL: "http://:3000",
-			expectError: false,
-			// Go's URL parser accepts empty host with port
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := deriveDashboardURL(tt.gatewayHTTP)
-			if tt.expectError {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errorContains)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expectedURL, result)
-			}
-		})
-	}
-}
-
 // TestValidateCredentials covers the partial-credential error paths extracted
 // from loadE2EConfig. These run as Tier 1 unit tests with no file system or
 // platform dependency.

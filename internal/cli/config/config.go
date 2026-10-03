@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	DefaultRuntimeDir = ".g8e"
-	DefaultPKIDir     = ".g8e/pki"
-	DefaultSecretsDir = ".g8e/secrets"
+	DefaultRuntimeDir = constants.RuntimeDirname
+	DefaultPKIDir     = constants.DefaultPKIDir
+	DefaultSecretsDir = constants.DefaultSecretsDir
 )
 
 // PathsConfig holds path configuration for test support.
@@ -57,20 +57,20 @@ func DefaultPathsConfig() PathsConfig {
 
 // DefaultInfraPaths returns the default infra path configuration.
 func DefaultInfraPaths() PathsConfig {
-	paths := DefaultPathsConfig()
-	paths.Infra.AppCertDir = ".g8e/pki/issued/apps"
-	paths.Infra.CACertPath = ".g8e/pki/trust/g8eg-ca-bundle.pem"
-	paths.Infra.DBPath = ".g8e/data/g8e.db"
-	paths.Infra.DocsDir = ".g8e/docs"
-	paths.Infra.PKIDir = ".g8e/pki"
-	paths.Infra.ProtocolConstantsDir = ".g8e/protocol/constants"
-	paths.Infra.ProtocolDir = ".g8e/protocol"
-	paths.Infra.ProtocolModelsDir = ".g8e/protocol/models"
-	paths.Infra.SecretsDir = ".g8e/secrets"
-	paths.Infra.SSHConfigPath = ".g8e/ssh_config"
-	paths.Infra.VaultDir = ".g8e/vault"
-	paths.Infra.VaultKeyPath = ".g8e/vault/key"
-	return paths
+	cfg := DefaultPathsConfig()
+	cfg.Infra.AppCertDir = paths.Infra.AppCertDir
+	cfg.Infra.CACertPath = paths.Infra.CaCertPath
+	cfg.Infra.DBPath = paths.Infra.DbPath
+	cfg.Infra.DocsDir = paths.Infra.DocsDir
+	cfg.Infra.PKIDir = paths.Infra.PkiDir
+	cfg.Infra.ProtocolConstantsDir = paths.Infra.ProtocolConstantsDir
+	cfg.Infra.ProtocolDir = paths.Infra.ProtocolDir
+	cfg.Infra.ProtocolModelsDir = paths.Infra.ProtocolModelsDir
+	cfg.Infra.SecretsDir = paths.Infra.SecretsDir
+	cfg.Infra.SSHConfigPath = paths.Infra.SshConfigPath
+	cfg.Infra.VaultDir = paths.Infra.VaultDir
+	cfg.Infra.VaultKeyPath = paths.Infra.VaultKeyPath
+	return cfg
 }
 
 // Config holds CLI configuration resolved from constants.Paths.
@@ -269,22 +269,7 @@ func HasHTTPSEndpointOverride() bool {
 // When cfg.Paths.Host is a full URL (contains "://"), it is returned directly,
 // matching OperatorHTTPURL behavior for test overrides.
 func (c *Config) OperatorPublicURL() string {
-	endpointMu.RLock()
-	override := httpsEndpointOverride
-	endpointMu.RUnlock()
-	if override != "" {
-		if strings.Contains(override, "://") {
-			return override
-		}
-		if _, _, err := net.SplitHostPort(override); err != nil {
-			return fmt.Sprintf("https://%s:%d", override, constants.Ports.OperatorHttps)
-		}
-		return fmt.Sprintf("https://%s", override)
-	}
-	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
-		return c.Paths.Host
-	}
-	return network.LocalhostHTTPSURL(c.OperatorHTTPSPort())
+	return c.OperatorHTTPURL()
 }
 
 // OperatorDiscoveryURL returns the HTTP URL for CA download and bootstrap routes.

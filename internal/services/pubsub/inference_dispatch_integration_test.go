@@ -114,11 +114,8 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 
 	cfg := testutil.NewTestConfig(t)
 	cfg.Inference = config.InferenceConfig{
-		Enabled:        true,
-		PrimaryModel:   "gemma3:4b",
-		AssistantModel: "llama3.2:3b",
-		LiteModel:      "qwen3:1.5b",
-		KeepAlive:      "-1",
+		Enabled:   true,
+		KeepAlive: "-1",
 	}
 	logger := testutil.NewTestLogger()
 
@@ -161,6 +158,7 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 		AuditStore:         auditStore,
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-inference-int"}},
 			ReplayStore:       testutil.NewStatefulMockReplayStore(),
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -281,12 +279,12 @@ func TestInferenceDispatch_ProcessEnvelope_PrimaryRole_PersistsReceiptAndAudit(t
 	assert.Equal(t, wantDigest, persisted.ResultSummary, "persisted receipt summary must be the result digest")
 }
 
-// TestInferenceDispatch_ProcessEnvelope_AllThreeRoles_RoutesByConfigDefault
-// verifies that the inference handler resolves the correct Ollama model name
-// for each chat-tier role (Primary, Assistant, Lite) from the config defaults,
-// proving multi-role support through a single handler without per-role
-// backend instances.
-func TestInferenceDispatch_ProcessEnvelope_AllThreeRoles_RoutesByConfigDefault(t *testing.T) {
+// TestInferenceDispatch_ProcessEnvelope_AllThreeRoles_ServesRequestedModel
+// verifies that the inference handler serves exactly the model each governed
+// request names for every chat-tier role (Primary, Assistant, Lite). The
+// Operator holds no per-role model configuration, so one handler and one
+// backend serve whatever the user chose in the Console.
+func TestInferenceDispatch_ProcessEnvelope_AllThreeRoles_ServesRequestedModel(t *testing.T) {
 	svc, backend, _, _ := newInferenceIntegrationFixture(t)
 
 	roles := []struct {
@@ -304,7 +302,7 @@ func TestInferenceDispatch_ProcessEnvelope_AllThreeRoles_RoutesByConfigDefault(t
 			backend.called = false
 			backend.lastReq = models.GenerateRequest{}
 
-			wire := buildInferenceEnvelope(t, tc.protoRole, "", "test prompt")
+			wire := buildInferenceEnvelope(t, tc.protoRole, tc.wantModel, "test prompt")
 			receipt, err := svc.ProcessEnvelope(context.Background(), wire)
 
 			require.NoError(t, err)
@@ -343,6 +341,7 @@ func TestInferenceDispatch_ProcessEnvelope_NilInferenceHandler_FailsClosed(t *te
 		AuditStore:         auditStore,
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-inference-int"}},
 			ReplayStore:       testutil.NewStatefulMockReplayStore(),
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},

@@ -59,14 +59,9 @@ type ServeOperatorOptions struct {
 
 	// Inference (g8ellama). Enabled when the operator runs as an Inference
 	// Node calling the configured remote Ollama provider.
-	InferenceEnabled             bool
-	InferenceOllamaEndpoint      string
-	InferencePrimaryModel        string
-	InferenceAssistantModel      string
-	InferenceLiteModel           string
-	InferenceKeepAlive           string
-	InferenceCampaignID          string
-	InferenceModelRegistryDigest string
+	InferenceEnabled        bool
+	InferenceOllamaEndpoint string
+	InferenceKeepAlive      string
 
 	ProviderBoundaryObserverEnabled bool
 	ProviderBoundaryObserverID      string
@@ -256,14 +251,9 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 
 		Lattice: latticeCfg,
 
-		InferenceEnabled:             opts.InferenceEnabled,
-		InferenceOllamaEndpoint:      opts.InferenceOllamaEndpoint,
-		InferencePrimaryModel:        opts.InferencePrimaryModel,
-		InferenceAssistantModel:      opts.InferenceAssistantModel,
-		InferenceLiteModel:           opts.InferenceLiteModel,
-		InferenceKeepAlive:           opts.InferenceKeepAlive,
-		InferenceCampaignID:          opts.InferenceCampaignID,
-		InferenceModelRegistryDigest: opts.InferenceModelRegistryDigest,
+		InferenceEnabled:        opts.InferenceEnabled,
+		InferenceOllamaEndpoint: opts.InferenceOllamaEndpoint,
+		InferenceKeepAlive:      opts.InferenceKeepAlive,
 
 		ProviderBoundaryObserverEnabled: opts.ProviderBoundaryObserverEnabled,
 		ProviderBoundaryObserverID:      opts.ProviderBoundaryObserverID,
@@ -348,14 +338,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
 			os.Exit(constants.ExitConfigError)
 		}
-		role := constants.OperatorRoleData
-		if opts.InferenceEnabled {
-			role = constants.OperatorRoleInference
-		} else if opts.ProvenanceOperatorEnabled {
-			role = constants.OperatorRoleProvenance
-		} else if opts.ProviderBoundaryObserverEnabled {
-			role = constants.OperatorRoleObserver
-		}
+		role := operatorRole(opts)
 		account := auth.ResolveCurrentAccount()
 		instanceID := fmt.Sprintf("operator-%s-%s", hostname, role)
 		enrollClient, err := NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname, fileSvc, logger)
@@ -364,11 +347,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
 			os.Exit(constants.ExitConfigError)
 		}
-		enrollClient.SetFingerprintOptions(auth.FingerprintOptions{
-			LocalDir: effectiveWorkDir,
-			Account:  account,
-			Role:     string(role),
-		})
+		enrollClient.SetFingerprintOptions(operatorFingerprintOptions(opts, effectiveWorkDir, account))
 		result, err := enrollClient.Enroll(context.Background())
 		if err != nil {
 			logger.Error("Platform enrollment failed", string(constants.ConnectionStateError), err)
@@ -377,6 +356,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			fmt.Fprintf(os.Stderr, "  Pending state is persisted; restart to resume the same request.\n")
 			os.Exit(constants.ExitConfigError)
 		}
+
 		os.Setenv(string(constants.EnvVar.OperatorSessionID), result.OperatorSessionID)
 		if result.Posture != "" {
 			opts.Posture = result.Posture
@@ -510,4 +490,26 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	shutdownCancel()
 
 	os.Exit(constants.ExitSuccess)
+}
+
+func operatorRole(opts ServeOperatorOptions) constants.OperatorRole {
+	switch {
+	case opts.InferenceEnabled:
+		return constants.OperatorRoleInference
+	case opts.ProvenanceOperatorEnabled:
+		return constants.OperatorRoleProvenance
+	case opts.ProviderBoundaryObserverEnabled:
+		return constants.OperatorRoleObserver
+	default:
+		return constants.OperatorRoleData
+	}
+}
+
+func operatorFingerprintOptions(opts ServeOperatorOptions, localDir, account string) auth.FingerprintOptions {
+	return auth.FingerprintOptions{
+		LocalDir: localDir,
+		Account:  account,
+		Port:     constants.Ports.OperatorHttp,
+		Role:     string(operatorRole(opts)),
+	}
 }

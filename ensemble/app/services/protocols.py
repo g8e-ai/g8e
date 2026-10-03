@@ -61,7 +61,6 @@ from app.models.operators import (
     IntentApprovalRequest,
     OperatorDocument,
     PendingApproval,
-    StreamApprovalRequest,
     TargetSystem,
 )
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
@@ -208,17 +207,8 @@ class KVServiceProtocol(Protocol):
         """Delete all keys matching a pattern."""
         raise NotImplementedError
 
-    async def lrange(self, key: str, start: int, stop: int) -> list[object]:
-        """Retrieve a range of elements from a list."""
-        raise NotImplementedError
 
-    async def incr(self, key: str, amount: int = 1) -> int:
-        """Increment a key's value."""
-        raise NotImplementedError
 
-    async def decr(self, key: str, amount: int = 1) -> int:
-        """Decrement a key's value."""
-        raise NotImplementedError
 
     def is_healthy(self) -> bool:
         """Check if the service is healthy."""
@@ -330,9 +320,6 @@ class DocumentServiceProtocol(Protocol):
         """Convenience method to append to an array field."""
         raise NotImplementedError
 
-    async def invalidate_query_cache(self, collection: str) -> int:
-        """Invalidate the query cache for a collection."""
-        raise NotImplementedError
 
     async def close(self) -> None:
         """Close the underlying database and cache connections."""
@@ -630,8 +617,6 @@ class ApprovalServiceProtocol(Protocol):
     ) -> ApprovalResult:
         raise NotImplementedError
 
-    async def request_stream_approval(self, request: StreamApprovalRequest) -> ApprovalResult:
-        raise NotImplementedError
 
     async def handle_approval_response(self, response: OperatorApprovalResponse) -> None:
         raise NotImplementedError

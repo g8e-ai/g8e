@@ -940,6 +940,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		Timestamp:       timestamppb.New(now),
 		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
 		SourceComponent: commonv1.Component_COMPONENT_CLIENT,
+		OperatorId:      string(constants.DocIDEmbeddedOperator),
 		EventType:       string(opts.eventType),
 		ActionType:      string(actionType),
 		TargetResource:  opts.targetResource,
@@ -965,13 +966,8 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	// For delegated credentials the auth middleware extracts both SANs from the cert
 	// and places them in context — no trusted headers.
 	if appID, ok := ctx.Value(constants.ContextKeyAppID).(string); ok && appID != "" {
-		env.OperatorId = appID
-		env.OperatorSessionId = appID
 		env.ActingAppId = appID
 	} else {
-		if opID, ok := ctx.Value(constants.ContextKeyOperatorID).(string); ok && opID != "" {
-			env.OperatorId = opID
-		}
 		if opSessionID, ok := ctx.Value(constants.ContextKeyOperatorSessionID).(string); ok && opSessionID != "" {
 			env.OperatorSessionId = opSessionID
 		}
@@ -1255,7 +1251,6 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	env.OperatorId = userID
 	if env.Governance == nil {
 		env.Governance = &commonv1.GovernanceMetadata{}
 	}

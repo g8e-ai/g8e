@@ -4,13 +4,13 @@ g8ee is the first-party Python and FastAPI reasoning service for the g8e platfor
 
 ## Run the unified stack
 
-The supported Docker Compose flow starts the gateway, operator, ensemble, and dashboard. It also enrolls the first owner and guides that owner through approval of each workload enrollment request.
+The supported Docker Compose flow starts the gateway, data operator, inference operator, and ensemble. The Gateway serves the browser console at `https://localhost:8443/console/`. It also enrolls the first owner and guides that owner through approval of each workload enrollment request.
 
 ### Prerequisites
 
 - Docker Engine with the Docker Compose v2 plugin
 - The repository-root `g8e` binary
-- Host ports 8080, 8443, 8000, and 3000 available when using the defaults
+- Host ports 8080, 8443, and 8000 available when using the defaults
 - A browser with WebAuthn support, or a terminal that can complete headless owner enrollment
 
 From the repository root, build the images and start the full stack:
@@ -24,7 +24,7 @@ docker compose up -d
 ./g8e docker start
 ```
 
-The unified stack starts all 5 core services (gateway, data operator, inference operator, ensemble, and dashboard) together in the default Compose profile. Workloads remain pending until an enrolled owner approves them. The helper above manages that flow; see the [Unified Docker Stack guide](../docs/guides/unified_stack.md) for the manual commands and troubleshooting steps.
+The unified stack starts its four services (gateway, data operator, inference operator, and ensemble) together in the default Compose profile. Workloads remain pending until an enrolled owner approves them. The helper above manages that flow; see the [Unified Docker Stack guide](../docs/guides/unified_stack.md) for the manual commands and troubleshooting steps.
 
 After enrollment completes, the ensemble health endpoint is available at `http://localhost:8000/health`. The published host port is fixed in `docker-compose.yml`; use a checked-in `docker-compose.override.yml` to change it.
 

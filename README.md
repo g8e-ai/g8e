@@ -2,7 +2,7 @@
 
 **Give AI systems a governed path to real infrastructure—without giving them direct authority over it.**
 
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Version](https://img.shields.io/badge/version-v2.2.7-green.svg)](VERSION) [![FIPS 140-3](https://img.shields.io/badge/FIPS%20140--3-Go%20Cryptographic%20Module-006400.svg)](docs/reference/fips140-3.md) [![MCP](https://img.shields.io/badge/MCP-governed-5D3FD3.svg)](protocol/docs/mcp.md)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Version](https://img.shields.io/badge/version-v2.3.0-green.svg)](VERSION) [![FIPS 140-3](https://img.shields.io/badge/FIPS%20140--3-Go%20Cryptographic%20Module-006400.svg)](docs/reference/fips140-3.md) [![MCP](https://img.shields.io/badge/MCP-governed-5D3FD3.svg)](protocol/docs/mcp.md)
 
 g8e is a zero-trust execution and evidence platform for AI agents, human operators, and distributed target runtimes. An AI client or operator proposes typed intent. A central **Gateway** authenticates the ingress, binds identity and state roots, and screens policy. A host-side **Operator** on the target machine independently verifies the exact transaction before executing anything, mints a short-lived capability, and records signed cryptographic receipts and commitment chains at the local execution boundary.
 
@@ -89,7 +89,7 @@ g8e is a polyglot platform combining a single statically linked Go binary with f
 | **g8eg · Governance Gateway** | Go (`g8e gw start`) | Policy Decision Point (PDP). Exposes REST, MCP, and A2A APIs, manages the 4-tier PKI hierarchy, enforces L1-L3 policies, brokers outbound-only pub/sub channels, and hosts an embedded Operator for Gateway-local actions. | Core PDP. Coordinates policy and routes work, but cannot bypass a remote Operator's verification gates. |
 | **g8eo · Governed Operator** | Go (`g8e operator start`) | Policy Execution Point (PEP). Runs directly on the target host, opens an outbound-only mTLS connection to the Gateway, executes the L4 Warden and L5 Actuator pipeline, and owns sovereign local audit storage. Supports specialized roles (`data`, `inference`, `provenance`, `observer`). | Core PEP. The sole authority for mutation and audit truth within its own operating runtime. |
 | **g8ee · Agentic Ensemble** | Python 3.12 / FastAPI (`ensemble/`) | First-party conversational triage, multi-provider model routing, ReAct tool execution loops, five-member Tribunal deliberation, and case/investigation management. | Untrusted application tier. Enrolls an app workload identity; its reasoning and application approvals never replace protocol L2 or L3 gates. |
-| **g8ed · Dashboard** | Node.js 22 / Vanilla JS (`dashboard/`) | Static web host serving the operator browser interface on port 3000. Authenticates to the Gateway directly via WebAuthn passkeys. | Untrusted interface. Serves browser assets and provides workload enrollment; operational tasks use the Gateway Console. |
+| **g8e Console** | React / TypeScript (`console/`), embedded in the `g8e` binary | Browser frontend served by the Gateway at `/console/`: passkey sign-in, approvals, Operator inventory and binding, cases, investigations, and chat with the ensemble. | Untrusted interface. Holds no keys; the Gateway authenticates every request and the governance pipeline gates every action. |
 | **g8e Tactical Console (TUI)** | Go (`g8e tui`) | Real-time terminal UI streaming over Gateway SSE. Visualizes L1-L5 execution stages, L2 consensus deliberations, and the sovereign audit ledger. | Authenticated operator client. Displays live pipeline events and historical records. |
 | **g8e Protocol** | Protobuf v3 / Go / Python (`protocol/`) | Defines canonical protobuf contracts, deterministic canonical protojson serialization, constants registries, workload identities, and receipt verifiers. | Shared wire contract across all suite services and external integrations. |
 | **Evaluation & Evidence Tools** | Go CLI (`g8e eval`, `g8e compliance`) | Native execution-boundary test suites, governed model campaign runners, provider-side witness verifiers, and FedRAMP 20x KSI evidence engines. | Verification tooling. Measures and proves runtime invariants against frozen criteria. |
@@ -171,7 +171,7 @@ The first-party Python service provides high-level reasoning and triage while ma
 
 ### 9. Multi-tier observer interfaces & Tactical Console (TUI)
 - **Tactical Governance Console (TUI):** Run `g8e tui` to launch a real-time terminal UI streaming live L1-L5 execution stages, L2 consensus deliberations, and ledger events.
-- **Gateway Console:** Access the operational web UI at `https://localhost:8443/console/` for WebAuthn passkey management, approval queues, workload enrollment, and audit logs.
+- **Console:** Open `https://localhost:8443/console/` to sign in with a passkey, bind Operators, run investigations with the ensemble, and handle approvals and workload enrollment.
 - **Evaluation Explorer:** Real-time web application on port 5173 for tracking model evaluation runs, residency verifications, and benchmark telemetry.
 - **Public Spectator Mirror:** Isolated, read-only mirror service on port 8082 serving allowlisted public projections and proof artifacts without direct access to the private Gateway. See [Public Spectator Architecture](docs/architecture/public_spectator.md).
 
@@ -179,7 +179,7 @@ The first-party Python service provides high-level reasoning and triage while ma
 
 ## Quick start
 
-The standard deployment uses the root Docker Compose stack, starting the Gateway, Data Operator, Inference Operator, Agentic Ensemble, and Dashboard together.
+The standard deployment uses the root Docker Compose stack, starting the Gateway, Data Operator, Inference Operator, and Agentic Ensemble together. The Gateway serves the browser console.
 
 ### Prerequisites
 
@@ -225,9 +225,8 @@ List pending platform workloads and approve them using your authenticated owner 
 ```bash
 ./g8e auth enroll pending
 
-# Approve each workload (Data Operator, Ensemble, Dashboard, Inference Operator):
+# Approve each workload (Data Operator, Ensemble, Inference Operator):
 ./g8e auth enroll approve <operator-request-id> --yes
-./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <inference-operator-request-id> --yes
 ```
@@ -249,9 +248,8 @@ docker compose ps
 | --- | --- | --- | --- |
 | **Gateway Discovery** | `http://localhost:8080` | Public / Token | PKI discovery, health, binary bootstrap, and enrollment |
 | **Gateway API & MCP** | `https://localhost:8443` | mTLS / Route-Gated | Authenticated platform API; MCP endpoint is at `/mcp` |
-| **Gateway Console** | `https://localhost:8443/console/` | WebAuthn Cookie | Operational web UI for passkeys, approvals, and audit logs |
+| **Console** | `https://localhost:8443/console/` | WebAuthn Cookie | Browser frontend: passkeys, approvals, Operators, cases, and chat |
 | **Agentic Ensemble (g8ee)** | `http://localhost:8000` | mTLS to Gateway | First-party Python agentic chat and triage API |
-| **Dashboard (g8ed)** | `http://localhost:3000` | Direct to Gateway | Static web host serving the operator browser interface |
 | **Evaluation Explorer** | `http://localhost:5173` | Direct / Local | Live campaign telemetry and model evaluation explorer |
 | **Public Spectator Mirror** | `http://localhost:8082` | Anonymous | Read-only public mirror for allowlisted projections |
 
@@ -355,10 +353,10 @@ Integrate with the g8e protocol in Go or Python:
 
 ```bash
 # Go module (canonical protobuf bindings, models, hashing, and verifiers)
-go get github.com/g8e-ai/g8e/v2@v2.2.7
+go get github.com/g8e-ai/g8e/v2@v2.3.0
 
 # Python package (FastAPI clients, envelope models, and receipt validation)
-pip install g8e==2.2.7
+pip install g8e==2.3.0
 ```
 
 See [Protocol Library](docs/architecture/protocol.md).
@@ -373,7 +371,8 @@ internal/cli/cmd/     CLI command implementations (gw, operator, auth, mcp, comp
 internal/services/    Core services (gateway, operator, governance, consensus, storage, network, vault, sse, pubsub)
 protocol/             Protobuf contracts (proto/g8e/), constants registries, generated Go/Python/TS code
 ensemble/             g8ee Python 3.12 / FastAPI agentic application (Tribunal, ReAct loops, multi-provider LLMs)
-dashboard/            g8ed Node.js static host and framework-free JavaScript operator interface
+console/              Gateway-embedded browser console (React + TypeScript), served at /console/
+g8e-adapter/          Audited browser adapter and contract pack for generated observe frontends
 evaluation-explorer/  Evaluation Explorer frontend for live model campaign inspection
 eval/                 Evaluation fixtures, campaign schemas, and benchmark datasets
 demos/                Healthcare, finance, DHS, and FedRAMP demo environment configurations
@@ -390,7 +389,7 @@ docs/                 Comprehensive platform documentation (architecture, guides
 | **Deploy and operate the platform** | [Getting Started](docs/guides/getting_started.md) · [Unified Docker Stack](docs/guides/unified_stack.md) · [Connect an Operator](docs/guides/connect_operator_to_gateway.md) · [Docker Gateway Guide](docs/guides/docker_gateway.md) |
 | **Connect AI agents or build applications** | [AI Agents & Governance Boundary](docs/architecture/agents.md) · [Build Applications](docs/guides/build_apps.md) · [MCP Protocol Guide](protocol/docs/mcp.md) · [A2A Protocol Guide](protocol/docs/a2a.md) · [Protocol Spec](protocol/docs/spec.md) |
 | **Explore the Agentic Ensemble (g8ee)** | [Ensemble Architecture](docs/architecture/ensemble.md) · [Getting Started with g8ee](docs/ensemble/getting-started.md) · [Ensemble Agents](docs/ensemble/agents.md) · [LLM Providers](docs/ensemble/llm-providers.md) |
-| **Build frontend & spectator experiences** | [Build a Frontend](docs/guides/build_frontend.md) · [Build an Observe Frontend](docs/guides/build_observe_frontend.md) · [Dashboard Architecture](docs/dashboard/architecture.md) · [Public Spectator Architecture](docs/architecture/public_spectator.md) |
+| **Build frontend & spectator experiences** | [Build a Frontend](docs/guides/build_frontend.md) · [Build an Observe Frontend](docs/guides/build_observe_frontend.md) · [Console Architecture](docs/architecture/console.md) · [Public Spectator Architecture](docs/architecture/public_spectator.md) |
 | **Security, identity & cryptographic storage** | [Authentication & Identity](docs/architecture/auth.md) · [Network & PKI](docs/architecture/network.md) · [Encryption & Vault](docs/architecture/encryption.md) · [Storage Architecture](docs/architecture/storage.md) · [FIPS 140-3](docs/reference/fips140-3.md) |
 | **Compliance, evidence & evaluations** | [Compliance Evidence](docs/reference/compliance-evidence.md) · [Compliance Alignment](docs/reference/compliance-alignment.md) · [Evaluations Architecture](docs/architecture/evals.md) · [Model Provenance](docs/architecture/model-provenance.md) · [Glossary](docs/reference/glossary.md) |
 | **Air-gap & sovereignty validation** | [Air Gap Guide](docs/guides/air_gap.md) · [Sovereignty Gauntlet](docs/guides/sovereignty_gauntlet.md) · [Position Paper](docs/core/position_paper.md) · [About g8e](docs/core/about.md) |
@@ -411,7 +410,7 @@ make build
 
 # Run first-party service test suites
 make ensemble-test
-make dashboard-test
+make console-test
 ```
 
 Always use `./g8e test <suite>` rather than running `go test` directly, to ensure required environment flags and FIPS configurations are applied. See the [Testing Guide](docs/devs/tests.md) and [Developer Guidelines](docs/devs/devs.md).

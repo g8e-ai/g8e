@@ -30,7 +30,7 @@ func BuildPublicAssignmentProjection(ctx context.Context, input PublicAssignment
 	if verificationStatus == "" {
 		verificationStatus = "unverified"
 	}
-	projection, err := BuildAssignmentResultProjection(input.Assignment, input.Result, input.ScenarioContext.Category, DerivePublicSummaryStatus(input.Result), verificationStatus)
+	projection, err := BuildAssignmentResultProjection(input.Assignment, input.Result, input.ScenarioContext.Category, DerivePublicSummaryStatus(input.Result), verificationStatus, input.Release)
 	if err != nil {
 		return nil, err
 	}

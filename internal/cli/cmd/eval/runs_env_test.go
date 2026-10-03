@@ -31,7 +31,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
@@ -225,7 +227,7 @@ func setupRunEnv(t *testing.T) *runEnv {
 	}
 
 	cmd := cmdtest.SilentCobraCommand()
-	cmd.SetContext(context.Background())
+	cmd.SetContext(testVersionContext())
 	cmd.Flags().String("project-root", root, "")
 	return &runEnv{root: root, deps: deps, cmd: cmd, control: control}
 }
@@ -250,7 +252,7 @@ func (e *runEnv) run(t *testing.T, args ...string) (string, error) {
 	command.SetOut(&out)
 	command.SetErr(&out)
 	command.SetArgs(append(append([]string{}, args...), "--project-root", e.root))
-	err := command.Execute()
+	err := command.ExecuteContext(testVersionContext())
 	return out.String(), err
 }
 
@@ -263,7 +265,7 @@ func (e *runEnv) runJSON(t *testing.T, payload any, args ...string) error {
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&errOut)
 	rootCmd.SetArgs(append(append([]string{"eval"}, args...), "--project-root", e.root))
-	cmdErr := rootCmd.Execute()
+	cmdErr := rootCmd.ExecuteContext(testVersionContext())
 	if out.Len() > 0 {
 		decoder := json.NewDecoder(&out)
 		require.NoError(t, decoder.Decode(payload), out.String())
@@ -290,6 +292,7 @@ func (e *runEnv) createCampaign(t *testing.T, campaignID string) {
 func (e *runEnv) createCampaignOver(t *testing.T, campaignID string, variants ...*evalv1.ModelVariant) {
 	t.Helper()
 	_, err := createCampaign(context.Background(), e.deps, e.fileSvc(t), campaignCreateSpec{
+		Platform:    testPlatform,
 		CampaignID:  campaignID,
 		Variants:    variants,
 		Repetitions: 1,
@@ -497,6 +500,7 @@ func buildCompletedCampaignTrace(assignment *evalv1.EvaluationAssignment, attemp
 		"model_calls": []any{
 			map[string]any{
 				"agent_role":              "sage",
+				"classification":          "scored_chain",
 				"model_role":              role,
 				"provider":                "G8EProvider",
 				"governed_transaction_id": "tx-1",
@@ -661,3 +665,14 @@ func testFormationCatalogCLIVariants() []*evalv1.ModelVariant {
 		return repeatTestHex(ch, 64)
 	})
 }
+
+// testReleaseVersion is the build release the test harness runs commands as.
+const testReleaseVersion = "v2.3.0"
+
+// testVersionContext carries the build identity the root command attaches in production.
+func testVersionContext() context.Context {
+	return shared.ContextWithVersionInfo(context.Background(), serve.VersionInfo{Version: testReleaseVersion, SourceRevision: string(constants.SystemHealthUnknown)})
+}
+
+// testPlatform is the build identity campaign fixtures freeze under.
+var testPlatform = evaluation.PlatformIdentity{Release: testReleaseVersion}

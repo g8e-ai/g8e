@@ -216,6 +216,61 @@ func TestOperatorStatusEvents_HeartbeatRecoveryReachesOwnerWebSession(t *testing
 	assert.Equal(t, constants.OperatorStatusActive, events[0].payload.Status)
 }
 
+func assertActiveAnnouncement(t *testing.T, ls *GatewayModeService, ownerID, operatorID, name string) {
+	t.Helper()
+	events := webSessionEvents(t, ls, ownerID, "web-owner")
+	require.Len(t, events, 1)
+	assert.Equal(t, string(constants.EventOperatorStatusUpdatedActive), events[0].eventType)
+	assert.Equal(t, operatorID, events[0].payload.OperatorID)
+	assert.Equal(t, constants.OperatorStatusActive, events[0].payload.Status)
+	assert.Equal(t, name, events[0].payload.Name)
+	assert.False(t, events[0].payload.Timestamp.IsZero())
+	assert.Empty(t, webSessionEvents(t, ls, ownerID, "web-owner-expired"))
+	assert.Empty(t, webSessionEvents(t, ls, statusEventOther, "web-other"))
+}
+
+func TestOperatorStatusEvents_EnrollmentAnnouncesActiveToOwner(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	operatorCSR, operatorKey, cliCSR, cliKey := generateOperatorCSRsAndKeys(t)
+	_, token, approved := createAndApproveRequest(t, env,
+		models.PlatformComponentOperator, "operator-1", "operator.local", "", operatorCSR, cliCSR)
+	putWebSession(t, env.docStore, "web-owner", env.ownerID, time.Hour)
+	putWebSession(t, env.docStore, "web-owner-expired", env.ownerID, -time.Minute)
+	putWebSession(t, env.docStore, "web-other", statusEventOther, time.Hour)
+	require.Empty(t, webSessionEvents(t, env.svc, env.ownerID, "web-owner"))
+
+	resp, err := env.enrollSvc.Complete(context.Background(), token, models.PlatformEnrollmentProofs{
+		Operator: signCompletionTranscript(t, approved, operatorKey),
+		CLI:      signCompletionTranscript(t, approved, cliKey),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp.Operator)
+	assertActiveAnnouncement(t, env.svc, env.ownerID, resp.Operator.OperatorID, "operator.local")
+}
+
+func TestOperatorStatusEvents_SlotClaimAnnouncesActiveToOwner(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	owner, err := env.userSvc.GetByID(env.ownerID)
+	require.NoError(t, err)
+	slot, err := env.svc.reg.createSlot(env.ownerID, owner.OrganizationID)
+	require.NoError(t, err)
+	putWebSession(t, env.docStore, "web-owner", env.ownerID, time.Hour)
+	putWebSession(t, env.docStore, "web-owner-expired", env.ownerID, -time.Minute)
+	putWebSession(t, env.docStore, "web-other", statusEventOther, time.Hour)
+	require.Empty(t, webSessionEvents(t, env.svc, env.ownerID, "web-owner"))
+	operatorCSR, _, _, _ := generateOperatorCSRsAndKeys(t)
+
+	resp, err := env.svc.reg.RegisterDeviceCSR(env.ownerID, owner.OrganizationID, models.OperatorRegistrationRequest{
+		SystemFingerprint: "slot-claim-fingerprint",
+		Hostname:          "slot-host",
+		CSR:               operatorCSR,
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Success)
+	require.Equal(t, slot.ID, resp.OperatorID, "claim the pre-created offline slot")
+	assertActiveAnnouncement(t, env.svc, env.ownerID, slot.ID, slot.Name)
+}
+
 func TestOperatorStatusEvents_HeartbeatFromHealthyOperatorIsNotPushed(t *testing.T) {
 	ls := newTestGatewayService(t, testGatewayOpts{})
 	store := ls.GetDocStore()

@@ -33,7 +33,7 @@ from app.models.agents.tribunal import (
     TribunalAuditResult,
 )
 from app.models.http_context import G8eHttpContext, RequestContext
-from app.models.reputation import ReputationState
+from app.models.reputation import ReputationSignResponse, ReputationState
 from app.services.ai.generator import generate_command
 from app.services.data.reputation_data_service import ReputationDataService
 from tests.fakes.agent_helpers import (
@@ -73,6 +73,7 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = _MagicMock()
+        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
         gov.update_governed_doc = AsyncMock(side_effect=_write_through)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
@@ -174,7 +175,6 @@ class TestCommandGeneratorWithCommitment:
                     ),
                     settings=inputs.request_settings,
                     reputation_data_service=reputation_svc,
-                    auditor_hmac_key=_TEST_HMAC_KEY,
                     whitelisting_enabled=False,
                     blacklisting_enabled=False,
                 )
@@ -210,6 +210,7 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = MagicMock()
+        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
         gov.update_governed_doc = AsyncMock(side_effect=_write_through2)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
@@ -258,7 +259,6 @@ class TestCommandGeneratorWithCommitment:
                     ),
                     settings=inputs.request_settings,
                     reputation_data_service=reputation_svc,
-                    auditor_hmac_key=_TEST_HMAC_KEY,
                 )
             )
 
@@ -288,6 +288,7 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = MagicMock()
+        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
         gov.update_governed_doc = AsyncMock(side_effect=_write_through3)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
@@ -367,7 +368,6 @@ class TestCommandGeneratorWithCommitment:
                         ),
                         settings=inputs.request_settings,
                         reputation_data_service=reputation_svc,
-                        auditor_hmac_key=_TEST_HMAC_KEY,
                     )
                 )
 

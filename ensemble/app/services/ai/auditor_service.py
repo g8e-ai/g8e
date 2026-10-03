@@ -7,8 +7,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import logging
 import time
 from dataclasses import dataclass
@@ -17,7 +15,7 @@ from typing import TYPE_CHECKING, Literal, NoReturn
 from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
 from app.models.agent import OperatorContext
-from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment
+from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment, ReputationSignRequest
 from app.models.http_context import RequestContext
 from app.services.data.reputation_data_service import ReputationDataService
 from app.utils.hashing.merkle import leaf_bytes, merkle_root
@@ -295,7 +293,7 @@ async def call_auditor_llm(
             prompt_eval_count=None,
             eval_count=None,
             num_ctx=0,
-            num_predict=0,
+            num_predict=None,
             thinking_len=0,
             tool_calls_count=0,
             ctx_overflow_suspected=False,
@@ -595,7 +593,6 @@ async def commit_reputation(
     reputation_data_service: ReputationDataService,
     tribunal_command_id: str,
     investigation_id: str,
-    hmac_key: str,
     context: RequestContext,
 ) -> ReputationCommitment:
     """Compute, sign, and persist a Merkle commitment over the reputation scoreboard.
@@ -613,8 +610,6 @@ async def commit_reputation(
         raise ValueError("tribunal_command_id is required")
     if not investigation_id:
         raise ValueError("investigation_id is required")
-    if not hmac_key:
-        raise ValueError("hmac_key is required")
 
     states = await reputation_data_service.list_states()
     leaves = [leaf_bytes(s.agent_id, s.scalar) for s in states]
@@ -623,11 +618,9 @@ async def commit_reputation(
     latest = await reputation_data_service.get_latest_commitment()
     prev_root = latest.merkle_root if latest is not None else GENESIS_PREV_ROOT
 
-    signature = hmac.new(
-        hmac_key.encode("utf-8"),
-        (root + prev_root + tribunal_command_id).encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    signature = await reputation_data_service.sign_commitment(ReputationSignRequest(
+        merkle_root=root, prev_root=prev_root, tribunal_command_id=tribunal_command_id,
+    ))
 
     commitment = ReputationCommitment(
         investigation_id=investigation_id,

@@ -92,6 +92,22 @@
       "_go_const": "HeaderPragma",
       "value": "Pragma"
     },
+    "ProxyIssuedAt": {
+      "_go_const": "HeaderProxyIssuedAt",
+      "value": "X-G8E-Proxy-Issued-At"
+    },
+    "ProxyKeyID": {
+      "_go_const": "HeaderProxyKeyID",
+      "value": "X-G8E-Proxy-Key-Id"
+    },
+    "ProxyNonce": {
+      "_go_const": "HeaderProxyNonce",
+      "value": "X-G8E-Proxy-Nonce"
+    },
+    "ProxySignature": {
+      "_go_const": "HeaderProxySignature",
+      "value": "X-G8E-Proxy-Signature"
+    },
     "RequestID": {
       "_go_const": "HeaderRequestID",
       "value": "X-G8E-Request-ID"

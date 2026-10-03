@@ -127,7 +127,7 @@ When extended thinking is active, the adapter omits `top_k` and `top_p`. It rais
 
 ### OpenAI-compatible providers
 
-OpenAI receives `reasoning.effort` with the resolved `minimal`, `low`, `medium`, or `high` value via [translate_for_openai()](../../ensemble/app/llm/thinking.py#L139). The registered `gpt-5.4-mini` profile supports `off`, `minimal`, and `low`; the generic OpenAI profile has no declared thinking capability and therefore resolves to `off`. When thinking is off, the adapter omits the `reasoning` object.
+OpenAI receives `reasoning.effort` with the resolved `minimal`, `low`, `medium`, or `high` value via [translate_for_openai()](../../ensemble/app/llm/thinking.py#L139). The registered `gpt-5.4-mini` profile supports `off`, `minimal`, and `low`; the registered `Qwen/Qwen3.8-Flash-Next` profile (a self-hosted OpenAI-compatible model) supports `off` and `high`; the generic OpenAI profile has no declared thinking capability and therefore resolves to `off`. When thinking is off, the adapter omits the `reasoning` object.
 
 llama.cpp inherits the OpenAI-compatible adapter, so it uses the same translation and can return `reasoning_content`. No llama.cpp-specific model profiles are registered; its model names therefore resolve to [UNKNOWN_MODEL_CONFIG](../../ensemble/app/models/model_configs.py#L496) unless a matching model is registered.
 

@@ -313,26 +313,6 @@
       ],
       "requires_web_search": false,
       "scope": "operator_gated"
-    },
-    {
-      "agent_modes": [
-        "g8e.bound",
-        "g8e.not.bound"
-      ],
-      "arguments": [
-        "arch",
-        "concurrency",
-        "hosts",
-        "justification",
-        "timeout_seconds"
-      ],
-      "name": "stream_operator_to_ssh_fleet",
-      "required_arguments": [
-        "hosts",
-        "justification"
-      ],
-      "requires_web_search": false,
-      "scope": "universal"
     }
   ]
 }

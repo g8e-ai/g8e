@@ -111,7 +111,7 @@ The CLI certificate carries a SPIFFE identity of the form `spiffe://g8e.local/cl
 
 ### External Application Credentials
 
-External applications obtain credentials through owner-approved platform enrollment. The Gateway exposes no delegated application enrollment route; the earlier `POST /api/v1/pki/apps/delegated` endpoint is removed. Enroll an application by name:
+External applications obtain credentials through owner-approved platform enrollment. It is the only path to an application certificate. Enroll an application by name:
 
 ```bash
 ./g8e auth enroll app example-app

@@ -87,7 +87,7 @@ type MarkCampaignQueueEntryRequest struct {
 // MarkCampaignQueueEntry updates and persists one queue entry.
 func MarkCampaignQueueEntry(req MarkCampaignQueueEntryRequest) (*CampaignQueueModel, error) {
 	if req.FileService == nil || req.Status == "" {
-		return nil, fmt.Errorf("evaluation: mark campaign queue entry: missing required field")
+		return nil, fmt.Errorf("evaluation: mark campaign queue entry: %w", constants.ErrMissingRequiredField)
 	}
 	if req.Context == nil {
 		req.Context = context.Background()
@@ -115,7 +115,7 @@ func (queue *CampaignQueue) markEntry(req MarkCampaignQueueEntryRequest) (*Campa
 	queryVariant := strings.TrimSpace(req.VariantID)
 	queryTag := strings.TrimSpace(req.ServedModelTag)
 	if queryVariant == "" && queryTag == "" {
-		return nil, fmt.Errorf("evaluation: mark campaign queue entry: specify variant_id or served model tag")
+		return nil, fmt.Errorf("evaluation: mark campaign queue entry: variant_id or served model tag: %w", constants.ErrMissingRequiredField)
 	}
 	for i, entry := range queue.Models {
 		if queryVariant != "" && entry.VariantID != queryVariant {
@@ -134,5 +134,5 @@ func (queue *CampaignQueue) markEntry(req MarkCampaignQueueEntryRequest) (*Campa
 		selected := queue.Models[i]
 		return &selected, nil
 	}
-	return nil, fmt.Errorf("evaluation: mark campaign queue entry: model not found")
+	return nil, fmt.Errorf("evaluation: mark campaign queue entry: model: %w", constants.ErrNotFound)
 }

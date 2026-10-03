@@ -54,6 +54,7 @@ func TestL4Warden_ConsensusPolicyStoreError_FailClosed(t *testing.T) {
 		NewL1Doctrine(),
 		constants.AllActionTypes,
 		nil,
+		&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 	)
 
 	payload := typedPayload(t, constants.ActionTypeFsList)
@@ -113,6 +114,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		NewL1Doctrine(),
 		constants.AllActionTypes,
 		nil,
+		&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 	)
 
 	payload := typedPayload(t, constants.ActionTypeFsList)
@@ -200,6 +202,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 			NewL1Doctrine(),
 			constants.AllActionTypes,
 			nil,
+			&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 		)
 	}
 
@@ -333,6 +336,7 @@ func TestL4Warden_SingleKeyCannotSatisfyQuorum(t *testing.T) {
 			NewL1Doctrine(),
 			constants.AllActionTypes,
 			nil,
+			&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 		)
 	}
 
@@ -428,6 +432,7 @@ func TestL4Warden_SingleKeyCannotSatisfyQuorum(t *testing.T) {
 			NewL1Doctrine(),
 			constants.AllActionTypes,
 			nil,
+			&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 		)
 	}
 	twoOfThreeEnv := buildEnv("2of3", nil)

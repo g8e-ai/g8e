@@ -111,7 +111,7 @@ func TestTestE2ECmd_PropagatesArgumentsAndRaceFlag(t *testing.T) {
 	}
 	require.GreaterOrEqual(t, idx, 0, "captured args should contain the approved-stack default -run: %v", captured)
 	require.True(t, len(captured) > idx+1, "captured args should have a value after -run: %v", captured)
-	assert.Equal(t, "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestDashboard_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)", captured[idx+1])
+	assert.Equal(t, "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestConsole_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)", captured[idx+1])
 }
 
 func TestTestE2ECmd_RunFlagAppendsRegexp(t *testing.T) {

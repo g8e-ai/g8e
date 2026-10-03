@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // RolloutIntakeStageRequest stages catalog models through the governed Inference
@@ -63,7 +65,7 @@ type RolloutIntakeStageFailure struct {
 
 func validateRolloutIntakeStageRequest(req RolloutIntakeStageRequest) error {
 	if req.Dispatcher == nil || req.InferenceSessionID == "" || req.NewID == nil {
-		return fmt.Errorf("evaluation: stage rollout intake: governed inference session and dispatcher are required")
+		return fmt.Errorf("evaluation: stage rollout intake: governed inference session and dispatcher: %w", constants.ErrMissingRequiredField)
 	}
 	return nil
 }

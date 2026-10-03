@@ -436,7 +436,7 @@ func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {
 	require.NoError(t, err, "invalid JSON should pass through to processor for decode error")
 }
 
-func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T) {
+func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_FailsClosed(t *testing.T) {
 	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
 	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
@@ -448,5 +448,5 @@ func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T)
 	envelope, marshalErr := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: "test"})
 	require.NoError(t, marshalErr)
 	err := verifyEnvelopeIdentityBinding(req, envelope)
-	require.NoError(t, err, "envelope without identity fields should pass through to processor")
+	require.ErrorIs(t, err, constants.ErrIdentityBindingFailed, "an unbound envelope must fail closed")
 }

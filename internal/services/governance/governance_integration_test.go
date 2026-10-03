@@ -112,6 +112,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 			doctrine,
 			constants.AllActionTypes,
 			nil, // Clock defaults to RealClock
+			&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 		)
 	}
 

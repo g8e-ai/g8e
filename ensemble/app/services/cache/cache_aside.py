@@ -187,18 +187,6 @@ class CacheAsideService(DocumentServiceProtocol):
 
         return CacheOperationResult(success=True, document_id=document_id, cache_invalidated=True)
 
-    async def cache_document(
-        self,
-        collection: str,
-        document_id: str,
-        data: dict[str, object],
-        ttl: int | None = None,
-    ) -> bool:
-        """Write data directly to the KV cache without touching the DB."""
-        key = self.make_key(collection, document_id)
-        resolved_ttl = ttl if ttl is not None else self._get_ttl_for_collection(collection)
-        return await self.kv.set_json(key, data, ex=resolved_ttl)
-
     async def get_document_with_cache(
         self, collection: str, document_id: str
     ) -> dict[str, Any] | None:
@@ -235,6 +223,9 @@ class CacheAsideService(DocumentServiceProtocol):
 
         db_data = recursive_serialize(db_response.data)
 
+        if not self.read_enabled:
+            return db_data
+
         ttl = self._get_ttl_for_collection(collection)
         cache_success = await self.kv.set_json(key, db_data, ex=ttl)
 
@@ -245,17 +236,6 @@ class CacheAsideService(DocumentServiceProtocol):
             )
 
         return db_data
-
-    async def invalidate_collection(self, collection: str) -> int:
-        """Delete all document cache keys for a collection. Returns count deleted."""
-        pattern = f"{KVKeyPrefix.CACHE_DOC}{collection}:*"
-        return await self.kv.delete_pattern(pattern)
-
-    async def clear_all(self) -> int:
-        """Delete all document and query cache keys. Returns total count deleted."""
-        doc_deleted = await self.kv.delete_pattern(f"{KVKeyPrefix.CACHE_DOC}*")
-        query_deleted = await self.kv.delete_pattern(f"{KVKeyPrefix.CACHE_QUERY}*")
-        return doc_deleted + query_deleted
 
     async def get_query_result(
         self,
@@ -293,6 +273,8 @@ class CacheAsideService(DocumentServiceProtocol):
         results: list[dict[str, Any]],
         ttl: int | None = CACHE_TTL_SHORT,
     ) -> bool:
+        if not self.read_enabled:
+            return False
         query_str = json.dumps(query_params, sort_keys=True)
         filter_hash = hashlib.md5(query_str.encode()).hexdigest()
         key = KVKey.query(collection, filter_hash)
@@ -336,11 +318,11 @@ class CacheAsideService(DocumentServiceProtocol):
         )
 
         data: list[dict[str, Any]] = result.data if result.success else []
-        if ttl is not None and data:
+        if self.read_enabled and ttl is not None and data:
             await self.set_query_result(collection, query_params, data, ttl=ttl)
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Query executed and cached",
+            f"[{self.component_name.upper()}-CACHE] Query executed",
             extra={"collection": collection, "result_count": len(data)},
         )
         return result
@@ -354,15 +336,6 @@ class CacheAsideService(DocumentServiceProtocol):
                 extra={"collection": collection, "doc_id": document_id},
             )
         return deleted > 0
-
-    async def invalidate_query_cache(self, collection: str) -> int:
-        pattern = f"{KVKeyPrefix.CACHE_QUERY}{collection}:*"
-        deleted = await self.kv.delete_pattern(pattern)
-        logger.info(
-            f"[{self.component_name.upper()}-CACHE] Query cache invalidated",
-            extra={"collection": collection, "keys_deleted": deleted},
-        )
-        return deleted
 
     async def update_with_array_union(
         self,

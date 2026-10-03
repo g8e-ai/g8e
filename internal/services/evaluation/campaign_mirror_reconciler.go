@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -80,7 +81,7 @@ func NewCampaignMirrorReconciler(publication *CampaignPublicationCoordinator, st
 // campaign queue is not available (e.g., on restored backups).
 func (r *CampaignMirrorReconciler) ReconcileAllVerifiedRunsFromStore(ctx context.Context, runTimeout time.Duration, restoreMissing bool, force bool, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
 	if r == nil || r.publication == nil || r.store == nil || runTimeout <= 0 {
-		return nil, fmt.Errorf("evaluation: reconcile verified runs from store: missing required dependencies")
+		return nil, fmt.Errorf("evaluation: reconcile verified runs from store: dependencies: %w", constants.ErrMissingRequiredField)
 	}
 	runIDs, err := r.store.ListRunIDs(ctx)
 	if err != nil {
@@ -168,7 +169,7 @@ func (r *CampaignMirrorReconciler) ReconcileAllVerifiedRunsFromStore(ctx context
 // dataset. Use ReconcileRun with force to republish one already-present run.
 func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, queue *CampaignQueue, runTimeout time.Duration, restoreMissing bool, force bool, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
 	if r == nil || r.publication == nil || r.store == nil || queue == nil || runTimeout <= 0 {
-		return nil, fmt.Errorf("evaluation: reconcile verified queue: missing required dependencies")
+		return nil, fmt.Errorf("evaluation: reconcile verified queue: dependencies: %w", constants.ErrMissingRequiredField)
 	}
 	entries := queue.FilterByStatus("verified")
 	runIDs := make([]string, 0, len(entries))
@@ -248,7 +249,7 @@ func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, q
 // When force is true, it republishes even when the dataset is already present.
 func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID string, force bool) (int, error) {
 	if r == nil || r.publication == nil || r.store == nil || runID == "" {
-		return 0, fmt.Errorf("evaluation: reconcile run: missing required dependencies")
+		return 0, fmt.Errorf("evaluation: reconcile run: dependencies: %w", constants.ErrMissingRequiredField)
 	}
 	if r.probe != nil && !force {
 		present, err := r.probe.DatasetPresent(ctx, CampaignDatasetID(runID))

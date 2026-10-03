@@ -5,10 +5,9 @@
 # the runtime image. Everything else is dead weight (or worse — secrets and
 # local runtime state) and is excluded here.
 #
-# The polyglot services (ensemble, dashboard) build from the same context root
-# but carry their own per-Dockerfile ignore files (ensemble/Dockerfile.dockerignore,
-# dashboard/Dockerfile.dockerignore), which take precedence over this file under
-# BuildKit. This file therefore does not need to keep their source trees visible.
+# The ensemble builds from the same context root but carries its own
+# per-Dockerfile ignore file (ensemble/Dockerfile.dockerignore), which takes
+# precedence over this file under BuildKit. This file therefore does not need to keep their source trees visible.
 
 # Git
 .git/
@@ -101,10 +100,13 @@ coverage.xml
 coverage.html
 coverage.txt
 
-# Polyglot services — built from their own per-Dockerfile ignore files, not
-# needed for the gateway/operator image.
+# Polyglot services and frontend sources — not needed for the gateway/operator
+# image. The console and evaluation explorer reach the binary as committed
+# embeds under internal/.
 ensemble/
-dashboard/
+console/
+g8e-adapter/
+evaluation-explorer/
 
 # Demos, evals, tests — not needed for platform deployment
 demos/

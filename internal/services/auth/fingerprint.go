@@ -8,8 +8,12 @@
 package auth
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"os"
@@ -202,4 +206,60 @@ func getDarwinMachineID() (string, error) {
 	hasher := sha256.New()
 	hasher.Write(data)
 	return hex.EncodeToString(hasher.Sum(nil))[:32], nil
+}
+
+// CSRFingerprint computes the SHA-256 fingerprint of the public key in
+// a CSR PEM, matching the gateway's parsePlatformEnrollmentCSR: it
+// hashes the SubjectPublicKeyInfo DER bytes and returns hex.
+func CSRFingerprint(csrPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(csrPEM))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return "", fmt.Errorf("csr fingerprint: %w", constants.ErrPlatformEnrollmentInvalidCSR)
+	}
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("csr fingerprint: parse: %w", constants.ErrPlatformEnrollmentInvalidCSR)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return "", fmt.Errorf("csr fingerprint: verify signature: %w", constants.ErrPlatformEnrollmentInvalidCSR)
+	}
+	publicKey, ok := csr.PublicKey.(*ecdsa.PublicKey)
+	if !ok || publicKey.Curve != elliptic.P256() {
+		return "", constants.ErrPlatformEnrollmentUnsupportedKey
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return "", fmt.Errorf("csr fingerprint: marshal public key: %w", err)
+	}
+	digest := sha256.Sum256(publicDER)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+// CertificateFingerprint computes the SHA-256 fingerprint of a PEM-encoded certificate.
+// Returns an empty string on decode or parse failure.
+func CertificateFingerprint(certPEM string) string {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	hash := sha256.Sum256(cert.Raw)
+	return hex.EncodeToString(hash[:])
+}
+
+// CertificateSerialNumber extracts the serial number from a PEM-encoded certificate.
+// Returns an empty string on decode or parse failure.
+func CertificateSerialNumber(certPEM string) string {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	return cert.SerialNumber.String()
 }

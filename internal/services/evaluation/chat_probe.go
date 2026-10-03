@@ -99,7 +99,7 @@ type ChatProbeGoldSummary struct {
 // governed tool Operator used for case creation and model-originated actions.
 func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSessionID string) (harnessclient.EnsembleChatRequest, error) {
 	if dataOperatorID == "" || dataOperatorSessionID == "" {
-		return harnessclient.EnsembleChatRequest{}, fmt.Errorf("evaluation: build chat probe request: data operator binding is required")
+		return harnessclient.EnsembleChatRequest{}, fmt.Errorf("evaluation: build chat probe request: data operator binding: %w", constants.ErrMissingRequiredField)
 	}
 	if req.AssignmentID == "" || req.EvaluationAttemptID == "" || req.Model == "" || req.TargetOperatorSessionID == "" {
 		return harnessclient.EnsembleChatRequest{}, fmt.Errorf("evaluation: build chat probe request: %w", constants.ErrMissingRequiredField)
@@ -128,7 +128,7 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 	}
 	if lane == "model_role" {
 		if req.DesignatedModelRole == "" {
-			return harnessclient.EnsembleChatRequest{}, fmt.Errorf("evaluation: build chat probe request: designated model role required for model_role lane")
+			return harnessclient.EnsembleChatRequest{}, fmt.Errorf("evaluation: build chat probe request: designated model role for model_role lane: %w", constants.ErrMissingRequiredField)
 		}
 		evalContext.DesignatedModelRole = req.DesignatedModelRole
 	}
@@ -203,34 +203,34 @@ func ValidateChatProbeTrace(req ChatProbeRequest, trace EvaluationTrace) error {
 	}
 	status, _ := trace["status"].(string)
 	if status != "completed" && status != "failed" {
-		return fmt.Errorf("evaluation: validate chat probe trace: trace status %q is not terminal", status)
+		return fmt.Errorf("evaluation: validate chat probe trace: trace status %q is not terminal: %w", status, constants.ErrEvidenceArtifactMalformed)
 	}
 	if status != "completed" {
 		reason, _ := trace["error"].(string)
 		if reason == "" {
-			return fmt.Errorf("evaluation: validate chat probe trace: assignment failed without a recorded error")
+			return fmt.Errorf("evaluation: validate chat probe trace: assignment failed without a recorded error: %w", constants.ErrEvidenceArtifactMalformed)
 		}
-		return fmt.Errorf("evaluation: validate chat probe trace: assignment failed: %s", reason)
+		return fmt.Errorf("evaluation: validate chat probe trace: assignment failed: %s: %w", reason, constants.ErrEvaluationAssignmentExecutionFailed)
 	}
 	if err := validateTraceDigest(trace); err != nil {
 		return err
 	}
 	evalContext, ok := evaluationTrace(trace["evaluation_context"])
 	if !ok {
-		return fmt.Errorf("evaluation: validate chat probe trace: missing evaluation_context")
+		return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context: %w", constants.ErrMissingRequiredField)
 	}
 	if err := validateTraceEvaluationContext(req, evalContext); err != nil {
 		return err
 	}
 	if chatExecutionID, _ := trace["chat_execution_id"].(string); chatExecutionID == "" {
-		return fmt.Errorf("evaluation: validate chat probe trace: missing chat_execution_id")
+		return fmt.Errorf("evaluation: validate chat probe trace: chat_execution_id: %w", constants.ErrMissingRequiredField)
 	}
 	if completedAt, _ := trace["completed_at"].(string); completedAt == "" {
-		return fmt.Errorf("evaluation: validate chat probe trace: missing completed_at")
+		return fmt.Errorf("evaluation: validate chat probe trace: completed_at: %w", constants.ErrMissingRequiredField)
 	}
 	modelCalls, ok := trace["model_calls"].([]any)
 	if !ok || len(modelCalls) == 0 {
-		return fmt.Errorf("evaluation: validate chat probe trace: missing model_calls")
+		return fmt.Errorf("evaluation: validate chat probe trace: model_calls: %w", constants.ErrMissingRequiredField)
 	}
 	if err := validateGovernedModelCalls(modelCalls); err != nil {
 		return err
@@ -241,14 +241,14 @@ func ValidateChatProbeTrace(req ChatProbeRequest, trace EvaluationTrace) error {
 func validateTraceDigest(trace EvaluationTrace) error {
 	digest, _ := trace["trace_digest"].(string)
 	if digest == "" {
-		return fmt.Errorf("evaluation: validate chat probe trace: missing trace_digest")
+		return fmt.Errorf("evaluation: validate chat probe trace: trace_digest: %w", constants.ErrMissingRequiredField)
 	}
 	expected, err := ComputeChatProbeTraceDigest(trace)
 	if err != nil {
 		return err
 	}
 	if digest != expected {
-		return fmt.Errorf("evaluation: validate chat probe trace: trace digest mismatch")
+		return fmt.Errorf("evaluation: validate chat probe trace: %w", constants.ErrEvaluationTraceDigestMismatch)
 	}
 	return nil
 }
@@ -282,7 +282,7 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext Evaluation
 	for field, want := range checks {
 		got, _ := evalContext[field].(string)
 		if got != want {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.%s=%q, want %q", field, got, want)
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.%s=%q, want %q: %w", field, got, want, constants.ErrEvidenceScopeMismatch)
 		}
 	}
 	lane, _ := evalContext["evaluation_lane"].(string)
@@ -294,18 +294,18 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext Evaluation
 		wantLane = "system"
 	}
 	if lane != wantLane {
-		return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.evaluation_lane=%q, want %q", lane, wantLane)
+		return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.evaluation_lane=%q, want %q: %w", lane, wantLane, constants.ErrEvidenceScopeMismatch)
 	}
 	if wantLane == "model_role" {
 		gotRole, _ := evalContext["designated_model_role"].(string)
 		if gotRole != req.DesignatedModelRole {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.designated_model_role=%q, want %q", gotRole, req.DesignatedModelRole)
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.designated_model_role=%q, want %q: %w", gotRole, req.DesignatedModelRole, constants.ErrEvidenceScopeMismatch)
 		}
 	}
 	if req.Seed != nil {
 		rawSeed, hasSeed := evalContext["seed"]
 		if !hasSeed || rawSeed == nil {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.seed is required")
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.seed: %w", constants.ErrMissingRequiredField)
 		}
 		reqBytes, err := canonicalSeedBytes(req.Seed)
 		if err != nil {
@@ -316,24 +316,24 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext Evaluation
 			return fmt.Errorf("evaluation: validate chat probe trace: canonicalize trace seed: %w", err)
 		}
 		if !bytes.Equal(reqBytes, traceBytes) {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.seed mismatch")
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.seed: %w", constants.ErrEvidenceScopeMismatch)
 		}
 	}
 	if req.Workspace != nil {
 		rawWs, hasWs := evalContext["workspace"]
 		if !hasWs || rawWs == nil {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace is required")
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace: %w", constants.ErrMissingRequiredField)
 		}
 		wsMap, ok := evaluationTrace(rawWs)
 		if !ok {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace must be an object")
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace must be an object: %w", constants.ErrEvidenceArtifactMalformed)
 		}
 		traceWs := ScenarioWorkspace{
 			Root:                     stringValue(wsMap["root"]),
 			OperatorWorkingDirectory: stringValue(wsMap["operator_working_directory"]),
 		}
 		if traceWs.Root != req.Workspace.Root || traceWs.OperatorWorkingDirectory != req.Workspace.OperatorWorkingDirectory {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace mismatch")
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace: %w", constants.ErrEvidenceScopeMismatch)
 		}
 		if err := traceWs.Validate(req.RunID, req.EvaluationAttemptID); err != nil {
 			return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
@@ -341,7 +341,7 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext Evaluation
 	} else if rawWs, hasWs := evalContext["workspace"]; hasWs && rawWs != nil {
 		wsMap, ok := evaluationTrace(rawWs)
 		if !ok {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace must be an object")
+			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace must be an object: %w", constants.ErrEvidenceArtifactMalformed)
 		}
 		traceWs := ScenarioWorkspace{
 			Root:                     stringValue(wsMap["root"]),
@@ -372,12 +372,12 @@ func validateGovernedModelCalls(modelCalls []any) error {
 		for _, field := range []string{"governed_transaction_id", "governed_result_digest", "provider_attempt_id"} {
 			value, _ := call[field].(string)
 			if value == "" {
-				return fmt.Errorf("evaluation: validate chat probe trace: governed model call missing %s", field)
+				return fmt.Errorf("evaluation: validate chat probe trace: governed model call %s: %w", field, constants.ErrMissingRequiredField)
 			}
 		}
 	}
 	if !foundGoverned {
-		return fmt.Errorf("evaluation: validate chat probe trace: no governed model calls recorded")
+		return fmt.Errorf("evaluation: validate chat probe trace: governed model calls: %w", constants.ErrMissingRequiredField)
 	}
 	return nil
 }

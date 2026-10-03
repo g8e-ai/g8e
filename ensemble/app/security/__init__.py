@@ -11,7 +11,6 @@ g8e Security utilities.
 Security modules:
 - auth.py: Authentication utilities
 - output_sanitizer.py: Output sanitization for security
-- request_timestamp.py: Request timestamp validation
 - sentinel_scrubber.py: Sentinel scrubbing for sensitive data
 """
 
@@ -20,19 +19,7 @@ from .output_sanitizer import (
     sanitize_file_content,
     sanitize_g8eo_output,
 )
-from .request_timestamp import (
-    NONCE_TTL_SECONDS,
-    TIMESTAMP_WINDOW_SECONDS,
-    NonceCheckResult,
-    NonceErrorCode,
-    RequestTimestampValidator,
-    RequestValidationResult,
-    TimestampErrorCode,
-    TimestampValidationResult,
-    validate_message_timestamp,
-    validate_request_timestamp,
-    validate_timestamp,
-)
+
 from .sentinel_scrubber import (
     ScrubResult,
     SentinelConfig,
@@ -42,23 +29,12 @@ from .sentinel_scrubber import (
 )
 
 __all__ = [
-    "NONCE_TTL_SECONDS",
-    "TIMESTAMP_WINDOW_SECONDS",
-    "NonceCheckResult",
-    "NonceErrorCode",
-    "RequestTimestampValidator",
-    "RequestValidationResult",
     "SanitizationResult",
     "ScrubResult",
     "SentinelConfig",
     "SentinelScrubber",
-    "TimestampErrorCode",
-    "TimestampValidationResult",
     "get_sentinel_scrubber",
     "sanitize_file_content",
     "sanitize_g8eo_output",
     "scrub_user_message",
-    "validate_message_timestamp",
-    "validate_request_timestamp",
-    "validate_timestamp",
 ]

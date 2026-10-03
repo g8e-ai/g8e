@@ -32,7 +32,7 @@ from app.constants import (
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
-from app.models.reputation import ReputationCommitment, ReputationState
+from app.models.reputation import ReputationCommitment, ReputationState, ReputationSignRequest
 from app.models.http_context import RequestContext
 from app.services.protocols import DocumentServiceProtocol
 from app.clients.governance_client import GovernanceClient
@@ -156,6 +156,11 @@ class ReputationDataService:
     # ------------------------------------------------------------------
     # reputation_commitments
     # ------------------------------------------------------------------
+
+    async def sign_commitment(self, request: ReputationSignRequest) -> str:
+        """Use the Gateway's private reputation signer; retain no signing key."""
+        signed = await self._governance_client.sign_reputation_commitment(request)
+        return signed.signature
 
     async def create_commitment(
         self, commitment: ReputationCommitment, context: RequestContext

@@ -45,7 +45,7 @@ func TestLoad(t *testing.T) {
 		// Change to temp directory and load with empty project root
 		originalWd, err := os.Getwd()
 		require.NoError(t, err)
-		defer os.Chdir(originalWd)
+		t.Cleanup(func() { _ = os.Chdir(originalWd) })
 
 		err = os.Chdir(tempDir)
 		require.NoError(t, err)
@@ -521,7 +521,7 @@ func TestLoadIntegration(t *testing.T) {
 		// Change to temp directory (simulating running binary from empty directory)
 		originalWd, err := os.Getwd()
 		require.NoError(t, err)
-		defer os.Chdir(originalWd)
+		t.Cleanup(func() { _ = os.Chdir(originalWd) })
 
 		err = os.Chdir(tempDir)
 		require.NoError(t, err)

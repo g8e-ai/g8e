@@ -143,18 +143,13 @@ func (h *InferenceExecutionHandler) authorizeInferenceModel(req models.Inference
 	if HasCampaignAuthority(req.CampaignID, req.ModelRegistryDigest, req.ModelRegistry) {
 		return authorizeGovernedCampaignModel(req)
 	}
-	startupCampaignMode := h.cfg.Inference.CampaignID != "" || h.cfg.Inference.ModelRegistryDigest != ""
-	if startupCampaignMode {
-		return "", constants.ErrInferenceCampaignBindingInvalid
-	}
-	approved := h.defaultModelForRole(req.Role)
-	if approved == "" {
+	// The Operator is a worker and holds no model configuration: the model is
+	// the user's choice, carried on the governed request. An absent model fails
+	// closed; an unknown one is rejected by the provider.
+	if req.Model == "" {
 		return "", constants.ErrInferenceModelRefInvalid
 	}
-	if req.Model != "" && req.Model != approved {
-		return "", constants.ErrInferenceModelOverrideDenied
-	}
-	return approved, nil
+	return req.Model, nil
 }
 
 func authorizeGovernedCampaignModel(req models.InferenceRequestPayload) (string, error) {
@@ -201,7 +196,7 @@ func validateInferenceGenerationOptions(req *models.InferenceRequestPayload) err
 	if math.IsNaN(float64(req.Temperature)) || math.IsInf(float64(req.Temperature), 0) || req.Temperature < 0 || req.Temperature > 2 {
 		return fmt.Errorf("%w: temperature", constants.ErrInferenceGenerationOptionsInvalid)
 	}
-	if req.MaxTokens < 0 {
+	if req.MaxTokens < 0 || req.MaxTokens > constants.InferenceMaxOutputTokens {
 		return fmt.Errorf("%w: max tokens", constants.ErrInferenceGenerationOptionsInvalid)
 	}
 	if req.TopP != nil && (math.IsNaN(float64(*req.TopP)) || math.IsInf(float64(*req.TopP), 0) || *req.TopP < 0 || *req.TopP > 1) {
@@ -459,20 +454,5 @@ func normalizeJSONValue(raw json.RawMessage, scrubText func(string) string) (jso
 			return nil, constants.ErrInferenceJSONInvalid
 		}
 		return append(json.RawMessage(nil), trimmed...), nil
-	}
-}
-
-// defaultModelForRole returns the configured default Ollama model name for
-// the given chat-tier role.
-func (h *InferenceExecutionHandler) defaultModelForRole(role models.InferenceModelRole) string {
-	switch role {
-	case models.InferenceModelRolePrimary:
-		return h.cfg.Inference.PrimaryModel
-	case models.InferenceModelRoleAssistant:
-		return h.cfg.Inference.AssistantModel
-	case models.InferenceModelRoleLite:
-		return h.cfg.Inference.LiteModel
-	default:
-		return ""
 	}
 }

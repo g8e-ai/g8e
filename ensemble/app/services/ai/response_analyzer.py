@@ -207,7 +207,7 @@ class AIResponseAnalyzer:
             response_schema.get("properties", {}).pop("model_call", None)
             config = AIGenerationConfigBuilder.build_lite_settings(
                 model=lite_model,
-                max_tokens=settings.llm.llm_max_tokens,
+                max_tokens=None,
                 system_instructions=prompt,
                 response_format=types.ResponseFormat.from_pydantic_schema(response_schema),
             )

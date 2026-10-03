@@ -53,7 +53,7 @@ func ValidateHeterogeneousStackSet(set *HeterogeneousStackSet) error {
 		return err
 	}
 	if set.SetDigest != expectedDigest {
-		return fmt.Errorf("evaluation: validate heterogeneous stack set: set digest mismatch")
+		return fmt.Errorf("evaluation: validate heterogeneous stack set: set digest: %w", constants.ErrChecksumMismatch)
 	}
 	seenStackIDs := make(map[string]struct{}, len(set.Stacks))
 	for _, stack := range set.Stacks {

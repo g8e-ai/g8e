@@ -12,12 +12,47 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/publicdisclosure"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
+
+func TestProjectMetricAvailabilityEvent_RejectsMissingRole(t *testing.T) {
+	_, err := ProjectMetricAvailabilityEvent(PublicMetricAvailabilitySignal{
+		RunID:        "run-live-1",
+		AssignmentID: "assign-1",
+		VariantID:    "qwen3-4b",
+		MetricID:     "pass_rate",
+		Numerator:    1,
+		Denominator:  1,
+		ObservedAt:   "2026-09-24T12:00:05.000Z",
+		EventID:      "run-live-1:assign-1:metric:pass_rate:44",
+		Completed:    1,
+		Total:        5,
+	})
+	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestProjectMetricAvailabilityEvent_RejectsInvalidProgress(t *testing.T) {
+	_, err := ProjectMetricAvailabilityEvent(PublicMetricAvailabilitySignal{
+		RunID:        "run-live-1",
+		AssignmentID: "assign-1",
+		VariantID:    "qwen3-4b",
+		Role:         models.ModelRolePrimary,
+		MetricID:     "pass_rate",
+		Numerator:    1,
+		Denominator:  1,
+		ObservedAt:   "2026-09-24T12:00:05.000Z",
+		EventID:      "run-live-1:assign-1:metric:pass_rate:45",
+		Completed:    6,
+		Total:        5,
+	})
+	require.ErrorIs(t, err, constants.ErrEvaluationLiveEventProgressInvalid)
+}
 
 func TestProjectModelRoleInvocationEvent_ExcludesProviderBoundaryFields(t *testing.T) {
 	event, err := ProjectModelRoleInvocationEvent(PublicModelRoleInvocationSignal{
@@ -33,7 +68,7 @@ func TestProjectModelRoleInvocationEvent_ExcludesProviderBoundaryFields(t *testi
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "stage_updated", event.Kind)
-	assert.Equal(t, "ds-live-run-live-1", event.DatasetID)
+	assert.Equal(t, "ds-live-run-live-1", event.DatasetId)
 	assert.Contains(t, event.StageLabel, "model role invoked")
 	assert.Contains(t, event.StageLabel, "primary")
 
@@ -50,6 +85,7 @@ func TestProjectMetricAvailabilityEvent_ProjectsPassRateDelta(t *testing.T) {
 		RunID:        "run-live-1",
 		AssignmentID: "assign-1",
 		VariantID:    "qwen3-4b",
+		Role:         models.ModelRolePrimary,
 		MetricID:     "pass_rate",
 		Numerator:    3,
 		Denominator:  4,
@@ -61,6 +97,7 @@ func TestProjectMetricAvailabilityEvent_ProjectsPassRateDelta(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "metric_updated", event.Kind)
+	assert.Equal(t, "primary", event.Role, "a metric event names the role it grades")
 	passRate, ok := event.MetricDelta["pass_rate"]
 	require.True(t, ok)
 	require.NotNil(t, passRate.Value)
@@ -76,6 +113,7 @@ func TestProjectMetricAvailabilityEvent_ZeroDenominatorIsUnavailable(t *testing.
 		RunID:        "run-live-1",
 		AssignmentID: "assign-1",
 		VariantID:    "qwen3-4b",
+		Role:         models.ModelRolePrimary,
 		MetricID:     "pass_rate",
 		Numerator:    0,
 		Denominator:  0,
@@ -91,6 +129,70 @@ func TestProjectMetricAvailabilityEvent_ZeroDenominatorIsUnavailable(t *testing.
 	assert.Nil(t, passRate.Value)
 }
 
+func TestMarshalPublicLiveEvent_KeepsZeroProgressAndAMeasuredZero(t *testing.T) {
+	zero := 0.0
+	event, err := ProjectMetricAvailabilityEvent(PublicMetricAvailabilitySignal{
+		RunID:        "run-live-1",
+		AssignmentID: "assign-1",
+		VariantID:    "qwen3-4b",
+		Role:         models.ModelRolePrimary,
+		MetricID:     assignmentPassMetricID,
+		Numerator:    0,
+		Denominator:  1,
+		Rate:         &zero,
+		ObservedAt:   "2026-09-24T12:00:05.000Z",
+		EventID:      "run-live-1:assign-1:metric:pass:46",
+		Completed:    0,
+		Total:        5,
+	})
+	require.NoError(t, err)
+	body, err := MarshalPublicLiveEvent(event)
+	require.NoError(t, err)
+
+	var wire struct {
+		Completed   *int                      `json:"completed"`
+		Total       *int                      `json:"total"`
+		MetricDelta map[string]map[string]any `json:"metric_delta"`
+	}
+	require.NoError(t, json.Unmarshal(body, &wire))
+	require.NotNil(t, wire.Completed, "zero progress is a value, not an omission")
+	assert.Equal(t, 0, *wire.Completed)
+	require.NotNil(t, wire.Total)
+	value, present := wire.MetricDelta[assignmentPassMetricID]["value"]
+	require.True(t, present, "a failed assignment's binary pass is a measured zero, not an omission")
+	assert.InDelta(t, 0.0, value, 0)
+
+	decoded := &evalv1.PublicLiveEvent{}
+	require.NoError(t, evalv1.UnmarshalCanonical(body, decoded), "the body is the canonical protojson form")
+	assert.True(t, proto.Equal(event, decoded))
+	require.NoError(t, publicdisclosure.ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, body))
+}
+
+func TestMarshalPublicLiveEvent_RejectsNil(t *testing.T) {
+	_, err := MarshalPublicLiveEvent(nil)
+	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestProjectLiveEvents_CarryTheCampaignReleaseIdentity(t *testing.T) {
+	release := CampaignRelease{Release: "v2.3.0", Basis: ReleaseBasisRecorded, SourceRevision: "abc123"}
+	invoked, err := ProjectModelRoleInvocationEvent(PublicModelRoleInvocationSignal{
+		Release: release, RunID: "run-live-1", AssignmentID: "assign-1", VariantID: "qwen3-4b", Role: models.ModelRolePrimary,
+		ObservedAt: "2026-09-24T12:00:00.000Z", EventID: "run-live-1:assign-1:invocation:primary:47", Completed: 0, Total: 5,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "v2.3.0", invoked.GetRelease())
+	assert.Equal(t, evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED, invoked.GetReleaseBasis())
+	assert.Equal(t, "abc123", invoked.GetSourceRevision())
+
+	unknown, err := ProjectModelRoleInvocationEvent(PublicModelRoleInvocationSignal{
+		RunID: "run-live-1", AssignmentID: "assign-1", VariantID: "qwen3-4b", Role: models.ModelRolePrimary,
+		ObservedAt: "2026-09-24T12:00:00.000Z", EventID: "run-live-1:assign-1:invocation:primary:48", Completed: 0, Total: 5,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, unknown.GetRelease(), "a campaign without a release is not given one")
+	assert.Equal(t, evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNKNOWN, unknown.GetReleaseBasis())
+}
+
 func TestHeadlineMetricID_RecognizesExplorerHeadlineMetrics(t *testing.T) {
 	assert.True(t, HeadlineMetricID("pass_rate"))
 	assert.True(t, HeadlineMetricID("latency_p50_ms"))
@@ -100,8 +202,10 @@ func TestHeadlineMetricID_RecognizesExplorerHeadlineMetrics(t *testing.T) {
 
 func TestCampaignPublicationCoordinator_ExportsProjectionRecordsOnly(t *testing.T) {
 	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	savePublicRunIdentity(t, store, "run-1", "campaign-1")
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
 	assignment := &evalv1.EvaluationAssignment{
 		AssignmentId:    "assign-1",
 		RunId:           "run-1",
@@ -162,6 +266,7 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 		}},
 		DeterministicGrades: []*evalv1.DeterministicGrade{{
 			CriterionId: "role-invoked",
+			Basis:       basisStructural,
 			Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		}},
 	}
@@ -169,6 +274,7 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 	require.NoError(t, err)
 	result.ResultDigest = digest
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           runID,
@@ -217,6 +323,7 @@ func TestCampaignPublication_PublishesInvocationAtAssignmentStart(t *testing.T) 
 		},
 	}
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           runID,
@@ -253,6 +360,7 @@ func TestCampaignPublication_PublishesScoredInferenceDuringTraceProgress(t *test
 		},
 	}
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           runID,
@@ -299,6 +407,7 @@ func TestCampaignPublication_PublishesScoredInferenceRetriesInMetricDelta(t *tes
 		},
 	}
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           runID,
@@ -340,6 +449,7 @@ func TestCampaignPublication_PublishesFormationRoleInvocationIncrementally(t *te
 	assignment := heterogeneousAssignmentExecutionRequest(t, stack, variants).Assignment
 	assignment.SchemaVersion = CampaignSchemaVersion
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           assignment.GetRunId(),
@@ -368,6 +478,7 @@ func TestCampaignPublication_PublishesFormationRoleProgressWithPerRoleMetrics(t 
 	assignment := req.Assignment
 	assignment.SchemaVersion = CampaignSchemaVersion
 	store := NewStore(files)
+	savePublicRunIdentity(t, store, assignment.GetRunId(), assignment.GetCampaignId())
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
 		SchemaVersion:   CampaignSchemaVersion,
 		RunId:           assignment.GetRunId(),

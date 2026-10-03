@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -70,7 +71,7 @@ type formationRoleOutput struct {
 // outcome homogeneous assignments classify as PARTIAL.
 func (r *CampaignFormationChatRunner) RunHeterogeneousFormation(ctx context.Context, binding FormationBindingRequest, runContext FormationRunContext, initialState []byte) (*FormationRunResult, error) {
 	if r == nil || r.client == nil || r.waitForTrace == nil {
-		return nil, fmt.Errorf("evaluation: run heterogeneous formation: chat client and trace waiter are required")
+		return nil, fmt.Errorf("evaluation: run heterogeneous formation: chat client and trace waiter: %w", constants.ErrFormationRunnerDependency)
 	}
 	var input ScenarioInputFixture
 	if err := json.Unmarshal(initialState, &input); err != nil {

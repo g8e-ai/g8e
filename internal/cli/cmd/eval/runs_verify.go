@@ -69,7 +69,7 @@ and accounted for, without full verification.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runID := args[0]
 			if coverage && (requireProvenance || requireObservation) {
-				return fmt.Errorf("evaluation: runs verify: --coverage cannot be combined with --require-provenance or --require-observation")
+				return fmt.Errorf("evaluation: runs verify: --coverage cannot be combined with --require-provenance or --require-observation: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {

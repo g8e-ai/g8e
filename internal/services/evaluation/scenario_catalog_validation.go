@@ -19,16 +19,15 @@ import (
 // Every type in it is derivable from a digest-bound trace, so none can be
 // permanently unavailable (INV-EVAL-CAMP-10).
 var scenarioEvidenceTypes = map[string]struct{}{
-	"model_inference":     {},
-	"deterministic_grade": {},
-	"semantic_grade":      {},
-	"tool_decision":       {},
-	"tool_call":           {},
-	"governed_action":     {},
-	"policy_decision":     {},
-	"state_observation":   {},
-	"recovery":            {},
-	"final_response":      {},
+	"model_inference":   {},
+	"semantic_grade":    {},
+	"tool_decision":     {},
+	"tool_call":         {},
+	"governed_action":   {},
+	"policy_decision":   {},
+	"state_observation": {},
+	"recovery":          {},
+	"final_response":    {},
 }
 
 func scenarioContractError(blueprint ScenarioBlueprint, format string, args ...any) error {

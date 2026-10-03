@@ -30,7 +30,6 @@ class TribunalGenerationRequest:
     g8e_context: G8eHttpContext | None = None
     settings: G8eeUserSettings | None = None
     reputation_data_service: ReputationDataService | None = None
-    auditor_hmac_key: str | None = None
     ai_response_analyzer: AIResponseAnalyzerProtocol | None = None
     investigation_state: str = ""
     investigation_context: str = ""

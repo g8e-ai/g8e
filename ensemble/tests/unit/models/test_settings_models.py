@@ -9,7 +9,12 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from app.constants.config import LLMProvider
-from app.models.settings import BatchExecutionSettings, LLMSettings, G8eeAppSettings
+from app.models.settings import (
+    BatchExecutionSettings,
+    G8eeAppSettings,
+    LLMSettings,
+    UserSettingsDocument,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -219,3 +224,25 @@ class TestG8eeAppSettingsMTLSPaths:
         settings._client_key_path = "/tmp/key.pem"
         assert settings.client_cert_path == "/tmp/cert.pem"
         assert settings.client_key_path == "/tmp/key.pem"
+
+
+class TestStoredUserSettingsCompatibility:
+    def test_document_with_removed_token_limit_fields_still_loads(self):
+        """v2.3.0 removed llm_max_tokens and eval_judge_max_tokens. A user_settings
+        document saved by an earlier release still carries them and must load, or
+        every chat for that user fails at settings load."""
+        doc = UserSettingsDocument.model_validate(
+            {
+                "user_id": "user-1",
+                "settings": {
+                    "llm": {
+                        "primary_provider": "g8e",
+                        "primary_model": "gemma4:e4b",
+                        "llm_max_tokens": 4096,
+                    },
+                    "eval_judge": {"eval_judge_max_tokens": 2000},
+                },
+            }
+        )
+        assert doc.settings.llm.primary_provider is LLMProvider.G8E
+        assert not hasattr(doc.settings.llm, "llm_max_tokens")

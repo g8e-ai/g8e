@@ -11,10 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os/user"
-	"runtime"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -99,32 +96,7 @@ func (s *UserService) CreateUserWithSub(sub string) (*models.User, error) {
 }
 
 func getLocalOSUser() *models.LocalOSUser {
-	currentUser, err := user.Current()
-	if err != nil {
-		return nil
-	}
-
-	var domain, username string
-	parts := strings.SplitN(currentUser.Username, "\\", 2)
-	if len(parts) == 2 {
-		domain = parts[0]
-		username = parts[1]
-	} else {
-		username = currentUser.Username
-	}
-
-	var sid string
-	if runtime.GOOS == "windows" {
-		sid = currentUser.Uid
-	}
-
-	return &models.LocalOSUser{
-		Domain:   domain,
-		Username: username,
-		UID:      currentUser.Uid,
-		GID:      currentUser.Gid,
-		SID:      sid,
-	}
+	return models.CurrentLocalOSUser()
 }
 
 func (s *UserService) createUser(localOSUser *models.LocalOSUser, roles []string) (*models.User, error) {

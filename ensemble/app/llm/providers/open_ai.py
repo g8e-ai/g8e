@@ -11,7 +11,6 @@ from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
 
-from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.thinking import translate_for_openai
 from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
@@ -175,7 +174,7 @@ class OpenAIProvider(LLMProvider):
     def _build_openai_kwargs(
         model: str,
         messages: list[dict],
-        max_tokens: int,
+        max_tokens: int | None,
         top_p: float | None,
         stop: list[str] | None,
         tools: list[dict] | None = None,
@@ -193,9 +192,10 @@ class OpenAIProvider(LLMProvider):
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": max_tokens,
             "stream": stream,
         }
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
         if stream:
             kwargs["stream_options"] = {"include_usage": True}
         if top_p is not None:
@@ -248,11 +248,7 @@ class OpenAIProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
-        effective_max_tokens = (
-            primary_llm_settings.max_output_tokens
-            if primary_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = primary_llm_settings.max_output_tokens
 
         if openai_tools:
             # Some endpoints hang on streaming when tools are present.
@@ -337,11 +333,7 @@ class OpenAIProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
-        effective_max_tokens = (
-            primary_llm_settings.max_output_tokens
-            if primary_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = primary_llm_settings.max_output_tokens
 
         kwargs = self._build_openai_kwargs(
             model=model,
@@ -434,11 +426,7 @@ class OpenAIProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
-        effective_max_tokens = (
-            assistant_llm_settings.max_output_tokens
-            if assistant_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = assistant_llm_settings.max_output_tokens
 
         response_format = (
             assistant_llm_settings.response_format.flatten_for_openai()
@@ -496,11 +484,7 @@ class OpenAIProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
-        effective_max_tokens = (
-            assistant_llm_settings.max_output_tokens
-            if assistant_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = assistant_llm_settings.max_output_tokens
 
         response_format = (
             assistant_llm_settings.response_format.flatten_for_openai()
@@ -567,11 +551,7 @@ class OpenAIProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
-        effective_max_tokens = (
-            lite_llm_settings.max_output_tokens
-            if lite_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = lite_llm_settings.max_output_tokens
 
         response_format = (
             lite_llm_settings.response_format.flatten_for_openai()
@@ -627,11 +607,7 @@ class OpenAIProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
-        effective_max_tokens = (
-            lite_llm_settings.max_output_tokens
-            if lite_llm_settings.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        effective_max_tokens = lite_llm_settings.max_output_tokens
 
         response_format = (
             lite_llm_settings.response_format.flatten_for_openai()

@@ -19,23 +19,14 @@ func TestNewInferenceConfig_AppliesTypedDefaults(t *testing.T) {
 	got := newInferenceConfig(LoadOptions{InferenceEnabled: true})
 
 	assert.True(t, got.Enabled)
-	assert.Equal(t, constants.InferenceDefaultPrimaryModel, got.PrimaryModel)
-	assert.Equal(t, constants.InferenceDefaultAssistantModel, got.AssistantModel)
-	assert.Equal(t, constants.InferenceDefaultLiteModel, got.LiteModel)
 	assert.Equal(t, constants.InferenceDefaultKeepAlive, got.KeepAlive)
 }
 
 func TestNewInferenceConfig_ExplicitFlagsOverrideDefaults(t *testing.T) {
 	got := newInferenceConfig(LoadOptions{
-		InferenceEnabled:        true,
-		InferencePrimaryModel:   "custom-primary:1b",
-		InferenceAssistantModel: "custom-assistant:1b",
-		InferenceLiteModel:      "custom-lite:1b",
-		InferenceKeepAlive:      "5m",
+		InferenceEnabled:   true,
+		InferenceKeepAlive: "5m",
 	})
 
-	assert.Equal(t, "custom-primary:1b", got.PrimaryModel)
-	assert.Equal(t, "custom-assistant:1b", got.AssistantModel)
-	assert.Equal(t, "custom-lite:1b", got.LiteModel)
 	assert.Equal(t, "5m", got.KeepAlive)
 }

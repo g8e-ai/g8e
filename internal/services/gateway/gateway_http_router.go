@@ -16,8 +16,8 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway/console"
+	"github.com/g8e-ai/g8e/v2/internal/services/gateway/docs"
 )
 
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
@@ -30,12 +30,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.State, h.healthController.handleState)
 
 	// Swagger UI documentation
-	mux.HandleFunc("/swagger/", handleSwaggerUI)
-	mux.HandleFunc("/swagger/index.html", handleSwaggerUI)
-	mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		http.ServeFile(w, r, paths.SwaggerFilePath)
-	})
+	mux.HandleFunc(constants.SwaggerUIPath, handleSwaggerUI)
+	mux.HandleFunc(constants.SwaggerUIPath+"index.html", handleSwaggerUI)
+	mux.HandleFunc(constants.SwaggerDocPath, handleSwaggerDoc)
 
 	// Bootstrap routes (CA discovery) - now on public HTTPS
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
@@ -230,6 +227,10 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.ApprovePage, h.passkeyController.handleApprovalPage)
 	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.passkeyController.handleCLIApprovalStatus)
 	mux.HandleFunc(constants.APIPaths.ApprovalsCLIList, h.passkeyController.handleCLIListSuspended)
+
+	// g8ee fetches the public key that verifies the Gateway's proxy identity stamps.
+	mux.HandleFunc(constants.APIPaths.GatewayProxySigningKey, h.ensembleBrowserProxyController.handleProxySigningKey)
+	mux.HandleFunc(constants.APIPaths.GatewayReputationSign, h.dataController.handleReputationSign)
 
 	// Ensemble browser proxy (RouteAuthWebSession — Gateway stamps identity for g8ee).
 	mux.HandleFunc(constants.APIPaths.EnsembleChatPrefix, h.ensembleBrowserProxyController.handleProxy)
@@ -501,6 +502,21 @@ window.onload=function(){
 </script>
 </body>
 </html>`
+
+// handleSwaggerDoc serves the embedded OpenAPI spec. The bytes are compiled in
+// (see the docs package), so the route works from a bare binary with no docs/
+// directory on disk. Auth is enforced upstream by the route registry.
+func handleSwaggerDoc(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	_, _ = w.Write(docs.SwaggerJSON)
+}
 
 func handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
@@ -29,7 +28,7 @@ import (
 // modelProvenanceAttestationPreflightAPIClientTimeout covers the synchronous
 // storage attestation probe on the gateway. The default 5s CLI timeout is too
 // short while the provenance operator hashes multi-gigabyte Ollama blobs.
-const modelProvenanceAttestationPreflightAPIClientTimeout = 35 * time.Second
+const modelProvenanceAttestationPreflightAPIClientTimeout = constants.ModelProvenanceAttestationPreflightTimeout + constants.ModelProvenanceAttestationPreflightClientMargin
 
 type remoteModelProvenanceClient struct {
 	client authcmd.APIClient

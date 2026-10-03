@@ -73,7 +73,7 @@ IDs are stable. Append the next free number in a topic. Do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-ENS-SVC-01 | `ServiceFactory` (in `ensemble/app/services/service_factory.py`) is the sole builder of all domain services. No service is constructed outside the factory. The factory method `create_all_services()` receives settings, cache-aside service, and client handlers (DB, KV, Blob, HTTP) and returns a `ServiceContainer` with all constructed services. Services are bound to app state via `bind_to_app_state()`. |
-| INV-ENS-SVC-02 | `AuthService` authenticates either a bearer Operator session after Gateway validation or a trusted proxy context containing required user identity fields. It then checks request context ownership and session bindings. Operator-authentication relay routes are explicit workflow exceptions; they do not make arbitrary unauthenticated internal routes valid. |
+| INV-ENS-SVC-02 | `AuthService` authenticates either a bearer Operator session after Gateway validation or a proxy context containing required user identity fields and the Gateway's signature over the request (INV-AUTH-ID-07). It then checks request context ownership and session bindings. Operator-authentication relay routes are explicit workflow exceptions; they do not make arbitrary unauthenticated internal routes valid. |
 | INV-ENS-SVC-03 | The `InternalHttpClient` is constructed and owned by the application lifecycle and injected into the LLM provider factory at `ensemble/app/llm/factory.py:set_internal_http_client()`. The factory uses it to route governed-dispatch inference requests through the Gateway. g8ee does not control client lifecycle; it manages only injection timing. |
 
 ### Trust and authorization (`INV-ENS-AUTH`)
@@ -120,7 +120,7 @@ IDs are stable. Append the next free number in a topic. Do not renumber.
 1. Incoming request arrives at one of the three routers (health, chat, internal).
 2. Health router endpoints (`/health`, `/health/live`, `/health/details`) do not require authentication.
 3. Chat and internal routes check `require_authenticated_context` middleware.
-4. `AuthService` authenticates either a bearer Operator session (validated with Gateway) or trusted proxy headers containing user identity.
+4. `AuthService` authenticates either a bearer Operator session (validated with Gateway) or proxy headers containing user identity with a valid Gateway signature.
 5. Request context ownership and session bindings are checked.
 6. Operator-authentication relay routes are explicit exceptions and are documented per route.
 7. Request proceeds to handler with authenticated `G8eHttpContext`.

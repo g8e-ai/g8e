@@ -78,7 +78,13 @@ func newDeterministicStageEvidence(
 	}
 }
 
+// ExecutionTarget identifies the Operators whose actions this runtime executes.
+type ExecutionTarget interface {
+	ExecutesFor(operatorID string) bool
+}
+
 type L4Warden struct {
+	executionTarget      ExecutionTarget
 	logger               *slog.Logger
 	replayStore          ReplayStore
 	stateRootProvider    StateRootProvider
@@ -106,6 +112,7 @@ func NewL4Warden(
 	doctrine *L1Doctrine,
 	knownActionTypes []constants.ActionType,
 	clock system.Clock,
+	executionTarget ExecutionTarget,
 ) *L4Warden {
 	knownActions := make(map[constants.ActionType]struct{})
 	for _, action := range knownActionTypes {
@@ -118,6 +125,7 @@ func NewL4Warden(
 	}
 
 	return &L4Warden{
+		executionTarget:      executionTarget,
 		logger:               logger,
 		replayStore:          replayStore,
 		stateRootProvider:    stateRootProvider,
@@ -404,6 +412,18 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 		return nil, "", constants.ErrTxPayloadDecoderMissing
 	}
 
+	if err := verifyDocumentCollection(decodedPayload); err != nil {
+		tv.logger.Error("Document action rejected: collection not governed", "action_type", envelope.ActionType, string(constants.ConnectionStateError), err)
+		return nil, "", err
+	}
+
+	// Unbound app document writes are the sole identity exception (INV-AUTH-ID-05).
+	unboundDocument := envelope.OperatorId == "" &&
+		(actionType == constants.ActionTypeDocumentUpdate || actionType == constants.ActionTypeDocumentDelete)
+	if tv.executionTarget == nil || (!unboundDocument && (envelope.OperatorId == "" || !tv.executionTarget.ExecutesFor(envelope.OperatorId))) {
+		return nil, "", fmt.Errorf("%w: %q", constants.ErrTxTargetOperatorMismatch, envelope.OperatorId)
+	}
+
 	if violations := tv.doctrine.ValidatePayload(decodedPayload); len(violations) > 0 {
 		tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
 		return nil, "", fmt.Errorf("%w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
@@ -554,7 +574,7 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.Gove
 
 	ok, err := tv.l3Notary.VerifyL3Proof(
 		ctx,
-		envelope.OperatorId,
+		envelope.RequestorUserId,
 		envelope.TransactionHash,
 		envelope.CliSessionId,
 		envelope.Governance.L3.Proof,
@@ -566,6 +586,28 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.Gove
 	}
 
 	return ok && err == nil, nil
+}
+
+// verifyDocumentCollection admits a DOCUMENT_UPDATE or DOCUMENT_DELETE payload
+// only when it targets a governed document collection. The governed document
+// store is the Gateway's platform document store, which also holds users,
+// trusted_signers, app_policies, and other authority records, so a document
+// action outside the governed set fails closed before execution. Other
+// payload types pass.
+func verifyDocumentCollection(payload proto.Message) error {
+	var collection string
+	switch p := payload.(type) {
+	case *operatorv1.DocumentUpdateRequested:
+		collection = p.GetCollection()
+	case *operatorv1.DocumentDeleteRequested:
+		collection = p.GetCollection()
+	default:
+		return nil
+	}
+	if !constants.CollectionName(collection).IsGovernedDocument() {
+		return fmt.Errorf("%w: %q", constants.ErrTxDocumentCollectionNotGoverned, collection)
+	}
+	return nil
 }
 
 func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payload []byte) (proto.Message, error) {

@@ -108,7 +108,7 @@ func BuildModelVariantsFromProviderInventory(ctx context.Context, entries []infe
 		seenIDs[variant.GetVariantId()] = struct{}{}
 		if opts.RunCapabilityProbes {
 			if opts.CapabilityProbeRunner == nil {
-				return nil, fmt.Errorf("evaluation: build model variants: capability probes requested without governed probe runner")
+				return nil, fmt.Errorf("evaluation: build model variants: governed capability probe runner: %w", constants.ErrMissingRequiredField)
 			}
 			observations, err := opts.CapabilityProbeRunner.RunCapabilityProbes(ctx, variant)
 			if err != nil {
@@ -173,7 +173,7 @@ func ValidateModelRegistry(freeze *ModelInventoryFreeze) error {
 		return err
 	}
 	if freeze.RegistryDigest != expectedDigest {
-		return fmt.Errorf("evaluation: validate model registry: registry digest mismatch")
+		return fmt.Errorf("evaluation: validate model registry: registry digest: %w", constants.ErrChecksumMismatch)
 	}
 	seenTags := make(map[string]struct{}, len(freeze.Variants))
 	seenIDs := make(map[string]struct{}, len(freeze.Variants))
@@ -485,7 +485,7 @@ func RemoveModelVariant(freeze *ModelInventoryFreeze, identifier string) (*Model
 	}
 	id := strings.TrimSpace(identifier)
 	if id == "" {
-		return nil, nil, fmt.Errorf("evaluation: remove model variant: identifier is required")
+		return nil, nil, fmt.Errorf("evaluation: remove model variant: identifier: %w", constants.ErrMissingRequiredField)
 	}
 
 	normalizedID := inference.NormalizeProviderModelVariantID(id)
@@ -506,11 +506,11 @@ func RemoveModelVariant(freeze *ModelInventoryFreeze, identifier string) (*Model
 	}
 
 	if removed == nil {
-		return nil, nil, fmt.Errorf("evaluation: remove model variant: model %q not found in inventory", id)
+		return nil, nil, fmt.Errorf("evaluation: remove model variant: model %q in inventory: %w", id, constants.ErrNotFound)
 	}
 
 	if len(remaining) == 0 {
-		return nil, nil, fmt.Errorf("evaluation: remove model variant: cannot remove last variant from inventory")
+		return nil, nil, fmt.Errorf("evaluation: remove model variant: %w", constants.ErrEvaluationLastEntryRemoval)
 	}
 
 	sort.Slice(remaining, func(i, j int) bool {

@@ -22,6 +22,7 @@ def _make_mock_reputation_service() -> MagicMock:
     svc = MagicMock()
     svc.list_states = AsyncMock(return_value=[])
     svc.get_latest_commitment = AsyncMock(return_value=None)
+    svc.sign_commitment = AsyncMock(return_value="a" * 64)
 
     async def _create_commitment(
         commitment: ReputationCommitment, context=None
@@ -95,7 +96,6 @@ def make_tribunal_generation_request(
     g8e_context: G8eHttpContext | None = None,
     settings: G8eeUserSettings | None = None,
     reputation_data_service: ReputationDataService | None = None,
-    auditor_hmac_key: str = "test-hmac-key",
     ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
     investigation_state: str = "",
     investigation_context: str = "",
@@ -129,7 +129,6 @@ def make_tribunal_generation_request(
         g8e_context=g8e_context,
         settings=settings,
         reputation_data_service=reputation_data_service,
-        auditor_hmac_key=auditor_hmac_key,
         ai_response_analyzer=ai_response_analyzer,
         investigation_state=investigation_state,
         investigation_context=investigation_context,

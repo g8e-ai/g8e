@@ -810,6 +810,87 @@ class TestTokenAccumulation:
         assert len(complete_chunk.data.model_calls[0].output_artifact_hash) == 64
         assert complete_chunk.data.model_calls[0].monotonic_end >= complete_chunk.data.model_calls[0].monotonic_start
 
+    async def test_final_usage_equals_sum_of_recorded_calls_across_tool_turns(self):
+        """The COMPLETE total is derived from the per-call records and nothing else.
+
+        Seeds one prior (triage) call and runs two provider turns with a tool call
+        in between. Distinct, small values per call mean any invented amount (such
+        as a configured output limit) added anywhere breaks the equality.
+        """
+        from unittest.mock import AsyncMock
+
+        from app.llm.llm_types import ToolCall
+        from app.llm.model_call_attribution import build_model_call_telemetry
+
+        tool_executor = MagicMock()
+        tool_executor.execute_tool_call = AsyncMock()
+        provider = MagicMock()
+        usage_by_turn = [(100, 7, 3, 107), (150, 11, 5, 161)]
+        turn = 0
+
+        def stream(**kwargs):
+            nonlocal turn
+            prompt, out, thinking, total = usage_by_turn[turn]
+            turn += 1
+            first = turn == 1
+
+            async def _gen():
+                chunk = make_provider_chunk(
+                    text=f"turn {turn}",
+                    tool_calls=[ToolCall(name="search_web", args={"query": "q"})] if first else None,
+                    finish_reason="STOP",
+                )
+                chunk.usage_metadata = MagicMock()
+                chunk.usage_metadata.prompt_token_count = prompt
+                chunk.usage_metadata.candidates_token_count = out
+                chunk.usage_metadata.thinking_token_count = thinking
+                chunk.usage_metadata.cache_token_count = 0
+                chunk.usage_metadata.total_token_count = total
+                chunk.usage_metadata.usage_reported = True
+                yield chunk
+
+            return _gen()
+
+        provider.generate_content_stream_primary = stream
+
+        triage_call = build_model_call_telemetry(
+            provider=provider,
+            agent_role="triage",
+            model_role="lite",
+            model="test-lite",
+            monotonic_start=0.0,
+            monotonic_end=0.1,
+            input_artifact_hash="a" * 64,
+            input_tokens=40,
+            output_tokens=2,
+            total_tokens=42,
+            usage_reported=True,
+            output_artifact_hash="b" * 64,
+        )
+
+        agent = make_g8e_agent(fn_handler=tool_executor)
+        context = make_agent_inputs()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
+        event_service = make_event_service()
+
+        chunks = []
+        async for chunk in agent._stream_with_tool_loop(
+            inputs=context,
+            event_service=event_service,
+            llm_provider=provider,
+            model_calls=[triage_call],
+        ):
+            chunks.append(chunk)
+
+        complete = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
+        calls = complete.data.model_calls
+        usage = complete.data.token_usage
+        assert len(calls) == 3
+        assert usage.input_tokens == sum(c.input_tokens for c in calls) == 290
+        assert usage.output_tokens == sum(c.output_tokens for c in calls) == 20
+        assert usage.total_tokens == sum(c.total_tokens for c in calls) == 310
+
     async def test_emits_explicit_missing_usage_when_provider_omits_metadata(self):
         tool_executor = MagicMock()
         provider = MagicMock()

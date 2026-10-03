@@ -39,7 +39,6 @@ _ALLOWED_VIOLATIONS = frozenset(
         "G8E_TEST_LLM_ASSISTANT_PROVIDER",
         "G8E_TEST_LLM_LITE_MODEL",
         "G8E_TEST_LLM_LITE_PROVIDER",
-        "G8E_TEST_LLM_MAX_TOKENS",
         "G8E_TEST_LLM_PRIMARY_MODEL",
         "G8E_TEST_LLM_PRIMARY_PROVIDER",
         "G8E_TEST_TMP_DIR",
@@ -130,7 +129,13 @@ def _env_read_arguments(tree: ast.AST) -> list[ast.expr]:
 
 def test_production_env_reads_use_registry_keys():
     offenders: list[str] = []
-    for path in sorted(_APP_DIR.rglob("*.py")):
+    py_files = [
+        p for p in _APP_DIR.rglob("*.py")
+        if not any(part.startswith(".") for part in p.parts)
+        and "venv" not in p.parts
+        and "__pycache__" not in p.parts
+    ]
+    for path in sorted(py_files):
         tree = ast.parse(path.read_text(), filename=str(path))
         for arg in _env_read_arguments(tree):
             if isinstance(arg, ast.Constant) and isinstance(arg.value, str):

@@ -49,7 +49,7 @@ graph TD
         Agent["AI Agent / MCP Client"]
         BYO["CLI / BYO app<br/>(envelope or dispatch)"]
         EE["g8ee ensemble<br/>(dispatch + SSE)"]
-        Browser["Browser / g8ed<br/>(WebAuthn session)"]
+        Browser["Browser · Console<br/>(WebAuthn session)"]
     end
 
     Agent -. "mTLS · Streamable HTTP" .-> Surfaces
@@ -66,7 +66,7 @@ graph TD
 This diagram is the top of a zoom-in series:
 
 1. **50k ft** (this diagram): Gateway (PDP) layered on Operator (PEP) substrate. Remote Operator connects via outbound-only mTLS WebSocket.
-2. **Fleet topology** ([graph-gateway-fleet-single-host-http-mtls.md](./graph-gateway-fleet-single-host-http-mtls.md)): Unified Compose stack with optional g8ee, g8ed, and evaluation Operators.
+2. **Fleet topology** ([graph-gateway-fleet-single-host-http-mtls.md](./graph-gateway-fleet-single-host-http-mtls.md)): Unified Compose stack with optional g8ee and evaluation Operators.
 3. **Gateway services** ([graph-gateway-services.md](./graph-gateway-services.md)): The service stack on top of the Operator substrate — protocol surfaces, core services, persistence, pub/sub broker, MCP/A2A gateway, governance surface, SSE bridge.
 4. **Operator pipeline** ([graph-operator-pipeline-l1-l5.md](./graph-operator-pipeline-l1-l5.md)): The L1–L5 verification and execution sequence in the substrate beneath both modes.
 5. **Operator lifecycle** ([graph-operator-lifecycle.md](./graph-operator-lifecycle.md)): Enrollment, session binding, heartbeats, stale detection, and remote stop signals.

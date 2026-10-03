@@ -73,7 +73,7 @@ from app.services.evaluation.player_steps import (
 from app.services.evaluation.role_control import (
     apply_homogeneous_role_control,
     resolve_role_outcome,
-    resolve_scored_provider_is_lite,
+    resolve_scored_model_role,
 )
 from app.services.investigation.investigation_service import (
     extract_all_operators_context,
@@ -412,8 +412,6 @@ class ChatPipelineService:
                 "No LLM model configured. Set a primary_model and/or assistant_model in platform settings."
             )
 
-        max_tokens = request_settings.llm.llm_max_tokens
-
         logger.info(
             "[CHAT] Triage: complexity=%s (conf=%s) intent=%s (conf=%s) posture=%s (conf=%s) model=%s",
             triage_result.complexity,
@@ -477,7 +475,6 @@ class ChatPipelineService:
             system_instructions=system_instructions,
             settings=request_settings,
             agent_mode=agent_mode,
-            max_tokens=max_tokens,
             model_override=model_to_use,
             evaluation_context=g8e_context.evaluation_context,
         )
@@ -513,7 +510,6 @@ class ChatPipelineService:
             request_settings=request_settings,
             operator_bound=operator_bound,
             model_to_use=model_to_use,
-            max_tokens=max_tokens,
             conversation_history=conversation_history,
             system_instructions=system_instructions,
             contents=built_contents.contents,
@@ -808,6 +804,7 @@ class ChatPipelineService:
         inputs: AgentInputs,
         state: AgentStreamState,
         memory_holder: MemoryHolder | None,
+        judge_settings: G8eeUserSettings,
         seed_application: EvaluationSeedApplication | None = None,
     ) -> None:
         if g8e_context.evaluation_context is None:
@@ -891,7 +888,7 @@ class ChatPipelineService:
             semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
                 evaluation_context=evaluation_context,
                 g8e_context=g8e_context,
-                request_settings=inputs.request_settings,
+                judge_settings=judge_settings,
                 gold_summary=evaluation_context.gold_summary,
                 designated_role_output=designated_role_output,
                 tool_calls=state.tool_calls,
@@ -1227,28 +1224,28 @@ class ChatPipelineService:
         state = AgentStreamState()
         memory_holder: MemoryHolder = {}
 
-        triage_complexity = (
-            inputs.triage_result.complexity
-            if inputs.triage_result
-            else TriageComplexityClassification.COMPLEX
-        )
-        is_lite = resolve_scored_provider_is_lite(
+        # The scored provider is the provider of the role the turn runs as, so
+        # a role's model is never sent to another role's backend.
+        scored_model_role = resolve_scored_model_role(
             designated_model_role=inputs.designated_model_role,
-            triage_complexity=triage_complexity,
+            active_agent=inputs.active_agent,
         )
-        llm_provider = get_llm_provider(resolved_settings.llm, is_lite=is_lite)
+        llm_provider = get_llm_provider(
+            resolved_settings.llm,
+            is_assistant=scored_model_role == "assistant",
+            is_lite=scored_model_role == "lite",
+        )
         logger.info(
-            "[SSE-CHAT] LLM provider resolved: %s (is_lite=%s)",
+            "[SSE-CHAT] LLM provider resolved: %s (model_role=%s)",
             type(llm_provider).__name__,
-            is_lite,
+            scored_model_role,
         )
 
         logger.info(
-            "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
+            "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d",
             inputs.model_to_use,
             inputs.agent_mode,
             len(inputs.contents),
-            inputs.max_tokens,
         )
 
         if inputs.model_to_use and inputs.generation_config:
@@ -1288,11 +1285,14 @@ class ChatPipelineService:
             memory_holder=memory_holder,
         )
 
+        # The judge grades on the caller's settings before request overrides:
+        # campaign overrides bind the scored model, which never judges itself.
         await self._finalize_evaluation_assignment(
             g8e_context=g8e_context,
             inputs=inputs,
             state=state,
             memory_holder=memory_holder,
+            judge_settings=user_settings,
             seed_application=seed_application,
         )
 

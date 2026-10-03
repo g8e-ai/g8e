@@ -8,7 +8,6 @@
 package eval
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"testing"
@@ -110,7 +109,7 @@ func TestChatEvalBindDataOperator(t *testing.T) {
 			client := &fakeBindClient{bound: tt.bound, infoErr: tt.infoErr, bindErr: tt.bindErr}
 			deps := chatEvalDeps{bindClientFactory: func(*config.Config) chatEvalBindClient { return client }}
 			cmd := cmdtest.SilentCobraCommand()
-			cmd.SetContext(context.Background())
+			cmd.SetContext(testVersionContext())
 			authContext := &auth.ClientAuthContext{CLISessionID: "cli-1", UserID: "user-1", ClientCert: "cert", ClientKey: "key"}
 
 			got, err := chatEvalBindDataOperator(cmd, deps, cfg, fileSvc, authContext, operators, dataSession, tt.autoBind)

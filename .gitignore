@@ -126,7 +126,7 @@ ENV/
 __pypackages__/
 .Python
 
-# --- Node.js Dashboard (g8ed) ---
+# --- Node.js (console, g8e-adapter, evaluation-explorer, protocol/node) ---
 node_modules/
 coverage/
 npm-debug.log*

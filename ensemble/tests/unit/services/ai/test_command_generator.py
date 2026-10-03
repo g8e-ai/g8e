@@ -81,7 +81,6 @@ _TEST_HMAC_KEY = "a" * 64
 
 _REPUTATION_KWARGS = {
     "reputation_data_service": _make_mock_reputation_service(),
-    "auditor_hmac_key": _TEST_HMAC_KEY,
 }
 
 

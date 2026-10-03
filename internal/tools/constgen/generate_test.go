@@ -8,6 +8,7 @@
 package main
 
 import (
+	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
@@ -26,7 +27,7 @@ const (
 
 	eventsGoRel      = "internal/constants/events_gen.go"
 	actionTypesGoRel = "internal/constants/action_types_gen.go"
-	dashboardJSRel   = "dashboard/public/js/constants/events.js"
+	consoleTSRel     = "console/src/generated/events.ts"
 	pythonEventsRel  = "protocol/python/g8e/_data/events.json"
 )
 
@@ -61,7 +62,7 @@ func newConstgenRoot(t *testing.T) string {
 		require.NoError(t, err)
 		writeFile(t, filepath.Join(root, rel), string(data))
 	}
-	for _, rel := range []string{eventsGoRel, dashboardJSRel, pythonEventsRel} {
+	for _, rel := range []string{eventsGoRel, consoleTSRel, pythonEventsRel} {
 		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(root, rel)), 0o755))
 	}
 	return root
@@ -71,7 +72,7 @@ func sampleOutputs() generationOutputs {
 	return generationOutputs{
 		EventsGo:      "package constants // events\n",
 		ActionTypesGo: "package constants // actions\n",
-		DashboardJS:   "export const EventType = {};\n",
+		ConsoleTS:     "export const EventType = {};\n",
 	}
 }
 
@@ -81,7 +82,7 @@ func seedGenerated(t *testing.T, root string, out generationOutputs) {
 	t.Helper()
 	writeFile(t, filepath.Join(root, eventsGoRel), out.EventsGo)
 	writeFile(t, filepath.Join(root, actionTypesGoRel), out.ActionTypesGo)
-	writeFile(t, filepath.Join(root, dashboardJSRel), out.DashboardJS)
+	writeFile(t, filepath.Join(root, consoleTSRel), out.ConsoleTS)
 	require.NoError(t, syncBundledPythonEvents(root))
 }
 
@@ -151,9 +152,14 @@ func TestGenerateAll_ProducesParseableGoAndEveryRegistryEvent(t *testing.T) {
 	require.NoError(t, err)
 	requireParsesAsGo(t, out.EventsGo)
 	requireParsesAsGo(t, out.ActionTypesGo)
+	for name, source := range map[string]string{"events": out.EventsGo, "actions": out.ActionTypesGo} {
+		formatted, err := format.Source([]byte(source))
+		require.NoError(t, err)
+		assert.Equal(t, source, string(formatted), "%s constants must already be gofmt-clean", name)
+	}
 	for _, entry := range events.Events {
 		assert.Contains(t, out.EventsGo, entry.GoConst)
-		assert.Contains(t, out.DashboardJS, entry.Value)
+		assert.Contains(t, out.ConsoleTS, entry.Value)
 	}
 	for _, meta := range actionTypes {
 		assert.Contains(t, out.ActionTypesGo, meta.GoConst)
@@ -195,7 +201,7 @@ func TestWriteGenerated_WritesEveryTargetAndSyncsBundledPythonRegistry(t *testin
 	for rel, want := range map[string]string{
 		eventsGoRel:      out.EventsGo,
 		actionTypesGoRel: out.ActionTypesGo,
-		dashboardJSRel:   out.DashboardJS,
+		consoleTSRel:     out.ConsoleTS,
 	} {
 		got, err := os.ReadFile(filepath.Join(root, rel))
 		require.NoError(t, err, rel)
@@ -210,7 +216,7 @@ func TestWriteGenerated_WritesEveryTargetAndSyncsBundledPythonRegistry(t *testin
 
 func TestWriteGenerated_FailsWhenTargetDirectoryIsMissing(t *testing.T) {
 	root := newConstgenRoot(t)
-	require.NoError(t, os.RemoveAll(filepath.Join(root, "dashboard")))
+	require.NoError(t, os.RemoveAll(filepath.Join(root, "console")))
 
 	err := writeGenerated(root, sampleOutputs())
 
@@ -253,16 +259,16 @@ func TestVerifyGenerated_ReportsEachStaleOrMissingTargetInSortedOrder(t *testing
 	out := sampleOutputs()
 	seedGenerated(t, root, out)
 	writeFile(t, filepath.Join(root, eventsGoRel), "package constants // hand edited\n")
-	require.NoError(t, os.Remove(filepath.Join(root, dashboardJSRel)))
+	require.NoError(t, os.Remove(filepath.Join(root, consoleTSRel)))
 
 	err := verifyGenerated(root, out)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "generated constants are stale:")
 	assert.Contains(t, err.Error(), filepath.Join(root, eventsGoRel)+": generated output differs from committed file (run make constants)")
-	assert.Contains(t, err.Error(), filepath.Join(root, dashboardJSRel)+": ")
+	assert.Contains(t, err.Error(), filepath.Join(root, consoleTSRel)+": ")
 	assert.NotContains(t, err.Error(), filepath.Join(root, actionTypesGoRel), "an up-to-date file must not be reported")
-	assert.Less(t, strings.Index(err.Error(), filepath.Join(root, dashboardJSRel)), strings.Index(err.Error(), filepath.Join(root, eventsGoRel)), "diagnostics are sorted")
+	assert.Less(t, strings.Index(err.Error(), filepath.Join(root, consoleTSRel)), strings.Index(err.Error(), filepath.Join(root, eventsGoRel)), "diagnostics are sorted")
 }
 
 func TestVerifyGenerated_DetectsBundledPythonRegistryDrift(t *testing.T) {

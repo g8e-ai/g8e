@@ -123,7 +123,10 @@ func walkProductionPythonFiles(root string) ([]string, error) {
 	return files, err
 }
 
-func walkProductionJSFiles(root string) ([]string, error) {
+// walkProductionConsoleFiles returns the console's production TypeScript
+// sources, excluding tests and generated/ (registry output, as the dashboard
+// walker excluded its generated constants/). The console replaced dashboard/.
+func walkProductionConsoleFiles(root string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -131,12 +134,15 @@ func walkProductionJSFiles(root string) ([]string, error) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case "constants", "node_modules", ".local.dev", "vendor":
+			case "generated", "node_modules", ".local.dev", "vendor":
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".test.js") {
+		if !strings.HasSuffix(path, ".ts") && !strings.HasSuffix(path, ".tsx") {
+			return nil
+		}
+		if strings.HasSuffix(path, ".test.ts") || strings.HasSuffix(path, ".test.tsx") {
 			return nil
 		}
 		files = append(files, path)
@@ -254,7 +260,7 @@ func TestArchitecture_NoBannedVocabularyInProductionCode(t *testing.T) {
 		violations = append(violations, found...)
 	}
 
-	jsFiles, err := walkProductionJSFiles(filepath.Join(root, "dashboard", "public", "js"))
+	jsFiles, err := walkProductionConsoleFiles(filepath.Join(root, "console", "src"))
 	require.NoError(t, err)
 	for _, path := range jsFiles {
 		found, err := scanFileSubstrings(path, bannedVocabularyNeedles)

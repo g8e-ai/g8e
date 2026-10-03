@@ -46,6 +46,7 @@ func TestRepairAssignmentTraceDigests_RecomputesLegacyDigest(t *testing.T) {
 		"model_calls": []any{
 			EvaluationTrace{
 				"agent_role":              "sage",
+				"classification":          "scored_chain",
 				"provider":                "G8EProvider",
 				"model":                   "gemma3:4b",
 				"succeeded":               true,

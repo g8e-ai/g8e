@@ -174,7 +174,6 @@ class TestAuditorSafety:
                 auditor = TribunalAuditor(
                     emitter=emitter,
                     reputation_data_service=MagicMock(),
-                    auditor_hmac_key="test-key",
                 )
                 await auditor.run(
                     provider=mock_provider,

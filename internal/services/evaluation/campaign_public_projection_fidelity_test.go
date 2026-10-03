@@ -39,9 +39,9 @@ func fidelityScenarioContext() *PublicScenarioContext {
 	}
 }
 
-func fidelityInference(id, persona string, declared ...string) *evalv1.ModelInferenceRecord {
+func fidelityInference(id, persona string, classification evalv1.EvaluationCallClassification, declared ...string) *evalv1.ModelInferenceRecord {
 	return &evalv1.ModelInferenceRecord{
-		InferenceRecordId: id, AgentPersona: persona,
+		InferenceRecordId: id, AgentPersona: persona, Classification: classification,
 		ModelRole:    evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
 		ModelVariant: &evalv1.ModelVariant{VariantId: "variant-1"},
 		FinishReason: "stop", ToolsDeclaredReported: true, ToolsDeclared: declared,
@@ -57,9 +57,9 @@ func fidelityResult() *evalv1.EvaluationAssignmentResult {
 			"Its output began: “" + privateOutputPrefix + "”.",
 		PublicFailureReason: "`recursive_grep_search` was declared to the model and hinted by the prompt (arguments: pattern from the prompt). The model made no tool call.",
 		ModelInferences: []*evalv1.ModelInferenceRecord{
-			fidelityInference("inference-triage", "triage", "triage_only_tool"),
-			fidelityInference("inference-codex", memoryCodexAgentRole, "codex_only_tool"),
-			fidelityInference("inference-scored", "sage", "recursive_grep_search", "file_read_on_operator"),
+			fidelityInference("inference-triage", "triage", evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN, "triage_only_tool"),
+			fidelityInference("inference-codex", "codex", evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_POST_TURN, "codex_only_tool"),
+			fidelityInference("inference-scored", "sage", evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN, "recursive_grep_search", "file_read_on_operator"),
 		},
 		ToolCallsCaptured: true,
 		ToolCalls: []*evalv1.ToolCallRecord{{
@@ -120,7 +120,7 @@ func TestPublicProjection_ToolsDeclaredStaysEmptyWhenNotReported(t *testing.T) {
 	projection, err := BuildAssignmentResultProjection(
 		&evalv1.EvaluationAssignment{AssignmentId: "assignment-1", RunId: "run-1", ScenarioId: "scenario-1"},
 		result, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT,
-		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "unverified")
+		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "unverified", CampaignRelease{})
 	require.NoError(t, err)
 	assert.Empty(t, projection.GetToolsDeclared())
 }

@@ -340,8 +340,8 @@ jobs:
         working-directory: ensemble
         run: python -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
 
-  dashboard-tests:
-    name: Dashboard (g8ed) Tests
+  console-tests:
+    name: Console Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -353,25 +353,37 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: dashboard/package-lock.json
+          cache-dependency-path: |
+            console/package-lock.json
+            g8e-adapter/package-lock.json
 
       - name: Install dependencies
-        working-directory: dashboard
+        working-directory: console
         run: npm ci
 
-      - name: Build g8e-adapter
-        working-directory: dashboard/g8e-adapter
+      - name: Typecheck and lint
+        working-directory: console
+        run: npm run typecheck && npm run lint
+
+      - name: Run vitest suite
+        working-directory: console
+        run: npm test
+
+      - name: Verify the embedded console is current
+        run: |
+          npm run build --prefix console
+          diff -r console/dist internal/services/gateway/console/static || {
+            echo "ERROR: The embedded console (internal/services/gateway/console/static) is stale."
+            echo "Run 'make ci' (or 'make embed-console') locally and commit the refreshed embed."
+            exit 1
+          }
+
+      - name: Build g8e-adapter and verify its contract pack
+        working-directory: g8e-adapter
         run: |
           npm ci
           npm run build
-
-      - name: Run ESLint
-        working-directory: dashboard
-        run: npm run lint
-
-      - name: Run vitest suite
-        working-directory: dashboard
-        run: npm test
+          npm run gen:contract-pack:check
 
   website-tests:
     name: Website Tests

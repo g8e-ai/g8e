@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -37,20 +38,20 @@ func (r *recordingCampaignProofPublisher) FlushProofCatalog(context.Context) err
 }
 
 func TestCollectAssignmentAuditEventsFromBodies(t *testing.T) {
-	body, err := MarshalPublicLiveEvent(PublicLiveEvent{
+	body, err := MarshalPublicLiveEvent(&evalv1.PublicLiveEvent{
 		SchemaVersion:   "1.5.0",
 		Kind:            "stage_updated",
-		DatasetID:       "dataset-1",
+		DatasetId:       "dataset-1",
 		QualityState:    "live_in_progress",
 		ObservedAt:      "2026-09-17T00:00:00Z",
-		EventID:         "event-1",
-		RunID:           "run-1",
-		AssignmentID:    "assignment-1",
-		VariantID:       "variant-a",
+		EventId:         "event-1",
+		RunId:           "run-1",
+		AssignmentId:    "assignment-1",
+		VariantId:       "variant-a",
 		Role:            "primary",
 		LifecycleStatus: "running",
-		Completed:       1,
-		Total:           2,
+		Completed:       proto.Uint32(1),
+		Total:           proto.Uint32(2),
 		StageLabel:      "model role invoked · primary · variant-a",
 	})
 	require.NoError(t, err)

@@ -199,6 +199,7 @@ func TestValidateRegistry_RejectsEntriesThatBreakASingleRule(t *testing.T) {
 		{name: "unknown kind", mutate: func(e *eventEntry) { e.Kind = "notification" }, want: `A: unknown kind "notification"`},
 		{name: "unknown transport", mutate: func(e *eventEntry) { e.Transport = []string{"pubsub", "carrier-pigeon"} }, want: `A: unknown transport "carrier-pigeon"`},
 		{name: "unknown producer", mutate: func(e *eventEntry) { e.Producers = []string{"gateway", "intern"} }, want: `A: unknown producer "intern"`},
+		{name: "removed dashboard producer", mutate: func(e *eventEntry) { e.Producers = []string{"dashboard"} }, want: `A: unknown producer "dashboard"`},
 		{name: "no producers", mutate: func(e *eventEntry) { e.Producers = nil }, want: "A: missing producers"},
 		{name: "missing persistence", mutate: func(e *eventEntry) { e.Persistence = "" }, want: "A: missing persistence"},
 		{name: "unknown persistence", mutate: func(e *eventEntry) { e.Persistence = "gateway.scratchpad" }, want: `A: unknown persistence "gateway.scratchpad"`},
@@ -408,7 +409,7 @@ func TestExecute_WriteGeneratesFilesThatCheckModeThenAccepts(t *testing.T) {
 
 	require.NoError(t, execute(root, true, &stdout))
 	assert.Equal(t, "generated constants from protocol/constants/events.json\n", stdout.String())
-	for _, rel := range []string{eventsGoRel, actionTypesGoRel, dashboardJSRel} {
+	for _, rel := range []string{eventsGoRel, actionTypesGoRel, consoleTSRel} {
 		_, err := os.Stat(filepath.Join(root, rel))
 		assert.NoError(t, err, rel)
 	}
@@ -450,7 +451,7 @@ func TestExecute_RejectsInvalidRegistryWithoutWritingAnyGeneratedFile(t *testing
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "events registry is empty")
-	for _, rel := range []string{eventsGoRel, actionTypesGoRel, dashboardJSRel, pythonEventsRel} {
+	for _, rel := range []string{eventsGoRel, actionTypesGoRel, consoleTSRel, pythonEventsRel} {
 		_, statErr := os.Stat(filepath.Join(root, rel))
 		assert.ErrorIs(t, statErr, os.ErrNotExist, rel)
 	}

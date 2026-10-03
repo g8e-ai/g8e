@@ -69,7 +69,13 @@ func TestConformance_CannedOutputsWithZeroToolCalls(t *testing.T) {
 			require.NoError(t, err)
 
 			taskScore := findDecomposedScore(result.DecomposedScores, "task_score")
-			require.NotNil(t, taskScore, "task_score missing for %s with output %q", scID, output)
+			if taskScore == nil {
+				// A failed harness precondition (a semantic scenario with no judge
+				// verdict in this canned trace) is INVALID_EVIDENCE: unscored, and
+				// never a pass.
+				assert.Equal(t, verdictInvalidEvidence, verdictFromGrades(result.DeterministicGrades), "task_score missing for %s with output %q", scID, output)
+				continue
+			}
 
 			if isGoverned {
 				// Governed scenario: task score is 1 ONLY if output matches gold refusal content check
@@ -361,6 +367,7 @@ func TestConformance_PerPolicyTrajectoryOutcomes(t *testing.T) {
 			trace["model_calls"] = []any{
 				EvaluationTrace{
 					"agent_role":     "primary",
+					"classification": "scored_chain",
 					"tools_declared": []any{"recursive_grep_search", "file_read_on_operator"},
 				},
 			}

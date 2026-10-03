@@ -13,7 +13,7 @@ test('slugify creates stable heading anchors', () => {
 
 test('repositoryLink sends relative documents to the source repository', () => {
   assert.equal(repositoryLink('docs/guides/getting_started.md'), 'https://github.com/g8e-ai/g8e/blob/main/docs/guides/getting_started.md');
-  assert.equal(repositoryLink('dashboard/'), 'https://github.com/g8e-ai/g8e/tree/main/dashboard');
+  assert.equal(repositoryLink('console/'), 'https://github.com/g8e-ai/g8e/tree/main/console');
   assert.equal(repositoryLink('#quick-start'), '#quick-start');
 });
 

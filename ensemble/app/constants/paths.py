@@ -18,7 +18,6 @@ class InfraPaths(TypedDict):
     ca_cert_path: str
     app_cert_dir: str
     pki_dir: str
-    secrets_dir: str
     docs_dir: str
     ssh_config_path: str
     pending_enrollment_dir: str
@@ -51,21 +50,18 @@ def resolve_runtime_dir() -> Path:
     )
 
 
-def _host_runtime_paths() -> tuple[Path, Path]:
+def _host_runtime_paths() -> Path:
     bootstrap = get_bootstrap()
     runtime_dir = resolve_runtime_dir()
-    pki_dir = _resolve_host_path(bootstrap.pki_dir, runtime_dir / "pki")
-    secrets_dir = _resolve_host_path(bootstrap.secrets_dir, runtime_dir / "secrets")
-    return pki_dir, secrets_dir
+    return _resolve_host_path(bootstrap.pki_dir, runtime_dir / "pki")
 
 
 def _load_paths() -> PathsDict:
     project_root = resolve_project_root()
 
     # Default paths when no protocol volume
-    pki_path, secrets_path = _host_runtime_paths()
+    pki_path = _host_runtime_paths()
     default_pki_dir = str(pki_path)
-    default_secrets_dir = str(secrets_path)
     app_cert_dir = str(Path(default_pki_dir) / "issued" / "apps")
 
     default_ca_cert_path = str(Path(default_pki_dir) / "trust" / "g8eg-ca-bundle.pem")
@@ -78,7 +74,6 @@ def _load_paths() -> PathsDict:
             "ca_cert_path": ca_cert_path,
             "app_cert_dir": app_cert_dir,
             "pki_dir": default_pki_dir,
-            "secrets_dir": default_secrets_dir,
             "docs_dir": str(project_root / "docs"),
             "ssh_config_path": str(project_root / ".g8e" / "ssh_config"),
             "pending_enrollment_dir": pending_enrollment_dir,

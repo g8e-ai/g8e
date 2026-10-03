@@ -88,6 +88,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, pubsub.OutboundModeDeps{
 			GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				ReplayStore:       &testutil.MockReplayStore{},
 				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 				TransactionAudit:  &testutil.MockTransactionAudit{},

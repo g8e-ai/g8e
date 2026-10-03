@@ -1,17 +1,17 @@
 # Constants System
 
 Last Updated: 2026-09-28
-Version: v2.2.7
+Version: v2.3.0
 
 ## Overview
 
-The g8e constants system maintains canonical constant definitions across the platform. JSON files in `protocol/constants/` are the single source of truth (SSOT). Go (`internal/constants/*_gen.go`), dashboard (`dashboard/public/js/constants/events.js`), and Python (`protocol/python/g8e/_data/`) are generated or bundled views of the same JSON.
+The g8e constants system maintains canonical constant definitions across the platform. JSON files in `protocol/constants/` are the single source of truth (SSOT). Go (`internal/constants/*_gen.go`), the console (`console/src/generated/events.ts`), and Python (`protocol/python/g8e/_data/`) are generated or bundled views of the same JSON.
 
 ## Constant Categories
 
 ### Database Collections (`collections.go`)
 
-Canonical collection names for the operator embedded SQLite database, typed as `CollectionName`:
+Canonical collection names for the operator embedded SQLite database, typed as `CollectionName`. Entries marked `_governed` in `collections.json` are the only collections `DOCUMENT_UPDATE` and `DOCUMENT_DELETE` may target; `CollectionName.IsGovernedDocument()` mirrors that flag, and the L4 Warden enforces it (INV-GOV-WARD-06):
 
 - `CollectionUsers`, `CollectionWebSessions`, `CollectionOperatorSessions`, `CollectionCLISessions`
 - `CollectionLoginAudit`, `CollectionAuthAdminAudit`, `CollectionAccountLocks`
@@ -59,11 +59,11 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. `make cons
 - AI LLM Config: requested, received, failed
 - AI LLM Lifecycle: requested, started, completed, failed, stopped, error occurred
 - AI LLM Tools: web search, investigation query, and command constraints event lifecycles
-- AI LLM Chat: submitted, filter updated, message sent/replayed/processing failed/dead lettered, iteration lifecycle events (started, completed, failed, stopped, retry), thinking lifecycle events (`thinking_phase` in payloads), citations received, text received/chunk received/completed/truncated, stream lifecycle events. Dashboard-local stop signals live in `dashboard/public/js/constants/ui-events.js`, not the protocol registry.
+- AI LLM Chat: submitted, filter updated, message sent/replayed/processing failed/dead lettered, iteration lifecycle events (started, completed, failed, stopped, retry), thinking lifecycle events (`thinking_phase` in payloads), citations received, text received/chunk received/completed/truncated, stream lifecycle events.
 - Platform: usage updated, notification sent
 - Platform Auth: login requested/succeeded/failed, logout requested/succeeded/failed, session validation requested/succeeded/failed, session expired, user authenticated/unauthenticated, component initialized (authstate, chat, operator), auth info updated
 - Platform SSE: keepalive sent, connection established/opened/closed/failed/error
-- Platform Terminal: dashboard UI signals (`ui-events.js`); no `platform.terminal.*` wire events in the registry
+- Platform Terminal: no `platform.terminal.*` wire events in the registry
 - Platform Vault: `EventPlatformVaultModeChanged` (`g8e.v1.platform.sentinel.mode.changed`)
 - Platform External Service: configured
 - Platform Telemetry: health reported, performance recorded, error logged, audit logged
@@ -95,7 +95,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - SSE: `SSEPush`, `SSEEvents`, `SSEStream`
 - Observe (browser read-only): `ObservePrefix` (`/api/v1/observe/`), `ObserveBootstrap`, `ObserveRuns`, `ObserveRunsByID`, `ObserveEvals`, `ObserveEvalsByID`, `ObserveDownloads`, `ObserveDownloadsByID`
 - Observe producers (mTLS, ensemble-only): `ObserveProducerPrefix` (`/api/v1/observe/producer/`), `ObserveProducerAgentState` (`/api/v1/observe/producer/agent-state`), `ObserveProducerRunState` (`/api/v1/observe/producer/run-state`)
-- PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
+- PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
 - Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`, `AuditStream`
 - User: `Users`, `UsersMe`, `UsersPrefix`
 - Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryApproveCLI`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthCLIRefresh`, `AuthCLISession`, `AuthCLIBind` (`/api/v1/auth/cli/bind`), `AuthCLIUnbind` (`/api/v1/auth/cli/unbind`), `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthPasskeysEnrollmentRegisterChallenge`, `AuthPasskeysEnrollmentRegisterVerify`, `AuthPasskeysEnrollmentPrefix`, `AuthSessionsMe`, `AuthSessionsPrefix`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`, `AuthPlatformEnrollmentRequest` (`/api/v1/auth/platform-enrollments/request`), `AuthPlatformEnrollmentStatus` (`/api/v1/auth/platform-enrollments/status`), `AuthPlatformEnrollmentComplete` (`/api/v1/auth/platform-enrollments/complete`), `AuthPlatformEnrollmentPending` (`/api/v1/auth/platform-enrollments/pending`), `AuthPlatformEnrollmentDecision` (`/api/v1/auth/platform-enrollments/decision`)
@@ -199,7 +199,7 @@ HTTP header names and authentication-related constants:
 - Identity: `HeaderOperatorID`, `HeaderOperatorSessionID`, `HeaderWebSessionID`, `HeaderCLISessionID`, `HeaderUserID`, `HeaderOrganizationID`, `HeaderBoundOperators`
 - Context: `HeaderCaseID`, `HeaderExecutionID`, `HeaderInvestigationID`, `HeaderTaskID`
 - System: `HeaderRequestID`, `HeaderSourceComponent`, `HeaderSystemFingerprint`, `HeaderXAccelBuffering`
-- Proxy: `HeaderXForwardedFor`, `HeaderXForwardedHost`, `HeaderXForwardedProto`, `HeaderXProxyOrganizationID`, `HeaderXProxyUserID`, `HeaderXRequestTimestamp`
+- Proxy: `HeaderXForwardedFor`, `HeaderXForwardedHost`, `HeaderXForwardedProto`, `HeaderXProxyOrganizationID`, `HeaderXProxyUserID`, `HeaderProxyKeyID`, `HeaderProxyNonce`, `HeaderProxyIssuedAt`, `HeaderProxySignature`, `HeaderXRequestTimestamp`
 - Security: `HeaderXContentTypeOptions`, `HeaderXFrameOptions`, `HeaderContentSecurityPolicy`
 - Standard: `HeaderAuthorization`, `HeaderContentType`, `HeaderAccept`, `HeaderAcceptLanguage`, `HeaderCacheControl`, `HeaderCookie`, `HeaderUserAgent`, `HeaderPragma`, `HeaderSetCookie`, `HeaderConnection`, `HeaderVary`
 - Content: `HeaderContentDisposition`, `HeaderContentLanguage`, `HeaderContentLength`
@@ -477,7 +477,7 @@ Language-specific targets are available as `make proto-go`, `make proto-python`,
 ## Constants Generation and CI
 
 ```bash
-make constants        # regenerate events_gen.go, action_types_gen.go, dashboard events.js
+make constants        # regenerate events_gen.go, action_types_gen.go, console/src/generated/events.ts, protocol/python/g8e/_data/events.json
 make constants-check  # validate registry and fail on generated-file drift (runs in make test-unit)
 ```
 
@@ -495,7 +495,7 @@ CI also runs proto verification (`make _ci-verify-proto`), doctrine validation (
 ## Adding New Constants
 
 1. **Edit JSON** in `protocol/constants/` (events, status, or other SSOT files).
-2. **Run** `make constants` to regenerate Go and dashboard outputs.
+2. **Run** `make constants` to regenerate the Go, console, and Python outputs.
 3. **Run** `make constants-check` and language tests.
 4. **Commit** JSON source and generated files together.
 

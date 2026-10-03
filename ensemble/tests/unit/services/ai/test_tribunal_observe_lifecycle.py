@@ -149,7 +149,9 @@ async def test_successful_consensus_emits_running_then_completed():
 
     statuses = _agent_state_statuses(event_svc)
     assert statuses[0] == "running"
-    assert statuses[-1] == "completed"
+    # The Gateway rejects running after a terminal state, so the persona
+    # resets to idle once the run ends.
+    assert statuses[-2:] == ["completed", "idle"]
 
 
 async def test_consensus_failure_emits_failed_agent_state():
@@ -173,7 +175,7 @@ async def test_consensus_failure_emits_failed_agent_state():
             )
 
     statuses = _agent_state_statuses(event_svc)
-    assert "failed" in statuses
+    assert statuses[-2:] == ["failed", "idle"]
 
 
 async def test_producer_payload_contains_no_raw_request_or_candidate_command():

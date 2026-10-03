@@ -333,12 +333,7 @@ func operatorStartCmd() *cobra.Command {
 	var latticePostureFloor string
 	var inferenceEnabled bool
 	var inferenceOllamaEndpoint string
-	var inferencePrimaryModel string
-	var inferenceAssistantModel string
-	var inferenceLiteModel string
 	var inferenceKeepAlive string
-	var inferenceCampaignID string
-	var inferenceModelRegistryDigest string
 	var providerBoundaryObserverEnabled bool
 	var providerBoundaryObserverID string
 	var provenanceOperatorEnabled bool
@@ -369,12 +364,7 @@ func operatorStartCmd() *cobra.Command {
 				HeartbeatInterval:               time.Duration(heartbeatInterval) * time.Second,
 				InferenceEnabled:                inferenceEnabled,
 				InferenceOllamaEndpoint:         inferenceOllamaEndpoint,
-				InferencePrimaryModel:           inferencePrimaryModel,
-				InferenceAssistantModel:         inferenceAssistantModel,
-				InferenceLiteModel:              inferenceLiteModel,
 				InferenceKeepAlive:              inferenceKeepAlive,
-				InferenceCampaignID:             inferenceCampaignID,
-				InferenceModelRegistryDigest:    inferenceModelRegistryDigest,
 				ProviderBoundaryObserverEnabled: providerBoundaryObserverEnabled,
 				ProviderBoundaryObserverID:      providerBoundaryObserverID,
 
@@ -410,12 +400,7 @@ func operatorStartCmd() *cobra.Command {
 	// Inference Node calling the configured remote Ollama provider.
 	cmd.Flags().BoolVar(&inferenceEnabled, "inference-enabled", false, "Enable governed LLM inference backend (g8ellama)")
 	cmd.Flags().StringVar(&inferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Remote Ollama provider endpoint (default: http://127.0.0.1:11434)")
-	cmd.Flags().StringVar(&inferencePrimaryModel, "inference-primary-model", "", fmt.Sprintf("Ollama model name for the Primary chat tier (default: %s)", constants.InferenceDefaultPrimaryModel))
-	cmd.Flags().StringVar(&inferenceAssistantModel, "inference-assistant-model", "", fmt.Sprintf("Ollama model name for the Assistant chat tier (default: %s)", constants.InferenceDefaultAssistantModel))
-	cmd.Flags().StringVar(&inferenceLiteModel, "inference-lite-model", "", fmt.Sprintf("Ollama model name for the Lite chat tier (default: %s)", constants.InferenceDefaultLiteModel))
 	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", fmt.Sprintf("Ollama keep-alive duration (default: %s for infinite)", constants.InferenceDefaultKeepAlive))
-	cmd.Flags().StringVar(&inferenceCampaignID, "inference-campaign-id", "", "Frozen evaluation campaign authorized by this inference operator")
-	cmd.Flags().StringVar(&inferenceModelRegistryDigest, "inference-model-registry-digest", "", "SHA-256 digest of the frozen campaign model registry")
 	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")
 	cmd.Flags().StringVar(&providerBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity pseudonym")
 	cmd.Flags().BoolVar(&provenanceOperatorEnabled, "provenance-operator-enabled", false, "Enable storage-side model provenance attestation at the model file site")

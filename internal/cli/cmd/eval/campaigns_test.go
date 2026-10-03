@@ -210,6 +210,74 @@ func TestCampaignsCreate_ConflictsWhenTheSpecDiffers(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrEvaluationCampaignConflict)
 }
 
+// A catalog change leaves the frozen campaign untouched. With versioning on, the
+// next create freezes the new catalog under a digest-suffixed ID, once.
+func TestCreateCampaign_VersionsOnCatalogChange(t *testing.T) {
+	env := setupRunEnv(t)
+	ctx := context.Background()
+	store := evaluation.NewStore(env.fileSvc(t))
+	env.createCampaign(t, "eval-a")
+	frozen, err := store.LoadCampaignSpec(ctx, "eval-a")
+	require.NoError(t, err)
+
+	changedCatalog := campaignCreateSpec{
+		Platform:    testPlatform,
+		CampaignID:  "eval-a",
+		Variants:    []*evalv1.ModelVariant{testQwenVariant()},
+		Repetitions: 1,
+		SuiteID:     evaluation.SmokeSuiteID,
+	}
+	_, err = createCampaign(ctx, env.deps, env.fileSvc(t), changedCatalog)
+	require.ErrorIs(t, err, constants.ErrEvaluationCampaignConflict, "versioning is opt-in")
+
+	changedCatalog.VersionOnCatalogChange = true
+	first, err := createCampaign(ctx, env.deps, env.fileSvc(t), changedCatalog)
+	require.NoError(t, err)
+	versionedID := first.Spec.GetCampaignId()
+	assert.Equal(t, "eval-a-"+first.Spec.GetCatalogDigest()[:8], versionedID)
+	assert.NotEqual(t, frozen.GetCatalogDigest(), first.Spec.GetCatalogDigest())
+
+	again, err := createCampaign(ctx, env.deps, env.fileSvc(t), changedCatalog)
+	require.NoError(t, err)
+	assert.Equal(t, versionedID, again.Spec.GetCampaignId(), "the same catalog resolves to the campaign already frozen for it")
+	assert.Equal(t, first.Spec.GetCampaignDigest(), again.Spec.GetCampaignDigest())
+
+	unchanged, err := store.LoadCampaignSpec(ctx, "eval-a")
+	require.NoError(t, err)
+	assert.Equal(t, frozen.GetCampaignDigest(), unchanged.GetCampaignDigest(), "the original frozen campaign is never rewritten")
+}
+
+func TestCreateCampaign_VersioningKeepsTheCampaignIDWhileTheCatalogIsUnchanged(t *testing.T) {
+	env := setupRunEnv(t)
+	env.createCampaign(t, "eval-a")
+
+	result, err := createCampaign(context.Background(), env.deps, env.fileSvc(t), campaignCreateSpec{
+		Platform:               testPlatform,
+		CampaignID:             "eval-a",
+		Variants:               []*evalv1.ModelVariant{testQwenVariant()},
+		Repetitions:            1,
+		VersionOnCatalogChange: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "eval-a", result.Spec.GetCampaignId())
+}
+
+// Versioning answers a catalog change only. Any other drift under the same
+// catalog is still a conflict, not a reason to mint another campaign.
+func TestCreateCampaign_VersioningStillConflictsOnNonCatalogDrift(t *testing.T) {
+	env := setupRunEnv(t)
+	env.createCampaign(t, "eval-a")
+
+	_, err := createCampaign(context.Background(), env.deps, env.fileSvc(t), campaignCreateSpec{
+		Platform:               testPlatform,
+		CampaignID:             "eval-a",
+		Variants:               []*evalv1.ModelVariant{testQwenVariant()},
+		Repetitions:            3,
+		VersionOnCatalogChange: true,
+	})
+	require.ErrorIs(t, err, constants.ErrEvaluationCampaignConflict)
+}
+
 func TestCampaignsCreate_RejectsMultiModelModelRoleCampaign(t *testing.T) {
 	env := setupRunEnv(t)
 	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, threeModelRegistry()...)

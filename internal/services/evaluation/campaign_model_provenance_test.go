@@ -73,7 +73,7 @@ func TestVerifyModelProvenanceWindow_ExpectedDigestMismatch(t *testing.T) {
 	window := testModelProvenanceWindow(t, "attempt-1")
 	err := VerifyModelProvenanceWindow(window, strings.Repeat("c", 64), ModelProvenancePolicyInterim)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "expected digest mismatch")
+	assert.ErrorIs(t, err, constants.ErrModelProvenanceDigestMismatch)
 }
 
 func TestLocalModelProvenanceReader_LoadRoundTrip(t *testing.T) {

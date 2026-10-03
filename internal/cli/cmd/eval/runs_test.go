@@ -165,7 +165,7 @@ func TestRunsVerify_CoverageCannotCombineWithWitnessRequirements(t *testing.T) {
 
 	_, err := env.run(t, "runs", "verify", "run-a-1", "--coverage", "--require-observation")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--coverage cannot be combined")
+	assert.ErrorIs(t, err, constants.ErrEvaluationFlagsInvalid)
 }
 
 func TestRunsVerify_RejectsMissingRun(t *testing.T) {
@@ -195,7 +195,7 @@ func TestRunsExport_RejectsExternalOutputDir(t *testing.T) {
 
 	_, err := env.run(t, "runs", "export", "run-a-1", "--output-dir", filepath.Join(env.root, "exports", "run-a-1"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "output directory must be runtime-relative")
+	assert.ErrorIs(t, err, constants.ErrEvaluationExportDirNotRelative)
 }
 
 func TestRunsExport_RequiresOutputDir(t *testing.T) {
@@ -235,7 +235,7 @@ func TestRunsRepair_RequiresExactlyOneMode(t *testing.T) {
 	} {
 		_, err := env.run(t, args...)
 		require.Error(t, err, strings.Join(args, " "))
-		assert.Contains(t, err.Error(), "exactly one of --results or --trace-digests")
+		assert.ErrorIs(t, err, constants.ErrEvaluationFlagsInvalid, strings.Join(args, " "))
 	}
 }
 
@@ -409,7 +409,7 @@ func TestRunsResume_RejectsMissingRunWithoutLeavingALease(t *testing.T) {
 
 	_, err := env.run(t, "runs", "resume", "missing-run-id")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.ErrorIs(t, err, constants.ErrNotFound)
 
 	runIDs, listErr := env.store(t).ListRunIDs(context.Background())
 	require.NoError(t, listErr)
@@ -706,7 +706,7 @@ func TestPublicRestore_RequiresTarget(t *testing.T) {
 	command.SetArgs([]string{"--project-root", env.root})
 	err := command.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "specify --queue or --run-id")
+	assert.ErrorIs(t, err, constants.ErrEvaluationFlagsInvalid)
 }
 
 func TestPublicRestore_RejectsBothTargets(t *testing.T) {
@@ -716,7 +716,7 @@ func TestPublicRestore_RejectsBothTargets(t *testing.T) {
 	command.SetArgs([]string{"--project-root", env.root, "--queue", "--run-id", "run-1"})
 	err := command.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "mutually exclusive")
+	assert.ErrorIs(t, err, constants.ErrEvaluationFlagsInvalid)
 }
 
 func TestVerificationReportHelpers(t *testing.T) {

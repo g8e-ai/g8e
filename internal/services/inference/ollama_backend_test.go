@@ -484,6 +484,39 @@ func TestOllamaBackend_GenerateEmptyAutoChoiceAllowsAllDeclaredTools(t *testing.
 	assert.Len(t, capturedBody.Tools, 2)
 }
 
+func TestOllamaBackend_GenerateOutputLimitIsStatedValueOrPlatformCeiling(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name      string
+		requested int32
+		want      int32
+	}{
+		{name: "unset runs under the ceiling", requested: 0, want: constants.InferenceMaxOutputTokens},
+		{name: "stated value passes through", requested: 512, want: 512},
+		{name: "ceiling passes through", requested: constants.InferenceMaxOutputTokens, want: constants.InferenceMaxOutputTokens},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var captured ollamaChatRequest
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&captured))
+				require.NoError(t, json.NewEncoder(w).Encode(ollamaChatResponse{
+					Model:   "test-model",
+					Message: ollamaChatMessage{Role: "assistant", Content: "ok"},
+					Done:    true,
+				}))
+			}))
+			defer server.Close()
+			backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+			require.NoError(t, err)
+
+			_, err = backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model", MaxTokens: tt.requested})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, captured.Options.NumPredict)
+		})
+	}
+}
+
 func TestOllamaBackend_GenerateRejectsParallelToolCallsWhenDisabled(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

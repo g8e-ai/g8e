@@ -514,7 +514,7 @@ func writePublicExportConfig(ctx context.Context, fileSvc fs.RuntimeFileService,
 	return nil
 }
 
-func readPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, expectedBytes int, missingErr error) ([]byte, error) {
+func ReadPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, expectedBytes int, missingErr error) ([]byte, error) {
 	data, err := fileSvc.ReadFile(ctx, relPath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", missingErr, err)
@@ -524,6 +524,10 @@ func readPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, relPat
 		return nil, missingErr
 	}
 	return decoded, nil
+}
+
+func readPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, expectedBytes int, missingErr error) ([]byte, error) {
+	return ReadPublicSecret(ctx, fileSvc, relPath, expectedBytes, missingErr)
 }
 
 func rejectTrailingPublicJSON(decoder *json.Decoder) error {

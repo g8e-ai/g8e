@@ -22,7 +22,6 @@ class EvalJudgeSettings(G8eBaseModel):
         extra="ignore",
     )
     model: str | None = Field(None, alias="eval_judge_model")
-    max_output_tokens: int = Field(4096, alias="eval_judge_max_tokens")
 
 class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration."""

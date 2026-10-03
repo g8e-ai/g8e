@@ -42,11 +42,22 @@ Documents g8e's storage architecture: local SQLite databases, persistence topolo
 
 ## Invariants
 
-(Invariants section — currently no specific invariant rules, reserved for future policy codification)
+| ID | Rule |
+| --- | --- |
+| INV-STOR-KV-01 | Gateway HTTP KV access requires mTLS authentication and admits only `g8e:cache:doc:` and `g8e:cache:query:` namespaces. Enumeration and deletion patterns MUST begin with an entire allowed literal prefix. Session, nonce, scrubbing-token, and other private keys remain Gateway-owned. |
+| INV-STOR-KV-02 | HTTP cache writes MUST use observed state. Cache keys contribute to neither state root nor `state_version`; document writes invalidate their related document and query cache entries in SQLite. Schema initialization replaces the KV version triggers on existing databases. |
+| INV-STOR-KV-03 | g8ee MUST use Gateway storage primitives and MUST NOT emulate atomic counters, hashes, lists, or nonce reservation through client-side read/modify/write. Disabled cache reads MUST also disable cache warming writes. Governed replay protection belongs to the executing runtime's uniqueness-constrained replay store. |
 
 ## Owned surfaces
 
-(To be documented: database initialization, schema ownership, path resolution)
+| Surface | Owner | Verification |
+| --- | --- | --- |
+| Canonical schema and cache invalidation/version triggers | `internal/services/gateway/db/schema.sql`, `CanonicalDBService.initSchema` | `TestKVStore_CacheMutationsDoNotAdvanceStateVersion`, `TestKVStore_SchemaReopenReplacesOldCacheVersionTriggers` |
+| HTTP KV authorization | `DataController.handleKV`, `authorizeKVNamespace` | `TestKVNamespace_RejectsAuthorityKeysAndUnscopedPatterns`, `TestKVNamespace_CacheWritesAreObserved` |
+| Internal KV state and TTL | `KVStoreService` | Gateway KV integration tests |
+| App cache transport and optional cache warming | `ensemble/app/clients/kv_cache_client.py`, `CacheAsideService` | Cache client and disabled-read regressions; Gateway owns invalidation |
+| Replay nonce reservation | `ReplayStoreService` and outbound `SQLReplayStore` | Replay and L4 verification tests |
+| Runtime paths | `RuntimeFileService`, `internal/constants/paths.go` | Isolated runtime fixture tests |
 
 ## Procedures
 
@@ -95,6 +106,8 @@ The document store persists JSON records by collection and identifier. Gateway s
 ### Key-Value and Blob State
 
 The key-value store persists string values with optional expiration. The blob store persists binary content by namespace and identifier with content type, size, and optional expiration. Both stores distinguish bound state from observed state.
+
+The `/api/v1/kv/` HTTP API exposes only authenticated document and query caches, including TTL operations. Unscoped patterns such as `*` or `g8e:cache:*` return 403, as do private key names. Gateway services access private KV state directly through `KVStoreService`. The ensemble retains seven cache data operations (`get`, `set`, `delete`, `keys`, `delete_pattern`, `get_json`, `set_json`) plus connection and health lifecycle methods. It does not maintain a second governed replay guard or emulate Redis structures. Document changes invalidate caches in the Gateway database; g8ee does not issue cache writes while cache reads are disabled.
 
 Bound documents, active bound key-value entries, and active bound blobs contribute to the state root that L4 verifies. Cache entries, replay nonces, and SSE events do not contribute to that root. Observed key-value entries and blobs are excluded from the admission root and can be hashed as a separate observed-state commitment.
 

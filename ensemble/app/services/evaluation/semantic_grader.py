@@ -26,12 +26,12 @@ from g8e.models.internal_api import EvaluationGoldSummary, EvaluationInferenceCo
 logger = logging.getLogger(__name__)
 
 
-def _resolve_eval_judge_model(request_settings: G8eeUserSettings) -> str | None:
+def _resolve_eval_judge_model(judge_settings: G8eeUserSettings) -> str | None:
     """Return the judge model, falling back to the configured lite model chain."""
-    configured = (request_settings.eval_judge.model or "").strip()
+    configured = (judge_settings.eval_judge.model or "").strip()
     if configured:
         return configured
-    return request_settings.llm.resolved_lite_model
+    return judge_settings.llm.resolved_lite_model
 
 
 def _build_interaction_trace(
@@ -54,29 +54,48 @@ async def grade_campaign_assignment_semantically(
     *,
     evaluation_context: EvaluationInferenceContext,
     g8e_context: G8eHttpContext,
-    request_settings: G8eeUserSettings,
+    judge_settings: G8eeUserSettings,
     gold_summary: EvaluationGoldSummary,
     designated_role_output: str | None,
     tool_calls: list[EvaluationToolCallRecord],
 ) -> tuple[list[EvaluationSemanticGradeRecord], list[EvaluationGraderCallRecord]]:
+    """Grade one assignment with the platform's semantic judge.
+
+    judge_settings are the caller's settings before request overrides: the
+    configured judge model, else the Lite model, on the Lite provider. A
+    campaign's overrides bind the scored model, which is never its own judge,
+    and the grader dispatches without campaign authority (it is not a scored
+    call), so under governed inference only the Inference Operator's Lite
+    binding is accepted for it.
+    """
     grade_id = f"{evaluation_context.assignment_id}:semantic-judge"
-    judge_model = _resolve_eval_judge_model(request_settings)
+    judge_model = _resolve_eval_judge_model(judge_settings)
+
+    # Grader context: linked to the assignment but NOT the scored evaluation_attempt_id.
+    # This ensures grader calls are recorded separately and excluded from scored aggregates.
+    grader_context = G8eHttpContext(
+        user_id=g8e_context.user_id,
+        evaluation_context=None,  # Grader is not a scored-chain member
+        operator_id=g8e_context.operator_id,
+        operator_session_id=g8e_context.operator_session_id,
+    )
+
     try:
-        if request_settings.llm.lite_provider == LLMProvider.JEV:
-            decision_provider = get_decision_provider(request_settings.llm)
+        if judge_settings.llm.lite_provider == LLMProvider.JEV:
+            decision_provider = get_decision_provider(judge_settings.llm)
             judge = EvalJudge(
                 decision_provider=decision_provider,
                 model=judge_model,
-                settings=request_settings.eval_judge,
-                g8e_context=g8e_context,
+                settings=judge_settings.eval_judge,
+                g8e_context=grader_context,
             )
         else:
-            provider = get_llm_provider(request_settings.llm, is_lite=True)
+            provider = get_llm_provider(judge_settings.llm, is_lite=True)
             judge = EvalJudge(
                 provider=provider,
                 model=judge_model,
-                settings=request_settings.eval_judge,
-                g8e_context=g8e_context,
+                settings=judge_settings.eval_judge,
+                g8e_context=grader_context,
             )
         grade = await judge.grade_turn(
             user_query=gold_summary.user_prompt,

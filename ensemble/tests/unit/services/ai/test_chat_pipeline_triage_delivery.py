@@ -20,9 +20,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     AgentMode,
     EventType,
+    LLMProvider,
+    ReasoningAgent,
     ThinkingLevel,
     TriageComplexityClassification,
     TriageConfidence,
@@ -100,12 +101,11 @@ def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentS
         sentinel_mode=True,
         operator_bound=False,
         model_to_use="lite-model",
-        max_tokens=None,
         conversation_history=[],
         system_instructions="",
         contents=[],
         generation_config=PrimaryLLMSettings(
-            max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+            max_output_tokens=None,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
             stop_sequences=[],
@@ -491,14 +491,22 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
         )
 
 
-async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
-    """Regression: when triage returns SIMPLE complexity, the lite provider
-    should be used - not the primary provider.
-
-    Previously, get_llm_provider was called before triage, so is_assistant always
-    defaulted to False, causing cross-provider mismatches (e.g. Gemini model sent
-    to Anthropic endpoint). With the lite tier wiring, SIMPLE complexity now uses
-    the lite provider.
+@pytest.mark.parametrize(
+    ("active_agent", "expected_assistant", "expected_lite"),
+    [
+        (ReasoningAgent.DASH, True, False),
+        (ReasoningAgent.SAGE, False, False),
+    ],
+)
+async def test_run_chat_impl_selects_provider_of_scored_model_role(
+    active_agent, expected_assistant, expected_lite
+):
+    """Regression: the scored turn's provider is the provider of the role the
+    turn runs as. Dash runs as Assistant, so a simple turn must use the
+    Assistant provider. Taking the Lite provider sent the Assistant model
+    (here a Gemini model) to the Lite backend (Ollama), and with governed
+    inference sent role Lite with the Assistant model, which the Inference
+    Operator rejects.
     """
     from app.models.settings import G8eeUserSettings, LLMSettings
 
@@ -514,6 +522,7 @@ async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
         intent_summary="ok",
     )
     inputs, _state = _make_chat_context(triage_result=simple_triage_result)
+    inputs = inputs.model_copy(update={"active_agent": active_agent})
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}
@@ -540,5 +549,41 @@ async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
             user_settings=user_settings,
         )
 
-    # Verify is_lite=True was passed (lite provider should be used for SIMPLE complexity)
-    assert captured["is_lite"] is True
+    assert captured["is_assistant"] is expected_assistant
+    assert captured["is_lite"] is expected_lite
+
+
+async def test_run_chat_impl_grades_with_settings_before_request_overrides():
+    """Regression: the semantic judge runs on the caller's settings before
+    request overrides. A campaign's overrides bind the scored model; grading
+    with them made the scored model its own judge and, on a shared Inference
+    Operator, sent a non-bound Lite model without campaign authority (403)."""
+    from app.models.settings import G8eeUserSettings, LLMSettings
+
+    svc = _make_pipeline()
+    g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
+    inputs, _state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
+    svc._finalize_evaluation_assignment = AsyncMock()
+
+    user_settings = G8eeUserSettings(
+        llm=LLMSettings(primary_provider=LLMProvider.G8E, lite_model="operator-lite")
+    )
+    with patch("app.services.ai.chat_pipeline.get_llm_provider", return_value=MagicMock()):
+        await svc._run_chat_impl(
+            message="hello",
+            g8e_context=g8e_ctx,
+            attachments=[],
+            sentinel_mode=True,
+            llm_primary_provider=None,
+            llm_assistant_provider=None,
+            llm_lite_provider=None,
+            llm_primary_model="campaign-model",
+            llm_assistant_model="campaign-model",
+            llm_lite_model="campaign-model",
+            user_settings=user_settings,
+        )
+
+    judge_settings = svc._finalize_evaluation_assignment.call_args.kwargs["judge_settings"]
+    assert judge_settings is user_settings
+    assert judge_settings.llm.resolved_lite_model == "operator-lite"

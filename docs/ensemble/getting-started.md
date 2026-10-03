@@ -80,10 +80,10 @@ Run these commands from the repository root:
 cp .env.example .env
 # Edit .env and set G8E_OLLAMA_ENDPOINT to the approved remote Ollama URL.
 ./g8e docker build
-./g8e docker start --full
+./g8e docker start
 ```
 
-`docker start --full` starts the Gateway and the `bootstrapped` workloads, enrolls the first CLI owner, and walks through platform enrollment approvals. It does not start the evaluation-profile inference Operator. Use `./g8e docker init` when you need the complete evaluation topology, automatic approvals, readiness checks, and the `evaluation` profile; `docker init` requires the same `.env` setting and can use `--headless` for mTLS-only owner enrollment.
+`docker start` starts the Gateway and the `bootstrapped` workloads, enrolls the first CLI owner, and walks through platform enrollment approvals. It does not start the evaluation-profile inference Operator. Use `./g8e docker init` when you need the complete evaluation topology, automatic approvals, readiness checks, and the `evaluation` profile; `docker init` requires the same `.env` setting and can use `--headless` for mTLS-only owner enrollment.
 
 #### Enrollment
 

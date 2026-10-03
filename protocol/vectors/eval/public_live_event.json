@@ -1,0 +1,4 @@
+{
+  "message_type": "PublicLiveEvent",
+  "canonical_json": "{\"schema_version\":\"1.6.0\",\"kind\":\"metric_updated\",\"dataset_id\":\"ds-live-run-1\",\"quality_state\":\"live_in_progress\",\"observed_at\":\"2026-09-24T12:00:05.000Z\",\"source_revision_label\":\"g8e-eval-campaign\",\"release\":\"v2.3.0\",\"release_basis\":\"PUBLIC_RELEASE_BASIS_RECORDED\",\"source_revision\":\"abc123\",\"event_id\":\"run-1:assign-failed:metric:pass:event\",\"run_id\":\"run-1\",\"assignment_id\":\"assign-failed\",\"variant_id\":\"qwen3-4b\",\"role\":\"primary\",\"lifecycle_status\":\"running\",\"completed\":0,\"total\":5,\"metric_delta\":{\"pass\":{\"value\":0}}}"
+}

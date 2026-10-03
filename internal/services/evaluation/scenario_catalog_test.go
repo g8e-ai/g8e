@@ -119,6 +119,9 @@ func TestValidateScenarioContract_RejectsContractViolations(t *testing.T) {
 		{"retired handoff evidence type", toolArgGrepPattern, func(b *ScenarioBlueprint) {
 			b.Gold.RequiredEvidenceTypes = append(b.Gold.RequiredEvidenceTypes, "handoff")
 		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"retired deterministic_grade evidence type", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.RequiredEvidenceTypes = append(b.Gold.RequiredEvidenceTypes, "deterministic_grade")
+		}, constants.ErrEvaluationScenarioContractInvalid},
 		{"triage expectation grades no label", toolArgGrepPattern, func(b *ScenarioBlueprint) {
 			b.Gold.Players = &ScenarioPlayerExpectations{Triage: &TriageExpectation{}}
 		}, constants.ErrEvaluationScenarioContractInvalid},

@@ -112,7 +112,7 @@ func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
-	if err := ensureSubmitterCLISessionColumn(db); err != nil {
+	if err := migrateSubmitterCLISessionColumn(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to migrate suspended transaction schema: %w", err)
 	}
@@ -132,7 +132,7 @@ func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *
 	return sts, nil
 }
 
-func ensureSubmitterCLISessionColumn(db *sqliteutil.DB) error {
+func migrateSubmitterCLISessionColumn(db *sqliteutil.DB) error {
 	columns, err := sqliteutil.MaterializeRows(db, "PRAGMA table_info(suspended_transactions)", nil, func(rows *sql.Rows) (string, error) {
 		var cid int
 		var name, columnType string

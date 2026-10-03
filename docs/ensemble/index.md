@@ -138,5 +138,5 @@ When auditing ensemble documentation:
 | [Model Provenance](../architecture/model-provenance.md) | Weight attestation, storage-side verification, and chain of custody |
 | [Getting Started Guide](../guides/getting_started.md) | Platform installation, deployment, and quick start |
 | [Unified Docker Stack](../guides/unified_stack.md) | Docker Compose deployment and unified stack management |
-| [Dashboard](../dashboard/index.md) | First-party browser interface and event consumption |
+| [Console](../architecture/console.md) | First-party browser interface and event consumption |
 | [Documentation Guide](../devs/docs.md) | Repository-wide documentation standards, ownership, and audit procedures |

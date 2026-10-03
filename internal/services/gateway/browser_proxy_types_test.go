@@ -9,12 +9,17 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestInvestigationsQueryBody_JSONMatchesSortedMapShape(t *testing.T) {
@@ -23,7 +28,7 @@ func TestInvestigationsQueryBody_JSONMatchesSortedMapShape(t *testing.T) {
 	body, err := (&EnsembleBrowserProxyController{}).investigationsQueryBody(req, "user-1", "web-1")
 	require.NoError(t, err)
 
-	const want = `{"case_id":"c1","context":{"user_id":"user-1","web_session_id":"web-1"},"investigation_type":"triage","limit":5,"order_by":"updated","order_direction":"desc","priority":"high","status":"open","web_session_id":"from-query"}`
+	const want = `{"case_id":"c1","context":{"user_id":"user-1","web_session_id":"web-1"},"investigation_type":"triage","limit":5,"order_by":"updated","order_direction":"desc","priority":"high","status":"open","user_id":"user-1","web_session_id":"from-query"}`
 	assert.JSONEq(t, want, string(body))
 	assert.Equal(t, want, string(body))
 }
@@ -33,13 +38,24 @@ func TestInvestigationsQueryBody_InvalidLimitKeepsDefault(t *testing.T) {
 
 	body, err := (&EnsembleBrowserProxyController{}).investigationsQueryBody(req, "user-1", "web-1")
 	require.NoError(t, err)
-	assert.Equal(t, `{"context":{"user_id":"user-1","web_session_id":"web-1"},"limit":20}`, string(body))
+	assert.Equal(t, `{"context":{"user_id":"user-1","web_session_id":"web-1"},"limit":20,"user_id":"user-1"}`, string(body))
+}
+
+func TestInvestigationsQueryBody_ScopesToSessionUser(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/investigations?user_id=someone-else", nil)
+
+	body, err := (&EnsembleBrowserProxyController{}).investigationsQueryBody(req, "user-1", "web-1")
+	require.NoError(t, err)
+
+	var payload browserInvestigationsQuery
+	require.NoError(t, json.Unmarshal(body, &payload))
+	assert.Equal(t, "user-1", payload.UserID)
 }
 
 func TestInjectBrowserContext_PreservesUnknownJSON(t *testing.T) {
 	in := []byte(`{"list":[1],"extra":"keep","context":{"keep":true,"user_id":"old"},"case_id":"c","investigation_id":"i"}`)
 
-	out, err := injectBrowserContext(in, "user-1", "web-1")
+	out, err := injectBrowserContext(in, "user-1", "web-1", []browserBoundOperator{})
 	require.NoError(t, err)
 
 	var payload map[string]interface{}
@@ -56,7 +72,7 @@ func TestInjectBrowserContext_PreservesUnknownJSON(t *testing.T) {
 
 func TestInjectBrowserContext_NonObjectBodyUnchanged(t *testing.T) {
 	in := []byte(`[1,2,3]`)
-	out, err := injectBrowserContext(in, "user-1", "web-1")
+	out, err := injectBrowserContext(in, "user-1", "web-1", nil)
 	require.NoError(t, err)
 	assert.Equal(t, in, out)
 }
@@ -71,4 +87,56 @@ func TestBrowserOperatorStopResponseJSON(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, `{"message":"Stop command relayed to orchestrator","operator_id":"op-1","operator_session_id":"sess-1","success":true,"transaction_id":"tx-1"}`, string(body))
+}
+
+type fakeOperatorLister struct {
+	ops []models.OperatorDocumentGo
+	err error
+}
+
+func (f fakeOperatorLister) ListUserOperators(string) ([]models.OperatorDocumentGo, error) {
+	return f.ops, f.err
+}
+
+func TestInjectBrowserContext_ReplacesBrowserSuppliedBoundOperators(t *testing.T) {
+	in := []byte(`{"message":"hi","context":{"bound_operators":[{"operator_id":"forged"}]}}`)
+	bound := []browserBoundOperator{{BoundWebSessionID: "web-1", OperatorID: "op-1", OperatorSessionID: "os-1", Status: "bound"}}
+
+	out, err := injectBrowserContext(in, "user-1", "web-1", bound)
+	require.NoError(t, err)
+
+	var payload struct {
+		Context struct {
+			BoundOperators []browserBoundOperator `json:"bound_operators"`
+		} `json:"context"`
+	}
+	require.NoError(t, json.Unmarshal(out, &payload))
+	assert.Equal(t, bound, payload.Context.BoundOperators)
+}
+
+func TestBoundOperators_FiltersToWebSession(t *testing.T) {
+	c := &EnsembleBrowserProxyController{
+		logger: slog.Default(),
+		operators: fakeOperatorLister{ops: []models.OperatorDocumentGo{
+			{ID: "op-1", OperatorSessionID: "os-1", BoundWebSessionID: "web-1", Status: constants.OperatorStatusBound},
+			{ID: "op-2", OperatorSessionID: "os-2", BoundWebSessionID: "web-other", Status: constants.OperatorStatusBound},
+			{ID: "op-3", OperatorSessionID: "os-3", Status: constants.OperatorStatusActive},
+		}},
+	}
+
+	got := c.boundOperators("user-1", "web-1")
+
+	assert.Equal(t, []browserBoundOperator{{BoundWebSessionID: "web-1", OperatorID: "op-1", OperatorSessionID: "os-1", Status: "bound"}}, got)
+}
+
+func TestBoundOperators_RegistryErrorYieldsEmptyList(t *testing.T) {
+	c := &EnsembleBrowserProxyController{
+		logger:    slog.Default(),
+		operators: fakeOperatorLister{err: errors.New("registry down")},
+	}
+
+	got := c.boundOperators("user-1", "web-1")
+
+	require.NotNil(t, got)
+	assert.Empty(t, got)
 }

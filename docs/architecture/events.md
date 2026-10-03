@@ -12,7 +12,7 @@ owners:
 related:
   - docs/architecture/gateway.md
   - docs/architecture/operator.md
-when_to_read: Designing, integrating, or auditing event flow across gateway, operator, ensemble, and dashboard; understanding governance envelopes and audit trails.
+when_to_read: Designing, integrating, or auditing event flow across gateway, operator, ensemble, and console; understanding governance envelopes and audit trails.
 do_not_use_for:
   - Gateway API endpoints (docs/architecture/gateway.md)
   - Operator command flow (docs/architecture/operator.md)
@@ -21,7 +21,7 @@ do_not_use_for:
 
 # Event and Action Protocol
 
-Defines the vocabulary and ownership boundary for protocol events. [protocol/constants/events.json](protocol/constants/events.json) is the authoritative registry; generated Go, Python, and dashboard views derive from it and do not define independent event names.
+Defines the vocabulary and ownership boundary for protocol events. [protocol/constants/events.json](protocol/constants/events.json) is the authoritative registry; generated Go, Python, and console views derive from it and do not define independent event names.
 
 ## Purpose
 
@@ -66,7 +66,7 @@ Metadata is validated against [protocol/models/event_registry.schema.json](proto
   “value”: “g8e.v1.<domain>.<entity>[.<qualifier>...].<terminal>”,
   “kind”: “request|outcome|fact|stream”,
   “transport”: [“governed|pubsub|sse”],
-  “producers”: [“gateway|operator|ensemble|dashboard|cli|mcp”],
+  “producers”: [“gateway|operator|ensemble|cli|mcp”],
   “persistence”: “operator.audit_log|gateway.audit_log|gateway.sse_store|gateway.operator_docs|gateway.docstore|ephemeral”,
   “governance”: {
     “action_type”: “<string>”,
@@ -104,7 +104,7 @@ Request events that declare a `governance` block become governed transactions. T
 
 1. Receives the protobuf GovernanceEnvelope over mTLS with identity bindings (operator_id, operator_session_id, cli_session_id, acting_app_id, source_component).
 2. Looks up the `event_type` in the registry and derives `action_type`.
-3. Verifies the envelope's identity bindings match the mTLS certificate's SPIFFE ID and rejects unbound mutations.
+3. Verifies the envelope's identity bindings match the mTLS certificate's SPIFFE ID and rejects unbound mutations. The one exception is an application's own platform-record write (`DOCUMENT_UPDATE` or `DOCUMENT_DELETE` with an `acting_app_id` matching its app certificate); see INV-AUTH-ID-05 in [Authentication](auth.md). Any document action, bound or not, may target only a `_governed` collection (INV-GOV-WARD-06 in [Governance](governance.md)).
 4. Enforces policies (ACL, rate limit, quotas) derived from `action_type`.
 5. Forwards the envelope to the operator; the operator includes both `event_type` and `action_type` in signed receipts.
 

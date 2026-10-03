@@ -36,7 +36,7 @@ type CampaignProjectionEnvelope struct {
 
 // BuildAssignmentLifecycleProjection materializes one public lifecycle record
 // from canonical assignment state.
-func BuildAssignmentLifecycleProjection(assignment *evalv1.EvaluationAssignment, scenarioCategory evalv1.EvaluationScenarioCategory, observedAt time.Time) (*evalv1.PublicAssignmentLifecycleRecord, error) {
+func BuildAssignmentLifecycleProjection(assignment *evalv1.EvaluationAssignment, scenarioCategory evalv1.EvaluationScenarioCategory, observedAt time.Time, release CampaignRelease) (*evalv1.PublicAssignmentLifecycleRecord, error) {
 	if assignment == nil || assignment.GetAssignmentId() == "" || assignment.GetRunId() == "" {
 		return nil, fmt.Errorf("evaluation: build assignment lifecycle projection: %w", constants.ErrMissingRequiredField)
 	}
@@ -55,6 +55,9 @@ func BuildAssignmentLifecycleProjection(assignment *evalv1.EvaluationAssignment,
 		LifecycleStatus:  assignment.GetLifecycleStatus(),
 		Repetition:       assignment.GetRepetition(),
 		ObservedAt:       timestamppb.New(observedAt.UTC()),
+		Release:          release.Release,
+		ReleaseBasis:     release.publicBasis(),
+		SourceRevision:   release.SourceRevision,
 	}
 	if homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous); ok && homogeneous.Homogeneous != nil {
 		record.DesignatedRole = homogeneous.Homogeneous.GetDesignatedRole()
@@ -78,7 +81,7 @@ func BuildAssignmentLifecycleProjection(assignment *evalv1.EvaluationAssignment,
 
 // BuildAssignmentResultProjection materializes one public terminal assignment
 // projection from canonical assignment and result records.
-func BuildAssignmentResultProjection(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, scenarioCategory evalv1.EvaluationScenarioCategory, summaryStatus evalv1.EvaluationVerdictStatus, verificationStatus string) (*evalv1.PublicAssignmentResultProjection, error) {
+func BuildAssignmentResultProjection(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, scenarioCategory evalv1.EvaluationScenarioCategory, summaryStatus evalv1.EvaluationVerdictStatus, verificationStatus string, release CampaignRelease) (*evalv1.PublicAssignmentResultProjection, error) {
 	if assignment == nil || result == nil {
 		return nil, fmt.Errorf("evaluation: build assignment result projection: %w", constants.ErrMissingRequiredField)
 	}
@@ -105,6 +108,9 @@ func BuildAssignmentResultProjection(assignment *evalv1.EvaluationAssignment, re
 		TrajectoryOutcome: result.GetTrajectoryOutcome(),
 		GuidedRetryCount:  result.GetGuidedRetryCount(),
 		FailureReason:     result.GetPublicFailureReason(),
+		Release:           release.Release,
+		ReleaseBasis:      release.publicBasis(),
+		SourceRevision:    release.SourceRevision,
 	}
 	if scored := scoredAgentInference(result.GetModelInferences()); scored != nil && scored.GetToolsDeclaredReported() {
 		projection.ToolsDeclared = append([]string(nil), scored.GetToolsDeclared()...)
@@ -184,28 +190,19 @@ func marshalCampaignProjectionEnvelope(messageType, idempotencyKey string, recor
 }
 
 // DerivePublicSummaryStatus maps one terminal assignment result to a public
-// summary verdict using deterministic grades when present.
+// summary verdict. Only a COMPLETED lifecycle reaches a model verdict, read
+// from the deterministic grades. Every other terminal lifecycle ended before
+// the model could be judged, so it is INVALID_EVIDENCE: shown, never counted
+// for or against the model. The lifecycle (and AssignmentTerminalOutcome)
+// names which kind of ending it was.
 func DerivePublicSummaryStatus(result *evalv1.EvaluationAssignmentResult) evalv1.EvaluationVerdictStatus {
 	if result == nil {
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED
 	}
-	switch result.GetLifecycleStatus() {
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
-		for _, grade := range result.GetDeterministicGrades() {
-			if grade.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL {
-				return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
-			}
-		}
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNAVAILABLE:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE
-	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
-	default:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
+	if result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED {
+		return verdictFromGrades(result.GetDeterministicGrades())
 	}
+	return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE
 }
 
 // ScenarioCategoryForAssignment resolves one scenario category from a frozen

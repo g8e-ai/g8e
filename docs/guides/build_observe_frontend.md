@@ -7,7 +7,7 @@ last_updated: 2026-09-28
 version: v2.2.3
 owners:
   - docs/guides/build_observe_frontend.md
-  - dashboard/g8e-adapter/
+  - g8e-adapter/
   - protocol/docs/reference/
 related:
   - docs/guides/build_frontend.md
@@ -28,7 +28,7 @@ do_not_use_for:
 
 ## Purpose
 
-This guide explains the runtime capability requirements and integration guarantees that a generated observe frontend must satisfy. A generated observe frontend is a read-only browser dashboard that shows agent and run lifecycle projections, eval summaries, downloads, and a live SSE narrative. It is produced by a builder (Lovable, Notion, or other supported SPA builder) consuming the deterministic contract pack from `dashboard/g8e-adapter/contract-pack/`. The builder must produce a deployable single-page application that runs in a top-level browser tab and connects directly to a g8e Gateway with passkey authentication.
+This guide explains the runtime capability requirements and integration guarantees that a generated observe frontend must satisfy. A generated observe frontend is a read-only browser dashboard that shows agent and run lifecycle projections, eval summaries, downloads, and a live SSE narrative. It is produced by a builder (Lovable, Notion, or other supported SPA builder) consuming the deterministic contract pack from `g8e-adapter/contract-pack/`. The builder must produce a deployable single-page application that runs in a top-level browser tab and connects directly to a g8e Gateway with passkey authentication.
 
 This guide covers the owner-local observe frontend specifically and the audited adapter boundary that builders must respect. It is not the anonymous [Public Spectator](../architecture/public_spectator.md) mirror; see [Public Spectator Operations Guide](./public_spectator.md) for publication and tunnel operations. For minimal Lovable setup, see [Connect a Lovable App](./lovable.md). For the full browser integration reference (WebAuthn, SSE, CORS, approvals, passkey management), see [Build a g8e-Compatible Frontend](./build_frontend.md).
 
@@ -52,7 +52,7 @@ This guide covers the owner-local observe frontend specifically and the audited 
 
 ## Prerequisites and workflow
 
-The builder output is a browser SPA, not a static design or an iframe preview. Use Node.js 22 or newer and the package manager required by the generated project. The adapter contract pack is generated and validated from `dashboard/g8e-adapter/`; run its commands from that directory.
+The builder output is a browser SPA, not a static design or an iframe preview. Use Node.js 22 or newer and the package manager required by the generated project. The adapter contract pack is generated and validated from `g8e-adapter/`; run its commands from that directory.
 
 1. Consume `contract-pack/builder-prompt.md`, `runtime-config.schema.json`, `observe.openapi.json`, `event-schemas.json`, `models.ts`, and `fixtures/` as the builder inputs. Do not copy the adapter's transport implementation into generated presentation code.
 2. Generate a top-level SPA that imports the built `g8e-adapter` package or its audited source modules according to the generated project's package configuration. Serve the SPA from the exact frontend origin that the Gateway allows.
@@ -92,7 +92,7 @@ The generated SPA wraps the audited `g8e-adapter` package. The adapter owns runt
 
 ## The audited adapter
 
-The [g8e-adapter](../../dashboard/g8e-adapter/) package is the audited integration core. It is verified by 445 unit tests, including the contract-pack drift check, and ships with a minimal host, a reference frontend, and the checked-in public evaluation explorer in `evaluation-explorer/`. The evaluation explorer consumes the anonymous public adapter while retaining its own typed full-corpus presentation store. Builder-generated code imports from the adapter and calls its exported APIs.
+The [g8e-adapter](../../g8e-adapter/) package is the audited integration core. It is verified by 445 unit tests, including the contract-pack drift check, and ships with a minimal host, a reference frontend, and the checked-in public evaluation explorer in `evaluation-explorer/`. The evaluation explorer consumes the anonymous public adapter while retaining its own typed full-corpus presentation store. Builder-generated code imports from the adapter and calls its exported APIs.
 
 The adapter exposes:
 
@@ -108,7 +108,7 @@ The adapter exposes:
 
 ## The contract pack
 
-The `dashboard/g8e-adapter/contract-pack/` directory contains deterministic, generator-neutral inputs. Regenerate with `npm run gen:contract-pack`; verify with `npm run gen:contract-pack:check`.
+The `g8e-adapter/contract-pack/` directory contains deterministic, generator-neutral inputs. Regenerate with `npm run gen:contract-pack`; verify with `npm run gen:contract-pack:check`.
 
 | File | Purpose |
 | --- | --- |
@@ -176,7 +176,7 @@ Design-preview mode is explicit, visibly labeled, and disabled in production unl
 
 ## Acceptance
 
-The generated SPA must pass the acceptance commands in the contract pack README. Run from `dashboard/g8e-adapter/`:
+The generated SPA must pass the acceptance commands in the contract pack README. Run from `g8e-adapter/`:
 
 ```bash
 npm run gen:contract-pack:check   # fail if committed outputs are stale
@@ -207,4 +207,4 @@ Real-browser acceptance (exact-origin CORS, WebAuthn authenticator, SSE credenti
 - [Connect a Lovable App](./lovable.md) — Minimal local Lovable setup with `gw connect`.
 - [Architecture: SSE Streaming](../architecture/sse.md) — Gateway SSE push ingestion, persistence, replay, and consumer endpoints.
 - [Architecture: Public Spectator Architecture and Threat Model](../architecture/public_spectator.md) — The separate anonymous public-mirror observation mode, outbound-only export, and threat model.
-- [Contract Pack README](../../dashboard/g8e-adapter/contract-pack/README.md) — Deterministic generation and acceptance commands.
+- [Contract Pack README](../../g8e-adapter/contract-pack/README.md) — Deterministic generation and acceptance commands.

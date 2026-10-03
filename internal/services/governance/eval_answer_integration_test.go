@@ -47,6 +47,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		NewL1Doctrine(),
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
 		nil, // Clock defaults to RealClock
+		&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 	)
 
 	// Create an EVAL_ANSWER payload

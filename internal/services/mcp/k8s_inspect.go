@@ -33,12 +33,7 @@ func (r *realKubectlRunner) lookPath() bool {
 }
 
 func (r *realKubectlRunner) runCommand(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "kubectl", args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return string(output), fmt.Errorf("%w: %v", constants.ErrMCPK8sCommandFailed, err)
-	}
-	return strings.TrimSpace(string(output)), nil
+	return runKubectlCommand(ctx, args...)
 }
 
 // K8sInspectTool provides Kubernetes cluster inspection and pod management operations.

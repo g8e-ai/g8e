@@ -310,17 +310,17 @@ func (c *E2EClient) GetEnsembleDetailedHealth(ctx context.Context, ensembleURL s
 	return body, nil
 }
 
-// GetDashboardIndex fetches the dashboard index page over HTTP (no mTLS) and
-// returns the raw body bytes. The dashboard is a Node.js/Express service on
-// a separate port.
-func (c *E2EClient) GetDashboardIndex(ctx context.Context, dashboardURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dashboardURL+"/", nil)
+// GetConsoleIndex fetches the Gateway-embedded console SPA index over HTTPS
+// (no client certificate; the console route is public) and returns the raw
+// body bytes.
+func (c *E2EClient) GetConsoleIndex(ctx context.Context) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.gatewayHTTPS+constants.APIPaths.ConsolePrefix, nil)
 	if err != nil {
-		return nil, fmt.Errorf("build dashboard index request: %w", err)
+		return nil, fmt.Errorf("build console index request: %w", err)
 	}
 	body, _, err := doRequest(c.publicClient, req, http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("dashboard index: %w", err)
+		return nil, fmt.Errorf("console index: %w", err)
 	}
 	return body, nil
 }

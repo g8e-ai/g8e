@@ -176,13 +176,23 @@ func newCompletedRunFixture(t *testing.T, catalogRef *compliancev1.VersionedRefe
 	require.NoError(t, json.Unmarshal(artifact.Input.Body, &scenarioInput))
 	var scenarioGold ScenarioGoldCriteria
 	require.NoError(t, json.Unmarshal(artifact.Gold.Body, &scenarioGold))
+	// The scenario owns its grading method, tools, and required concepts, as in
+	// the controller; the verifier regrades from the same catalog entry.
+	gradingMethod, err := scenarioGradingMethodForAssignment(truncated, assignment)
+	require.NoError(t, err)
+	scenarioTools, err := scenarioToolsForAssignment(truncated, assignment)
+	require.NoError(t, err)
+	requiredConcepts, err := scenarioRequiredConceptsForAssignment(truncated, assignment)
+	require.NoError(t, err)
 	imported, err := ImportAssignmentResultFromTrace(AssignmentExecutionRequest{
-		Assignment:    assignment,
-		AttemptID:     "attempt-1",
-		ScenarioInput: scenarioInput,
-		ScenarioGold:  scenarioGold,
-		GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
-		Binding:       binding,
+		Assignment:       assignment,
+		AttemptID:        "attempt-1",
+		ScenarioInput:    scenarioInput,
+		ScenarioGold:     scenarioGold,
+		ScenarioTools:    scenarioTools,
+		RequiredConcepts: requiredConcepts,
+		GradingMethod:    gradingMethod,
+		Binding:          binding,
 	}, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	require.NoError(t, store.SaveAssignmentResult(context.Background(), imported))
@@ -195,7 +205,7 @@ func TestCampaignRunVerifier_PassesCompletedAssignment(t *testing.T) {
 
 	report := f.verify(t)
 
-	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, report.GetStatus())
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, report.GetStatus(), report.GetFailureReasons())
 	require.NoError(t, f.store.SaveCampaignVerification(context.Background(), f.req.RunID, report))
 }
 

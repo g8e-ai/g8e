@@ -3,7 +3,7 @@
 // included in the LICENSE file.
 //
 // As of the Change Date listed in the LICENSE file, this software is
-// released under the Apache License, Version 0.0.
+// released under the Apache License, Version 2.0.
 
 package docker
 
@@ -36,7 +36,7 @@ import (
 
 	// dockerComposePath resolves the root unified-stack compose file relative to
 	// the current working directory. The root compose file deploys the full
-	// platform stack (gateway, operator, ensemble, dashboard).
+	// platform stack (gateway, operator, ensemble). The Gateway serves the console.
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/eval"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
@@ -80,7 +80,7 @@ func confirmDockerVolumeWipe(
 	return shared.ConfirmDestructive(cmd, shared.DestructiveOptions{
 		Effects: []string{
 			"Remove every container, network, and orphan of the unified stack (all profiles)",
-			"Permanently delete the Docker data volumes (gateway, operator, inference, ensemble, dashboard); volumes cannot be recovered",
+			"Permanently delete the Docker data volumes (gateway, operator, inference, ensemble); volumes cannot be recovered",
 			"Destroy the trust domain (PKI, owner and Operator identities); owner and workload enrollment must be repeated",
 			"The host .g8e directory is not touched",
 		},
@@ -93,26 +93,21 @@ func confirmDockerVolumeWipe(
 // prepareDockerHostRuntime ensures the host-side .g8e tree exists and is
 // writable before Docker Compose starts the gateway container.
 func prepareDockerHostRuntime(ctx context.Context, fileSvc fs.RuntimeFileService) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := fs.EnsureDockerHostRuntimeLayout(ctx, fileSvc); err != nil {
 		return fmt.Errorf("docker: prepare host runtime: %w", err)
 	}
 	return nil
 }
 
-// runDockerCompose builds and runs a `docker compose` command against the root
-// compose file, streaming stdout/stderr to the console. The optional profiles
-// activate compose profiles (e.g. bootstrapped, cross-enrollment) so multiple
-// workloads can be started together.
-func RunDockerCompose(args []string, profiles ...string) error {
+// composeCommand builds a `docker compose` invocation against the root compose
+// file after confirming Docker is available. Empty profile names are skipped.
+func composeCommand(args []string, profiles []string) (*exec.Cmd, error) {
 	composePath, err := dockerComposePath()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := demos.CheckDockerAvailable(); err != nil {
-		return err
+		return nil, err
 	}
 	fullArgs := []string{"compose", "-f", demos.ToDockerPath(composePath)}
 	for _, profile := range profiles {
@@ -120,36 +115,30 @@ func RunDockerCompose(args []string, profiles ...string) error {
 			fullArgs = append(fullArgs, "--profile", profile)
 		}
 	}
-	fullArgs = append(fullArgs, args...)
+	return exec.Command("docker", append(fullArgs, args...)...), nil
+}
 
-	c := exec.Command("docker", fullArgs...)
+// RunDockerCompose runs a `docker compose` command against the root compose
+// file, streaming stdout/stderr to the console. Optional profiles activate
+// compose profiles.
+func RunDockerCompose(args []string, profiles ...string) error {
+	c, err := composeCommand(args, profiles)
+	if err != nil {
+		return err
+	}
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()
 }
 
 // runDockerComposeOutput runs a `docker compose` command against the root
-// compose file and returns its combined stdout/stderr output. Unlike
-// runDockerCompose it does not stream to the console, so callers can embed the
-// output in a larger status view (e.g. `g8e gw status`). The optional profiles
-// activate compose profiles.
+// compose file and returns its combined output instead of streaming it, so
+// callers can embed it in a larger status view (e.g. `g8e gw status`).
 func runDockerComposeOutput(args []string, profiles ...string) (string, error) {
-	composePath, err := dockerComposePath()
+	c, err := composeCommand(args, profiles)
 	if err != nil {
 		return "", err
 	}
-	if err := demos.CheckDockerAvailable(); err != nil {
-		return "", err
-	}
-	fullArgs := []string{"compose", "-f", demos.ToDockerPath(composePath)}
-	for _, profile := range profiles {
-		if profile != "" {
-			fullArgs = append(fullArgs, "--profile", profile)
-		}
-	}
-	fullArgs = append(fullArgs, args...)
-
-	c := exec.Command("docker", fullArgs...)
 	out, err := c.CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("%w: %w", constants.ErrInternal, err)
@@ -195,7 +184,7 @@ func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docker",
 		Short: "Manage the Docker Compose unified stack",
-		Long: `Manage the root Docker Compose unified stack (gateway, operator, inference operator, ensemble, dashboard).
+		Long: `Manage the root Docker Compose unified stack (gateway, operator, inference operator, ensemble).
 
 Use ` + "`" + `g8e docker init` + "`" + ` to build images and bring the full evaluation stack online in one
 command (owner enrollment, platform approvals, readiness checks). See
@@ -256,17 +245,9 @@ so they align with the current host-mounted binary (from 'make build').`,
 	return cmd
 }
 
-// dockerFullStackProfiles returns the compose profiles required for the full
-// evaluation topology. Because the unified stack now starts in the default profile,
-// this returns nil.
-func dockerFullStackProfiles() []string {
-	return nil
-}
-
-// resolveDockerProfiles returns compose profiles to activate for start/build.
-// Because the unified stack runs in the default profile, returns nil unless an
-// explicit profile is specified.
-func resolveDockerProfiles(full bool, profile string) []string {
+// explicitProfile returns the requested compose profile as an argument list,
+// or nil so the unified stack runs in the default profile.
+func explicitProfile(profile string) []string {
 	if profile != "" {
 		return []string{profile}
 	}
@@ -274,7 +255,7 @@ func resolveDockerProfiles(full bool, profile string) []string {
 }
 
 func dockerInitCmd() *cobra.Command {
-	return dockerInitCmdWithConfig(shared.LoadConfig, shared.NewFileSvc, authcmd.DockerInitAPIClientFactory, auth.CheckOperatorRunning, authcmd.NewDefaultEnrollmentCoordinator)
+	return dockerInitCmdWithConfig(shared.LoadConfig, shared.NewFileSvc, authcmd.DockerInitAPIClientFactory, auth.CheckOperatorRunning, authcmd.NewDefaultEnrollmentCoordinator, authcmd.DefaultAppEnrollerFactory)
 }
 
 func dockerInitCmdWithConfig(
@@ -283,6 +264,7 @@ func dockerInitCmdWithConfig(
 	clientFactory authcmd.APIClientFactory,
 	checkOperatorRunning func(*config.Config) error,
 	enrollerFactory authcmd.EnrollerFactory,
+	appEnrollerFactory authcmd.AppEnrollerFactory,
 ) *cobra.Command {
 	var (
 		skipBuild      bool
@@ -309,11 +291,17 @@ docs/guides/unified_stack.md:
   4. Start the gateway and wait for it to become healthy.
   5. Enroll the CLI owner (unless --skip-enroll).
   6. Start bootstrapped + evaluation workloads (operator, inference operator,
-     ensemble, and dashboard).
+     and ensemble).
   7. Auto-approve pending platform enrollment requests in the documented order
-     (data operator, dashboard, ensemble, inference operator) unless
+     (data operator, ensemble, inference operator) unless
      --skip-approvals is set.
   8. Wait for the ensemble health endpoint to respond.
+  9. Enroll the host 'g8e-eval' application identity that 'g8e eval' gates and
+     campaigns need, approving exactly that request (skipped when a valid
+     identity already exists).
+
+If the 'g8e-eval' enrollment fails, init warns and prints the manual steps
+('g8e auth enroll app g8e-eval', then approve) instead of failing the stack.
 
 Use --clean to wipe containers, volumes, and networks before init.
 That destroys the trust domain and repeats owner enrollment from scratch, so it
@@ -368,7 +356,7 @@ already-enrolled CLI.`,
 					return fmt.Errorf("docker init: build arguments: %w", err)
 				}
 				cmd.Println("Building Docker images for the unified stack...")
-				if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, dockerFullStackProfiles()...); err != nil {
+				if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs); err != nil {
 					return err
 				}
 				cmd.Println("Docker images built and runtime binary exported to ./g8e.")
@@ -406,8 +394,8 @@ already-enrolled CLI.`,
 			}
 
 			cmd.Println()
-			cmd.Println("Starting full stack (bootstrapped + evaluation profiles)...")
-			if err := RunDockerCompose([]string{"up", "-d"}, dockerFullStackProfiles()...); err != nil {
+			cmd.Println("Starting full stack...")
+			if err := RunDockerCompose([]string{"up", "-d"}); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 
@@ -451,8 +439,14 @@ already-enrolled CLI.`,
 			}
 
 			cmd.Println()
+			if err := enrollDockerInitEvalApp(cmd, client, fileSvc, cfg, appEnrollerFactory); err != nil {
+				cmd.Printf("Warning: could not enroll the %q application identity: %v\n", constants.EvaluationAppName, err)
+			}
+
+			cmd.Println()
 			cmd.Println("Unified stack init complete.")
 			printDockerSpectatorEndpoints(cmd)
+			reportEvalAppEnrollment(cmd, fileSvc, cfg)
 			cmd.Println("Run 'g8e docker status' to check service status.")
 			cmd.Println("Run 'g8e operator list' and 'g8e eval gate inference status --json' to verify operators.")
 			return nil
@@ -579,7 +573,6 @@ func dockerStartCmdWithConfig(
 	checkOperatorRunning func(*config.Config) error,
 	enrollerFactory authcmd.EnrollerFactory,
 ) *cobra.Command {
-	var full bool
 	var profile string
 	var skipEnroll bool
 
@@ -589,22 +582,23 @@ func dockerStartCmdWithConfig(
 		Long: `Start the Docker Compose unified stack in the background.
 
 Starts the full unified stack: gateway, data operator, inference operator,
-ensemble, and dashboard.
+and ensemble. The Gateway serves the console at https://localhost:8443/console/.
 
 When starting without --skip-enroll, the command walks the owner through interactive enrollment:
   1. Enrolls the CLI user (the first owner) with the gateway.
   2. Prompts to approve the Ensemble platform enrollment request.
-  3. Prompts to approve the Dashboard platform enrollment request.
-  4. Prompts to approve the Operator platform enrollment request.
+  3. Prompts to approve the Operator platform enrollment request.
 
 Each component prompt accepts y to approve or n (or any other input) to skip.
+The walkthrough ends by reporting whether the host 'g8e-eval' application identity
+needed by 'g8e eval' gates and campaigns is enrolled; if not, it prints the command.
 Use --skip-enroll to start the stack without the interactive walkthrough
 (the workloads will block waiting for manual approval).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
-			profiles := resolveDockerProfiles(full, profile)
+			profiles := explicitProfile(profile)
 			scope := "unified stack"
 			if len(profiles) > 0 {
 				scope = fmt.Sprintf("unified stack (profiles %s)", strings.Join(profiles, ", "))
@@ -654,7 +648,6 @@ Use --skip-enroll to start the stack without the interactive walkthrough
 			return runDockerStartWalkthrough(cmd, *walkthroughDeps)
 		},
 	}
-	cmd.Flags().BoolVar(&full, "full", true, "Start the full stack (enabled by default)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (optional)")
 	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Start without the interactive enrollment walkthrough")
 	return cmd
@@ -663,8 +656,7 @@ Use --skip-enroll to start the stack without the interactive walkthrough
 // runDockerStartWalkthrough drives the interactive enrollment walkthrough after
 // the bootstrapped profile containers are up. It enrolls the CLI owner, waits for
 // the gateway to be reachable, then prompts the owner to approve each
-// component's platform enrollment request in order: ensemble, dashboard,
-// operator. Each prompt is skippable (any answer other than y skips that
+// component's platform enrollment request in order: ensemble, operator. Each prompt is skippable (any answer other than y skips that
 // component without aborting the walkthrough).
 func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 	ctx := shared.CommandContext(cmd)
@@ -715,7 +707,6 @@ func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 
 	components := []models.PlatformComponentKind{
 		models.PlatformComponentEnsemble,
-		models.PlatformComponentDashboard,
 		models.PlatformComponentOperator,
 	}
 	for i, component := range components {
@@ -728,6 +719,7 @@ func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 	}
 
 	cmd.Println("Interactive enrollment walkthrough complete.")
+	reportEvalAppEnrollment(cmd, fileSvc, cfg)
 	cmd.Println("Run 'g8e docker status' to check service status.")
 	cmd.Println("Run 'g8e docker logs' to follow logs.")
 	return nil
@@ -743,6 +735,114 @@ func reportDockerPublicSpectatorReady(cmd *cobra.Command) error {
 	}
 	cmd.Printf("Public mirror bootstrap ready (high_water_sequence=%d).\n", bootstrap.Snapshot.HighWaterSequence)
 	return nil
+}
+
+const (
+	dockerInitEvalEnrollPollInterval = 2 * time.Second
+	dockerInitEvalEnrollTimeout      = 3 * time.Minute
+)
+
+// enrollDockerInitEvalApp enrolls the host `g8e-eval` application identity
+// unless a valid one is already installed.
+func enrollDockerInitEvalApp(cmd *cobra.Command, client authcmd.APIClient, fileSvc fs.RuntimeFileService, cfg *config.Config, factory authcmd.AppEnrollerFactory) error {
+	name := constants.EvaluationAppName
+	if auth.HasValidAppIdentity(fileSvc, cfg, name) {
+		cmd.Printf("Evaluation identity %q already enrolled.\n", name)
+		return nil
+	}
+	cmd.Printf("Enrolling the %q application identity for 'g8e eval'...\n", name)
+	enroller, err := factory(name, fileSvc, cfg, slog.Default())
+	if err != nil {
+		return err
+	}
+	return runDockerInitEvalEnrollment(cmd, client, enroller, dockerInitEvalEnrollPollInterval, dockerInitEvalEnrollTimeout)
+}
+
+// runDockerInitEvalEnrollment runs the app enrollment client, which submits a
+// platform enrollment request and waits for approval, and approves that request
+// as the enrolled owner. Only a pending request that is an application named
+// `g8e-eval` is approved; any other application request is left for the owner.
+func runDockerInitEvalEnrollment(cmd *cobra.Command, client authcmd.APIClient, enroller authcmd.AppEnroller, pollInterval, timeout time.Duration) error {
+	name := constants.EvaluationAppName
+	ctx, cancel := context.WithTimeout(shared.CommandContext(cmd), timeout)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := enroller.Enroll(ctx, io.Discard)
+		done <- err
+	}()
+
+	approved := false
+	for {
+		if !approved {
+			pending, err := fetchPendingPlatformEnrollments(client)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrDockerInitApprovalFailed, err)
+			}
+			if req := findEvalApplicationRequest(pending); req != nil {
+				authcmd.PrintPlatformEnrollmentRequestDetails(cmd, req)
+				resp, err := authcmd.PostPlatformEnrollmentDecision(client, models.PlatformEnrollmentDecisionRequest{
+					RequestID: req.RequestID,
+					Decision:  models.PlatformEnrollmentDecisionApprove,
+				})
+				if err != nil {
+					return fmt.Errorf("%w: approve %s (%s): %w", constants.ErrDockerInitApprovalFailed, name, req.RequestID, err)
+				}
+				cmd.Printf("Approved %s enrollment request %s (%s).\n", name, req.RequestID, resp.State)
+				approved = true
+			}
+		}
+
+		select {
+		case err := <-done:
+			if err != nil {
+				return fmt.Errorf("%w: enroll %s: %w", constants.ErrDockerInitApprovalFailed, name, err)
+			}
+			cmd.Printf("Evaluation identity %q enrolled.\n", name)
+			return nil
+		case <-ctx.Done():
+			return fmt.Errorf("%w: timed out enrolling %s: %w", constants.ErrDockerInitApprovalFailed, name, ctx.Err())
+		case <-time.After(pollInterval):
+		}
+	}
+}
+
+// findEvalApplicationRequest returns the pending request for the `g8e-eval`
+// application, matching both component kind and name so an operator or another
+// application is never selected.
+func findEvalApplicationRequest(pending []models.PlatformEnrollmentPendingRequest) *models.PlatformEnrollmentPendingRequest {
+	for i := range pending {
+		if pending[i].ComponentKind == models.PlatformComponentApplication && pending[i].ComponentName == constants.EvaluationAppName {
+			return &pending[i]
+		}
+	}
+	return nil
+}
+
+// reportEvalAppEnrollment tells the owner whether the host `g8e-eval`
+// application identity is usable. Init and start enroll the owner and approve
+// the Gateway's workloads (Data Operator, Ensemble, Inference Operator) and
+// init then enrolls `g8e-eval`; `g8e eval` gates and campaigns present that
+// identity for inference dispatch and fail closed without it. A missing one
+// (init skipped or failed its enrollment, or `docker start`) is reported here
+// rather than at the first eval command.
+func reportEvalAppEnrollment(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *config.Config) {
+	name := constants.EvaluationAppName
+	_, err := auth.LoadAppIdentity(fileSvc, cfg, name)
+	if err == nil {
+		cmd.Printf("Evaluation identity %q: enrolled.\n", name)
+		return
+	}
+	cmd.Println()
+	cmd.Printf("Evaluation identity %q is not ready: %v\n", name, err)
+	cmd.Println("  './g8e eval' gates and campaigns dispatch inference with this host application")
+	cmd.Println("  identity (console chat does not use it). Enroll it once; the command waits for approval,")
+	cmd.Println("  so run it in a separate terminal:")
+	cmd.Printf("    ./g8e auth enroll app %s\n", name)
+	cmd.Println("  then approve the request it prints:")
+	cmd.Println("    ./g8e auth enroll pending")
+	cmd.Println("    ./g8e auth enroll approve <request-id> --yes")
 }
 
 // printDockerSpectatorEndpoints prints the acceptance URLs for the embedded
@@ -853,24 +953,22 @@ func isInferenceOperatorPendingRequest(req *models.PlatformEnrollmentPendingRequ
 }
 
 // platformEnrollmentApprovalRank assigns the documented approval order for the
-// unified stack: data operator, dashboard, ensemble, inference operator.
+// unified stack: data operator, ensemble, inference operator.
 func platformEnrollmentApprovalRank(req models.PlatformEnrollmentPendingRequest) int {
 	switch req.ComponentKind {
 	case models.PlatformComponentOperator:
 		if isInferenceOperatorPendingRequest(&req) {
-			return 4
+			return 3
 		}
 		return 1
-	case models.PlatformComponentDashboard:
-		return 2
 	case models.PlatformComponentEnsemble:
-		return 3
+		return 2
 	default:
 		return 99
 	}
 }
 
-const dockerInitApprovalSlotCount = 4
+const dockerInitApprovalSlotCount = 3
 
 // selectDockerInitApprovalCandidate returns the lowest-ranked pending request in
 // the documented order. Workloads with reusable credentials submit no request
@@ -1070,7 +1168,7 @@ func dockerBuildCmd() *cobra.Command {
 				return fmt.Errorf("docker: build arguments: %w", err)
 			}
 			cmd.Println("Building Docker images...")
-			if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, resolveDockerProfiles(true, profile)...); err != nil {
+			if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, explicitProfile(profile)...); err != nil {
 				return err
 			}
 			cmd.Println("\nDocker images built and runtime binary exported to ./g8e.")
@@ -1098,7 +1196,7 @@ first. Use --yes to skip the confirmation (the backup still runs) and
 --skip-backup to opt out of the backup.
 
 Clean always targets the bootstrapped and evaluation profiles so that operator,
-ensemble, dashboard, and inference-operator containers are removed alongside
+ensemble, and inference-operator containers are removed alongside
 the gateway, not just the default-profile gateway container.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
@@ -1114,7 +1212,7 @@ the gateway, not just the default-profile gateway container.`,
 			}
 			cmd.Println("Cleaning Docker Compose stack...")
 			// Always pass the bootstrapped and evaluation profiles so operator,
-			// ensemble, dashboard, and inference-operator containers are removed
+			// ensemble, and inference-operator containers are removed
 			// together with the gateway. Without them, down only touches
 			// default-profile services and profile-gated containers keep running,
 			// holding their volumes and the shared network open.
@@ -1132,7 +1230,6 @@ the gateway, not just the default-profile gateway container.`,
 }
 
 func dockerResetCmd() *cobra.Command {
-	var full bool
 	var profile string
 	var assumeYes bool
 	var skipBackup bool
@@ -1165,7 +1262,7 @@ skip the confirmation (the backup still runs) and --skip-backup to opt out.`,
 			if err := prepareDockerHostRuntime(shared.CommandContext(cmd), fileSvc); err != nil {
 				return err
 			}
-			profiles := resolveDockerProfiles(full, profile)
+			profiles := explicitProfile(profile)
 			scope := "gateway"
 			if len(profiles) > 0 {
 				scope = fmt.Sprintf("full stack (profiles %s)", strings.Join(profiles, ", "))
@@ -1178,7 +1275,6 @@ skip the confirmation (the backup still runs) and --skip-backup to opt out.`,
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	cmd.Flags().BoolVar(&assumeYes, shared.FlagYes, false, "Skip the confirmation prompt (the backup still runs unless --skip-backup)")
 	shared.AddSkipBackupFlag(cmd, &skipBackup)
@@ -1187,7 +1283,6 @@ skip the confirmation (the backup still runs) and --skip-backup to opt out.`,
 
 func dockerRebuildCmd() *cobra.Command {
 	var noCache bool
-	var full bool
 	var profile string
 
 	cmd := &cobra.Command{
@@ -1219,7 +1314,7 @@ Use --no-cache=false to reuse the Docker build cache.`,
 			if err := prepareDockerHostRuntime(shared.CommandContext(cmd), fileSvc); err != nil {
 				return err
 			}
-			profiles := resolveDockerProfiles(full, profile)
+			profiles := explicitProfile(profile)
 			scope := "unified stack"
 			if len(profiles) > 0 {
 				scope = fmt.Sprintf("unified stack (profiles %s)", strings.Join(profiles, ", "))
@@ -1233,7 +1328,6 @@ Use --no-cache=false to reuse the Docker build cache.`,
 		},
 	}
 	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Rebuild without using the Docker cache")
-	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	return cmd
 }

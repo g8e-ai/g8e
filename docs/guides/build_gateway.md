@@ -53,24 +53,26 @@ The reference implementation is the static `g8e` binary running in gateway mode.
 
 - **Go 1.26.6+** - Required for building the reference gateway. The root `go.mod` is authoritative; the Makefile may select a newer toolchain automatically unless `GOTOOLCHAIN=local` is set.
 - **Make** - Required to run the root build targets.
-- **Node.js and npm** - Required to build the Evaluation Explorer asset that the Go build embeds. The build does not install the dashboard adapter's Node dependencies for you.
+- **Node.js and npm** - Required to build the Evaluation Explorer asset that the Go build embeds. The console build is committed as an embed, so `make build` needs Node only to refresh it (`make console-build`).
 - **Docker Engine and the Docker Compose plugin** - Required only for the container build and Compose deployment.
 
 Before the first Go build, build the Evaluation Explorer asset from the repository root:
 
 ```bash
-cd dashboard/g8e-adapter/evaluation-explorer
+cd evaluation-explorer
 npm install
 npm run build
 cd ../../..
 ```
 
-The resulting `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` is required by `make build` and `make build-all`. If the asset is already present, do not rebuild it unless its source changed.
+The resulting `evaluation-explorer/dist/index.html` is required by `make build` and `make build-all`. If the asset is already present, do not rebuild it unless its source changed.
 
 > **Don't have the local build toolchain installed?** Run the setup script for your platform to install prerequisites, build the evaluation explorer, and compile `g8e`:
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`
+>
+> The Linux and macOS scripts also install the toolchain `make ci` needs; add `--build-only` to skip it and stop after `make build`.
 
 ### Build from Source
 
@@ -108,7 +110,7 @@ Docker Engine with the Docker Compose plugin can build the binaries without a lo
 make up
 ```
 
-This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts the complete default Compose profile (gateway, operators, ensemble, and dashboard). `make up` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
+This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts the complete default Compose profile (gateway, operators, and ensemble). `make up` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
 
 ```bash
 docker cp g8e-gateway:/g8e ./g8e
@@ -371,11 +373,13 @@ Run all Go unit and in-process integration tests with:
 make test
 ```
 
-Run the local platform, Ensemble, and Dashboard CI targets, including protocol generation, Swagger generation, lint, vulnerability checks, and component tests, with:
+Run the local platform, Ensemble, and Console CI targets, including protocol generation, Swagger generation, lint, vulnerability checks, and component tests, with:
 
 ```bash
 make ci
 ```
+
+`make ci` starts with `make dev-check`, which lists every missing tool at once. A machine set up with `scripts/linux-setup.sh` or `scripts/macos-setup.sh` (without `--build-only`) passes it; otherwise run `make dev-setup` after installing the operating-system prerequisites.
 
 ---
 
@@ -520,7 +524,7 @@ Requires `cloudflared` installed and a Cloudflare account with a registered doma
 ## Next Steps
 
 - **[Docker Gateway](docker_gateway.md)** - Build and run the root Compose Gateway, enroll the owner, approve workloads, and manage container state.
-- **[Unified Docker Stack](unified_stack.md)** - Operate the complete Gateway, Operator, Ensemble, Dashboard, and evaluation profiles.
+- **[Unified Docker Stack](unified_stack.md)** - Operate the complete Gateway, Operator, Ensemble, and evaluation profiles.
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** - Connect to, authenticate, use, maintain, and pull reports from a Gateway.
 - **[Build Operator](build_operator.md)** - Build a custom g8e-compatible Operator.
 - **[Protocol Library](../architecture/protocol.md)** - Go module and Python package API reference, constants, models, and usage examples.

@@ -381,6 +381,14 @@ const (
 	DeployScriptFilenameWindows = "g8e-deploy.ps1"
 )
 
+// Gateway-served API reference routes. The spec route is read by the Console
+// API view, so it is classified for web-session or mTLS callers in
+// gateway_auth.go.
+const (
+	SwaggerUIPath  = "/swagger/"
+	SwaggerDocPath = "/swagger/doc.json"
+)
+
 // Component filenames for gateway, operator, and shared services.
 const (
 	SwaggerFilename          = "swagger.json"
@@ -802,6 +810,7 @@ const (
 	EvaluationReportFilename                      = "report.json"
 	EvaluationVerificationFilename                = "verification.json"
 	EvaluationCampaignSpecFilename                = "campaign-spec.json"
+	EvaluationCampaignReleaseTagFilename          = "release-tag.json"
 	EvaluationHeterogeneousStackSetFilename       = "heterogeneous-stack-set.json"
 	EvaluationScenarioCatalogFilename             = "scenario-catalog.json"
 	EvaluationScenarioArtifactsDirname            = "scenario-artifacts"

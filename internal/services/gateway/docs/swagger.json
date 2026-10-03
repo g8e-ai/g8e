@@ -621,6 +621,90 @@
                 }
             }
         },
+        "/api/v1/gateway/proxy-signing-key": {
+            "get": {
+                "description": "Returns the Ed25519 public key (and its key ID) the Gateway uses to sign browser-proxy identity stamps. g8ee fetches it over its mTLS client and verifies every proxied request against it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "gateway"
+                ],
+                "summary": "Browser proxy signing key",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ActuatorPublicKeyExport"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable — no signing key is loaded",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/gateway/reputation/sign": {
+            "post": {
+                "description": "App mTLS only. Returns an HMAC signature over merkle_root || prev_root || tribunal_command_id. The signing key remains in the Gateway keystore. Signing does not validate the application's scores or satisfy governance proof requirements.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "gateway"
+                ],
+                "summary": "Sign an application reputation commitment",
+                "parameters": [
+                    {
+                        "description": "Reputation commitment claim",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ReputationSignRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ReputationSignResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid commitment",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "App identity required",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Signing unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/governance/envelopes": {
             "post": {
                 "description": "Accepts a GovernanceEnvelope, verifies it through the 5-layer gauntlet (L1–L3 pre-flight,\nL4 warden, L5 actuator), and returns the signed ActionReceipt. Transport-to-envelope\nidentity binding is enforced via mTLS certificate URI SAN matching.",
@@ -1962,7 +2046,7 @@
         },
         "/console/": {
             "get": {
-                "description": "Serves the single-page application dashboard for WebAuthn/passkey operations.",
+                "description": "Serves the g8e Console: passkey authentication, approvals, Operator inventory and binding, cases, investigations, and chat.",
                 "consumes": [
                     "text/html"
                 ],
@@ -2489,14 +2573,12 @@
                 "g8e.v1.operator.status.updated.stopped",
                 "g8e.v1.operator.status.updated.terminated",
                 "g8e.v1.operator.status.updated.unavailable",
-                "g8e.v1.operator.stream.approval.granted",
-                "g8e.v1.operator.stream.approval.rejected",
-                "g8e.v1.operator.stream.approval.requested",
                 "g8e.v1.operator.terminal.approval.denied",
                 "g8e.v1.operator.terminal.auth.state.changed",
                 "g8e.v1.operator.terminal.thinking.append",
                 "g8e.v1.operator.terminal.thinking.complete",
                 "g8e.v1.operator.unbound",
+                "g8e.v1.platform.approvals.changed",
                 "g8e.v1.platform.audit.chain.checkpointed",
                 "g8e.v1.platform.auth.info.updated",
                 "g8e.v1.platform.auth.login.failed",
@@ -2836,14 +2918,12 @@
                 "EventOperatorStatusUpdatedStopped",
                 "EventOperatorStatusUpdatedTerminated",
                 "EventOperatorStatusUpdatedUnavailable",
-                "EventOperatorStreamApprovalGranted",
-                "EventOperatorStreamApprovalRejected",
-                "EventOperatorStreamApprovalRequested",
                 "EventOperatorTerminalApprovalDenied",
                 "EventOperatorTerminalAuthStateChanged",
                 "EventOperatorTerminalThinkingAppend",
                 "EventOperatorTerminalThinkingComplete",
                 "EventOperatorUnbound",
+                "EventPlatformApprovalsChanged",
                 "EventPlatformAuditChainCheckpointed",
                 "EventPlatformAuthInfo",
                 "EventPlatformAuthLoginFailed",
@@ -2972,6 +3052,20 @@
                     "type": "string"
                 },
                 "transaction_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ActuatorPublicKeyExport": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "key_id": {
+                    "type": "string"
+                },
+                "public_key": {
                     "type": "string"
                 }
             }
@@ -4029,6 +4123,28 @@
                     "type": "integer"
                 },
                 "proof_root_sha256": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ReputationSignRequest": {
+            "type": "object",
+            "properties": {
+                "merkle_root": {
+                    "type": "string"
+                },
+                "prev_root": {
+                    "type": "string"
+                },
+                "tribunal_command_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ReputationSignResponse": {
+            "type": "object",
+            "properties": {
+                "signature": {
                     "type": "string"
                 }
             }

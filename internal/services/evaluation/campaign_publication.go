@@ -111,7 +111,11 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentLifecycle(ctx context.
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil {
 		return fmt.Errorf("evaluation: publish assignment lifecycle: %w", constants.ErrMissingRequiredField)
 	}
-	projection, err := BuildAssignmentLifecycleProjection(assignment, scenarioCategory, observedAt)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	projection, err := BuildAssignmentLifecycleProjection(assignment, scenarioCategory, observedAt, release)
 	if err != nil {
 		return err
 	}
@@ -133,6 +137,10 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentLifecycles(ctx context
 	if runID == "" {
 		return fmt.Errorf("evaluation: publish assignment lifecycles: %w", constants.ErrMissingRequiredField)
 	}
+	release, err := c.loadRunRelease(ctx, runID)
+	if err != nil {
+		return err
+	}
 	requests := make([]campaignFeedPublishRequest, 0, len(assignments))
 	for _, assignment := range assignments {
 		if assignment == nil {
@@ -142,7 +150,7 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentLifecycles(ctx context
 		if err != nil {
 			return err
 		}
-		request, err := buildAssignmentLifecyclePublishRequest(assignment, category, assignmentLifecycleObservedAt(assignment))
+		request, err := buildAssignmentLifecyclePublishRequest(assignment, category, assignmentLifecycleObservedAt(assignment), release)
 		if err != nil {
 			return err
 		}
@@ -151,7 +159,7 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentLifecycles(ctx context
 	if len(requests) == 0 {
 		return nil
 	}
-	_, err := c.exportFeedRecords(ctx, runID, requests)
+	_, err = c.exportFeedRecords(ctx, runID, requests)
 	return err
 }
 
@@ -224,6 +232,10 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 	if !ok {
 		return campaignFeedPublishRequest{}, fmt.Errorf("evaluation: publish assignment result: resolve scenario context: %w", constants.ErrEvidenceScopeMismatch)
 	}
+	release, err := c.store.LoadCampaignRelease(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return campaignFeedPublishRequest{}, err
+	}
 	scenario, scenarioErr := ResolvePublicScenarioContext(ctx, store, run, catalog, assignment, artifacts)
 	if scenarioErr != nil && !errors.Is(scenarioErr, constants.ErrEvidenceArtifactMalformed) {
 		return campaignFeedPublishRequest{}, scenarioErr
@@ -248,6 +260,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 	var record *PublicAssignmentRecord
 	if scenarioErr == nil {
 		record, err = BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
+			Release:            release,
 			Assignment:         assignment,
 			Result:             result,
 			ScenarioContext:    scenario,
@@ -256,7 +269,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 			Extensions:         extensions,
 		})
 	} else {
-		projection, projectionErr := BuildAssignmentResultProjection(assignment, result, scenarioCategory, DerivePublicSummaryStatus(result), verificationStatus)
+		projection, projectionErr := BuildAssignmentResultProjection(assignment, result, scenarioCategory, DerivePublicSummaryStatus(result), verificationStatus, release)
 		if projectionErr != nil {
 			return campaignFeedPublishRequest{}, projectionErr
 		}
@@ -282,11 +295,11 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, RecordType: models.PublicFeedRecordTypeProjection, Body: body}, nil
 }
 
-func buildAssignmentLifecyclePublishRequest(assignment *evalv1.EvaluationAssignment, scenarioCategory evalv1.EvaluationScenarioCategory, observedAt time.Time) (campaignFeedPublishRequest, error) {
+func buildAssignmentLifecyclePublishRequest(assignment *evalv1.EvaluationAssignment, scenarioCategory evalv1.EvaluationScenarioCategory, observedAt time.Time, release CampaignRelease) (campaignFeedPublishRequest, error) {
 	if assignment == nil {
 		return campaignFeedPublishRequest{}, fmt.Errorf("evaluation: publish assignment lifecycle: %w", constants.ErrMissingRequiredField)
 	}
-	projection, err := BuildAssignmentLifecycleProjection(assignment, scenarioCategory, observedAt)
+	projection, err := BuildAssignmentLifecycleProjection(assignment, scenarioCategory, observedAt, release)
 	if err != nil {
 		return campaignFeedPublishRequest{}, err
 	}
@@ -460,6 +473,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 			var record *PublicAssignmentRecord
 			if scenarioErr == nil {
 				record, err = BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
+					Release:              state.Release,
 					Assignment:           assignment,
 					Result:               result,
 					ScenarioContext:      scenario,
@@ -473,7 +487,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 				if categoryErr != nil {
 					return 0, categoryErr
 				}
-				projection, projectionErr := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), "verified")
+				projection, projectionErr := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), "verified", state.Release)
 				if projectionErr != nil {
 					return 0, projectionErr
 				}
@@ -807,7 +821,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 			return 0, err
 		}
 	}
-	run, assignments, results, _, err := c.loadRunAggregateState(ctx, runID)
+	run, assignments, results, state, err := c.loadRunAggregateState(ctx, runID)
 	if err != nil {
 		return 0, err
 	}
@@ -829,7 +843,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 		if err != nil {
 			return 0, err
 		}
-		lifecycleRequest, err := buildAssignmentLifecyclePublishRequest(assignment, category, assignmentLifecycleObservedAt(assignment))
+		lifecycleRequest, err := buildAssignmentLifecyclePublishRequest(assignment, category, assignmentLifecycleObservedAt(assignment), state.Release)
 		if err != nil {
 			return 0, err
 		}
@@ -919,12 +933,16 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	release, err := c.store.LoadCampaignRelease(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
 	assignments, err := c.store.ListAssignments(ctx, runID)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 	if len(assignments) == 0 {
-		return run, assignments, map[string]*evalv1.EvaluationAssignmentResult{}, &runAggregateState{VariantRoles: map[string]*variantRoleAggregate{}}, nil
+		return run, assignments, map[string]*evalv1.EvaluationAssignmentResult{}, &runAggregateState{Release: release, VariantRoles: map[string]*variantRoleAggregate{}}, nil
 	}
 	results, err := c.store.LoadAssignmentResults(ctx, runID, assignments)
 	if err != nil {
@@ -939,6 +957,7 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 		return nil, nil, nil, nil, err
 	}
 	state.Suite = methodologySuiteFromCatalog(catalog)
+	state.Release = release
 	if RunAggregateComplete(assignments, results, state) {
 		// Only a finished run claims an environment: a live dataset is
 		// provisional and must not be matched against another run's.
@@ -951,6 +970,14 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 		}
 	}
 	return run, assignments, results, state, nil
+}
+
+func (c *CampaignPublicationCoordinator) loadRunRelease(ctx context.Context, runID string) (CampaignRelease, error) {
+	run, err := c.store.LoadRun(ctx, runID)
+	if err != nil {
+		return CampaignRelease{}, fmt.Errorf("evaluation: load public run release: %w", err)
+	}
+	return c.store.LoadCampaignRelease(ctx, run.GetCampaignBinding().GetCampaignId())
 }
 
 func (c *CampaignPublicationCoordinator) publishEnvelope(ctx context.Context, runID, idempotencyKey, messageType string, record proto.Message) error {

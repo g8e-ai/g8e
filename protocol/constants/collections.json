@@ -8,7 +8,8 @@
     "agent_activity_metadata": {
       "_go_const": "CollectionAgentActivityMetadata",
       "value": "agent_activity_metadata",
-      "_python_const": "AGENT_ACTIVITY_METADATA"
+      "_python_const": "AGENT_ACTIVITY_METADATA",
+      "_governed": true
     },
     "app_policies": {
       "_go_const": "CollectionAppPolicies",
@@ -28,7 +29,8 @@
     "cases": {
       "_go_const": "CollectionCases",
       "value": "cases",
-      "_python_const": "CASES"
+      "_python_const": "CASES",
+      "_governed": true
     },
     "cli_sessions": {
       "_go_const": "CollectionCLISessions",
@@ -43,7 +45,8 @@
     "investigations": {
       "_go_const": "CollectionInvestigations",
       "value": "investigations",
-      "_python_const": "INVESTIGATIONS"
+      "_python_const": "INVESTIGATIONS",
+      "_governed": true
     },
     "login_audit": {
       "_go_const": "CollectionLoginAudit",
@@ -53,7 +56,8 @@
     "memories": {
       "_go_const": "CollectionMemories",
       "value": "memories",
-      "_python_const": "MEMORIES"
+      "_python_const": "MEMORIES",
+      "_governed": true
     },
     "operator_sessions": {
       "_go_const": "CollectionOperatorSessions",
@@ -93,12 +97,14 @@
     "reputation_commitments": {
       "_go_const": "CollectionReputationCommitments",
       "value": "reputation_commitments",
-      "_python_const": "REPUTATION_COMMITMENTS"
+      "_python_const": "REPUTATION_COMMITMENTS",
+      "_governed": true
     },
     "reputation_state": {
       "_go_const": "CollectionReputationState",
       "value": "reputation_state",
-      "_python_const": "REPUTATION_STATE"
+      "_python_const": "REPUTATION_STATE",
+      "_governed": true
     },
     "revoked_certificates": {
       "_go_const": "CollectionRevokedCertificates",
@@ -113,12 +119,14 @@
     "stake_resolutions": {
       "_go_const": "CollectionStakeResolutions",
       "value": "stake_resolutions",
-      "_python_const": "STAKE_RESOLUTIONS"
+      "_python_const": "STAKE_RESOLUTIONS",
+      "_governed": true
     },
     "tasks": {
       "_go_const": "CollectionTasks",
       "value": "tasks",
-      "_python_const": "TASKS"
+      "_python_const": "TASKS",
+      "_governed": true
     },
     "trusted_signers": {
       "_go_const": "CollectionTrustedSigners",

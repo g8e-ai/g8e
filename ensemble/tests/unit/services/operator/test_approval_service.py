@@ -27,7 +27,6 @@ from app.models.operators import (
     FileEditApprovalRequest,
     IntentApprovalRequest,
     PendingApproval,
-    StreamApprovalRequest,
 )
 from app.models.tool_results import RiskLevel
 from app.services.operator.approval_service import OperatorApprovalService
@@ -1188,47 +1187,6 @@ class TestApprovalPreRegistrationOrdering:
             == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED
         )
 
-    @patch("app.services.operator.approval_service.generate_approval_id")
-    @patch("app.services.operator.approval_service.PendingApproval")
-    async def test_request_stream_approval_registers_before_publish(
-        self, mock_pending_class, mock_generate_id
-    ):
-        """request_stream_approval registers pending before event_service.publish."""
-        service, publish_log = self._build_service()
-        approval_id = "stream-app-1"
-        mock_generate_id.return_value = approval_id
-        mock_pending = MagicMock()
-        mock_pending.wait = AsyncMock()
-        mock_pending.approved = True
-        mock_pending.reason = "Approved"
-        mock_pending.operator_id = None
-        mock_pending.operator_session_id = None
-        mock_pending.responded_at = MagicMock()
-        mock_pending.feedback = False
-        mock_pending_class.return_value = mock_pending
-
-        request = StreamApprovalRequest(
-            g8e_context=self._base_context(),
-            timeout_seconds=30,
-            justification="test",
-            execution_id="exec-1",
-            operator_session_id="session-1",
-            operator_id="op-1",
-            hosts=["host-1"],
-            arch="amd64",
-            endpoint="https://client.example/handshake",
-            device_token="dlk_test_token",
-            concurrency=5,
-            timeout=300,
-        )
-        result = await service.request_stream_approval(request)
-
-        assert result.approved is True
-        assert approval_id in publish_log, "publish was never called"
-        assert (
-            publish_log[approval_id][0]
-            == EventType.OPERATOR_STREAM_APPROVAL_REQUESTED
-        )
 
     @patch("app.services.operator.approval_service.generate_approval_id")
     @patch("app.services.operator.approval_service.PendingApproval")
@@ -1312,48 +1270,6 @@ class TestApprovalPreRegistrationOrdering:
             "pending entry should be cleaned up on publish failure"
         )
 
-    @patch("app.services.operator.approval_service.generate_approval_id")
-    @patch("app.services.operator.approval_service.PendingApproval")
-    async def test_request_stream_approval_publish_failure_cleans_up_pending(
-        self, mock_pending_class, mock_generate_id
-    ):
-        """On publish failure, the stream-approval pending entry is removed."""
-        event_service = MagicMock(spec=EventServiceProtocol)
-        operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
-        investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
-        service = OperatorApprovalService(
-            event_service=event_service,
-            operator_data_service=operator_data_service,
-            investigation_data_service=investigation_data_service,
-        )
-        approval_id = "stream-fail-1"
-        mock_generate_id.return_value = approval_id
-        mock_pending = MagicMock()
-        mock_pending.wait = AsyncMock()
-        mock_pending_class.return_value = mock_pending
-        event_service.publish = AsyncMock(side_effect=RuntimeError("SSE push failed"))
-
-        request = StreamApprovalRequest(
-            g8e_context=self._base_context(),
-            timeout_seconds=30,
-            justification="test",
-            execution_id="exec-1",
-            operator_session_id="session-1",
-            operator_id="op-1",
-            hosts=["host-1"],
-            arch="amd64",
-            endpoint="https://client.example/handshake",
-            device_token="dlk_test_token",
-            concurrency=5,
-            timeout=300,
-        )
-        result = await service.request_stream_approval(request)
-
-        assert result.approved is False
-        assert result.error is True
-        assert approval_id not in service._pending_approvals, (
-            "pending entry should be cleaned up on publish failure"
-        )
 
     async def test_handle_approval_response_resolves_immediately_after_publish(self):
         """Simulates the CI/headless race: an auto-approver responds during

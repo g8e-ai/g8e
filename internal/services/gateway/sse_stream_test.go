@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
@@ -193,6 +194,45 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	assert.Contains(t, body, "pubsub_event")
 	assert.Contains(t, body, "data: "+payload)
 	assert.Contains(t, body, "id: 1")
+}
+
+// Ephemeral events are never persisted, so they are published with ID 0. They
+// must still reach the client (without an `id:` field), including after a
+// persisted event has advanced the dedup cursor.
+func TestHandleInternalSSEStream_EphemeralEventDelivered(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	ctx, _, cliSessionID, _ := seedCLISessionCtx(t, h, "ephemeral")
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(streamCtx)
+	rr := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		h.sseController.handleInternalSSEStream(rr, req)
+		close(done)
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	publish := func(id int64, name string) {
+		payload := `{"cli_session_id":"` + cliSessionID + `","event":{"type":"` + name + `"}}`
+		envelopeJSON, err := json.Marshal(models.SSEPublishedEvent{ID: id, Payload: json.RawMessage(payload)})
+		require.NoError(t, err)
+		h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, envelopeJSON)
+	}
+	publish(0, "ephemeral_first")
+	publish(5, "persisted")
+	publish(0, "ephemeral_after_persisted")
+
+	time.Sleep(40 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := rr.Body.String()
+	assert.Contains(t, body, "ephemeral_first")
+	assert.Contains(t, body, "persisted")
+	assert.Contains(t, body, "ephemeral_after_persisted")
+	assert.NotContains(t, body, "id: 0")
 }
 
 func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
@@ -395,4 +435,48 @@ func TestHandleInternalSSEStream_TruncationSentinelOnFullReplay(t *testing.T) {
 	// R6: the truncation sentinel must be present.
 	assert.Contains(t, body, `"type":"truncated"`)
 	assert.Contains(t, body, `"limit":1000`)
+}
+
+// ---------------------------------------------------------------------------
+// Browser cookie auth through the full router + auth middleware
+// ---------------------------------------------------------------------------
+
+// TestSSEStream_BrowserWebSessionCookieThroughRouter drives the real router
+// (auth middleware included) with only a web session cookie, the way the
+// Console's EventSource does. Every other stream test seeds context directly
+// and so cannot catch a middleware-to-handler identity gap.
+func TestSSEStream_BrowserWebSessionCookieThroughRouter(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+	require.NotNil(t, h.authMiddleware)
+
+	userID := "user-browser-sse"
+	webSessionID := "web-browser-sse"
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	sessBytes, err := json.Marshal(&models.WebSession{
+		ID:              webSessionID,
+		UserID:          userID,
+		CreatedAtUnixMs: time.Now().UnixMilli(),
+		ExpiresAtUnixMs: time.Now().Add(time.Hour).UnixMilli(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, sessBytes))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.SSEStream, nil).WithContext(ctx)
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
+	rr := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		h.ServeHTTP(rr, req)
+		close(done)
+	}()
+	time.Sleep(150 * time.Millisecond)
+	cancel()
+	<-done
+
+	assert.Equal(t, http.StatusOK, rr.Code, "body: %s", rr.Body.String())
+	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 }

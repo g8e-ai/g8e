@@ -305,7 +305,7 @@ done
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
 		require.Len(t, mcpResp.Result.Prompts, 1)
-		require.Equal(t, "subprocess-prompt", mcpResp.Result.Prompts[0].Name)
+		require.Equal(t, "sub-prompt", mcpResp.Result.Prompts[0].Name)
 	})
 
 	// Test tools/call through governance pipeline

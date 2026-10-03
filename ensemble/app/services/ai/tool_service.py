@@ -66,7 +66,6 @@ from app.services.data.reputation_data_service import ReputationDataService
 if TYPE_CHECKING:
     from .reputation_service import ReputationService
     from .chat_task_manager import BackgroundTaskManager
-    from app.services.operator.stream_executor import OperatorStreamExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +108,6 @@ class AIToolService:
         reputation_service: ReputationService,
         chat_task_manager: BackgroundTaskManager,
         ssh_inventory_service: SshInventoryService,
-        stream_executor: OperatorStreamExecutor,
         web_search_provider: WebSearchProvider | None,
         app_settings: G8eeAppSettings | None = None,
         user_settings: G8eeUserSettings | None = None,
@@ -126,7 +124,6 @@ class AIToolService:
         self._reputation_service = reputation_service
         self._chat_task_manager = chat_task_manager
         self._ssh_inventory_service = ssh_inventory_service
-        self._stream_executor = stream_executor
 
         self._whitelist_validator = (
             whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
@@ -214,23 +211,6 @@ class AIToolService:
         """
         return self._reputation_data_service
 
-    @property
-    def auditor_hmac_key(self) -> str:
-        """The auditor HMAC key from the wired platform settings.
-
-        Tribunal-path invocations require it; absence is a configuration
-        error surfaced at the call site.
-        """
-        key = None
-        if self._app_settings is not None:
-            key = self._app_settings.auth.auditor_hmac_key
-        if not key:
-            raise ConfigurationError(
-                "AIToolService has no auditor_hmac_key available; the key "
-                "must be seeded via g8eo SecretManager and overlaid onto "
-                "AuthSettings.auditor_hmac_key."
-            )
-        return key
 
     @property
     def reputation_service(self) -> ReputationService:
@@ -247,10 +227,6 @@ class AIToolService:
         """The configured ``SshInventoryService`` (required)."""
         return self._ssh_inventory_service
 
-    @property
-    def stream_executor(self) -> OperatorStreamExecutor:
-        """The configured ``OperatorStreamExecutor`` (required)."""
-        return self._stream_executor
 
     @property
     def whitelist_validator(self) -> CommandWhitelistValidator:

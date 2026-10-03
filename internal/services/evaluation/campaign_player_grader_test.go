@@ -548,7 +548,9 @@ func TestDecomposedScores_AFailingLitePlayerLowersTheLiteTierAndNotThePersonas(t
 	grades := mustGradePlayers(t, playerRequest(t, FormationRolePrimary, expect, steps...), true, "ok")
 
 	scores := map[string]float64{}
-	for _, score := range deriveScenarioDecomposedScores("assignment-1", grades) {
+	decomposed, err := deriveScenarioDecomposedScores("assignment-1", grades)
+	require.NoError(t, err)
+	for _, score := range decomposed {
 		scores[score.GetDimension()] = score.GetValue()
 	}
 	assert.InDelta(t, 2.0/3.0, scores["tier_lite"], 1e-9, "triage failed; axiom and the vote passed")

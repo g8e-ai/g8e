@@ -29,28 +29,32 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const campaignExportSchemaVersion = "1.1.0"
+const campaignExportSchemaVersion = "1.2.0"
 
 type campaignRunSummaryExport struct {
-	SchemaVersion            string   `json:"schema_version"`
-	RecordType               string   `json:"record_type"`
-	RunID                    string   `json:"run_id"`
-	CampaignID               string   `json:"campaign_id"`
-	Lane                     string   `json:"lane"`
-	CatalogID                string   `json:"catalog_id"`
-	CatalogVersion           string   `json:"catalog_version"`
-	CatalogDigest            string   `json:"catalog_digest"`
-	CampaignDigest           string   `json:"campaign_digest,omitempty"`
-	ModelRegistryDigest      string   `json:"model_registry_digest"`
-	ExportedAt               string   `json:"exported_at"`
-	ScheduledAssignments     uint32   `json:"scheduled_assignments"`
-	TerminalAssignments      uint32   `json:"terminal_assignments"`
-	PassedAssignments        uint32   `json:"passed_assignments"`
-	FailedAssignments        uint32   `json:"failed_assignments"`
-	ModelCount               uint32   `json:"model_count"`
-	PopulationComplete       bool     `json:"population_complete"`
-	ExpectedCells            uint64   `json:"expected_cells"`
-	PopulationFailureReasons []string `json:"population_failure_reasons"`
+	SchemaVersion            string       `json:"schema_version"`
+	RecordType               string       `json:"record_type"`
+	RunID                    string       `json:"run_id"`
+	CampaignID               string       `json:"campaign_id"`
+	Release                  string       `json:"release"`
+	ReleaseBasis             ReleaseBasis `json:"release_basis"`
+	SourceRevision           string       `json:"source_revision"`
+	Lane                     string       `json:"lane"`
+	CatalogID                string       `json:"catalog_id"`
+	CatalogVersion           string       `json:"catalog_version"`
+	CatalogDigest            string       `json:"catalog_digest"`
+	CampaignDigest           string       `json:"campaign_digest,omitempty"`
+	ModelRegistryDigest      string       `json:"model_registry_digest"`
+	ExportedAt               string       `json:"exported_at"`
+	ScheduledAssignments     uint32       `json:"scheduled_assignments"`
+	TerminalAssignments      uint32       `json:"terminal_assignments"`
+	JudgedAssignments        uint32       `json:"judged_assignments"`
+	PassedAssignments        uint32       `json:"passed_assignments"`
+	FailedAssignments        uint32       `json:"failed_assignments"`
+	ModelCount               uint32       `json:"model_count"`
+	PopulationComplete       bool         `json:"population_complete"`
+	ExpectedCells            uint64       `json:"expected_cells"`
+	PopulationFailureReasons []string     `json:"population_failure_reasons"`
 }
 
 type campaignExportSchemaTable struct {
@@ -101,6 +105,8 @@ type CampaignExportFile struct {
 type CampaignExportReport struct {
 	RunID               string               `json:"run_id"`
 	CampaignID          string               `json:"campaign_id"`
+	Release             string               `json:"release"`
+	ReleaseBasis        ReleaseBasis         `json:"release_basis"`
 	OutputDir           string               `json:"output_dir"`
 	ExportedAt          time.Time            `json:"exported_at"`
 	AssignmentCount     uint32               `json:"assignment_count"`
@@ -313,6 +319,10 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
+	release, err := store.LoadCampaignRelease(ctx, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: resolve export campaign release: %w", err)
+	}
 	catalog, err := store.LoadScenarioCatalog(ctx, campaignID)
 	if err != nil {
 		return nil, err
@@ -369,7 +379,7 @@ func (e *CampaignExporter) ExportRun(
 		if err != nil {
 			return nil, err
 		}
-		record, err := e.buildAssignmentExportRecord(ctx, store, run, catalog, assignment, result, category, observationReader, verified, verificationReport)
+		record, err := e.buildAssignmentExportRecord(ctx, store, run, catalog, assignment, result, category, observationReader, verified, verificationReport, release)
 		if err != nil {
 			return nil, err
 		}
@@ -381,6 +391,7 @@ func (e *CampaignExporter) ExportRun(
 		return nil, err
 	}
 	aggregateState.Suite = methodologySuiteFromCatalog(catalog)
+	aggregateState.Release = release
 	if RunAggregateComplete(assignments, results, aggregateState) {
 		if aggregateState.ProviderEnvironment, err = observationReader.ObservedProviderEnvironment(ctx, results); err != nil {
 			return nil, err
@@ -392,7 +403,8 @@ func (e *CampaignExporter) ExportRun(
 	}
 	if verified {
 		verifiedRecords, projectionErr := BuildVerifiedModelSummaryViewRecords(VerifiedModelSummaryProjectionInput{
-			Run: run, Spec: spec, Catalog: catalog, Assignments: assignments, Results: results,
+			Release: release,
+			Run:     run, Spec: spec, Catalog: catalog, Assignments: assignments, Results: results,
 			Report: verificationReport, Applicability: applicability,
 		})
 		if projectionErr != nil {
@@ -400,27 +412,9 @@ func (e *CampaignExporter) ExportRun(
 		}
 		aggregateRecords = replaceModelSummaryRecords(aggregateRecords, verifiedRecords)
 	}
-	var evaluationSummaryBody []byte
-	modelSummaryLines := make([][]byte, 0, len(aggregateRecords))
-	for _, record := range aggregateRecords {
-		var header struct {
-			Kind string `json:"kind"`
-		}
-		if err := json.Unmarshal(record.Body, &header); err != nil {
-			return nil, fmt.Errorf("evaluation: classify aggregate export record: %w", err)
-		}
-		switch header.Kind {
-		case "evaluation_summary":
-			if evaluationSummaryBody != nil {
-				return nil, fmt.Errorf("evaluation: classify aggregate export record: duplicate evaluation summary: %w", constants.ErrEvidenceArtifactMalformed)
-			}
-			evaluationSummaryBody = record.Body
-		case "model_summary":
-			modelSummaryLines = append(modelSummaryLines, record.Body)
-		}
-	}
-	if evaluationSummaryBody == nil {
-		return nil, fmt.Errorf("evaluation: classify aggregate export record: missing evaluation summary: %w", constants.ErrEvidenceArtifactMalformed)
+	evaluationSummaryBody, modelSummaryLines, err := classifyAggregateExportRecords(aggregateRecords)
+	if err != nil {
+		return nil, err
 	}
 	populationReport, err := NewCampaignPopulationAccountant(e.now).AccountRun(ctx, store, runID, catalog)
 	if err != nil {
@@ -434,6 +428,8 @@ func (e *CampaignExporter) ExportRun(
 	report := &CampaignExportReport{
 		RunID:               runID,
 		CampaignID:          campaignID,
+		Release:             release.Release,
+		ReleaseBasis:        release.Basis,
 		OutputDir:           outputDir,
 		ExportedAt:          exportedAt,
 		AssignmentCount:     uint32(len(assignments)),
@@ -451,6 +447,7 @@ func (e *CampaignExporter) ExportRun(
 	runSummaryBody, err := json.MarshalIndent(buildCampaignRunSummaryExport(
 		run,
 		spec,
+		release,
 		catalog,
 		exportedAt,
 		populationReport,
@@ -507,6 +504,7 @@ func (e *CampaignExporter) ExportRun(
 		fileSvc.Resolve(sqlitePath),
 		run,
 		spec,
+		release,
 		catalog,
 		exportedAt,
 		populationReport,
@@ -536,6 +534,7 @@ func (e *CampaignExporter) buildAssignmentExportRecord(
 	observationReader *CampaignProviderObservationReader,
 	verified bool,
 	report *evalv1.EvaluationVerificationReport,
+	release CampaignRelease,
 ) (CampaignExportAssignmentRecord, error) {
 	verificationStatus := "unverified"
 	if verified {
@@ -547,6 +546,7 @@ func (e *CampaignExporter) buildAssignmentExportRecord(
 		scenario, resolveErr := ResolvePublicScenarioContext(ctx, store, run, catalog, assignment, artifacts)
 		if resolveErr == nil {
 			composed, composeErr := BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
+				Release:    release,
 				Assignment: assignment, Result: result, ScenarioContext: scenario,
 				ObservationReader: observationReader, VerificationStatus: verificationStatus,
 				VerificationMetadata: exportVerificationMetadata(report, verified),
@@ -568,7 +568,7 @@ func (e *CampaignExporter) buildAssignmentExportRecord(
 	if err != nil {
 		return CampaignExportAssignmentRecord{}, err
 	}
-	projection, err := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), verificationStatus)
+	projection, err := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), verificationStatus, release)
 	if err != nil {
 		return CampaignExportAssignmentRecord{}, err
 	}
@@ -603,6 +603,32 @@ func exportVerificationMetadata(report *evalv1.EvaluationVerificationReport, ver
 	return metadata
 }
 
+func classifyAggregateExportRecords(records []CampaignViewRecord) ([]byte, [][]byte, error) {
+	var evaluationSummary []byte
+	modelSummaries := make([][]byte, 0, len(records))
+	for _, record := range records {
+		var header struct {
+			Kind string `json:"kind"`
+		}
+		if err := json.Unmarshal(record.Body, &header); err != nil {
+			return nil, nil, fmt.Errorf("evaluation: classify aggregate export record: %w", err)
+		}
+		switch header.Kind {
+		case "evaluation_summary":
+			if evaluationSummary != nil {
+				return nil, nil, fmt.Errorf("evaluation: classify aggregate export record: duplicate evaluation summary: %w", constants.ErrEvidenceArtifactMalformed)
+			}
+			evaluationSummary = record.Body
+		case "model_summary":
+			modelSummaries = append(modelSummaries, record.Body)
+		}
+	}
+	if evaluationSummary == nil {
+		return nil, nil, fmt.Errorf("evaluation: classify aggregate export record: missing evaluation summary: %w", constants.ErrEvidenceArtifactMalformed)
+	}
+	return evaluationSummary, modelSummaries, nil
+}
+
 func replaceModelSummaryRecords(base, verified []CampaignViewRecord) []CampaignViewRecord {
 	result := make([]CampaignViewRecord, 0, len(base)+len(verified))
 	for _, record := range base {
@@ -624,7 +650,7 @@ func normalizeRuntimeExportDir(runID, outputDir string) (string, error) {
 	}
 	outputDir = filepath.ToSlash(outputDir)
 	if filepath.IsAbs(outputDir) || outputDir == ".." || strings.HasPrefix(outputDir, "../") {
-		return "", fmt.Errorf("evaluation: export campaign run: output directory must be runtime-relative")
+		return "", fmt.Errorf("evaluation: export campaign run: %w", constants.ErrEvaluationExportDirNotRelative)
 	}
 	return outputDir, nil
 }
@@ -694,6 +720,7 @@ func marshalJSONL(records []CampaignExportAssignmentRecord) ([]byte, error) {
 func buildCampaignRunSummaryExport(
 	run *evalv1.EvaluationRun,
 	spec *evalv1.EvaluationCampaignSpec,
+	release CampaignRelease,
 	catalog *evalv1.EvaluationScenarioCatalog,
 	exportedAt time.Time,
 	population *CampaignPopulationReport,
@@ -704,6 +731,9 @@ func buildCampaignRunSummaryExport(
 		RecordType:               "run_summary",
 		RunID:                    run.GetRunId(),
 		CampaignID:               run.GetCampaignBinding().GetCampaignId(),
+		Release:                  release.Release,
+		ReleaseBasis:             release.Basis,
+		SourceRevision:           spec.GetSourceRevision(),
 		Lane:                     run.GetLane().String(),
 		CatalogID:                catalog.GetCatalogRef().GetId(),
 		CatalogVersion:           catalog.GetCatalogRef().GetVersion(),
@@ -712,6 +742,7 @@ func buildCampaignRunSummaryExport(
 		ExportedAt:               exportedAt.Format(time.RFC3339Nano),
 		ScheduledAssignments:     aggregate.Scheduled,
 		TerminalAssignments:      aggregate.Terminal,
+		JudgedAssignments:        aggregate.Judged,
 		PassedAssignments:        aggregate.Passed,
 		FailedAssignments:        aggregate.Failed,
 		ModelCount:               aggregate.ModelCount,
@@ -734,12 +765,12 @@ func buildCampaignExportSchemaDocument() campaignExportSchemaDocument {
 		Description:   "Disclosure-safe campaign export bundle derived from public projections.",
 		Files: map[string]campaignExportSchemaFile{
 			constants.EvaluationExportSchemaFilename:          file("json", "This schema document."),
-			constants.EvaluationRunSummaryFilename:            file("json", "Run-level metadata, catalog/registry digests, and aggregate counters."),
+			constants.EvaluationRunSummaryFilename:            file("json", "Run-level release and its recorded/asserted/unknown basis, source revision, catalog/registry digests, and aggregate counters including judged assignments."),
 			constants.CampaignExportEvaluationSummaryFilename: file("json", "Explorer evaluation_summary projection with typed headline metrics and bound verification metadata."),
 			constants.EvaluationAssignmentsJSONLFilename:      file("jsonl", "One named export wrapper per terminal assignment containing canonical protobuf JSON under projection plus approved benchmark_observations and resource_summary extensions."),
 			constants.EvaluationModelSummariesJSONLFilename:   file("jsonl", "One explorer model_summary snapshot per variant-role bucket."),
 			constants.EvaluationAssignmentsCSVFilename:        file("csv", "Tabular assignment results with disclosure-safe benchmark columns."),
-			constants.EvaluationModelSummariesCSVFilename:     file("csv", "Tabular model-role aggregate counters."),
+			constants.EvaluationModelSummariesCSVFilename:     file("csv", "Tabular model-role aggregate counters including judged assignments; pass rates use the judged denominator and remain empty when none were judged."),
 			constants.EvaluationCampaignExportSQLiteFilename: {
 				Format:      "sqlite",
 				Description: "Relational export with export_metadata, assignment_results, and model_summaries tables.",
@@ -887,6 +918,7 @@ func buildModelSummariesCSV(state *runAggregateState) ([]byte, error) {
 		"role",
 		"scheduled",
 		"terminal",
+		"judged",
 		"passed",
 		"failed",
 		"evaluation_coverage",
@@ -911,14 +943,15 @@ func buildModelSummariesCSV(state *runAggregateState) ([]byte, error) {
 			coverage = float64(bucket.Terminal) / float64(bucket.Scheduled)
 		}
 		passEstimate := ""
-		if bucket.Terminal > 0 {
-			passEstimate = fmt.Sprintf("%.6f", float64(bucket.Passed)/float64(bucket.Terminal))
+		if bucket.Judged > 0 {
+			passEstimate = fmt.Sprintf("%.6f", float64(bucket.Passed)/float64(bucket.Judged))
 		}
 		row := []string{
 			bucket.VariantID,
 			bucket.Role,
 			fmt.Sprintf("%d", bucket.Scheduled),
 			fmt.Sprintf("%d", bucket.Terminal),
+			fmt.Sprintf("%d", bucket.Judged),
 			fmt.Sprintf("%d", bucket.Passed),
 			fmt.Sprintf("%d", bucket.Failed),
 			fmt.Sprintf("%.6f", coverage),
@@ -944,6 +977,7 @@ func (e *CampaignExporter) writeSQLiteExport(
 	path string,
 	run *evalv1.EvaluationRun,
 	spec *evalv1.EvaluationCampaignSpec,
+	release CampaignRelease,
 	catalog *evalv1.EvaluationScenarioCatalog,
 	exportedAt time.Time,
 	population *CampaignPopulationReport,
@@ -966,6 +1000,9 @@ CREATE TABLE export_metadata (
   schema_version TEXT NOT NULL,
   run_id TEXT PRIMARY KEY,
   campaign_id TEXT NOT NULL,
+  release TEXT NOT NULL,
+  release_basis TEXT NOT NULL,
+  source_revision TEXT NOT NULL,
   catalog_digest TEXT NOT NULL,
   model_registry_digest TEXT NOT NULL,
   exported_at TEXT NOT NULL,
@@ -1001,6 +1038,7 @@ CREATE TABLE model_summaries (
   role TEXT NOT NULL,
   scheduled INTEGER NOT NULL,
   terminal INTEGER NOT NULL,
+  judged INTEGER NOT NULL,
   passed INTEGER NOT NULL,
   failed INTEGER NOT NULL,
   evaluation_coverage REAL,
@@ -1018,12 +1056,15 @@ CREATE TABLE model_summaries (
 	}
 	if _, err := db.ExecContext(ctx, `
 INSERT INTO export_metadata (
-  schema_version, run_id, campaign_id, catalog_digest, model_registry_digest,
+  schema_version, run_id, campaign_id, release, release_basis, source_revision, catalog_digest, model_registry_digest,
   exported_at, assignment_count, terminal_result_count, population_complete, expected_cells
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		campaignExportSchemaVersion,
 		run.GetRunId(),
 		run.GetCampaignBinding().GetCampaignId(),
+		release.Release,
+		string(release.Basis),
+		spec.GetSourceRevision(),
 		catalog.GetCatalogDigest(),
 		spec.GetModelRegistryDigest(),
 		exportedAt.Format(time.RFC3339Nano),
@@ -1096,8 +1137,8 @@ INSERT INTO assignment_results (
 			coverage = float64(bucket.Terminal) / float64(bucket.Scheduled)
 		}
 		var passEstimate *float64
-		if bucket.Terminal > 0 {
-			estimate := float64(bucket.Passed) / float64(bucket.Terminal)
+		if bucket.Judged > 0 {
+			estimate := float64(bucket.Passed) / float64(bucket.Judged)
 			passEstimate = &estimate
 		}
 		summaryJSON := string(summaryByKey[key])
@@ -1113,13 +1154,14 @@ INSERT INTO assignment_results (
 		}
 		if _, err := db.ExecContext(ctx, `
 INSERT INTO model_summaries (
-  variant_id, role, scheduled, terminal, passed, failed,
+  variant_id, role, scheduled, terminal, judged, passed, failed,
   evaluation_coverage, pass_rate_estimate, summary_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			bucket.VariantID,
 			bucket.Role,
 			bucket.Scheduled,
 			bucket.Terminal,
+			bucket.Judged,
 			bucket.Passed,
 			bucket.Failed,
 			coverage,

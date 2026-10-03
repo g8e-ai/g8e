@@ -69,6 +69,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		},
 		GovDeps: &GatewayModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				L3Notary:          rejectingL3,
 				ReplayStore:       replayStore,
 				StateRootProvider: stateRootProvider,
@@ -209,6 +210,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		},
 		GovDeps: &GatewayModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				L3Notary:          acceptingL3,
 				ReplayStore:       replayStore,
 				StateRootProvider: stateRootProvider,
@@ -344,6 +346,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		},
 		GovDeps: &GatewayModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
+				ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 				L3Notary:          nil, // Explicitly nil to test fail-closed
 				ReplayStore:       replayStore,
 				StateRootProvider: stateRootProvider,

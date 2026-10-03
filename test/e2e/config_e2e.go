@@ -28,7 +28,6 @@ type e2eConfig struct {
 	gatewayHTTPURL    string
 	gatewayHTTPSURL   string
 	ensembleURL       string
-	dashboardURL      string
 	cliCertPath       string
 	cliKeyPath        string
 	caBundleRelPath   string
@@ -49,8 +48,8 @@ const healthCheckTimeout = 10 * time.Second
 // local .g8e/ runtime tree, and reads the owner CLI session ID from stored
 // credentials. It returns an error if any step fails — callers (TestMain) fail
 // closed on error rather than skipping. The gateway HTTP/HTTPS URLs are
-// derived from CLI config; the ensemble and dashboard URLs use the
-// docker-compose deployment default ports.
+// derived from CLI config; the ensemble URL uses the docker-compose
+// deployment default port.
 func loadE2EConfig() (*e2eConfig, error) {
 	repoRoot, err := resolveRepoRoot()
 	if err != nil {
@@ -82,16 +81,11 @@ func loadE2EConfig() (*e2eConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("e2e: derive ensemble URL: %w", err)
 	}
-	dashboardURL, err := deriveDashboardURL(gatewayHTTPURL)
-	if err != nil {
-		return nil, fmt.Errorf("e2e: derive dashboard URL: %w", err)
-	}
 
 	return &e2eConfig{
 		gatewayHTTPURL:    gatewayHTTPURL,
 		gatewayHTTPSURL:   gatewayHTTPSURL,
 		ensembleURL:       ensembleURL,
-		dashboardURL:      dashboardURL,
 		cliCertPath:       cfg.CLICertFile(),
 		cliKeyPath:        cfg.CLIKeyFile(),
 		caBundleRelPath:   cfg.DefaultTrustBundleRelPath(),

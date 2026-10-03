@@ -26,7 +26,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     AgentMode,
     ThinkingLevel,
     TriageComplexityClassification,
@@ -127,12 +126,11 @@ def _make_ctx(
         agent_mode=AgentMode.G8E_BOUND,
         operator_bound=True,
         model_to_use="primary-model",
-        max_tokens=None,
         conversation_history=[],
         system_instructions="",
         contents=[],
         generation_config=PrimaryLLMSettings(
-            max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+            max_output_tokens=None,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
             stop_sequences=[],

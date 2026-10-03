@@ -17,7 +17,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,7 +28,7 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const outputRelPath = "dashboard/g8e-adapter/evaluation-explorer/src/content/scenario-catalog.generated.ts"
+const outputRelPath = "evaluation-explorer/src/content/scenario-catalog.generated.ts"
 
 type inlineContent struct {
 	Kind    string `json:"kind"`
@@ -93,7 +92,7 @@ func run(args []string, root string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if *checkOnly && *write {
-		return errors.New("use only one of -check or -write")
+		return fmt.Errorf("use only one of -check or -write")
 	}
 	generated, err := generate()
 	if err != nil {

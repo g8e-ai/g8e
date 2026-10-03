@@ -71,6 +71,7 @@ type PublicAssignmentRecordExtensions struct {
 }
 
 type PublicAssignmentBuildInput struct {
+	Release              CampaignRelease
 	Assignment           *evalv1.EvaluationAssignment
 	Result               *evalv1.EvaluationAssignmentResult
 	ScenarioContext      *PublicScenarioContext
@@ -106,6 +107,7 @@ type RunVerificationApplicability struct {
 }
 
 type VerifiedModelSummaryProjectionInput struct {
+	Release       CampaignRelease
 	Run           *evalv1.EvaluationRun
 	Spec          *evalv1.EvaluationCampaignSpec
 	Catalog       *evalv1.EvaluationScenarioCatalog

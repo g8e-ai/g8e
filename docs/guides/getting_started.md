@@ -14,7 +14,7 @@ related:
   - docs/guides/docker_gateway.md
   - docs/guides/connect_operator_to_gateway.md
   - docs/ensemble/index.md
-  - docs/dashboard/index.md
+  - docs/architecture/console.md
   - docs/architecture/auth.md
 when_to_read: Setting up g8e for the first time, bootstrapping a demo environment, or understanding the platform's core execution model.
 do_not_use_for:
@@ -34,7 +34,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. Its two core 
 - **g8e Gateway**, the central Policy Decision Point (PDP): PKI authority, state store, pub/sub broker, and admission APIs.
 - **g8e Operator**, the Policy Execution Point (PEP) for the runtime where that Operator process runs: an outbound-only mTLS connection to the Gateway, local audit vault, and governed tool execution.
 
-Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcommand. The unified stack also includes the first-party Agentic Ensemble (g8ee) and Dashboard (g8ed).
+Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcommand. The unified stack also includes the first-party Agentic Ensemble (g8ee); the Gateway serves the browser console.
 
 ---
 
@@ -53,7 +53,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-`docker compose up -d` starts the entire platform stack: Gateway (PDP), Data Operator (PEP), Inference Operator, Agentic Ensemble (g8ee), and Dashboard (g8ed). The Gateway publishes port 8080 for plain-HTTP health, bootstrap, PKI discovery, and enrollment flows; port 8443 for HTTPS/mTLS APIs, MCP, A2A, pub/sub, and Web Console. All workloads start in the default profile and submit enrollment requests to the Gateway. See the [Unified Docker Stack Guide](unified_stack.md) for network topology, volumes, and stack health details.
+`docker compose up -d` starts the entire platform stack: Gateway (PDP), Data Operator (PEP), Inference Operator, and Agentic Ensemble (g8ee). The Gateway publishes port 8080 for plain-HTTP health, bootstrap, PKI discovery, and enrollment flows; port 8443 for HTTPS/mTLS APIs, MCP, A2A, pub/sub, and Web Console. All workloads start in the default profile and submit enrollment requests to the Gateway. See the [Unified Docker Stack Guide](unified_stack.md) for network topology, volumes, and stack health details.
 
 ### 2. Get the CLI binary
 
@@ -101,9 +101,8 @@ List pending platform enrollment requests and approve or deny each workload usin
 # List pending enrollment requests
 ./g8e auth enroll pending
 
-# Approve the Data Operator, Dashboard, and Ensemble
+# Approve the Data Operator and Ensemble
 ./g8e auth enroll approve <operator-request-id> --yes
-./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 
 # Approve the Inference Operator
@@ -132,18 +131,17 @@ docker compose ps
 Service endpoints:
 - **Gateway bootstrap, health, and PKI discovery:** `http://localhost:8080`
 - **Gateway HTTPS/mTLS API, MCP, and A2A:** `https://localhost:8443` (MCP at `https://localhost:8443/mcp`)
-- **Gateway Web Console:** `https://localhost:8443/console/`
-- **Dashboard static host:** `http://localhost:3000`
+- **Console (browser):** `https://localhost:8443/console/` — passkey sign-in, approvals, Operators, cases, and chat
 - **Ensemble API:** `http://localhost:8000`
 - **Public spectator private ingest:** `http://127.0.0.1:8081` (loopback only)
 - **Public spectator anonymous read/SSE:** `http://127.0.0.1:8082` (loopback only)
 - **Evaluation explorer:** `http://127.0.0.1:5173` (loopback only; available when its assets are built)
 
-The Dashboard is a static browser host; the browser authenticates directly to the Gateway. The Dashboard container identity is separate from the browser session and does not authorize browser actions.
+The console is served by the Gateway itself, so the browser talks only to the Gateway origin and needs no CORS configuration.
 
 ### CLI-managed alternative
 
-If a current `g8e` binary is already available on the workstation, `./g8e docker start --full` starts the default stack, enrolls or reuses the CLI owner interactively, and prompts for platform workload approvals. Use `./g8e docker start --full --skip-enroll` only when enrollment and approvals are managed separately. For automated evaluation bootstrap with a remote Ollama provider, use `./g8e docker init` with `G8E_OLLAMA_ENDPOINT` set in the repository-root `.env`; see the [Unified Docker Stack Guide](unified_stack.md).
+If a current `g8e` binary is already available on the workstation, `./g8e docker start` starts the default stack, enrolls or reuses the CLI owner interactively, and prompts for platform workload approvals. Use `./g8e docker start --skip-enroll` only when enrollment and approvals are managed separately. For automated evaluation bootstrap with a remote Ollama provider, use `./g8e docker init` with `G8E_OLLAMA_ENDPOINT` set in the repository-root `.env`; see the [Unified Docker Stack Guide](unified_stack.md).
 
 ---
 
@@ -167,13 +165,15 @@ The Docker build runs the Go compiler and build dependencies inside the builder 
 | Go | 1.26.6, required to build from source |
 | Make | Any recent version, required to run build targets |
 | Git | Any recent version, required to clone the repository |
-| Python | 3.10+, optional, required only for protocol library development |
+| Python | 3.10+, optional, required only for protocol library development. Contributors running `make ci` also need `uv`, `ripgrep`, `bc`, and a C compiler; the setup script installs them (see below) |
 | Node.js and npm | Node.js 22+, required to build the embedded evaluation explorer before a local `make build` |
 
-> **Don't have the local build toolchain installed?** Run the setup script for your platform to detect and install `git`, `make`, Go (from `go.mod`), and Node.js 22+, build the evaluation explorer, and compile `g8e` (see [scripts.md](../architecture/scripts.md) for details):
+> **Don't have the local build toolchain installed?** Run the setup script for your platform to detect and install `git`, `make`, `curl`, Go (from `go.mod`), and Node.js 22+, build the evaluation explorer, and compile `g8e` (see [scripts.md](../architecture/scripts.md) for details):
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`
+>
+> On Linux and macOS the script also installs everything a contributor needs to run `make ci` (Python, `uv`, `ripgrep`, `bc`, a C compiler, the protobuf and lint tools, a Python venv, and Node dependencies). Add `--build-only` when you only want the `g8e` binary. Windows contributors run the Linux script inside WSL 2.
 
 ---
 
@@ -250,7 +250,7 @@ Requires Python 3.10+. See the [Protocol Library documentation](../architecture/
 Requires `make`, Go 1.26.6, and Node.js 22+ with npm. Before `make build`, build the embedded evaluation explorer so the Makefile can package its static assets:
 
 ```bash
-cd dashboard/g8e-adapter/evaluation-explorer
+cd evaluation-explorer
 npm ci
 npm run build
 cd ../../..
@@ -436,7 +436,7 @@ When `--endpoint` (or `-e`) is provided, the Operator automatically initiates pl
 
 ### Run the gateway and operator in Docker
 
-The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-data-operator` (PEP), `g8e-inference-operator`, `ensemble` (g8ee), and `dashboard` (g8ed). See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for component details. The stack starts all services in a single `docker compose up -d`:
+The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-data-operator` (PEP), `g8e-inference-operator`, and `ensemble` (g8ee). The Gateway serves the browser console. See the [g8ee documentation](../ensemble/index.md) and [Console Architecture](../architecture/console.md) for component details. The stack starts all services in a single `docker compose up -d`:
 
 ```bash
 # Start the full stack
@@ -448,7 +448,6 @@ docker compose up -d
 # Approve all enrollment requests
 ./g8e auth enroll pending
 ./g8e auth enroll approve <operator-request-id> --yes
-./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <inference-operator-request-id> --yes
 ```

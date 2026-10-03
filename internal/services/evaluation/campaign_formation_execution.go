@@ -117,10 +117,10 @@ func NewCampaignFormationExecutorWithWitness(variants []*evalv1.ModelVariant, ru
 // terminal assignment result from formation role telemetry.
 func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
 	if e == nil || e.runner == nil {
-		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: formation executor is required")
+		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: formation executor: %w", constants.ErrFormationRunnerDependency)
 	}
 	if !IsHeterogeneousAssignment(req.Assignment) {
-		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: heterogeneous target required")
+		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: heterogeneous target: %w", constants.ErrEvaluationTargetKindMismatch)
 	}
 	binding, err := CampaignFormationBindingRequest(req.Assignment, e.variants)
 	if err != nil {
@@ -232,7 +232,7 @@ func NewLazyCampaignFormationExecutor(build func() (CampaignAssignmentExecutor, 
 // ExecuteAssignment builds the formation executor on first heterogeneous use.
 func (e *LazyCampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
 	if e == nil || e.build == nil {
-		return nil, fmt.Errorf("evaluation: execute assignment: heterogeneous executor is required")
+		return nil, fmt.Errorf("evaluation: execute assignment: heterogeneous executor: %w", constants.ErrMissingRequiredField)
 	}
 	if e.inner == nil {
 		inner, err := e.build()
@@ -259,16 +259,16 @@ func NewCampaignAssignmentRouter(homogeneous, heterogeneous CampaignAssignmentEx
 // ExecuteAssignment routes one assignment to the correct governed executor.
 func (r *CampaignAssignmentRouter) ExecuteAssignment(ctx context.Context, req AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
 	if r == nil {
-		return nil, fmt.Errorf("evaluation: execute assignment: router is required")
+		return nil, fmt.Errorf("evaluation: execute assignment: router: %w", constants.ErrMissingRequiredField)
 	}
 	if IsHeterogeneousAssignment(req.Assignment) {
 		if r.heterogeneous == nil {
-			return nil, fmt.Errorf("evaluation: execute assignment: heterogeneous executor is required")
+			return nil, fmt.Errorf("evaluation: execute assignment: heterogeneous executor: %w", constants.ErrMissingRequiredField)
 		}
 		return r.heterogeneous.ExecuteAssignment(ctx, req)
 	}
 	if r.homogeneous == nil {
-		return nil, fmt.Errorf("evaluation: execute assignment: homogeneous executor is required")
+		return nil, fmt.Errorf("evaluation: execute assignment: homogeneous executor: %w", constants.ErrMissingRequiredField)
 	}
 	return r.homogeneous.ExecuteAssignment(ctx, req)
 }
@@ -332,6 +332,7 @@ func classifyFormationAssignmentOutcome(req AssignmentExecutionRequest, formatio
 		CriterionId: "formation-roles",
 		Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		Detail:      "heterogeneous formation did not complete all three roles",
+		Basis:       basisStructural,
 	}
 	if formationResult == nil {
 		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, []*evalv1.DeterministicGrade{grade}
@@ -379,6 +380,7 @@ func modelInferenceRecordsFromFormationRun(assignment *evalv1.EvaluationAssignme
 		}
 		record := &evalv1.ModelInferenceRecord{
 			InferenceRecordId:       newID("inference"),
+			Classification:          evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN,
 			ProviderAttemptId:       role.ProviderAttemptID,
 			AssignmentId:            assignment.GetAssignmentId(),
 			EvaluationAttemptId:     attemptID,
@@ -467,21 +469,21 @@ func VerifyFormationAssignmentEvidence(assignment *evalv1.EvaluationAssignment, 
 		return fmt.Errorf("evaluation: verify formation assignment evidence: %w", constants.ErrMissingRequiredField)
 	}
 	if !IsHeterogeneousAssignment(assignment) {
-		return fmt.Errorf("evaluation: verify formation assignment evidence: heterogeneous target required")
+		return fmt.Errorf("evaluation: verify formation assignment evidence: heterogeneous target: %w", constants.ErrEvaluationTargetKindMismatch)
 	}
 	inferences := result.GetModelInferences()
 	switch result.GetLifecycleStatus() {
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
 		if len(inferences) != 3 {
-			return fmt.Errorf("completed heterogeneous assignment requires three model inferences")
+			return fmt.Errorf("completed heterogeneous assignment requires three model inferences: %w", constants.ErrEvalRunVerificationFailed)
 		}
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL:
 		if len(inferences) == 0 || len(inferences) >= 3 {
-			return fmt.Errorf("partial heterogeneous assignment requires one or two model inferences")
+			return fmt.Errorf("partial heterogeneous assignment requires one or two model inferences: %w", constants.ErrEvalRunVerificationFailed)
 		}
 	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED:
 		if len(inferences) != 0 {
-			return fmt.Errorf("provider-failed heterogeneous assignment must not report model inferences")
+			return fmt.Errorf("provider-failed heterogeneous assignment must not report model inferences: %w", constants.ErrEvalRunVerificationFailed)
 		}
 	}
 	expectedRoles := []evalv1.ModelCampaignRole{
@@ -491,17 +493,17 @@ func VerifyFormationAssignmentEvidence(assignment *evalv1.EvaluationAssignment, 
 	}
 	for index, record := range inferences {
 		if record.GetProviderAttemptId() == "" {
-			return fmt.Errorf("model inference %d missing provider attempt id", index)
+			return fmt.Errorf("model inference %d provider attempt id: %w", index, constants.ErrMissingRequiredField)
 		}
 		if record.GetAssignmentId() != assignment.GetAssignmentId() {
-			return fmt.Errorf("model inference %d assignment binding mismatch", index)
+			return fmt.Errorf("model inference %d assignment binding: %w", index, constants.ErrEvidenceScopeMismatch)
 		}
 		if index < len(expectedRoles) && record.GetModelRole() != expectedRoles[index] {
-			return fmt.Errorf("model inference %d role order mismatch", index)
+			return fmt.Errorf("model inference %d role order mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
 		}
 		expectedCallSite := "formation:" + formationRoleToCampaignRoleLabel(record.GetModelRole())
 		if record.GetCallSite() != expectedCallSite {
-			return fmt.Errorf("model inference %d call site mismatch", index)
+			return fmt.Errorf("model inference %d call site mismatch: %w", index, constants.ErrEvalRunVerificationFailed)
 		}
 	}
 	if span := result.GetScoredInferenceSpanNanos(); span > 0 {
@@ -510,7 +512,7 @@ func VerifyFormationAssignmentEvidence(assignment *evalv1.EvaluationAssignment, 
 			total += record.GetGenerationDurationNanos()
 		}
 		if total != span {
-			return fmt.Errorf("scored inference span mismatch")
+			return fmt.Errorf("scored inference span mismatch: %w", constants.ErrEvalRunVerificationFailed)
 		}
 	}
 	return nil
@@ -541,7 +543,7 @@ func RecomputeFormationAssignmentGrades(req AssignmentExecutionRequest, result *
 	}
 	lifecycle, grades := classifyFormationAssignmentOutcome(req, formationOutcomeFromResult(result))
 	if lifecycle != result.GetLifecycleStatus() {
-		return nil, fmt.Errorf("stored lifecycle does not match formation outcome")
+		return nil, fmt.Errorf("evaluation: recompute formation assignment grades: stored lifecycle does not match formation outcome: %w", constants.ErrEvalRunVerificationFailed)
 	}
 	roleTraces, ok := formationEvidenceRoleTraces(evidence)
 	if !ok {

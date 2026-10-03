@@ -58,13 +58,6 @@ func deriveEnsembleURL(gatewayHTTPURL string) (string, error) {
 	return replacePort(gatewayHTTPURL, constants.EnsembleDefaultPort)
 }
 
-// deriveDashboardURL replaces the port in the gateway HTTP URL with the
-// dashboard deployment default port. The dashboard runs on its own port
-// (default 3000) alongside the gateway.
-func deriveDashboardURL(gatewayHTTPURL string) (string, error) {
-	return replacePort(gatewayHTTPURL, constants.DashboardDefaultPort)
-}
-
 // validateCredentials checks that loaded owner credentials are present and
 // contain the required CLI session ID. Returns a descriptive error for nil
 // credentials or a missing session ID so TestMain fails closed with an

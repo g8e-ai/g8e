@@ -845,15 +845,20 @@ func (es *ExecutionService) collectEnvironmentInfo() *models.ExecutionEnvironmen
 	return envInfo
 }
 
-// finalizeResult finalizes the execution result
-func (es *ExecutionService) finalizeResult(result *models.ExecutionResult) {
-	if result.EndTime.IsZero() {
-		result.EndTime = time.Now().UTC()
+// finalizeTiming ensures EndTime is set and calculates DurationSeconds.
+func finalizeTiming(startTime time.Time, endTime *time.Time, durationSeconds *float64) {
+	if endTime.IsZero() {
+		*endTime = time.Now().UTC()
 	}
 
-	if !result.StartTime.IsZero() && !result.EndTime.IsZero() {
-		result.DurationSeconds = result.EndTime.Sub(result.StartTime).Seconds()
+	if !startTime.IsZero() && !endTime.IsZero() {
+		*durationSeconds = endTime.Sub(startTime).Seconds()
 	}
+}
+
+// finalizeResult finalizes the execution result
+func (es *ExecutionService) finalizeResult(result *models.ExecutionResult) {
+	finalizeTiming(result.StartTime, &result.EndTime, &result.DurationSeconds)
 }
 
 // Stop cancels all active executions and releases resources.

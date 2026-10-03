@@ -511,7 +511,7 @@ class OllamaEmptyResponseError(ExternalServiceError):
         prompt_eval_count: int | None,
         eval_count: int | None,
         num_ctx: int,
-        num_predict: int,
+        num_predict: int | None,
         thinking_len: int,
         tool_calls_count: int,
         ctx_overflow_suspected: bool,

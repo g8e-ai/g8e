@@ -113,7 +113,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Python protocol package | `protocol/python/` | `pytest protocol/python/tests -v` |
 | Python constants & enums | `protocol/python/g8e/constants.py`, `protocol/python/g8e/enums.py` | `pytest protocol/python/tests/test_constants.py -v` |
 | TypeScript protobuf package | `protocol/node/` | `npm --prefix protocol/node run typecheck` |
-| Observe contract generator | `dashboard/g8e-adapter/generator/gen-contract-pack.mjs` | `node dashboard/g8e-adapter/generator/gen-contract-pack.mjs --check` |
+| Observe contract generator | `g8e-adapter/generator/gen-contract-pack.mjs` | `node g8e-adapter/generator/gen-contract-pack.mjs --check` |
 | Cross-language test vectors | `protocol/vectors/` | `go test -v ./protocol` |
 | Conformance test suite | `protocol/conformance/` | `uv run --project protocol/python --extra dev pytest protocol/conformance -v` |
 | JSON constant registries | `protocol/constants/` | `make validate-doctrines && make validate-cosais` |
@@ -220,7 +220,7 @@ npm --prefix protocol/node run typecheck
 
 #### Observe frontend contract pack generator
 
-The deterministic generator at `dashboard/g8e-adapter/generator/gen-contract-pack.mjs` consumes canonical protocol JSON (`protocol/models/observe_api.json`, `protocol/models/observe_event_payloads.json`, `protocol/constants/event_dashboard_classification.json`) and the compiled adapter distribution to produce `contract-pack/models.ts`. This contract pack provides TypeScript models, runtime validators, type guards, and fixtures for browser-facing read projections and event payloads. Internal mTLS producer models are excluded. Re-running against identical inputs produces byte-identical files, verified in CI using `node dashboard/g8e-adapter/generator/gen-contract-pack.mjs --check`.
+The deterministic generator at `g8e-adapter/generator/gen-contract-pack.mjs` consumes canonical protocol JSON (`protocol/models/observe_api.json`, `protocol/models/observe_event_payloads.json`, `protocol/constants/event_dashboard_classification.json`) and the compiled adapter distribution to produce `contract-pack/models.ts`. This contract pack provides TypeScript models, runtime validators, type guards, and fixtures for browser-facing read projections and event payloads. Internal mTLS producer models are excluded. Re-running against identical inputs produces byte-identical files, verified in CI using `node g8e-adapter/generator/gen-contract-pack.mjs --check`.
 
 ### Shared protocol assets: constants registries, model schemas, and MCP configurations
 
@@ -272,6 +272,10 @@ Governed execution yields an `ActionReceipt` carrying five-layer execution evide
 - Both surfaces verify Ed25519 signatures using raw 32-byte public keys or PEM SPKI keys (`verify_action_receipt`, `verify_persistence_attestation`).
 
 #### Cross-language vectors
+
+Evaluation protobuf JSON uses `evalv1.MarshalCanonical` and `evalv1.UnmarshalCanonical` in `protocol/proto/g8e/eval/v1/canonical.go`. The encoder uses protobuf field names and omits proto3 scalar defaults. `protocol/vectors/eval/public_assignment_result_failed.json` contains Go-produced bytes for a completed assignment with verdict `FAIL` and a zero `task_score` whose `value` key is omitted. `TestFailedPublicAssignmentResultCanonicalizationMatchesCrossLanguageVector` constructs the producer message and checks byte equality; the Explorer's `tests/campaign-adapter.test.ts` decodes the same bytes through `decodeCampaignProjectionEnvelope` and checks `task_score = 0`, `pass = 0`, and `model_failed`. The decoder applies the proto3 default only to a present score record; a missing score record does not imply zero.
+
+Live events are the protobuf message `PublicLiveEvent`, encoded only by `MarshalPublicLiveEvent` through `evalv1.MarshalCanonical`. Its `completed`, `total`, and `PublicLiveMetricValue.value` fields are `optional`, so a zero is emitted rather than omitted, and a producer or browser that finds either count absent rejects the event. `protocol/vectors/eval/public_live_event.json` contains Go-produced bytes for a `metric_updated` event with no progress and a measured `pass` of 0. `TestPublicLiveEventCanonicalizationMatchesCrossLanguageVector` constructs the producer message and checks byte equality; the Explorer's `tests/live-event-wire.test.ts` decodes the same bytes through `decodeLiveEventWire`.
 
 `protocol/vectors/` contains cross-language verification vectors ensuring bit-for-bit parity:
 

@@ -60,7 +60,16 @@ func workspaceFromTrace(trace EvaluationTrace) *ScenarioWorkspace {
 // from a validated g8ee trace and optional content-addressed trace evidence.
 func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace EvaluationTrace, traceEvidence *compliancev1.ComplianceEvidenceReference, now time.Time, newID func(string) string) (*evalv1.EvaluationAssignmentResult, error) {
 	if req.Assignment == nil || req.AttemptID == "" || len(trace) == 0 {
-		return nil, fmt.Errorf("evaluation: import assignment result from trace: assignment, attempt, and trace are required")
+		return nil, fmt.Errorf("evaluation: import assignment result from trace: assignment, attempt, and trace: %w", constants.ErrMissingRequiredField)
+	}
+	// The digest binds every field the result is derived from, so it is checked
+	// before the trace is classified or graded, for every status. Classification
+	// reads the trace first and reports a validation error as a scored FAILED
+	// outcome whose reason this function drops, and it skips validation entirely
+	// for a failed or role-not-invoked trace; a trace whose digest does not hold is
+	// a harness failure and never a model result.
+	if err := validateTraceDigest(trace); err != nil {
+		return nil, fmt.Errorf("evaluation: import assignment result from trace: %w", err)
 	}
 	if newID == nil {
 		newID = func(prefix string) string { return prefix }
@@ -212,6 +221,7 @@ func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (
 		CriterionId: "role-invoked",
 		Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		Detail:      "designated model role was not invoked",
+		Basis:       basisStructural,
 	}
 	if status == "failed" && trace["provider_tool_rejection"] != nil {
 		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, grade
@@ -451,13 +461,13 @@ func toolsDeclaredFromTraceCall(call EvaluationTrace) (declared []string, report
 		for _, tool := range tools {
 			name, ok := tool.(string)
 			if !ok {
-				return nil, false, fmt.Errorf("tools_declared must list tool names")
+				return nil, false, fmt.Errorf("tools_declared must list tool names: %w", constants.ErrEvidenceArtifactMalformed)
 			}
 			declared = append(declared, name)
 		}
 		return declared, true, nil
 	default:
-		return nil, false, fmt.Errorf("tools_declared must be a list of tool names")
+		return nil, false, fmt.Errorf("tools_declared must be a list of tool names: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 }
 
@@ -488,11 +498,33 @@ func requiredUint32FromTraceCall(call EvaluationTrace, name string) (uint32, err
 	return converted, nil
 }
 
+// traceScoredChainClassification is the wire spelling of
+// EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN in a g8ee trace model call.
+const traceScoredChainClassification = "scored_chain"
+
+// callClassificationFromTrace reads the chain a producer stated for a model
+// call. A missing or unknown value is an error: the importer never guesses a
+// chain from the agent role or timing.
+func callClassificationFromTrace(call EvaluationTrace) (evalv1.EvaluationCallClassification, error) {
+	raw, _ := call["classification"].(string)
+	switch raw {
+	case traceScoredChainClassification:
+		return evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN, nil
+	case "post_turn":
+		return evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_POST_TURN, nil
+	case "grader":
+		return evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_GRADER, nil
+	default:
+		return evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_UNSPECIFIED,
+			fmt.Errorf("evaluation: trace model call classification %q: %w", raw, constants.ErrEvidenceArtifactMalformed)
+	}
+}
+
 func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, attemptID string, candidate *evalv1.ModelVariant, trace EvaluationTrace, newID func(string) string) ([]*evalv1.ModelInferenceRecord, *uint64, error) {
 	schemaVersion := traceSchemaVersion(trace)
 	modelCalls, ok := trace["model_calls"].([]any)
 	if !ok {
-		return nil, nil, fmt.Errorf("model_calls must be an array")
+		return nil, nil, fmt.Errorf("model_calls must be an array: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	records := make([]*evalv1.ModelInferenceRecord, 0, len(modelCalls))
 	var monotonicStarts []uint64
@@ -501,7 +533,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 	for _, rawCall := range modelCalls {
 		call, ok := evaluationTrace(rawCall)
 		if !ok {
-			return nil, nil, fmt.Errorf("model call must be an object")
+			return nil, nil, fmt.Errorf("model call must be an object: %w", constants.ErrEvidenceArtifactMalformed)
 		}
 		provider, _ := call["provider"].(string)
 		if !strings.EqualFold(provider, "G8EProvider") {
@@ -514,7 +546,15 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 		if providerAttemptID == "" {
 			continue
 		}
+		classification, err := callClassificationFromTrace(call)
+		if err != nil {
+			return nil, nil, err
+		}
+		if classification == evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_GRADER {
+			return nil, nil, fmt.Errorf("evaluation: grader call %q in model_calls: %w", providerAttemptID, constants.ErrEvidenceArtifactMalformed)
+		}
 		record := &evalv1.ModelInferenceRecord{
+			Classification:      classification,
 			InferenceRecordId:   newID("inference"),
 			ProviderAttemptId:   providerAttemptID,
 			AssignmentId:        assignment.GetAssignmentId(),
@@ -539,7 +579,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 		if reported, present := call["usage_reported"]; present {
 			value, ok := reported.(bool)
 			if !ok {
-				return nil, nil, fmt.Errorf("usage_reported must be a boolean")
+				return nil, nil, fmt.Errorf("usage_reported must be a boolean: %w", constants.ErrEvidenceArtifactMalformed)
 			}
 			if value {
 				record.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
@@ -573,7 +613,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 				return nil, nil, fmt.Errorf("retry_count: %w", err)
 			}
 			if converted > 1000 {
-				return nil, nil, fmt.Errorf("retry_count exceeds 1000")
+				return nil, nil, fmt.Errorf("retry_count exceeds 1000: %w", constants.ErrEvidenceArtifactMalformed)
 			}
 			record.RetryCount = &converted
 		}
@@ -605,8 +645,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 				SchemaRef:    "g8e.operator.v1.ActionReceipt",
 			}
 		}
-		agentRole := stringValue(call["agent_role"])
-		if agentRole != memoryCodexAgentRole {
+		if classification == evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN {
 			scoredCallsCount++
 			if start, end, complete, err := monotonicCallBounds(call); err != nil {
 				return nil, nil, err
@@ -629,7 +668,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			}
 		}
 		if maxEnd < minStart {
-			return nil, nil, fmt.Errorf("scored inference monotonic span is negative")
+			return nil, nil, fmt.Errorf("scored inference monotonic span is negative: %w", constants.ErrEvidenceArtifactMalformed)
 		}
 		value := maxEnd - minStart
 		span = &value
@@ -644,29 +683,29 @@ func policyDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, tra
 	}
 	items, ok := raw.([]any)
 	if !ok {
-		return nil, fmt.Errorf("policy_decisions must be an array")
+		return nil, fmt.Errorf("policy_decisions must be an array: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	records := make([]*evalv1.PolicyDecisionRecord, 0, len(items))
 	for _, item := range items {
 		decision, ok := evaluationTrace(item)
 		if !ok {
-			return nil, fmt.Errorf("policy decision must be an object")
+			return nil, fmt.Errorf("policy decision must be an object: %w", constants.ErrEvidenceArtifactMalformed)
 		}
 		decisionID, ok := decision["decision_id"].(string)
 		if !ok || decisionID == "" {
-			return nil, fmt.Errorf("policy decision requires decision_id")
+			return nil, fmt.Errorf("policy decision decision_id: %w", constants.ErrMissingRequiredField)
 		}
 		toolName, ok := decision["tool_name"].(string)
 		if !ok {
-			return nil, fmt.Errorf("policy decision tool_name must be a string")
+			return nil, fmt.Errorf("policy decision tool_name must be a string: %w", constants.ErrEvidenceArtifactMalformed)
 		}
 		outcome, ok := policyDecisionOutcome(decision["outcome"])
 		if !ok {
-			return nil, fmt.Errorf("policy decision has unknown outcome")
+			return nil, fmt.Errorf("policy decision has unknown outcome: %w", constants.ErrEvidenceArtifactMalformed)
 		}
 		detail, ok := decision["detail"].(string)
 		if !ok {
-			return nil, fmt.Errorf("policy decision detail must be a string")
+			return nil, fmt.Errorf("policy decision detail must be a string: %w", constants.ErrEvidenceArtifactMalformed)
 		}
 		records = append(records, &evalv1.PolicyDecisionRecord{DecisionId: decisionID, AssignmentId: assignment.GetAssignmentId(), ToolName: toolName, Outcome: outcome, Detail: detail})
 	}
@@ -717,11 +756,11 @@ func stringValue(raw any) string {
 func durationSecondsToNanosChecked(raw any) (uint64, error) {
 	seconds, ok := numericFloat(raw)
 	if !ok || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds < 0 {
-		return 0, fmt.Errorf("must be a finite nonnegative number")
+		return 0, fmt.Errorf("must be a finite nonnegative number: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	converted := math.Round(seconds * 1_000_000_000)
 	if converted >= float64(^uint64(0)) {
-		return 0, fmt.Errorf("is outside uint64 nanosecond range")
+		return 0, fmt.Errorf("is outside uint64 nanosecond range: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	return uint64(converted), nil
 }
@@ -729,7 +768,7 @@ func durationSecondsToNanosChecked(raw any) (uint64, error) {
 func uint32Value(raw any) (uint32, error) {
 	value, ok := numericFloat(raw)
 	if !ok || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > float64(^uint32(0)) || math.Trunc(value) != value {
-		return 0, fmt.Errorf("must be a finite nonnegative integer")
+		return 0, fmt.Errorf("must be a finite nonnegative integer: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	return uint32(value), nil
 }
@@ -777,7 +816,7 @@ func monotonicCallBounds(call EvaluationTrace) (uint64, uint64, bool, error) {
 		return 0, 0, false, fmt.Errorf("monotonic_end: %w", err)
 	}
 	if end < start {
-		return 0, 0, false, fmt.Errorf("monotonic_end precedes monotonic_start")
+		return 0, 0, false, fmt.Errorf("monotonic_end precedes monotonic_start: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	return start, end, true, nil
 }
@@ -786,7 +825,7 @@ func monotonicCallBounds(call EvaluationTrace) (uint64, uint64, bool, error) {
 // reference for one imported g8ee assignment trace body.
 func BuildAssignmentTraceEvidenceReference(runID, assignmentID, attemptID string, trace EvaluationTrace, producedAt time.Time) (*compliancev1.ComplianceEvidenceReference, error) {
 	if runID == "" || assignmentID == "" || attemptID == "" || len(trace) == 0 {
-		return nil, fmt.Errorf("evaluation: build assignment trace evidence reference: run, assignment, attempt, and trace are required")
+		return nil, fmt.Errorf("evaluation: build assignment trace evidence reference: run, assignment, attempt, and trace: %w", constants.ErrMissingRequiredField)
 	}
 	body, err := marshalSortedJSON(trace)
 	if err != nil {
@@ -798,7 +837,7 @@ func BuildAssignmentTraceEvidenceReference(runID, assignmentID, attemptID string
 	artifactID := complianceevidence.ContentAddress(complianceevidence.ArtifactTypeEvaluationAssignmentTrace, body)
 	_, digest, ok := complianceevidence.ParseContentAddress(artifactID)
 	if !ok {
-		return nil, fmt.Errorf("evaluation: build assignment trace evidence reference: invalid content address")
+		return nil, fmt.Errorf("evaluation: build assignment trace evidence reference: content address: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	if producedAt.IsZero() {
 		producedAt = time.Now().UTC()

@@ -23,17 +23,10 @@ const (
 	maxPublicRetryCount = uint64(1000)
 )
 
-// memoryCodexAgentRole is the agent_role the post-turn memory update reports.
-// That call is real production behavior but is not part of the measured
-// assignment, so it is excluded from scored latency and token aggregates (R9).
-const memoryCodexAgentRole = "codex"
-
-func isMemoryCodexCall(call *evalv1.ModelInferenceRecord) bool {
-	return call.GetAgentPersona() == memoryCodexAgentRole
-}
-
 // isScoredAgentRole reports whether an agent_role names the active agent that
-// answers the scored turn (never triage, memory, tribunal, or a grader).
+// answers the scored turn (never triage, memory, tribunal, or a grader). It
+// identifies the answering agent only; which chain a call belongs to is the
+// producer-stated classification (see scoredInferenceRecords).
 func isScoredAgentRole(role string) bool {
 	return role == "sage" || role == "dash"
 }
@@ -50,10 +43,13 @@ func scoredAgentInference(calls []*evalv1.ModelInferenceRecord) *evalv1.ModelInf
 
 // scoredInferenceRecords returns the inference records that count toward
 // resource aggregates, preserving nil entries so callers still reject them.
+// A call counts only when its producer classified it as part of the scored
+// chain; post-turn calls such as the memory write are real production behavior
+// outside the measured assignment and are excluded (R9).
 func scoredInferenceRecords(calls []*evalv1.ModelInferenceRecord) []*evalv1.ModelInferenceRecord {
 	scored := make([]*evalv1.ModelInferenceRecord, 0, len(calls))
 	for _, call := range calls {
-		if call != nil && isMemoryCodexCall(call) {
+		if call != nil && call.GetClassification() != evalv1.EvaluationCallClassification_EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN {
 			continue
 		}
 		scored = append(scored, call)

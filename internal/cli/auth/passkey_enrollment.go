@@ -185,7 +185,7 @@ func (r *passkeyRegistrar) Register(ctx context.Context, userID, cliSessionID st
 	// Create the TUI model and program. Messages from the SSE monitor are
 	// sent to the program; Send is safe to call before Run (messages are
 	// buffered in the program's channel).
-	model := newEnrollModel(consoleURL)
+	model := newEnrollModel()
 	p := r.programFactory(model)
 
 	// Start the SSE monitor goroutine. It filters events by type, user ID,
@@ -235,9 +235,8 @@ func (r *passkeyRegistrar) Register(ctx context.Context, userID, cliSessionID st
 	}
 
 	// 7. Run the TUI. Blocks until passkeyRegisteredMsg, enrollErrMsg, or
-	// user cancellation (q/ctrl+c). The TUI displays the full console URL
-	// (including the one-time token in the fragment) so the user can open
-	// it manually if the browser did not launch.
+	// user cancellation (q/ctrl+c). The TUI deliberately omits the URL: the
+	// copy printed above is the only one that survives a narrow terminal.
 	finalModel, err := p.Run()
 	if err != nil {
 		cancel()

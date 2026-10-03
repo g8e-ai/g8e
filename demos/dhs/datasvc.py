@@ -29,9 +29,12 @@ Endpoints:
 """
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+logger = logging.getLogger("datasvc")
 
 OPS_FILE = os.environ.get("DATASVC_OPS_FILE", "/var/vault/operations.jsonl")
 PORT = int(os.environ.get("DATASVC_PORT", "9100"))
@@ -93,8 +96,8 @@ class DataSvcHandler(BaseHTTPRequestHandler):
                         if line:
                             try:
                                 ops.append(json.loads(line))
-                            except json.JSONDecodeError:
-                                pass
+                            except json.JSONDecodeError as exc:
+                                logger.debug("Skipping invalid JSON operation line: %s", exc)
             self._send_json(200, {"operations": ops})
         elif self.path == "/health":
             self._send_json(200, {"status": "ok"})

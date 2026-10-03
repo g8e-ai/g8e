@@ -17,7 +17,7 @@ the Merkle root deterministically from a `ReputationState` snapshot.
 Authority: this file. The canonical doc-style JSON schemas live at
 `protocol/models/reputation_state.json` and `protocol/models/reputation_commitment.json`
 and are kept aligned via the contract test in
-`tests/unit/models/test_reputation_models_alignment.py`.
+`tests/integration/test_reputation_pipeline.py`.
 """
 
 from __future__ import annotations
@@ -34,6 +34,8 @@ __all__ = [
     "ReputationCommitmentCreatedPayload",
     "ReputationCommitmentFailedPayload",
     "ReputationLeaf",
+    "ReputationSignRequest",
+    "ReputationSignResponse",
     "ReputationState",
     "SlashTier",
     "StakeResolution",
@@ -46,6 +48,18 @@ __all__ = [
 # zeros which matches the canonical "no parent" convention used in similar
 # hash-chained ledgers.
 GENESIS_PREV_ROOT = "0" * 64
+
+
+class ReputationSignRequest(G8eBaseModel):
+    """Application claim sent to the Gateway-held reputation signer."""
+
+    merkle_root: str = Field(pattern=r"^[0-9a-f]{64}$")
+    prev_root: str = Field(pattern=r"^[0-9a-f]{64}$")
+    tribunal_command_id: str = Field(min_length=1)
+
+
+class ReputationSignResponse(G8eBaseModel):
+    signature: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ReputationState(G8eBaseModel):
@@ -109,16 +123,16 @@ class ReputationLeaf(G8eBaseModel):
 
 
 class ReputationCommitment(G8eIdentifiableModel):
-    """Auditor-signed Merkle commitment binding a tribunal verdict to the scoreboard.
+    """Gateway-signed application commitment to the tribunal scoreboard.
 
     Written inside the auditor's verdict step (one commitment per passing
     verdict). Forms an append-only chain: each commitment's ``prev_root``
     equals the previous commitment's ``merkle_root`` (deployment-scoped).
     The genesis commitment uses ``prev_root = GENESIS_PREV_ROOT``.
 
-    Citation falsifiability (GDD §7): any party can recompute the Merkle
-    root from a stored `reputation_state` snapshot and verify the HMAC
-    signature without the Auditor's cooperation, given the HMAC key.
+    The Gateway holds the HMAC key and signs the application's claimed
+    roots and command ID. The signature does not attest the scores or
+    chain continuity and does not supply protocol L2 or L3 approval.
 
     Inherits ``id``, ``created_at``, ``updated_at`` from
     ``G8eIdentifiableModel`` (note: ``updated_at`` is unused - commitments
@@ -151,8 +165,8 @@ class ReputationCommitment(G8eIdentifiableModel):
         description="Number of (agent_id, scalar) leaves in the Merkle tree.",
     )
     signed_by: str = Field(
-        default="auditor",
-        description="Signer identity. Day-1: literal 'auditor'.",
+        default="gateway",
+        description="Key custodian that signed the claimed commitment: 'gateway'.",
     )
     signature: str = Field(
         ...,

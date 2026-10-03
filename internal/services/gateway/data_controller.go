@@ -26,38 +26,41 @@ import (
 
 // DataController handles document DB, KV store, blob storage, SSE events, and pub/sub publish endpoints.
 type DataController struct {
-	cfg       *config.Config
-	logger    *slog.Logger
-	docStore  *DocumentStoreService
-	kvStore   *KVStoreService
-	sseStore  *SSEEventService
-	blobStore *BlobStoreService
-	pubsub    *GatewayWebSocketHandler
-	responder *response.Writer
+	cfg                *config.Config
+	logger             *slog.Logger
+	docStore           *DocumentStoreService
+	kvStore            *KVStoreService
+	sseStore           *SSEEventService
+	blobStore          *BlobStoreService
+	pubsub             *GatewayWebSocketHandler
+	responder          *response.Writer
+	auditorKeyProvider AuditorKeyProvider
 }
 
 // DataControllerDeps groups all dependencies for DataController.
 type DataControllerDeps struct {
-	Cfg       *config.Config
-	Logger    *slog.Logger
-	DocStore  *DocumentStoreService
-	KVStore   *KVStoreService
-	SSEStore  *SSEEventService
-	BlobStore *BlobStoreService
-	Pubsub    *GatewayWebSocketHandler
-	Responder *response.Writer
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	DocStore           *DocumentStoreService
+	KVStore            *KVStoreService
+	SSEStore           *SSEEventService
+	BlobStore          *BlobStoreService
+	Pubsub             *GatewayWebSocketHandler
+	Responder          *response.Writer
+	AuditorKeyProvider AuditorKeyProvider
 }
 
 func newDataController(d DataControllerDeps) *DataController {
 	return &DataController{
-		cfg:       d.Cfg,
-		logger:    d.Logger,
-		docStore:  d.DocStore,
-		kvStore:   d.KVStore,
-		sseStore:  d.SSEStore,
-		blobStore: d.BlobStore,
-		pubsub:    d.Pubsub,
-		responder: d.Responder,
+		cfg:                d.Cfg,
+		logger:             d.Logger,
+		docStore:           d.DocStore,
+		kvStore:            d.KVStore,
+		sseStore:           d.SSEStore,
+		blobStore:          d.BlobStore,
+		pubsub:             d.Pubsub,
+		responder:          d.Responder,
+		auditorKeyProvider: d.AuditorKeyProvider,
 	}
 }
 
@@ -291,6 +294,12 @@ func (c *DataController) handleKV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	key := strings.TrimSuffix(strings.TrimSuffix(path, "/_ttl"), "/_expire")
+	if err := authorizeKVNamespace(r, key); err != nil {
+		c.responder.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
+
 	if strings.HasSuffix(path, "/_ttl") {
 		key := strings.TrimSuffix(path, "/_ttl")
 		ttl := c.kvStore.KVTTL(key)
@@ -322,7 +331,7 @@ func (c *DataController) handleKV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := path
+	key = path
 
 	switch r.Method {
 	case http.MethodGet:
@@ -344,7 +353,7 @@ func (c *DataController) handleKV(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
-		if err := c.kvStore.KVSet(key, req.Value, req.TTL); err != nil {
+		if err := c.kvStore.KVSetObserved(key, req.Value, req.TTL); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleKV: %w", err).Error())
 			return
 		}
@@ -378,6 +387,10 @@ func (c *DataController) handleKVKeys(w http.ResponseWriter, r *http.Request) {
 	if req.Pattern == "" {
 		req.Pattern = "*"
 	}
+	if err := authorizeKVNamespace(r, req.Pattern); err != nil {
+		c.responder.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
 	keys, err := c.kvStore.KVKeys(req.Pattern)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleKVKeys: %w", err).Error())
@@ -404,6 +417,10 @@ func (c *DataController) handleKVScan(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Pattern == "" {
 		req.Pattern = "*"
+	}
+	if err := authorizeKVNamespace(r, req.Pattern); err != nil {
+		c.responder.Error(w, http.StatusForbidden, err.Error())
+		return
 	}
 	if req.Count <= 0 {
 		req.Count = 100
@@ -432,6 +449,10 @@ func (c *DataController) handleKVDeletePattern(w http.ResponseWriter, r *http.Re
 	}
 	if req.Pattern == "" {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerPatternRequired.Error())
+		return
+	}
+	if err := authorizeKVNamespace(r, req.Pattern); err != nil {
+		c.responder.Error(w, http.StatusForbidden, err.Error())
 		return
 	}
 	count, err := c.kvStore.KVDeletePattern(req.Pattern)

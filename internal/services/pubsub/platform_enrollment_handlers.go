@@ -9,9 +9,7 @@ package pubsub
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -22,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
@@ -468,6 +467,10 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	if err := h.supersedeOperatorLeases(user.ID, req.SystemFingerprint, operatorID); err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("supersede prior operator leases: %w", err)
 	}
+	// Announce the enrollment so an already-connected browser session sees
+	// the new Operator over SSE instead of only on its next reload or the
+	// next unrelated status event's debounced re-list.
+	h.deps.DocStore.NotifyOperatorEnrolled(operatorID, user.ID, req.Hostname)
 
 	creds := &models.PlatformEnrollmentOperatorCredentials{
 		OperatorCert:      operatorCertPEM,
@@ -820,30 +823,13 @@ func fingerprintsSummary(f models.PlatformEnrollmentCSRFingerprints) string {
 // certificate inside the PEM block. Returns an empty string on decode
 // failure; callers treat an empty fingerprint as a non-fatal warning.
 func fingerprintFromPEM(certPEM string) string {
-	block, _ := pem.Decode([]byte(certPEM))
-	if block == nil {
-		return ""
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return ""
-	}
-	hash := sha256.Sum256(cert.Raw)
-	return hex.EncodeToString(hash[:])
+	return auth.CertificateFingerprint(certPEM)
 }
 
 // serialFromPEM extracts the certificate serial number as a decimal
 // string. Returns an empty string on decode failure.
 func serialFromPEM(certPEM string) string {
-	block, _ := pem.Decode([]byte(certPEM))
-	if block == nil {
-		return ""
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return ""
-	}
-	return cert.SerialNumber.String()
+	return auth.CertificateSerialNumber(certPEM)
 }
 
 func spiffeIDFromCertificate(certPEM string) (string, error) {

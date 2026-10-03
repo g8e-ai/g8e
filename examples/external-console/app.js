@@ -11,7 +11,7 @@
  *   docs/guides/build_frontend.md
  *   docs/guides/connect_frontend_to_gateway.md
  *   docs/guides/lovable.md
- * Wire shapes aligned with dashboard/public/js/components/auth.js
+ * Wire shapes aligned with console/src/lib/webauthn.ts
  *
  * Serve this folder over HTTP (not file://), e.g. port 3003, then:
  *   ./g8e gw connect http://localhost:3003

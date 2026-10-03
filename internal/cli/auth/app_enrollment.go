@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
@@ -37,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	serviceauth "github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 
@@ -660,27 +660,7 @@ func signTranscript(privateKey *ecdsa.PrivateKey, transcript []byte) (string, er
 }
 
 func csrFingerprint(csrPEM string) (string, error) {
-	block, _ := pem.Decode([]byte(csrPEM))
-	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return "", fmt.Errorf("csr fingerprint: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	csr, err := x509.ParseCertificateRequest(block.Bytes)
-	if err != nil {
-		return "", fmt.Errorf("csr fingerprint: parse: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	if err := csr.CheckSignature(); err != nil {
-		return "", fmt.Errorf("csr fingerprint: verify signature: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	publicKey, ok := csr.PublicKey.(*ecdsa.PublicKey)
-	if !ok || publicKey.Curve != elliptic.P256() {
-		return "", constants.ErrPlatformEnrollmentUnsupportedKey
-	}
-	publicDER, err := x509.MarshalPKIXPublicKey(publicKey)
-	if err != nil {
-		return "", fmt.Errorf("csr fingerprint: marshal public key: %w", err)
-	}
-	digest := sha256.Sum256(publicDER)
-	return hex.EncodeToString(digest[:]), nil
+	return serviceauth.CSRFingerprint(csrPEM)
 }
 
 func tokenHash(token string) string {

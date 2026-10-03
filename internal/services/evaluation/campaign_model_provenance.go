@@ -193,7 +193,7 @@ func VerifyModelProvenanceWindow(window *evalv1.ModelProvenanceAttestationWindow
 		return err
 	}
 	if expectedModelDigest != "" && window.GetExpectedModelDigest() != expectedModelDigest {
-		return fmt.Errorf("evaluation: model provenance: expected digest mismatch")
+		return fmt.Errorf("evaluation: model provenance: expected digest: %w", constants.ErrModelProvenanceDigestMismatch)
 	}
 	if policy == ModelProvenancePolicyStrict && !window.GetDigestMatch() {
 		return fmt.Errorf("evaluation: model provenance: %w", constants.ErrModelProvenanceDigestMismatch)

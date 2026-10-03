@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,15 +21,21 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 )
 
 // EnsembleBrowserProxyController forwards browser-authenticated requests to g8ee
-// with Gateway-stamped identity. Browsers never call g8ee directly.
+// with Gateway-stamped identity. Browsers never call g8ee directly. The stamped
+// identity includes the Operators bound to the caller's web session, read from
+// the Gateway registry; browser-supplied bound_operators are discarded.
 type EnsembleBrowserProxyController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
 	responder *response.Writer
+	operators dispatch.OperatorLister
+	signer    *BrowserProxySigner
 	client    *http.Client
 }
 
@@ -36,6 +43,10 @@ type EnsembleBrowserProxyControllerDeps struct {
 	Cfg       *config.Config
 	Logger    *slog.Logger
 	Responder *response.Writer
+	Operators dispatch.OperatorLister
+	// Signer signs every proxied request. A nil Signer makes the proxy refuse
+	// to forward anything: there is no unsigned mode.
+	Signer *BrowserProxySigner
 }
 
 func newEnsembleBrowserProxyController(d EnsembleBrowserProxyControllerDeps) *EnsembleBrowserProxyController {
@@ -43,6 +54,8 @@ func newEnsembleBrowserProxyController(d EnsembleBrowserProxyControllerDeps) *En
 		cfg:       d.Cfg,
 		logger:    d.Logger,
 		responder: d.Responder,
+		operators: d.Operators,
+		signer:    d.Signer,
 		client: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -58,6 +71,10 @@ func (c *EnsembleBrowserProxyController) upstreamBase() string {
 }
 
 func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *http.Request) {
+	if c.signer == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrBrowserProxySignerUnavailable.Error())
+		return
+	}
 	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
 	if strings.TrimSpace(userID) == "" || strings.TrimSpace(webSessionID) == "" {
@@ -83,7 +100,7 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 			return
 		}
 	} else if len(body) > 0 && method != http.MethodGet && method != http.MethodHead {
-		body, err = injectBrowserContext(body, userID, webSessionID)
+		body, err = injectBrowserContext(body, userID, webSessionID, c.boundOperators(userID, webSessionID))
 		if err != nil {
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
@@ -105,10 +122,15 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 		return
 	}
 
-	req.Header.Set(constants.HeaderGatewayBrowserProxy, constants.GatewayBrowserProxyValue)
-	req.Header.Set(constants.HeaderProxyUserID, userID)
-	req.Header.Set(constants.HeaderProxyUserEmail, userID+"@g8e.local")
-	req.Header.Set(constants.HeaderProxyWebSessionID, webSessionID)
+	if err := c.signer.Apply(req, body, BrowserProxyIdentity{
+		UserID:       userID,
+		UserEmail:    userID + "@g8e.local",
+		WebSessionID: webSessionID,
+	}); err != nil {
+		c.logger.Error("gateway: ensemble browser proxy could not sign request", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+		return
+	}
 	if ct := r.Header.Get("Content-Type"); ct != "" {
 		req.Header.Set("Content-Type", ct)
 	} else if len(body) > 0 {
@@ -135,6 +157,71 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	}
 }
 
+// handleProxySigningKey serves the public half of the proxy signing key so g8ee
+// can verify stamps without sharing a volume or a file with the Gateway. The
+// route is mTLS-only; the key is public.
+//
+// @Summary		Browser proxy signing key
+// @Description	Returns the Ed25519 public key (and its key ID) the Gateway uses to sign browser-proxy identity stamps. g8ee fetches it over its mTLS client and verifies every proxied request against it.
+// @Tags			gateway
+// @Produce		json
+// @Success		200	{object}	models.ActuatorPublicKeyExport
+// @Failure		405	{string}	string	"Method Not Allowed"
+// @Failure		503	{string}	string	"Service Unavailable — no signing key is loaded"
+// @Router			/api/v1/gateway/proxy-signing-key [get]
+func (c *EnsembleBrowserProxyController) handleProxySigningKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.signer == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrBrowserProxySignerUnavailable.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, models.ActuatorPublicKeyExport{
+		KeyID:     c.signer.KeyID(),
+		PublicKey: hex.EncodeToString(c.signer.PublicKey()),
+		Algorithm: "ed25519",
+	})
+}
+
+// browserBoundOperator is one entry of the Gateway-stamped bound_operators
+// list. It mirrors the protocol BoundOperator shape g8ee parses from the
+// request context. Field order matches encoding/json map key order.
+type browserBoundOperator struct {
+	BoundWebSessionID string `json:"bound_web_session_id"`
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id,omitempty"`
+	Status            string `json:"status,omitempty"`
+}
+
+// boundOperators returns the caller's Operators that the registry shows bound
+// to webSessionID. A registry failure yields an empty list, so the request
+// proceeds with no Operator authority rather than with unverified bindings.
+func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID string) []browserBoundOperator {
+	bound := []browserBoundOperator{}
+	if c.operators == nil {
+		return bound
+	}
+	ops, err := c.operators.ListUserOperators(userID)
+	if err != nil {
+		c.logger.Warn("gateway: ensemble browser proxy could not list bound operators", "error", err)
+		return bound
+	}
+	for _, op := range ops {
+		if op.BoundWebSessionID != webSessionID {
+			continue
+		}
+		bound = append(bound, browserBoundOperator{
+			BoundWebSessionID: op.BoundWebSessionID,
+			OperatorID:        op.ID,
+			OperatorSessionID: op.OperatorSessionID,
+			Status:            string(op.Status),
+		})
+	}
+	return bound
+}
+
 // browserProxyContext is the identity object the browser proxy stamps onto
 // ensemble requests. Field order matches encoding/json map key order.
 type browserProxyContext struct {
@@ -143,7 +230,9 @@ type browserProxyContext struct {
 }
 
 // browserInvestigationsQuery is the body of the GET investigations compatibility
-// rewrite. Field order matches encoding/json map key order.
+// rewrite. UserID is always the session user so g8ee scopes the query to the
+// caller; a query-string user_id is never honored. Field order matches
+// encoding/json map key order.
 type browserInvestigationsQuery struct {
 	CaseID            string              `json:"case_id,omitempty"`
 	Context           browserProxyContext `json:"context"`
@@ -153,6 +242,7 @@ type browserInvestigationsQuery struct {
 	OrderDirection    string              `json:"order_direction,omitempty"`
 	Priority          string              `json:"priority,omitempty"`
 	Status            string              `json:"status,omitempty"`
+	UserID            string              `json:"user_id"`
 	WebSessionID      string              `json:"web_session_id,omitempty"`
 }
 
@@ -162,7 +252,8 @@ func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request
 			UserID:       userID,
 			WebSessionID: webSessionID,
 		},
-		Limit: 20,
+		Limit:  20,
+		UserID: userID,
 	}
 	for key, vals := range r.URL.Query() {
 		if len(vals) == 0 {
@@ -193,10 +284,11 @@ func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request
 	return json.Marshal(payload)
 }
 
-// injectBrowserContext stamps browser identity onto a JSON object body.
+// injectBrowserContext stamps browser identity and the session's bound
+// Operators onto a JSON object body, replacing any caller-supplied values.
 // The outer document and any extra context keys are caller-defined JSON with
 // no stable schema, so they stay map[string]interface{} and round-trip.
-func injectBrowserContext(body []byte, userID, webSessionID string) ([]byte, error) {
+func injectBrowserContext(body []byte, userID, webSessionID string, bound []browserBoundOperator) ([]byte, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return body, nil
@@ -207,6 +299,7 @@ func injectBrowserContext(body []byte, userID, webSessionID string) ([]byte, err
 	}
 	ctx["user_id"] = userID
 	ctx["web_session_id"] = webSessionID
+	ctx["bound_operators"] = bound
 	if caseID, ok := payload["case_id"].(string); ok && caseID != "" {
 		ctx["case_id"] = caseID
 	}

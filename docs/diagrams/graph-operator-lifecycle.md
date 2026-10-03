@@ -123,7 +123,7 @@ A remote Operator in `active` status with no heartbeat for more than **60 second
 - **Status**: `OperatorStatusStale` (`internal/constants/status.go`).
 - **Observation**: The transition is persisted on the operator document and observed through `g8e operator list`, `g8e operator show`, and the operator API. The Gateway also publishes `g8e.v1.operator.status.updated.stale` to the owner's web sessions, whichever reader or sweep applied the transition.
 - **Impact**: Stale Operators are **unusable**: every capability selector and every CLI command that requires `active` rejects them. However, `STALE` and `OFFLINE` statuses can still authenticate (to support bootstrap and recovery) — only `TERMINATED` is a hard-gate rejection (`internal/services/gateway/gateway_auth.go`).
-- **Recovery**: The next heartbeat restores a `stale` Operator to `active` and the Gateway publishes `g8e.v1.operator.status.updated.active` so a dashboard showing the Operator stale clears it. A heartbeat never revives a `stopped` or `terminated` Operator.
+- **Recovery**: The next heartbeat restores a `stale` Operator to `active` and the Gateway publishes `g8e.v1.operator.status.updated.active` so a console showing the Operator stale clears it. A heartbeat never revives a `stopped` or `terminated` Operator.
 
 ### 6. Remote Stop
 

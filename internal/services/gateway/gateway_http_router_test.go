@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -118,4 +119,30 @@ func TestRegisterMCPRoutes_BothPathsDeferToSameHandler(t *testing.T) {
 			assert.Equal(t, "called", rr.Header().Get("X-Test-Handler"), "handler should be the same for %s", path)
 		})
 	}
+}
+
+// --- handleSwaggerDoc ---
+
+func TestHandleSwaggerDoc_ServesEmbeddedSpec(t *testing.T) {
+	rr := httptest.NewRecorder()
+	handleSwaggerDoc(rr, httptest.NewRequest(http.MethodGet, constants.SwaggerDocPath, nil))
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+
+	var spec struct {
+		Swagger string                     `json:"swagger"`
+		Paths   map[string]json.RawMessage `json:"paths"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &spec))
+	assert.Equal(t, "2.0", spec.Swagger)
+	assert.NotEmpty(t, spec.Paths)
+}
+
+func TestHandleSwaggerDoc_RejectsWrites(t *testing.T) {
+	rr := httptest.NewRecorder()
+	handleSwaggerDoc(rr, httptest.NewRequest(http.MethodPost, constants.SwaggerDocPath, nil))
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	assert.Equal(t, "GET, HEAD", rr.Header().Get("Allow"))
 }

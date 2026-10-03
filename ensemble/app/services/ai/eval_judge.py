@@ -36,6 +36,7 @@ from app.llm.model_call_attribution import build_model_call_telemetry, prepare_p
 from app.models.http_context import G8eHttpContext
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.model_telemetry import ModelCallTelemetry
+from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.models.settings import EvalJudgeSettings
 from app.utils.agent_persona_loader import get_agent_persona
 from app.errors import OllamaEmptyResponseError, RateLimitError
@@ -197,10 +198,7 @@ class EvalJudge:
         self._provider = provider
         self._decision_provider = decision_provider
         self._g8e_context = g8e_context
-        self._settings = settings or EvalJudgeSettings(
-            eval_judge_model=None,
-            eval_judge_max_tokens=4096,
-        )
+        self._settings = settings or EvalJudgeSettings(eval_judge_model=None)
         self._model = model or self._settings.model
 
         if not self._model:
@@ -248,7 +246,9 @@ class EvalJudge:
 
         model_config = get_model_config(self._model)
         settings = LiteLLMSettings(
-            max_output_tokens=self._settings.max_output_tokens,
+            max_output_tokens=AIGenerationConfigBuilder.resolve_max_output_tokens(
+                model_config, None
+            ),
             top_p_nucleus_sampling=model_config.top_p,
             top_k_filtering=model_config.top_k,
             stop_sequences=model_config.stop_sequences,

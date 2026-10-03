@@ -191,6 +191,7 @@ func TestL4Warden_Doctrine(t *testing.T) {
 		NewL1Doctrine(),
 		[]constants.ActionType{constants.ActionTypeFileEdit},
 		nil,
+		&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 	)
 
 	assert.NotNil(t, warden.Doctrine())

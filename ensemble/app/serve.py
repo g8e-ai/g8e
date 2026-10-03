@@ -45,7 +45,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gateway-pubsub-url", help="Gateway WebSocket pub/sub URL")
     parser.add_argument("--runtime-dir", help="Runtime (.g8e) directory")
     parser.add_argument("--pki-dir", help="PKI directory (default: <runtime-dir>/pki)")
-    parser.add_argument("--secrets-dir", help="Bootstrap secrets directory (default: <runtime-dir>/secrets)")
     parser.add_argument("--ca-cert-path", help="Gateway trust bundle path (default: <pki-dir>/trust/g8eg-ca-bundle.pem)")
     return parser
 
@@ -61,7 +60,6 @@ def parse_args(argv: Sequence[str]) -> ServeArgs:
             gateway_pubsub_url=ns.gateway_pubsub_url,
             runtime_dir=ns.runtime_dir,
             pki_dir=ns.pki_dir,
-            secrets_dir=ns.secrets_dir,
             ca_cert_path=ns.ca_cert_path,
         ),
         host=ns.host,

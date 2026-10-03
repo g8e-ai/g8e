@@ -108,7 +108,7 @@ The tunnel origin is the read-only public listener, never the private listener a
 The explicit plain-HTTP service prevents Gateway HTTPS origin settings from being inherited.
 The generated cloudflared ingress terminates at the loopback-only read adapter.
 Start the gateway with `--public-base-url https://opendevops.ai` so the embedded explorer runtime points at the public origin.
-Do not configure `opendevops.ai` to target port 8081, Gateway ports 8080 or 8443, the Ensemble, the Dashboard, a component bridge address, or a component-local volume.
+Do not configure `opendevops.ai` to target port 8081, Gateway ports 8080 or 8443, the Ensemble, a component bridge address, or a component-local volume.
 
 ## External acceptance
 

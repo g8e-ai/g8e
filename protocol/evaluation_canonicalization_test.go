@@ -10,13 +10,16 @@ package protocol_test
 import (
 	_ "embed"
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -40,6 +43,12 @@ var modelAssignmentResultVectorJSON []byte
 //go:embed vectors/eval/public_assignment_result.json
 var publicAssignmentResultVectorJSON []byte
 
+//go:embed vectors/eval/public_assignment_result_failed.json
+var failedPublicAssignmentResultVectorJSON []byte
+
+//go:embed vectors/eval/public_live_event.json
+var publicLiveEventVectorJSON []byte
+
 //go:embed vectors/eval/model_assignment_result_enriched.json
 var enrichedModelAssignmentResultVectorJSON []byte
 
@@ -51,6 +60,9 @@ var boundVerificationReportVectorJSON []byte
 
 //go:embed vectors/eval/chat_probe_trace.json
 var chatProbeTraceVectorJSON []byte
+
+//go:embed vectors/eval/canonical_json_numbers.json
+var canonicalJSONValuesVectorJSON []byte
 
 func TestEvaluationReportCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector evaluationCanonicalizationVector
@@ -172,6 +184,30 @@ func TestChatProbeTraceDigestMatchesCrossLanguageVector(t *testing.T) {
 	assert.Equal(t, vector.TraceDigest, got)
 }
 
+func TestCanonicalJSONValuesMatchCrossLanguageVector(t *testing.T) {
+	var vector struct {
+		MessageType string `json:"message_type"`
+		Cases       []struct {
+			Name      string `json:"name"`
+			Input     string `json:"input"`
+			Canonical string `json:"canonical"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(canonicalJSONValuesVectorJSON, &vector))
+	assert.Equal(t, "CanonicalJSONValues", vector.MessageType)
+	require.NotEmpty(t, vector.Cases)
+
+	for _, tc := range vector.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			var decoded any
+			require.NoError(t, json.Unmarshal([]byte(tc.Input), &decoded))
+			got, err := evaluation.MarshalCanonicalJSONObject(decoded)
+			require.NoError(t, err)
+			assert.Equal(t, tc.Canonical, string(got))
+		})
+	}
+}
+
 func TestPublicAssignmentResultProjectionCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector evaluationCanonicalizationVector
 	require.NoError(t, json.Unmarshal(publicAssignmentResultVectorJSON, &vector))
@@ -185,6 +221,84 @@ func TestPublicAssignmentResultProjectionCanonicalizationMatchesCrossLanguageVec
 	require.NoError(t, err)
 	assert.Equal(t, encoded, canonical)
 	assert.Equal(t, "assign-1", projection.GetAssignmentId())
+}
+
+func TestFailedPublicAssignmentResultCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(failedPublicAssignmentResultVectorJSON, &vector))
+	require.Equal(t, "PublicAssignmentResultProjection", vector.MessageType)
+
+	// Construct the producer's message independently of the vector. The same
+	// bytes feed the Explorer test, including proto3's omitted zero double.
+	projection := &evalv1.PublicAssignmentResultProjection{
+		AssignmentId:     "assign-failed",
+		RunId:            "run-1",
+		ScenarioId:       "instruction-exact-1",
+		ScenarioCategory: evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
+		Lane:             evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+		VariantId:        "qwen3-4b",
+		LifecycleStatus:  evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		SummaryStatus:    evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
+		DecomposedScores: []*evalv1.DecomposedScoreRecord{
+			{ScoreId: "assign-failed:task-score", Dimension: "task_score", Value: 0},
+			{ScoreId: "assign-failed:deterministic-pass-rate", Dimension: "deterministic_pass_rate", Value: 0.8},
+		},
+		ResultDigest:       strings.Repeat("e", 64),
+		VerificationStatus: "verified",
+		CompletedAt:        timestamppb.New(time.Date(2026, 9, 16, 14, 0, 0, 0, time.UTC)),
+	}
+	canonical, err := evalv1.MarshalCanonical(projection)
+	require.NoError(t, err)
+	assert.Equal(t, vector.CanonicalJSON, string(canonical))
+	assert.Contains(t, string(canonical), `{"score_id":"assign-failed:task-score","dimension":"task_score"}`)
+
+	reparsed := &evalv1.PublicAssignmentResultProjection{}
+	require.NoError(t, evalv1.UnmarshalCanonical(canonical, reparsed))
+	assert.True(t, proto.Equal(projection, reparsed))
+	assert.Equal(t, float64(0), reparsed.GetDecomposedScores()[0].GetValue())
+}
+
+func TestPublicLiveEventCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(publicLiveEventVectorJSON, &vector))
+	require.Equal(t, "PublicLiveEvent", vector.MessageType)
+
+	// Construct the producer's message independently of the vector. The event
+	// carries both zero-presence hazards the Explorer must keep: no progress yet
+	// (completed 0) and a failed assignment's measured binary pass (value 0).
+	zero := 0.0
+	event := &evalv1.PublicLiveEvent{
+		SchemaVersion:       "1.6.0",
+		Kind:                "metric_updated",
+		DatasetId:           "ds-live-run-1",
+		QualityState:        "live_in_progress",
+		ObservedAt:          "2026-09-24T12:00:05.000Z",
+		SourceRevisionLabel: "g8e-eval-campaign",
+		Release:             "v2.3.0",
+		ReleaseBasis:        evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED,
+		SourceRevision:      "abc123",
+		EventId:             "run-1:assign-failed:metric:pass:event",
+		RunId:               "run-1",
+		AssignmentId:        "assign-failed",
+		VariantId:           "qwen3-4b",
+		Role:                "primary",
+		LifecycleStatus:     "running",
+		Completed:           proto.Uint32(0),
+		Total:               proto.Uint32(5),
+		MetricDelta:         map[string]*evalv1.PublicLiveMetricValue{"pass": {Value: &zero}},
+	}
+	canonical, err := evalv1.MarshalCanonical(event)
+	require.NoError(t, err)
+	assert.Equal(t, vector.CanonicalJSON, string(canonical))
+	assert.Contains(t, string(canonical), `"completed":0`)
+	assert.Contains(t, string(canonical), `"pass":{"value":0}`)
+
+	reparsed := &evalv1.PublicLiveEvent{}
+	require.NoError(t, evalv1.UnmarshalCanonical(canonical, reparsed))
+	assert.True(t, proto.Equal(event, reparsed))
+	require.NotNil(t, reparsed.Completed, "decoding keeps a zero count present")
+	require.NotNil(t, reparsed.GetMetricDelta()["pass"].Value)
 }
 
 func TestEvaluationProtocolRegistersNativeRecordSet(t *testing.T) {

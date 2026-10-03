@@ -36,11 +36,11 @@ from app.models.settings import (
 )
 from app.models.base import G8eBaseModel
 
-from app.services.infra.bootstrap_service import BootstrapService, BootstrapServiceProtocol
+from app.models.internal_api import LLMRoleSettingsResponse, LLMRoleSettingsUpdateRequest
+from app.services.infra.llm_role_settings import apply_role_updates, settings_view
 
 if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService
-    from app.models.internal_api import RequestOverrides
 
 
 @runtime_checkable
@@ -59,9 +59,6 @@ class SettingsServiceProtocol(Protocol):
         """Retrieve local bootstrap settings (bootstrap)."""
         ...
 
-    def get_bootstrap_service(self) -> BootstrapServiceProtocol:
-        """Get the bootstrap service dependency."""
-        ...
 
 
 class SettingsService:
@@ -70,21 +67,17 @@ class SettingsService:
     def __init__(
         self,
         cache_aside_service: CacheAsideService | None = None,
-        bootstrap_service: BootstrapService | None = None,
     ) -> None:
         self._cache_aside = cache_aside_service
-        self._bootstrap = bootstrap_service or BootstrapService()
         self._logger = logging.getLogger(__name__)
 
     def get_local_settings(self) -> G8eeAppSettings:
-        """Load settings using canonical defaults plus secrets sourced from the
-        bootstrap service (operator volume)."""
+        """Load canonical defaults and local LLM credentials."""
         settings = G8eeAppSettings(
             host="0.0.0.0",
             port=PortConstants.G8E_PORT_G8EE_HTTPS,
             log_level=LogLevel.INFO,
             enable_logging=True,
-            docker_gid="988",
             session_ttl=3600,
             absolute_session_timeout=86400,
             docs_dir=PathConstants.PATH_DOCS_DIR,
@@ -94,26 +87,6 @@ class SettingsService:
             passkey_rp_id="g8e",
             passkey_origin=f"http://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}",
         )
-
-        # Load secrets from bootstrap service
-        session_key = self._bootstrap.load_session_encryption_key()
-        if session_key:
-            self._bootstrap.verify_against_manifest("session_encryption_key", None)
-            settings.auth.session_encryption_key = session_key
-        else:
-            self._logger.info("Session encryption key not available from bootstrap service")
-
-        auditor_hmac_key = self._bootstrap.load_auditor_hmac_key()
-        if auditor_hmac_key:
-            self._bootstrap.verify_against_manifest("auditor_hmac_key", None)
-            settings.auth.auditor_hmac_key = auditor_hmac_key
-        else:
-            self._logger.info("Auditor HMAC key not available from bootstrap service")
-
-        # Operator session identity is Gateway-owned. The ensemble authenticates
-        # to the Gateway exclusively via its mTLS app cert — no host state crosses
-        # the container boundary (per docs/g8e/guides/build_apps.md § Identity
-        # and Authentication).
 
         # Apply LLM credential and endpoint bootstrap defaults (lowest
         # priority). Only secrets (API keys) and user-specific endpoints come
@@ -313,124 +286,29 @@ class SettingsService:
             data=doc.model_dump(mode="json"),
             merge=False,
         )
+        # The next request must read what was just written, including when KV
+        # cache reads are enabled.
+        await self._cache_aside.invalidate_document(DB_COLLECTION_SETTINGS, user_doc_id)
 
-    async def sync_settings_overrides(
-        self, user_id: str, user_settings: G8eeUserSettings, overrides: RequestOverrides
-    ) -> bool:
-        """Extract LLM and Search overrides from a request and update user settings if needed."""
-        # Check if any overrides are provided
-        llm_overrides = any(
-            [
-                overrides.llm_primary_model,
-                overrides.llm_assistant_model,
-                overrides.llm_lite_model,
-                overrides.llm_primary_provider,
-                overrides.llm_assistant_provider,
-                overrides.llm_lite_provider,
-                overrides.llm_primary_api_key,
-                overrides.llm_primary_endpoint,
-                overrides.llm_assistant_api_key,
-                overrides.llm_assistant_endpoint,
-                overrides.llm_lite_api_key,
-                overrides.llm_lite_endpoint,
-            ]
-        )
+    async def get_llm_role_settings(self, user_id: str) -> LLMRoleSettingsResponse:
+        """Return the caller's per-role LLM selection with API keys masked."""
+        user_settings = await self.get_user_settings(user_id)
+        return settings_view(user_settings.llm)
 
-        search_overrides = any(
-            [
-                overrides.web_search_project,
-                overrides.web_search_app,
-                overrides.web_search_api_key,
-            ]
-        )
-
-        if not llm_overrides and not search_overrides:
-            return False
-
-        self._logger.info(
-            "[SettingsService] Storing request config overrides into user settings for user %s",
-            user_id,
-        )
-
-        # Update LLM settings
-        if overrides.llm_primary_model:
-            user_settings.llm.primary_model = overrides.llm_primary_model
-        if overrides.llm_assistant_model:
-            user_settings.llm.assistant_model = overrides.llm_assistant_model
-        if overrides.llm_lite_model:
-            user_settings.llm.lite_model = overrides.llm_lite_model
-
-        if overrides.llm_primary_provider:
-            user_settings.llm.primary_provider = overrides.llm_primary_provider
-        if overrides.llm_assistant_provider:
-            user_settings.llm.assistant_provider = overrides.llm_assistant_provider
-        if overrides.llm_lite_provider:
-            user_settings.llm.lite_provider = overrides.llm_lite_provider
-
-        # Provider-specific keys/endpoints
-        for _role, key, endpoint, prov in [
-            (
-                "primary",
-                overrides.llm_primary_api_key,
-                overrides.llm_primary_endpoint,
-                overrides.llm_primary_provider or user_settings.llm.primary_provider,
-            ),
-            (
-                "assistant",
-                overrides.llm_assistant_api_key,
-                overrides.llm_assistant_endpoint,
-                overrides.llm_assistant_provider or user_settings.llm.assistant_provider,
-            ),
-            (
-                "lite",
-                overrides.llm_lite_api_key,
-                overrides.llm_lite_endpoint,
-                overrides.llm_lite_provider or user_settings.llm.lite_provider,
-            ),
-        ]:
-            if not prov:
-                continue
-
-            # Using strings for provider comparison as they might be strings or enums
-            p_str = prov.value if hasattr(prov, "value") else str(prov)
-
-            if p_str == "openai":
-                if key:
-                    user_settings.llm.openai_api_key = key
-                if endpoint:
-                    user_settings.llm.openai_endpoint = endpoint
-            elif p_str == "anthropic":
-                if key:
-                    user_settings.llm.anthropic_api_key = key
-                if endpoint:
-                    user_settings.llm.anthropic_endpoint = endpoint
-            elif p_str == "gemini":
-                if key:
-                    user_settings.llm.gemini_api_key = key
-            elif p_str == "ollama":
-                if key:
-                    user_settings.llm.ollama_api_key = key
-                if endpoint:
-                    user_settings.llm.ollama_endpoint = endpoint
-            elif p_str == "llamacpp":
-                if key:
-                    user_settings.llm.llamacpp_api_key = key
-                if endpoint:
-                    user_settings.llm.llamacpp_endpoint = endpoint
-
-        # Update Search settings
-        if search_overrides:
-            if overrides.web_search_project:
-                user_settings.search.project_id = overrides.web_search_project
-            if overrides.web_search_app:
-                user_settings.search.engine_id = overrides.web_search_app
-            if overrides.web_search_api_key:
-                user_settings.search.api_key = overrides.web_search_api_key
-            # If any search overrides provided, ensure search is enabled in user settings
-            user_settings.search.enabled = True
-
+    async def update_llm_role_settings(
+        self, user_id: str, request: LLMRoleSettingsUpdateRequest
+    ) -> LLMRoleSettingsResponse:
+        """Persist the caller's per-role LLM selection; the next chat request uses it."""
+        user_settings = await self.get_user_settings(user_id)
+        apply_role_updates(user_settings.llm, request)
         await self.update_user_settings(user_id, user_settings)
-        return True
+        self._logger.info(
+            "[SettingsService] Updated LLM role settings for user %s (primary=%s/%s)",
+            user_id,
+            user_settings.llm.primary_provider,
+            user_settings.llm.primary_model,
+        )
+        return settings_view(user_settings.llm)
 
     def _build_search_settings(
         self, settings: G8eeAppSettings | G8eeUserSettings
@@ -438,6 +316,3 @@ class SettingsService:
         """Build SearchSettings from platform or user settings."""
         return settings.search
 
-    def get_bootstrap_service(self) -> BootstrapServiceProtocol:
-        """Get the bootstrap service dependency."""
-        return self._bootstrap
