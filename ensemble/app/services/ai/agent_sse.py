@@ -43,6 +43,20 @@ from app.models.events import (
     ChatThinkingPayload,
     ChatTurnCompletePayload,
 )
+from app.models.tool_results import (
+    CommandConstraintsResult,
+    CommandExecutionResult,
+    FetchFileDiffToolResult,
+    FetchLogsToolResult,
+    FileEditResult,
+    FsGrepToolResult,
+    FsListToolResult,
+    FsReadToolResult,
+    InvestigationContextResult,
+    PortCheckToolResult,
+    SearchWebResult,
+    SshInventoryToolResult,
+)
 from app.utils.time_ids.timestamp import now
 from app.errors import ValidationError
 from app.services.infra.event_service import EventService
@@ -314,19 +328,18 @@ async def deliver_via_sse(
 
                     if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
                         event_type = EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED
-                        # Extract query if available
-                        if chunk.data.result and hasattr(chunk.data.result, "query"):
-                            query = chunk.data.result.query
-                        elif chunk.data.arguments and "query" in chunk.data.arguments:
+                        if chunk.data.arguments and "query" in chunk.data.arguments:
                             query = str(chunk.data.arguments["query"])
+                        elif isinstance(chunk.data.result, SearchWebResult) and chunk.data.result.query:
+                            query = chunk.data.result.query
                     elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
                         event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED
                     elif fn == OperatorToolName.G8E_SEARCH_WEB:
                         event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED
-                        if chunk.data.result and hasattr(chunk.data.result, "query"):
-                            query = chunk.data.result.query
-                        elif chunk.data.arguments and "query" in chunk.data.arguments:
+                        if chunk.data.arguments and "query" in chunk.data.arguments:
                             query = str(chunk.data.arguments["query"])
+                        elif isinstance(chunk.data.result, SearchWebResult) and chunk.data.result.query:
+                            query = chunk.data.result.query
 
                     if event_type:
                         await _publish(
@@ -384,20 +397,34 @@ async def deliver_via_sse(
                     # agent_sse.py sees TOOL_RESULT which maps to COMPLETED/FAILED.
                     if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
                         event_type = EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
-                        if chunk.data.result:
-                            content = str(getattr(chunk.data.result, "data", ""))
+                        if isinstance(chunk.data.result, InvestigationContextResult):
+                            if chunk.data.result.data is not None:
+                                content = str(chunk.data.result.data)
+                            if not chunk.data.result.success:
+                                error = chunk.data.result.error
                     elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
                         event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED
-                        if chunk.data.result:
-                            content = getattr(chunk.data.result, "message", None)
+                        if isinstance(chunk.data.result, CommandConstraintsResult):
+                            content = chunk.data.result.message
+                            if not chunk.data.result.success:
+                                error = chunk.data.result.error
                     elif fn == OperatorToolName.G8E_SEARCH_WEB:
                         event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED
-                        if chunk.data.result:
-                            res = getattr(chunk.data.result, "results", [])
-                            results = [
-                                r.model_dump(mode="json") if hasattr(r, "model_dump") else r
-                                for r in res
-                            ]
+                        if isinstance(chunk.data.result, SearchWebResult):
+                            results = [r.model_dump(mode="json") for r in chunk.data.result.results]
+                            if not chunk.data.result.success:
+                                error = chunk.data.result.error
+
+                    if chunk.data.error:
+                        error = str(chunk.data.error)
+
+                    is_failed = (
+                        bool(error)
+                        or chunk.data.status == ToolCallStatus.FAILED
+                        or chunk.data.success is False
+                        or (chunk.data.result is not None and not chunk.data.result.success)
+                    )
+                    status = ToolCallStatus.FAILED if is_failed else ToolCallStatus.COMPLETED
 
                     if event_type:
                         await _publish(
@@ -409,7 +436,7 @@ async def deliver_via_sse(
                                 display_detail=chunk.data.display_detail,
                                 category=chunk.data.category,
                                 execution_id=exec_id,
-                                status=ToolCallStatus.COMPLETED,
+                                status=status,
                                 content=content,
                                 results=results,
                                 is_open=is_open,
@@ -426,21 +453,34 @@ async def deliver_via_sse(
                     if chunk.data.error:
                         error = str(chunk.data.error)
                     elif chunk.data.result is not None:
-                        if hasattr(chunk.data.result, "error") and chunk.data.result.error:
-                            error = str(chunk.data.result.error)
-                        elif hasattr(chunk.data.result, "content") and chunk.data.result.content is not None:
-                            content = str(chunk.data.result.content)
-                        elif hasattr(chunk.data.result, "output") and chunk.data.result.output is not None:
-                            content = str(chunk.data.result.output)
-                        elif hasattr(chunk.data.result, "data") and chunk.data.result.data is not None:
-                            content = str(chunk.data.result.data)
-                        elif isinstance(chunk.data.result, (str, dict, list)):
-                            content = str(chunk.data.result)
+                        result = chunk.data.result
+                        if not result.success and result.error:
+                            error = str(result.error)
+                        elif isinstance(result, CommandExecutionResult):
+                            content = result.output
+                        elif isinstance(result, (FileEditResult, FsReadToolResult)):
+                            content = result.content
+                        elif isinstance(result, FetchLogsToolResult):
+                            content = result.stdout
+                        elif isinstance(result, FetchFileDiffToolResult):
+                            content = result.diff
+                        elif isinstance(result, InvestigationContextResult):
+                            content = str(result.data) if result.data is not None else None
+                        elif isinstance(result, CommandConstraintsResult):
+                            content = result.message
+                        elif isinstance(result, PortCheckToolResult):
+                            content = f"Port {result.port} on {result.host} is {'open' if result.is_open else 'closed'}"
+                        elif isinstance(
+                            result,
+                            (FsListToolResult, FsGrepToolResult, SshInventoryToolResult, SearchWebResult),
+                        ):
+                            content = str(result.model_dump(mode="json"))
 
                     is_failed = (
                         bool(error)
-                        or chunk.data.status in (ToolCallStatus.FAILED, "failed", "error")
-                        or getattr(chunk.data, "success", True) is False
+                        or chunk.data.status == ToolCallStatus.FAILED
+                        or chunk.data.success is False
+                        or (chunk.data.result is not None and not chunk.data.result.success)
                     )
                     ev_type = (
                         EventType.OPERATOR_COMMAND_FAILED

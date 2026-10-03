@@ -18,8 +18,15 @@ from __future__ import annotations
 
 import pytest
 
-from app.constants import ReasoningAgent, StreamChunkFromModelType
+from app.constants import (
+    EventType,
+    OperatorToolName,
+    ReasoningAgent,
+    StreamChunkFromModelType,
+    ToolCallStatus,
+)
 from app.models.agent import StreamChunkData, StreamChunkFromModel
+from app.models.tool_results import CommandExecutionResult, InvestigationContextResult
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import make_agent_run_args
 from tests.fakes.fake_event_service import FakeEventService
@@ -363,3 +370,168 @@ async def test_no_active_agent_skips_agent_projection():
 
     assert len(event_svc.agent_state_requests) == 0
     assert len(event_svc.run_state_requests) > 0
+
+
+async def test_operator_tool_call_lifecycle_completed():
+    inputs, state = make_agent_run_args(
+        case_id="case-obs-11",
+        investigation_id="inv-obs-11",
+        web_session_id="web-obs-11",
+        user_id="user-obs-11",
+        active_agent=ReasoningAgent.SAGE,
+    )
+    event_svc = FakeEventService()
+
+    await deliver_via_sse(
+        stream=_stream(
+            _text("Running grep."),
+            _tool_call(name="recursive_grep_search", exec_id="exec-grep-1"),
+            _tool_result(name="recursive_grep_search", exec_id="exec-grep-1"),
+            _text("Found match."),
+            _complete(),
+        ),
+        inputs=inputs,
+        state=state,
+        event_service=event_svc,
+    )
+
+    event_types = [e.event_type for e in event_svc.published]
+    assert EventType.OPERATOR_COMMAND_STARTED in event_types
+    assert EventType.OPERATOR_COMMAND_COMPLETED in event_types
+
+    completed_events = [
+        e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_COMPLETED
+    ]
+    assert len(completed_events) == 1
+    assert completed_events[0].payload.status == ToolCallStatus.COMPLETED
+
+
+async def test_operator_tool_call_lifecycle_failed():
+    inputs, state = make_agent_run_args(
+        case_id="case-obs-12",
+        investigation_id="inv-obs-12",
+        web_session_id="web-obs-12",
+        user_id="user-obs-12",
+        active_agent=ReasoningAgent.SAGE,
+    )
+    event_svc = FakeEventService()
+
+    await deliver_via_sse(
+        stream=_stream(
+            _text("Running grep."),
+            _tool_call(name="recursive_grep_search", exec_id="exec-grep-2"),
+            StreamChunkFromModel(
+                type=StreamChunkFromModelType.TOOL_RESULT,
+                data=StreamChunkData(
+                    tool_name="recursive_grep_search",
+                    execution_id="exec-grep-2",
+                    error="command failed with exit code 1",
+                    success=False,
+                ),
+            ),
+            _text("Error handling."),
+            _complete(),
+        ),
+        inputs=inputs,
+        state=state,
+        event_service=event_svc,
+    )
+
+    event_types = [e.event_type for e in event_svc.published]
+    assert EventType.OPERATOR_COMMAND_STARTED in event_types
+    assert EventType.OPERATOR_COMMAND_FAILED in event_types
+
+    failed_events = [
+        e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_FAILED
+    ]
+    assert len(failed_events) == 1
+    assert failed_events[0].payload.status == ToolCallStatus.FAILED
+
+
+async def test_operator_tool_call_lifecycle_typed_result():
+    inputs, state = make_agent_run_args(
+        case_id="case-obs-13",
+        investigation_id="inv-obs-13",
+        web_session_id="web-obs-13",
+        user_id="user-obs-13",
+        active_agent=ReasoningAgent.SAGE,
+    )
+    event_svc = FakeEventService()
+
+    await deliver_via_sse(
+        stream=_stream(
+            _text("Executing command."),
+            _tool_call(name="run_commands_with_operator", exec_id="exec-cmd-1"),
+            StreamChunkFromModel(
+                type=StreamChunkFromModelType.TOOL_RESULT,
+                data=StreamChunkData(
+                    tool_name="run_commands_with_operator",
+                    execution_id="exec-cmd-1",
+                    result=CommandExecutionResult(
+                        success=True,
+                        output="system status ok",
+                    ),
+                    success=True,
+                    status=ToolCallStatus.COMPLETED,
+                ),
+            ),
+            _text("Done."),
+            _complete(),
+        ),
+        inputs=inputs,
+        state=state,
+        event_service=event_svc,
+    )
+
+    completed_events = [
+        e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_COMPLETED
+    ]
+    assert len(completed_events) == 1
+    assert completed_events[0].payload.status == ToolCallStatus.COMPLETED
+    assert completed_events[0].payload.content == "system status ok"
+
+
+async def test_universal_tool_call_lifecycle_typed_result():
+    inputs, state = make_agent_run_args(
+        case_id="case-obs-14",
+        investigation_id="inv-obs-14",
+        web_session_id="web-obs-14",
+        user_id="user-obs-14",
+        active_agent=ReasoningAgent.SAGE,
+    )
+    event_svc = FakeEventService()
+
+    await deliver_via_sse(
+        stream=_stream(
+            _text("Checking investigation context."),
+            _tool_call(name=OperatorToolName.QUERY_INVESTIGATION_CONTEXT, exec_id="exec-ctx-1"),
+            StreamChunkFromModel(
+                type=StreamChunkFromModelType.TOOL_RESULT,
+                data=StreamChunkData(
+                    tool_name=OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
+                    execution_id="exec-ctx-1",
+                    result=InvestigationContextResult(
+                        success=True,
+                        data="enriched context data",
+                    ),
+                    success=True,
+                    status=ToolCallStatus.COMPLETED,
+                ),
+            ),
+            _text("Context reviewed."),
+            _complete(),
+        ),
+        inputs=inputs,
+        state=state,
+        event_service=event_svc,
+    )
+
+    completed_events = [
+        e
+        for e in event_svc.published
+        if e.event_type == EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
+    ]
+    assert len(completed_events) == 1
+    assert completed_events[0].payload.status == ToolCallStatus.COMPLETED
+    assert completed_events[0].payload.content == "enriched context data"
+

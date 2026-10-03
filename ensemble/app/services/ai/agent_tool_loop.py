@@ -22,6 +22,7 @@ from app.constants import (
     CommandErrorType,
     EventType,
     OperatorToolName,
+    ToolCallStatus,
 )
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.constants.config import (
@@ -339,6 +340,7 @@ def create_initial_tool_call_info(
         display_icon=display_icon,
         display_detail=display_detail or "",
         category=category,
+        status=ToolCallStatus.STARTED,
     )
     return execution_id, call_info
 
@@ -406,6 +408,7 @@ def _tribunal_error_result(
             command=display_detail,
             arguments=arguments,
             is_operator_tool=True,
+            status=ToolCallStatus.FAILED,
             success=False,
             result=error_result,
             error_type=CommandErrorType.EXECUTION_ERROR,
@@ -610,11 +613,10 @@ async def orchestrate_tool_execution(
             display_icon=display_icon,
             display_detail=display_detail or "",
             category=category,
+            status=ToolCallStatus.COMPLETED if result.success else ToolCallStatus.FAILED,
             success=result.success,
             result=result,
-            error_type=result.error_type
-            if not result.success and hasattr(result, "error_type")
-            else None,
+            error_type=result.error_type if not result.success else None,
             player_steps=chain_steps,
         ),
         result=result,
@@ -724,6 +726,7 @@ async def _process_single_tool_call(
                 display_icon=c_info.display_icon,
                 display_detail=c_info.display_detail,
                 category=c_info.category,
+                status=ToolCallStatus.FAILED,
                 success=False,
                 result=_exc_result,
                 error_type=CommandErrorType.EXECUTION_ERROR,
