@@ -245,8 +245,15 @@ class TestLoadModePrompts:
 
 
 class TestPromptFileIntegrity:
+    @staticmethod
+    def _prompt_files() -> list[Path]:
+        return [
+            p for p in PROMPTS_DIR.rglob("*.txt")
+            if not any(part.startswith(".") for part in p.parts) and "venv" not in p.parts
+        ]
+
     def test_no_empty_prompt_files(self):
-        all_txt = list(PROMPTS_DIR.rglob("*.txt"))
+        all_txt = self._prompt_files()
         assert len(all_txt) > 0
 
         empty_files = []
@@ -258,7 +265,7 @@ class TestPromptFileIntegrity:
         assert empty_files == [], f"Empty prompt files found: {empty_files}"
 
     def test_prompt_files_are_utf8(self):
-        all_txt = list(PROMPTS_DIR.rglob("*.txt"))
+        all_txt = self._prompt_files()
 
         for txt_file in all_txt:
             try:
@@ -267,5 +274,5 @@ class TestPromptFileIntegrity:
                 pytest.fail(f"Invalid UTF-8 in {txt_file.relative_to(PROMPTS_DIR)}")
 
     def test_total_prompt_file_count(self):
-        all_txt = list(PROMPTS_DIR.rglob("*.txt"))
+        all_txt = self._prompt_files()
         assert len(all_txt) >= 20, f"Only found {len(all_txt)} prompt files, expected 20+"

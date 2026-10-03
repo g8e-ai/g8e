@@ -14,10 +14,10 @@ related:
   - docs/guides/getting_started.md
   - docs/guides/docker_gateway.md
   - docs/ensemble/index.md
-  - docs/dashboard/index.md
+  - docs/architecture/console.md
   - demos/README.md
   - docs/guides/governance_posture.md
-when_to_read: Running end-to-end validation of the full g8e platform stack (gateway, operator, ensemble, dashboard) in a Docker environment; troubleshooting platform enrollment or governance operations; auditing audit-trail integrity and CSV evidence generation.
+when_to_read: Running end-to-end validation of the full g8e platform stack (gateway, operator, ensemble, console) in a Docker environment; troubleshooting platform enrollment or governance operations; auditing audit-trail integrity and CSV evidence generation.
 do_not_use_for:
   - Platform coding invariants (docs/devs/devs.md)
   - Runtime and package ownership (docs/devs/codemap.md)
@@ -30,7 +30,7 @@ do_not_use_for:
 
 ## Purpose
 
-Exercises the current headless Docker workflow from the repository root. The runbook starts the gateway, enrolls an mTLS-only owner identity, starts and approves the operator, ensemble, and dashboard workloads, runs governed file and document mutations, inspects their audit records, verifies the operator-local CSV evidence report, and downloads the published platform binary. The suite is deterministic by default and reproducible without external dependencies; optional real-model paths exercise the full ensemble pipeline against live Ollama endpoints.
+Exercises the current headless Docker workflow from the repository root. The runbook starts the gateway, enrolls an mTLS-only owner identity, starts and approves the operator and ensemble workloads, runs governed file and document mutations, inspects their audit records, verifies the operator-local CSV evidence report, and downloads the published platform binary. The suite is deterministic by default and reproducible without external dependencies; optional real-model paths exercise the full ensemble pipeline against live Ollama endpoints.
 
 ## Quick index
 
@@ -47,7 +47,7 @@ Exercises the current headless Docker workflow from the repository root. The run
 | ID | Claim | Verification Method |
 | --- | --- | --- |
 | INV-SMOKE-01 | CLI exposes documented command tree and lists MCP integrations | `./g8e --help` and `./g8e mcp agent list` exit zero and show all subcommands |
-| INV-SMOKE-02 | Default Docker profile starts gateway; `bootstrapped` profile adds operator, ensemble, dashboard | `./g8e docker status` reports all services healthy after `docker compose up -d` and profile selection |
+| INV-SMOKE-02 | Default Docker profile starts gateway; `bootstrapped` profile adds operator and ensemble | `./g8e docker status` reports all services healthy after `docker compose up -d` and profile selection |
 | INV-SMOKE-03 | Linux AMD64 binary reports FIPS 140-3 approved mode and linked module | `docker exec g8e-gateway /g8e version --fips` prints `FIPS 140-3 mode: enabled` and module version |
 | INV-SMOKE-04 | Headless owner enrollment creates mTLS credentials without browser and prints UUIDs | `./g8e auth enroll user --headless -e localhost` produces User ID and CLI Session ID |
 | INV-SMOKE-05 | Owner can list and approve platform workload enrollment requests over mTLS | `./g8e auth enroll pending` and `./g8e auth enroll approve <id> --yes` complete successfully |
@@ -61,7 +61,7 @@ Exercises the current headless Docker workflow from the repository root. The run
 
 | Claim | Path | Verify |
 | --- | --- | --- |
-| Docker Compose unified stack | `docker-compose.yml` | Gateway at port 8443 (mTLS), 8080 (HTTP); operator, ensemble, dashboard, inference operator services with correct volume mounts |
+| Docker Compose unified stack | `docker-compose.yml` | Gateway at port 8443 (mTLS), 8080 (HTTP); operator, ensemble, inference operator services with correct volume mounts |
 | Smoke test runbook | `docs/guides/ux_smoke_test.md` | End-to-end procedural walkthrough with claim mapping |
 | CLI command tree | `./g8e --help` | All subcommands listed; demo scenarios and audit commands present |
 | Report CSV generation | `internal/services/reporting/` | All required files in `internal/constants/paths.go` |
@@ -154,7 +154,7 @@ Expected: no browser opens. The command prints `User ID: <uuid>` and `CLI Sessio
 ./g8e docker status
 ```
 
-Expected: the gateway, operator, ensemble, and dashboard containers are present. The three workloads can remain unready while their enrollment requests await approval.
+Expected: the gateway, operator, and ensemble containers are present. The workloads can remain unready while their enrollment requests await approval.
 
 ### Step 5: Review the workload enrollments
 
@@ -167,12 +167,11 @@ List the pending requests:
 # ./g8e auth enroll deny <request-id> --yes
 ```
 
-Approve each operator, ensemble, and dashboard request by its exact request ID:
+Approve each operator and ensemble request by its exact request ID:
 
 ```bash
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
-./g8e auth enroll approve <dashboard-request-id> --yes
 ```
 
 The order does not affect the approval protocol. Each workload polls until its request is approved and then completes certificate enrollment.
@@ -188,7 +187,7 @@ docker exec g8e-data-operator /g8e vault status
 OPERATOR_PORTS="$(docker port g8e-data-operator)"
 test -z "${OPERATOR_PORTS}"
 curl -fsS http://localhost:8000/health
-curl -fsS -o /dev/null http://localhost:3000/
+curl -fsSk -o /dev/null https://localhost:8443/console/
 ```
 
 Expected:
@@ -197,7 +196,7 @@ Expected:
 - `g8e gw data operators` shows the registered operator instance.
 - `vault status` reports that the operator vault is initialized and unlocked.
 - The `docker port` assertion exits zero because the operator publishes no host ports.
-- The ensemble health endpoint and dashboard root return successful responses.
+- The ensemble health endpoint and the Gateway console (`/console/`) return successful responses.
 
 These checks establish service availability, owner-visible operator registration, the absence of published operator ports, and operator-local vault initialization. They do not inspect traffic contents or prove that key material never leaves the operator.
 
@@ -361,7 +360,7 @@ The second command deletes the gateway PKI, operator vault and audit data, and a
 - `g8e docker status` shows `starting`: wait and retry. If a container exits, inspect it with `./g8e docker logs <service-name>`.
 - Enrollment fails after a reset: run `./g8e auth logout` to remove stale local CLI credentials, then retry against the new gateway PKI.
 - A network command returns `404 page not found`: rebuild stale images with `./g8e docker build`, restart the stack, and compare `./g8e version` with `docker exec g8e-gateway /g8e version`.
-- Pending enrollments are empty while workloads remain unready: wait for the workloads to submit their requests, then inspect `./g8e docker logs g8e-data-operator`, `./g8e docker logs ensemble`, or `./g8e docker logs dashboard`.
+- Pending enrollments are empty while workloads remain unready: wait for the workloads to submit their requests, then inspect `./g8e docker logs g8e-data-operator`, or `./g8e docker logs ensemble`.
 - The file scenario fails with Ollama: confirm the endpoint and model, or switch to `G8E_HARNESS_LLM_PROVIDER=fake` and unset the model and endpoint variables.
 - A scenario reports `ok` but a mutation is absent from `audit receipts`: the newest-50 API window may have advanced. Check the newest-100 `audit export` immediately, and rely on the scenario's own correlated receipt and read-back result for its per-run assertion.
 - `report all` lacks `FILE_EDIT` rows: the file scenario did not complete on the operator, or the report was run against the wrong filesystem. Re-run the scenario, then execute `/g8e report all` inside `g8e-data-operator`.
@@ -398,6 +397,6 @@ The second command deletes the gateway PKI, operator vault and audit data, and a
 - [Unified Docker Stack](./unified_stack.md) — Docker Compose topology, volumes, and service coordination.
 - [Docker Gateway](./docker_gateway.md) — Gateway lifecycle management and container operations.
 - [Ensemble Architecture](../ensemble/index.md) — Ensemble component design and LLM integration.
-- [Dashboard Guide](../dashboard/index.md) — Dashboard component and UI.
+- [Console Architecture](../architecture/console.md) — the Gateway-served browser console.
 - [Demo Harness](../../demos/README.md) — Scenario definitions and evaluation framework.
 - [Sovereignty Gauntlet](./sovereignty_gauntlet.md) — Advanced multi-region and cross-enrollment testing.

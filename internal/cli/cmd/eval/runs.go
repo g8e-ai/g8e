@@ -41,6 +41,7 @@ cancel, verify, publish, and export, and they can be archived.`,
 	addLeaves(cmd,
 		runsListCmd(deps),
 		runsShowCmd(deps),
+		runsAssignmentsCmd(deps),
 		runsStartCmd(deps),
 		runsResumeCmd(deps),
 		runsCancelCmd(deps),
@@ -384,7 +385,7 @@ func runsRepairCmd(deps nativeEvalDeps) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runID := args[0]
 			if results == traceDigests {
-				return fmt.Errorf("evaluation: runs repair: pass exactly one of --results or --trace-digests")
+				return fmt.Errorf("evaluation: runs repair: pass exactly one of --results or --trace-digests: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
@@ -434,18 +435,44 @@ func runsRepairCmd(deps nativeEvalDeps) *cobra.Command {
 
 // runCell is one cell of a run's matrix reduced to what compare reports.
 type runCell struct {
-	Status string  `json:"status"`
-	Passed bool    `json:"passed"`
-	Score  float64 `json:"score"`
+	Status  string  `json:"status"`
+	Verdict string  `json:"verdict,omitempty"`
+	Passed  bool    `json:"passed"`
+	Score   float64 `json:"score"`
+}
+
+// invalidEvidence reports a cell whose grades measure the harness, not the
+// model. It is shown, never counted for or against the model.
+func (c runCell) invalidEvidence() bool { return c.Verdict == invalidEvidenceVerdict }
+
+const (
+	verdictStatusPrefix    = "EVALUATION_VERDICT_STATUS_"
+	invalidEvidenceVerdict = "invalid_evidence"
+)
+
+// cellFromResult reads one terminal result's outcome from the same verdict and
+// pass rate every other surface publishes; it never re-tallies grades.
+func cellFromResult(result *evalv1.EvaluationAssignmentResult) runCell {
+	verdict := evaluation.DerivePublicSummaryStatus(result)
+	cell := runCell{
+		Status:  strings.ToLower(strings.TrimPrefix(result.GetLifecycleStatus().String(), "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_")),
+		Verdict: strings.ToLower(strings.TrimPrefix(verdict.String(), verdictStatusPrefix)),
+		Passed:  verdict == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+	}
+	if rate, ok := evaluation.DeterministicPassRate(result); ok {
+		cell.Score = rate
+	}
+	return cell
 }
 
 type runCompareSide struct {
-	RunID      string  `json:"run_id"`
-	CampaignID string  `json:"campaign_id"`
-	Cells      int     `json:"cells"`
-	Completed  int     `json:"completed"`
-	Passed     int     `json:"passed"`
-	MeanScore  float64 `json:"mean_score"`
+	RunID           string  `json:"run_id"`
+	CampaignID      string  `json:"campaign_id"`
+	Cells           int     `json:"cells"`
+	Completed       int     `json:"completed"`
+	Passed          int     `json:"passed"`
+	InvalidEvidence int     `json:"invalid_evidence"`
+	MeanScore       float64 `json:"mean_score"`
 }
 
 type runCompareChange struct {
@@ -467,14 +494,45 @@ type runCompareJSON struct {
 
 // runCellKey names a matrix cell independently of the run it belongs to.
 func runCellKey(assignment *evalv1.EvaluationAssignment) string {
-	target := "unknown"
+	return fmt.Sprintf("%s | %s | rep %d", assignment.GetScenarioId(), assignmentTarget(assignment), assignment.GetRepetition())
+}
+
+// assignmentTarget names what an assignment exercises: `<served model>/<role>`
+// for one model in one role, `stack:<id>` for a heterogeneous formation.
+func assignmentTarget(assignment *evalv1.EvaluationAssignment) string {
 	switch t := assignment.GetTarget().(type) {
 	case *evalv1.EvaluationAssignment_Homogeneous:
-		target = fmt.Sprintf("%s/%s", t.Homogeneous.GetCandidateVariant().GetServedModelTag(), strings.ToLower(strings.TrimPrefix(t.Homogeneous.GetDesignatedRole().String(), "MODEL_CAMPAIGN_ROLE_")))
+		return fmt.Sprintf("%s/%s", t.Homogeneous.GetCandidateVariant().GetServedModelTag(), assignmentRoleLabel(t.Homogeneous.GetDesignatedRole()))
 	case *evalv1.EvaluationAssignment_Heterogeneous:
-		target = "stack:" + t.Heterogeneous.GetStack().GetStackId()
+		return "stack:" + t.Heterogeneous.GetStack().GetStackId()
+	default:
+		return "unknown"
 	}
-	return fmt.Sprintf("%s | %s | rep %d", assignment.GetScenarioId(), target, assignment.GetRepetition())
+}
+
+func assignmentRoleLabel(role evalv1.ModelCampaignRole) string {
+	return strings.ToLower(strings.TrimPrefix(role.String(), "MODEL_CAMPAIGN_ROLE_"))
+}
+
+// executedAssignmentLine is the execution-log line for one finished assignment:
+// what ran (scenario, target, repetition), how long it took, and its outcome.
+func executedAssignmentLine(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) string {
+	took := ""
+	if elapsed, ok := assignmentDuration(assignment, result); ok {
+		took = ", " + elapsed.Round(100*time.Millisecond).String()
+	}
+	return fmt.Sprintf("Executed %s [%s%s]: %s", result.GetAssignmentId(), runCellKey(assignment), took, evaluation.AssignmentOutcomeSummary(result))
+}
+
+// assignmentDuration is the wall-clock time from start to completion, when both
+// were recorded.
+func assignmentDuration(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) (time.Duration, bool) {
+	started := assignment.GetStartedAt()
+	completed := result.GetCompletedAt()
+	if started == nil || completed == nil {
+		return 0, false
+	}
+	return completed.AsTime().Sub(started.AsTime()), true
 }
 
 func loadRunCells(ctx context.Context, store *evaluation.Store, runID string) (map[string]runCell, error) {
@@ -494,18 +552,7 @@ func loadRunCells(ctx context.Context, store *evaluation.Store, runID string) (m
 			if err != nil {
 				return nil, err
 			}
-			cell.Status = strings.ToLower(strings.TrimPrefix(result.GetLifecycleStatus().String(), "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_"))
-			cell.Passed = result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
-			var total float64
-			for _, grade := range result.GetDeterministicGrades() {
-				total += grade.GetScore()
-				if grade.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
-					cell.Passed = false
-				}
-			}
-			if grades := len(result.GetDeterministicGrades()); grades > 0 {
-				cell.Score = total / float64(grades)
-			}
+			cell = cellFromResult(result)
 		}
 		cells[runCellKey(assignment)] = cell
 	}
@@ -522,10 +569,14 @@ func summarizeRunCells(runID, campaignID string, cells map[string]runCell) runCo
 		if cell.Passed {
 			side.Passed++
 		}
+		if cell.invalidEvidence() {
+			side.InvalidEvidence++
+			continue
+		}
 		total += cell.Score
 	}
-	if side.Cells > 0 {
-		side.MeanScore = total / float64(side.Cells)
+	if measured := side.Cells - side.InvalidEvidence; measured > 0 {
+		side.MeanScore = total / float64(measured)
 	}
 	return side
 }
@@ -539,6 +590,10 @@ func compareRunCells(left, right map[string]runCell) (onlyLeft, onlyRight []stri
 			continue
 		}
 		switch {
+		case l.invalidEvidence() || r.invalidEvidence():
+			if l != r {
+				changes = append(changes, runCompareChange{Cell: key, Kind: "changed", Left: l, Right: r})
+			}
 		case l.Passed && !r.Passed:
 			changes = append(changes, runCompareChange{Cell: key, Kind: "regression", Left: l, Right: r})
 		case !l.Passed && r.Passed:
@@ -614,7 +669,7 @@ like any other.`,
 			}
 			out := cmd.OutOrStdout()
 			for _, side := range sides {
-				_, _ = fmt.Fprintf(out, "%s (%s): %d cells, %d completed, %d passed, mean score %.3f\n", side.RunID, side.CampaignID, side.Cells, side.Completed, side.Passed, side.MeanScore)
+				_, _ = fmt.Fprintf(out, "%s (%s): %d cells, %d completed, %d passed, %d invalid evidence, mean score %.3f\n", side.RunID, side.CampaignID, side.Cells, side.Completed, side.Passed, side.InvalidEvidence, side.MeanScore)
 			}
 			_, _ = fmt.Fprintf(out, "Regressions: %d  Improvements: %d  Only in %s: %d  Only in %s: %d\n",
 				payload.Regressions, payload.Improvements, args[0], len(onlyLeft), args[1], len(onlyRight))

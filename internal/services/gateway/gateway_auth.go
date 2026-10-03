@@ -173,7 +173,15 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// Browser operator detail/stop under /api/v1/operators/{id}/ (terminate remains mTLS-enforced in handler).
 	r.addPrefix(constants.APIPaths.OperatorsByID, RouteAuthDual)
 
-	// Ensemble browser proxy (Gateway → g8ee with stamped identity).
+	// API reference spec — read by the Console API view (cookie) and by CLI or
+	// builder tooling (mTLS). Not public: it enumerates the full route surface.
+	r.addExact(constants.SwaggerDocPath, RouteAuthDual)
+
+	// Proxy signing public key: g8ee fetches it over mTLS to verify stamps.
+	r.addExact(constants.APIPaths.GatewayProxySigningKey, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.GatewayReputationSign, RouteAuthMTLS)
+
+	// Ensemble browser proxy (Gateway → g8ee with signed identity stamp).
 	r.addPrefix(constants.APIPaths.EnsembleChatPrefix, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.EnsembleSettingsPrefix, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.EnsembleCasesPrefix, RouteAuthWebSession)
@@ -1201,16 +1209,17 @@ func (s *AuthService) ValidateWebSessionCookie(r *http.Request) (webSessionID, u
 		return "", "", constants.ErrWebSessionExpired
 	}
 
-	if user, err := s.getAndValidateUser(webSession.UserID); err != nil {
+	if _, err := s.getAndValidateUser(webSession.UserID); err != nil {
 		if ae, ok := err.(*AuthError); ok {
 			return "", "", ae
 		}
 		s.logger.Error("gateway: auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), err)
 		return "", "", constants.ErrIdentityValidationFailed
-	} else if user != nil {
-		return webSession.ID, webSession.UserID, nil
 	}
 
+	// The persisted session body does not carry its own ID; the document key
+	// (the cookie value looked up above) is the web session ID. Returning
+	// webSession.ID would hand downstream SSE routing an empty session.
 	return webSessionID, webSession.UserID, nil
 }
 

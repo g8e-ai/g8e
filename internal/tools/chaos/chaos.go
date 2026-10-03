@@ -49,6 +49,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/v2/internal/services/system"
 	vault "github.com/g8e-ai/g8e/v2/internal/services/vault"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -377,10 +378,6 @@ func Run(cfg Config) error {
 	var testVaultDir string
 	if cfg.DataDir == "" {
 		testVaultDir = paths.Infra.TestVaultDir
-		if err := os.MkdirAll(testVaultDir, constants.PermDirStandard); err != nil {
-			return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
-		}
-
 		// Create unique subdirectory for this test run
 		testRunID := fmt.Sprintf("%s-chaos-test", time.Now().Format("20060102-150405"))
 		baseDir = filepath.Join(testVaultDir, testRunID)
@@ -524,6 +521,7 @@ func Run(cfg Config) error {
 		doctrine,
 		knownActionTypes,
 		nil, // Clock defaults to RealClock
+		&testutil.MockExecutionTarget{OperatorIDs: []string{"chaos-operator"}},
 	)
 
 	// L5Actuator replaces Actuator - execution boundary with receipt signing
@@ -656,10 +654,10 @@ func Run(cfg Config) error {
 	fmt.Printf("Use './g8e test summary' to see aggregate results across all test runs.\n")
 	fmt.Printf("\n")
 	fmt.Printf("Test vault: %s\n", dataDir)
-	fmt.Printf("Audit DB  : %s\n", filepath.Join(dataDir, "g8e.db"))
-	fmt.Printf("Ledger    : %s\n", filepath.Join(dataDir, "ledger"))
+	fmt.Printf("Audit DB  : %s\n", filepath.Join(dataDir, constants.DbFilename))
+	fmt.Printf("Ledger    : %s\n", filepath.Join(dataDir, constants.LedgerDirname))
 	fmt.Printf("\n")
-	printDemoQueries(filepath.Join(dataDir, "g8e.db"))
+	printDemoQueries(filepath.Join(dataDir, constants.DbFilename))
 	return nil
 }
 

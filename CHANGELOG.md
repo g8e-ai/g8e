@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v2.3.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 2.3.0 | 2026-10-02 | Console release: replaces the g8ed dashboard with the g8e Console, a React and TypeScript browser frontend embedded in the binary and served by the Gateway at `/console/` (passkey sign-in, L3 and recovery approvals, platform enrollment review, Operator inventory and binding, cases, investigations, streamed chat, and per-role model selection with governed Inference Operator model listing), reduces the unified Compose stack to Gateway, Data Operator, Inference Operator, and ensemble, moves `evaluation-explorer/` and `g8e-adapter/` to the repository root, and removes the `--full` flag from `g8e docker`; the ensemble browser proxy now stamps session-bound Operators itself and scopes investigation queries to the caller, the Gateway admits an app-bound mutation envelope that names no Operator when `acting_app_id` matches the app certificate, ephemeral SSE events are sent without an `id:` line, and a web session routes SSE under its real ID; evaluation campaigns record the platform release that froze them (`g8e eval campaigns tag`, export schema `1.2.0`, Explorer release filter), a provider or harness failure is `INVALID_EVIDENCE` instead of a model failure, grades carry a typed basis and stored scores are re-verified against them, `g8e eval runs assignments` is added, rollout qualifies a changed catalog under a digest-suffixed campaign ID, and live events are the typed `PublicLiveEvent`; model output limits belong to the provider (the `llm_max_tokens` and `eval_judge_max_tokens` settings are removed), prompts are smaller and cache-stable, and `make dev-setup` and `make dev-check` set up and verify the contributor toolchain. | [v2.3.0](docs/release_notes/v2.3.x/v2.3.0.md) |
+
 ## v2.2.x
 
 | Version | Date | Description | Notes |

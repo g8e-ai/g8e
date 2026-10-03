@@ -56,6 +56,9 @@
     - [PublicEvidenceBinding](#g8e-eval-v1-PublicEvidenceBinding)
     - [PublicGovernedActionActivity](#g8e-eval-v1-PublicGovernedActionActivity)
     - [PublicGovernedActionActivityRecord](#g8e-eval-v1-PublicGovernedActionActivityRecord)
+    - [PublicLiveEvent](#g8e-eval-v1-PublicLiveEvent)
+    - [PublicLiveEvent.MetricDeltaEntry](#g8e-eval-v1-PublicLiveEvent-MetricDeltaEntry)
+    - [PublicLiveMetricValue](#g8e-eval-v1-PublicLiveMetricValue)
     - [PublicModelActivity](#g8e-eval-v1-PublicModelActivity)
     - [PublicModelActivityRecord](#g8e-eval-v1-PublicModelActivityRecord)
     - [PublicModelCallSummary](#g8e-eval-v1-PublicModelCallSummary)
@@ -79,6 +82,7 @@
   
     - [EvaluationAssignmentLifecycleStatus](#g8e-eval-v1-EvaluationAssignmentLifecycleStatus)
     - [EvaluationAttemptStatus](#g8e-eval-v1-EvaluationAttemptStatus)
+    - [EvaluationCallClassification](#g8e-eval-v1-EvaluationCallClassification)
     - [EvaluationComparator](#g8e-eval-v1-EvaluationComparator)
     - [EvaluationEvidenceAuthority](#g8e-eval-v1-EvaluationEvidenceAuthority)
     - [EvaluationGovernancePosture](#g8e-eval-v1-EvaluationGovernancePosture)
@@ -98,6 +102,7 @@
     - [EvaluationUsageAvailability](#g8e-eval-v1-EvaluationUsageAvailability)
     - [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus)
     - [EvaluationWitnessPolicy](#g8e-eval-v1-EvaluationWitnessPolicy)
+    - [GradeBasis](#g8e-eval-v1-GradeBasis)
     - [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole)
     - [ModelCapabilityKind](#g8e-eval-v1-ModelCapabilityKind)
     - [ModelManifestVerificationStatus](#g8e-eval-v1-ModelManifestVerificationStatus)
@@ -111,6 +116,7 @@
     - [PublicFinishState](#g8e-eval-v1-PublicFinishState)
     - [PublicGradeExplanationCode](#g8e-eval-v1-PublicGradeExplanationCode)
     - [PublicReceiptStatus](#g8e-eval-v1-PublicReceiptStatus)
+    - [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis)
     - [PublicToolScoreDimension](#g8e-eval-v1-PublicToolScoreDimension)
     - [PublicUnavailableReason](#g8e-eval-v1-PublicUnavailableReason)
     - [PublicVerificationProvenance](#g8e-eval-v1-PublicVerificationProvenance)
@@ -197,6 +203,7 @@
 | status | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
 | score | [double](#double) |  |  |
 | detail | [string](#string) |  |  |
+| basis | [GradeBasis](#g8e-eval-v1-GradeBasis) |  |  |
 
 
 
@@ -360,6 +367,8 @@ EvaluationCampaignSpec is the frozen private campaign definition.
 | governance_posture | [EvaluationGovernancePosture](#g8e-eval-v1-EvaluationGovernancePosture) |  |  |
 | scenario_count | [uint32](#uint32) |  |  |
 | repetition_count | [uint32](#uint32) |  |  |
+| platform_release | [string](#string) |  | platform_release is the g8e build version that froze the campaign. It is part of campaign_digest, so a campaign cannot be re-labeled. Empty only on campaigns frozen before v2.3.0; their release is an operator-asserted tag held outside the digest. |
+| source_revision | [string](#string) |  | source_revision is the source commit of the build that froze the campaign. |
 
 
 
@@ -894,6 +903,7 @@ ModelInferenceRecord captures one governed scored inference call.
 | provider_boundary_observation_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
 | tools_declared | [string](#string) | repeated | Tool names as sent to the provider for this call, captured at the provider boundary. tools_declared_reported distinguishes &#34;none declared&#34; from &#34;not reported&#34;. |
 | tools_declared_reported | [bool](#bool) |  |  |
+| classification | [EvaluationCallClassification](#g8e-eval-v1-EvaluationCallClassification) |  | Which chain the call belongs to, stated by the producer at the call site. Aggregators select scored calls by this field, never by persona or span. |
 
 
 
@@ -1200,6 +1210,9 @@ to one governed inference provider attempt.
 | lifecycle_status | [EvaluationAssignmentLifecycleStatus](#g8e-eval-v1-EvaluationAssignmentLifecycleStatus) |  |  |
 | repetition | [uint32](#uint32) |  |  |
 | observed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| release | [string](#string) |  |  |
+| release_basis | [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis) |  |  |
+| source_revision | [string](#string) |  |  |
 
 
 
@@ -1237,6 +1250,9 @@ to one governed inference provider attempt.
 | guided_retry_count | [uint32](#uint32) |  |  |
 | failure_reason | [string](#string) |  |  |
 | tools_declared | [string](#string) | repeated |  |
+| release | [string](#string) |  |  |
+| release_basis | [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis) |  |  |
+| source_revision | [string](#string) |  |  |
 
 
 
@@ -1258,6 +1274,9 @@ to one governed inference provider attempt.
 | catalog_digest | [string](#string) |  |  |
 | model_registry_digest | [string](#string) |  |  |
 | lane | [EvaluationLane](#g8e-eval-v1-EvaluationLane) |  |  |
+| release | [string](#string) |  |  |
+| release_basis | [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis) |  |  |
+| source_revision | [string](#string) |  |  |
 
 
 
@@ -1310,6 +1329,78 @@ to one governed inference provider attempt.
 | reported_policy_outcome | [EvaluationPolicyDecisionOutcome](#g8e-eval-v1-EvaluationPolicyDecisionOutcome) |  |  |
 | receipt_status | [PublicReceiptStatus](#g8e-eval-v1-PublicReceiptStatus) |  |  |
 | evidence_source | [PublicEvidenceSource](#g8e-eval-v1-PublicEvidenceSource) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicLiveEvent"></a>
+
+### PublicLiveEvent
+One disclosure-safe Explorer live event. kind, quality_state,
+lifecycle_status, and role carry the Explorer view contract&#39;s closed string
+vocabularies, which publicdisclosure.ValidatePublicFeedRecord enforces.
+completed and total are presence-tracked: zero progress is a value, and a
+producer that leaves either unset is rejected at validation.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| schema_version | [string](#string) |  |  |
+| kind | [string](#string) |  |  |
+| dataset_id | [string](#string) |  |  |
+| quality_state | [string](#string) |  |  |
+| observed_at | [string](#string) |  |  |
+| source_revision_label | [string](#string) |  |  |
+| release | [string](#string) |  |  |
+| release_basis | [PublicReleaseBasis](#g8e-eval-v1-PublicReleaseBasis) |  |  |
+| source_revision | [string](#string) |  |  |
+| event_id | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| assignment_id | [string](#string) |  |  |
+| variant_id | [string](#string) |  |  |
+| role | [string](#string) |  |  |
+| lifecycle_status | [string](#string) |  |  |
+| completed | [uint32](#uint32) | optional |  |
+| total | [uint32](#uint32) | optional |  |
+| stage_label | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| metric_delta | [PublicLiveEvent.MetricDeltaEntry](#g8e-eval-v1-PublicLiveEvent-MetricDeltaEntry) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicLiveEvent-MetricDeltaEntry"></a>
+
+### PublicLiveEvent.MetricDeltaEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [PublicLiveMetricValue](#g8e-eval-v1-PublicLiveMetricValue) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicLiveMetricValue"></a>
+
+### PublicLiveMetricValue
+One scalar in a live event&#39;s metric_delta. value is presence-tracked so a
+measured zero (a failed assignment&#39;s binary pass) is emitted, never dropped;
+exactly one of value and unavailable_reason is set.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| value | [double](#double) | optional |  |
+| unavailable_reason | [string](#string) |  |  |
 
 
 
@@ -1759,6 +1850,24 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 
 
 
+<a name="g8e-eval-v1-EvaluationCallClassification"></a>
+
+### EvaluationCallClassification
+EvaluationCallClassification names the chain a model call belongs to.
+SCORED_CHAIN calls answer the scored turn and are the only calls summed into
+scored aggregates. POST_TURN calls (for example the memory write) run after
+the turn. GRADER calls judge the turn and are recorded in grader_calls, never
+in model_inferences.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| EVALUATION_CALL_CLASSIFICATION_UNSPECIFIED | 0 |  |
+| EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN | 1 |  |
+| EVALUATION_CALL_CLASSIFICATION_POST_TURN | 2 |  |
+| EVALUATION_CALL_CLASSIFICATION_GRADER | 3 |  |
+
+
+
 <a name="g8e-eval-v1-EvaluationComparator"></a>
 
 ### EvaluationComparator
@@ -2050,6 +2159,24 @@ trajectory the model produced in its guided loop.
 
 
 
+<a name="g8e-eval-v1-GradeBasis"></a>
+
+### GradeBasis
+GradeBasis states what a deterministic grade measures, so each independent
+observation counts once in the verdict and the pass rate. OBSERVATION is a
+fact read from the trace or workspace and is the only counted basis. DERIVED
+is a boolean function of other grades in the same result. STRUCTURAL is a
+harness precondition, not a model result. UNSPECIFIED is never valid.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| GRADE_BASIS_UNSPECIFIED | 0 |  |
+| GRADE_BASIS_OBSERVATION | 1 |  |
+| GRADE_BASIS_DERIVED | 2 |  |
+| GRADE_BASIS_STRUCTURAL | 3 |  |
+
+
+
 <a name="g8e-eval-v1-ModelCampaignRole"></a>
 
 ### ModelCampaignRole
@@ -2236,6 +2363,20 @@ governed provider attempt on the remote observer operator.
 | PUBLIC_RECEIPT_STATUS_UNSPECIFIED | 0 |  |
 | PUBLIC_RECEIPT_STATUS_UNAVAILABLE | 1 |  |
 | PUBLIC_RECEIPT_STATUS_REPORTED | 2 |  |
+
+
+
+<a name="g8e-eval-v1-PublicReleaseBasis"></a>
+
+### PublicReleaseBasis
+The release measured by a campaign is independent of verifier provenance.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_RELEASE_BASIS_UNSPECIFIED | 0 |  |
+| PUBLIC_RELEASE_BASIS_RECORDED | 1 | Bound into campaign_digest at creation. |
+| PUBLIC_RELEASE_BASIS_ASSERTED | 2 | Operator tag outside campaign_digest. |
+| PUBLIC_RELEASE_BASIS_UNKNOWN | 3 | Historical campaign without a release tag. |
 
 
 

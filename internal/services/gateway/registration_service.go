@@ -8,9 +8,6 @@
 package gateway
 
 import (
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -22,6 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
@@ -445,6 +443,15 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	if updateErr != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, updateErr)
 	}
+	// Claiming an offline slot moves it straight to active; announce it so an
+	// already-connected browser session sees the Operator without waiting for
+	// a later transition or a manual reload.
+	s.docStore.NotifyOperatorStatusChanged(OperatorStatusTransition{
+		OperatorID: operator.ID,
+		UserID:     userID,
+		Name:       operator.Name,
+		Status:     constants.OperatorStatusActive,
+	})
 
 	// Fetch trust bundle
 	hubBundle, err := s.pki.GatewayTrustBundle()
@@ -950,27 +957,10 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 
 // calculateFingerprintFromPEM computes the SHA-256 fingerprint of a PEM-encoded certificate.
 func calculateFingerprintFromPEM(certPEM string) string {
-	block, _ := pem.Decode([]byte(certPEM))
-	if block == nil {
-		return ""
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return ""
-	}
-	hash := sha256.Sum256(cert.Raw)
-	return hex.EncodeToString(hash[:])
+	return auth.CertificateFingerprint(certPEM)
 }
 
 // calculateSerialFromPEM extracts the serial number from a PEM-encoded certificate.
 func calculateSerialFromPEM(certPEM string) string {
-	block, _ := pem.Decode([]byte(certPEM))
-	if block == nil {
-		return ""
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return ""
-	}
-	return cert.SerialNumber.String()
+	return auth.CertificateSerialNumber(certPEM)
 }

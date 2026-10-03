@@ -5,9 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import json
+
 import pytest
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
+from app.constants.chat_model_call_sites import classification_for_agent_role
 from app.errors import ValidationError
 from app.models.evaluation_trace import (
     EvaluationAssignmentTrace,
@@ -17,6 +20,7 @@ from app.models.evaluation_trace import (
     EvaluationTextOutput,
     EvaluationToolCallRecord,
     EvaluationTriageOutput,
+    EvaluationVoteOutput,
     ToolGate,
 )
 from app.models.http_context import G8eHttpContext
@@ -26,6 +30,7 @@ from app.services.evaluation.trace_service import (
     compute_trace_digest,
     validated_trace_ids,
 )
+from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest
 from g8e.models.internal_api import (
     EvaluationInferenceContext,
     EvaluationInvestigationSeed,
@@ -71,6 +76,7 @@ def test_trace_persist_finalize_and_load(trace_service):
     context = _context()
     triage_call = ModelCallTelemetry(
         agent_role="triage",
+        classification="scored_chain",
         model_role="lite",
         provider="G8EProvider",
         model="model-a",
@@ -81,6 +87,7 @@ def test_trace_persist_finalize_and_load(trace_service):
 
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -159,6 +166,34 @@ def test_trace_finalize_persists_the_chain_and_binds_it_into_the_digest(trace_se
     assert compute_trace_digest(tampered) != loaded.trace_digest
 
 
+def test_trace_digest_survives_a_reader_that_decodes_integral_floats_as_integers(trace_service):
+    # The Go verifier decodes every number to float64 and re-encodes it, so a
+    # vote of exactly 0.0 or 1.0 comes back as 0 or 1. The digest has to be the
+    # same for the trace as persisted and for that re-encoded copy.
+    context = _context()
+    trace_service.begin(context)
+    vote = EvaluationPlayerStep(
+        step_id="vote",
+        sequence=1,
+        player="tribunal",
+        round=1,
+        vote=EvaluationVoteOutput(reached=False, vote_score=0.0, consensus_strength=1.0),
+    )
+
+    finalized = trace_service.finalize(
+        context,
+        model_calls=[],
+        player_steps=[vote],
+        finish_reason="stop",
+        status="completed",
+    )
+
+    persisted = trace_service.trace_file("assignment-1", "attempt-1").read_text(encoding="utf-8")
+    assert '"vote_score":0}' in persisted
+    assert '"consensus_strength":1,' in persisted
+    assert compute_chat_probe_trace_digest(json.loads(persisted)) == finalized.trace_digest
+
+
 def test_trace_finalize_persists_designated_role_output(trace_service):
     context = _context()
     trace_service.begin(context)
@@ -181,6 +216,7 @@ def test_trace_finalize_records_the_proof_that_the_opportunity_was_real(trace_se
     trace_service.begin(context)
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -236,6 +272,7 @@ def test_trace_distinguishes_no_tools_declared_from_not_reported(trace_service):
     def _call(role: str, tools: list[str] | None) -> ModelCallTelemetry:
         return ModelCallTelemetry(
             agent_role=role,
+            classification=classification_for_agent_role(role),
             provider="G8EProvider",
             model="model-a",
             monotonic_start=1.0,
@@ -349,6 +386,7 @@ def test_finalize_crashed_closes_a_running_trace_as_failed_and_keeps_triage(trac
     context = _context()
     triage_call = ModelCallTelemetry(
         agent_role="triage",
+        classification="scored_chain",
         model_role="lite",
         provider="G8EProvider",
         model="model-a",
@@ -442,6 +480,7 @@ def test_trace_digest_binds_declared_tools_and_gate():
     def _call(tools: list[str]) -> ModelCallTelemetry:
         return ModelCallTelemetry(
             agent_role="sage",
+            classification="scored_chain",
             provider="G8EProvider",
             model="model-a",
             monotonic_start=1.0,
@@ -492,6 +531,7 @@ def test_trace_digest_changes_when_model_calls_change():
             "model_calls": [
                 ModelCallTelemetry(
                     agent_role="sage",
+                    classification="scored_chain",
                     provider="G8EProvider",
                     model="model-a",
                     monotonic_start=1.0,

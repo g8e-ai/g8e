@@ -91,7 +91,6 @@ class PromptFile(StrEnum):
     TOOLS_FILE_READ = "tools/file_read_on_operator.txt"
     TOOLS_FILE_UPDATE = "tools/file_update_on_operator.txt"
     TOOLS_REVOKE_INTENT = "tools/revoke_intent_permission.txt"
-    TOOLS_STREAM_OPERATOR = "tools/stream_operator_to_ssh_fleet.txt"
     TOOLS_SSH_INVENTORY = "tools/list_ssh_inventory.txt"
     TOOLS_GET_COMMAND_CONSTRAINTS = "tools/get_command_constraints.txt"
     TOOLS_GRANT_INTENT = "tools/grant_intent_permission.txt"

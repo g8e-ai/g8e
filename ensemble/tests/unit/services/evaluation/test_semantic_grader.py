@@ -51,7 +51,7 @@ def _evaluation_context() -> EvaluationInferenceContext:
 async def test_grade_campaign_assignment_semantically_records_passing_grade():
     context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     settings = G8eeUserSettings(
-        eval_judge=EvalJudgeSettings(eval_judge_model="judge-model", eval_judge_max_tokens=1024)
+        eval_judge=EvalJudgeSettings(eval_judge_model="judge-model")
     )
     judge_grade = EvalGrade(
         score=4,
@@ -60,6 +60,7 @@ async def test_grade_campaign_assignment_semantically_records_passing_grade():
         model_calls=[
             ModelCallTelemetry(
                 agent_role="judge",
+                classification="grader",
                 provider="GeminiProvider",
                 model="judge-model",
                 monotonic_start=1.0,
@@ -75,7 +76,7 @@ async def test_grade_campaign_assignment_semantically_records_passing_grade():
         semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
             evaluation_context=context.evaluation_context,
             g8e_context=context,
-            request_settings=settings,
+            judge_settings=settings,
             gold_summary=context.evaluation_context.gold_summary,
             designated_role_output="checkout-api failed",
             tool_calls=[
@@ -119,7 +120,7 @@ async def test_grade_campaign_assignment_semantically_uses_lite_model_fallback()
         semantic_grades, _ = await grade_campaign_assignment_semantically(
             evaluation_context=context.evaluation_context,
             g8e_context=context,
-            request_settings=settings,
+            judge_settings=settings,
             gold_summary=context.evaluation_context.gold_summary,
             designated_role_output="delegating to assistant",
             tool_calls=[],
@@ -160,7 +161,7 @@ async def test_grade_campaign_assignment_semantically_uses_jev_decision_provider
         semantic_grades, _ = await grade_campaign_assignment_semantically(
             evaluation_context=context.evaluation_context,
             g8e_context=context,
-            request_settings=settings,
+            judge_settings=settings,
             gold_summary=context.evaluation_context.gold_summary,
             designated_role_output="checkout-api failed",
             tool_calls=[],
@@ -175,13 +176,52 @@ async def test_grade_campaign_assignment_semantically_uses_jev_decision_provider
 
 
 @pytest.mark.asyncio
+async def test_empty_judge_response_is_unavailable_and_sends_no_output_cap():
+    """Simulates the provider returning no candidates (the 2026-10-02 failure shape).
+
+    Uses the real EvalJudge so the whole path runs: the judge call must carry no
+    invented output limit, and an empty response must surface as an explicit
+    `unavailable` grade, never a silent pass, fail, or zero score.
+    """
+    from unittest.mock import MagicMock
+
+    from app.llm.llm_types import GenerateContentResponse
+
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    settings = G8eeUserSettings(
+        llm=LLMSettings(lite_provider=LLMProvider.OLLAMA, lite_model="qwen3:0.6b"),
+    )
+    provider = MagicMock()
+    provider.generate_content_lite = AsyncMock(return_value=GenerateContentResponse(candidates=[]))
+
+    with patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=provider):
+        semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
+            evaluation_context=context.evaluation_context,
+            g8e_context=context,
+            judge_settings=settings,
+            gold_summary=context.evaluation_context.gold_summary,
+            designated_role_output="checkout-api failed",
+            tool_calls=[],
+        )
+
+    sent = provider.generate_content_lite.call_args.kwargs["lite_llm_settings"]
+    assert sent.max_output_tokens is None
+    assert len(semantic_grades) == 1
+    assert semantic_grades[0].status == "unavailable"
+    assert semantic_grades[0].score is None
+    assert "empty response" in semantic_grades[0].detail
+    assert grader_calls == []
+    assert provider.generate_content_lite.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_grade_campaign_assignment_semantically_returns_unavailable_when_judge_missing():
     context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     settings = G8eeUserSettings()
     semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
         evaluation_context=context.evaluation_context,
         g8e_context=context,
-        request_settings=settings,
+        judge_settings=settings,
         gold_summary=context.evaluation_context.gold_summary,
         designated_role_output="delegating to assistant",
         tool_calls=[],
@@ -191,3 +231,44 @@ async def test_grade_campaign_assignment_semantically_returns_unavailable_when_j
     assert len(semantic_grades) == 1
     assert semantic_grades[0].status == "unavailable"
     assert semantic_grades[0].detail
+
+
+@pytest.mark.asyncio
+async def test_judge_is_called_with_grader_context_without_evaluation_attempt_id():
+    """Verify that judge calls are NOT attributed to the scored turn's evaluation_attempt_id.
+
+    W2 requirement: Grader context must be distinct from the scored chain.
+    The judge should not set the judged assignment's evaluation_attempt_id
+    as a scored-chain member, so grader calls are excluded from scored aggregates.
+    """
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    settings = G8eeUserSettings(
+        eval_judge=EvalJudgeSettings(eval_judge_model="judge-model")
+    )
+    judge_grade = EvalGrade(
+        score=4,
+        reasoning="checkout-api is identified",
+        passed=True,
+        model_calls=[],
+    )
+    with patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()), patch(
+        "app.services.evaluation.semantic_grader.EvalJudge"
+    ) as judge_cls:
+        judge_cls.return_value.grade_turn = AsyncMock(return_value=judge_grade)
+        await grade_campaign_assignment_semantically(
+            evaluation_context=context.evaluation_context,
+            g8e_context=context,
+            judge_settings=settings,
+            gold_summary=context.evaluation_context.gold_summary,
+            designated_role_output="checkout-api failed",
+            tool_calls=[],
+        )
+
+    # Verify the judge was instantiated with a grader context
+    judge_instantiation_context = judge_cls.call_args.kwargs["g8e_context"]
+    assert judge_instantiation_context is not None
+    assert judge_instantiation_context.evaluation_context is None, (
+        "Grader context must not carry evaluation_context (which includes evaluation_attempt_id)"
+    )
+    assert judge_instantiation_context.user_id == context.user_id
+    assert judge_instantiation_context.operator_id == context.operator_id

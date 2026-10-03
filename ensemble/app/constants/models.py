@@ -18,10 +18,16 @@ class ProtocolConstantValue(G8eBaseModel):
     python_const: str | None = Field(default=None, alias="_python_const")
 
 
+class CollectionConstantValue(ProtocolConstantValue):
+    """A collection name, with whether governed document actions may target it."""
+
+    governed: bool = Field(default=False, alias="_governed")
+
+
 class CollectionsConstants(G8eBaseModel):
     """Canonical database collection names."""
 
-    collections: dict[str, ProtocolConstantValue]
+    collections: dict[str, CollectionConstantValue]
 
 
 class DocumentIdsConstants(G8eBaseModel):
@@ -190,7 +196,6 @@ class InfraPaths(G8eBaseModel):
     ca_cert_path: str
     app_cert_dir: str
     pki_dir: str
-    secrets_dir: str
     docs_dir: str
     ssh_config_path: str
     pending_enrollment_dir: str = ""

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -146,7 +147,7 @@ func TestCampaignAssignmentVerifier_FailsWhenCapturedTelemetryDriftsFromTrace(t 
 	})
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
-	assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: model inference 0 mismatch")
+	assert.Contains(t, report.GetFailureReasons(), "model inference 0 mismatch: "+constants.ErrEvaluationEvidenceTraceMismatch.Error())
 }
 
 func loadScenarioGold(t *testing.T, scenarioID string) ScenarioGoldCriteria {

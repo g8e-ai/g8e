@@ -12,6 +12,7 @@ from fastapi import Request
 
 from app.constants import MessageSender, ComponentName
 from app.constants.generated_status import EventType
+from app.models.settings import G8eeUserSettings
 from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from app.routers.chat_router import (
@@ -71,7 +72,7 @@ class TestTriageEndpoints:
             investigation_service=mock_investigation_service,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
-            settings_service=AsyncMock(),
+            user_settings=G8eeUserSettings(),
             g8e_context=g8e_context,
         )
 
@@ -126,7 +127,7 @@ class TestTriageEndpoints:
             investigation_service=mock_investigation_service,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
-            settings_service=AsyncMock(),
+            user_settings=G8eeUserSettings(),
             g8e_context=g8e_context,
         )
 

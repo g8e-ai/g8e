@@ -158,7 +158,7 @@ func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 // argument propagation and failure wrapping without starting platform tests.
 type e2eCommandRunner func(ctx context.Context, name string, args ...string) (int, error)
 
-const defaultE2ERunRegexp = "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestDashboard_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)"
+const defaultE2ERunRegexp = "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestConsole_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)"
 
 // realE2ERunner runs the Go test binary as a child process, streaming stdout
 // and stderr to the parent. It returns the child exit code and any start/run

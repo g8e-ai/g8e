@@ -18,7 +18,21 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 )
+
+func TestOperatorFingerprintOptions_ProvenanceIncludesRuntimePort(t *testing.T) {
+	opts := ServeOperatorOptions{ProvenanceOperatorEnabled: true}
+
+	got := operatorFingerprintOptions(opts, "/var/lib/ollama/models", "operator-user")
+
+	assert.Equal(t, auth.FingerprintOptions{
+		LocalDir: "/var/lib/ollama/models",
+		Account:  "operator-user",
+		Port:     constants.Ports.OperatorHttp,
+		Role:     string(constants.OperatorRoleProvenance),
+	}, got)
+}
 
 func TestServeOperatorOptions_ZeroValue(t *testing.T) {
 	var opts ServeOperatorOptions
@@ -393,14 +407,12 @@ func TestServeOperatorOptions_Equality_AllFieldsEqual(t *testing.T) {
 
 func TestBuildOperatorLoadOptions_BasicMapping(t *testing.T) {
 	opts := ServeOperatorOptions{
-		LogLevel:                     "debug",
-		CloudMode:                    true,
-		CloudProvider:                "aws",
-		ExecutionVault:               true,
-		NoGit:                        true,
-		HeartbeatInterval:            45 * time.Second,
-		InferenceCampaignID:          "campaign-1",
-		InferenceModelRegistryDigest: strings.Repeat("a", 64),
+		LogLevel:          "debug",
+		CloudMode:         true,
+		CloudProvider:     "aws",
+		ExecutionVault:    true,
+		NoGit:             true,
+		HeartbeatInterval: 45 * time.Second,
 	}
 
 	loadOpts := buildOperatorLoadOptions(opts, "10.0.0.1", "/work/dir")
@@ -415,8 +427,6 @@ func TestBuildOperatorLoadOptions_BasicMapping(t *testing.T) {
 	assert.Equal(t, "debug", loadOpts.LogLevel)
 	assert.Equal(t, "/work/dir", loadOpts.WorkDir)
 	assert.Equal(t, 45*time.Second, loadOpts.HeartbeatInterval)
-	assert.Equal(t, "campaign-1", loadOpts.InferenceCampaignID)
-	assert.Equal(t, strings.Repeat("a", 64), loadOpts.InferenceModelRegistryDigest)
 }
 
 func TestBuildOperatorLoadOptions_EmptyEndpoint(t *testing.T) {

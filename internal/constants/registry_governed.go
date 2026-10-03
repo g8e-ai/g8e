@@ -8,18 +8,7 @@
 package constants
 
 import (
-	"errors"
 	"fmt"
-)
-
-var (
-	ErrTxUnknownEventType      = errors.New("TX_UNKNOWN_EVENT: event type not registered")
-	ErrTxEventNotRequest       = errors.New("TX_EVENT_NOT_REQUEST: event is not a governed request")
-	ErrTxEventNotGoverned      = errors.New("TX_EVENT_NOT_GOVERNED: event is not on the governed transport")
-	ErrTxEventActionMismatch   = errors.New("TX_EVENT_ACTION_MISMATCH: event_type and action_type disagree")
-	ErrTxOutcomeNotRegistered  = errors.New("TX_OUTCOME_NOT_REGISTERED: outcome event type not registered")
-	ErrTxOutcomeNotAllowed     = errors.New("TX_OUTCOME_NOT_ALLOWED: outcome event type not listed for request")
-	ErrTxPayloadDecoderMissing = errors.New("TX_PAYLOAD_DECODER_MISSING: no typed payload decoder for governed action")
 )
 
 func eventHasTransport(entry EventRegistryEntry, transport string) bool {

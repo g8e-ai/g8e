@@ -1,0 +1,24 @@
+{
+  "message_type": "CanonicalJSONValues",
+  "description": "Each input is JSON text. Decoding it into a generic value and re-encoding it with the trace-digest canonical encoder must produce exactly canonical. Go decodes every number to float64, so an integral float loses its fractional part and the plain/exponent switch sits at 1e-6 and 1e21.",
+  "cases": [
+    {"name": "zero float", "input": "0.0", "canonical": "0"},
+    {"name": "negative zero float", "input": "-0.0", "canonical": "-0"},
+    {"name": "one float", "input": "1.0", "canonical": "1"},
+    {"name": "integral float", "input": "100.0", "canonical": "100"},
+    {"name": "fraction", "input": "0.5", "canonical": "0.5"},
+    {"name": "monotonic clock", "input": "13612.72729467", "canonical": "13612.72729467"},
+    {"name": "below Python exponent threshold", "input": "0.00001", "canonical": "0.00001"},
+    {"name": "lowest plain float", "input": "0.000001", "canonical": "0.000001"},
+    {"name": "smallest exponent float", "input": "1e-07", "canonical": "1e-7"},
+    {"name": "two digit negative exponent", "input": "1.5e-10", "canonical": "1.5e-10"},
+    {"name": "above Python plain limit", "input": "1e16", "canonical": "10000000000000000"},
+    {"name": "below Go exponent limit", "input": "2.5e20", "canonical": "250000000000000000000"},
+    {"name": "first exponent float", "input": "1e21", "canonical": "1e+21"},
+    {"name": "integer", "input": "878", "canonical": "878"},
+    {"name": "html sensitive string", "input": "\"a<b>&c\"", "canonical": "\"a\\u003cb\\u003e\\u0026c\""},
+    {"name": "line separators", "input": "\"\\u2028\\u2029\"", "canonical": "\"\\u2028\\u2029\""},
+    {"name": "vote step", "input": "{\"vote\":{\"vote_score\":0.0,\"consensus_strength\":1.0}}", "canonical": "{\"vote\":{\"consensus_strength\":1,\"vote_score\":0}}"},
+    {"name": "sorted keys and arrays", "input": "{\"b\":1.0,\"a\":[0.0,0.25]}", "canonical": "{\"a\":[0,0.25],\"b\":1}"}
+  ]
+}

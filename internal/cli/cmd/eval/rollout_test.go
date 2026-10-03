@@ -47,7 +47,7 @@ func TestRolloutAdd_RejectsUnknownModel(t *testing.T) {
 	env := setupRunEnv(t)
 	_, err := env.run(t, "rollout", "add", "unknown:model")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.ErrorIs(t, err, constants.ErrInferenceModelNotFound)
 }
 
 func TestRolloutRemove_DropsModelByTag(t *testing.T) {
@@ -111,7 +111,7 @@ func TestRolloutNext_FailsWhenNoPendingModels(t *testing.T) {
 	env := setupRunEnv(t)
 	_, err := env.run(t, "rollout", "next")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no pending models")
+	assert.ErrorIs(t, err, constants.ErrNotFound)
 }
 
 func TestRolloutList_FiltersByStatus(t *testing.T) {
@@ -141,7 +141,7 @@ func TestRolloutRun_PromoteOnPassRequiresGateSmoke(t *testing.T) {
 
 	_, err := env.run(t, "rollout", "run", "--promote-on-pass")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--promote-on-pass requires --gate-smoke")
+	assert.ErrorIs(t, err, constants.ErrEvaluationFlagsInvalid)
 }
 
 func TestRolloutRun_UntilCannotBeNegative(t *testing.T) {
@@ -150,5 +150,5 @@ func TestRolloutRun_UntilCannotBeNegative(t *testing.T) {
 
 	_, err := env.run(t, "rollout", "run", "--until", "-1")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "must not be negative")
+	assert.ErrorIs(t, err, constants.ErrEvaluationFlagsInvalid)
 }

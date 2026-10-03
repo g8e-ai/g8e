@@ -54,7 +54,7 @@ from app.llm.llm_types import (
     PrimaryLLMSettings,
     ThinkingConfig,
 )
-from app.llm.providers.g8e import G8EProvider, _contents_to_messages
+from app.llm.providers.g8e import G8EProvider, _contents_to_messages, _validate_response_identity
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import InferenceDispatchRequest, InferenceDispatchResponse
 from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
@@ -75,6 +75,36 @@ from g8e.operator.v1.operator_pb2 import (
 )
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.parametrize("served_digest", ["", "ab" * 32])
+def test_response_identity_accepts_unpinned_served_digest(served_digest):
+    request = InferenceDispatchRequest(model="gemma3:4b", provider_attempt_id="attempt-1")
+    response = _response()
+    _bind_response_identity(request, response)
+    response.result.served_model_digest = served_digest
+    _validate_response_identity(request, response)
+
+
+@pytest.mark.parametrize("served_digest", ["malformed", "AB" * 32, "cd" * 32, ""])
+def test_response_identity_rejects_invalid_or_mismatched_served_digest(served_digest):
+    request = InferenceDispatchRequest(
+        model="gemma3:4b", provider_attempt_id="attempt-1", model_digest="ab" * 32
+    )
+    response = _response()
+    _bind_response_identity(request, response)
+    response.result.served_model_digest = served_digest
+    with pytest.raises(ValidationError, match="identity binding"):
+        _validate_response_identity(request, response)
+
+
+def test_response_identity_rejects_malformed_unpinned_served_digest():
+    request = InferenceDispatchRequest(model="gemma3:4b", provider_attempt_id="attempt-1")
+    response = _response()
+    _bind_response_identity(request, response)
+    response.result.served_model_digest = "malformed"
+    with pytest.raises(ValidationError, match="identity binding"):
+        _validate_response_identity(request, response)
 
 
 def _response(text: str = "generated output") -> InferenceDispatchResponse:
@@ -301,7 +331,9 @@ class TestG8EProviderDispatch:
         assert request.role == MODEL_ROLE_PRIMARY
         assert request.model == "gemma3:4b"
         assert request.provider_attempt_id
-        assert request.max_tokens == PrimaryLLMSettings().max_output_tokens
+        # Unset on the Python side; the proto3 default tells the Gateway to use the backend default.
+        assert PrimaryLLMSettings().max_output_tokens is None
+        assert request.max_tokens == 0
         assert resp.candidates[0].content.parts[0].text == "generated output"
         assert resp.usage_metadata.total_token_count == 18
         assert resp.usage_metadata.usage_reported is True
@@ -995,7 +1027,7 @@ class TestG8EProviderCanonicalJSON:
                             response={
                                 "pattern": ":(){ :|:& };:",
                                 "substring": "> /dev/sd",
-                                "tag": "<b>  </b>",
+                                "tag": "<b>\u2028\u2029</b>",
                             },
                         )
                     )

@@ -89,7 +89,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-GOV-LAY-02 | L2 Consensus member votes MUST be Ed25519 signatures over `<transaction_hash>|<decision>`. Under `consensus` and `notary` postures, affirmative votes (`decision=true`) from distinct members (when `require_distinct` is true) MUST meet policy quorum, or reject with `ErrTxL2QuorumNotMet`. |
 | INV-GOV-LAY-03 | Platform bootstrap action types (`actionType.IsBootstrapAction()`) MUST be exempt from L2 consensus gating across all postures, allowing platform enrollment before consensus members are enrolled. |
 | INV-GOV-LAY-04 | L3 Notary verification MUST gate mutation actions under `ratify` and `notary` postures (`ErrTxL3ProofMissing`). Read-only actions MUST NOT require an L3 proof under any posture. |
-| INV-GOV-LAY-05 | In gateway mode, L3 Notary requires a WebAuthn passkey assertion with challenge matching the transaction hash (`ErrPasskeyProofRequired`). In outbound operator mode, L3 Notary verifies an approved suspended transaction within the 30-minute window (`L3ApprovalWindow`) signed by the operator private key with matching certificate fingerprint. |
+| INV-GOV-LAY-05 | In gateway mode, L3 Notary requires a WebAuthn passkey assertion with challenge matching the transaction hash (`ErrPasskeyProofRequired`). In outbound operator mode, L3 Notary verifies an approved suspended transaction within the 30-minute window (`L3ApprovalWindow`) signed by the operator private key with matching certificate fingerprint. L4 passes `requestor_user_id` as the approving user; `operator_id` identifies the execution target. Attaching approval proof MUST preserve every hashed envelope field. |
 
 ### L4 Warden Pre-Dispatch (`INV-GOV-WARD`)
 
@@ -97,9 +97,11 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-GOV-WARD-01 | L4 Warden MUST track nonces in memory (`inFlight`) before stateful operations to prevent race conditions, and MUST durably reserve the nonce in `ReplayStore` before payload validation. |
 | INV-GOV-WARD-02 | Expiry (`envelope.ExpiresAt`) MUST be strictly checked against the clock before nonce reservation. Expired transactions MUST fail closed with `ErrTxTransactionExpired`. |
-| INV-GOV-WARD-03 | Stateless checks MUST run before stateful checks: protocol version, L1 doctrine presence, non-empty ID, event type validation, known action type, non-empty payload (except heartbeat), typed payload decoding, L1 doctrine scanning, and dual hash matching. |
+| INV-GOV-WARD-03 | Stateless checks MUST run before stateful checks: protocol version, L1 doctrine presence, non-empty ID, event type validation, known action type, non-empty payload (except heartbeat), typed payload decoding, document collection scope, execution target ownership, L1 doctrine scanning, and dual hash matching. |
 | INV-GOV-WARD-04 | The state Merkle root (`envelope.StateMerkleRoot`) MUST match the current root from `StateRootProvider` (or the pre-fetched root in context for in-process gateway builds); mismatches MUST fail closed with `ErrTxStateRootMismatch`. |
 | INV-GOV-WARD-05 | Any validation failure occurring after nonce reservation MUST release the nonce reservation via `replayStore.ReleaseNonce` so that non-admitted transactions do not leave dangling replay locks. |
+| INV-GOV-WARD-06 | A `DOCUMENT_UPDATE` or `DOCUMENT_DELETE` payload MUST target a collection marked `_governed` in `protocol/constants/collections.json` (`CollectionName.IsGovernedDocument`); any other collection MUST fail closed with `ErrTxDocumentCollectionNotGoverned` before execution. The governed document store is the Gateway's platform document store, which also holds `users`, `trusted_signers`, `app_policies`, and other authority records that only their owning Gateway services write. |
+| INV-GOV-WARD-07 | After document collection scope and before doctrine scanning, L4 MUST require `ExecutionTarget.ExecutesFor(envelope.OperatorId)`: an outbound runtime executes only for its own enrolled Operator ID, and the Gateway executes only for the embedded Operator owned by `embedded.Service`. A missing target dependency, empty target on a host action, or foreign target fails closed with `ErrTxTargetOperatorMismatch` (HTTP 403 for direct envelope submission). The INV-AUTH-ID-05 unbound app document-write path is exempt from the Operator ID comparison; the target dependency remains required. Gateway-internal enrollment envelopes name the embedded Operator, including bootstrap before that record is claimed. |
 
 ### L5 Actuator and Execution (`INV-GOV-ACT`)
 
@@ -324,7 +326,7 @@ The L4 Warden executes ordered pre-dispatch verification before any mutation rea
 1. Durable Nonce Reservation (ReplayStore.ReserveNonce + Expiry Check)
         │
         ▼
-2. Stateless Validation (Version 2, L1 Doctrine, Typed Decode, Hash Match)
+2. Stateless Validation (Version 2, L1 Doctrine, Typed Decode, Document Collection Scope, Execution Target, Hash Match)
         │ ──[Failure]──► Release Nonce Reservation & Reject
         ▼
 3. Stateful Validation (State Merkle Root Verification)
@@ -349,6 +351,8 @@ The L4 Warden executes ordered pre-dispatch verification before any mutation rea
    - Action type must be recognized in `knownActionTypes`.
    - Payload must be present (unless action type is `HEARTBEAT`).
    - Typed payload decoded via `DecodePayloadForAction`.
+   - Document update/delete collection checked against the governed set.
+   - Runtime execution target checked against `operator_id` (INV-GOV-WARD-07).
    - Decoded payload evaluated against L1 Doctrine (`ValidatePayload`).
    - Transaction hash computed via `GenerateMessageID`. Both `envelope.TransactionHash` and `envelope.Id` must match the computed hash.
 4. **Step 3: Stateful Validation**:

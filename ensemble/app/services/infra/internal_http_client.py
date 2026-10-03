@@ -5,6 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import codecs
 import logging
 from collections.abc import AsyncIterator
 
@@ -27,7 +28,11 @@ from app.constants import (
     UNKNOWN_ERROR_MESSAGE,
 )
 from app.errors import NetworkError
-from app.models.auth import OperatorSessionValidationRequest, OperatorSessionValidationResponse
+from app.models.auth import (
+    OperatorSessionValidationRequest,
+    OperatorSessionValidationResponse,
+    ProxySigningKeyResponse,
+)
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (
@@ -140,6 +145,22 @@ class InternalHttpClient:
         if not result.valid or result.user_id != user_id:
             return None
         return result
+
+    async def fetch_proxy_signing_key(self) -> ProxySigningKeyResponse:
+        """Fetch the public key the Gateway signs browser-proxy stamps with.
+
+        The caller treats any failure as "no key": proxy identity is then
+        rejected rather than trusted.
+        """
+        self._ensure_mtls()
+        response = await self._http.get(GatewayAPIPaths.GATEWAY_PROXY_SIGNING_KEY)
+        if not response.is_success:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Gateway proxy signing key returned HTTP {response.status_code}",
+                component=G8EE_COMPONENT,
+                details={"status_code": response.status_code},
+            )
+        return ProxySigningKeyResponse.model_validate(response.json())
 
     async def push_sse_event(
         self,
@@ -327,7 +348,7 @@ class InternalHttpClient:
     ) -> OperatorLinkResponse:
         """Generate a single-operator handshake link (dlk_ token) via client.
 
-        This is a prerequisite for the 'stream_operator' tool (Phase 4).
+        The link supports explicit Operator enrollment.
         """
         try:
             logger.info(
@@ -541,6 +562,7 @@ class InternalHttpClient:
         """POST a streaming governed inference dispatch and yield NDJSON frames."""
         self._ensure_mtls()
         request.stream = True
+        decoder = codecs.getincrementaldecoder("utf-8")()
         buffer = ""
         try:
             async for chunk in self._http.stream(
@@ -553,7 +575,7 @@ class InternalHttpClient:
                 ),
                 timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
             ):
-                buffer += chunk.decode("utf-8")
+                buffer += decoder.decode(chunk)
                 while "\n" in buffer:
                     line, buffer = buffer.split("\n", 1)
                     if not line.strip():
@@ -561,6 +583,11 @@ class InternalHttpClient:
                     frame = InferenceDispatchStreamFrame()
                     json_format.Parse(line, frame)
                     yield frame
+            buffer += decoder.decode(b"", final=True)
+            if buffer.strip():
+                frame = InferenceDispatchStreamFrame()
+                json_format.Parse(buffer.strip(), frame)
+                yield frame
         except NetworkError:
             raise
         except Exception as e:
@@ -569,8 +596,3 @@ class InternalHttpClient:
                 component=G8EE_COMPONENT,
                 cause=e,
             ) from e
-
-        if buffer.strip():
-            frame = InferenceDispatchStreamFrame()
-            json_format.Parse(buffer.strip(), frame)
-            yield frame

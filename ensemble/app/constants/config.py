@@ -343,6 +343,9 @@ OPENAI_GPT_5_4_NANO = "gpt-5.4-nano"
 OPENAI_GPT_5_4_PRO = "gpt-5.4-pro"
 OPENAI_GPT_5_4_MINI = "gpt-5.4-mini"
 
+# OpenAI-compatible (vLLM / SGLang) self-hosted models
+OPENAI_QWEN3_8_FLASH_NEXT = "Qwen/Qwen3.8-Flash-Next"
+
 # Anthropic models
 ANTHROPIC_CLAUDE_OPUS_4_6 = "claude-opus-4-6"
 ANTHROPIC_CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
@@ -363,6 +366,9 @@ OLLAMA_GRANITE4_2_8B = "granite4.2:8b"
 OLLAMA_GRANITE4_2_3B = "granite4.2:3b"
 OLLAMA_LLAMA_3_2_3B = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B = "qwen3.5:2b"
+# Small Ollama chat models
+OLLAMA_QWEN3_1_7B = "qwen3:1.7b"
+OLLAMA_QWEN3_5_0_8B = "qwen3.5:0.8b"
 
 # llama.cpp models
 LLAMACPP_GEMMA4_E2B = "llamacpp.gemma4.e2b"
@@ -458,9 +464,6 @@ DEFAULT_OPERATOR_CONFIG = {
     "heartbeat_interval_seconds": 30,
 }
 
-# System-wide LLM generation defaults
-# These are used when user/platform settings do not specify values
-LLM_DEFAULT_MAX_OUTPUT_TOKENS = 20000
 # Ollama-only: default context window passed as options.num_ctx.
 # Ollama's server default is 4096, which silently truncates real-world prompts
 # (system + chat history) and leaves thinking models with no budget for visible

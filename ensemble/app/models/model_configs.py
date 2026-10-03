@@ -54,9 +54,12 @@ from app.constants import (
     OLLAMA_GRANITE4_2_8B,
     OLLAMA_GRANITE4_2_3B,
     OLLAMA_LLAMA_3_2_3B,
+    OLLAMA_QWEN3_1_7B,
+    OLLAMA_QWEN3_5_0_8B,
     OLLAMA_QWEN3_5_2B,
     OPENAI_DEFAULT_MODEL,
     OPENAI_GPT_5_4_MINI,
+    OPENAI_QWEN3_8_FLASH_NEXT,
     THINKING_LEVEL_PRIORITY_ASC,
     ThinkingDialect,
     ThinkingLevel,
@@ -129,7 +132,8 @@ GEMINI_3_1_PRO_CONFIG = LLModelConfig(
     supports_structured_output=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
-    max_output_tokens=64_000,
+    # Documented output token limit: https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview
+    max_output_tokens=65_536,
 )
 
 GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG = LLModelConfig(
@@ -144,7 +148,8 @@ GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG = LLModelConfig(
     supports_structured_output=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
-    max_output_tokens=64_000,
+    # Same model as GEMINI_3_1_PRO_CONFIG; documented output token limit applies.
+    max_output_tokens=65_536,
 )
 
 GEMINI_3_1_FLASH_LITE_CONFIG = LLModelConfig(
@@ -160,7 +165,8 @@ GEMINI_3_1_FLASH_LITE_CONFIG = LLModelConfig(
     supports_structured_output=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
-    max_output_tokens=64_000,
+    # Documented output token limit: https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-preview
+    max_output_tokens=65_536,
 )
 
 GEMINI_3_FLASH_CONFIG = LLModelConfig(
@@ -175,7 +181,8 @@ GEMINI_3_FLASH_CONFIG = LLModelConfig(
     supports_structured_output=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
-    max_output_tokens=64_000,
+    # Documented output token limit: https://ai.google.dev/gemini-api/docs/models/gemini-3-flash-preview
+    max_output_tokens=65_536,
 )
 
 
@@ -193,10 +200,8 @@ OLLAMA_GEMMA4_E4B_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=32_768,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 OLLAMA_GEMMA4_E2B_CONFIG = LLModelConfig(
@@ -205,10 +210,8 @@ OLLAMA_GEMMA4_E2B_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=32_768,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 OLLAMA_GEMMA4_E2B_G8EA_CONFIG = LLModelConfig(
@@ -217,10 +220,8 @@ OLLAMA_GEMMA4_E2B_G8EA_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=32_768,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 OLLAMA_LLAMA_3_2_3B_CONFIG = LLModelConfig(
@@ -229,10 +230,8 @@ OLLAMA_LLAMA_3_2_3B_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NONE,
     supports_tools=True,
     context_window_input=32_768,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 OLLAMA_QWEN3_5_2B_CONFIG = LLModelConfig(
@@ -241,10 +240,28 @@ OLLAMA_QWEN3_5_2B_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=32_768,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
+)
+
+OLLAMA_QWEN3_1_7B_CONFIG = LLModelConfig(
+    name=OLLAMA_QWEN3_1_7B,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
+    supports_tools=True,
+    context_window_input=32_768,
+    top_k=40,
+    top_p=1.0,
+)
+
+OLLAMA_QWEN3_5_0_8B_CONFIG = LLModelConfig(
+    name=OLLAMA_QWEN3_5_0_8B,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
+    supports_tools=True,
+    context_window_input=32_768,
+    top_k=40,
+    top_p=1.0,
 )
 
 OLLAMA_GEMMA4_12B_CONFIG = LLModelConfig(
@@ -253,10 +270,8 @@ OLLAMA_GEMMA4_12B_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=131_072,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 OLLAMA_GRANITE4_2_8B_CONFIG = LLModelConfig(
@@ -265,10 +280,8 @@ OLLAMA_GRANITE4_2_8B_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=131_072,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 OLLAMA_GRANITE4_2_3B_CONFIG = LLModelConfig(
@@ -277,10 +290,8 @@ OLLAMA_GRANITE4_2_3B_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=131_072,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 
@@ -310,10 +321,12 @@ ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG = LLModelConfig(
     thinking_output_reserve=8_192,
     supports_tools=True,
     context_window_input=200_000,
-    context_window_output=8_192,
+    # Documented synchronous Messages API ceiling:
+    # https://platform.claude.com/docs/en/models/opus-4-6/overview
+    context_window_output=128_000,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
+    max_output_tokens=128_000,
 )
 
 ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG = LLModelConfig(
@@ -326,10 +339,12 @@ ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG = LLModelConfig(
     ],
     supports_tools=True,
     context_window_input=200_000,
-    context_window_output=8_192,
+    # Documented synchronous Messages API ceiling:
+    # https://platform.claude.com/docs/en/models/sonnet-4-6/overview
+    context_window_output=128_000,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
+    max_output_tokens=128_000,
 )
 
 ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG = LLModelConfig(
@@ -337,10 +352,12 @@ ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG = LLModelConfig(
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.MINIMAL, ThinkingLevel.LOW],
     supports_tools=True,
     context_window_input=200_000,
-    context_window_output=8_192,
+    # Documented synchronous Messages API ceiling:
+    # https://platform.claude.com/docs/en/models/haiku-4-5/overview
+    context_window_output=64_000,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
+    max_output_tokens=64_000,
 )
 
 ANTHROPIC_DEFAULT_CONFIG = LLModelConfig(
@@ -353,10 +370,11 @@ ANTHROPIC_DEFAULT_CONFIG = LLModelConfig(
     ],
     supports_tools=True,
     context_window_input=200_000,
-    context_window_output=8_192,
+    # ANTHROPIC_DEFAULT_MODEL is Opus 4.6; same documented ceiling as its config.
+    context_window_output=128_000,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
+    max_output_tokens=128_000,
 )
 
 
@@ -374,10 +392,18 @@ OPENAI_GPT_5_4_MINI_CONFIG = LLModelConfig(
     supports_tools=True,
     supports_structured_output=True,
     context_window_input=200_000,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
+)
+
+OPENAI_QWEN3_8_FLASH_NEXT_CONFIG = LLModelConfig(
+    name=OPENAI_QWEN3_8_FLASH_NEXT,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    supports_tools=True,
+    supports_structured_output=True,
+    context_window_input=262_144,
+    top_k=40,
+    top_p=1.0,
 )
 
 OPENAI_DEFAULT_CONFIG = LLModelConfig(
@@ -386,10 +412,8 @@ OPENAI_DEFAULT_CONFIG = LLModelConfig(
     supports_tools=True,
     supports_structured_output=True,
     context_window_input=128_000,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 
@@ -403,10 +427,8 @@ OLLAMA_DEFAULT_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NONE,
     supports_tools=True,
     context_window_input=128_000,
-    context_window_output=8_192,
     top_k=40,
     top_p=1.0,
-    max_output_tokens=8_192,
 )
 
 SYSTEM_ONE_NIMBLE_CONFIG = LLModelConfig(
@@ -603,6 +625,8 @@ _OLLAMA_CONFIGS: tuple[LLModelConfig, ...] = (
     OLLAMA_GRANITE4_2_3B_CONFIG,
     OLLAMA_LLAMA_3_2_3B_CONFIG,
     OLLAMA_QWEN3_5_2B_CONFIG,
+    OLLAMA_QWEN3_1_7B_CONFIG,
+    OLLAMA_QWEN3_5_0_8B_CONFIG,
     OLLAMA_DEFAULT_CONFIG,
 )
 for _cfg in _OLLAMA_CONFIGS:
@@ -622,6 +646,7 @@ MODEL_REGISTRY = LLModelRegistry(
         ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG,
         ANTHROPIC_DEFAULT_CONFIG,
         OPENAI_GPT_5_4_MINI_CONFIG,
+        OPENAI_QWEN3_8_FLASH_NEXT_CONFIG,
         OPENAI_DEFAULT_CONFIG,
         OLLAMA_GEMMA4_E4B_CONFIG,
         OLLAMA_GEMMA4_E2B_CONFIG,
@@ -631,6 +656,8 @@ MODEL_REGISTRY = LLModelRegistry(
         OLLAMA_GRANITE4_2_3B_CONFIG,
         OLLAMA_LLAMA_3_2_3B_CONFIG,
         OLLAMA_QWEN3_5_2B_CONFIG,
+    OLLAMA_QWEN3_1_7B_CONFIG,
+    OLLAMA_QWEN3_5_0_8B_CONFIG,
         OLLAMA_DEFAULT_CONFIG,
         GEMINI_3_1_PRO_CONFIG,
         GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG,

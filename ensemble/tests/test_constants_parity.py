@@ -20,6 +20,16 @@ import os
 from pathlib import Path
 
 
+from app.constants.collections import (
+    DB_COLLECTION_AGENT_ACTIVITY_METADATA,
+    DB_COLLECTION_CASES,
+    DB_COLLECTION_INVESTIGATIONS,
+    DB_COLLECTION_MEMORIES,
+    DB_COLLECTION_REPUTATION_COMMITMENTS,
+    DB_COLLECTION_REPUTATION_STATE,
+    DB_COLLECTION_STAKE_RESOLUTIONS,
+    DB_COLLECTION_TASKS,
+)
 from app.constants.models import (
     AgentsConstants,
     APIPathsConstants,
@@ -77,6 +87,27 @@ def test_collections_json_matches_model():
     # Spot-check a well-known key
     assert "users" in model.collections
     assert model.collections["users"].value == "users"
+
+
+def test_governed_collections_match_governance_writers():
+    """The registry's _governed set is exactly what g8ee writes through GovernanceClient.
+
+    The Gateway's L4 Warden rejects DOCUMENT_UPDATE and DOCUMENT_DELETE for any
+    other collection, so a new governed writer must be marked _governed in
+    collections.json, and nothing else may be.
+    """
+    model = CollectionsConstants.model_validate(_load_json_file("collections.json"))
+    governed = {entry.value for entry in model.collections.values() if entry.governed}
+    assert governed == {
+        DB_COLLECTION_CASES,
+        DB_COLLECTION_TASKS,
+        DB_COLLECTION_INVESTIGATIONS,
+        DB_COLLECTION_MEMORIES,
+        DB_COLLECTION_AGENT_ACTIVITY_METADATA,
+        DB_COLLECTION_STAKE_RESOLUTIONS,
+        DB_COLLECTION_REPUTATION_STATE,
+        DB_COLLECTION_REPUTATION_COMMITMENTS,
+    }
 
 
 def test_events_json_matches_model():

@@ -37,7 +37,6 @@ from app.constants import (
     AGENT_RETRY_DELAY_SECONDS,
     AITaskId,
     DEFAULT_FINISH_REASON,
-    ReasoningAgent,
 )
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
@@ -60,6 +59,7 @@ from app.services.ai.agent_tool_loop import (
     merge_grounding,
 )
 from app.services.ai.agent_sse import deliver_via_sse
+from app.services.evaluation.role_control import resolve_scored_model_role
 from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.ai.agent_turn import (
     GatedTurnResult,
@@ -85,31 +85,26 @@ def _sum_optional_usage_counts(values: list[int | None]) -> int | None:
 
 
 def _resolve_agent_model_role(inputs: AgentInputs) -> str:
-    if inputs.designated_model_role:
-        return inputs.designated_model_role
-    return (
-        "assistant"
-        if inputs.active_agent == ReasoningAgent.DASH
-        else "primary"
+    return resolve_scored_model_role(
+        designated_model_role=inputs.designated_model_role,
+        active_agent=inputs.active_agent,
     )
 
 
 def _agent_role_for_telemetry(inputs: AgentInputs) -> str:
     """Return the persona a model call is attributed to.
 
-    The chat pipeline always assigns an active agent. A scored request without
-    one would be attributed to a role the grader cannot recognise, so it fails
+    The chat pipeline always assigns an active agent. A request without one
+    would be attributed to a role with no call classification, so it fails
     loudly instead of reporting ``unknown``.
     """
     if inputs.active_agent:
         return inputs.active_agent.value
-    if inputs.g8e_context.evaluation_context is not None:
-        raise ValidationError(
-            "active_agent is required for evaluation requests",
-            field="active_agent",
-            component="g8ee",
-        )
-    return "unknown"
+    raise ValidationError(
+        "active_agent is required for every agent model call",
+        field="active_agent",
+        component="g8ee",
+    )
 
 
 def _agent_generation_stream(

@@ -26,12 +26,9 @@ from app.constants import (
     DB_COLLECTION_MEMORIES,
     EventType,
     InternalAPIPaths,
+    LLMProvider,
     OperatorStatus,
     Priority,
-)
-from app.constants.collections import (
-    DB_COLLECTION_SETTINGS,
-    USER_SETTINGS_DOC_PREFIX,
 )
 from app.errors import ResourceNotFoundError, ServiceUnavailableError, ValidationError
 from app.models import CaseCreateRequest
@@ -55,6 +52,10 @@ from app.models.internal_api import (
     DirectCommandSentResponse,
     OperatorApprovalResponse,
     InternalOperatorAuthCall,
+    LLMModelListRequest,
+    LLMModelListResponse,
+    LLMRoleSettingsResponse,
+    LLMRoleSettingsUpdateRequest,
     OperatorAuthenticateResponse,
     OperatorDeviceLinkRegisterRequest,
     OperatorDeviceLinkRegisterResponse,
@@ -82,9 +83,7 @@ from app.models.internal_api import (
     StopAIRequest,
     StopAIResponse,
     StopOperatorRequest,
-    UserSettingsUpdateResponse,
     SettingsGetRequest,
-    SettingsSyncRequest,
 )
 from app.models.triage_api import (
     TriageAnswerRequest,
@@ -109,6 +108,7 @@ from app.models.operators import (
 )
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.errors import NetworkError
+from app.llm.model_catalog import list_governed_models, list_models
 from app.services.data.case_data_service import CaseDataService
 from app.services.data.attachment_store_service import AttachmentService
 from app.services.investigation.investigation_service import InvestigationService
@@ -119,6 +119,7 @@ from app.services.infra.event_service import EventService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
+from app.services.infra.llm_role_settings import normalize_endpoint, stored_connection
 from app.services.infra.settings_service import SettingsService
 from app.constants.message_sender import MessageSender
 
@@ -146,9 +147,8 @@ from app.dependencies import (
     get_g8ee_gateway_operator_client,
     get_g8ee_api_key_service,
     get_g8ee_certificate_service,
-    get_g8ee_settings_service,
     get_g8ee_settings_service_write,
-    get_g8ee_user_settings,
+    get_g8ee_chat_user_settings,
     get_request_context,
     require_authenticated_context,
 )
@@ -263,11 +263,62 @@ async def _generate_and_update_title(
         )
 
 
+async def _create_investigation_for_case(
+    g8e_context: G8eHttpContext,
+    sentinel_mode: bool,
+    case_service: CaseDataService,
+    investigation_service: InvestigationService,
+) -> G8eHttpContext:
+    """Open a new investigation under an existing case the caller owns.
+
+    A case the caller does not own is reported as not found, matching the
+    ownership checks on the other case and investigation read paths.
+    """
+    if not g8e_context.case_id:
+        raise ValidationError(
+            "create_investigation requires context.case_id",
+            field="context.case_id",
+            constraint="required",
+        )
+    case = await case_service.get_case(g8e_context.case_id)
+    if case.user_id != g8e_context.user_id:
+        raise ResourceNotFoundError(
+            "Case not found",
+            resource_type="case",
+            resource_id=g8e_context.case_id,
+            component="g8ee",
+        )
+
+    from app.models.investigations import InvestigationCreateRequest
+
+    investigation = await investigation_service.create_investigation(
+        InvestigationCreateRequest(
+            case_id=case.id,
+            case_title=case.title,
+            case_description=case.description,
+            web_session_id=g8e_context.web_session_id,
+            priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
+            user_email=case.user_email,
+            user_id=case.user_id,
+            operator_id=g8e_context.operator_id,
+            operator_session_id=g8e_context.operator_session_id,
+            sentinel_mode=sentinel_mode,
+            created_with_case=False,
+            case_source=case.source,
+        )
+    )
+    logger.info(
+        "[INTERNAL-HTTP] New investigation opened under existing case",
+        extra={"case_id": case.id, "investigation_id": investigation.id},
+    )
+    return g8e_context.model_copy(update={"investigation_id": investigation.id})
+
+
 @router.post(InternalAPIPaths.G8EE_CHAT, response_model=ChatStartedResponse)
 async def internal_chat(
     request: ChatMessageRequest,
     app_settings: G8eeAppSettings = Depends(get_g8ee_app_settings),
-    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_chat_user_settings),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
@@ -281,8 +332,10 @@ async def internal_chat(
     """
     Non-streaming chat endpoint - default path for browser sessions.
 
-    Creates case + investigation inline when case_id is absent, then fires
-    run_chat as a background task. The AI response and all tool events are
+    Creates case + investigation inline when resource_creation.create_case is
+    set, or a new investigation under the caller's existing case when
+    resource_creation.create_investigation is set, then fires run_chat as a
+    background task. The AI response and all tool events are
     delivered to the browser via the existing SSE connection; this endpoint
     returns immediately with case/investigation IDs so the browser can update
     its state without waiting for the LLM.
@@ -298,6 +351,9 @@ async def internal_chat(
     """
     resource_creation = request.resource_creation
     create_new_case = resource_creation.create_case if resource_creation else False
+    create_new_investigation = bool(
+        resource_creation and resource_creation.create_investigation and not create_new_case
+    )
     seed = request.evaluation_context.seed if request.evaluation_context is not None else None
     if seed is not None and not create_new_case:
         raise ValidationError(
@@ -329,8 +385,9 @@ async def internal_chat(
         lite_endpoint_override=request.llm_lite_endpoint,
     )
 
-    # Validate investigation_id exists before proceeding, UNLESS we are creating a new case
-    if not create_new_case:
+    # Validate investigation_id exists before proceeding, UNLESS we are creating
+    # a new case or a new investigation under an existing case
+    if not create_new_case and not create_new_investigation:
         if not g8e_context.investigation_id:
             logger.error(
                 "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing",
@@ -458,6 +515,13 @@ async def internal_chat(
                 "investigation_id": g8e_context.investigation_id,
             },
         )
+    elif create_new_investigation:
+        g8e_context = await _create_investigation_for_case(
+            g8e_context=g8e_context,
+            sentinel_mode=request.sentinel_mode,
+            case_service=case_service,
+            investigation_service=investigation_service,
+        )
 
     resolved_attachments = []
     if request.attachments:
@@ -513,7 +577,7 @@ async def internal_triage_answer(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_chat_user_settings),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """
@@ -522,9 +586,6 @@ async def internal_triage_answer(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    # Fetch user settings manually using user_id from context to eliminate header dependency
-    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -592,7 +653,7 @@ async def internal_triage_skip(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_chat_user_settings),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """
@@ -601,9 +662,6 @@ async def internal_triage_skip(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    # Fetch user settings manually using user_id from context to eliminate header dependency
-    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -1373,8 +1431,9 @@ async def query_investigations(
         extra={"user_id": g8e_context.user_id, "source": g8e_context.source_component},
     )
 
-    # Use the request object directly since it already contains the filters
-    return await investigation_service.investigation_data_service.query_investigations(request)
+    # Scope to the authenticated user; a caller-supplied user_id never widens the query.
+    scoped = request.model_copy(update={"user_id": g8e_context.user_id})
+    return await investigation_service.investigation_data_service.query_investigations(scoped)
 
 
 @router.post(InternalAPIPaths.G8EE_INVESTIGATION + "/get", response_model=InvestigationModel)
@@ -1464,73 +1523,57 @@ async def health_check():
             InternalAPIPaths.G8EE_CHAT_TRIAGE_ANSWER,
             InternalAPIPaths.G8EE_CHAT_TRIAGE_SKIP,
             InternalAPIPaths.G8EE_CHAT_TRIAGE_TIMEOUT,
-            InternalAPIPaths.G8EE_SETTINGS_USER,
         ],
     }
 
 
-@router.post(InternalAPIPaths.G8EE_SETTINGS_USER + "/get", response_model=G8eeUserSettings)
-async def get_user_settings(
+@router.post(InternalAPIPaths.G8EE_SETTINGS_LLM_GET, response_model=LLMRoleSettingsResponse)
+async def get_llm_role_settings(
     request: SettingsGetRequest,
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
+    """Return the caller's provider and model per role (primary, assistant, lite).
+
+    API keys are reported only as set or unset.
     """
-    Get user settings - internal cluster use only.
-    """
-    user_id = g8e_context.user_id
-    logger.info("[INTERNAL-HTTP] Retrieving user settings", extra={"user_id": user_id})
-    return await settings_service.get_user_settings(user_id)
+    return await settings_service.get_llm_role_settings(g8e_context.user_id)
 
 
-@router.post(InternalAPIPaths.G8EE_SETTINGS_SYNC, response_model=UserSettingsUpdateResponse)
-async def settings_sync(
-    request: SettingsSyncRequest,
+@router.post(InternalAPIPaths.G8EE_SETTINGS_LLM, response_model=LLMRoleSettingsResponse)
+async def update_llm_role_settings(
+    request: LLMRoleSettingsUpdateRequest,
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Persist LLM and Search settings overrides into user settings.
-
-    This replaces the legacy "sync-on-chat" behavior to avoid side-effects
-    during inference and ensure settings are committed before chat starts.
-    """
-    user_id = request.context.user_id
-    user_settings = await settings_service.get_user_settings(user_id)
-
-    success = await settings_service.sync_settings_overrides(user_id, user_settings, request)
-    return UserSettingsUpdateResponse(success=success)
+    """Save the caller's provider and model per role. The next chat request uses them."""
+    return await settings_service.update_llm_role_settings(g8e_context.user_id, request)
 
 
-@router.patch(InternalAPIPaths.G8EE_SETTINGS_USER, response_model=UserSettingsUpdateResponse)
-async def sync_user_settings(
-    request: dict,
-    cache_aside: CacheAsideService = Depends(get_g8ee_cache_aside_service),
+@router.post(InternalAPIPaths.G8EE_SETTINGS_LLM_MODELS, response_model=LLMModelListResponse)
+async def list_llm_models(
+    request: LLMModelListRequest,
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+    gateway_operator_client: GatewayOperatorClient = Depends(get_g8ee_gateway_operator_client),
 ):
-    """
-    Sync user settings from client - internal cluster use only.
+    """List the models a provider endpoint serves.
 
-    Invalidates the local cache for the user's settings so subsequent
-    requests will fetch the fresh settings from operator.
+    A missing endpoint or key falls back to what the caller's role would
+    resolve for that provider, so stored keys need not be re-entered.
+    Governed inference instead queries the active Inference Operator through
+    its typed inventory command; caller-supplied endpoint and key are ignored.
     """
-    user_id = request.get("user_id")
-    if not user_id:
-        return UserSettingsUpdateResponse(
-            success=False, error="user_id is required in request body"
+    if request.provider is LLMProvider.G8E:
+        return LLMModelListResponse(
+            models=await list_governed_models(gateway_operator_client, g8e_context)
         )
-
-    logger.info(
-        "[INTERNAL-HTTP] Syncing user settings (cache invalidation)", extra={"user_id": user_id}
+    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
+    stored_endpoint, stored_key = stored_connection(
+        user_settings.llm, request.role, request.provider
     )
+    endpoint = normalize_endpoint(request.endpoint, "endpoint") or stored_endpoint
+    models = await list_models(request.provider, endpoint, request.api_key or stored_key)
+    return LLMModelListResponse(models=models)
 
-    try:
-        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        await cache_aside.invalidate_local_cache(
-            collection=DB_COLLECTION_SETTINGS, document_id=user_doc_id
-        )
-        return UserSettingsUpdateResponse(success=True)
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to invalidate settings cache",
-            extra={"error": str(e), "user_id": user_id},
-        )
-        return UserSettingsUpdateResponse(success=False, error=str(e))
+

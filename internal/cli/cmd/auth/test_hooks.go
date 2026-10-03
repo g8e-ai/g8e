@@ -9,9 +9,12 @@ package authcmd
 
 import (
 	"context"
+	"io"
+	"log/slog"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -47,4 +50,17 @@ type panickingEnroller struct{}
 
 func (panickingEnroller) Enroll(context.Context, auth.EnrollmentOptions) (*auth.EnrollmentResult, error) {
 	panic("enrollerFactory should not be called on this code path")
+}
+
+// PanickingAppEnrollerFactory returns an app enroller factory whose enroller panics if called.
+func PanickingAppEnrollerFactory() AppEnrollerFactory {
+	return func(string, fs.RuntimeFileService, *config.Config, *slog.Logger) (AppEnroller, error) {
+		return panickingAppEnroller{}, nil
+	}
+}
+
+type panickingAppEnroller struct{}
+
+func (panickingAppEnroller) Enroll(context.Context, io.Writer) (*models.PlatformEnrollmentCompleteResponse, error) {
+	panic("appEnrollerFactory should not be called on this code path")
 }

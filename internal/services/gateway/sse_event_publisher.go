@@ -36,17 +36,39 @@ func NewSSEEventPublisher(sseStore *SSEEventService, pubsub *GatewayWebSocketHan
 // before the live publish so a replaying consumer never misses an event it was
 // shown live.
 func (p *SSEEventPublisher) Publish(route SSERoute, eventType string, payload any, producerID string) error {
+	payloadBytes, err := buildSSEPushPayload(route, eventType, payload)
+	if err != nil {
+		return err
+	}
+	rowID, err := p.sseStore.SSEEventsAppend(route, eventType, string(payloadBytes), producerID)
+	if err != nil {
+		return fmt.Errorf("append sse event: %w", err)
+	}
+	return p.publishLive(route, rowID, payloadBytes)
+}
+
+// PublishEphemeral publishes eventType to the live channel of route without
+// appending a row, for events the registry marks ephemeral: they carry ID 0, so
+// the stream emits them without an id: line and a reconnecting consumer cannot
+// replay them. A consumer that must not miss one reconciles on reconnect.
+func (p *SSEEventPublisher) PublishEphemeral(route SSERoute, eventType string, payload any) error {
+	payloadBytes, err := buildSSEPushPayload(route, eventType, payload)
+	if err != nil {
+		return err
+	}
+	return p.publishLive(route, 0, payloadBytes)
+}
+
+// buildSSEPushPayload marshals the SSEPushPayload wire shape for eventType and
+// payload addressed to route.
+func buildSSEPushPayload(route SSERoute, eventType string, payload any) ([]byte, error) {
 	dataBytes, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal event data: %w", err)
+		return nil, fmt.Errorf("marshal event data: %w", err)
 	}
-	envelope := sseEventEnvelope{
-		Type: eventType,
-		Data: dataBytes,
-	}
-	eventBytes, err := json.Marshal(envelope)
+	eventBytes, err := json.Marshal(sseEventEnvelope{Type: eventType, Data: dataBytes})
 	if err != nil {
-		return fmt.Errorf("marshal event envelope: %w", err)
+		return nil, fmt.Errorf("marshal event envelope: %w", err)
 	}
 	pushPayload := models.SSEPushPayload{
 		UserID: route.UserID,
@@ -59,15 +81,15 @@ func (p *SSEEventPublisher) Publish(route SSERoute, eventType string, payload an
 	}
 	payloadBytes, err := json.Marshal(pushPayload)
 	if err != nil {
-		return fmt.Errorf("marshal push payload: %w", err)
+		return nil, fmt.Errorf("marshal push payload: %w", err)
 	}
+	return payloadBytes, nil
+}
 
-	rowID, err := p.sseStore.SSEEventsAppend(route, eventType, string(payloadBytes), producerID)
-	if err != nil {
-		return fmt.Errorf("append sse event: %w", err)
-	}
-
-	// The channel matches the SSE stream handler's subscription channel.
+// publishLive wraps payloadBytes in the published-event envelope and sends it
+// on the channel the SSE stream handler subscribes for route. rowID 0 marks an
+// ephemeral event. A nil pubsub performs no live delivery.
+func (p *SSEEventPublisher) publishLive(route SSERoute, rowID int64, payloadBytes []byte) error {
 	var channel string
 	switch {
 	case route.CLISessionID != "":
@@ -75,13 +97,13 @@ func (p *SSEEventPublisher) Publish(route SSERoute, eventType string, payload an
 	case route.WebSessionID != "":
 		channel = "sse:web:" + route.WebSessionID
 	}
-	if channel != "" && p.pubsub != nil {
-		pubEvent := models.SSEPublishedEvent{ID: rowID, Payload: json.RawMessage(payloadBytes)}
-		envelopeJSON, err := json.Marshal(pubEvent)
-		if err != nil {
-			return fmt.Errorf("marshal published event: %w", err)
-		}
-		p.pubsub.Publish(channel, envelopeJSON)
+	if channel == "" || p.pubsub == nil {
+		return nil
 	}
+	envelopeJSON, err := json.Marshal(models.SSEPublishedEvent{ID: rowID, Payload: json.RawMessage(payloadBytes)})
+	if err != nil {
+		return fmt.Errorf("marshal published event: %w", err)
+	}
+	p.pubsub.Publish(channel, envelopeJSON)
 	return nil
 }

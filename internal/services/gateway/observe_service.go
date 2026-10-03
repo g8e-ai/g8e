@@ -684,18 +684,7 @@ func (s *ObserveService) paginateDownloads(downloads []models.DownloadArtifact, 
 	return page, nil
 }
 
-// agentFreshness returns the freshness status for the agents counter based on
-// the most recent agent observation time.
-func (s *ObserveService) agentFreshness(agents []models.AgentStateProjection, now time.Time) models.SnapshotFreshness {
-	if len(agents) == 0 {
-		return models.SnapshotFreshnessUnavailable
-	}
-	var latest time.Time
-	for _, a := range agents {
-		if a.ObservedAt.After(latest) {
-			latest = a.ObservedAt
-		}
-	}
+func observationFreshness(latest time.Time, now time.Time) models.SnapshotFreshness {
 	if latest.IsZero() {
 		return models.SnapshotFreshnessUnavailable
 	}
@@ -705,25 +694,28 @@ func (s *ObserveService) agentFreshness(agents []models.AgentStateProjection, no
 	return models.SnapshotFreshnessObserved
 }
 
+// agentFreshness returns the freshness status for the agents counter based on
+// the most recent agent observation time.
+func (s *ObserveService) agentFreshness(agents []models.AgentStateProjection, now time.Time) models.SnapshotFreshness {
+	var latest time.Time
+	for _, a := range agents {
+		if a.ObservedAt.After(latest) {
+			latest = a.ObservedAt
+		}
+	}
+	return observationFreshness(latest, now)
+}
+
 // runsFreshness returns the freshness status for the tasks counter based on
 // the most recent run observation time.
 func (s *ObserveService) runsFreshness(runs []models.RunSummary, now time.Time) models.SnapshotFreshness {
-	if len(runs) == 0 {
-		return models.SnapshotFreshnessUnavailable
-	}
 	var latest time.Time
 	for _, r := range runs {
 		if r.ObservedAt.After(latest) {
 			latest = r.ObservedAt
 		}
 	}
-	if latest.IsZero() {
-		return models.SnapshotFreshnessUnavailable
-	}
-	if now.Sub(latest) > 5*time.Minute {
-		return models.SnapshotFreshnessStale
-	}
-	return models.SnapshotFreshnessObserved
+	return observationFreshness(latest, now)
 }
 
 // clampLimit bounds the requested page size to the allowed range. A limit of

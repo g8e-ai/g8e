@@ -194,7 +194,6 @@ Startup fails if multiple logical services configure the same port (`len(usage) 
 
 Auxiliary default ports started in Docker Compose or optional Gateway subprocesses:
 - **Ensemble (`g8ee`)**: `8000` (`constants.EnsembleDefaultPort`)
-- **Dashboard (`g8ed`)**: `3000` (`constants.DashboardDefaultPort`)
 - **Public Spectator Private Ingest**: `8081` (`constants.PublicSpectatorPrivatePort`, loopback default)
 - **Public Spectator Public Read**: `8082` (`constants.PublicSpectatorPublicPort`, loopback default)
 - **Evaluation Explorer SPA**: `5173` (`constants.EvalExplorerDefaultPort`, loopback default)
@@ -221,7 +220,7 @@ POST /api/v1/auth/platform-enrollments/complete POST /api/v1/auth/platform-enrol
 1. **CA Discovery**: Clients retrieve trust bundle certificates via `GET /.well-known/g8e/pki/ca-bundle` and verify the Root CA SHA-256 fingerprint via `GET /.well-known/g8e/pki/fingerprint`.
 2. **Initial Bootstrap**: When the Gateway has no registered users, the first caller submits an ECDSA P-256 CSR to `POST /api/v1/auth/bootstrap`, provisioning the root owner and returning initial credentials.
 3. **CLI Recovery**: On an already-bootstrapped Gateway, a new or recovering CLI submits a CSR to `POST /api/v1/auth/cli/recovery/request`, receiving an opaque lookup token. The CLI polls `GET /api/v1/auth/cli/recovery/status`. An active owner approves the request via the Console SPA (`POST /api/v1/auth/cli/recovery/approve` using web-session cookie) or headlessly via `g8e auth approve-recovery <token>` (`POST /api/v1/auth/cli/recovery/approve-cli` using mTLS). The recovering CLI completes issuance via `POST /api/v1/auth/cli/recovery/complete`.
-4. **Platform Workload Enrollment**: Unenrolled background services (dashboard, ensemble, remote operator) submit a CSR to `POST /api/v1/auth/platform-enrollments/request`, poll status, and complete issuance after owner approval via `POST /api/v1/auth/platform-enrollments/decision`.
+4. **Platform Workload Enrollment**: Unenrolled background services (ensemble, remote operator) submit a CSR to `POST /api/v1/auth/platform-enrollments/request`, poll status, and complete issuance after owner approval via `POST /api/v1/auth/platform-enrollments/decision`.
 5. **Passkey Enrollment**: Browser WebAuthn registration is initiated by an enrolled CLI through `POST /api/v1/auth/enrollment-token/generate` (mTLS-only). The browser validates the token via `POST /api/v1/auth/enrollment-token/validate` and completes challenge/verify under `/api/v1/auth/passkeys/enrollment/register/`.
 6. **Windows Certificate Store**: On Windows hosts, `g8e auth enroll user` detects the platform and automatically imports the signed client certificate into the `CurrentUser\Personal` store, enabling seamless integration with Windows Hello and CNG.
 
@@ -286,7 +285,7 @@ The Gateway inspects its existing serving certificate against the detected ident
 - [Operator Architecture](operator.md): Remote operator execution, L4 Warden verification, and L5 Actuator receipts.
 - [SSE Streaming](sse.md): Real-time Server-Sent Events architecture, event types, and consumer routing.
 - [Ensemble Architecture](ensemble.md): Python agentic ensemble and SSE broadcast mechanics.
-- [Dashboard Architecture](dashboard.md): Operator web console architecture and authentication.
+- [Console Architecture](console.md): Gateway-embedded browser console architecture and authentication.
 - [Public Spectator Architecture](public_spectator.md): Read-only public mirror and evaluation explorer.
 - [Unified Docker Stack](../guides/unified_stack.md): Container networking, namespace isolation, and host identity bind mounts.
 - [Troubleshooting Guide](../devs/troubleshooting.md): PKI diagnostics, certificate recovery, and connection debugging.

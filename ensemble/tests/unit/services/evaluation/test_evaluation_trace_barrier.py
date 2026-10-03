@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models.settings import G8eeUserSettings
+
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.evaluation_trace import (
     EvaluationProviderToolRejection,
@@ -52,6 +54,7 @@ async def test_finalize_evaluation_assignment_waits_for_memory_barrier():
     g8e_context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -60,6 +63,7 @@ async def test_finalize_evaluation_assignment_waits_for_memory_barrier():
     )
     memory_call = ModelCallTelemetry(
         agent_role="codex",
+        classification="post_turn",
         model_role="lite",
         provider="G8EProvider",
         model="model-a",
@@ -94,8 +98,9 @@ async def test_finalize_evaluation_assignment_waits_for_memory_barrier():
 
     await pipeline._finalize_evaluation_assignment(
         g8e_context=g8e_context,
+        judge_settings=G8eeUserSettings(),
         inputs=inputs,
-        state=state,
+                state=state,
         memory_holder=memory_holder,
     )
 
@@ -144,6 +149,7 @@ async def test_finalize_records_the_eval_tool_gate_and_keeps_per_call_declared_t
     g8e_context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -155,6 +161,7 @@ async def test_finalize_records_the_eval_tool_gate_and_keeps_per_call_declared_t
 
     await pipeline._finalize_evaluation_assignment(
         g8e_context=g8e_context,
+        judge_settings=G8eeUserSettings(),
         inputs=_boundary_inputs(g8e_context),
         state=state,
         memory_holder=None,
@@ -185,6 +192,7 @@ async def test_finalize_records_a_provider_tool_declaration_rejection_as_a_faile
 
     await pipeline._finalize_evaluation_assignment(
         g8e_context=g8e_context,
+        judge_settings=G8eeUserSettings(),
         inputs=_boundary_inputs(g8e_context),
         state=state,
         memory_holder=None,
@@ -208,8 +216,9 @@ async def test_finalize_records_the_eval_only_divergences_and_the_seed_applicati
 
     await pipeline._finalize_evaluation_assignment(
         g8e_context=g8e_context,
+        judge_settings=G8eeUserSettings(),
         inputs=inputs,
-        state=state,
+                state=state,
         memory_holder=None,
         seed_application=seed_application,
     )
@@ -229,6 +238,7 @@ async def test_finalize_records_no_divergence_for_an_unseeded_run_that_finished_
 
     await pipeline._finalize_evaluation_assignment(
         g8e_context=g8e_context,
+        judge_settings=G8eeUserSettings(),
         inputs=_boundary_inputs(g8e_context),
         state=AgentStreamState(),
         memory_holder=None,
@@ -320,6 +330,7 @@ def _memory_barrier_fixture():
     g8e_context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
     agent_call = ModelCallTelemetry(
         agent_role="sage",
+        classification="scored_chain",
         model_role="primary",
         provider="G8EProvider",
         model="model-a",
@@ -338,6 +349,7 @@ async def test_a_failing_memory_update_does_not_fail_the_scored_trace():
 
     await pipeline._finalize_evaluation_assignment(
         g8e_context=g8e_context,
+        judge_settings=G8eeUserSettings(),
         inputs=_boundary_inputs(g8e_context),
         state=AgentStreamState(model_calls=[agent_call]),
         memory_holder={"task": asyncio.create_task(_failing_memory_task()), "model_call": None},
@@ -362,6 +374,7 @@ async def test_a_timed_out_memory_update_does_not_fail_the_scored_trace(monkeypa
     try:
         await pipeline._finalize_evaluation_assignment(
             g8e_context=g8e_context,
+            judge_settings=G8eeUserSettings(),
             inputs=_boundary_inputs(g8e_context),
             state=AgentStreamState(model_calls=[agent_call]),
             memory_holder={"task": task, "model_call": None},

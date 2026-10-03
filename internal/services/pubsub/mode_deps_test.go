@@ -25,6 +25,7 @@ import (
 
 func validTestGovernanceCoreDeps() GovernanceCoreDeps {
 	return GovernanceCoreDeps{
+		ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
 		ReplayStore:       &testutil.MockReplayStore{},
 		StateRootProvider: testutil.NewMockStateRootProvider("test-root"),
 		TransactionAudit:  &testutil.MockTransactionAudit{},

@@ -18,7 +18,7 @@ Separation of Concerns:
 
 import logging
 
-from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS, ThinkingLevel
+from app.constants import ThinkingLevel
 import app.llm.llm_types as types
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -38,31 +38,30 @@ class AIGenerationConfigBuilder:
     """
 
     @staticmethod
-    def _get_effective_max_tokens(
+    def resolve_max_output_tokens(
         model_config: LLModelConfig | None,
         max_tokens: int | None,
-    ) -> int:
-        """Get effective max_tokens value with fallback to model config or default."""
+    ) -> int | None:
+        """Resolve the output limit: the caller's value, else the model's documented
+        ceiling, else unset. This is the only place a limit is resolved; providers
+        consume the result and never derive one themselves.
+        """
         if max_tokens is not None:
             return max_tokens
-        return (
-            model_config.max_output_tokens
-            if model_config and model_config.max_output_tokens is not None
-            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        )
+        return model_config.max_output_tokens if model_config else None
 
     @staticmethod
     def _get_effective_values(
         model_config: LLModelConfig | None,
         max_tokens: int | None,
-    ) -> tuple[int, int | None, float | None, list[str] | None]:
+    ) -> tuple[int | None, int | None, float | None, list[str] | None]:
         """Get all effective values from model config with fallbacks.
 
         Returns:
             (max_tokens, top_k, top_p, stop_sequences)
         """
         return (
-            AIGenerationConfigBuilder._get_effective_max_tokens(model_config, max_tokens),
+            AIGenerationConfigBuilder.resolve_max_output_tokens(model_config, max_tokens),
             model_config.top_k if model_config else None,
             model_config.top_p if model_config else None,
             model_config.stop_sequences if model_config else None,

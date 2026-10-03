@@ -5,8 +5,9 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-# Unified stack: gateway, data operator, inference operator, ensemble, and
-# dashboard start together in the default profile (`docker compose up -d`).
+# Unified stack: gateway, data operator, inference operator, and ensemble start
+# together in the default profile (`docker compose up -d`). The Gateway serves
+# the browser console at https://localhost:8443/console/.
 # Workloads submit platform enrollment requests and become ready once approved
 # by the owner.
 #
@@ -33,8 +34,6 @@ volumes:
     driver: local
   g8e-ensemble-data:
     driver: local
-  g8e-dashboard-data:
-    driver: local
   g8e-gateway-secondary-data:
     driver: local
   g8e-gateway-user-data:
@@ -60,7 +59,7 @@ services:
           - g8eg
     volumes:
       - g8e-gateway-data:/root/.g8e
-      - ./dashboard/g8e-adapter/evaluation-explorer/dist:/eval-explorer:ro
+      - ./evaluation-explorer/dist:/eval-explorer:ro
       - g8e-shared-tmp:/tmp
       - ./bin:/opt/g8e/bin:ro
       - /etc/hosts:/etc/hosts.host:ro
@@ -97,14 +96,19 @@ services:
       - "0.0.0.0:5173"
       - "--eval-explorer-root"
       - "/eval-explorer"
-      - "--cors-origin"
-      - "http://${G8E_HOSTNAME:-localhost}:3000"
+      # The console is served by this Gateway, so it needs no CORS origin; its
+      # HTTPS origin is listed explicitly because a non-localhost RP ID only
+      # implies the port-less https://<host> origin.
       - "--passkey-rp-origin"
-      - "http://${G8E_HOSTNAME:-localhost}:3000"
+      - "https://${G8E_HOSTNAME:-localhost}:8443"
       - "--passkey-rp-id"
       - "${G8E_HOSTNAME:-localhost}"
       - "--passkey-rp-name"
       - "g8e"
+      # The browser proxy forwards console chat/case traffic to g8ee, which
+      # runs in its own container (the default 127.0.0.1:8000 is this one).
+      - "--ensemble-upstream-url"
+      - "http://g8e-ensemble:8000"
     restart: unless-stopped
     ulimits:
       nofile:
@@ -190,10 +194,6 @@ services:
       - "--inference-enabled"
       - "--inference-ollama-endpoint"
       - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
-      - "--inference-campaign-id"
-      - "${G8E_INFERENCE_CAMPAIGN_ID:-}"
-      - "--inference-model-registry-digest"
-      - "${G8E_INFERENCE_MODEL_REGISTRY_DIGEST:-}"
     restart: unless-stopped
     deploy:
       resources:
@@ -248,17 +248,22 @@ services:
       dockerfile: ensemble/Dockerfile
     container_name: g8e-ensemble
     networks:
-      - g8e-net
+      g8e-net:
+        aliases:
+          - g8e-ensemble
     depends_on:
       g8e-gateway:
         condition: service_healthy
       g8e-data-operator:
         condition: service_started
     ports:
-      - "8000:8000"
+      # Published on loopback for host tools (eval, e2e) and for convenience.
+      # This is not a security control: g8ee accepts proxy identity only with
+      # the Gateway's Ed25519 signature on the request, so a caller that
+      # reaches port 8000 by any route still gets no identity without it.
+      - "127.0.0.1:8000:8000"
     volumes:
       - g8e-ensemble-data:/root/.g8e
-      - g8e-operator-data:/operator-state:ro
       - g8e-shared-tmp:/tmp
     command:
       - "--gateway-http-url"
@@ -271,8 +276,6 @@ services:
       - "wss://g8e.local:8443"
       - "--runtime-dir"
       - "/root/.g8e"
-      - "--secrets-dir"
-      - "/operator-state/secrets"
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -288,43 +291,6 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-
-  dashboard:
-    # Operator dashboard (g8ed): Node.js/Express browser UI. Runs as non-root g8e user (UID 1001).
-    build:
-      context: .
-      dockerfile: dashboard/Dockerfile
-    container_name: g8e-dashboard
-    networks:
-      - g8e-net
-    ports:
-      - "3000:3000"
-    depends_on:
-      g8e-gateway:
-        condition: service_healthy
-    volumes:
-      - g8e-dashboard-data:/data
-    environment:
-      - GATEWAY_HEALTH_URL=http://g8eg:8080
-      - GATEWAY_HEALTH_PATH=/api/v1/health
-      - G8E_GATEWAY_URL=https://${G8E_HOSTNAME:-localhost}:8443
-      - G8E_GATEWAY_HTTP_URL=http://g8eg:8080
-      - G8E_RUNTIME_DIR=/data
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
 
   # ===========================================================================
   # g8ellama — governed inference against the approved remote Ollama provider.

@@ -13,6 +13,11 @@ const (
 	EvaluationReceiptPollInterval = 500 * time.Millisecond
 	EvaluationReceiptPollTimeout  = 30 * time.Second
 	InferenceRequestSchemaVersion = "1.0"
+
+	// InferenceMaxOutputTokens is the hard upper bound on one inference
+	// call's output. It is a ceiling, not a default tuning value: a request
+	// above it is rejected, and a request that states no limit (0) runs under it.
+	InferenceMaxOutputTokens int32 = 256_000
 )
 
 // Platform binary names.

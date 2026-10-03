@@ -39,20 +39,24 @@ func tickCmd() tea.Cmd {
 }
 
 // enrollModel is a minimal bubbletea model for the passkey enrollment waiting UX.
-// It displays a spinner, the console URL, and exits when a passkey.registered
-// event is received, an error occurs, or the user cancels.
+// It displays a spinner and exits when a passkey.registered event is received,
+// an error occurs, or the user cancels.
+//
+// The model never renders the enrollment URL. bubbletea truncates each view line
+// to the terminal width without an ellipsis, so a long URL would reach the user
+// with a silently truncated one-time token. The registrar prints the URL through
+// its Out sink before the program starts, where the terminal wraps it intact.
 //
 // On user cancellation (q/ctrl+c), the model exits with context.Canceled so
 // the registrar can cancel the SSE context and clean up the stream.
 type enrollModel struct {
-	consoleURL string
-	done       bool
-	err        error
-	tick       int
+	done bool
+	err  error
+	tick int
 }
 
-func newEnrollModel(consoleURL string) enrollModel {
-	return enrollModel{consoleURL: consoleURL}
+func newEnrollModel() enrollModel {
+	return enrollModel{}
 }
 
 func (m enrollModel) Init() tea.Cmd {
@@ -90,9 +94,9 @@ func (m enrollModel) View() string {
 	spinner := spinnerChar(m.tick)
 	return fmt.Sprintf(
 		"\n %s Waiting for passkey registration...\n\n"+
-			"   Console URL: %s\n\n"+
+			"   Open the enrollment URL printed above to continue.\n\n"+
 			"   Press q to cancel.\n",
-		spinner, m.consoleURL,
+		spinner,
 	)
 }
 

@@ -236,7 +236,11 @@ func TestImportAssignmentResultFromFormationRun_GradesFromRoleTraces(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, result.GetLifecycleStatus())
 	require.NotEmpty(t, result.GetDeterministicGrades())
-	require.NotEmpty(t, result.GetDecomposedScores())
+	// The role traces here are not a verified handoff chain, so the pipeline
+	// grade is a failed harness precondition: the result is INVALID_EVIDENCE and
+	// carries no scores for or against the models.
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE, DerivePublicSummaryStatus(result))
+	assert.Empty(t, result.GetDecomposedScores())
 
 	seenIDs := make(map[string]bool, len(result.GetDeterministicGrades()))
 	pipelineGrades := 0

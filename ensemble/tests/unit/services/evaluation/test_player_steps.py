@@ -20,6 +20,7 @@ from app.constants import (
     TriageIntentClassification,
     TriageRequestPosture,
 )
+from app.constants.chat_model_call_sites import classification_for_agent_role
 from app.models.agents.triage import TriageResult
 from app.models.agents.tribunal import (
     TribunalAuditorCompletedPayload,
@@ -58,6 +59,7 @@ def _call(
 ):
     return ModelCallTelemetry(
         agent_role=agent_role,
+        classification=classification_for_agent_role(agent_role),
         model_role=model_role,
         provider="OllamaProvider",
         model="m1",

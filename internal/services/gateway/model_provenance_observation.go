@@ -29,8 +29,6 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const modelProvenanceAttestationPreflightTimeout = 30 * time.Second
-
 // ModelProvenanceObservationCoordinator fans out BEGIN/FINALIZE provenance
 // commands to the remote storage-side Provenance Operator and ingests
 // completed attestation windows on the campaign Gateway host.
@@ -214,7 +212,7 @@ func (c *ModelProvenanceObservationCoordinator) PreflightStorageAttestation(ctx 
 		return nil, fmt.Errorf("model provenance attestation preflight: finalize: %w", err)
 	}
 
-	deadline := time.Now().Add(modelProvenanceAttestationPreflightTimeout)
+	deadline := time.Now().Add(constants.ModelProvenanceAttestationPreflightTimeout)
 	for {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()

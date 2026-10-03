@@ -44,7 +44,7 @@ func GenerateFormationCatalogStackSet(req FormationCatalogStackGenerationRequest
 		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: %w", err)
 	}
 	if len(formations) == 0 {
-		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: catalog is empty")
+		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: catalog is empty: %w", constants.ErrFormationInvalid)
 	}
 	registry := indexFormationVariants(req.Variants)
 	stacks := make([]*evalv1.HeterogeneousStackDefinition, 0, len(formations))

@@ -388,6 +388,8 @@ def _validate_response_identity(
         raise ValidationError("Governed inference response is missing its result")
     result = response.result
     hashes = (result.normalized_request_hash, result.output_hash, result.result_digest)
+    if result.served_model_digest:
+        hashes += (result.served_model_digest,)
     if (
         not response.HasField("receipt")
         or response.receipt.status != EXECUTION_STATUS_COMPLETED
@@ -399,7 +401,6 @@ def _validate_response_identity(
             and (result.requested_model != request.model or result.model != request.model)
         )
         or result.requested_model_digest != request.model_digest
-        or result.served_model_digest != request.model_digest
         or result.campaign_id != request.campaign_id
         or result.run_id != request.run_id
         or result.assignment_id != request.assignment_id
@@ -561,7 +562,7 @@ class G8EProvider(LLMProvider):
         model: str,
         contents: list[Content],
         system_instructions: str | None,
-        max_output_tokens: int,
+        max_output_tokens: int | None,
         top_p: float | None,
         top_k: int | None,
         random_seed: int | None,
@@ -655,7 +656,7 @@ class G8EProvider(LLMProvider):
         model: str,
         contents: list[Content],
         system_instructions: str | None,
-        max_output_tokens: int,
+        max_output_tokens: int | None,
         top_p: float | None,
         top_k: int | None,
         random_seed: int | None,

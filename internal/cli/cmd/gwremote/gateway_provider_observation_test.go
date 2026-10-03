@@ -24,36 +24,32 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func chdirRepoRoot(t *testing.T) {
+func findRepoRoot(t *testing.T) string {
 	t.Helper()
 	wd, err := os.Getwd()
 	require.NoError(t, err)
 	for {
 		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
-			break
+			return wd
 		}
 		parent := filepath.Dir(wd)
 		require.NotEqual(t, parent, wd)
 		wd = parent
 	}
-	original, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(wd))
-	t.Cleanup(func() { _ = os.Chdir(original) })
 }
 
 func TestProviderObservationGatewayRead_LiveNotFound(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping live gateway integration in short mode")
 	}
-	chdirRepoRoot(t)
+	repoRoot := findRepoRoot(t)
 	if !IsGatewayHealthy() {
 		t.Skip("gateway not healthy on localhost:8080")
 	}
 
-	cfg, err := config.Load("")
+	cfg, err := config.Load(repoRoot)
 	require.NoError(t, err)
-	fileSvc, err := fs.NewRuntimeFileService("", testutil.NewTestLogger())
+	fileSvc, err := fs.NewRuntimeFileService(repoRoot, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	remote, err := NewProviderObservationRemote(fileSvc, cfg)

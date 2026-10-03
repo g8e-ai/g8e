@@ -77,13 +77,13 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 Before running `make build` or `make build-compressed`, install the evaluation explorer dependencies and build its production bundle:
 
 ```bash
-cd dashboard/g8e-adapter/evaluation-explorer
+cd evaluation-explorer
 npm ci
 npm run build
 cd ../../..
 ```
 
-The repository setup scripts validate the development tools, offer to install missing tools, build the evaluation explorer when needed, and run `make build`:
+The repository setup scripts validate the development tools, offer to install missing tools, build the evaluation explorer when needed, and run `make build`. The Linux and macOS scripts also install the toolchain behind `make ci` unless you pass `--build-only`:
 
 - Linux: `bash scripts/linux-setup.sh`
 - macOS: `bash scripts/macos-setup.sh`
@@ -97,7 +97,7 @@ cd g8e
 make build
 ```
 
-`make build` first copies the built evaluation explorer from `dashboard/g8e-adapter/evaluation-explorer/dist/` into the Go binary, then creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows). If the explorer bundle has not been built, `make build` stops with an instruction to build it first.
+`make build` first copies the built evaluation explorer from `evaluation-explorer/dist/` into the Go binary, then creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows). If the explorer bundle has not been built, `make build` stops with an instruction to build it first.
 
 The build sets `CGO_ENABLED=0`, uses the `netgo` and `osusergo` build tags, strips symbol and debug data, and embeds the platform version, build ID, build time, and target platform. The resulting binary does not require a Go toolchain or a system SQLite library on the target host.
 
@@ -193,20 +193,15 @@ The current worker path applies these options:
 | `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds and the accepted range is 0-30 (0 selects the default). Larger values are rejected at startup because the Gateway marks an Operator `stale` after 60 seconds without a heartbeat. |
 | `--lattice-endpoint <url>` and related `--lattice-*` flags | These flags are exposed by Cobra but `operatorStartCmd` does not copy their values into `ServeOperatorOptions`, so the flags currently have no effect. The service-layer environment path uses `LATTICE_ENDPOINT`, `LATTICE_CLIENT_ID`, `LATTICE_CLIENT_SECRET`, `SANDBOXES_TOKEN`, `LATTICE_ENTITY_NAME`, and `LATTICE_POSTURE_FLOOR`; the adapter remains incomplete. |
 | `--inference-enabled` | Enables the governed inference backend for an Inference Operator. |
-| `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. |
-| `--inference-primary-model <model>` | Selects the Ollama model name for the Primary chat tier. |
-| `--inference-assistant-model <model>` | Selects the Ollama model name for the Assistant chat tier. |
-| `--inference-lite-model <model>` | Selects the Ollama model name for the Lite chat tier. |
+| `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. The Operator holds no model configuration; each governed request names the model the user chose in the Console. |
 | `--inference-keep-alive <duration>` | Sets the Ollama keep-alive duration (default: -1 for infinite). |
-| `--inference-campaign-id <id>` | Selects dedicated campaign authorization mode and requires every governed inference request to carry this exact campaign identity and complete assignment correlation. |
-| `--inference-model-registry-digest <sha256>` | Commits the dedicated campaign Operator to one immutable model registry. The Operator recomputes the digest over the request registry and rejects malformed registries, absent models, digest changes, and incomplete campaign bindings. |
 | `--provider-boundary-observer-enabled` | Enrolls a read-only provider-boundary hardware witness with no generic command or provider-lifecycle authority. |
 | `--provider-boundary-observer-id <id>` | Sets the stable Observer Operator identity pseudonym. |
 | `--provenance-operator-enabled` | Enrolls a storage-side model provenance witness. |
 | `--provenance-operator-id <id>` | Sets the stable Provenance Operator identity pseudonym. |
 | `--model-storage-root <path>` | Selects the local content-addressed model storage tree read by the Provenance Operator. |
 
-Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest. Both campaign flags are required together; ordinary inference omits both and retains the configured role-model authority.
+One Inference Operator serves console chat and evaluation campaigns at the same time; authority is decided per request. A request without campaign authority runs on the configured model for its role and is rejected if it names any other model. A request with campaign authority carries its campaign ID, model registry, and registry digest on the dispatch; the Operator recomputes the digest and rejects malformed registries, absent models, digest changes, and incomplete assignment correlation. Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest.
 
 Use `./g8e operator start --help` as the command-surface reference. The Lattice-named flags currently appear in Cobra help but are not copied into `ServeOperatorOptions` by `operatorStartCmd`; setting those flags does not enable the adapter. The adapter's environment-variable path exists in the service layer, but its task handler currently records receipt of a task without dispatching it. Do not treat the Lattice path as an implemented Operator execution integration.
 

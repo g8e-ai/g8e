@@ -27,7 +27,7 @@ import (
 //
 //	./g8e test e2e --run TestPlatformEnrollment_PendingDiscovery
 //
-// The test asserts that all three component kinds (operator, dashboard,
+// The test asserts that both workload component kinds (operator and
 // ensemble) appear in the pending list, that request IDs are non-empty and
 // unique, and that the raw JSON response excludes requester tokens, token
 // hashes, CSR PEM, certificate PEM, and private key material. The pending
@@ -44,8 +44,8 @@ func TestPlatformEnrollment_PendingDiscovery(t *testing.T) {
 	defer cancel()
 
 	// Precondition: this test requires a platform with pending enrollment
-	// requests from all three component kinds (operator, dashboard,
-	// ensemble). The user starts the full stack without approving any
+	// requests from both workload component kinds (operator and ensemble).
+	// The user starts the full stack without approving any
 	// enrollments. On an approved stack (no pending requests), fail fast
 	// with an actionable message instead of timing out.
 	pending, err := e2eClient.GetPendingEnrollments(ctx)
@@ -56,8 +56,8 @@ func TestPlatformEnrollment_PendingDiscovery(t *testing.T) {
 			"then run: ./g8e test e2e --run TestPlatformEnrollment_PendingDiscovery")
 	}
 
-	// Wait for all three component kinds to appear. The operator, dashboard,
-	// and ensemble submit enrollment requests on startup; they may not all
+	// Wait for both component kinds to appear. The operator and ensemble
+	// submit enrollment requests on startup; they may not all
 	// be present immediately. A 120-second window accommodates startup
 	// jitter without being so generous that a missing component could pass.
 	require.Eventually(t, func() bool {
@@ -67,30 +67,27 @@ func TestPlatformEnrollment_PendingDiscovery(t *testing.T) {
 			return false
 		}
 		pending = p
-		hasOp, hasDash, hasEns := false, false, false
+		hasOp, hasEns := false, false
 		for _, r := range pending.Requests {
 			switch r.ComponentKind {
 			case models.PlatformComponentOperator:
 				hasOp = true
-			case models.PlatformComponentDashboard:
-				hasDash = true
 			case models.PlatformComponentEnsemble:
 				hasEns = true
 			}
 		}
-		return hasOp && hasDash && hasEns
+		return hasOp && hasEns
 	}, 120*time.Second, 3*time.Second,
-		"all three component kinds (operator, dashboard, ensemble) must appear in the pending list")
+		"both component kinds (operator, ensemble) must appear in the pending list")
 
 	require.NotEmpty(t, pending.Requests, "pending list must contain requests on an unapproved stack")
 
-	// Assert all three component kinds are present.
+	// Assert both component kinds are present.
 	kinds := make(map[models.PlatformComponentKind]bool, len(pending.Requests))
 	for _, r := range pending.Requests {
 		kinds[r.ComponentKind] = true
 	}
 	assert.True(t, kinds[models.PlatformComponentOperator], "pending list must include an operator request")
-	assert.True(t, kinds[models.PlatformComponentDashboard], "pending list must include a dashboard request")
 	assert.True(t, kinds[models.PlatformComponentEnsemble], "pending list must include an ensemble request")
 	t.Logf("pending list contains %d requests covering %d component kinds",
 		len(pending.Requests), len(kinds))

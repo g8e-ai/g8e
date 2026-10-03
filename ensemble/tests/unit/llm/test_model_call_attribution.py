@@ -5,13 +5,17 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import pytest
+from pydantic import ValidationError as PydanticValidationError
+
+from app.errors import ValidationError
 from app.llm.model_call_attribution import (
     build_model_call_telemetry,
     governed_telemetry_fields,
     prepare_provider_call,
 )
 from app.models.http_context import G8eHttpContext
-from app.models.model_telemetry import GovernedDispatchEvidence
+from app.models.model_telemetry import GovernedDispatchEvidence, ModelCallTelemetry
 from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 
@@ -131,6 +135,37 @@ def test_build_model_call_telemetry_ignores_a_provider_without_the_capture():
     assert _telemetry(_NoCapture()).tools_declared is None
 
 
+@pytest.mark.parametrize(
+    ("agent_role", "classification"),
+    [("sage", "scored_chain"), ("codex", "post_turn"), ("judge", "grader")],
+)
+def test_build_model_call_telemetry_states_the_chain_classification(agent_role, classification):
+    telemetry = build_model_call_telemetry(
+        provider=_RecordingProvider(),
+        agent_role=agent_role,
+        model_role="lite",
+        model="model-a",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+        input_artifact_hash="e" * 64,
+    )
+
+    assert telemetry.classification == classification
+
+
+def test_build_model_call_telemetry_rejects_an_unregistered_agent_role():
+    with pytest.raises(ValidationError):
+        build_model_call_telemetry(
+            provider=_RecordingProvider(),
+            agent_role="unknown",
+            model_role="lite",
+            model="model-a",
+            monotonic_start=1.0,
+            monotonic_end=2.0,
+            input_artifact_hash="e" * 64,
+        )
+
+
 def test_build_model_call_telemetry_includes_governed_fields():
     provider = _RecordingProvider()
     telemetry = build_model_call_telemetry(
@@ -147,3 +182,14 @@ def test_build_model_call_telemetry_includes_governed_fields():
     assert telemetry.provider_attempt_id == fields["provider_attempt_id"]
     assert telemetry.assignment_id == "assignment-1"
     assert telemetry.model_registry_digest == "d" * 64
+
+
+def test_model_call_telemetry_requires_classification():
+    with pytest.raises(PydanticValidationError, match="classification"):
+        ModelCallTelemetry(
+            agent_role="sage",
+            provider="fake",
+            model="model-a",
+            monotonic_start=1.0,
+            monotonic_end=2.0,
+        )

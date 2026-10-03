@@ -441,3 +441,14 @@ func writeNativeVerification(cmd *cobra.Command, report *compliancev1.Compliance
 	}
 	return nil
 }
+
+// platformIdentity returns the build identity the root command attached, the
+// release a campaign freezes and a run must execute under.
+func platformIdentity(cmd *cobra.Command) evaluation.PlatformIdentity {
+	vi := shared.VersionInfoFromCmd(cmd)
+	identity := evaluation.PlatformIdentity{Release: vi.Version}
+	if vi.SourceRevision != string(constants.SystemHealthUnknown) {
+		identity.SourceRevision = vi.SourceRevision
+	}
+	return identity
+}

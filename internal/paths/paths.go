@@ -190,6 +190,7 @@ var Infra struct {
 	RuntimeDir:              constants.RuntimeDirname,
 	DataDir:                 constants.RuntimeDirname + "/" + constants.DataDirname,
 	VaultDir:                constants.RuntimeDirname + "/" + constants.VaultDirname,
+	VaultKeyPath:            constants.RuntimeDirname + "/" + constants.VaultDirname + "/" + constants.VaultKeyFilename,
 	TestVaultDir:            constants.RuntimeDirname + "/" + constants.TestVaultDirname,
 	LocalStateDBPath:        constants.RuntimeDirname + "/" + constants.LocalStateDBFilename,
 	AuditVaultDBPath:        constants.RuntimeDirname + "/" + constants.AuditVaultDBFilename,
@@ -254,7 +255,6 @@ var (
 	PeerKeyPath         = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PeerSubdir + "/" + constants.PeerKeyFilename
 	PeerChainPath       = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PeerSubdir + "/" + constants.PeerChainFilename
 	PkiGatewayKeyPath   = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirHub + "/" + constants.PkiFileGatewayKey
-	SwaggerFilePath     = constants.DocsDirname + "/" + constants.SwaggerFilename
 	G8eLogPath          = constants.G8eLogFilename
 )
 

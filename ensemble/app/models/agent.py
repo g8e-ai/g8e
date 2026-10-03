@@ -199,7 +199,6 @@ class AgentInputs(G8eBaseModel):
 
     operator_bound: bool = False
     model_to_use: str | None = None
-    max_tokens: int | None = None
     conversation_history: list[ConversationHistoryMessage] = Field(default_factory=list)
     system_instructions: str | None = None
     contents: list[Content] = Field(default_factory=list)

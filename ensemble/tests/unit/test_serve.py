@@ -29,7 +29,6 @@ def test_arguments_map_to_bootstrap_settings():
             "--gateway-https-url", "https://g8e.local:8443",
             "--gateway-pubsub-url", "wss://g8e.local:8443",
             "--runtime-dir", "/root/.g8e",
-            "--secrets-dir", "/operator-state/secrets",
             "--port", "9000",
         ]
     )
@@ -40,7 +39,6 @@ def test_arguments_map_to_bootstrap_settings():
         gateway_https_url="https://g8e.local:8443",
         gateway_pubsub_url="wss://g8e.local:8443",
         runtime_dir="/root/.g8e",
-        secrets_dir="/operator-state/secrets",
     )
     assert parsed.port == 9000
 

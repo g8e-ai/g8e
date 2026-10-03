@@ -188,6 +188,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- Core services ---
 	userSvc := NewUserService(docStore, logger)
+	approvalsPublisher := NewApprovalsChangePublisher(docStore, userSvc, NewSSEEventPublisher(sseStore, wsHandler), logger)
 	res := response.NewWriter(logger)
 
 	var jwksProvider *JWKSProvider
@@ -350,6 +351,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 			Posture:          string(cfg.Gateway.Posture),
 		}
 		govCore := pubsub.GovernanceCoreDeps{
+			ExecutionTarget:   embeddedOperator,
 			ReplayStore:       replayStore,
 			StateRootProvider: stateRootSvc,
 			TransactionAudit:  docStore,
@@ -394,7 +396,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	// --- Platform enrollment service (C2: concrete cmdSvc injected) ---
-	platformEnrollmentSvc := NewPlatformEnrollmentService(docStore, userSvc, cmdSvc, stateRootSvc, string(cfg.Gateway.Posture), logger)
+	platformEnrollmentSvc := NewPlatformEnrollmentService(docStore, userSvc, cmdSvc, stateRootSvc, string(cfg.Gateway.Posture), approvalsPublisher, logger)
 
 	// --- MCP gateway (C2: concrete cmdSvc, auditLogger, l2Deliberator injected) ---
 	var auditLogger mcp.AuditLogger
@@ -405,7 +407,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:                 logger,
 		Responder:              res,
-		SuspendedStore:         suspendedTxService,
+		SuspendedStore:         newNotifyingSuspendedStore(suspendedTxService, approvalsPublisher),
 		ScrubbingService:       scrubbingService,
 		ThreatScanner:          doctrine,
 		MaxPayloadBytes:        cfg.Gateway.MaxPayloadBytes,
@@ -436,7 +438,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	// --- Passkey orchestrator and handler ---
-	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, sseStore, wsHandler, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, newNotifyingSuspendedStore(suspendedTxService, approvalsPublisher), sseStore, wsHandler, logger)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey orchestrator: %w", err)
 	}
@@ -686,6 +688,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
 	modelProvenanceDeps.ProvenanceCoordinator = ls.modelProvenanceCoord
 
+	proxySigner, err := ls.newBrowserProxySigner()
+	if err != nil {
+		return fmt.Errorf("gateway: initialize browser proxy signer: %w", err)
+	}
+
 	g8eReader, err := g8ebinaries.OpenReader(constants.G8eBinariesDir)
 	if err != nil {
 		return fmt.Errorf("gateway: initialize g8e-binary reader: %w", err)
@@ -719,14 +726,15 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder:      ls.responder,
 		},
 		DataControllerDeps: DataControllerDeps{
-			Cfg:       cfg,
-			Logger:    logger,
-			DocStore:  ls.docStore,
-			KVStore:   ls.kvStore,
-			SSEStore:  ls.sseStore,
-			BlobStore: ls.blobStore,
-			Pubsub:    pubsub,
-			Responder: ls.responder,
+			Cfg:                cfg,
+			Logger:             logger,
+			DocStore:           ls.docStore,
+			KVStore:            ls.kvStore,
+			SSEStore:           ls.sseStore,
+			BlobStore:          ls.blobStore,
+			Pubsub:             pubsub,
+			Responder:          ls.responder,
+			AuditorKeyProvider: ls.db.GetSecretManager(),
 		},
 		SignerControllerDeps: SignerControllerDeps{
 			Cfg:         cfg,
@@ -902,6 +910,8 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Cfg:       cfg,
 			Logger:    logger,
 			Responder: ls.responder,
+			Operators: &gatewayOperatorListerAdapter{svc: reg},
+			Signer:    proxySigner,
 		},
 	})
 	if err != nil {
@@ -1024,6 +1034,18 @@ func (ls *GatewayModeService) GetReplayStore() *ReplayStoreService {
 	return ls.replayStore
 }
 
+// newBrowserProxySigner builds the signer for Gateway-to-g8ee identity stamps
+// from the Gateway's Actuator key. The Gateway does not start without it: g8ee
+// accepts no unsigned proxy identity, so a Gateway that cannot sign has no
+// working console chat.
+func (ls *GatewayModeService) newBrowserProxySigner() (*BrowserProxySigner, error) {
+	priv, keyID, err := ls.db.GetSecretManager().GetActuatorKey()
+	if err != nil {
+		return nil, fmt.Errorf("load actuator key: %w", err)
+	}
+	return NewBrowserProxySigner(priv, keyID)
+}
+
 // GetSecretManager returns the secret manager initialized during database open.
 func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return ls.db.GetSecretManager(), nil
@@ -1138,6 +1160,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GatewayModeDeps {
 
 	return &pubsub.GatewayModeDeps{
 		GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+			ExecutionTarget:   ls.embeddedOperator,
 			ReplayStore:       ls.replayStore,
 			StateRootProvider: ls.stateRootSvc,
 			TransactionAudit:  ls.docStore,

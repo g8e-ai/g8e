@@ -45,16 +45,14 @@ func TestReadDotEnvFile_ParsesValues(t *testing.T) {
 	path := filepath.Join(tmpDir, ".env")
 	content := `# comment
 G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
-G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini
-G8E_INFERENCE_MODEL_REGISTRY_DIGEST=abc123
+UNRELATED_KEY=value
 `
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 
 	values, err := readDotEnvFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, "http://192.168.1.2:11434", values["G8E_OLLAMA_ENDPOINT"])
-	assert.Equal(t, "eval-smoke-mini", values["G8E_INFERENCE_CAMPAIGN_ID"])
-	assert.Equal(t, "abc123", values["G8E_INFERENCE_MODEL_REGISTRY_DIGEST"])
+	assert.Equal(t, "value", values["UNRELATED_KEY"])
 }
 
 func TestCheckDockerInitEnv_MissingFile(t *testing.T) {
@@ -67,7 +65,7 @@ func TestCheckDockerInitEnv_MissingFile(t *testing.T) {
 
 func TestCheckDockerInitEnv_MissingRequiredKeys(t *testing.T) {
 	tmpDir := cmdtest.ChdirTemp(t)
-	content := "G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini\n"
+	content := "UNRELATED_KEY=value\n"
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(content), 0o644))
 
 	err := checkDockerInitEnv()
@@ -116,12 +114,18 @@ func TestSelectDockerInitApprovalCandidate(t *testing.T) {
 			wantID: "op-1",
 		},
 		{
-			name: "existing data operator does not block dashboard",
+			name: "existing data operator does not block ensemble",
 			pending: []models.PlatformEnrollmentPendingRequest{
+				{RequestID: "inf-1", ComponentKind: models.PlatformComponentOperator, Hostname: "inference-operator"},
 				{RequestID: "ensemble-1", ComponentKind: models.PlatformComponentEnsemble},
+			},
+			wantID: "ensemble-1",
+		},
+		{
+			name: "dashboard request is not auto-approved",
+			pending: []models.PlatformEnrollmentPendingRequest{
 				{RequestID: "dashboard-1", ComponentKind: models.PlatformComponentDashboard},
 			},
-			wantID: "dashboard-1",
 		},
 		{
 			name: "unrelated request is not auto-approved",
@@ -162,18 +166,11 @@ func TestPlatformEnrollmentApprovalRank(t *testing.T) {
 			want: 1,
 		},
 		{
-			name: "dashboard second",
-			req: models.PlatformEnrollmentPendingRequest{
-				ComponentKind: models.PlatformComponentDashboard,
-			},
-			want: 2,
-		},
-		{
-			name: "ensemble third",
+			name: "ensemble second",
 			req: models.PlatformEnrollmentPendingRequest{
 				ComponentKind: models.PlatformComponentEnsemble,
 			},
-			want: 3,
+			want: 2,
 		},
 		{
 			name: "inference operator last",
@@ -181,7 +178,14 @@ func TestPlatformEnrollmentApprovalRank(t *testing.T) {
 				ComponentKind: models.PlatformComponentOperator,
 				Hostname:      "inference-operator",
 			},
-			want: 4,
+			want: 3,
+		},
+		{
+			name: "dashboard is not part of the unified stack",
+			req: models.PlatformEnrollmentPendingRequest{
+				ComponentKind: models.PlatformComponentDashboard,
+			},
+			want: 99,
 		},
 	}
 	for _, tc := range tests {
@@ -202,10 +206,6 @@ func TestDockerOwnerEnrollmentOptions(t *testing.T) {
 		assert.True(t, opts.Headless)
 		assert.True(t, opts.NoSystemTrust)
 	})
-}
-
-func TestDockerFullStackProfiles(t *testing.T) {
-	assert.Empty(t, dockerFullStackProfiles(), "unified stack now runs in default profile without requiring compose profiles")
 }
 
 func TestReportDockerPublicSpectatorReady_PrintsBootstrapSequence(t *testing.T) {

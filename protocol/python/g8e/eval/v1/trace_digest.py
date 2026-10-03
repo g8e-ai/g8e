@@ -9,7 +9,32 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+from decimal import Decimal
 from typing import Any
+
+_GO_PLAIN_FLOAT_MIN = 1e-6
+_GO_PLAIN_FLOAT_MAX = 1e21
+
+
+def _marshal_go_float(value: float) -> str:
+    """Encode a float exactly as Go's encoding/json encodes a float64.
+
+    The Go side decodes every JSON number to float64 and re-encodes it, so an
+    integral float is written without a fractional part (``0.0`` -> ``0``) and
+    the plain/exponent switch sits at 1e-6 and 1e21, not at Python's repr limits.
+    """
+    if not math.isfinite(value):
+        raise ValueError("canonical JSON cannot encode a non-finite float")
+    if value == 0:
+        return "-0" if math.copysign(1.0, value) < 0 else "0"
+    magnitude = abs(value)
+    if magnitude < _GO_PLAIN_FLOAT_MIN or magnitude >= _GO_PLAIN_FLOAT_MAX:
+        mantissa, _, exponent = repr(value).partition("e")
+        if exponent.startswith("-0"):
+            exponent = "-" + exponent[2:]
+        return f"{mantissa}e{exponent}"
+    return format(Decimal(repr(value)).normalize(), "f")
 
 
 def marshal_canonical_json(value: Any) -> bytes:
@@ -30,11 +55,15 @@ def marshal_canonical_json(value: Any) -> bytes:
     if isinstance(value, list):
         body = "[" + ",".join(marshal_canonical_json(item).decode() for item in value) + "]"
         return body.encode()
+    if isinstance(value, float):
+        return _marshal_go_float(value).encode()
     encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     return (
         encoded.replace("<", "\\u003c")
         .replace(">", "\\u003e")
         .replace("&", "\\u0026")
+        .replace(" ", "\\u2028")
+        .replace(" ", "\\u2029")
         .encode()
     )
 

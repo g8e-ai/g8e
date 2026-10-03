@@ -126,7 +126,7 @@ func TestBuildModelVariantsFromProviderInventory_RequiresGovernedProbeRunnerWhen
 	}
 	_, err := BuildModelVariantsFromProviderInventory(context.Background(), entries, ModelInventoryOptions{RunCapabilityProbes: true})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "governed probe runner")
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }
 
 func TestBuildModelVariantsFromProviderInventory_RejectsEmptyInventory(t *testing.T) {
@@ -303,9 +303,9 @@ func TestRemoveModelVariant(t *testing.T) {
 
 	// Non-existent model fails
 	_, _, err = RemoveModelVariant(freeze, "non-existent:1b")
-	require.Error(t, err)
+	require.ErrorIs(t, err, constants.ErrNotFound)
 
 	// Removing the last model fails
 	_, _, err = RemoveModelVariant(updated, "model-b:2b")
-	require.Error(t, err)
+	require.ErrorIs(t, err, constants.ErrEvaluationLastEntryRemoval)
 }

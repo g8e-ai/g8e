@@ -16,10 +16,7 @@ from app.constants import (
     AUTHORIZATION,
     AuthMethod,
     CLI_SESSION_ID,
-    GATEWAY_BROWSER_PROXY_HEADER,
-    GATEWAY_BROWSER_PROXY_VALUE,
     G8EE_COMPONENT,
-    WEB_SESSION_ID,
     X_PROXY_CLI_SESSION_ID,
     X_PROXY_ORGANIZATION_ID,
     X_PROXY_USER_EMAIL,
@@ -32,6 +29,7 @@ from app.models.http_context import G8eHttpContext
 
 if TYPE_CHECKING:
     from app.models.settings import G8eeAppSettings
+    from app.services.auth.proxy_stamp import ProxyStampVerifier
     from app.services.infra.internal_http_client import InternalHttpClient
 
 logger = logging.getLogger(__name__)
@@ -40,8 +38,14 @@ logger = logging.getLogger(__name__)
 class AuthService:
     """Unified authentication and context validation service."""
 
-    def __init__(self, internal_http_client: InternalHttpClient):
+    def __init__(
+        self,
+        internal_http_client: InternalHttpClient,
+        proxy_stamp_verifier: ProxyStampVerifier | None = None,
+    ):
         self._internal_http_client = internal_http_client
+        # Without a verifier no proxy identity can be trusted, so none is accepted.
+        self._proxy_stamp_verifier = proxy_stamp_verifier
 
     async def authenticate_request(
         self,
@@ -85,14 +89,11 @@ class AuthService:
                     )
 
         if user is None and proxy_user_id and proxy_user_email:
-            gateway_proxy = request.headers.get(GATEWAY_BROWSER_PROXY_HEADER)
-            if gateway_proxy != GATEWAY_BROWSER_PROXY_VALUE:
-                raise AuthenticationError(
-                    "Proxy identity requires Gateway browser proxy stamp",
-                    component=G8EE_COMPONENT,
-                )
-            proxy_cli_session_id = request.headers.get(X_PROXY_CLI_SESSION_ID) or request.headers.get(CLI_SESSION_ID)
-            proxy_web_session_id = request.headers.get(X_PROXY_WEB_SESSION_ID) or request.headers.get(WEB_SESSION_ID)
+            await self._verify_proxy_stamp(request)
+            # Only the signed X-Proxy-* values are read here. The unsigned
+            # X-G8E-*-Session-ID headers are not covered by the stamp.
+            proxy_cli_session_id = request.headers.get(X_PROXY_CLI_SESSION_ID)
+            proxy_web_session_id = request.headers.get(X_PROXY_WEB_SESSION_ID)
             g8e_context = getattr(request.state, "g8e_context", None)
             if g8e_context:
                 if not proxy_cli_session_id and g8e_context.cli_session_id:
@@ -124,6 +125,22 @@ class AuthService:
             raise AuthenticationError("Authentication required", component=G8EE_COMPONENT)
 
         return user
+
+    async def _verify_proxy_stamp(self, request: Request) -> None:
+        """Require the Gateway's signature on the request's proxy identity.
+
+        The verdict is remembered on the request: several dependencies may
+        authenticate the same request, and a nonce can be spent only once.
+        """
+        if getattr(request.state, "proxy_stamp_verified", None) is True:
+            return
+        if self._proxy_stamp_verifier is None:
+            raise AuthenticationError(
+                "Proxy identity requires a valid Gateway signature",
+                component=G8EE_COMPONENT,
+            )
+        await self._proxy_stamp_verifier.verify(request)
+        request.state.proxy_stamp_verified = True
 
     async def get_validated_context(
         self,

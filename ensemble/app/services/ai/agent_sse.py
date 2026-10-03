@@ -52,6 +52,7 @@ from app.services.evaluation.tool_evidence import (
 )
 from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.observe.payloads import (
+    agent_state_sequence,
     build_agent_state_request,
     build_investigation_run_state_request,
     resolve_chat_persona_id,
@@ -153,30 +154,33 @@ async def deliver_via_sse(
 
     async def _push_agent_state(status: str) -> None:
         """Best-effort agent-state projection push. Skips when persona is
-        unresolved or routing is targetless. Failures are caught at this
+        unresolved or routing is targetless. A terminal status is followed
+        by ``idle`` (``agent_state_sequence``). Failures are caught at this
         boundary and do not abort the stream."""
         if _persona_id is None:
             return
-        request = build_agent_state_request(
-            user_id=user_id,
-            persona_id=_persona_id,
-            status=status,
-            run_id=investigation_id,
-            model=inputs.model_to_use,
-            web_session_id=web_session_id,
-            cli_session_id=cli_session_id,
-        )
-        if request is None:
-            return
-        try:
-            await event_service.publish_agent_state(request)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logger.warning(
-                "[SSE] observe agent-state push failed (non-blocking): %s",
-                exc,
+        for reported_status in agent_state_sequence(status):
+            request = build_agent_state_request(
+                user_id=user_id,
+                persona_id=_persona_id,
+                status=reported_status,
+                run_id=investigation_id,
+                model=inputs.model_to_use,
+                web_session_id=web_session_id,
+                cli_session_id=cli_session_id,
             )
+            if request is None:
+                return
+            try:
+                await event_service.publish_agent_state(request)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "[SSE] observe agent-state push failed (non-blocking): %s",
+                    exc,
+                )
+                return
 
     async def _push_run_state(status: str) -> None:
         """Best-effort investigation run-state projection push. The

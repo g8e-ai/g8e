@@ -27,7 +27,6 @@ class BootstrapSettings:
     gateway_pubsub_url: str | None = None
     runtime_dir: str | None = None
     pki_dir: str | None = None
-    secrets_dir: str | None = None
     ca_cert_path: str | None = None
 
 

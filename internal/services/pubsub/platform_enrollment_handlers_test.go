@@ -73,6 +73,7 @@ type enrollTestDocStore struct {
 
 	condCalls []enrollTestCondCall
 	deletes   []string
+	enrolled  []string
 }
 
 type enrollTestCondCall struct {
@@ -233,6 +234,12 @@ func (s *enrollTestDocStore) DocDelete(collection, id string) error {
 	s.deletes = append(s.deletes, collection+"/"+id)
 	delete(s.docs[collection], id)
 	return nil
+}
+
+func (s *enrollTestDocStore) NotifyOperatorEnrolled(operatorID, userID, name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.enrolled = append(s.enrolled, operatorID+"/"+userID+"/"+name)
 }
 
 type enrollTestPKI struct {

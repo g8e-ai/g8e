@@ -817,6 +817,8 @@ message OllamaModelInventoryResult {
   repeated ProviderModelInventoryEntry entries = 3;
   string error_message = 4;
   string error_type = 5;
+  reserved 6;
+  reserved "role_bindings";
 }
 
 message OllamaModelResidencyRequested {

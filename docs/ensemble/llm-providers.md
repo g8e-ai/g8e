@@ -3,8 +3,8 @@ doc_id: ensemble_llm_providers
 title: LLM Providers
 audience: platform and feature developers, coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-02
+version: v2.3.0
 owners:
   - ensemble/app/llm/
   - ensemble/app/models/model_configs.py
@@ -51,6 +51,7 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 | INV-LLM-BOOTSTRAP-01 | Environment variables provide the lowest-priority bootstrap values for API keys and endpoints only (INV-ENV-04). Platform settings replace them when explicitly set, and request-specific role overrides take precedence over platform settings. |
 | INV-LLM-BOOTSTRAP-02 | Each role (`primary`, `assistant`, `lite`) accepts `ENDPOINT` and `API_KEY` environment variables under prefixes `G8E_LLM_PRIMARY_*`, `G8E_LLM_ASSISTANT_*`, `G8E_LLM_LITE_*`. Provider and model selection come only from Gateway-backed platform settings and request overrides, never from the environment. Role-specific credentials and endpoints take precedence over provider-level values. |
 | INV-LLM-BOOTSTRAP-03 | A model name remains required in settings; the system does not automatically select a provider's default model. |
+| INV-LLM-BOOTSTRAP-04 | A user's per-role provider, model, endpoint, and API key chosen in the console are written to that user's `user_settings` document by `SettingsService.update_llm_role_settings` and take effect on the next chat request. The selectable providers are Ollama, OpenAI-compatible, Anthropic, Gemini, llama.cpp, and g8e; Jev and Fake are not offered. g8ee never returns a stored API key, only whether one resolves for the role, and a role that changes provider drops its stored key unless a new one is supplied. |
 
 ### Provider registry (`INV-LLM-PROVIDERS`)
 
@@ -60,6 +61,8 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 | INV-LLM-PROVIDERS-02 | Gemini retries transient errors (timeouts, HTTP 429, HTTP 503) for up to 4 attempts with exponential backoff (min 2s, max 30s). OpenAI and Anthropic disable SDK retries. Ollama and llama.cpp do not add provider-level retries. |
 | INV-LLM-PROVIDERS-03 | Ollama rejects endpoints containing `/v1`; Ollama uses the native `/api/chat` surface. OpenAI-compatible providers (OpenAI, llama.cpp) append `/v1` to endpoints when absent. |
 | INV-LLM-PROVIDERS-04 | The g8e provider routes inference through the Gateway's `/api/v1/inference/dispatch` endpoint over mTLS. Inline-data content parts are rejected with a `ModelCapabilityError`. |
+| INV-LLM-PROVIDERS-06 | A role that runs through the g8e provider sends the model the user chose for it in the Console, like every other provider. The Inference Operator holds no role-to-model configuration and never decides a model: it serves the model the governed request names, and a request with no model fails closed with `model reference invalid`. Only a campaign's registry-bound request override takes precedence over the stored selection. |
+| INV-LLM-PROVIDERS-07 | The scored chat turn uses the provider of the role it runs as: the campaign's designated role, else Assistant for Dash and Primary otherwise (`resolve_scored_model_role`). A role's model is never sent to another role's backend. |
 | INV-LLM-PROVIDERS-05 | Anthropic ignores `response_format` for assistant and lite calls and relies on prompt instructions for structured output. Gemini, OpenAI-compatible providers, and Ollama pass JSON Schemas to the backend. |
 
 ### Model capability registry (`INV-LLM-MODELS`)
@@ -69,6 +72,9 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 | INV-LLM-MODELS-01 | The model registry in [model_configs.py](../../ensemble/app/models/model_configs.py) declares thinking levels, thinking budgets, output reserves, tool support, structured-output support, context limits, output limits, stop sequences, and sampling defaults for all known model names. |
 | INV-LLM-MODELS-02 | Unknown model names use the shared `UNKNOWN_MODEL_CONFIG` which disables thinking, tools, and provider-enforced structured-output decisions. Register a model profile before relying on reasoning, tools, or structured output for a custom model. |
 | INV-LLM-MODELS-03 | Ollama-registered models MUST declare `thinking_dialect` explicitly (`NONE` for no reasoning, `NATIVE_TOGGLE` for native `think=true/false`). Missing dialect at import time raises `ValueError`. |
+| INV-LLM-MODELS-04 | `max_output_tokens` on a model profile is the provider's documented ceiling, or unset. The platform declares no output limit of its own: local Ollama and g8e inference models and OpenAI profiles leave it unset. |
+| INV-LLM-MODELS-05 | `AIGenerationConfigBuilder.resolve_max_output_tokens` is the only resolver: the caller's value, else the model ceiling, else unset. An unset limit is omitted from the provider request. Anthropic requires `max_tokens`, so it uses the model ceiling and raises `ConfigurationError` when the model declares none. |
+| INV-LLM-MODELS-06 | The Gateway inference path has one platform ceiling, `constants.InferenceMaxOutputTokens` (256,000). The executing Operator rejects a `max_tokens` above it or below zero with `ErrInferenceGenerationOptionsInvalid`, and a request that states no limit (0) runs under the ceiling. The ceiling bounds a runaway generation; it is never a default tuning value. |
 
 ### Generation call shapes (`INV-LLM-CALLS`)
 
@@ -86,6 +92,7 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 | Provider factory | [factory.py](../../ensemble/app/llm/factory.py) | Role resolution, cache key generation, provider instantiation |
 | Model registry | [model_configs.py](../../ensemble/app/models/model_configs.py) | MODEL_REGISTRY and model profile definitions |
 | LLM settings | [settings.py](../../ensemble/app/models/settings.py) | LLMSettings.resolve() method, role fallback chains, environment variable support |
+| Console role selection and model listing | `ensemble/app/services/infra/llm_role_settings.py`, `ensemble/app/llm/model_catalog.py` | `ensemble/.venv/bin/python -m pytest tests/unit/services/infra/test_llm_role_settings.py tests/unit/llm/test_model_catalog.py` |
 | Thinking translation | [thinking.py](../../ensemble/app/llm/thinking.py) | Provider-specific thinking level translation and wire format mapping |
 
 ## Procedures
@@ -105,6 +112,12 @@ Wire values are canonical in APIs, settings, telemetry, and persisted records. U
 Configure a provider and model for every role that uses a distinct backend. If the assistant role has no provider, provider resolution falls back to primary. If the lite role has no provider, resolution falls back to assistant and then primary. Model resolution follows the same direction, with assistant falling back to primary and lite falling back to assistant and then primary.
 
 The main chat agent always uses the primary generation call shape because both simple and complex turns can enter the tool loop. Complex turns select the primary model and provider. Simple turns select the assistant model, while provider lookup follows the lite role, so the configured lite provider must accept the assistant model when those roles use different backends.
+
+### Select roles from the console
+
+The console's Inference view reads and writes the three roles through `POST /api/v1/settings/llm/get` and `POST /api/v1/settings/llm` (see [Console Architecture](../architecture/console.md#model-selection) for the browser contract). g8ee reports the selectable providers with the fields each one needs (endpoint and API key are `none`, `optional`, or `required`), validates every role before writing any of them, and requires a provider for the primary role and a model for every role that sets a provider, `g8e` included: the user picks the model, and the Inference Operator, a worker, never decides it. An endpoint is normalized to an `http` or `https` URL without a trailing slash, and a bare `host:port` is read as `http`.
+
+`POST /api/v1/settings/llm/models` lists the models a provider endpoint serves, using `/api/tags` for Ollama, `/v1/models` for OpenAI-compatible, llama.cpp, and Anthropic endpoints, and `models` for Gemini. A missing endpoint or key falls back to what the role would resolve for that provider. For `g8e` it ignores any supplied endpoint or key, requests the typed model inventory of the caller's sole active Inference Operator through governed dispatch, and returns the models it serves for the user to pick from; zero or several active Inference Operators fail with a service-unavailable error. A failed listing reports only the HTTP status or the transport error class, never the upstream body.
 
 ### Environment bootstrap
 
@@ -133,7 +146,6 @@ The LLM settings model carries these cross-provider controls:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `llm_max_tokens` | Unset | Overrides the registry output limit or the 20,000-token system fallback when set |
 | `llm_command_gen_enabled` | `true` | Enables Tribunal command generation; disabling it makes command requests fail closed |
 | `llm_command_gen_auditor` | `true` | Enables the Auditor stage after Tribunal candidate generation |
 | `llm_command_gen_passes` | `5` | Sets the number of Tribunal generation passes; runtime resolution enforces at least one pass |
@@ -174,7 +186,7 @@ The registry contains these unique model names:
 | --- | --- | --- | --- |
 | Gemini | `gemini-3.1-pro-preview`, `gemini-3.1-pro-preview-customtools`, `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | Off, low, medium, and high; flash-lite also supports minimal | Enabled |
 | Anthropic | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Opus and Sonnet: off, low, medium, high; Haiku: off, minimal, low | Not declared |
-| OpenAI | `gpt-5.4-mini` | Off, minimal, and low | Enabled |
+| OpenAI | `gpt-5.4-mini`, `Qwen/Qwen3.8-Flash-Next` | `gpt-5.4-mini`: off, minimal, low; `Qwen/Qwen3.8-Flash-Next`: off and high | Enabled |
 | Ollama | `gemma4:e4b`, `gemma4:e2b`, `gemma4:e2b-g8ea`, `gemma4:12b`, `granite4.2:8b`, `granite4.2:3b`, `llama3.2:3b`, `qwen3.5:2b` | Gemma4, Granite, Qwen: off/high native toggle; Llama: none | Disabled; adapter serializes caller-supplied schemas |
 
 Adapters can send other model names to a backend, but unknown names use the shared unknown profile. That profile disables thinking, tools, and provider-enforced structured-output decisions. Register a model profile before relying on reasoning, tools, or provider-enforced structured output for a custom model. Unregistered llama.cpp model names use the unknown profile.

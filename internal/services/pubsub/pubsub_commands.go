@@ -375,6 +375,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, co
 		core.Doctrine,
 		knownActionTypes,
 		nil, // Clock defaults to RealClock
+		core.ExecutionTarget,
 	)
 
 	var signerStoreType, l4wardenType string

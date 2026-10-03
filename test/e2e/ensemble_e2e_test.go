@@ -86,19 +86,17 @@ func TestEnsemble_DetailedHealth(t *testing.T) {
 	t.Logf("ensemble detailed health: %d clients all up", len(expectedEnsembleClients))
 }
 
-// TestDashboard_Index verifies the dashboard service is reachable and serves
-// its index page over HTTP. The dashboard runs on its own port alongside the
-// gateway; its URL is derived from the gateway HTTP URL by port replacement.
-// This replaces the prior container-running check with an API-visible HTTP
-// assertion.
-func TestDashboard_Index(t *testing.T) {
+// TestConsole_Index verifies the Gateway serves the embedded console SPA at
+// /console/ on its HTTPS port. The console is the platform's browser
+// frontend; there is no separate frontend service.
+func TestConsole_Index(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
 	defer cancel()
 
-	body, err := e2eClient.GetDashboardIndex(ctx, e2eCfg.dashboardURL)
-	require.NoError(t, err, "dashboard index must be reachable on an approved stack")
-	require.NotEmpty(t, body, "dashboard index must serve non-empty content")
-	t.Logf("dashboard index served: %d bytes", len(body))
+	body, err := e2eClient.GetConsoleIndex(ctx)
+	require.NoError(t, err, "console index must be reachable on the gateway")
+	require.Contains(t, string(body), "<title>g8e Console</title>", "console index must serve the console SPA")
+	t.Logf("console index served: %d bytes", len(body))
 }
 
 // TestEnsemble_GatewayStillHealthy verifies the gateway remains healthy while

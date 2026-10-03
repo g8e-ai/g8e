@@ -45,8 +45,11 @@ type rolloutRunFailure struct {
 type rolloutRunSuccess struct {
 	VariantID string `json:"variant_id"`
 	Tag       string `json:"served_model_tag"`
-	RunID     string `json:"run_id"`
-	Gate      string `json:"gate"`
+	// CampaignID is the campaign the run executed under, which differs from the
+	// queue entry's when the catalog changed after that campaign was frozen.
+	CampaignID string `json:"campaign_id,omitempty"`
+	RunID      string `json:"run_id"`
+	Gate       string `json:"gate"`
 }
 
 const (
@@ -91,16 +94,16 @@ Examples:
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Until < 0 {
-				return fmt.Errorf("evaluation: rollout run: --until must not be negative")
+				return fmt.Errorf("evaluation: rollout run: --until must not be negative: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			if opts.PromoteOnPass && !opts.GateSmoke {
-				return fmt.Errorf("evaluation: rollout run: --promote-on-pass requires --gate-smoke")
+				return fmt.Errorf("evaluation: rollout run: --promote-on-pass requires --gate-smoke: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			return runRollout(cmd, deps, opts)
 		},
 	}
 	cmd.Flags().IntVar(&opts.Until, "until", 0, "Run at most this many models (0 runs every pending model)")
-	cmd.Flags().BoolVar(&opts.SkipVerified, "skip-verified", true, "Skip queue entries already marked verified")
+	cmd.Flags().BoolVar(&opts.SkipVerified, "skip-verified", true, "Skip queue entries already verified on the current scenario catalog")
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Print the rollout plan without executing")
 	cmd.Flags().BoolVar(&opts.GateSmoke, "gate-smoke", false, "Screen each model with the fast smoke campaign before any full run")
 	cmd.Flags().BoolVar(&opts.PromoteOnPass, "promote-on-pass", false, "Run the full campaign for models that pass the smoke gate")
@@ -145,7 +148,23 @@ func runRolloutWith(cmd *cobra.Command, deps nativeEvalDeps, opts rolloutRunOpti
 	if err != nil {
 		return fmt.Errorf("evaluation: rollout run: %w", err)
 	}
-	plan := queue.BuildBatchPlan(evaluation.CampaignQueueBatchPlanRequest{SkipVerified: opts.SkipVerified, Until: opts.Until})
+	planRequest := evaluation.CampaignQueueBatchPlanRequest{SkipVerified: opts.SkipVerified, Until: opts.Until}
+	if opts.SkipVerified {
+		store := evaluation.NewStore(fileSvc)
+		catalog, _, err := store.LoadSuiteCatalog(cmd.Context(), evaluation.DefaultSuiteID)
+		if err != nil {
+			return fmt.Errorf("evaluation: rollout run: %w", err)
+		}
+		stale, err := evaluation.StaleVerifiedVariants(cmd.Context(), store, queue, catalog.GetCatalogDigest())
+		if err != nil {
+			return fmt.Errorf("evaluation: rollout run: %w", err)
+		}
+		planRequest.VerifiedIsStale = func(entry evaluation.CampaignQueueModel) bool {
+			_, isStale := stale[entry.VariantID]
+			return isStale
+		}
+	}
+	plan := queue.BuildBatchPlan(planRequest)
 	if len(plan) == 0 {
 		cmd.Println("No queue entries selected")
 		return nil
@@ -282,13 +301,20 @@ func runRolloutGate(cmd *cobra.Command, deps nativeEvalDeps, fileSvc fs.RuntimeF
 		campaignID += rolloutSmokeCampaignSuffix
 		suiteID = evaluation.SmokeSuiteID
 	}
-	if _, err := createCampaign(cmd.Context(), deps, fileSvc, campaignCreateSpec{
-		CampaignID:  campaignID,
-		Variants:    []*evalv1.ModelVariant{variant},
-		Repetitions: 1,
-		SuiteID:     suiteID,
-	}); err != nil {
+	created, err := createCampaign(cmd.Context(), deps, fileSvc, campaignCreateSpec{
+		CampaignID:             campaignID,
+		Variants:               []*evalv1.ModelVariant{variant},
+		Repetitions:            1,
+		SuiteID:                suiteID,
+		VersionOnCatalogChange: true,
+		Platform:               platformIdentity(cmd),
+	})
+	if err != nil {
 		return nil, err
+	}
+	if frozenID := created.Spec.GetCampaignId(); frozenID != campaignID {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Catalog changed since campaign %s was frozen; qualifying under %s\n", campaignID, frozenID)
+		campaignID = frozenID
 	}
 	result, err := runStartFlow(cmd, deps, runStartFlowOptions{
 		CampaignID:         campaignID,
@@ -300,7 +326,7 @@ func runRolloutGate(cmd *cobra.Command, deps nativeEvalDeps, fileSvc fs.RuntimeF
 	})
 	var run *rolloutRunSuccess
 	if result != nil && result.RunID != "" {
-		run = &rolloutRunSuccess{VariantID: entry.VariantID, Tag: entry.ServedModelTag, RunID: result.RunID, Gate: gate}
+		run = &rolloutRunSuccess{VariantID: entry.VariantID, Tag: entry.ServedModelTag, CampaignID: campaignID, RunID: result.RunID, Gate: gate}
 	}
 	return run, err
 }
@@ -407,7 +433,7 @@ func preflightRollout(cmd *cobra.Command, ensembleHealthURL, mirrorBootstrapURL 
 func checkHTTPReachable(ctx context.Context, rawURL string) error {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return fmt.Errorf("missing URL")
+		return fmt.Errorf("evaluation: check HTTP reachable: %w", constants.ErrEndpointRequired)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {

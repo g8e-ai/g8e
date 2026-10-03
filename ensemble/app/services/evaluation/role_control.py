@@ -27,20 +27,21 @@ from g8e.models.internal_api import EvaluationInferenceContext
 _SCORED_AGENT_ROLES = frozenset({"sage", "dash"})
 
 
-def resolve_scored_provider_is_lite(
+def resolve_scored_model_role(
     *,
     designated_model_role: str | None,
-    triage_complexity: TriageComplexityClassification,
-) -> bool:
-    """Return whether the scored chat provider should use the lite tier.
+    active_agent: ReasoningAgent | None,
+) -> str:
+    """Return the model role the scored chat turn runs as.
 
-    Homogeneous role control binds any campaign model to primary, assistant,
-    or lite slots. Provider selection must follow the designated scored role,
-    not triage complexity alone.
+    A campaign's designated role wins. Otherwise Dash runs as Assistant and
+    every other agent as Primary. The chat pipeline takes the scored provider
+    from this same role, so the provider, the role sent to governed dispatch,
+    and the role's model always agree.
     """
-    if designated_model_role == "lite":
-        return True
-    return triage_complexity == TriageComplexityClassification.SIMPLE
+    if designated_model_role:
+        return designated_model_role
+    return "assistant" if active_agent == ReasoningAgent.DASH else "primary"
 
 
 class ControlledRoleRouting(G8eBaseModel):

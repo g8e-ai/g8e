@@ -28,6 +28,7 @@ class ResourceCreationRequest(G8eBaseModel):
     """Typed request to create new case and investigation resources."""
 
     create_case: bool = Field(default=False)
+    create_investigation: bool = Field(default=False)
     case_title: str | None = Field(default=None)
 
 

@@ -81,6 +81,9 @@ func ValidateAssignmentRecord(envelopeVersion string, recordBytes []byte) error 
 		if lifecycle.GetAssignmentId() == "" || lifecycle.GetRunId() == "" || lifecycle.GetScenarioId() == "" {
 			return schemaError("missing lifecycle identity")
 		}
+		if err := validateReleaseIdentity(lifecycle.GetRelease(), lifecycle.GetReleaseBasis(), lifecycle.GetSourceRevision()); err != nil {
+			return err
+		}
 		return validateStrings(envelope.Record)
 	}
 	if envelope.SchemaVersion != historicalVersion && envelope.SchemaVersion != enrichedVersion && envelope.SchemaVersion != trajectoryVersion {
@@ -111,6 +114,9 @@ func validateResult(version string, raw json.RawMessage) error {
 	}
 	if record.GetAssignmentId() == "" || record.GetRunId() == "" || record.GetScenarioId() == "" {
 		return schemaError("missing assignment identity")
+	}
+	if err := validateReleaseIdentity(record.GetRelease(), record.GetReleaseBasis(), record.GetSourceRevision()); err != nil {
+		return err
 	}
 	if record.GetResultDigest() != "" && !hashPattern.MatchString(record.GetResultDigest()) {
 		return fmt.Errorf("invalid result digest: %w", constants.ErrEvidenceArtifactMalformed)
@@ -505,9 +511,9 @@ func ValidatePublicFeedRecord(recordType models.PublicFeedRecordType, recordByte
 			}
 			return nil
 		}
-		return validateExplorerViewRecord(recordBytes, false)
+		return validateExplorerViewRecord(recordBytes)
 	case models.PublicFeedRecordTypeEvent:
-		return validateExplorerViewRecord(recordBytes, true)
+		return validatePublicLiveEvent(recordBytes)
 	case models.PublicFeedRecordTypeProofManifest:
 		return validatePublicFeedManifest(recordBytes)
 	case models.PublicFeedRecordTypeKeyRevocation:
@@ -517,48 +523,13 @@ func ValidatePublicFeedRecord(recordType models.PublicFeedRecordType, recordByte
 	}
 }
 
-func validateExplorerViewRecord(recordBytes []byte, event bool) error {
+func validateExplorerViewRecord(recordBytes []byte) error {
 	fields, err := decodeObject(recordBytes)
 	if err != nil {
 		return publicFeedSchemaError(err.Error())
 	}
-	if err := validateExplorerEnvelope(fields, event); err != nil {
+	if err := validateExplorerEnvelope(fields); err != nil {
 		return err
-	}
-	if event {
-		if err := allowed(fields, "schema_version", "kind", "dataset_id", "quality_state", "observed_at", "source_revision_label", "event_id", "run_id", "assignment_id", "task_id", "variant_id", "role", "lifecycle_status", "completed", "total", "stage_label", "metric_delta", "feed_sequence"); err != nil {
-			return publicFeedSchemaError(err.Error())
-		}
-		eventID, eventIDOK := stringField(fields, "event_id")
-		runID, runIDOK := stringField(fields, "run_id")
-		lifecycleStatus, lifecycleOK := stringField(fields, "lifecycle_status")
-		if !eventIDOK || eventID == "" || !runIDOK || runID == "" || !lifecycleOK || !publicFeedLifecycleStatus(lifecycleStatus) {
-			return publicFeedSchemaError("missing or invalid event identity")
-		}
-		completed, err := integerField(fields, "completed")
-		if err != nil {
-			return publicFeedSchemaError(err.Error())
-		}
-		total, err := integerField(fields, "total")
-		if err != nil {
-			return publicFeedSchemaError(err.Error())
-		}
-		if completed < 0 || total < 0 || completed > total {
-			return publicFeedSchemaError("event progress is invalid")
-		}
-		if _, ok := fields["role"]; ok {
-			role, roleOK := stringField(fields, "role")
-			if !roleOK || !publicFeedRole(role) {
-				return publicFeedSchemaError("invalid event role")
-			}
-		}
-		if value, ok := fields["feed_sequence"]; ok {
-			var sequence int64
-			if err := json.Unmarshal(value, &sequence); err != nil || sequence < 0 {
-				return publicFeedSchemaError("invalid event feed_sequence")
-			}
-		}
-		return nil
 	}
 	if _, ok := fields["kind"]; !ok {
 		return publicFeedSchemaError("missing projection kind")
@@ -566,13 +537,71 @@ func validateExplorerViewRecord(recordBytes []byte, event bool) error {
 	return nil
 }
 
-func validateExplorerEnvelope(fields map[string]json.RawMessage, event bool) error {
+// validatePublicLiveEvent decodes one live event as its protobuf message, so a
+// field outside the message is rejected by the decoder, then checks the closed
+// vocabularies the Explorer view contract defines. completed and total track
+// presence: an event that omits either is malformed, not at zero.
+func validatePublicLiveEvent(recordBytes []byte) error {
+	event := &evalv1.PublicLiveEvent{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(recordBytes, event); err != nil {
+		return publicFeedSchemaError(err.Error())
+	}
+	if !publicFeedViewSchemaVersion(event.GetSchemaVersion()) {
+		return publicFeedSchemaError("unsupported schema_version")
+	}
+	if !publicFeedEventKind(event.GetKind()) {
+		return publicFeedSchemaError("unsupported kind")
+	}
+	if event.GetDatasetId() == "" || !publicFeedQualityState(event.GetQualityState()) || event.GetObservedAt() == "" {
+		return publicFeedSchemaError("missing or invalid envelope field")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, event.GetObservedAt()); err != nil {
+		return publicFeedSchemaError("observed_at must be RFC3339")
+	}
+	if err := validateReleaseIdentity(event.GetRelease(), event.GetReleaseBasis(), event.GetSourceRevision()); err != nil {
+		return publicFeedSchemaError(err.Error())
+	}
+	if event.GetEventId() == "" || event.GetRunId() == "" || !publicFeedLifecycleStatus(event.GetLifecycleStatus()) {
+		return publicFeedSchemaError("missing or invalid event identity")
+	}
+	if event.Completed == nil || event.Total == nil {
+		return publicFeedSchemaError("event progress is missing")
+	}
+	if event.GetCompleted() > event.GetTotal() {
+		return publicFeedSchemaError("event progress is invalid")
+	}
+	if event.GetRole() != "" && !publicFeedRole(event.GetRole()) {
+		return publicFeedSchemaError("invalid event role")
+	}
+	for key, metric := range event.GetMetricDelta() {
+		if err := validateLiveMetricValue(key, metric); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateLiveMetricValue(key string, metric *evalv1.PublicLiveMetricValue) error {
+	if metric == nil {
+		return publicFeedSchemaError(fmt.Sprintf("metric_delta %q is missing", key))
+	}
+	hasValue, hasReason := metric.Value != nil, metric.GetUnavailableReason() != ""
+	if hasValue == hasReason {
+		return publicFeedSchemaError(fmt.Sprintf("metric_delta %q requires exactly one value or unavailable_reason", key))
+	}
+	if hasValue && (math.IsNaN(metric.GetValue()) || math.IsInf(metric.GetValue(), 0)) {
+		return publicFeedSchemaError(fmt.Sprintf("metric_delta %q value must be finite", key))
+	}
+	return nil
+}
+
+func validateExplorerEnvelope(fields map[string]json.RawMessage) error {
 	schemaVersion, ok := stringField(fields, "schema_version")
 	if !ok || !publicFeedViewSchemaVersion(schemaVersion) {
 		return publicFeedSchemaError("unsupported schema_version")
 	}
 	kind, ok := stringField(fields, "kind")
-	if !ok || (event && !publicFeedEventKind(kind)) || (!event && !publicFeedSnapshotKind(kind)) {
+	if !ok || !publicFeedSnapshotKind(kind) {
 		return publicFeedSchemaError("unsupported kind")
 	}
 	datasetID, datasetPresent := stringField(fields, "dataset_id")
@@ -584,7 +613,59 @@ func validateExplorerEnvelope(fields map[string]json.RawMessage, event bool) err
 	if _, err := time.Parse(time.RFC3339Nano, observedAt); err != nil {
 		return publicFeedSchemaError("observed_at must be RFC3339")
 	}
+	if err := validateExplorerReleaseIdentity(fields); err != nil {
+		return publicFeedSchemaError(err.Error())
+	}
 	return nil
+}
+
+func validateReleaseIdentity(release string, basis evalv1.PublicReleaseBasis, revision string) error {
+	switch basis {
+	case evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNSPECIFIED:
+		if release != "" || revision != "" {
+			return schemaError("release provenance requires a basis")
+		}
+	case evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED, evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_ASSERTED:
+		if strings.TrimSpace(release) == "" {
+			return schemaError("known release basis requires a release")
+		}
+	case evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNKNOWN:
+		if release != "" {
+			return schemaError("unknown release basis cannot name a release")
+		}
+	default:
+		return schemaError("invalid release basis")
+	}
+	return nil
+}
+
+func validateExplorerReleaseIdentity(fields map[string]json.RawMessage) error {
+	release, releaseOK := stringField(fields, "release")
+	basis, basisOK := stringField(fields, "release_basis")
+	revision, revisionOK := stringField(fields, "source_revision")
+	for _, key := range []string{"release", "release_basis", "source_revision"} {
+		if raw, present := fields[key]; present {
+			var value *string
+			if err := json.Unmarshal(raw, &value); err != nil || value == nil {
+				return schemaError("invalid " + key)
+			}
+		}
+	}
+	if !basisOK && !releaseOK && !revisionOK {
+		return nil
+	}
+	var typedBasis evalv1.PublicReleaseBasis
+	switch basis {
+	case "recorded":
+		typedBasis = evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED
+	case "asserted":
+		typedBasis = evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_ASSERTED
+	case "unknown":
+		typedBasis = evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_UNKNOWN
+	default:
+		return schemaError("invalid release basis")
+	}
+	return validateReleaseIdentity(release, typedBasis, revision)
 }
 
 func validatePublicFeedManifest(recordBytes []byte) error {
@@ -609,21 +690,9 @@ func validatePublicFeedKeyRevocation(recordBytes []byte) error {
 	return nil
 }
 
-func integerField(fields map[string]json.RawMessage, field string) (int64, error) {
-	value, ok := fields[field]
-	if !ok {
-		return 0, fmt.Errorf("missing event field %s", field)
-	}
-	var result int64
-	if err := json.Unmarshal(value, &result); err != nil {
-		return 0, fmt.Errorf("event field %s must be an integer", field)
-	}
-	return result, nil
-}
-
 func publicFeedViewSchemaVersion(value string) bool {
 	switch value {
-	case "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0":
+	case "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0":
 		return true
 	default:
 		return false

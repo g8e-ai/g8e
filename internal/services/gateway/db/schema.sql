@@ -140,22 +140,29 @@ BEGIN
 END;
 
 -- Trigger to increment state_version on kv_store insert
-CREATE TRIGGER IF NOT EXISTS trg_kv_store_insert_version
+-- Replace these triggers on open so existing databases receive the cache rule.
+DROP TRIGGER IF EXISTS trg_kv_store_insert_version;
+CREATE TRIGGER trg_kv_store_insert_version
 AFTER INSERT ON kv_store
+WHEN NEW.key NOT LIKE 'g8e:cache:%'
 BEGIN
     UPDATE state_version SET version = version + 1 WHERE id = 1;
 END;
 
 -- Trigger to increment state_version on kv_store update
-CREATE TRIGGER IF NOT EXISTS trg_kv_store_update_version
+DROP TRIGGER IF EXISTS trg_kv_store_update_version;
+CREATE TRIGGER trg_kv_store_update_version
 AFTER UPDATE ON kv_store
+WHEN OLD.key NOT LIKE 'g8e:cache:%' OR NEW.key NOT LIKE 'g8e:cache:%'
 BEGIN
     UPDATE state_version SET version = version + 1 WHERE id = 1;
 END;
 
 -- Trigger to increment state_version on kv_store delete
-CREATE TRIGGER IF NOT EXISTS trg_kv_store_delete_version
+DROP TRIGGER IF EXISTS trg_kv_store_delete_version;
+CREATE TRIGGER trg_kv_store_delete_version
 AFTER DELETE ON kv_store
+WHEN OLD.key NOT LIKE 'g8e:cache:%'
 BEGIN
     UPDATE state_version SET version = version + 1 WHERE id = 1;
 END;

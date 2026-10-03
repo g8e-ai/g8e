@@ -40,6 +40,7 @@ from app.models.model_configs import (
     OLLAMA_GEMMA4_E4B_CONFIG,
     OPENAI_DEFAULT_CONFIG,
     OPENAI_GPT_5_4_MINI_CONFIG,
+    OPENAI_QWEN3_8_FLASH_NEXT_CONFIG,
     LLModelConfig,
     clamp_thinking_level,
 )
@@ -239,6 +240,13 @@ class TestTranslateForOpenAI:
             OPENAI_GPT_5_4_MINI_CONFIG,
         )
         assert translation.reasoning_effort == "low"
+
+    def test_qwen3_8_flash_next_supports_off_and_high(self):
+        high = translate_for_openai(ThinkingLevel.HIGH, OPENAI_QWEN3_8_FLASH_NEXT_CONFIG)
+        assert high.enabled is True
+        assert high.reasoning_effort == "high"
+        off = translate_for_openai(ThinkingLevel.OFF, OPENAI_QWEN3_8_FLASH_NEXT_CONFIG)
+        assert off.enabled is False
 
     def test_default_openai_model_has_no_reasoning(self):
         """The generic OpenAI default config declares no thinking capability;

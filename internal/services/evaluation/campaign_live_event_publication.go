@@ -51,11 +51,20 @@ func (c *CampaignPublicationCoordinator) buildAssignmentLiveEventPublishRequests
 		return nil, err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, result)
-	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
 	if err != nil {
 		return nil, err
 	}
-	if signal, ok := buildAssignmentPassMetricSignal(assignment, result, observedAt, completed, total); ok {
+	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total, release)
+	if err != nil {
+		return nil, err
+	}
+	signal, ok, err := buildAssignmentPassMetricSignal(assignment, result, observedAt, completed, total)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		signal.Release = release
 		event, err := ProjectMetricAvailabilityEvent(signal)
 		if err != nil {
 			return nil, err
@@ -96,7 +105,12 @@ func (c *CampaignPublicationCoordinator) PublishFormationRoleInvocationLiveEvent
 		return err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, nil)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
 	signal := PublicModelRoleInvocationSignal{
+		Release:      release,
 		RunID:        assignment.GetRunId(),
 		AssignmentID: assignment.GetAssignmentId(),
 		VariantID:    variantID,
@@ -137,7 +151,11 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentInvocationLiveEvents(c
 		return err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, nil)
-	requests, err := c.buildPlannedModelRoleInvocationPublishRequests(assignment, observedAt, completed, total)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	requests, err := c.buildPlannedModelRoleInvocationPublishRequests(assignment, observedAt, completed, total, release)
 	if err != nil {
 		return err
 	}
@@ -159,7 +177,11 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentScoredInferenceLiveEve
 		return err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, result)
-	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total)
+	release, err := c.loadRunRelease(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total, release)
 	if err != nil {
 		return err
 	}
@@ -187,9 +209,11 @@ func (c *CampaignPublicationCoordinator) buildPlannedModelRoleInvocationPublishR
 	observedAt string,
 	completed int,
 	total int,
+	release CampaignRelease,
 ) ([]campaignFeedPublishRequest, error) {
 	requests := make([]campaignFeedPublishRequest, 0, 1)
 	for _, signal := range buildPlannedModelRoleInvocationSignals(assignment, observedAt, completed, total) {
+		signal.Release = release
 		event, err := ProjectModelRoleInvocationEvent(signal)
 		if err != nil {
 			return nil, err
@@ -216,9 +240,11 @@ func (c *CampaignPublicationCoordinator) buildScoredModelRoleInvocationPublishRe
 	observedAt string,
 	completed int,
 	total int,
+	release CampaignRelease,
 ) ([]campaignFeedPublishRequest, error) {
 	requests := make([]campaignFeedPublishRequest, 0, len(result.GetModelInferences()))
 	for _, signal := range buildScoredModelRoleInvocationSignals(assignment, result, observedAt, completed, total) {
+		signal.Release = release
 		event, err := ProjectModelRoleInvocationEvent(signal)
 		if err != nil {
 			return nil, err
@@ -359,17 +385,17 @@ func modelInferenceMetricDelta(record *evalv1.ModelInferenceRecord) PublicMetric
 		return nil
 	}
 	delta := PublicMetricDelta{
-		"input_tokens":  *publicMetricValue(float64(record.GetPromptTokens())),
-		"output_tokens": *publicMetricValue(float64(record.GetCompletionTokens())),
+		"input_tokens":  liveMetricValue(float64(record.GetPromptTokens())),
+		"output_tokens": liveMetricValue(float64(record.GetCompletionTokens())),
 	}
 	if generationNanos := record.GetGenerationDurationNanos(); generationNanos > 0 {
-		delta["latency_ms"] = *publicMetricValue(float64(generationNanos) / float64(time.Millisecond))
+		delta["latency_ms"] = liveMetricValue(float64(generationNanos) / float64(time.Millisecond))
 		if completionTokens := record.GetCompletionTokens(); completionTokens > 0 {
-			delta["tokens_per_second"] = *publicMetricValue(float64(completionTokens) / (float64(generationNanos) / float64(time.Second)))
+			delta["tokens_per_second"] = liveMetricValue(float64(completionTokens) / (float64(generationNanos) / float64(time.Second)))
 		}
 	}
 	if record.RetryCount != nil {
-		delta["retries"] = *publicMetricValue(float64(record.GetRetryCount()))
+		delta["retries"] = liveMetricValue(float64(record.GetRetryCount()))
 	}
 	return delta
 }
@@ -388,20 +414,31 @@ func reportedModelInferences(result *evalv1.EvaluationAssignmentResult) []*evalv
 	return records
 }
 
+// assignmentPassMetricID names the binary per-assignment verdict metric (1 pass,
+// 0 fail). It is not a rate: run-level `pass_rate` is a different metric.
+const assignmentPassMetricID = "pass"
+
 func buildAssignmentPassMetricSignal(
 	assignment *evalv1.EvaluationAssignment,
 	result *evalv1.EvaluationAssignmentResult,
 	observedAt string,
 	completed int,
 	total int,
-) (PublicMetricAvailabilitySignal, bool) {
+) (PublicMetricAvailabilitySignal, bool, error) {
 	status := DerivePublicSummaryStatus(result)
-	if status == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED {
-		return PublicMetricAvailabilitySignal{}, false
+	// An unspecified or invalid-evidence verdict is not a model pass or fail, so
+	// it emits no binary metric.
+	if status == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED ||
+		status == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE {
+		return PublicMetricAvailabilitySignal{}, false, nil
 	}
 	variantID, err := primaryVariantIDForAssignment(assignment)
 	if err != nil {
-		return PublicMetricAvailabilitySignal{}, false
+		return PublicMetricAvailabilitySignal{}, false, fmt.Errorf("evaluation: build assignment pass metric signal: %w", err)
+	}
+	role, err := designatedRoleLabelForAssignment(assignment)
+	if err != nil {
+		return PublicMetricAvailabilitySignal{}, false, fmt.Errorf("evaluation: build assignment pass metric signal: %w", err)
 	}
 	rate := 0.0
 	numerator := 0
@@ -413,13 +450,14 @@ func buildAssignmentPassMetricSignal(
 		RunID:        assignment.GetRunId(),
 		AssignmentID: assignment.GetAssignmentId(),
 		VariantID:    variantID,
-		MetricID:     "pass_rate",
+		Role:         models.ModelRole(role),
+		MetricID:     assignmentPassMetricID,
 		Numerator:    numerator,
 		Denominator:  1,
 		Rate:         &rate,
 		ObservedAt:   observedAt,
-		EventID:      MetricAvailabilityIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), "pass_rate") + ":event",
+		EventID:      MetricAvailabilityIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), assignmentPassMetricID) + ":event",
 		Completed:    completed,
 		Total:        total,
-	}, true
+	}, true, nil
 }

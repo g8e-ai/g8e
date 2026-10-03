@@ -109,6 +109,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		ActuatorKeyID:      "Actuator-key",
 	}, OutboundModeDeps{
 		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{cfg.OperatorID, "operator-1"}},
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},

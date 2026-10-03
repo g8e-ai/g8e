@@ -16,6 +16,20 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
+// MockExecutionTarget restricts verification to explicitly configured Operators.
+type MockExecutionTarget struct {
+	OperatorIDs []string
+}
+
+func (m *MockExecutionTarget) ExecutesFor(operatorID string) bool {
+	for _, id := range m.OperatorIDs {
+		if id != "" && id == operatorID {
+			return true
+		}
+	}
+	return false
+}
+
 // MockReplayStore implements ReplayStore interface for testing.
 // Simple version that never detects replays (returns false).
 type MockReplayStore struct{}

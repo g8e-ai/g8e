@@ -312,6 +312,7 @@ func inferenceAssignment() *evalv1.EvaluationAssignment {
 func importModelCall(id string, extra map[string]any) EvaluationTrace {
 	call := EvaluationTrace{
 		"agent_role":              "sage",
+		"classification":          "scored_chain",
 		"model_role":              "primary",
 		"provider":                "G8EProvider",
 		"governed_transaction_id": "tx-" + id,
@@ -493,6 +494,11 @@ func TestModelInferenceRecords_ScoredSpanCoversOnlyScoredCalls(t *testing.T) {
 		extra["agent_role"] = role
 		return extra
 	}
+	postTurnMemory := func(extra map[string]any) map[string]any {
+		extra = withRole("codex", extra)
+		extra["classification"] = "post_turn"
+		return extra
+	}
 	tests := []struct {
 		name     string
 		calls    []EvaluationTrace
@@ -508,20 +514,20 @@ func TestModelInferenceRecords_ScoredSpanCoversOnlyScoredCalls(t *testing.T) {
 		},
 		{
 			name:     "a codex call after the scored work does not extend the span",
-			calls:    []EvaluationTrace{importModelCall("p1", bounds(10, 12)), importModelCall("p2", withRole("codex", bounds(20, 90)))},
+			calls:    []EvaluationTrace{importModelCall("p1", bounds(10, 12)), importModelCall("p2", postTurnMemory(bounds(20, 90)))},
 			wantSpan: ptr(2_000_000_000), wantRecs: 2,
 		},
 		{
 			name:     "a codex call before the scored work does not extend the span",
-			calls:    []EvaluationTrace{importModelCall("p0", withRole("codex", bounds(0, 1))), importModelCall("p1", bounds(10, 12))},
+			calls:    []EvaluationTrace{importModelCall("p0", postTurnMemory(bounds(0, 1))), importModelCall("p1", bounds(10, 12))},
 			wantSpan: ptr(2_000_000_000), wantRecs: 2,
 		},
 		{
 			name:     "a codex call without bounds does not void the span",
-			calls:    []EvaluationTrace{importModelCall("p1", bounds(10, 12)), importModelCall("p2", withRole("codex", nil))},
+			calls:    []EvaluationTrace{importModelCall("p1", bounds(10, 12)), importModelCall("p2", postTurnMemory(nil))},
 			wantSpan: ptr(2_000_000_000), wantRecs: 2,
 		},
-		{name: "only codex calls leave no scored span", calls: []EvaluationTrace{importModelCall("p1", withRole("codex", bounds(1, 2)))}, wantSpan: nil, wantRecs: 1},
+		{name: "only codex calls leave no scored span", calls: []EvaluationTrace{importModelCall("p1", postTurnMemory(bounds(1, 2)))}, wantSpan: nil, wantRecs: 1},
 		{name: "a scored call without bounds leaves no span", calls: []EvaluationTrace{importModelCall("p1", bounds(10, 12)), importModelCall("p2", nil)}, wantSpan: nil, wantRecs: 2},
 		{name: "a call with only a start has no complete bounds", calls: []EvaluationTrace{importModelCall("p1", map[string]any{"monotonic_start": 10.0})}, wantSpan: nil, wantRecs: 1},
 		{name: "end before start is rejected", calls: []EvaluationTrace{importModelCall("p1", bounds(12, 10))}, wantErr: "monotonic_end precedes monotonic_start"},

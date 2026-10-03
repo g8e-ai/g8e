@@ -21,7 +21,6 @@ from app.constants import (
     DB_COLLECTION_USERS,
     G8EE_COMPONENT,
     KVKey,
-    KVKeyPrefix,
     OperatorStatus,
 )
 from app.errors import DatabaseError
@@ -337,22 +336,6 @@ class TestCacheAsideService:
         with pytest.raises(Exception, match="kv error"):
             await service.invalidate_document(DB_COLLECTION_USERS, "user-x")
 
-    async def test_invalidate_query_cache_delegates_to_delete_pattern(
-        self, service, mock_kv_cache_client
-    ):
-        mock_kv_cache_client.delete_pattern = AsyncMock(return_value=3)
-        deleted = await service.invalidate_query_cache(DB_COLLECTION_USERS)
-
-        assert deleted == 3
-        mock_kv_cache_client.delete_pattern.assert_called_once_with(
-            f"{KVKeyPrefix.CACHE_QUERY}{DB_COLLECTION_USERS}:*"
-        )
-
-    async def test_invalidate_query_cache_exception_propagates(self, service, mock_kv_cache_client):
-        mock_kv_cache_client.delete_pattern = AsyncMock(side_effect=Exception("kv error"))
-        with pytest.raises(Exception, match="kv error"):
-            await service.invalidate_query_cache(DB_COLLECTION_USERS)
-
     async def test_batch_create_documents_empty_returns_zero(self, service):
         result = await service.batch_create_documents([])
         assert result.success is True
@@ -444,53 +427,6 @@ class TestCacheAsideService:
         )
         assert svc.component_name == ComponentName.G8EO
 
-    async def test_cache_document_writes_to_kv(self, service, mock_kv_cache_client):
-        data = {"id": "user-20", "name": "Direct"}
-        result = await service.cache_document(DB_COLLECTION_USERS, "user-20", data)
-
-        assert result is True
-        key = service.make_key(DB_COLLECTION_USERS, "user-20")
-        cached = await mock_kv_cache_client.get_json(key)
-        assert cached == data
-
-    async def test_cache_document_uses_collection_ttl(self, service, mock_kv_cache_client):
-        await service.cache_document(DB_COLLECTION_USERS, "user-21", {"id": "user-21"})
-        call_kwargs = mock_kv_cache_client.set_json.call_args[1]
-        assert call_kwargs["ex"] == CACHE_TTL_DEFAULT
-
-    async def test_cache_document_uses_custom_ttl(self, service, mock_kv_cache_client):
-        await service.cache_document(DB_COLLECTION_USERS, "user-22", {"id": "user-22"}, ttl=120)
-        call_kwargs = mock_kv_cache_client.set_json.call_args[1]
-        assert call_kwargs["ex"] == 120
-
-    async def test_invalidate_collection_delegates_to_delete_pattern(
-        self, service, mock_kv_cache_client
-    ):
-        mock_kv_cache_client.delete_pattern = AsyncMock(return_value=5)
-        deleted = await service.invalidate_collection(DB_COLLECTION_USERS)
-
-        assert deleted == 5
-        mock_kv_cache_client.delete_pattern.assert_called_once_with(
-            f"{KVKeyPrefix.CACHE_DOC}{DB_COLLECTION_USERS}:*"
-        )
-
-    async def test_clear_all_deletes_doc_and_query_keys(self, service, mock_kv_cache_client):
-        call_counts = {"doc": 0, "query": 0}
-
-        async def delete_pattern_side_effect(pattern):
-            if KVKeyPrefix.CACHE_DOC in pattern and KVKeyPrefix.CACHE_QUERY not in pattern:
-                call_counts["doc"] += 1
-                return 4
-            call_counts["query"] += 1
-            return 2
-
-        mock_kv_cache_client.delete_pattern = AsyncMock(side_effect=delete_pattern_side_effect)
-        total = await service.clear_all()
-
-        assert total == 6
-        assert call_counts["doc"] == 1
-        assert call_counts["query"] == 1
-
     async def test_get_stats_healthy(self, service, mock_kv_cache_client):
         doc_key = service.make_key(DB_COLLECTION_USERS, "user-stat")
         mock_kv_cache_client.seed_json(doc_key, {"id": "user-stat"})
@@ -530,6 +466,8 @@ class TestCacheAsideService:
         # DB must be called even though cache has data
         mock_db_client.get_document.assert_called_once()
 
+        mock_kv_cache_client.set_json.assert_not_called()
+
     async def test_query_collection_skips_cache_when_read_disabled(
         self, service, mock_kv_cache_client, mock_db_client
     ):
@@ -552,6 +490,7 @@ class TestCacheAsideService:
 
         assert result.data == db_results
         mock_db_client.query_collection.assert_called_once()
+        mock_kv_cache_client.set_json.assert_not_called()
 
     async def test_get_stats_reflects_read_enabled(self, service):
         service.read_enabled = True

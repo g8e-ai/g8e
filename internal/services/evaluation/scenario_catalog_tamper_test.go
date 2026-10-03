@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -55,15 +56,16 @@ func TestValidateScenarioCatalog_RejectsTamperedCatalogs(t *testing.T) {
 		name    string
 		mutate  func(catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts)
 		reseal  bool
+		wantIs  error
 		wantErr string
 	}{
 		{name: "nil catalog", mutate: nil, wantErr: ""},
 		{name: "a changed scenario without a new digest", mutate: func(c *evalv1.EvaluationScenarioCatalog, _ map[string]ScenarioArtifacts) {
 			c.Scenarios[0].PublicDescription += " edited"
-		}, wantErr: "digest mismatch"},
+		}, wantIs: constants.ErrChecksumMismatch},
 		{name: "an unsupported schema version", mutate: func(c *evalv1.EvaluationScenarioCatalog, _ map[string]ScenarioArtifacts) {
 			c.SchemaVersion = "0.0.1"
-		}, wantErr: "unsupported schema version"},
+		}, wantIs: constants.ErrEvidenceSchemaMismatch},
 		{name: "a missing catalog identity", mutate: func(c *evalv1.EvaluationScenarioCatalog, _ map[string]ScenarioArtifacts) {
 			c.CatalogRef.Version = ""
 		}, wantErr: "catalog identity"},
@@ -113,7 +115,12 @@ func TestValidateScenarioCatalog_RejectsTamperedCatalogs(t *testing.T) {
 			err := ValidateScenarioCatalog(catalog, artifacts)
 
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
+			if tt.wantIs != nil {
+				assert.ErrorIs(t, err, tt.wantIs)
+			}
+			if tt.wantErr != "" {
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
 		})
 	}
 }

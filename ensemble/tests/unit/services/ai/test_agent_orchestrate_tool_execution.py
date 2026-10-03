@@ -89,7 +89,6 @@ def mock_tool_executor():
     executor._blacklist_validator = get_blacklist_validator()
 
     executor.reputation_data_service = MagicMock()
-    executor.auditor_hmac_key = "test-hmac-key"
     executor.ai_response_analyzer = None
 
     # Mock reputation_service with async resolve_stakes

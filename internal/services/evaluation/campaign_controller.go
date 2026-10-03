@@ -27,6 +27,7 @@ type CampaignInitRequest struct {
 	Inventory                  *ModelInventoryFreeze
 	ScenarioArtifacts          map[string]ScenarioArtifacts
 	RepetitionCount            uint32
+	Platform                   PlatformIdentity
 	InferenceOperatorSessionID string
 	DataOperatorSessionID      string
 	Deployment                 *evalv1.EvaluationDeploymentIdentity
@@ -50,6 +51,7 @@ type CampaignRunSummary struct {
 type CampaignStore interface {
 	SaveCampaignSpec(ctx context.Context, spec *evalv1.EvaluationCampaignSpec) error
 	LoadCampaignSpec(ctx context.Context, campaignID string) (*evalv1.EvaluationCampaignSpec, error)
+	LoadCampaignRelease(ctx context.Context, campaignID string) (CampaignRelease, error)
 	SaveScenarioCatalog(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog) error
 	LoadScenarioCatalog(ctx context.Context, campaignID string) (*evalv1.EvaluationScenarioCatalog, error)
 	SaveScenarioArtifacts(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error
@@ -110,6 +112,8 @@ type CampaignCreateRequest struct {
 	Inventory         *ModelInventoryFreeze
 	ScenarioArtifacts map[string]ScenarioArtifacts
 	RepetitionCount   uint32
+	// Platform is the build that freezes the campaign; its release is digest-bound.
+	Platform PlatformIdentity
 }
 
 // RunStartRequest binds one new run to an existing campaign.
@@ -120,6 +124,9 @@ type RunStartRequest struct {
 	DataOperatorSessionID      string
 	Deployment                 *evalv1.EvaluationDeploymentIdentity
 	Lane                       evalv1.EvaluationLane
+	// PlatformRelease is the executing build's release. It must equal the
+	// release the campaign recorded when it froze.
+	PlatformRelease string
 }
 
 // CreateCampaign persists the frozen campaign spec, scenario catalog, and
@@ -132,7 +139,7 @@ func (c *CampaignController) CreateCampaign(ctx context.Context, req CampaignCre
 	if req.CampaignID == "" || req.Catalog == nil || req.Inventory == nil {
 		return nil, fmt.Errorf("evaluation: create campaign: %w", constants.ErrMissingRequiredField)
 	}
-	spec, err := MaterializeCampaignSpec(req.CampaignID, req.Catalog, req.Inventory, req.RepetitionCount)
+	spec, err := MaterializeCampaignSpec(req.CampaignID, req.Catalog, req.Inventory, req.RepetitionCount, req.Platform)
 	if err != nil {
 		return nil, err
 	}
@@ -163,12 +170,17 @@ func (c *CampaignController) StartRun(ctx context.Context, req RunStartRequest) 
 	if c == nil || c.store == nil {
 		return nil, fmt.Errorf("evaluation: start run: %w", constants.ErrMissingRequiredField)
 	}
-	if req.CampaignID == "" || req.RunID == "" {
+	if req.CampaignID == "" || req.RunID == "" || req.PlatformRelease == "" {
 		return nil, fmt.Errorf("evaluation: start run: %w", constants.ErrMissingRequiredField)
 	}
 	spec, err := c.store.LoadCampaignSpec(ctx, req.CampaignID)
 	if err != nil {
 		return nil, err
+	}
+	// Campaigns frozen before v2.3.0 recorded no release; their asserted tag
+	// is not a digest-bound fact, so only a recorded release is enforced.
+	if recorded := spec.GetPlatformRelease(); recorded != "" && recorded != req.PlatformRelease {
+		return nil, fmt.Errorf("evaluation: start run %q: campaign %q recorded %q, executing build is %q: %w", req.RunID, req.CampaignID, recorded, req.PlatformRelease, constants.ErrEvaluationPlatformReleaseMismatch)
 	}
 	catalog, err := c.store.LoadScenarioCatalog(ctx, req.CampaignID)
 	if err != nil {
@@ -221,6 +233,7 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 		Inventory:         req.Inventory,
 		ScenarioArtifacts: req.ScenarioArtifacts,
 		RepetitionCount:   req.RepetitionCount,
+		Platform:          req.Platform,
 	}); err != nil {
 		return nil, err
 	}
@@ -231,6 +244,7 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 		DataOperatorSessionID:      req.DataOperatorSessionID,
 		Deployment:                 req.Deployment,
 		Lane:                       req.Lane,
+		PlatformRelease:            req.Platform.Release,
 	})
 }
 
@@ -505,7 +519,7 @@ func (c *CampaignController) ResumeNextAssignment(ctx context.Context, runID str
 // persists the terminal result, and updates assignment lifecycle state.
 func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID string, binding CampaignExecutionBinding, artifacts map[string]ScenarioArtifacts) (*evalv1.EvaluationAssignmentResult, bool, error) {
 	if c == nil || c.executor == nil {
-		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor is required")
+		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor: %w", constants.ErrMissingRequiredField)
 	}
 	assignment, ok, err := c.ResumeNextAssignment(ctx, runID)
 	if err != nil || !ok {
@@ -590,7 +604,7 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 		return failureResult, true, nil
 	}
 	if result == nil {
-		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor returned nil result")
+		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor returned nil result: %w", constants.ErrEvaluationAssignmentExecutionFailed)
 	}
 	if err := c.persistTerminalAssignment(ctx, assignment, result); err != nil {
 		return nil, false, err

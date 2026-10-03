@@ -619,11 +619,5 @@ func (fes *FileEditService) collectFileStats(filePath string, fileInfo os.FileIn
 
 // finalizeResult finalizes the file edit result
 func (fes *FileEditService) finalizeResult(result *models.FileEditResult) {
-	if result.EndTime.IsZero() {
-		result.EndTime = time.Now().UTC()
-	}
-
-	if !result.StartTime.IsZero() && !result.EndTime.IsZero() {
-		result.DurationSeconds = result.EndTime.Sub(result.StartTime).Seconds()
-	}
+	finalizeTiming(result.StartTime, &result.EndTime, &result.DurationSeconds)
 }

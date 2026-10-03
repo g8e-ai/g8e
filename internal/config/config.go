@@ -93,14 +93,9 @@ type LoadOptions struct {
 	Lattice *latticeconfig.LatticeConfig
 
 	// Inference backend (g8ellama). Disabled when InferenceEnabled is false.
-	InferenceEnabled             bool
-	InferenceOllamaEndpoint      string
-	InferencePrimaryModel        string
-	InferenceAssistantModel      string
-	InferenceLiteModel           string
-	InferenceKeepAlive           string
-	InferenceCampaignID          string
-	InferenceModelRegistryDigest string
+	InferenceEnabled        bool
+	InferenceOllamaEndpoint string
+	InferenceKeepAlive      string
 
 	// ProviderBoundaryObserverEnabled marks the operator as the remote
 	// read-only provider-boundary hardware observer.
@@ -199,8 +194,8 @@ type GatewayConfig struct {
 // management, model eviction, and multi-model residency; the gateway's
 // responsibility is limited to acting as an HTTP client to Ollama's
 // /api/chat endpoint.
-// The three model fields map directly to the three tiers in ensemble's
-// LLMSettings.
+// The Inference Operator is a worker: it holds no model configuration. Each
+// governed request names the model it wants, chosen by the user in the Console.
 type InferenceConfig struct {
 	Enabled bool
 
@@ -209,18 +204,8 @@ type InferenceConfig struct {
 	// release the provider is remote; nothing here manages a local daemon.
 	OllamaEndpoint string
 
-	// PrimaryModel, AssistantModel, LiteModel map each chat-tier role to an
-	// Ollama model name. Ollama routes by model name in the API call, so
-	// role routing is a config-and-payload concern.
-	PrimaryModel   string
-	AssistantModel string
-	LiteModel      string
-
-	CampaignID          string
-	ModelRegistryDigest string
-
 	// KeepAlive is the Ollama keep-alive duration passed to /api/chat per
-	// request. Default "-1" pins all three chat roles in memory on the
+	// request. Default "-1" keeps each requested model resident on the
 	// remote provider.
 	KeepAlive string
 }
@@ -723,14 +708,9 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 		endpoint = fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
 	}
 	return InferenceConfig{
-		Enabled:             opts.InferenceEnabled,
-		OllamaEndpoint:      endpoint,
-		PrimaryModel:        cmp.Or(opts.InferencePrimaryModel, constants.InferenceDefaultPrimaryModel),
-		AssistantModel:      cmp.Or(opts.InferenceAssistantModel, constants.InferenceDefaultAssistantModel),
-		LiteModel:           cmp.Or(opts.InferenceLiteModel, constants.InferenceDefaultLiteModel),
-		KeepAlive:           cmp.Or(opts.InferenceKeepAlive, constants.InferenceDefaultKeepAlive),
-		CampaignID:          opts.InferenceCampaignID,
-		ModelRegistryDigest: opts.InferenceModelRegistryDigest,
+		Enabled:        opts.InferenceEnabled,
+		OllamaEndpoint: endpoint,
+		KeepAlive:      cmp.Or(opts.InferenceKeepAlive, constants.InferenceDefaultKeepAlive),
 	}
 }
 

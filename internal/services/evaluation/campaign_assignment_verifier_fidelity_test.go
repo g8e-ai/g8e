@@ -9,6 +9,7 @@ package evaluation
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -96,6 +98,73 @@ func TestCampaignAssignmentVerifier_RecomputesTheTrajectoryAndFailureReasonsItSt
 	})
 }
 
+// The scores are published and drive every pass rate, so the verifier recomputes
+// them from the grades it just verified instead of trusting a resealed digest.
+func TestCampaignAssignmentVerifier_RecomputesTheScoresItStored(t *testing.T) {
+	t.Parallel()
+	current := catalogRef(DefaultSuiteID, DefaultSuiteVersion)
+	const wantFailure = "stored decomposed scores do not match recomputation"
+
+	t.Run("the honest result carries scores and verifies", func(t *testing.T) {
+		t.Parallel()
+		f := newSeededImportFixture(t, "recovery-error-guided-retry", nil)
+		result := f.importResult(t)
+		require.NotEmpty(t, result.GetDecomposedScores(), "a result with no scores would verify vacuously")
+
+		report := verifyAssignment(t, f, result, current)
+
+		assert.Equal(t, verdictPass, report.GetStatus(), "%v", report.GetFailureReasons())
+	})
+
+	tamper := map[string]func(result *evalv1.EvaluationAssignmentResult){
+		"a task score": func(result *evalv1.EvaluationAssignmentResult) {
+			for _, score := range result.GetDecomposedScores() {
+				if score.GetDimension() == "task_score" {
+					score.Value = 1 - score.GetValue()
+				}
+			}
+		},
+		"a pass rate": func(result *evalv1.EvaluationAssignmentResult) {
+			for _, score := range result.GetDecomposedScores() {
+				if score.GetDimension() == "deterministic_pass_rate" {
+					score.Value = 0.123
+				}
+			}
+		},
+		"every score dropped": func(result *evalv1.EvaluationAssignmentResult) { result.DecomposedScores = nil },
+		"an invented score": func(result *evalv1.EvaluationAssignmentResult) {
+			result.DecomposedScores = append(result.DecomposedScores, &evalv1.DecomposedScoreRecord{ScoreId: "invented", Dimension: "invented", Value: 1})
+		},
+	}
+	for name, mutate := range tamper {
+		t.Run("a re-digested result with "+name+" fails verification", func(t *testing.T) {
+			t.Parallel()
+			f := newSeededImportFixture(t, "recovery-error-guided-retry", nil)
+			result := f.importResult(t)
+			mutate(result)
+			redigest(t, result)
+
+			report := verifyAssignment(t, f, result, current)
+
+			assert.Equal(t, verdictFail, report.GetStatus())
+			assert.Contains(t, report.GetFailureReasons(), wantFailure)
+			assert.NotContains(t, report.GetFailureReasons(), "stored deterministic grades do not match recomputation", "the grades are honest; only the scores drifted")
+		})
+	}
+
+	t.Run("a legacy catalog result is not regraded, so its scores are not compared", func(t *testing.T) {
+		t.Parallel()
+		f := newSeededImportFixture(t, "recovery-error-guided-retry", nil)
+		result := f.importResult(t)
+		result.DecomposedScores = nil
+		redigest(t, result)
+
+		report := verifyAssignment(t, f, result, catalogRef(LegacyDefaultSuiteID, "1.0.0"))
+
+		assert.Equal(t, verdictPass, report.GetStatus(), "%v", report.GetFailureReasons())
+	})
+}
+
 // TestCampaignAssignmentVerifier_OldCatalogRunsKeepEveryIntegrityCheck is R8:
 // a run frozen from an older built-in catalog skips only the regrading, never
 // the digest and evidence checks.
@@ -143,7 +212,7 @@ func TestCampaignAssignmentVerifier_OldCatalogRunsKeepEveryIntegrityCheck(t *tes
 				redigest(t, result)
 				report := verifyAssignment(t, f, result, ref)
 				assert.Equal(t, verdictFail, report.GetStatus())
-				assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: model inference 0 mismatch")
+				assert.Contains(t, report.GetFailureReasons(), "model inference 0 mismatch: "+constants.ErrEvaluationEvidenceTraceMismatch.Error())
 			})
 			t.Run("a tool call record rewritten after the fact still fails", func(t *testing.T) {
 				result := f.importResult(t)
@@ -152,7 +221,7 @@ func TestCampaignAssignmentVerifier_OldCatalogRunsKeepEveryIntegrityCheck(t *tes
 				redigest(t, result)
 				report := verifyAssignment(t, f, result, ref)
 				assert.Equal(t, verdictFail, report.GetStatus())
-				assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: tool call record 0 mismatch")
+				assert.Contains(t, report.GetFailureReasons(), "tool call record 0 mismatch: "+constants.ErrEvaluationEvidenceTraceMismatch.Error())
 			})
 			t.Run("a tool call record dropped from the result still fails", func(t *testing.T) {
 				result := f.importResult(t)
@@ -160,7 +229,7 @@ func TestCampaignAssignmentVerifier_OldCatalogRunsKeepEveryIntegrityCheck(t *tes
 				redigest(t, result)
 				report := verifyAssignment(t, f, result, ref)
 				assert.Equal(t, verdictFail, report.GetStatus())
-				assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: tool call records mismatch")
+				assert.Contains(t, report.GetFailureReasons(), "tool call records mismatch: "+constants.ErrEvaluationEvidenceTraceMismatch.Error())
 			})
 			t.Run("a trace that no longer matches its digest still fails", func(t *testing.T) {
 				result := f.importResult(t)
@@ -261,7 +330,8 @@ func TestCampaignAssignmentVerifier_RejectsIncompleteRequests(t *testing.T) {
 		report, err := verifier.Verify(context.Background(), CampaignAssignmentVerificationRequest{Assignment: noTarget, Result: result, Trace: f.trace})
 		require.NoError(t, err)
 		assert.Equal(t, verdictFail, report.GetStatus())
-		assert.Contains(t, report.GetFailureReasons(), "evaluation: designated role lookup: homogeneous target required")
+		// Failure reasons are persisted strings, so the typed sentinel is matched by its text.
+		assert.Contains(t, strings.Join(report.GetFailureReasons(), "\n"), constants.ErrEvaluationTargetKindMismatch.Error())
 	})
 }
 

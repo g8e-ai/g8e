@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import ComponentName
-from app.errors import ResourceNotFoundError
+from app.errors import ResourceNotFoundError, ValidationError
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.cases import (
     CaseGetRequest,
@@ -19,9 +19,12 @@ from app.models.cases import (
     CaseDeleteRequest,
 )
 from app.models.http_context import BoundOperator, G8eHttpContext, RequestContext
+from app.models.investigations import InvestigationQueryRequest
 from app.models.internal_api import (
     ChatMessageRequest,
     DirectCommandRequest,
+    LLMModelListRequest,
+    LLMModelListResponse,
     ResourceCreationRequest,
     OperatorApprovalResponse,
     OperatorBindRequest,
@@ -29,7 +32,6 @@ from app.models.internal_api import (
     OperatorSlotCreationRequest,
     OperatorUnbindRequest,
     StopAIRequest,
-    SettingsSyncRequest,
 )
 from app.constants import OperatorStatus
 from app.routers.internal_router import (
@@ -41,20 +43,40 @@ from app.routers.internal_router import (
     delete_case,
     execute_direct_command,
     internal_chat,
+    list_llm_models,
     operator_approval_respond,
+    query_investigations,
     stop_ai_processing,
     unbind_operators,
     update_case,
     get_case,
-    get_user_settings,
-    settings_sync,
 )
 from app.services.ai.chat_task_manager import BackgroundTaskManager
+from app.constants import LLMProvider
 from tests.fakes.factories import build_case_model, create_investigation_data
 
 # Canonical API key format from protocol/constants/api_key_patterns.json
 API_KEY_OPERATOR_REGEX = re.compile(r"^g8e_[a-f0-9]{8}_[a-f0-9]{64}$")
 API_KEY_REGULAR_REGEX = re.compile(r"^g8e_[a-f0-9]{64}$")
+
+
+@pytest.mark.asyncio
+async def test_governed_model_list_ignores_browser_endpoint(request_context, g8e_context):
+    settings_service = MagicMock()
+    gateway_operator_client = MagicMock()
+    request = LLMModelListRequest(
+        context=request_context,
+        role="primary",
+        provider=LLMProvider.G8E,
+        endpoint="http://untrusted.example:11434",
+        api_key="untrusted-key",
+    )
+    with patch("app.routers.internal_router.list_governed_models", new_callable=AsyncMock) as listing:
+        listing.return_value = ["qwen3:4b"]
+        result = await list_llm_models(request, settings_service, g8e_context, gateway_operator_client)
+    assert result.models == ["qwen3:4b"]
+    listing.assert_awaited_once_with(gateway_operator_client, g8e_context)
+    settings_service.get_user_settings.assert_not_called()
 
 
 @pytest.fixture
@@ -165,6 +187,121 @@ async def test_internal_chat_missing_investigation(request_context, g8e_context,
 
     assert response.success is True
     assert response.investigation_id != ""
+
+
+async def _run_internal_chat(request, g8e_context, task_tracker, case_service, investigation_service):
+    mock_chat_pipeline = MagicMock()
+    mock_chat_pipeline.run_chat = AsyncMock()
+    mock_chat_task_manager = MagicMock()
+    mock_chat_task_manager.track = AsyncMock()
+    with task_tracker.patch_create_task("app.routers.internal_router"):
+        return await internal_chat(
+            request=request,
+            app_settings=MagicMock(),
+            user_settings=MagicMock(),
+            chat_pipeline=mock_chat_pipeline,
+            chat_task_manager=mock_chat_task_manager,
+            case_service=case_service,
+            investigation_service=investigation_service,
+            attachment_service=MagicMock(),
+            event_service=MagicMock(),
+            g8e_context=g8e_context,
+        )
+
+
+@pytest.mark.asyncio
+async def test_internal_chat_new_investigation_in_existing_case(
+    request_context, g8e_context, task_tracker
+):
+    g8e_context = g8e_context.model_copy(update={"investigation_id": None})
+    request = ChatMessageRequest(
+        context=request_context.model_copy(update={"investigation_id": None}),
+        message="follow-up",
+        resource_creation=ResourceCreationRequest(create_investigation=True),
+    )
+    mock_case_service = MagicMock()
+    mock_case_service.get_case = AsyncMock(
+        return_value=build_case_model(case_id="case-123", user_id="user-123")
+    )
+    mock_case_service.create_case = AsyncMock()
+    mock_investigation_service = MagicMock()
+    mock_investigation_service.create_investigation = AsyncMock(
+        return_value=create_investigation_data(investigation_id="inv-456", case_id="case-123")
+    )
+
+    response = await _run_internal_chat(
+        request, g8e_context, task_tracker, mock_case_service, mock_investigation_service
+    )
+
+    assert response.success is True
+    assert response.case_id == "case-123"
+    assert response.investigation_id == "inv-456"
+    mock_case_service.create_case.assert_not_called()
+    created = mock_investigation_service.create_investigation.call_args.args[0]
+    assert created.case_id == "case-123"
+    assert created.user_id == "user-123"
+    assert created.created_with_case is False
+
+
+@pytest.mark.asyncio
+async def test_internal_chat_new_investigation_rejects_foreign_case(
+    request_context, g8e_context, task_tracker
+):
+    request = ChatMessageRequest(
+        context=request_context,
+        message="follow-up",
+        resource_creation=ResourceCreationRequest(create_investigation=True),
+    )
+    mock_case_service = MagicMock()
+    mock_case_service.get_case = AsyncMock(
+        return_value=build_case_model(case_id="case-123", user_id="someone-else")
+    )
+    mock_investigation_service = MagicMock()
+    mock_investigation_service.create_investigation = AsyncMock()
+
+    with pytest.raises(ResourceNotFoundError):
+        await _run_internal_chat(
+            request, g8e_context, task_tracker, mock_case_service, mock_investigation_service
+        )
+    mock_investigation_service.create_investigation.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_internal_chat_new_investigation_requires_case_id(
+    request_context, g8e_context, task_tracker
+):
+    g8e_context = g8e_context.model_copy(update={"case_id": None})
+    request = ChatMessageRequest(
+        context=request_context.model_copy(update={"case_id": None}),
+        message="follow-up",
+        resource_creation=ResourceCreationRequest(create_investigation=True),
+    )
+    mock_investigation_service = MagicMock()
+    mock_investigation_service.create_investigation = AsyncMock()
+
+    with pytest.raises(ValidationError):
+        await _run_internal_chat(
+            request, g8e_context, task_tracker, MagicMock(), mock_investigation_service
+        )
+    mock_investigation_service.create_investigation.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_query_investigations_scopes_to_authenticated_user(request_context, g8e_context):
+    request = InvestigationQueryRequest(context=request_context, user_id="someone-else")
+    mock_investigation_service = MagicMock()
+    mock_investigation_service.investigation_data_service.query_investigations = AsyncMock(
+        return_value=[]
+    )
+
+    await query_investigations(
+        request=request,
+        investigation_service=mock_investigation_service,
+        g8e_context=g8e_context,
+    )
+
+    scoped = mock_investigation_service.investigation_data_service.query_investigations.call_args.args[0]
+    assert scoped.user_id == "user-123"
 
 
 @pytest.mark.asyncio
@@ -637,24 +774,7 @@ def test_status_payload_from_gateway_doc_prefers_snapshot_hostname():
     assert payload.metrics.system_identity.hostname == "live-host"
 
 
-@pytest.mark.asyncio
-async def test_get_user_settings(g8e_context, request_context):
-    from app.models.internal_api import SettingsGetRequest
 
-    mock_settings_service = MagicMock()
-    mock_settings = MagicMock()
-    mock_settings_service.get_user_settings = AsyncMock(return_value=mock_settings)
-
-    request_obj = SettingsGetRequest(context=request_context)
-
-    response = await get_user_settings(
-        request=request_obj,
-        settings_service=mock_settings_service,
-        g8e_context=g8e_context,
-    )
-
-    assert response == mock_settings
-    mock_settings_service.get_user_settings.assert_called_once_with("user-123")
 
 
 @pytest.mark.asyncio
@@ -745,24 +865,6 @@ async def test_internal_chat_settings_service_di_regression(
             settings_service=mock_settings_service,
         )
 
-    # Verify internal_chat returns success
-    # settings_service.update_user_settings is no longer called in internal_chat
-    # as we moved to a dedicated /settings/sync endpoint.
     assert response.success is True
 
 
-@pytest.mark.asyncio
-async def test_settings_sync_success(request_context):
-    request = SettingsSyncRequest(
-        context=request_context, llm_primary_model="gpt-4o", llm_primary_provider="openai"
-    )
-
-    mock_settings_service = MagicMock()
-    mock_settings_service.get_user_settings = AsyncMock()
-    mock_settings_service.sync_settings_overrides = AsyncMock(return_value=True)
-
-    response = await settings_sync(request=request, settings_service=mock_settings_service)
-
-    assert response.success is True
-    mock_settings_service.get_user_settings.assert_called_once_with("user-123")
-    mock_settings_service.sync_settings_overrides.assert_called_once()

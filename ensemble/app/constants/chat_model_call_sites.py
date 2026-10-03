@@ -12,6 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from g8e.models.events import CallClassification
+
+from app.errors import ValidationError
+
 ModelRole = Literal["primary", "assistant", "lite"] | None
 
 
@@ -23,6 +27,7 @@ class ChatModelCallSite:
     module: str
     agent_role: str
     model_role: ModelRole
+    classification: CallClassification
     provider_method: str
 
 
@@ -32,6 +37,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.triage",
         agent_role="triage",
         model_role="lite",
+        classification="scored_chain",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(
@@ -39,6 +45,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.agent",
         agent_role="sage",
         model_role="primary",
+        classification="scored_chain",
         provider_method="generate_content_stream_scored_role",
     ),
     ChatModelCallSite(
@@ -46,6 +53,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.agent",
         agent_role="dash",
         model_role="assistant",
+        classification="scored_chain",
         provider_method="generate_content_stream_scored_role",
     ),
     ChatModelCallSite(
@@ -53,6 +61,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.agent",
         agent_role="dash",
         model_role="lite",
+        classification="scored_chain",
         provider_method="generate_content_stream_scored_role",
     ),
     ChatModelCallSite(
@@ -60,6 +69,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.title_generator",
         agent_role="scribe",
         model_role="lite",
+        classification="post_turn",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(
@@ -67,6 +77,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.memory_generation_service",
         agent_role="codex",
         model_role="lite",
+        classification="post_turn",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(
@@ -74,6 +85,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.tribunal.stages.generation",
         agent_role="tribunal",
         model_role="lite",
+        classification="scored_chain",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(
@@ -81,6 +93,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.auditor_service",
         agent_role="auditor",
         model_role="primary",
+        classification="scored_chain",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(
@@ -88,6 +101,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.response_analyzer",
         agent_role="marshal_command",
         model_role="lite",
+        classification="scored_chain",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(
@@ -95,6 +109,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.response_analyzer",
         agent_role="marshal_error",
         model_role="lite",
+        classification="scored_chain",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(
@@ -102,6 +117,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.response_analyzer",
         agent_role="marshal_file",
         model_role="lite",
+        classification="scored_chain",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(
@@ -109,8 +125,29 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.eval_judge",
         agent_role="judge",
         model_role="lite",
+        classification="grader",
         provider_method="generate_content_lite",
     ),
 )
 
 CALL_SITE_BY_NAME = {site.call_site: site for site in CHAT_MODEL_CALL_SITES}
+
+_CLASSIFICATION_BY_AGENT_ROLE: dict[str, CallClassification] = {
+    site.agent_role: site.classification for site in CHAT_MODEL_CALL_SITES
+}
+
+
+def classification_for_agent_role(agent_role: str) -> CallClassification:
+    """Return the chain a registered agent role's model calls belong to.
+
+    An unregistered role is a construction error: guessing a chain would let an
+    unclassified call leak into, or out of, the scored aggregates.
+    """
+    classification = _CLASSIFICATION_BY_AGENT_ROLE.get(agent_role)
+    if classification is None:
+        raise ValidationError(
+            f"agent role {agent_role!r} has no registered call classification",
+            field="agent_role",
+            component="g8ee",
+        )
+    return classification

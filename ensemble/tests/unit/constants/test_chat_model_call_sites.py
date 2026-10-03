@@ -10,7 +10,12 @@ import inspect
 
 import pytest
 
-from app.constants.chat_model_call_sites import CALL_SITE_BY_NAME, CHAT_MODEL_CALL_SITES
+from app.constants.chat_model_call_sites import (
+    CALL_SITE_BY_NAME,
+    CHAT_MODEL_CALL_SITES,
+    classification_for_agent_role,
+)
+from app.errors import ValidationError
 
 
 @pytest.mark.parametrize("site", CHAT_MODEL_CALL_SITES, ids=lambda site: site.call_site)
@@ -40,6 +45,35 @@ def test_call_site_inventory_covers_required_personas():
 def test_call_site_registry_has_unique_names():
     names = [site.call_site for site in CHAT_MODEL_CALL_SITES]
     assert len(names) == len(set(names))
+
+
+@pytest.mark.parametrize(
+    ("call_site", "classification"),
+    [
+        ("triage", "scored_chain"),
+        ("active_agent_primary", "scored_chain"),
+        ("active_agent_assistant", "scored_chain"),
+        ("active_agent_lite", "scored_chain"),
+        ("tribunal_generation", "scored_chain"),
+        ("tribunal_auditor", "scored_chain"),
+        ("marshal_command", "scored_chain"),
+        ("title_generation", "post_turn"),
+        ("memory_codex", "post_turn"),
+        ("eval_judge", "grader"),
+    ],
+)
+def test_call_site_states_its_chain_classification(call_site, classification):
+    assert CALL_SITE_BY_NAME[call_site].classification == classification
+
+
+def test_classification_for_agent_role_covers_every_registered_role():
+    for site in CHAT_MODEL_CALL_SITES:
+        assert classification_for_agent_role(site.agent_role) == site.classification
+
+
+def test_classification_for_unregistered_agent_role_fails_closed():
+    with pytest.raises(ValidationError):
+        classification_for_agent_role("unknown")
 
 
 def test_call_site_modules_use_expected_provider_method():

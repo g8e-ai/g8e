@@ -26,23 +26,20 @@ import base64
 import hashlib
 import logging
 import json
-import binascii
 import secrets
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
 import aiohttp
-from nacl.signing import VerifyKey
-from nacl.exceptions import BadSignatureError
 
 from g8e.registry import action_for
 from app.models.pubsub_messages import G8eMessage
+from app.models.reputation import ReputationSignRequest, ReputationSignResponse
 from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
 from app.constants import AUTHORIZATION, GatewayAPIPaths
 from app.constants.config import G8EE_COMPONENT
-from app.constants.paths import PATHS
 from app.errors import G8eError, NetworkError, ValidationError, ErrorCode, ErrorCategory
 from app.utils.aiohttp_session import create_component_http_session
 from g8e.models.governance import (
@@ -55,7 +52,6 @@ from g8e.models.governance import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 # Mapping from internal g8ee payload types to canonical g8e protocol payload types
 PAYLOAD_TYPE_MAPPING = {
@@ -319,7 +315,6 @@ class GovernanceClient:
         tls_config: TLSConfig | None = None,
         operator_session_id: str | None = None,
         gateway_settings: GatewaySettings | None = None,
-        pki_dir: str | None = None,
     ) -> None:
         if gateway_settings is None:
             service = SettingsService()
@@ -339,11 +334,6 @@ class GovernanceClient:
         self._operator_session_id = operator_session_id
         self._session: aiohttp.ClientSession | None = None
         self._submission_lock = asyncio.Lock()
-
-        self._pki_dir = Path(pki_dir) if pki_dir else Path(PATHS["infra"]["pki_dir"])
-        self._actuator_key_id: str | None = None
-        self._actuator_pub_key: bytes | None = None
-        self._actuator_key_loaded = False
 
         # Cached operator transport identity parsed from the client cert's
         # SPIFFE URI SAN. Resolved lazily on the first submit_envelope call
@@ -631,129 +621,21 @@ class GovernanceClient:
                 component="g8ee",
             )
 
-    def _load_actuator_public_key(self) -> bool:
-        """Load the actuator public key from the PKI directory.
-
-        Reads ``actuator_pub.json`` (preferred) or ``actuator_pub.pem`` from the
-        PKI directory. The file is written by the Gateway at startup via
-        ``ExportActuatorPublicKey``.
-
-        Returns:
-            True if the key was loaded successfully, False otherwise.
-        """
-        if self._actuator_key_loaded:
-            return self._actuator_pub_key is not None
-
-        self._actuator_key_loaded = True
-
-        json_path = self._pki_dir / "actuator_pub.json"
-        pem_path = self._pki_dir / "actuator_pub.pem"
-
-        if json_path.exists():
-            try:
-                data = json.loads(json_path.read_text())
-                self._actuator_key_id = data.get("key_id", "")
-                pub_hex = data.get("public_key", "")
-                if pub_hex:
-                    self._actuator_pub_key = binascii.unhexlify(pub_hex)
-                    logger.info(
-                        "[GOVERNANCE-CLIENT] Loaded actuator public key from %s (key_id=%s)",
-                        json_path,
-                        self._actuator_key_id[:16] if self._actuator_key_id else "unknown",
-                    )
-                    return True
-            except Exception as e:
-                logger.warning("[GOVERNANCE-CLIENT] Failed to read actuator_pub.json: %s", e)
-
-        if pem_path.exists():
-            try:
-                pem_text = pem_path.read_text()
-                lines = pem_text.strip().split("\n")
-                b64_key = "".join(lines[1:-1])
-                der_bytes = binascii.a2b_base64(b64_key)
-                self._actuator_pub_key = der_bytes[-32:]
-                logger.info("[GOVERNANCE-CLIENT] Loaded actuator public key from %s", pem_path)
-                return True
-            except Exception as e:
-                logger.warning("[GOVERNANCE-CLIENT] Failed to parse actuator_pub.pem: %s", e)
-
-        logger.warning(
-            "[GOVERNANCE-CLIENT] Actuator public key not found in PKI dir %s", self._pki_dir
-        )
-        return False
-
-    @staticmethod
-    def _canonicalize_receipt(receipt: dict[str, Any]) -> bytes:
-        """Produce deterministic JSON bytes for signature verification.
-
-        Must match g8e's ``CanonicalizeActionReceipt`` in
-        ``internal/services/governance/l5_actuator.go`` — same fields, same order.
-        Go's ``json.Marshal`` preserves struct field order, so the Python side
-        uses an insertion-ordered dict (Python 3.7+) without ``sort_keys``.
-        """
-        canonical = {
-            "transaction_id": receipt.get("transaction_id", ""),
-            "transaction_hash": receipt.get("transaction_hash", ""),
-            "status": receipt.get("status", ""),
-            "result_summary": receipt.get("result_summary", ""),
-            "state_root_before": receipt.get("state_root_before", ""),
-            "state_root_after": receipt.get("state_root_after", ""),
-            "executed_at_unix_ms": receipt.get("executed_at_unix_ms", 0),
-            "signer_key_id": receipt.get("signer_key_id", ""),
-            "l2_status": receipt.get("l2_status", ""),
-            "l3_status": receipt.get("l3_status", ""),
-        }
-        return json.dumps(canonical, separators=(",", ":")).encode("utf-8")
-
-    def verify_receipt_signature(self, receipt: dict[str, Any]) -> bool:
-        """Verify the Ed25519 signature of an ActionReceipt from the Gateway.
-
-        The Gateway signs receipts with its Actuator private key during
-        ``L5Actuator.Execute``. This method verifies the signature using the
-        actuator public key distributed via the PKI directory
-        (``actuator_pub.json`` / ``actuator_pub.pem``).
-
-        Args:
-            receipt: The ActionReceipt dictionary from the Gateway
-
-        Returns:
-            True if the signature is valid, False otherwise. Returns False if
-            the actuator public key is not available or the receipt is missing
-            required fields.
-        """
-        if not self._load_actuator_public_key():
-            logger.warning(
-                "[GOVERNANCE-CLIENT] Cannot verify receipt: actuator public key not available"
-            )
-            return False
-
-        signature_hex = receipt.get("signature", "")
-        if not signature_hex:
-            logger.warning("[GOVERNANCE-CLIENT] Receipt has no signature field")
-            return False
-
-        signer_key_id = receipt.get("signer_key_id", "")
-        if self._actuator_key_id and signer_key_id and signer_key_id != self._actuator_key_id:
-            logger.warning(
-                "[GOVERNANCE-CLIENT] Receipt signer_key_id %s does not match actuator key_id %s",
-                signer_key_id,
-                self._actuator_key_id,
-            )
-            return False
-
+    async def sign_reputation_commitment(self, request: ReputationSignRequest) -> ReputationSignResponse:
+        """Ask the Gateway to sign a reputation claim without exporting its key."""
+        if not self._client_cert_path or not self._client_key_path:
+            raise ValidationError("app mTLS credentials required for reputation signing", component="g8ee")
         try:
-            sig_bytes = binascii.unhexlify(signature_hex)
-            canonical_bytes = self._canonicalize_receipt(receipt)
-            verify_key = VerifyKey(self._actuator_pub_key)
-            verify_key.verify(canonical_bytes, sig_bytes)
-            logger.info("[GOVERNANCE-CLIENT] Receipt signature verified successfully")
-            return True
-        except BadSignatureError:
-            logger.warning("[GOVERNANCE-CLIENT] Receipt signature verification failed: bad signature")
-            return False
-        except Exception as e:
-            logger.error("[GOVERNANCE-CLIENT] Receipt signature verification error: %s", e)
-            return False
+            session = await self._get_http_session()
+            async with session.post(
+                f"{self._base_url}{GatewayAPIPaths.GATEWAY_REPUTATION_SIGN}",
+                json=request.model_dump(mode="json"),
+            ) as response:
+                if response.status != 200:
+                    raise NetworkError(f"Gateway reputation signing HTTP {response.status}", component="g8ee")
+                return ReputationSignResponse.model_validate(await response.json())
+        except aiohttp.ClientError as exc:
+            raise NetworkError("Gateway reputation signing failed", component="g8ee", cause=exc) from exc
 
     async def update_governed_doc(
         self,

@@ -69,7 +69,6 @@ def create_tool_service_fake(
         reputation_service=AsyncMock(),
         chat_task_manager=MagicMock(),
         ssh_inventory_service=MagicMock(),
-        stream_executor=MagicMock(),
         web_search_provider=web_search_provider,
         whitelist_validator=whitelist_validator,
         blacklist_validator=blacklist_validator,

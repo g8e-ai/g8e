@@ -170,7 +170,7 @@ Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing 
 | INV-TEST-10 | The canonical trust bundle path is `.g8e/pki/trust/g8eg-ca-bundle.pem`. A test MUST NOT repair a failure by mutating developer PKI state. |
 | INV-TEST-11 | MUST NOT use `os.Chdir` to line up runtime state. A working-directory change is allowed only for behavior that discovers source-tree or configuration files, and that file MUST explain the change and clean it up. |
 | INV-TEST-12 | `./g8e test e2e-full` MUST be described from `internal/cli/cmd/test/test.go`: it runs `docker compose up -d` with profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds profile `cross-enrollment` when `--cross-enrollment` is set, waits up to 60 seconds for HTTP 200 from Gateway `http://localhost:8080/api/v1/health` and Ensemble `http://localhost:8000/health`, runs the same `go test` arguments as `./g8e test e2e`, and tears the stack down with `docker compose down -v`. |
-| INV-TEST-13 | `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Unprofiled services (gateway, data operator, inference operator, ensemble, dashboard) start on `docker compose up -d`. Named profiles are `cross-enrollment` and `g8ellama`. MUST NOT describe `bootstrapped` as a Compose profile that selects those workloads. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist; the Compose file does not assign them. |
+| INV-TEST-13 | `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Unprofiled services (gateway, data operator, inference operator, ensemble) start on `docker compose up -d`. Named profiles are `cross-enrollment` and `g8ellama`. MUST NOT describe `bootstrapped` as a Compose profile that selects those workloads. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist; the Compose file does not assign them. |
 
 ### Generated artifacts (`INV-GEN`)
 
@@ -220,7 +220,7 @@ The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full m
 | Claim | Path | Verify |
 | --- | --- | --- |
 | Go version and module | `go.mod` | `go` directive is `1.26.6` |
-| Setup prerequisites | `scripts/lib/dev-setup-common.sh`, `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, `scripts/windows-setup.ps1` | Scripts read `go.mod`, check `git`, `make`, Node.js 22+, and `npm`, offer to install missing prerequisites, build `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` when it is absent, run `make build`, and add the repo root to the user path |
+| Setup prerequisites | `scripts/lib/dev-setup-common.sh`, `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, `scripts/windows-setup.ps1`, `scripts/dev-check.sh` | Scripts read the Go version from `go.mod` and other tool pins from the `Makefile`, check `git`, `make`, `curl`, Node.js 22+, `npm`, and (unless `--build-only`) `python3`, `uv`, `rg`, `bc`, and a C compiler, offer to install what is missing, build `evaluation-explorer/dist/index.html` when it is absent, run `make build` and `make dev-setup`, add the repo root and dev tool directories to the user path, and finish with `make dev-check`; the `ci` targets run `make dev-check` first |
 | Platform CLI binary | `Makefile` (`MAIN_PKG := ./cmd/g8e`), `cmd/g8e` | `make build` writes `bin/g8e-<os>-<arch>` and copies a runnable binary to the repo root |
 | Cobra root and groups | `internal/cli/cmd/main.go`, `internal/cli/cmd/<group>/` | `./g8e --help` |
 | Sentinel errors | `internal/constants/errors.go` | `constants.Err*` declarations, including `ErrFileServiceInit` |
@@ -270,7 +270,7 @@ make lint
 ```
 
 2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
-3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make test-external`, `make dashboard-test`.
+3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make test-external`, `make console-test`.
 4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-full` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
 
 ### Add a runtime-file CLI command
@@ -318,7 +318,7 @@ make lint
 - A second `Stop` or `Close` on a `NewGatewayFixture` resource (INV-TEST-06).
 - Hand-editing generated protobuf Markdown or Gateway OpenAPI output (INV-GEN-01).
 - `init` registration of a native MCP tool, or a pasted tool inventory (INV-MCP-03, INV-MCP-04).
-- Calling `bootstrapped` a Compose profile that selects the operator, ensemble, or dashboard. The CLI still passes that profile name; `docker-compose.yml` does not define it (INV-TEST-12, INV-TEST-13).
+- Calling `bootstrapped` a Compose profile that selects the operator or ensemble. The CLI still passes that profile name; `docker-compose.yml` does not define it (INV-TEST-12, INV-TEST-13).
 - A flag dump in place of `./g8e <command> --help` (INV-ENV-03).
 
 ## Links out
@@ -330,4 +330,4 @@ make lint
 - [Governance](../architecture/governance.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md): five-layer and posture model, and ingress limits.
 - [Protocol Specification](../../protocol/docs/spec.md): wire requirements.
 - [Scripts](../architecture/scripts.md): platform setup behavior.
-- Component workflows: [Protocol README](../../protocol/README.md), [Dashboard Development](../dashboard/devs.md), [Dashboard Testing](../dashboard/tests.md), [Ensemble Development](../ensemble/devs.md), [Ensemble Testing](../ensemble/tests.md).
+- Component workflows: [Protocol README](../../protocol/README.md), [Console Architecture & Development](../architecture/console.md), [Ensemble Development](../ensemble/devs.md), [Ensemble Testing](../ensemble/tests.md).

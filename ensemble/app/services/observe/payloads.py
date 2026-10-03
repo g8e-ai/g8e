@@ -53,6 +53,25 @@ def resolve_chat_persona_id(active_agent: ReasoningAgent | None) -> str | None:
     return persona_id
 
 
+# Agent lifecycle states after which the Gateway accepts only the same state,
+# ``idle``, or ``offline`` (``agentTransitions`` in
+# internal/services/gateway/observe_producer.go). A long-lived persona agent id
+# runs again, so the producer resets it to ``idle`` after each terminal state.
+AGENT_TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed"})
+AGENT_STATUS_IDLE = "idle"
+
+
+def agent_state_sequence(status: str) -> tuple[str, ...]:
+    """Return the agent states to report for ``status``, in order.
+
+    A terminal status is followed by ``idle`` so the next run's ``running``
+    is a valid transition; any other status is reported alone.
+    """
+    if status in AGENT_TERMINAL_STATUSES:
+        return (status, AGENT_STATUS_IDLE)
+    return (status,)
+
+
 def build_agent_state_request(
     *,
     user_id: str,

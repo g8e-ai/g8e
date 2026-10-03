@@ -13,9 +13,8 @@ from app.constants import (
     AUTHORIZATION,
     CLI_SESSION_ID,
     AuthMethod,
-    GATEWAY_BROWSER_PROXY_HEADER,
-    GATEWAY_BROWSER_PROXY_VALUE,
     OperatorStatus,
+    WEB_SESSION_ID,
     X_PROXY_CLI_SESSION_ID,
     X_PROXY_ORGANIZATION_ID,
     X_PROXY_USER_EMAIL,
@@ -26,6 +25,7 @@ from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser, OperatorSessionValidationResponse
 from app.models.http_context import BoundOperator, G8eHttpContext
 from app.services.auth.auth_service import AuthService
+from proxy_stamp_support import KeySource, key_response, make_key, make_request, stamped_headers, verifier
 
 
 @pytest.fixture
@@ -39,74 +39,108 @@ def auth_service(mock_internal_http_client):
 
 
 class TestAuthServiceProxyAuthentication:
-    @pytest.mark.asyncio
-    async def test_proxy_auth_extracts_user_and_cli_session_id(self, auth_service):
-        request = MagicMock(spec=Request)
-        request.headers = {
-            GATEWAY_BROWSER_PROXY_HEADER: GATEWAY_BROWSER_PROXY_VALUE,
-            X_PROXY_USER_ID: "user-123",
-            X_PROXY_USER_EMAIL: "user-123@g8e.local",
-            X_PROXY_ORGANIZATION_ID: "org-456",
-            X_PROXY_CLI_SESSION_ID: "cli-session-789",
-        }
-        request.state = MagicMock()
-        request.state.g8e_context = None
+    @pytest.fixture
+    def gateway_key(self):
+        return make_key()
 
-        settings = MagicMock()
-        user = await auth_service.authenticate_request(request, settings)
+    @pytest.fixture
+    def stamped_auth_service(self, mock_internal_http_client, gateway_key):
+        return AuthService(
+            internal_http_client=mock_internal_http_client,
+            proxy_stamp_verifier=verifier(KeySource(key_response(gateway_key))),
+        )
+
+    @pytest.mark.asyncio
+    async def test_signed_proxy_auth_extracts_user_and_cli_session_id(self, stamped_auth_service, gateway_key):
+        request = make_request(
+            stamped_headers(
+                gateway_key,
+                user_id="user-123",
+                organization_id="org-456",
+                cli_session_id="cli-session-789",
+            )
+        )
+
+        user = await stamped_auth_service.authenticate_request(request, MagicMock())
 
         assert user.uid == "user-123"
         assert user.user_id == "user-123"
         assert user.email == "user-123@g8e.local"
         assert user.organization_id == "org-456"
         assert user.cli_session_id == "cli-session-789"
-        assert user.web_session_id is None
+        assert user.web_session_id == "web-1"
         assert user.auth_method == AuthMethod.PROXY
 
     @pytest.mark.asyncio
-    async def test_proxy_auth_extracts_web_session_id(self, auth_service):
-        request = MagicMock(spec=Request)
-        request.headers = {
-            GATEWAY_BROWSER_PROXY_HEADER: GATEWAY_BROWSER_PROXY_VALUE,
-            X_PROXY_USER_ID: "user-123",
-            X_PROXY_USER_EMAIL: "user-123@g8e.local",
-            X_PROXY_WEB_SESSION_ID: "web-session-abc",
-        }
-        request.state = MagicMock()
-        request.state.g8e_context = None
+    async def test_signed_proxy_auth_ignores_unsigned_session_headers(self, stamped_auth_service, gateway_key):
+        headers = stamped_headers(gateway_key)
+        headers[WEB_SESSION_ID] = "web-forged"
+        headers[CLI_SESSION_ID] = "cli-forged"
 
-        settings = MagicMock()
-        user = await auth_service.authenticate_request(request, settings)
+        user = await stamped_auth_service.authenticate_request(make_request(headers), MagicMock())
 
-        assert user.uid == "user-123"
+        assert user.web_session_id == "web-1"
         assert user.cli_session_id is None
-        assert user.web_session_id == "web-session-abc"
-        assert user.auth_method == AuthMethod.PROXY
 
     @pytest.mark.asyncio
-    async def test_proxy_auth_missing_gateway_stamp_fails(self, auth_service):
-        request = MagicMock(spec=Request)
-        request.headers = {
-            X_PROXY_USER_ID: "user-123",
-            X_PROXY_USER_EMAIL: "user-123@g8e.local",
-        }
-        request.state = MagicMock()
+    async def test_proxy_headers_without_a_signature_are_rejected(self, stamped_auth_service):
+        request = make_request({X_PROXY_USER_ID: "user-123", X_PROXY_USER_EMAIL: "user-123@g8e.local"})
 
-        settings = MagicMock()
-        with pytest.raises(AuthenticationError, match="Gateway browser proxy stamp"):
-            await auth_service.authenticate_request(request, settings)
+        with pytest.raises(AuthenticationError, match="Gateway signature"):
+            await stamped_auth_service.authenticate_request(request, MagicMock())
 
     @pytest.mark.asyncio
-    async def test_proxy_auth_missing_email_fails(self, auth_service):
-        request = MagicMock(spec=Request)
-        request.headers = {
-            X_PROXY_USER_ID: "user-123",
-        }
-        request.state = MagicMock()
+    async def test_static_marker_header_no_longer_authenticates(self, stamped_auth_service):
+        request = make_request(
+            {
+                "X-G8E-Gateway-Browser-Proxy": "1",
+                X_PROXY_USER_ID: "user-123",
+                X_PROXY_USER_EMAIL: "user-123@g8e.local",
+            }
+        )
 
-        settings = MagicMock()
+        with pytest.raises(AuthenticationError, match="Gateway signature"):
+            await stamped_auth_service.authenticate_request(request, MagicMock())
+
+    @pytest.mark.asyncio
+    async def test_tampered_body_is_rejected(self, stamped_auth_service, gateway_key):
+        request = make_request(stamped_headers(gateway_key), body=b'{"message":"different"}')
+
+        with pytest.raises(AuthenticationError, match="Gateway signature"):
+            await stamped_auth_service.authenticate_request(request, MagicMock())
+
+    @pytest.mark.asyncio
+    async def test_replayed_stamp_is_rejected_on_a_second_request(self, stamped_auth_service, gateway_key):
+        headers = stamped_headers(gateway_key)
+        await stamped_auth_service.authenticate_request(make_request(headers), MagicMock())
+
+        with pytest.raises(AuthenticationError, match="Gateway signature"):
+            await stamped_auth_service.authenticate_request(make_request(headers), MagicMock())
+
+    @pytest.mark.asyncio
+    async def test_one_request_can_be_authenticated_by_several_dependencies(
+        self, stamped_auth_service, gateway_key
+    ):
+        request = make_request(stamped_headers(gateway_key))
+
+        first = await stamped_auth_service.authenticate_request(request, MagicMock())
+        second = await stamped_auth_service.authenticate_request(request, MagicMock())
+
+        assert first.user_id == second.user_id == "user-1"
+
+    @pytest.mark.asyncio
+    async def test_without_a_verifier_proxy_identity_is_rejected(self, auth_service, gateway_key):
+        with pytest.raises(AuthenticationError, match="Gateway signature"):
+            await auth_service.authenticate_request(
+                make_request(stamped_headers(gateway_key)), MagicMock()
+            )
+
+    @pytest.mark.asyncio
+    async def test_proxy_auth_missing_email_fails(self, stamped_auth_service):
+        request = make_request({X_PROXY_USER_ID: "user-123"})
+
         with pytest.raises(AuthenticationError):
-            await auth_service.authenticate_request(request, settings)
+            await stamped_auth_service.authenticate_request(request, MagicMock())
 
 
 class TestAuthServiceOperatorSessionAuthentication:

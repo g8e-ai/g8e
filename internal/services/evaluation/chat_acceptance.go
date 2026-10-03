@@ -9,6 +9,8 @@ package evaluation
 
 import (
 	"fmt"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // ChatAcceptanceCaseID names one Phase 1A chat-path vertical gate.
@@ -121,7 +123,7 @@ func ValidateChatAcceptanceCase(caseID ChatAcceptanceCaseID, req ChatProbeReques
 		return validateHomogeneousRoleTrace(trace, req.DesignatedModelRole, modelCalls)
 	case ChatAcceptanceCaseBackgroundBarrier:
 		if !hasAgentRole(modelCalls, "codex") {
-			return fmt.Errorf("evaluation: background barrier missing codex model call")
+			return fmt.Errorf("evaluation: background barrier codex model call: %w", constants.ErrMissingRequiredField)
 		}
 		return nil
 	default:

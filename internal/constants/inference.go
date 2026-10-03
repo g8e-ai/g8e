@@ -7,18 +7,24 @@
 
 package constants
 
+import "time"
+
 // EvaluationAppName is the platform-enrolled application identity the eval
 // runner presents for governed inference dispatch. It enrolls once through
 // `g8e auth enroll app` and never borrows another component's credentials.
 const EvaluationAppName = "g8e-eval"
 
-// Default Ollama model names for the Inference Operator chat tiers, and the
-// default keep-alive. These are the single source for `g8e operator start`
-// when the matching --inference-* flag is not given; deployments that need
-// different models pass the flags explicitly.
+// InferenceDefaultKeepAlive is the Ollama keep-alive `g8e operator start` uses
+// when --inference-keep-alive is not given. The Inference Operator configures
+// no models: each governed request carries the model the user chose.
+const InferenceDefaultKeepAlive = "-1"
+
+// ModelProvenanceAttestationPreflightTimeout bounds the synchronous storage
+// attestation probe: the Gateway waits this long for the Provenance Operator
+// to hash the model's blobs, and the CLI client allows this plus
+// ModelProvenanceAttestationPreflightClientMargin. Hashing a multi-gigabyte
+// model over a mounted filesystem takes well over 30 seconds.
 const (
-	InferenceDefaultPrimaryModel   = "gemma4:e4b"
-	InferenceDefaultAssistantModel = "qwen3:1.7b"
-	InferenceDefaultLiteModel      = "qwen3.5:0.8b"
-	InferenceDefaultKeepAlive      = "-1"
+	ModelProvenanceAttestationPreflightTimeout      = 5 * time.Minute
+	ModelProvenanceAttestationPreflightClientMargin = 15 * time.Second
 )

@@ -78,12 +78,11 @@ class TestG8eeSettingsOverlayIntegration:
                     "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                     "default_ttl": 3600,
                 },
-                "auth": {"session_encryption_key": "test-key", "internal_api_key": None},
+                "auth": {"internal_api_key": None},
                 "component_urls": {
                     "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}",
                     "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                 },
-                "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
@@ -150,12 +149,11 @@ class TestG8eeSettingsOverlayIntegration:
                     "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                     "default_ttl": 3600,
                 },
-                "auth": {"session_encryption_key": None, "internal_api_key": None},
+                "auth": {"internal_api_key": None},
                 "component_urls": {
                     "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}",
                     "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                 },
-                "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
@@ -218,46 +216,6 @@ class TestG8eeSettingsOverlayIntegration:
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
 
-    async def test_overlay_carries_auditor_hmac_key_from_app_settings(self, cache_service):
-        """Overlay must propagate ``auditor_hmac_key`` from the platform DB
-        document onto local bootstrap settings when the bootstrap volume
-        has not surfaced one (e.g. on a g8ee process that started before
-        the SecretManager ran). The auditor commit step in GDD §14.4
-        relies on this key being present in the platform settings object
-        the AI pipeline reads from."""
-        hmac_key = "f" * 64
-        platform_data = {
-            "id": "platform-doc-id",
-            "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
-                "host": "0.0.0.0",
-                "log_level": "INFO",
-                "enable_logging": True,
-                "auth": {
-                    "session_encryption_key": None,
-                    "auditor_hmac_key": hmac_key,
-                    "internal_api_key": None,
-                },
-            },
-            "created_at": "2026-01-01T00:00:00Z",
-            "updated_at": "2026-01-01T00:00:00Z",
-        }
-        cache_service.get_document_with_cache.return_value = platform_data
-
-        # Stub bootstrap so it reports no on-disk secrets; this isolates the
-        # platform-DB-overlay path described in the docstring.
-        bootstrap = MagicMock()
-        bootstrap.load_session_encryption_key.return_value = None
-        bootstrap.load_auditor_hmac_key.return_value = None
-        bootstrap.load_ca_cert_path.return_value = None
-        settings_service = SettingsService(
-            cache_aside_service=cache_service,
-            bootstrap_service=bootstrap,
-        )
-
-        settings = await settings_service.get_app_settings()
-
-        assert settings.auth.auditor_hmac_key == hmac_key
 
     async def test_get_user_settings_falls_back_to_empty_llm_when_missing(
         self, settings_service, cache_service
@@ -296,12 +254,11 @@ class TestG8eeSettingsOverlayIntegration:
                     "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                     "default_ttl": 3600,
                 },
-                "auth": {"session_encryption_key": None, "internal_api_key": None},
+                "auth": {"internal_api_key": None},
                 "component_urls": {
                     "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}",
                     "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                 },
-                "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
@@ -347,7 +304,6 @@ class TestG8eeSettingsOverlayIntegration:
         object - without ``overlay_platform_data`` having to hand-list it.
 
         This locks in the structural fix for a recurring class of bugs where
-        adding a new auth token (e.g. ``auditor_hmac_key``) silently failed
         to flow through the platform-bootstrap overlay because the merge
         enumerated fields by hand. The test iterates ``AuthSettings.model_fields``
         directly so any newly added auth field is automatically covered.
@@ -376,12 +332,9 @@ class TestG8eeSettingsOverlayIntegration:
         # Stub bootstrap so no on-disk secrets exist; the platform DB doc is
         # the only source of auth values, exercising the overlay path.
         bootstrap = MagicMock()
-        bootstrap.load_session_encryption_key.return_value = None
-        bootstrap.load_auditor_hmac_key.return_value = None
         bootstrap.load_ca_cert_path.return_value = None
         settings_service = SettingsService(
             cache_aside_service=cache_service,
-            bootstrap_service=bootstrap,
         )
 
         settings = await settings_service.get_app_settings()
@@ -393,39 +346,6 @@ class TestG8eeSettingsOverlayIntegration:
                 f"to hand-listed fields."
             )
 
-    async def test_overlay_auth_bootstrap_value_wins_over_platform(self, cache_service):
-        """When the bootstrap volume already provided an auth secret, the
-        platform DB value must NOT clobber it. This guards the precedence
-        contract that the model-driven auth merge has to preserve."""
-        bootstrap_key = "bootstrap-key-value"
-        platform_data = {
-            "id": "platform-doc-id",
-            "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
-                "host": "0.0.0.0",
-                "log_level": "INFO",
-                "enable_logging": True,
-                "auth": {
-                    "session_encryption_key": "platform-key-should-be-ignored",
-                },
-            },
-            "created_at": "2026-01-01T00:00:00Z",
-            "updated_at": "2026-01-01T00:00:00Z",
-        }
-        cache_service.get_document_with_cache.return_value = platform_data
-
-        bootstrap = MagicMock()
-        bootstrap.load_session_encryption_key.return_value = bootstrap_key
-        bootstrap.load_auditor_hmac_key.return_value = None
-        bootstrap.load_ca_cert_path.return_value = None
-        settings_service = SettingsService(
-            cache_aside_service=cache_service,
-            bootstrap_service=bootstrap,
-        )
-
-        settings = await settings_service.get_app_settings()
-
-        assert settings.auth.session_encryption_key == bootstrap_key
 
     async def test_overlay_propagates_auto_approve_from_platform(self, cache_service):
         """Platform-level auto_approve settings must flow through overlay_platform_data.
@@ -443,7 +363,6 @@ class TestG8eeSettingsOverlayIntegration:
                 "log_level": "INFO",
                 "enable_logging": True,
                 "auth": {
-                    "session_encryption_key": None,
                     "internal_api_key": None,
                 },
                 "command_validation": {
@@ -464,12 +383,9 @@ class TestG8eeSettingsOverlayIntegration:
         cache_service.get_document_with_cache.return_value = platform_data
 
         bootstrap = MagicMock()
-        bootstrap.load_session_encryption_key.return_value = None
-        bootstrap.load_auditor_hmac_key.return_value = None
         bootstrap.load_ca_cert_path.return_value = None
         settings_service = SettingsService(
             cache_aside_service=cache_service,
-            bootstrap_service=bootstrap,
         )
 
         settings = await settings_service.get_app_settings()
@@ -503,7 +419,6 @@ class TestG8eeSettingsOverlayIntegration:
                 "log_level": "INFO",
                 "enable_logging": True,
                 "auth": {
-                    "session_encryption_key": None,
                     "internal_api_key": None,
                 },
                 "command_validation": {
@@ -557,7 +472,6 @@ class TestG8eeSettingsOverlayIntegration:
                 "log_level": "INFO",
                 "enable_logging": True,
                 "auth": {
-                    "session_encryption_key": None,
                     "internal_api_key": None,
                 },
                 "command_validation": {

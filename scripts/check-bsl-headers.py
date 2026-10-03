@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -74,7 +75,13 @@ def has_bsl_header(text: str) -> bool:
 
 def find_missing(root: Path) -> list[Path]:
     missing: list[Path] = []
-    for path in sorted(root.rglob("*")):
+    candidate_paths: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+        for filename in filenames:
+            candidate_paths.append(Path(dirpath) / filename)
+
+    for path in sorted(candidate_paths):
         if not path.is_file() or not should_check(path):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")

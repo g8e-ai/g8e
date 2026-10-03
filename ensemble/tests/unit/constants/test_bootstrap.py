@@ -44,20 +44,17 @@ def test_configure_bootstrap_reloads_paths(tmp_path: Path):
     configure_bootstrap(BootstrapSettings(runtime_dir=str(runtime_dir)))
 
     assert paths_module.PATHS["infra"]["pki_dir"] == str(runtime_dir / "pki")
-    assert paths_module.PATHS["infra"]["secrets_dir"] == str(runtime_dir / "secrets")
 
 
-def test_explicit_secrets_and_pki_dirs_override_runtime_dir(tmp_path: Path):
+def test_explicit_pki_dir_overrides_runtime_dir(tmp_path: Path):
     configure_bootstrap(
         BootstrapSettings(
             runtime_dir=str(tmp_path / "runtime"),
             pki_dir=str(tmp_path / "pki"),
-            secrets_dir=str(tmp_path / "operator-state" / "secrets"),
         )
     )
 
     assert paths_module.PATHS["infra"]["pki_dir"] == str(tmp_path / "pki")
-    assert paths_module.PATHS["infra"]["secrets_dir"] == str(tmp_path / "operator-state" / "secrets")
 
 
 def test_explicit_ca_cert_path_overrides_default(tmp_path: Path):
@@ -86,5 +83,4 @@ def test_retired_platform_env_vars_are_ignored(monkeypatch: pytest.MonkeyPatch, 
     infra = paths_module.PATHS["infra"]
 
     assert "from-env" not in infra["pki_dir"]
-    assert "from-env" not in infra["secrets_dir"]
     assert "from-env" not in infra["ca_cert_path"]

@@ -84,6 +84,18 @@ enum EvaluationUsageAvailability {
   EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE = 2;
 }
 
+// EvaluationCallClassification names the chain a model call belongs to.
+// SCORED_CHAIN calls answer the scored turn and are the only calls summed into
+// scored aggregates. POST_TURN calls (for example the memory write) run after
+// the turn. GRADER calls judge the turn and are recorded in grader_calls, never
+// in model_inferences.
+enum EvaluationCallClassification {
+  EVALUATION_CALL_CLASSIFICATION_UNSPECIFIED = 0;
+  EVALUATION_CALL_CLASSIFICATION_SCORED_CHAIN = 1;
+  EVALUATION_CALL_CLASSIFICATION_POST_TURN = 2;
+  EVALUATION_CALL_CLASSIFICATION_GRADER = 3;
+}
+
 enum EvaluationPolicyDecisionOutcome {
   EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED = 0;
   EVALUATION_POLICY_DECISION_OUTCOME_ALLOW = 1;
@@ -454,6 +466,13 @@ message EvaluationCampaignSpec {
   EvaluationGovernancePosture governance_posture = 8;
   uint32 scenario_count = 9;
   uint32 repetition_count = 10;
+  // platform_release is the g8e build version that froze the campaign. It is
+  // part of campaign_digest, so a campaign cannot be re-labeled. Empty only
+  // on campaigns frozen before v2.3.0; their release is an operator-asserted
+  // tag held outside the digest.
+  string platform_release = 11;
+  // source_revision is the source commit of the build that froze the campaign.
+  string source_revision = 12;
 }
 
 // EvaluationScenarioCatalog is the immutable 25-scenario private catalog.
@@ -768,6 +787,9 @@ message ModelInferenceRecord {
   // from "not reported".
   repeated string tools_declared = 33;
   bool tools_declared_reported = 34;
+  // Which chain the call belongs to, stated by the producer at the call site.
+  // Aggregators select scored calls by this field, never by persona or span.
+  EvaluationCallClassification classification = 35;
 }
 
 message ToolDecisionRecord {
@@ -833,12 +855,25 @@ message GovernedActionBinding {
   g8e.compliance.v1.ComplianceEvidenceReference effect_observation_ref = 9;
 }
 
+// GradeBasis states what a deterministic grade measures, so each independent
+// observation counts once in the verdict and the pass rate. OBSERVATION is a
+// fact read from the trace or workspace and is the only counted basis. DERIVED
+// is a boolean function of other grades in the same result. STRUCTURAL is a
+// harness precondition, not a model result. UNSPECIFIED is never valid.
+enum GradeBasis {
+  GRADE_BASIS_UNSPECIFIED = 0;
+  GRADE_BASIS_OBSERVATION = 1;
+  GRADE_BASIS_DERIVED = 2;
+  GRADE_BASIS_STRUCTURAL = 3;
+}
+
 message DeterministicGrade {
   string grade_id = 1;
   string criterion_id = 2;
   EvaluationVerdictStatus status = 3;
   double score = 4;
   string detail = 5;
+  GradeBasis basis = 6;
 }
 
 message SemanticGrade {
@@ -985,6 +1020,14 @@ message EvaluationVerifiedPopulation {
 
 // Public projection records expose only disclosure-approved fields.
 
+// The release measured by a campaign is independent of verifier provenance.
+enum PublicReleaseBasis {
+  PUBLIC_RELEASE_BASIS_UNSPECIFIED = 0;
+  PUBLIC_RELEASE_BASIS_RECORDED = 1; // Bound into campaign_digest at creation.
+  PUBLIC_RELEASE_BASIS_ASSERTED = 2; // Operator tag outside campaign_digest.
+  PUBLIC_RELEASE_BASIS_UNKNOWN = 3; // Historical campaign without a release tag.
+}
+
 message PublicCampaignIdentity {
   string campaign_id = 1;
   string campaign_digest = 2;
@@ -993,6 +1036,9 @@ message PublicCampaignIdentity {
   string catalog_digest = 5;
   string model_registry_digest = 6;
   EvaluationLane lane = 7;
+  string release = 8;
+  PublicReleaseBasis release_basis = 9;
+  string source_revision = 10;
 }
 
 message PublicModelVariantIdentity {
@@ -1015,6 +1061,9 @@ message PublicAssignmentLifecycleRecord {
   EvaluationAssignmentLifecycleStatus lifecycle_status = 9;
   uint32 repetition = 10;
   google.protobuf.Timestamp observed_at = 11;
+  string release = 12;
+  PublicReleaseBasis release_basis = 13;
+  string source_revision = 14;
 }
 
 message PublicModelCallSummary {
@@ -1183,4 +1232,43 @@ message PublicAssignmentResultProjection {
   uint32 guided_retry_count = 21;
   string failure_reason = 22;
   repeated string tools_declared = 23;
+  string release = 24;
+  PublicReleaseBasis release_basis = 25;
+  string source_revision = 26;
+}
+
+// One scalar in a live event's metric_delta. value is presence-tracked so a
+// measured zero (a failed assignment's binary pass) is emitted, never dropped;
+// exactly one of value and unavailable_reason is set.
+message PublicLiveMetricValue {
+  optional double value = 1;
+  string unavailable_reason = 2;
+}
+
+// One disclosure-safe Explorer live event. kind, quality_state,
+// lifecycle_status, and role carry the Explorer view contract's closed string
+// vocabularies, which publicdisclosure.ValidatePublicFeedRecord enforces.
+// completed and total are presence-tracked: zero progress is a value, and a
+// producer that leaves either unset is rejected at validation.
+message PublicLiveEvent {
+  string schema_version = 1;
+  string kind = 2;
+  string dataset_id = 3;
+  string quality_state = 4;
+  string observed_at = 5;
+  string source_revision_label = 6;
+  string release = 7;
+  PublicReleaseBasis release_basis = 8;
+  string source_revision = 9;
+  string event_id = 10;
+  string run_id = 11;
+  string assignment_id = 12;
+  string variant_id = 13;
+  string role = 14;
+  string lifecycle_status = 15;
+  optional uint32 completed = 16;
+  optional uint32 total = 17;
+  string stage_label = 18;
+  string task_id = 19;
+  map<string, PublicLiveMetricValue> metric_delta = 20;
 }

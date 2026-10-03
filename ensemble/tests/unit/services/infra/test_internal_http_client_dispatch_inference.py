@@ -33,6 +33,7 @@ from g8e.operator.v1.operator_pb2 import (
     INFERENCE_MESSAGE_ROLE_USER,
     MODEL_ROLE_ASSISTANT,
     RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED,
+    InferenceDispatchStreamFrame,
 )
 
 pytestmark = pytest.mark.unit
@@ -211,3 +212,35 @@ async def test_dispatch_inference_ensures_mtls_before_request():
     await client.dispatch_inference(_dispatch_request())
 
     client._ensure_mtls.assert_called_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("trailing_newline", [True, False])
+async def test_dispatch_stream_preserves_utf8_split_across_network_chunks(trailing_newline):
+    client = _make_client()
+    expected = InferenceDispatchStreamFrame()
+    expected.progress.parts.add().text = "café 日本語 🙂"
+    wire = json_format.MessageToJson(expected, ensure_ascii=False, indent=None).encode("utf-8")
+    if trailing_newline:
+        wire += b"\n"
+
+    async def stream(*args, **kwargs):
+        for byte in wire:
+            yield bytes([byte])
+
+    client._http.stream = stream
+    frames = [frame async for frame in client.dispatch_inference_stream(_dispatch_request())]
+    assert frames == [expected]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wire", [b'{"progress":', b'{"progress":"\xc3'])
+async def test_dispatch_stream_wraps_malformed_final_frame(wire):
+    client = _make_client()
+
+    async def stream(*args, **kwargs):
+        yield wire
+
+    client._http.stream = stream
+    with pytest.raises(NetworkError):
+        _ = [frame async for frame in client.dispatch_inference_stream(_dispatch_request())]

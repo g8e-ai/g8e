@@ -197,6 +197,7 @@ func TestFailureSentences_FormatsExactSentences(t *testing.T) {
 			"model_calls": []any{
 				EvaluationTrace{
 					"agent_role":     "primary",
+					"classification": "scored_chain",
 					"tools_declared": []any{"recursive_grep_search"},
 				},
 			},

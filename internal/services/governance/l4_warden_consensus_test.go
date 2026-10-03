@@ -346,6 +346,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 			NewL1Doctrine(),
 			constants.AllActionTypes,
 			nil,
+			&testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1"}},
 		)
 	}
 

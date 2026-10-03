@@ -596,7 +596,7 @@ execution topology in sequence. This is a governed smoke path, not a scored camp
 			} else {
 				formations = args
 				if len(formations) == 0 {
-					return fmt.Errorf("evaluation: formations smoke: specify formation IDs or use --all")
+					return fmt.Errorf("evaluation: formations smoke: specify formation IDs or use --all: %w", constants.ErrEvaluationFlagsInvalid)
 				}
 			}
 
@@ -667,7 +667,7 @@ execution topology in sequence. This is a governed smoke path, not a scored camp
 			}
 
 			if hasFailure {
-				return fmt.Errorf("evaluation: formations smoke: one or more formations failed")
+				return fmt.Errorf("evaluation: formations smoke: one or more formations failed: %w", constants.ErrEvaluationFormationSmokeFailed)
 			}
 			return nil
 		},

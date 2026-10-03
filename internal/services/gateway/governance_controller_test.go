@@ -211,6 +211,81 @@ func TestVerifyEnvelopeIdentityBinding_FileEditEmptyIdentity_FailsClosed(t *test
 	require.True(t, errors.Is(err, constants.ErrIdentityBindingFailed), "expected ErrIdentityBindingFailed, got %v", err)
 }
 
+// appMutationEnvelopeBytes builds a DOCUMENT_UPDATE envelope with no operator
+// claims, acting as the given app from the given source component.
+func appMutationEnvelopeBytes(t *testing.T, actingAppID string, source commonv1.Component) []byte {
+	t.Helper()
+	b, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+		ActionType:      string(constants.ActionTypeDocumentUpdate),
+		ActingAppId:     actingAppID,
+		SourceComponent: source,
+	})
+	require.NoError(t, err)
+	return b
+}
+
+// TestVerifyEnvelopeIdentityBinding_AppMutationEmptyOperatorFields covers the
+// app-only write path (g8ee persisting platform records for a browser session,
+// where no Operator is in the loop): admitted only when acting_app_id matches
+// the mTLS app SPIFFE ID from an AGENT/CLIENT source.
+func TestVerifyEnvelopeIdentityBinding_AppMutationEmptyOperatorFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		spiffe  string
+		env     []byte
+		allowed bool
+	}{
+		{"app match agent", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "g8ee", commonv1.Component_COMPONENT_AGENT), true},
+		{"app match client", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "g8ee", commonv1.Component_COMPONENT_CLIENT), true},
+		{"app mismatch", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "other-app", commonv1.Component_COMPONENT_AGENT), false},
+		{"no acting app", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "", commonv1.Component_COMPONENT_AGENT), false},
+		{"non-app source", "spiffe://g8e.local/app/g8ee", appMutationEnvelopeBytes(t, "g8ee", commonv1.Component_COMPONENT_G8EO), false},
+		{"operator cert for app claim", "spiffe://g8e.local/operator/org-1/op-1/sess-1", appMutationEnvelopeBytes(t, "g8ee", commonv1.Component_COMPONENT_AGENT), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := verifyEnvelopeIdentityBinding(identityBindingRequest(t, tc.spiffe), tc.env)
+			if tc.allowed {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, constants.ErrIdentityBindingFailed)
+		})
+	}
+}
+
+// TestVerifyEnvelopeIdentityBinding_AppBindingAdmitsOnlyDocumentMutations
+// pins the scope of the app-only binding (INV-AUTH-ID-05). The Gateway-mode
+// command service also registers EXECUTE_BASH, FILE_EDIT, RESTORE_FILE, and
+// other Operator actions, so an app certificate with no Operator claim must
+// reach only the platform-record writes it exists for: DOCUMENT_UPDATE and
+// DOCUMENT_DELETE. Every other mutation still needs an Operator binding.
+func TestVerifyEnvelopeIdentityBinding_AppBindingAdmitsOnlyDocumentMutations(t *testing.T) {
+	appEnvelope := func(actionType constants.ActionType) []byte {
+		b, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+			ActionType:      string(actionType),
+			ActingAppId:     "g8ee",
+			SourceComponent: commonv1.Component_COMPONENT_AGENT,
+		})
+		require.NoError(t, err)
+		return b
+	}
+	for _, actionType := range constants.AllActionTypes {
+		if !actionType.IsMutation() {
+			continue
+		}
+		t.Run(string(actionType), func(t *testing.T) {
+			err := verifyEnvelopeIdentityBinding(identityBindingRequest(t, "spiffe://g8e.local/app/g8ee"), appEnvelope(actionType))
+			switch actionType {
+			case constants.ActionTypeDocumentUpdate, constants.ActionTypeDocumentDelete:
+				require.NoError(t, err)
+			default:
+				require.ErrorIs(t, err, constants.ErrIdentityBindingFailed)
+			}
+		})
+	}
+}
+
 // TestVerifyEnvelopeIdentityBinding_MutationWithMatchingOperatorCert_Admitted
 // is the positive counterpart: a DOCUMENT_UPDATE envelope carrying both
 // operator_id and operator_session_id, presented via a matching operator
@@ -222,13 +297,48 @@ func TestVerifyEnvelopeIdentityBinding_MutationWithMatchingOperatorCert_Admitted
 	require.NoError(t, err)
 }
 
-// TestVerifyEnvelopeIdentityBinding_NonMutationReadEmptyIdentity_PassesThrough
-// asserts the fail-closed path applies only to mutations. A non-mutation read
-// (FS_READ) with empty identity fields still returns nil so the downstream
-// processor validates it — preserving the prior behavior for reads.
-func TestVerifyEnvelopeIdentityBinding_NonMutationReadEmptyIdentity_PassesThrough(t *testing.T) {
-	req := identityBindingRequest(t, "spiffe://g8e.local/operator/org-1/op-1/sess-1")
-	env := mutationEnvelopeBytes(t, constants.ActionTypeFsRead, "", "", commonv1.Component_COMPONENT_G8EO)
-	err := verifyEnvelopeIdentityBinding(req, env)
-	require.NoError(t, err, "non-mutation read with empty identity should pass through to processor")
+// TestVerifyEnvelopeIdentityBinding_UnboundEnvelopeAdmitsOnlyAppRecordWrites
+// pins the fail-closed rule for envelopes that claim no Operator binding.
+// Direct submission executes on the Gateway's own command service, which also
+// registers host reads (FS_READ, FS_LIST, FS_GREP, FETCH_LOGS, ...); an
+// unbound read would otherwise read the Gateway container. MCP and platform
+// enrollment reach the processor in-process, not through this endpoint, so the
+// only unbound envelope this boundary admits is the app record write of
+// INV-AUTH-ID-05, whichever certificate presents it. A CLI session claim alone
+// is not an Operator binding.
+func TestVerifyEnvelopeIdentityBinding_UnboundEnvelopeAdmitsOnlyAppRecordWrites(t *testing.T) {
+	unboundEnvelope := func(actionType constants.ActionType, cliSessionID, actingAppID string, source commonv1.Component) []byte {
+		b, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+			ActionType:      string(actionType),
+			CliSessionId:    cliSessionID,
+			ActingAppId:     actingAppID,
+			SourceComponent: source,
+		})
+		require.NoError(t, err)
+		return b
+	}
+	presenters := []struct {
+		name         string
+		spiffe       string
+		cliSessionID string
+		actingAppID  string
+		source       commonv1.Component
+		appPath      bool
+	}{
+		{"operator cert", "spiffe://g8e.local/operator/org-1/op-1/sess-1", "", "", commonv1.Component_COMPONENT_G8EO, false},
+		{"cli session cert", "spiffe://g8e.local/cli/user-1/cli-sess-1", "cli-sess-1", "", commonv1.Component_COMPONENT_CLIENT, false},
+		{"app cert", "spiffe://g8e.local/app/g8ee", "", "g8ee", commonv1.Component_COMPONENT_AGENT, true},
+	}
+	for _, p := range presenters {
+		for _, actionType := range constants.AllActionTypes {
+			t.Run(p.name+"/"+string(actionType), func(t *testing.T) {
+				err := verifyEnvelopeIdentityBinding(identityBindingRequest(t, p.spiffe), unboundEnvelope(actionType, p.cliSessionID, p.actingAppID, p.source))
+				if p.appPath && isAppRecordWrite(actionType) {
+					require.NoError(t, err)
+					return
+				}
+				require.ErrorIs(t, err, constants.ErrIdentityBindingFailed)
+			})
+		}
+	}
 }

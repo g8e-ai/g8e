@@ -328,20 +328,18 @@ func TestFSFileChecksumTool_Execute_RelativePath(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	// Change to temp directory to test relative paths
 	tmpDir := testutil.TempDir(t)
-	originalDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(originalDir)
-
-	err = os.Chdir(tmpDir)
+	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	testFile := "relative.txt"
-	err = os.WriteFile(testFile, []byte("test"), 0644)
+	absFile := filepath.Join(tmpDir, "relative.txt")
+	err = os.WriteFile(absFile, []byte("test"), 0644)
 	require.NoError(t, err)
 
-	req := FSFileChecksumRequest{FilePath: testFile}
+	relPath, err := filepath.Rel(cwd, absFile)
+	require.NoError(t, err)
+
+	req := FSFileChecksumRequest{FilePath: relPath}
 	args, err := json.Marshal(req)
 	require.NoError(t, err)
 
@@ -352,7 +350,7 @@ func TestFSFileChecksumTool_Execute_RelativePath(t *testing.T) {
 	err = json.Unmarshal([]byte(result.Content[0].Text), &checksumResult)
 	require.NoError(t, err)
 
-	require.Equal(t, testFile, checksumResult.FilePath)
+	require.Equal(t, relPath, checksumResult.FilePath)
 }
 
 func TestFSFileChecksumTool_Execute_MultipleFiles(t *testing.T) {

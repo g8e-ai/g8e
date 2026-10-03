@@ -431,8 +431,13 @@ class HTTPClient:
 
     @staticmethod
     def _counts_toward_circuit_breaker(status_code: int, retry_config: RetryConfig) -> bool:
-        """Statuses we already retried are transient outages, not persistent failures."""
-        return status_code not in retry_config.retry_status_codes
+        """Count only server-side failures that were not already retried.
+
+        A 4xx is a deterministic answer from a healthy server (for example a 403
+        policy rejection); it says nothing about endpoint health. Statuses we
+        already retried are transient outages, not persistent failures.
+        """
+        return status_code >= 500 and status_code not in retry_config.retry_status_codes
 
     async def request(
         self,
@@ -487,7 +492,7 @@ class HTTPClient:
 
         if not await circuit_breaker.allow_request():
             error = NetworkError(
-                message=f"Circuit breaker is open for {circuit_breaker.endpoint}, failing fast",
+                message=f"Circuit breaker is open for {circuit_breaker.endpoint}",
                 code=ErrorCode.API_CONNECTION_ERROR,
                 severity=ErrorSeverity.HIGH,
                 details={
@@ -829,7 +834,7 @@ class HTTPClient:
         circuit_breaker = self._get_circuit_breaker(final_url)
         if not await circuit_breaker.allow_request():
             raise NetworkError(
-                message=f"Circuit breaker is open for {circuit_breaker.endpoint}, failing fast",
+                message=f"Circuit breaker is open for {circuit_breaker.endpoint}",
                 code=ErrorCode.API_CONNECTION_ERROR,
                 details={"url": final_url, "method": method},
                 retry_suggested=False,

@@ -22,8 +22,7 @@ var Ports = struct {
 // Go-only constants (not mirrored in protocol/constants/ports.json) because
 // they are deployment defaults, not protocol-level ports.
 const (
-	EnsembleDefaultPort  = 8000
-	DashboardDefaultPort = 3000
+	EnsembleDefaultPort = 8000
 
 	// PublicSpectatorPrivatePort is the loopback-only authenticated ingest
 	// listener for the gateway-owned public mirror.

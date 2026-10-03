@@ -57,7 +57,7 @@ See the [protocol overview](../protocol/README.md#workload-identities) for the i
 
 ## Python
 
-`python/constants_example.py` shows constants and headers usage; `python/models_example.py` shows model instantiation, serialization, validation, and observe producer request construction. Observe API read models, producer request types, observe event payloads, and public spectator feed schemas are defined in `protocol/models/observe_api.json`, `protocol/models/observe_event_payloads.json`, and `protocol/models/public_feed.json`. Browser integration uses the audited `g8e-adapter` contract pack under `dashboard/g8e-adapter/contract-pack/`.
+`python/constants_example.py` shows constants and headers usage; `python/models_example.py` shows model instantiation, serialization, validation, and observe producer request construction. Observe API read models, producer request types, observe event payloads, and public spectator feed schemas are defined in `protocol/models/observe_api.json`, `protocol/models/observe_event_payloads.json`, and `protocol/models/public_feed.json`. Browser integration uses the audited `g8e-adapter` contract pack under `g8e-adapter/contract-pack/`.
 
 ## Eval
 

@@ -5,7 +5,7 @@ title: g8e Protocol
 # g8e Protocol
 
 Last Updated: 2026-09-29
-Version: v2.2.7
+Version: v2.3.0
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -452,7 +452,7 @@ mTLS producer endpoints under `/api/v1/observe/producer/` accept typed state fro
 
 Dashboard and campaign SSE payloads for agent, run, and eval state are defined in `protocol/models/observe_event_payloads.json`, including live campaign events such as `ai.eval.cycle.started`, `ai.eval.assignment.completed`, and `ai.eval.publication.completed`. The event dashboard classification inventory in `protocol/constants/event_dashboard_classification.json` records which families are `produced_to_sse`, `governed_record_only`, `mixed`, or `unsupported`.
 
-See [SSE Architecture](../../docs/architecture/sse.md), [Dashboard Architecture](../../docs/architecture/dashboard.md), and [Build an Observe Frontend](../../docs/guides/build_observe_frontend.md).
+See [SSE Architecture](../../docs/architecture/sse.md), [Console Architecture](../../docs/architecture/console.md), and [Build an Observe Frontend](../../docs/guides/build_observe_frontend.md).
 
 ### Public Spectator Feed
 

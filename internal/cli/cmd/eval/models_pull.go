@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -59,7 +60,7 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector = selector.withArgs(args)
 			if formations && selector.IsSet() {
-				return fmt.Errorf("evaluation: models pull: --formations cannot be combined with a model selector")
+				return fmt.Errorf("evaluation: models pull: --formations cannot be combined with a model selector: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			cfg, _, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {

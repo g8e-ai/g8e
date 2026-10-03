@@ -9,13 +9,17 @@ package models
 
 import (
 	"encoding/json"
+	"os/user"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/uuid"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
 // OperatorRegistrationRequest is the inbound body for /api/pki/device-enroll (CSR-based enrollment).
@@ -160,6 +164,24 @@ type OperatorStatusUpdatedPayload struct {
 	Name       string                   `json:"name,omitempty"`
 	Timestamp  time.Time                `json:"timestamp"`
 }
+
+// ApprovalsChangedPayload is the SSE payload of g8e.v1.platform.approvals.changed.
+// It announces that the owner's pending approval set (suspended L3 transactions
+// or platform enrollment requests) changed; it carries no approval content.
+// The approval stores stay the source of truth: consumers re-list on receipt.
+type ApprovalsChangedPayload struct {
+	Subject   ApprovalsChangedSubject `json:"subject"`
+	Timestamp time.Time               `json:"timestamp"`
+}
+
+// ApprovalsChangedSubject names which pending list an ApprovalsChangedPayload
+// invalidates.
+type ApprovalsChangedSubject string
+
+const (
+	ApprovalsChangedTransactions ApprovalsChangedSubject = "transactions"
+	ApprovalsChangedEnrollments  ApprovalsChangedSubject = "enrollments"
+)
 
 type TerminateOperatorRequest struct {
 	OperatorID string `json:"operator_id"`
@@ -420,6 +442,36 @@ type LocalOSUser struct {
 	UID      string `json:"uid,omitempty"`
 	GID      string `json:"gid,omitempty"`
 	SID      string `json:"sid,omitempty"`
+}
+
+// CurrentLocalOSUser retrieves the current OS user information.
+func CurrentLocalOSUser() *LocalOSUser {
+	currentUser, err := user.Current()
+	if err != nil {
+		return nil
+	}
+
+	var domain, username string
+	parts := strings.SplitN(currentUser.Username, "\\", 2)
+	if len(parts) == 2 {
+		domain = parts[0]
+		username = parts[1]
+	} else {
+		username = currentUser.Username
+	}
+
+	var sid string
+	if runtime.GOOS == "windows" {
+		sid = currentUser.Uid
+	}
+
+	return &LocalOSUser{
+		Domain:   domain,
+		Username: username,
+		UID:      currentUser.Uid,
+		GID:      currentUser.Gid,
+		SID:      sid,
+	}
 }
 
 // User represents a platform user with passkey credentials.

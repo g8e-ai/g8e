@@ -256,102 +256,102 @@ func TestDataControllerHandleKV(t *testing.T) {
 	dataController, infra := setupTestDataController(t)
 
 	t.Run("PUT and GET", func(t *testing.T) {
-		reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/kv/k1", bytes.NewReader(mustDocJSON(t, models.KVSetRequest{Value: "g8e"})))
+		reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/kv/g8e:cache:doc:cases:case-1", bytes.NewReader(mustDocJSON(t, models.KVSetRequest{Value: "g8e"})))
 		rrPut := httptest.NewRecorder()
-		dataController.handleKV(rrPut, reqPut)
+		dataController.handleKV(rrPut, reqPut.WithContext(context.WithValue(reqPut.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusOK, rrPut.Code)
 
-		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/kv/k1", nil)
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/kv/g8e:cache:doc:cases:case-1", nil)
 		rrGet := httptest.NewRecorder()
-		dataController.handleKV(rrGet, reqGet)
+		dataController.handleKV(rrGet, reqGet.WithContext(context.WithValue(reqGet.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusOK, rrGet.Code)
 		assert.Contains(t, rrGet.Body.String(), `"value":"g8e"`)
 	})
 
 	t.Run("TTL and Expire", func(t *testing.T) {
-		reqTtl := httptest.NewRequest(http.MethodGet, "/api/v1/kv/k1/_ttl", nil)
+		reqTtl := httptest.NewRequest(http.MethodGet, "/api/v1/kv/g8e:cache:doc:cases:case-1/_ttl", nil)
 		rrTtl := httptest.NewRecorder()
-		dataController.handleKV(rrTtl, reqTtl)
+		dataController.handleKV(rrTtl, reqTtl.WithContext(context.WithValue(reqTtl.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusOK, rrTtl.Code)
 
-		reqExp := httptest.NewRequest(http.MethodPut, "/api/v1/kv/k1/_expire", bytes.NewReader(mustDocJSON(t, models.KVExpireRequest{TTL: 100})))
+		reqExp := httptest.NewRequest(http.MethodPut, "/api/v1/kv/g8e:cache:doc:cases:case-1/_expire", bytes.NewReader(mustDocJSON(t, models.KVExpireRequest{TTL: 100})))
 		rrExp := httptest.NewRecorder()
-		dataController.handleKV(rrExp, reqExp)
+		dataController.handleKV(rrExp, reqExp.WithContext(context.WithValue(reqExp.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusOK, rrExp.Code)
 	})
 
 	t.Run("Scan and DeletePattern", func(t *testing.T) {
-		infra.KVStore.KVSet("pref:1", "a", 0)
-		infra.KVStore.KVSet("pref:2", "b", 0)
+		infra.KVStore.KVSet("g8e:cache:query:cases:1", "a", 0)
+		infra.KVStore.KVSet("g8e:cache:query:cases:2", "b", 0)
 
-		reqScan := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_scan", bytes.NewReader(mustDocJSON(t, models.KVPatternRequest{Pattern: "pref:*"})))
+		reqScan := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_scan", bytes.NewReader(mustDocJSON(t, models.KVPatternRequest{Pattern: "g8e:cache:query:cases:*"})))
 		rrScan := httptest.NewRecorder()
-		dataController.handleKV(rrScan, reqScan)
+		dataController.handleKV(rrScan, reqScan.WithContext(context.WithValue(reqScan.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusOK, rrScan.Code)
-		assert.Contains(t, rrScan.Body.String(), "pref:1")
+		assert.Contains(t, rrScan.Body.String(), "g8e:cache:query:cases:1")
 
-		reqDel := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_delete_pattern", bytes.NewReader(mustDocJSON(t, models.KVPatternRequest{Pattern: "pref:*"})))
+		reqDel := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_delete_pattern", bytes.NewReader(mustDocJSON(t, models.KVPatternRequest{Pattern: "g8e:cache:query:cases:*"})))
 		rrDel := httptest.NewRecorder()
-		dataController.handleKV(rrDel, reqDel)
+		dataController.handleKV(rrDel, reqDel.WithContext(context.WithValue(reqDel.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusOK, rrDel.Code)
 		assert.Contains(t, rrDel.Body.String(), `"deleted":2`)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/kv/k1", strings.NewReader("{invalid-json}"))
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/kv/g8e:cache:doc:cases:case-1", strings.NewReader("{invalid-json}"))
 		rr := httptest.NewRecorder()
-		dataController.handleKV(rr, req)
+		dataController.handleKV(rr, req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("TTL required for expire", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/kv/k1/_expire", strings.NewReader(`{"ttl":0}`))
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/kv/g8e:cache:doc:cases:case-1/_expire", strings.NewReader(`{"ttl":0}`))
 		rr := httptest.NewRecorder()
-		dataController.handleKV(rr, req)
+		dataController.handleKV(rr, req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("KV Keys", func(t *testing.T) {
-		infra.KVStore.KVSet("key1", "val1", 0)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_keys", strings.NewReader(`{"pattern":"key*"}`))
+		infra.KVStore.KVSet("g8e:cache:doc:cases:key1", "val1", 0)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_keys", strings.NewReader(`{"pattern":"g8e:cache:doc:cases:key*"}`))
 		rr := httptest.NewRecorder()
-		dataController.handleKVKeys(rr, req)
+		dataController.handleKVKeys(rr, req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Contains(t, rr.Body.String(), "key1")
+		assert.Contains(t, rr.Body.String(), "g8e:cache:doc:cases:key1")
 	})
 
 	t.Run("KV Keys Invalid JSON", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_keys", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
-		dataController.handleKVKeys(rr, req)
+		dataController.handleKVKeys(rr, req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("KV Scan Invalid JSON", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_scan", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
-		dataController.handleKVScan(rr, req)
+		dataController.handleKVScan(rr, req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("KV Delete Pattern Missing Pattern", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_delete_pattern", strings.NewReader(`{}`))
 		rr := httptest.NewRecorder()
-		dataController.handleKVDeletePattern(rr, req)
+		dataController.handleKVDeletePattern(rr, req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("KV Delete Pattern Invalid JSON", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_delete_pattern", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
-		dataController.handleKVDeletePattern(rr, req)
+		dataController.handleKVDeletePattern(rr, req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/k1", strings.NewReader(`{"value":"x"}`))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/g8e:cache:doc:cases:case-1", strings.NewReader(`{"value":"x"}`))
 		rr := httptest.NewRecorder()
-		dataController.handleKV(rr, req)
+		dataController.handleKV(rr, req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, "cache-app")))
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 }

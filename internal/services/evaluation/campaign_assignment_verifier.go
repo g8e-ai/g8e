@@ -95,10 +95,10 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 	}
 	if len(req.Trace) == 0 {
 		failures = append(failures, "imported assignment trace is required for verification")
-	} else if err := validateImportedTraceDigest(req.Trace); err != nil {
+	} else if err := validateTraceDigest(req.Trace); err != nil {
 		failures = append(failures, "trace digest validation failed: "+err.Error())
 	} else if err := verifyImportedEvidence(req.Assignment, req.Result, req.Trace); err != nil {
-		failures = append(failures, "imported evidence does not match trace: "+err.Error())
+		failures = append(failures, err.Error())
 	}
 	skipGradeRecomputation := !CatalogRecomputesGrades(req.CatalogRef)
 	if !skipGradeRecomputation {
@@ -122,6 +122,8 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 			} else {
 				if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputed.DeterministicGrades) {
 					failures = append(failures, "stored deterministic grades do not match recomputation")
+				} else {
+					failures = append(failures, verifyStoredScores(req.Result)...)
 				}
 				// The outcome and both failure sentences are published, so they
 				// are recomputed from the digest-bound trace like the grades.
@@ -181,9 +183,28 @@ func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(ctx context.C
 			failures = append(failures, "formation grade recomputation failed: "+err.Error())
 		} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputedGrades) {
 			failures = append(failures, "stored deterministic grades do not match formation recomputation")
+		} else if _, gradedFromTraces := formationEvidenceRoleTraces(req.FormationRunEvidence); gradedFromTraces {
+			// A direct-dispatch run derives its grades from the lifecycle and
+			// stores no scores, so only a trace-graded run has scores to verify.
+			failures = append(failures, verifyStoredScores(req.Result)...)
 		}
 	}
 	return failures
+}
+
+// verifyStoredScores is the verifier's metric recomputation: the stored
+// `task_score`, `deterministic_pass_rate`, `triage_ok`, and tier scores must be
+// what the one tally yields from the grades that just verified.
+func verifyStoredScores(result *evalv1.EvaluationAssignmentResult) []string {
+	matches, err := storedScoresMatchGrades(result)
+	switch {
+	case err != nil:
+		return []string{"decomposed score recomputation failed: " + err.Error()}
+	case !matches:
+		return []string{"stored decomposed scores do not match recomputation"}
+	default:
+		return nil
+	}
 }
 
 func finalizeCampaignVerificationReport(report *evalv1.EvaluationVerificationReport, failures []string) *evalv1.EvaluationVerificationReport {
@@ -195,13 +216,6 @@ func finalizeCampaignVerificationReport(report *evalv1.EvaluationVerificationRep
 	}
 	report.Status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
 	return report
-}
-
-func validateImportedTraceDigest(trace EvaluationTrace) error {
-	if err := validateTraceDigest(trace); err != nil {
-		return err
-	}
-	return nil
 }
 
 func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, trace EvaluationTrace) error {
@@ -220,40 +234,40 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 		return err
 	}
 	if len(expectedInferences) != len(result.GetModelInferences()) {
-		return fmt.Errorf("model inference count mismatch")
+		return fmt.Errorf("model inference count mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	for index, expected := range expectedInferences {
 		actual := result.GetModelInferences()[index]
 		expected.InferenceRecordId = actual.GetInferenceRecordId()
 		if !proto.Equal(expected, actual) {
-			return fmt.Errorf("model inference %d mismatch", index)
+			return fmt.Errorf("model inference %d mismatch: %w", index, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	actualSpan := result.GetScoredInferenceSpanNanos()
 	if (expectedSpan == nil) != (result.ScoredInferenceSpanNanos == nil) || expectedSpan != nil && *expectedSpan != actualSpan {
-		return fmt.Errorf("scored inference span mismatch")
+		return fmt.Errorf("scored inference span mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	expectedPolicy, err := policyDecisionRecordsFromTrace(assignment, trace)
 	if err != nil {
 		return err
 	}
 	if len(expectedPolicy) != len(result.GetPolicyDecisions()) {
-		return fmt.Errorf("policy decision records mismatch")
+		return fmt.Errorf("policy decision records mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	for index, expected := range expectedPolicy {
 		if !proto.Equal(expected, result.GetPolicyDecisions()[index]) {
-			return fmt.Errorf("policy decision record %d mismatch", index)
+			return fmt.Errorf("policy decision record %d mismatch: %w", index, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	expectedToolCalls := toolCallRecordsFromTrace(assignment, trace, func(prefix string) string { return prefix })
 	if len(expectedToolCalls) != len(result.GetToolCalls()) {
-		return fmt.Errorf("tool call records mismatch")
+		return fmt.Errorf("tool call records mismatch: %w", constants.ErrEvaluationEvidenceTraceMismatch)
 	}
 	for index, expected := range expectedToolCalls {
 		actual := result.GetToolCalls()[index]
 		expected.CallId = actual.GetCallId()
 		if !proto.Equal(expected, actual) {
-			return fmt.Errorf("tool call record %d mismatch", index)
+			return fmt.Errorf("tool call record %d mismatch: %w", index, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	for field, expected := range map[string]bool{
@@ -274,7 +288,7 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 			actual = result.GetPolicyDecisionsCaptured()
 		}
 		if actual != expected {
-			return fmt.Errorf("%s capture presence mismatch", field)
+			return fmt.Errorf("%s capture presence mismatch: %w", field, constants.ErrEvaluationEvidenceTraceMismatch)
 		}
 	}
 	return nil
@@ -283,7 +297,7 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 func designatedRoleFromAssignment(assignment *evalv1.EvaluationAssignment) (string, error) {
 	homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous)
 	if !ok || homogeneous.Homogeneous == nil {
-		return "", fmt.Errorf("evaluation: designated role lookup: homogeneous target required")
+		return "", fmt.Errorf("evaluation: designated role lookup: homogeneous target: %w", constants.ErrEvaluationTargetKindMismatch)
 	}
 	return modelCampaignRoleLabel(homogeneous.Homogeneous.GetDesignatedRole())
 }

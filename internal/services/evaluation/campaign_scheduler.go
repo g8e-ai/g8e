@@ -129,7 +129,7 @@ func buildHomogeneousAssignment(campaignID, runID string, scenario *evalv1.Evalu
 	}
 	clonedVariant, ok := proto.Clone(variant).(*evalv1.ModelVariant)
 	if !ok {
-		return nil, fmt.Errorf("evaluation: build homogeneous assignment: invalid variant clone")
+		return nil, fmt.Errorf("evaluation: build homogeneous assignment: variant clone: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	assignment := &evalv1.EvaluationAssignment{
 		SchemaVersion: CampaignSchemaVersion,

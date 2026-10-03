@@ -3,8 +3,8 @@ doc_id: sse
 title: SSE Streaming
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-02
+version: v2.3.0
 owners:
   - internal/services/gateway/sse_controller.go
   - internal/services/gateway/sse_event_service.go
@@ -15,7 +15,7 @@ related:
   - docs/architecture/auth.md
   - docs/architecture/network.md
   - docs/ensemble/sse.md
-  - docs/dashboard/sse.md
+  - docs/architecture/console.md
   - docs/guides/build_observe_frontend.md
 when_to_read: Understanding SSE event flow, integration patterns for telemetry producers, gateway stream architecture, or client reconnection behavior.
 do_not_use_for:
@@ -52,8 +52,8 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | --- | --- |
 | INV-SSE-EVT-01 | Every SSE event is keyed by two routing dimensions: `user_id` (ownership) and exactly one of `web_session_id` or `cli_session_id` (delivery target). A bare `user_id` is not a valid route. The Gateway does not provide user-wide fan-out. |
 | INV-SSE-EVT-02 | The event registration in `protocol/constants/events.json` is the authority for whether an event is published, persisted, or ephemeral. Only events with `transport: "sse"` and a listed producer are accepted; unregistered, non-SSE, or wrong-producer events are rejected at the Gateway boundary with 422. |
-| INV-SSE-EVT-03 | SSE frames carry `id:` and `data:` fields; no `event:` field is emitted. Consumers read the application event type from the nested `event.type` value in the JSON data payload. Heartbeats are SSE comments and do not advance the event cursor. |
-| INV-SSE-EVT-04 | Ephemeral events are delivered via live streams but not persisted to the SSE store; consumers cannot later recover them via replay. Persist-before-publish ordering ensures rejected events never reach consumers. |
+| INV-SSE-EVT-03 | SSE frames carry a `data:` field and, for persisted events, an `id:` field; no `event:` field is emitted. Ephemeral events have no durable row and therefore no `id:` line. Consumers read the application event type from the nested `event.type` value in the JSON data payload. Heartbeats are SSE comments and do not advance the event cursor. |
+| INV-SSE-EVT-04 | Ephemeral events are delivered via live streams but not persisted to the SSE store; consumers cannot later recover them via replay. Persist-before-publish ordering ensures rejected events never reach consumers. A live ephemeral event is emitted without an `id:` line because an `id:` of 0 would rewind the client's `Last-Event-ID` cursor, and it never advances the stream's replay-deduplication cursor. A consumer MUST NOT infer an ephemeral event's identity from the browser's `lastEventId`, which still holds the previous frame's value; the console resolves every event the registry marks ephemeral to ID 0. |
 
 ### Producer authentication (`INV-SSE-PROD`)
 
@@ -80,13 +80,17 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-SSE-DEL-03 | Each live stream maintains a 100-event in-memory queue. If a consumer falls behind, the Gateway drops the oldest queued event; the consumer can recover via cursor-based replay on reconnect. A dropped event is not automatically backfilled on the same connection. |
 | INV-SSE-DEL-04 | The stream heartbeats every 30 seconds with an SSE comment; response headers are flushed immediately so clients may signal readiness before the first event. The maintenance loop (every 30 seconds) removes events older than one hour; this history window supports short reconnect windows and is not a durable audit record. |
 
+### Approvals invalidation event
+
+`g8e.v1.platform.approvals.changed` is an ephemeral, Gateway-produced invalidation: its payload names only the changed list (`transactions` or `enrollments`) and a timestamp. The Gateway publishes it to the owning user's unexpired web sessions whenever a suspended L3 transaction is stored, approved, deleted, or swept as expired, and whenever a platform enrollment request is created, decided, or expires. Transaction events go to the transaction's user; enrollment events go to the platform owner (the first user), the only reviewer. It is published through `SSEEventPublisher.PublishEphemeral`, which appends no row, so it carries no `id:` and cannot be replayed; consumers re-list on receipt and on every stream (re)open. A failed push is logged and never fails the mutation. Owners: `internal/services/gateway/approvals_events.go`.
+
 ## Owned surfaces
 
 | Claim | Path | Verify |
-| --- | --- |
+| --- | --- | --- |
 | SSE push handler | `internal/services/gateway/sse_controller.go:handleInternalSSEPush` | Validates producer auth, event registry, target ownership, persist-before-publish |
 | SSE poll handler | `internal/services/gateway/sse_controller.go:handleInternalSSEEvents` | Builds route from auth context, enforces user/session ownership, returns rows since ID |
-| SSE stream handler | `internal/services/gateway/sse_controller.go:handleInternalSSEStream` | Replay + live delivery, dedup by row ID, 30s heartbeat, 100-event backpressure queue |
+| SSE stream handler | `internal/services/gateway/sse_controller.go:handleInternalSSEStream` | Replay + live delivery, dedup by row ID, `id:`-less ephemeral frames, 30s heartbeat, 100-event backpressure queue (`./g8e test unit --pkg ./internal/services/gateway --run HandleInternalSSEStream`) |
 | SSE event storage | `internal/services/gateway/sse_event_service.go` | Append, list, cleanup (every 30s, remove >1h old), wipe, count |
 | Observe producers | `internal/services/gateway/observe_producer_controller.go` | Agent-state and run-state endpoints, persist-before-publish, auth from mTLS cert |
 | Event registry | `protocol/constants/events.json` | Authority for event registration, producer list, persistence mode |
@@ -125,7 +129,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 3. Stream begins with response headers immediately flushed.
 4. Replay phase: Gateway sends up to 1,000 stored events (one per frame) or a `truncated` sentinel if limit is hit.
 5. Live phase: Gateway sends new events as they arrive, with 30s heartbeat comments.
-6. Deduplication: Events emitted during replay are suppressed when they appear on the live channel.
+6. Deduplication: Persisted events emitted during replay are suppressed when they appear on the live channel. Ephemeral events carry no ID and are always delivered.
 7. Reconnection: Client sends `Last-Event-ID: <id>` header; Gateway resumes from that cursor.
 8. On disconnect: Client may reconnect and recover missed events; dropped oldest events can be recovered via DB replay.
 
@@ -159,7 +163,7 @@ if _, err := s.stores.SSEStore.SSEEventsCleanup(time.Hour); err != nil {
 - [Authentication and Authorization](./auth.md): mTLS identities, CLI sessions, web sessions, and app policies.
 - [Network Architecture](./network.md): TLS listeners, PKI, and cross-component transport.
 - [Ensemble SSE](../ensemble/sse.md): First-party event production and application event types.
-- [Dashboard SSE](../dashboard/sse.md): Browser connection lifecycle and current integration constraints.
+- [Console Architecture](console.md#event-delivery): Browser connection lifecycle, reconnect, and event routing.
 - [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): The audited g8e-adapter and contract pack for generated observe frontends.
 - [Public Spectator Architecture and Threat Model](./public_spectator.md): The separate anonymous public-mirror SSE relay and outbound-only export architecture.
 - [AI Agents and the Governance Boundary](./agents.md): Distinction between event telemetry and governed execution.

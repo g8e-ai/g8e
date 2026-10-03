@@ -72,6 +72,12 @@ func New(docs Store, sessions SessionPersister) *Service {
 	return &Service{docs: docs, sessions: sessions}
 }
 
+// ExecutesFor admits only the Operator record owned by this substrate.
+// The pending record also executes bootstrap enrollment before a user claims it.
+func (s *Service) ExecutesFor(operatorID string) bool {
+	return s != nil && operatorID == string(constants.DocIDEmbeddedOperator)
+}
+
 func pendingDocument(now time.Time) *models.OperatorDocumentGo {
 	return &models.OperatorDocumentGo{
 		ID:           string(constants.DocIDEmbeddedOperator),

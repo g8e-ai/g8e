@@ -161,7 +161,6 @@ def _llm_settings_from_env():
 
     if not lite:
         lite = assistant
-    max_tokens_str = os.environ.get(EnvVar.TEST_LLM_MAX_TOKENS, "").strip() or None
 
     kwargs: dict = {
         "primary_provider": provider,
@@ -174,13 +173,6 @@ def _llm_settings_from_env():
         kwargs["assistant_model"] = assistant
     if lite:
         kwargs["lite_model"] = lite
-    if max_tokens_str:
-        try:
-            kwargs["llm_max_tokens"] = int(max_tokens_str)
-        except ValueError:
-            logger.warning(
-                "G8E_TEST_LLM_MAX_TOKENS=%s is not a valid int, ignoring", max_tokens_str
-            )
 
     _PROVIDER_KEY_FIELD = {
         LLMProvider.GEMINI: "gemini_api_key",
@@ -823,12 +815,9 @@ def provider_config():
     This follows the documented pattern in testing.md and provides
     a default configuration for isolated unit tests.
     """
-    from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
     from app.llm.llm_types import GenerateContentConfig
 
-    return GenerateContentConfig(
-        max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
-    )
+    return GenerateContentConfig(max_output_tokens=None)
 
 
 # ---------------------------------------------------------------------------

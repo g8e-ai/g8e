@@ -196,7 +196,6 @@ class TribunalInvoker:
             g8e_context=g8e_context,
             settings=request_settings,
             reputation_data_service=tool_executor.reputation_data_service,
-            auditor_hmac_key=tool_executor.auditor_hmac_key,
             ai_response_analyzer=tool_executor.ai_response_analyzer,
             investigation_state=investigation.current_state,
             investigation_context=investigation_context,

@@ -40,6 +40,7 @@ runs (g8e eval runs).`,
 		campaignsListCmd(deps),
 		campaignsShowCmd(deps),
 		campaignsCreateCmd(deps),
+		campaignsTagCmd(deps),
 		campaignsArchiveCmd(deps),
 		campaignsUnarchiveCmd(deps),
 	)
@@ -47,17 +48,22 @@ runs (g8e eval runs).`,
 }
 
 type campaignRowJSON struct {
-	CampaignID          string   `json:"campaign_id"`
-	Lane                string   `json:"lane"`
-	ModelCount          int      `json:"model_count"`
-	ScenarioCount       uint32   `json:"scenario_count"`
-	RepetitionCount     uint32   `json:"repetition_count"`
-	ModelRegistryDigest string   `json:"model_registry_digest"`
-	CatalogDigest       string   `json:"catalog_digest"`
-	StackCount          int      `json:"stack_count,omitempty"`
-	Archived            bool     `json:"archived"`
-	Status              string   `json:"status"`
-	RunIDs              []string `json:"run_ids"`
+	CampaignID          string `json:"campaign_id"`
+	Lane                string `json:"lane"`
+	ModelCount          int    `json:"model_count"`
+	ScenarioCount       uint32 `json:"scenario_count"`
+	RepetitionCount     uint32 `json:"repetition_count"`
+	ModelRegistryDigest string `json:"model_registry_digest"`
+	CatalogDigest       string `json:"catalog_digest"`
+	// Release is the platform release the campaign measured; ReleaseBasis says
+	// whether it was recorded at freeze (digest-bound), asserted by an operator,
+	// or is unknown.
+	Release      string   `json:"release,omitempty"`
+	ReleaseBasis string   `json:"release_basis"`
+	StackCount   int      `json:"stack_count,omitempty"`
+	Archived     bool     `json:"archived"`
+	Status       string   `json:"status"`
+	RunIDs       []string `json:"run_ids"`
 }
 
 type campaignListJSON struct {
@@ -157,6 +163,10 @@ Archived campaigns are hidden unless --archived is given.`,
 					if err != nil {
 						return fmt.Errorf("evaluation: campaigns list: %w", err)
 					}
+					release, err := src.store.LoadCampaignRelease(cmd.Context(), entry.CampaignID)
+					if err != nil {
+						return fmt.Errorf("evaluation: campaigns list: %w", err)
+					}
 					status := latestRunStatus(runRows)
 					if statusFilter != "" && status != statusFilter {
 						continue
@@ -169,6 +179,8 @@ Archived campaigns are hidden unless --archived is given.`,
 						RepetitionCount:     entry.RepetitionCount,
 						ModelRegistryDigest: entry.ModelRegistryDigest,
 						CatalogDigest:       entry.CatalogDigest,
+						Release:             release.Release,
+						ReleaseBasis:        string(release.Basis),
 						StackCount:          stacks,
 						Archived:            src.archived,
 						Status:              status,
@@ -186,8 +198,8 @@ Archived campaigns are hidden unless --archived is given.`,
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			_, _ = fmt.Fprintln(w, "CAMPAIGN\tLANE\tMODELS\tSCENARIOS\tREPS\tRUNS\tSTATUS\tARCHIVED")
 			for _, row := range rows {
-				_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%d\t%s\t%t\n",
-					row.CampaignID, row.Lane, row.ModelCount, row.ScenarioCount, row.RepetitionCount, len(row.RunIDs), row.Status, row.Archived)
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%s\t%t\n",
+					row.CampaignID, releaseLabel(row.Release, row.ReleaseBasis), row.Lane, row.ModelCount, row.ScenarioCount, row.RepetitionCount, len(row.RunIDs), row.Status, row.Archived)
 			}
 			return w.Flush()
 		},
@@ -232,6 +244,10 @@ func campaignsShowCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaigns show: %w", err)
 			}
+			release, err := store.LoadCampaignRelease(cmd.Context(), campaignID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaigns show: %w", err)
+			}
 			catalog, err := store.LoadScenarioCatalog(cmd.Context(), campaignID)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaigns show: %w", err)
@@ -245,6 +261,8 @@ func campaignsShowCmd(deps nativeEvalDeps) *cobra.Command {
 					RepetitionCount:     spec.GetRepetitionCount(),
 					ModelRegistryDigest: spec.GetModelRegistryDigest(),
 					CatalogDigest:       spec.GetCatalogDigest(),
+					Release:             release.Release,
+					ReleaseBasis:        string(release.Basis),
 					StackCount:          stacks,
 					Archived:            archived,
 					Status:              latestRunStatus(runRows),
@@ -266,8 +284,8 @@ func campaignsShowCmd(deps nativeEvalDeps) *cobra.Command {
 				return output.WriteJSON(cmd.OutOrStdout(), payload)
 			}
 			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(out, "Campaign: %s\nLane: %s\nSuite: %s\nModels: %d (%s)\nScenarios: %d\nRepetitions: %d\nCells per run: %d\nModel registry digest: %s\nCatalog digest: %s\nStatus: %s\nArchived: %t\n",
-				campaignID, lane, payload.Suite, payload.ModelCount, strings.Join(payload.Models, ", "), payload.ScenarioCount, payload.RepetitionCount,
+			_, _ = fmt.Fprintf(out, "Campaign: %s\nRelease: %s\nLane: %s\nSuite: %s\nModels: %d (%s)\nScenarios: %d\nRepetitions: %d\nCells per run: %d\nModel registry digest: %s\nCatalog digest: %s\nStatus: %s\nArchived: %t\n",
+				campaignID, releaseLabel(release.Release, string(release.Basis)), lane, payload.Suite, payload.ModelCount, strings.Join(payload.Models, ", "), payload.ScenarioCount, payload.RepetitionCount,
 				payload.CellsPer, payload.ModelRegistryDigest, payload.CatalogDigest, payload.Status, archived)
 			if stacks > 0 {
 				_, _ = fmt.Fprintf(out, "Stacks: %d\n", stacks)
@@ -325,6 +343,13 @@ type campaignCreateSpec struct {
 	FormationIDs []string
 	// SuiteID names the suite the campaign freezes; empty means the default suite.
 	SuiteID string
+	// VersionOnCatalogChange freezes a new campaign, under CampaignID plus the
+	// catalog digest, when CampaignID already froze a different catalog. Without
+	// it that case is a frozen-spec conflict. The resolved ID is on the result's
+	// Spec.
+	VersionOnCatalogChange bool
+	// Platform is the build identity the campaign freezes under.
+	Platform evaluation.PlatformIdentity
 }
 
 type campaignCreateResult struct {
@@ -342,6 +367,21 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 	if !complianceevidence.ValidPathElement(spec.CampaignID) {
 		return nil, fmt.Errorf("evaluation: campaigns create: invalid campaign ID %q: %w", spec.CampaignID, constants.ErrMissingRequiredField)
 	}
+	store := evaluation.NewStore(fileSvc)
+	suiteID := spec.SuiteID
+	if suiteID == "" {
+		suiteID = evaluation.DefaultSuiteID
+	}
+	catalog, artifacts, err := store.LoadSuiteCatalog(ctx, suiteID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
+	}
+	if spec.VersionOnCatalogChange {
+		spec.CampaignID, err = evaluation.ResolveCampaignIDForCatalog(ctx, store, spec.CampaignID, catalog.GetCatalogDigest())
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
+		}
+	}
 	if _, archived, err := evaluation.LocateCampaign(ctx, fileSvc, spec.CampaignID); err == nil && archived {
 		return nil, fmt.Errorf("evaluation: campaigns create: campaign %q: %w", spec.CampaignID, constants.ErrEvaluationArchived)
 	} else if err != nil && !errors.Is(err, constants.ErrNotFound) {
@@ -352,15 +392,6 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
 	if err := evaluation.ValidateModelRegistry(freeze); err != nil {
-		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
-	}
-	store := evaluation.NewStore(fileSvc)
-	suiteID := spec.SuiteID
-	if suiteID == "" {
-		suiteID = evaluation.DefaultSuiteID
-	}
-	catalog, artifacts, err := store.LoadSuiteCatalog(ctx, suiteID)
-	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
 	var stackSet *evaluation.HeterogeneousStackSet
@@ -384,6 +415,7 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 		Inventory:         freeze,
 		ScenarioArtifacts: artifacts,
 		RepetitionCount:   spec.Repetitions,
+		Platform:          spec.Platform,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
@@ -459,14 +491,14 @@ Examples:
 			selector = selector.withArgs(args[1:])
 			formationCampaign := allFormations || len(formations) > 0
 			if allFormations && len(formations) > 0 {
-				return fmt.Errorf("evaluation: campaigns create: --formations and --all-formations are mutually exclusive")
+				return fmt.Errorf("evaluation: campaigns create: --formations and --all-formations are mutually exclusive: %w", constants.ErrEvaluationFlagsInvalid)
 			}
 			if formationCampaign && selector.IsSet() {
 				msg := fmt.Sprintf("evaluation: campaigns create: formations take no model selector, but got %s", selector.describe())
 				if len(selector.IDs) > 0 {
 					msg += "; if you meant to pass multiple --formations, separate them with a comma (--formations a,b) or repeat the flag (--formations a --formations b) — space-separated values after a flag are parsed as extra positional arguments"
 				}
-				return errors.New(msg)
+				return fmt.Errorf("%s: %w", msg, constants.ErrEvaluationFlagsInvalid)
 			}
 			if !formationCampaign && !selector.IsSet() {
 				return fmt.Errorf("evaluation: campaigns create: name models, pass --family, --max-params, or --all, or use --formations or --all-formations: %w", constants.ErrEvaluationSelectionEmpty)
@@ -482,7 +514,7 @@ Examples:
 			if len(registry) == 0 {
 				return fmt.Errorf("evaluation: campaigns create: the model registry is empty (run `g8e eval models freeze` or `g8e eval models import`): %w", constants.ErrEvaluationSelectionEmpty)
 			}
-			create := campaignCreateSpec{CampaignID: campaignID, Repetitions: reps, SuiteID: suite}
+			create := campaignCreateSpec{CampaignID: campaignID, Repetitions: reps, SuiteID: suite, Platform: platformIdentity(cmd)}
 			if formationCampaign {
 				create.Formations = true
 				create.FormationIDs = formations
@@ -533,4 +565,64 @@ Examples:
 	cmd.Flags().BoolVar(&allFormations, "all-formations", false, "Evaluate every formation in the catalog")
 	selector.bindFlags(cmd)
 	return cmd
+}
+
+// releaseLabel renders a campaign's release with how it is known: a recorded
+// release is digest-bound, an asserted one is an operator tag.
+func releaseLabel(release, basis string) string {
+	if release == "" {
+		return string(evaluation.ReleaseBasisUnknown)
+	}
+	return release + " (" + basis + ")"
+}
+
+func campaignsTagCmd(deps nativeEvalDeps) *cobra.Command {
+	var release string
+	cmd := &cobra.Command{
+		Use:   "tag --release <vX.Y.Z> <campaign>...",
+		Short: "Assert the platform release of campaigns frozen before releases were recorded",
+		Long: `Campaigns frozen by v2.3.0 or later record the platform release in their
+digest. Older campaigns recorded none, so their release is unknown until an
+operator asserts it. The tag is stored beside the campaign, outside its
+digest, and is shown as "(asserted)" rather than "(recorded)".
+
+A campaign that recorded its release cannot be tagged: the recorded release is
+digest-bound. Re-tagging an asserted campaign replaces the earlier assertion.
+
+Examples:
+  g8e eval campaigns tag --release v2.2.7 eval-qwen eval-gemma`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(release) == "" {
+				return fmt.Errorf("evaluation: campaigns tag: --release is required: %w", constants.ErrEvaluationFlagsInvalid)
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			for _, campaignID := range args {
+				store, _, err := evaluation.LocateCampaign(cmd.Context(), fileSvc, campaignID)
+				if err != nil {
+					return fmt.Errorf("evaluation: campaigns tag: %w", err)
+				}
+				if err := store.TagCampaignRelease(cmd.Context(), campaignID, release, deps.now()); err != nil {
+					return fmt.Errorf("evaluation: campaigns tag: %w", err)
+				}
+				if !output.JSONEnabled(cmd) {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Tagged campaign %s as %s (asserted)\n", campaignID, release)
+				}
+			}
+			if output.JSONEnabled(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), campaignTagJSON{Release: release, Campaigns: args})
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&release, "release", "", "Platform release to assert, for example v2.2.7")
+	return cmd
+}
+
+type campaignTagJSON struct {
+	Release   string   `json:"release"`
+	Campaigns []string `json:"campaigns"`
 }

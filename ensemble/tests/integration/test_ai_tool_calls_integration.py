@@ -113,7 +113,6 @@ def tool_service(
         reputation_service=AsyncMock(),
         chat_task_manager=MagicMock(),
         ssh_inventory_service=MagicMock(),
-        stream_executor=MagicMock(),
         web_search_provider=mock_web_search_provider,
     )
 
@@ -1151,7 +1150,6 @@ class TestToolIntegration:
             OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
             OperatorToolName.GET_COMMAND_CONSTRAINTS,
             OperatorToolName.SSH_INVENTORY,
-            OperatorToolName.STREAM_OPERATOR,
         }
 
         # Add G8E_SEARCH_WEB if available

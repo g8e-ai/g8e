@@ -481,8 +481,7 @@ type UserSearchSettings struct {
 
 // UserEvalJudgeSettings is the eval_judge group of a user_settings document.
 type UserEvalJudgeSettings struct {
-	Model     string `json:"eval_judge_model,omitempty"`
-	MaxTokens int    `json:"eval_judge_max_tokens,omitempty"`
+	Model string `json:"eval_judge_model,omitempty"`
 }
 
 // UserCommandValidationSettings is the command_validation group of a user_settings document.

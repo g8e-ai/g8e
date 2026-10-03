@@ -12161,14 +12161,14 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x06format\x18\b \x01(\tR\x06format\x12#\n" +
 	"\rcontext_limit\x18\t \x01(\rR\fcontextLimit\x127\n" +
 	"\x17advertised_capabilities\x18\n" +
-	" \x03(\tR\x16advertisedCapabilities\"\x85\x02\n" +
+	" \x03(\tR\x16advertisedCapabilities\"\x9a\x02\n" +
 	"\x1aOllamaModelInventoryResult\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
 	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x12F\n" +
 	"\aentries\x18\x03 \x03(\v2,.g8e.operator.v1.ProviderModelInventoryEntryR\aentries\x12#\n" +
 	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x12\x1d\n" +
 	"\n" +
-	"error_type\x18\x05 \x01(\tR\terrorType\"B\n" +
+	"error_type\x18\x05 \x01(\tR\terrorTypeJ\x04\b\x06\x10\aR\rrole_bindings\"B\n" +
 	"\x1dOllamaModelResidencyRequested\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\"/\n" +
 	"\x19OllamaModelResidencyModel\x12\x12\n" +

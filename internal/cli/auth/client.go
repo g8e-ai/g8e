@@ -23,9 +23,7 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/user"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -141,32 +139,7 @@ func LoadClientAuthContext(fileSvc fs.RuntimeFileService, cfg *config.Config) (*
 
 // getLocalOSUser retrieves the current OS user information.
 func getLocalOSUser() *models.LocalOSUser {
-	currentUser, err := user.Current()
-	if err != nil {
-		return nil
-	}
-
-	var domain, username string
-	parts := strings.SplitN(currentUser.Username, "\\", 2)
-	if len(parts) == 2 {
-		domain = parts[0]
-		username = parts[1]
-	} else {
-		username = currentUser.Username
-	}
-
-	var sid string
-	if runtime.GOOS == "windows" {
-		sid = currentUser.Uid
-	}
-
-	return &models.LocalOSUser{
-		Domain:   domain,
-		Username: username,
-		UID:      currentUser.Uid,
-		GID:      currentUser.Gid,
-		SID:      sid,
-	}
+	return models.CurrentLocalOSUser()
 }
 
 func GenerateCSR(commonName string) (csrPEM string, privKey *ecdsa.PrivateKey, err error) {

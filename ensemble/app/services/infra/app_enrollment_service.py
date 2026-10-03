@@ -12,7 +12,8 @@ This service runs at startup, before the operator clients connect, and
 establishes the ensemble's app identity (cert, key, trust bundle) stored in its
 own runtime directory.
 
-Mirrors ``dashboard/services/infra/app-enrollment-service.js``. The service
+Mirrors the operator's Go client
+(``internal/cli/serve/platform_enrollment_client.go``). The service
 implements the resumable nine-step platform enrollment sequence:
 
 1. Load and validate an installed identity (cert not expired, key matches,

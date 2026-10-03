@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
@@ -97,7 +96,7 @@ type operatorPendingState struct {
 
 // OperatorPlatformEnrollmentClient drives the owner-approved platform
 // enrollment protocol for the operator component. It mirrors the
-// dashboard JS client and the ensemble Python client: the same
+// ensemble Python client: the same
 // nine-step resumable sequence, the same canonical completion
 // transcript, and the same atomic credential writes.
 //
@@ -681,7 +680,7 @@ func buildOperatorCompletionTranscript(requestID, tokenHash, instanceID, operato
 // signTranscript signs the SHA-256 digest of the transcript with the
 // private key and returns the base64url-encoded ASN.1 DER signature.
 // Go's ecdsa.SignASN1 produces ASN.1 DER directly (no raw R||S
-// conversion needed, unlike WebCrypto in the dashboard JS client).
+// conversion needed, unlike WebCrypto's raw R||S signatures).
 func signTranscript(privateKey *ecdsa.PrivateKey, transcript []byte) (string, error) {
 	digest := sha256.Sum256(transcript)
 	signature, err := ecdsa.SignASN1(rand.Reader, privateKey, digest[:])
@@ -694,30 +693,9 @@ func signTranscript(privateKey *ecdsa.PrivateKey, transcript []byte) (string, er
 // --- CSR fingerprint ---
 
 // csrFingerprint computes the SHA-256 fingerprint of the public key in
-// a CSR PEM, matching the gateway's parsePlatformEnrollmentCSR: it
-// hashes the SubjectPublicKeyInfo DER bytes and returns hex.
+// a CSR PEM.
 func csrFingerprint(csrPEM string) (string, error) {
-	block, _ := pem.Decode([]byte(csrPEM))
-	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return "", fmt.Errorf("csr fingerprint: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	csr, err := x509.ParseCertificateRequest(block.Bytes)
-	if err != nil {
-		return "", fmt.Errorf("csr fingerprint: parse: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	if err := csr.CheckSignature(); err != nil {
-		return "", fmt.Errorf("csr fingerprint: verify signature: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	publicKey, ok := csr.PublicKey.(*ecdsa.PublicKey)
-	if !ok || publicKey.Curve != elliptic.P256() {
-		return "", constants.ErrPlatformEnrollmentUnsupportedKey
-	}
-	publicDER, err := x509.MarshalPKIXPublicKey(publicKey)
-	if err != nil {
-		return "", fmt.Errorf("csr fingerprint: marshal public key: %w", err)
-	}
-	digest := sha256.Sum256(publicDER)
-	return hex.EncodeToString(digest[:]), nil
+	return auth.CSRFingerprint(csrPEM)
 }
 
 // --- Helpers ---

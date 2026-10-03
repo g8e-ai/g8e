@@ -5,16 +5,8 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""
-KVCacheClient - HTTP-based Key-Value client for the Gateway.
+"""HTTP client for Gateway-owned document and query caches."""
 
-Talks to the Gateway via HTTP (KV store).
-API: get, set, delete, exists, expire, ttl, keys,
-get_json, set_json, delete_pattern, hget, hset, hgetall, hdel,
-rpush, lpush, lrange, llen, ltrim, incr, decr.
-"""
-
-import contextlib
 import json
 import logging
 from typing import Any
@@ -175,14 +167,15 @@ class KVCacheClient:
         elif px is not None:
             ttl = max(1, px // 1000)
         try:
-            await self._request("PUT", f"{GatewayAPIPaths.KV_PREFIX}{_encode_key(key)}", json={"value": value, "ttl": ttl})
+            await self._request(
+                "PUT",
+                f"{GatewayAPIPaths.KV_PREFIX}{_encode_key(key)}",
+                json={"value": value, "ttl": ttl},
+            )
             return True
         except Exception as e:
             logger.error("[KV-CACHE-CLIENT] set failed: %s", e)
             return False
-
-    async def setex(self, key: str, seconds: int, value: str) -> bool:
-        return await self.set(key, value, ex=seconds)
 
     async def delete(self, *keys: str) -> int:
         count = 0
@@ -194,38 +187,20 @@ class KVCacheClient:
                 pass
         return count
 
-    async def exists(self, *keys: str) -> int:
-        count = 0
-        for key in keys:
-            val = await self.get(key)
-            if val is not None:
-                count += 1
-        return count
-
-    async def expire(self, key: str, seconds: int) -> bool:
-        try:
-            await self._request("PUT", f"{GatewayAPIPaths.KV_PREFIX}{_encode_key(key)}/_expire", json={"ttl": seconds})
-            return True
-        except Exception:
-            return False
-
-    async def ttl(self, key: str) -> int:
-        try:
-            data = await self._request("GET", f"{GatewayAPIPaths.KV_PREFIX}{_encode_key(key)}/_ttl")
-            return data.get("ttl", -2)
-        except Exception:
-            return -2
-
     async def keys(self, pattern: str = "*") -> list[str]:
         try:
-            data = await self._request("POST", f"{GatewayAPIPaths.KV_PREFIX}_keys", json={"pattern": pattern})
+            data = await self._request(
+                "POST", f"{GatewayAPIPaths.KV_PREFIX}_keys", json={"pattern": pattern}
+            )
             return data.get("keys", [])
         except Exception:
             return []
 
     async def delete_pattern(self, pattern: str) -> int:
         try:
-            data = await self._request("POST", f"{GatewayAPIPaths.KV_PREFIX}_delete_pattern", json={"pattern": pattern})
+            data = await self._request(
+                "POST", f"{GatewayAPIPaths.KV_PREFIX}_delete_pattern", json={"pattern": pattern}
+            )
             return data.get("deleted", 0)
         except Exception:
             return 0
@@ -242,120 +217,3 @@ class KVCacheClient:
     async def set_json(self, key: str, value: Any, ex: int | None = None) -> bool:
         serialized = json.dumps(value)
         return await self.set(key, serialized, ex=ex)
-
-    async def hset(self, key: str, field: str, value: object) -> int:
-        existing = await self.get(key)
-        h: dict[str, object] = {}
-        if existing:
-            with contextlib.suppress(json.JSONDecodeError, TypeError):
-                h = json.loads(existing)
-        h[field] = value
-        await self.set(key, json.dumps(h))
-        return 1
-
-    async def hget(self, key: str, field: str) -> str | None:
-        existing = await self.get(key)
-        if not existing:
-            return None
-        try:
-            h = json.loads(existing)
-            val = h.get(field)
-            return str(val) if val is not None else None
-        except (json.JSONDecodeError, TypeError):
-            return None
-
-    async def hgetall(self, key: str) -> dict | None:
-        existing = await self.get(key)
-        if not existing:
-            return None
-        try:
-            return json.loads(existing)
-        except (json.JSONDecodeError, TypeError):
-            return None
-
-    async def hdel(self, key: str, *fields: str) -> int:
-        existing = await self.get(key)
-        if not existing:
-            return 0
-        try:
-            h = json.loads(existing)
-            count = 0
-            for f in fields:
-                if f in h:
-                    del h[f]
-                    count += 1
-            await self.set(key, json.dumps(h))
-            return count
-        except (json.JSONDecodeError, TypeError):
-            return 0
-
-    async def rpush(self, key: str, *values: object) -> int:
-        existing = await self.get(key)
-        lst: list[object] = []
-        if existing:
-            with contextlib.suppress(json.JSONDecodeError, TypeError):
-                lst = json.loads(existing)
-        lst.extend(values)
-        await self.set(key, json.dumps(lst))
-        return len(lst)
-
-    async def lpush(self, key: str, *values: object) -> int:
-        existing = await self.get(key)
-        lst: list[object] = []
-        if existing:
-            with contextlib.suppress(json.JSONDecodeError, TypeError):
-                lst = json.loads(existing)
-        for v in values:
-            lst.insert(0, v)
-        await self.set(key, json.dumps(lst))
-        return len(lst)
-
-    async def lrange(self, key: str, start: int, stop: int) -> list:
-        existing = await self.get(key)
-        if not existing:
-            return []
-        try:
-            lst = json.loads(existing)
-            if stop == -1:
-                return lst[start:]
-            return lst[start : stop + 1]
-        except (json.JSONDecodeError, TypeError):
-            return []
-
-    async def llen(self, key: str) -> int:
-        existing = await self.get(key)
-        if not existing:
-            return 0
-        try:
-            return len(json.loads(existing))
-        except (json.JSONDecodeError, TypeError):
-            return 0
-
-    async def ltrim(self, key: str, start: int, stop: int) -> bool:
-        existing = await self.get(key)
-        if not existing:
-            return True
-        try:
-            lst = json.loads(existing)
-            trimmed = lst[start:] if stop == -1 else lst[start : stop + 1]
-            await self.set(key, json.dumps(trimmed))
-        except (json.JSONDecodeError, TypeError):
-            pass
-        return True
-
-    async def incr(self, key: str, amount: int = 1) -> int:
-        if not self._healthy:
-            return 0
-        raw = await self.get(key)
-        current = int(raw) if raw is not None else 0
-        new_val = current + amount
-        await self.set(key, str(new_val))
-        return new_val
-
-    async def decr(self, key: str, amount: int = 1) -> int:
-        if not self._healthy:
-            return 0
-        return await self.incr(key, -amount)
-
-    async def ping(self) -> bool:
-        return await self.health_check()

@@ -70,6 +70,9 @@ docs = [
 where = ["."]
 include = ["app*", "config*", "reports*"]
 
+[tool.setuptools.package-data]
+"app.constants" = ["api_paths.json"]
+
 # ============================================================================
 # UV Sources — monorepo local path override for the in-tree g8e protocol
 # package. When the ensemble is installed with uv (development), the `g8e`

@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
@@ -156,7 +157,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	}
 	binding := summary.Run.GetCampaignBinding()
 	if binding == nil {
-		return 0, fmt.Errorf("evaluation: run execute: missing campaign binding")
+		return 0, fmt.Errorf("evaluation: run execute: campaign binding: %w", constants.ErrMissingRequiredField)
 	}
 	operators, err := chatEvalListOperators(cmd, chatDeps, cfg, authContext)
 	if err != nil {
@@ -333,7 +334,11 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 			opts.ResultOutput(result)
 		}
 		if !opts.JSONOutput {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %s: %s\n", result.GetAssignmentId(), result.GetLifecycleStatus().String())
+			executedAssignment, err := store.LoadAssignment(cmd.Context(), opts.RunID, result.GetAssignmentId())
+			if err != nil {
+				return executed, fmt.Errorf("evaluation: run execute: load executed assignment: %w", err)
+			}
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), executedAssignmentLine(executedAssignment, result))
 		}
 	}
 	if stopped && !opts.JSONOutput {

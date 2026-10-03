@@ -45,13 +45,13 @@ func TestBuildCampaignChatRequest_RejectsRequestsItCannotSendFaithfully(t *testi
 			},
 			wantMsg: "heterogeneous assignments execute through formation runner",
 		},
-		{name: "no target", mutate: func(req *AssignmentExecutionRequest) { req.Assignment.Target = nil }, wantMsg: "homogeneous target required"},
+		{name: "no target", mutate: func(req *AssignmentExecutionRequest) { req.Assignment.Target = nil }, wantIs: constants.ErrMissingRequiredField},
 		{
 			name: "no candidate variant",
 			mutate: func(req *AssignmentExecutionRequest) {
 				req.Assignment.Target = &evalv1.EvaluationAssignment_Homogeneous{Homogeneous: &evalv1.HomogeneousAssignmentTarget{}}
 			},
-			wantMsg: "homogeneous target required",
+			wantIs: constants.ErrMissingRequiredField,
 		},
 		{
 			name: "an unspecified designated role",
@@ -338,8 +338,8 @@ func TestBuildChatProbeRequest_RejectsMissingBindingsAndIdentity(t *testing.T) {
 		wantIs       error
 		wantMsg      string
 	}{
-		{name: "no data operator", dataOperator: "", dataSession: "s", mutate: func(*ChatProbeRequest) {}, wantMsg: "data operator binding is required"},
-		{name: "no data operator session", dataOperator: "o", dataSession: "", mutate: func(*ChatProbeRequest) {}, wantMsg: "data operator binding is required"},
+		{name: "no data operator", dataOperator: "", dataSession: "s", mutate: func(*ChatProbeRequest) {}, wantIs: constants.ErrMissingRequiredField, wantMsg: "data operator binding"},
+		{name: "no data operator session", dataOperator: "o", dataSession: "", mutate: func(*ChatProbeRequest) {}, wantIs: constants.ErrMissingRequiredField, wantMsg: "data operator binding"},
 		{name: "no assignment id", dataOperator: "o", dataSession: "s", mutate: func(req *ChatProbeRequest) { req.AssignmentID = "" }, wantIs: constants.ErrMissingRequiredField},
 		{name: "no attempt id", dataOperator: "o", dataSession: "s", mutate: func(req *ChatProbeRequest) { req.EvaluationAttemptID = "" }, wantIs: constants.ErrMissingRequiredField},
 		{name: "no model", dataOperator: "o", dataSession: "s", mutate: func(req *ChatProbeRequest) { req.Model = "" }, wantIs: constants.ErrMissingRequiredField},
@@ -350,7 +350,7 @@ func TestBuildChatProbeRequest_RejectsMissingBindingsAndIdentity(t *testing.T) {
 		{name: "no registry digest", dataOperator: "o", dataSession: "s", mutate: func(req *ChatProbeRequest) { req.ModelRegistryDigest = "" }, wantIs: constants.ErrInferenceModelRegistryInvalid},
 		{name: "no registry", dataOperator: "o", dataSession: "s", mutate: func(req *ChatProbeRequest) { req.ModelRegistry = nil }, wantIs: constants.ErrInferenceModelRegistryInvalid},
 		{name: "no model digest", dataOperator: "o", dataSession: "s", mutate: func(req *ChatProbeRequest) { req.ModelDigest = "" }, wantIs: constants.ErrInferenceModelRegistryInvalid},
-		{name: "model_role lane needs a designated role", dataOperator: "o", dataSession: "s", mutate: func(req *ChatProbeRequest) { req.EvaluationLane = "model_role" }, wantMsg: "designated model role required"},
+		{name: "model_role lane needs a designated role", dataOperator: "o", dataSession: "s", mutate: func(req *ChatProbeRequest) { req.EvaluationLane = "model_role" }, wantIs: constants.ErrMissingRequiredField, wantMsg: "designated model role"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

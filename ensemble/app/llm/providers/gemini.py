@@ -682,7 +682,7 @@ class GeminiProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[GEMINI] generate_content_stream_primary: model=%s contents=%d "
-            "max_output_tokens=%d top_k=%s top_p=%s "
+            "max_output_tokens=%s top_k=%s top_p=%s "
             "system_instructions_len=%d tools_count=%d",
             model,
             len(contents),
@@ -760,7 +760,7 @@ class GeminiProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[GEMINI] generate_content_stream_assistant: model=%s contents=%d "
-            "max_output_tokens=%d top_k=%s top_p=%s "
+            "max_output_tokens=%s top_k=%s top_p=%s "
             "response_format=%s",
             model,
             len(contents),
@@ -799,7 +799,7 @@ class GeminiProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[GEMINI] generate_content_stream_lite: model=%s contents=%d "
-            "max_output_tokens=%d top_k=%s top_p=%s "
+            "max_output_tokens=%s top_k=%s top_p=%s "
             "response_format=%s",
             model,
             len(contents),

@@ -357,6 +357,35 @@ async def test_triage_parses_request_posture_from_llm(fake_provider, mock_settin
     assert result.posture_confidence == TriageConfidence.HIGH
 
 
+async def test_triage_parses_confused_posture_from_llm(fake_provider, mock_settings):
+    """'confused' is a documented posture (prompts, personas, Go constants); it must
+    parse rather than collapse the whole triage result into a PARSE_FAILURE escalation."""
+    fake_provider.add_response("""{
+        "intent_summary": "user asks to restore a service they just said they deleted",
+        "intent": "action",
+        "intent_confidence": "high",
+        "complexity": "complex",
+        "complexity_confidence": "high",
+        "request_posture": "confused",
+        "posture_confidence": "high"
+    }""")
+
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="restart nginx, I removed it earlier",
+        agent_mode=AgentMode.G8E_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
+        result = await agent.triage(request)
+
+    assert result.error_code is None
+    assert result.request_posture == TriageRequestPosture.CONFUSED
+    assert result.posture_confidence == TriageConfidence.HIGH
+
+
 async def test_triage_defaults_posture_to_normal_when_field_missing(fake_provider, mock_settings):
     """Existing LLM outputs that predate the posture field must still parse, with
     a safe default (normal / low confidence)."""

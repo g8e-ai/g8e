@@ -6,14 +6,14 @@
   "_governed": true,
 
   "reputation_commitment": {
-    "_description": "Auditor-signed Merkle commitment binding a consensus verdict to the reputation scoreboard at verdict time. Append-only; commitments are never revised. Genesis commitment uses the deployment-scoped sentinel prev_root '0' * 64.",
+    "_description": "Gateway-signed application Merkle commitment binding a tribunal verdict to the reputation scoreboard at verdict time. Append-only; commitments are never revised. Genesis commitment uses the deployment-scoped sentinel prev_root '0' * 64.",
 
     "core_identity": {
       "id": {
         "type": "string",
         "format": "uuid",
         "required": true,
-        "description": "Stable document identifier (UUID4). Referenced by consensus_command.auditor.reputation_commitment_id."
+        "description": "Stable document identifier (UUID4). Referenced by tribunal_command.auditor.reputation_commitment_id."
       }
     },
 
@@ -23,10 +23,10 @@
         "required": true,
         "description": "Investigation that produced this verdict. Binds the commitment to a specific chain (block producer)."
       },
-      "consensus_command_id": {
+      "tribunal_command_id": {
         "type": "string",
         "required": true,
-        "description": "ConsensusCommand whose auditor verdict triggered this commitment. The block being committed."
+        "description": "TribunalCommand whose auditor verdict triggered this commitment. The block being committed."
       }
     },
 
@@ -53,13 +53,13 @@
       "signed_by": {
         "type": "string",
         "required": true,
-        "enum": ["auditor"],
-        "description": "Identity of the signer. Day 1: always literal 'auditor'. Future: persona id of the specific auditor instance."
+        "enum": ["gateway"],
+        "description": "Key custodian that signed this application claim. New commitments record 'gateway'; historical records retain their signer identity."
       },
       "signature": {
         "type": "string",
         "required": true,
-        "description": "HMAC-SHA256 hex (64 chars) over canonical_input = `merkle_root || prev_root || consensus_command_id` using the auditor's HMAC key. Day-1 key custody: g8eo SecretManager (see GDD §14.10 resolved decisions)."
+        "description": "HMAC-SHA256 hex (64 chars) over canonical_input = `merkle_root || prev_root || tribunal_command_id` using the Gateway SecretManager HMAC key. The app receives only the signature via app mTLS. This signs claimed roots and command identity; it does not attest scores, validate chain continuity, or provide L2/L3 approval."
       }
     },
 

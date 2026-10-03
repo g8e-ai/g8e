@@ -265,17 +265,17 @@ func VerifyAssignmentAuditSlice(dbBytes []byte, vaultKey []byte) error {
 		return err
 	}
 	if len(commitments) != len(events) {
-		return fmt.Errorf("evaluation: verify assignment audit slice: commitment count mismatch")
+		return fmt.Errorf("evaluation: verify assignment audit slice: commitment count: %w", constants.ErrInvalidEvidenceGraph)
 	}
 	priorHash := ""
 	for i, event := range events {
 		digest := assignmentAuditEventDigest(event.eventType, event.timestamp, event.payload)
 		commitment := commitments[i]
 		if commitment.priorHash != priorHash || commitment.eventDigest != digest {
-			return fmt.Errorf("evaluation: verify assignment audit slice: commitment mismatch at event %d", event.id)
+			return fmt.Errorf("evaluation: verify assignment audit slice: commitment mismatch at event %d: %w", event.id, constants.ErrInvalidEvidenceGraph)
 		}
 		if commitment.hash != assignmentAuditCommitmentHash(priorHash, digest) {
-			return fmt.Errorf("evaluation: verify assignment audit slice: recomputed hash mismatch at event %d", event.id)
+			return fmt.Errorf("evaluation: verify assignment audit slice: recomputed hash mismatch at event %d: %w", event.id, constants.ErrChecksumMismatch)
 		}
 		priorHash = commitment.hash
 	}

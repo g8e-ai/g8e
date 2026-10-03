@@ -34,7 +34,7 @@ paths = [
   '''README\.md''',
   '''protocol/constants/.*''',
   '''internal/constants/.*''',
-  '''dashboard/public/js/constants/.*''',
+  '''console/src/generated/.*''',
   '''scripts/.*''',
 ]
 
@@ -42,6 +42,16 @@ paths = [
 description = "Skip historical components directory (submodule remnants)"
 paths = [
   '''components/.*''',
+]
+
+[[allowlists]]
+description = "Historical dashboard settings registry: g8e_internal_*_url keys are setting names whose defaults are in-cluster URLs, not credentials"
+condition = "AND"
+paths = [
+  '''dashboard/models/settings_model\.js''',
+]
+regexes = [
+  '''^g8e_internal_[a-z_]+_url$''',
 ]
 
 [[allowlists]]
@@ -108,7 +118,6 @@ description = "Skip env var name constants and empty .env.example templates (nam
 paths = [
   '''ensemble/app/constants/env_vars\.py''',
   '''ensemble/\.env\.example''',
-  '''dashboard/models/settings_model\.js''',
 ]
 
 [[allowlists]]
@@ -120,5 +129,5 @@ paths = [
 [[allowlists]]
 description = "Skip evaluation explorer mock fixture data"
 paths = [
-  '''dashboard/g8e-adapter/evaluation-explorer/src/fixtures/.*''',
+  '''evaluation-explorer/src/fixtures/.*''',
 ]

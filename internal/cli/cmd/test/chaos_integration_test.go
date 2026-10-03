@@ -7,17 +7,10 @@
 
 //go:build integration
 
-// os.Chdir is used because runChaos calls configLoad which reads config from
-// the current working directory. This is a legitimate cwd usage — the config
-// layer translates cwd into fileSvc baseDir. Injecting fileSvcFactory into
-// runChaos would require config-layer injection, which is out of scope for the
-// current refactor.
-
 package testcmd
 
 import (
 	"bytes"
-	"os"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -41,14 +34,11 @@ func TestRunChaosErrorHandling(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		// Change to a temp directory to avoid affecting real filesystem
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		chaosDataDir = tmpDir
 
 		err := runChaos(cmd, []string{})
-		// We expect an error due to the invalid path
+		// We expect an error due to count=0 validation
 		assert.Error(t, err)
 	})
 
@@ -65,10 +55,6 @@ func TestRunChaosErrorHandling(t *testing.T) {
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
 
 		// This may still fail due to missing dependencies, but should not fail
 		// due to directory creation

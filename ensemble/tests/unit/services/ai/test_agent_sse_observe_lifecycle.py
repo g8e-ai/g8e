@@ -116,7 +116,9 @@ async def test_completion_emits_completed_agent_and_running_run():
     )
 
     statuses = _agent_state_statuses(event_svc)
-    assert statuses[-1] == "completed"
+    # The Gateway rejects running after a terminal state, so the persona
+    # resets to idle once the run ends.
+    assert statuses[-2:] == ["completed", "idle"]
     run_statuses = _run_state_statuses(event_svc)
     assert run_statuses[-1] == "running"
 
@@ -139,7 +141,7 @@ async def test_provider_error_emits_failed_agent_state():
     )
 
     statuses = _agent_state_statuses(event_svc)
-    assert "failed" in statuses
+    assert statuses[-2:] == ["failed", "idle"]
 
 
 async def test_universal_tool_call_emits_waiting_then_running():
@@ -168,7 +170,45 @@ async def test_universal_tool_call_emits_waiting_then_running():
     statuses = _agent_state_statuses(event_svc)
     assert "waiting" in statuses
     assert "running" in statuses
-    assert statuses[-1] == "completed"
+    assert statuses[-2:] == ["completed", "idle"]
+
+
+async def test_second_run_after_terminal_state_follows_gateway_transitions():
+    """Two consecutive runs of one persona never ask the Gateway for running
+    straight after completed or failed (observe_producer.go agentTransitions)."""
+    inputs, state = make_agent_run_args(
+        case_id="case-obs-8",
+        investigation_id="inv-obs-8",
+        web_session_id="web-obs-8",
+        user_id="user-obs-8",
+        active_agent=ReasoningAgent.SAGE,
+    )
+    event_svc = FakeEventService()
+
+    await deliver_via_sse(
+        stream=_stream(_text("Partial."), _error("model timeout")),
+        inputs=inputs,
+        state=state,
+        event_service=event_svc,
+    )
+    inputs, state = make_agent_run_args(
+        case_id="case-obs-8",
+        investigation_id="inv-obs-8",
+        web_session_id="web-obs-8",
+        user_id="user-obs-8",
+        active_agent=ReasoningAgent.SAGE,
+    )
+    await deliver_via_sse(
+        stream=_stream(_text("Answer."), _complete()),
+        inputs=inputs,
+        state=state,
+        event_service=event_svc,
+    )
+
+    statuses = _agent_state_statuses(event_svc)
+    for previous, current in zip(statuses, statuses[1:]):
+        if previous in ("completed", "failed"):
+            assert current in (previous, "idle", "offline"), statuses
 
 
 async def test_cancellation_emits_idle_agent_state():
