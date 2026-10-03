@@ -50,7 +50,12 @@ const (
 )
 
 const ensembleEnrollScript = `
-import asyncio, json
+import asyncio, json, sys
+
+from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
+
+configure_bootstrap(BootstrapSettings(gateway_http_url=sys.argv[1], runtime_dir=sys.argv[2]))
+
 from app.services.infra.app_enrollment_service import AppEnrollmentService
 
 service = AppEnrollmentService(instance_id="` + ensembleEnrollmentInstanceID + `", hostname="integration-host")
@@ -110,14 +115,13 @@ func runEnsembleEnrollment(t *testing.T, f *fixtures.GatewayFixture, ownerID str
 	ctx, cancel := context.WithTimeout(context.Background(), ensembleEnrollmentTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, python, "-c", ensembleEnrollScript)
+	cmd := exec.CommandContext(ctx, python, "-c", ensembleEnrollScript,
+		network.LocalhostHTTPURL(f.Service.GetHTTPPort()), runtimeDir)
 	cmd.Dir = ensemble
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + runtimeDir,
 		"PYTHONDONTWRITEBYTECODE=1",
-		"G8E_RUNTIME_DIR=" + runtimeDir,
-		"G8E_GATEWAY_HTTP_URL=" + network.LocalhostHTTPURL(f.Service.GetHTTPPort()),
 	}
 	var stdout, stderr syncBuffer
 	cmd.Stdout = &stdout

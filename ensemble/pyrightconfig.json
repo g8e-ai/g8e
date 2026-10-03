@@ -9,9 +9,9 @@
     "**/.ruff_cache",
     "tests"
   ],
-  "pythonVersion": "3.14",
+  "pythonVersion": "3.12",
   "pythonPlatform": "Linux",
-  "venvPath": "../..",
+  "venvPath": "..",
   "venv": ".venv",
   "typeCheckingMode": "basic",
   "reportMissingImports": "none",

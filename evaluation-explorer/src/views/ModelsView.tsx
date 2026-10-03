@@ -198,15 +198,6 @@ export function ModelsView() {
           ),
       },
       {
-        id: 'agreement',
-        header: 'Agreement',
-        accessorFn: (row: ModelSummary) => row.agreement_pairwise?.value ?? -1,
-        cell: ({ row }: CellContext<ModelSummary, unknown>) =>
-          row.original.agreement_pairwise?.value !== undefined
-            ? formatPercent(row.original.agreement_pairwise.value)
-            : <UnavailableValue />,
-      },
-      {
         id: 'latency_p50',
         header: 'Latency p50',
         accessorFn: (row: ModelSummary) => row.latency_p50_ms?.value ?? Number.POSITIVE_INFINITY,

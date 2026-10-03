@@ -255,7 +255,7 @@ func explicitProfile(profile string) []string {
 }
 
 func dockerInitCmd() *cobra.Command {
-	return dockerInitCmdWithConfig(shared.LoadConfig, shared.NewFileSvc, authcmd.DockerInitAPIClientFactory, auth.CheckOperatorRunning, authcmd.NewDefaultEnrollmentCoordinator)
+	return dockerInitCmdWithConfig(shared.LoadConfig, shared.NewFileSvc, authcmd.DockerInitAPIClientFactory, auth.CheckOperatorRunning, authcmd.NewDefaultEnrollmentCoordinator, authcmd.DefaultAppEnrollerFactory)
 }
 
 func dockerInitCmdWithConfig(
@@ -264,6 +264,7 @@ func dockerInitCmdWithConfig(
 	clientFactory authcmd.APIClientFactory,
 	checkOperatorRunning func(*config.Config) error,
 	enrollerFactory authcmd.EnrollerFactory,
+	appEnrollerFactory authcmd.AppEnrollerFactory,
 ) *cobra.Command {
 	var (
 		skipBuild      bool
@@ -295,6 +296,12 @@ docs/guides/unified_stack.md:
      (data operator, ensemble, inference operator) unless
      --skip-approvals is set.
   8. Wait for the ensemble health endpoint to respond.
+  9. Enroll the host 'g8e-eval' application identity that 'g8e eval' gates and
+     campaigns need, approving exactly that request (skipped when a valid
+     identity already exists).
+
+If the 'g8e-eval' enrollment fails, init warns and prints the manual steps
+('g8e auth enroll app g8e-eval', then approve) instead of failing the stack.
 
 Use --clean to wipe containers, volumes, and networks before init.
 That destroys the trust domain and repeats owner enrollment from scratch, so it
@@ -432,8 +439,14 @@ already-enrolled CLI.`,
 			}
 
 			cmd.Println()
+			if err := enrollDockerInitEvalApp(cmd, client, fileSvc, cfg, appEnrollerFactory); err != nil {
+				cmd.Printf("Warning: could not enroll the %q application identity: %v\n", constants.EvaluationAppName, err)
+			}
+
+			cmd.Println()
 			cmd.Println("Unified stack init complete.")
 			printDockerSpectatorEndpoints(cmd)
+			reportEvalAppEnrollment(cmd, fileSvc, cfg)
 			cmd.Println("Run 'g8e docker status' to check service status.")
 			cmd.Println("Run 'g8e operator list' and 'g8e eval gate inference status --json' to verify operators.")
 			return nil
@@ -577,6 +590,8 @@ When starting without --skip-enroll, the command walks the owner through interac
   3. Prompts to approve the Operator platform enrollment request.
 
 Each component prompt accepts y to approve or n (or any other input) to skip.
+The walkthrough ends by reporting whether the host 'g8e-eval' application identity
+needed by 'g8e eval' gates and campaigns is enrolled; if not, it prints the command.
 Use --skip-enroll to start the stack without the interactive walkthrough
 (the workloads will block waiting for manual approval).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -704,6 +719,7 @@ func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 	}
 
 	cmd.Println("Interactive enrollment walkthrough complete.")
+	reportEvalAppEnrollment(cmd, fileSvc, cfg)
 	cmd.Println("Run 'g8e docker status' to check service status.")
 	cmd.Println("Run 'g8e docker logs' to follow logs.")
 	return nil
@@ -719,6 +735,114 @@ func reportDockerPublicSpectatorReady(cmd *cobra.Command) error {
 	}
 	cmd.Printf("Public mirror bootstrap ready (high_water_sequence=%d).\n", bootstrap.Snapshot.HighWaterSequence)
 	return nil
+}
+
+const (
+	dockerInitEvalEnrollPollInterval = 2 * time.Second
+	dockerInitEvalEnrollTimeout      = 3 * time.Minute
+)
+
+// enrollDockerInitEvalApp enrolls the host `g8e-eval` application identity
+// unless a valid one is already installed.
+func enrollDockerInitEvalApp(cmd *cobra.Command, client authcmd.APIClient, fileSvc fs.RuntimeFileService, cfg *config.Config, factory authcmd.AppEnrollerFactory) error {
+	name := constants.EvaluationAppName
+	if auth.HasValidAppIdentity(fileSvc, cfg, name) {
+		cmd.Printf("Evaluation identity %q already enrolled.\n", name)
+		return nil
+	}
+	cmd.Printf("Enrolling the %q application identity for 'g8e eval'...\n", name)
+	enroller, err := factory(name, fileSvc, cfg, slog.Default())
+	if err != nil {
+		return err
+	}
+	return runDockerInitEvalEnrollment(cmd, client, enroller, dockerInitEvalEnrollPollInterval, dockerInitEvalEnrollTimeout)
+}
+
+// runDockerInitEvalEnrollment runs the app enrollment client, which submits a
+// platform enrollment request and waits for approval, and approves that request
+// as the enrolled owner. Only a pending request that is an application named
+// `g8e-eval` is approved; any other application request is left for the owner.
+func runDockerInitEvalEnrollment(cmd *cobra.Command, client authcmd.APIClient, enroller authcmd.AppEnroller, pollInterval, timeout time.Duration) error {
+	name := constants.EvaluationAppName
+	ctx, cancel := context.WithTimeout(shared.CommandContext(cmd), timeout)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := enroller.Enroll(ctx, io.Discard)
+		done <- err
+	}()
+
+	approved := false
+	for {
+		if !approved {
+			pending, err := fetchPendingPlatformEnrollments(client)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrDockerInitApprovalFailed, err)
+			}
+			if req := findEvalApplicationRequest(pending); req != nil {
+				authcmd.PrintPlatformEnrollmentRequestDetails(cmd, req)
+				resp, err := authcmd.PostPlatformEnrollmentDecision(client, models.PlatformEnrollmentDecisionRequest{
+					RequestID: req.RequestID,
+					Decision:  models.PlatformEnrollmentDecisionApprove,
+				})
+				if err != nil {
+					return fmt.Errorf("%w: approve %s (%s): %w", constants.ErrDockerInitApprovalFailed, name, req.RequestID, err)
+				}
+				cmd.Printf("Approved %s enrollment request %s (%s).\n", name, req.RequestID, resp.State)
+				approved = true
+			}
+		}
+
+		select {
+		case err := <-done:
+			if err != nil {
+				return fmt.Errorf("%w: enroll %s: %w", constants.ErrDockerInitApprovalFailed, name, err)
+			}
+			cmd.Printf("Evaluation identity %q enrolled.\n", name)
+			return nil
+		case <-ctx.Done():
+			return fmt.Errorf("%w: timed out enrolling %s: %w", constants.ErrDockerInitApprovalFailed, name, ctx.Err())
+		case <-time.After(pollInterval):
+		}
+	}
+}
+
+// findEvalApplicationRequest returns the pending request for the `g8e-eval`
+// application, matching both component kind and name so an operator or another
+// application is never selected.
+func findEvalApplicationRequest(pending []models.PlatformEnrollmentPendingRequest) *models.PlatformEnrollmentPendingRequest {
+	for i := range pending {
+		if pending[i].ComponentKind == models.PlatformComponentApplication && pending[i].ComponentName == constants.EvaluationAppName {
+			return &pending[i]
+		}
+	}
+	return nil
+}
+
+// reportEvalAppEnrollment tells the owner whether the host `g8e-eval`
+// application identity is usable. Init and start enroll the owner and approve
+// the Gateway's workloads (Data Operator, Ensemble, Inference Operator) and
+// init then enrolls `g8e-eval`; `g8e eval` gates and campaigns present that
+// identity for inference dispatch and fail closed without it. A missing one
+// (init skipped or failed its enrollment, or `docker start`) is reported here
+// rather than at the first eval command.
+func reportEvalAppEnrollment(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *config.Config) {
+	name := constants.EvaluationAppName
+	_, err := auth.LoadAppIdentity(fileSvc, cfg, name)
+	if err == nil {
+		cmd.Printf("Evaluation identity %q: enrolled.\n", name)
+		return
+	}
+	cmd.Println()
+	cmd.Printf("Evaluation identity %q is not ready: %v\n", name, err)
+	cmd.Println("  './g8e eval' gates and campaigns dispatch inference with this host application")
+	cmd.Println("  identity (console chat does not use it). Enroll it once; the command waits for approval,")
+	cmd.Println("  so run it in a separate terminal:")
+	cmd.Printf("    ./g8e auth enroll app %s\n", name)
+	cmd.Println("  then approve the request it prints:")
+	cmd.Println("    ./g8e auth enroll pending")
+	cmd.Println("    ./g8e auth enroll approve <request-id> --yes")
 }
 
 // printDockerSpectatorEndpoints prints the acceptance URLs for the embedded

@@ -4,7 +4,7 @@
 // Drives the real App against a fake Gateway: routes are matched by method and
 // path, and every request is recorded for assertions.
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
@@ -152,8 +152,10 @@ describe('cases and investigations', () => {
     expect(screen.getByText('Why is disk full?')).toBeInTheDocument();
 
     await waitFor(() => expect(window.location.search).toBe('?case=c1&investigation=i1'));
-    FakeEventSource.last!.push(10, 'g8e.v1.ai.llm.chat.iteration.text.chunk.received', { investigation_id: 'i1', content: 'Checking **mounts**' });
-    FakeEventSource.last!.push(11, 'g8e.v1.ai.llm.chat.iteration.text.chunk.received', { investigation_id: 'other', content: 'not mine' });
+    act(() => {
+      FakeEventSource.last!.push(10, 'g8e.v1.ai.llm.chat.iteration.text.chunk.received', { investigation_id: 'i1', content: 'Checking **mounts**' });
+      FakeEventSource.last!.push(11, 'g8e.v1.ai.llm.chat.iteration.text.chunk.received', { investigation_id: 'other', content: 'not mine' });
+    });
     expect(await screen.findByText('mounts')).toBeInTheDocument();
     expect(screen.queryByText('not mine')).toBeNull();
   });
@@ -197,11 +199,13 @@ describe('cases and investigations', () => {
     renderApp();
     await screen.findByRole('tab', { name: /Investigation 1/ });
 
-    FakeEventSource.last!.push(20, 'g8e.v1.operator.command.approval.requested', {
-      investigation_id: 'i1',
-      approval_id: 'ap1',
-      command: 'du -sh /var',
-      justification: 'Find large directories',
+    act(() => {
+      FakeEventSource.last!.push(20, 'g8e.v1.operator.command.approval.requested', {
+        investigation_id: 'i1',
+        approval_id: 'ap1',
+        command: 'du -sh /var',
+        justification: 'Find large directories',
+      });
     });
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
 

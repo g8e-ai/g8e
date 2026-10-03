@@ -428,6 +428,8 @@ Operator revocation invalidates the Operator and companion CLI certificates, dea
 
 `g8e docker init` runs the full bootstrap in one command: prepare the host `.g8e` tree, build images, start the unified stack, enroll the CLI owner, auto-approve platform enrollments in order (data operator → ensemble → inference operator), and wait for ensemble health. Requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT` set before running.
 
+**Init enrolls `g8e-eval`.** `./g8e eval` gates, probes, and campaigns dispatch inference with a separate host application identity, `g8e-eval`, and fail closed without it (console chat does not use it). As its last step init enrolls that identity unless a valid one is already installed, and approves exactly the pending request that is an application named `g8e-eval` (no other application or Operator request). It polls every 2 seconds for up to 3 minutes; a failure prints a warning and the manual steps and does not fail init. `--skip-approvals` skips this step. `./g8e docker start` does not enroll it; it only reports at the end whether the identity is enrolled. To enroll manually, in a second terminal because the command waits for approval: `./g8e auth enroll app g8e-eval`, then `./g8e auth enroll pending` and `./g8e auth enroll approve <request-id> --yes`. `docker init --clean` destroys the trust domain, so init enrolls it again afterwards.
+
 If a prior Docker start created `.g8e` as root, fix ownership once with `sudo chown -R $(id -u):$(id -g) .g8e` and rerun init.
 
 Useful flags:
@@ -497,7 +499,7 @@ The Observer Operator is the only provider-boundary observer. There is no CLI-si
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. That is expected. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
-For example Observer Operator console output and a healthy-output checklist, see [Evaluations — Provider-boundary Observer Operator](../architecture/evals.md#provider-boundary-observer-operator).
+For example Observer Operator console output and a healthy-output checklist, see [Evaluations — Witness operator roles](../architecture/evals.md#witness-operator-roles).
 
 ## Storage-side Provenance Operator
 
@@ -541,7 +543,7 @@ After approval, confirm the provenance operator appears in `./g8e operator list`
 
 **Timing rule:** Assignments that completed before the Provenance Operator was enrolled lack attestation windows. Enroll before `execute` when chain-of-custody claims are required.
 
-For architecture detail and example console output, see [Evaluations — Storage-side Provenance Operator](../architecture/evals.md#storage-side-provenance-operator) and [Model Provenance](../architecture/model-provenance.md).
+For architecture detail and example console output, see [Evaluations — Witness operator roles](../architecture/evals.md#witness-operator-roles) and [Model Provenance](../architecture/model-provenance.md).
 
 ## Formation smoke (`ultra-efficient-speedster`)
 
@@ -554,7 +556,7 @@ Use this after the evaluation stack, Inference Operator, and **both** witness Op
    - `llama3.2:1b` (Lite role)
    - `gemma4:e2b` (Assistant role)
    - `qwen3.5:4b` (Primary role)
-3. An enrolled `g8e-eval` application identity (`./g8e auth enroll app g8e-eval`, approved once by the platform owner). `./g8e eval` formation commands present this managed application credential for inference dispatch. They verify the `g8e-eval` app cert against the gateway's current trust bundle before dispatching, failing closed with an actionable error if the credential is missing, expired, or untrusted.
+3. An enrolled `g8e-eval` application identity (`./g8e docker init` enrolls and approves it; otherwise `./g8e auth enroll app g8e-eval`, approved once by the platform owner). `./g8e eval` formation commands present this managed application credential for inference dispatch. They verify the `g8e-eval` app cert against the gateway's current trust bundle before dispatching, failing closed with an actionable error if the credential is missing, expired, or untrusted.
 
 ### Build formation inventory
 

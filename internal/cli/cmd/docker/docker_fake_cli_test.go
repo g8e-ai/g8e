@@ -735,6 +735,7 @@ func initCmdWithStubs(t *testing.T, configLoader func(string) (*config.Config, e
 		authcmd.PanickingClientFactory(),
 		func(*config.Config) error { return nil },
 		authcmd.PanickingEnrollerFactory(),
+		authcmd.PanickingAppEnrollerFactory(),
 	)
 }
 
