@@ -106,12 +106,16 @@ func TestOperatorStartCmdFlags(t *testing.T) {
 			"lattice-sandboxes-token", "lattice-entity-name", "lattice-posture-floor",
 			"inference-enabled", "inference-ollama-endpoint",
 			"inference-primary-model", "inference-assistant-model",
-			"inference-lite-model", "inference-keep-alive", "inference-campaign-id",
-			"inference-model-registry-digest",
+			"inference-lite-model", "inference-keep-alive",
 		}
 		for _, flagName := range expectedFlags {
 			flag := cmd.Flags().Lookup(flagName)
 			assert.NotNil(t, flag, "operator start should have --%s flag", flagName)
+		}
+		// One Inference Operator serves chat and campaigns; campaign
+		// authority travels on each dispatch, never as a startup binding.
+		for _, removed := range []string{"inference-campaign-id", "inference-model-registry-digest"} {
+			assert.Nil(t, cmd.Flags().Lookup(removed), "operator start must not have --%s", removed)
 		}
 	})
 

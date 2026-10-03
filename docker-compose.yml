@@ -194,10 +194,6 @@ services:
       - "--inference-enabled"
       - "--inference-ollama-endpoint"
       - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
-      - "--inference-campaign-id"
-      - "${G8E_INFERENCE_CAMPAIGN_ID:-}"
-      - "--inference-model-registry-digest"
-      - "${G8E_INFERENCE_MODEL_REGISTRY_DIGEST:-}"
     restart: unless-stopped
     deploy:
       resources:
@@ -261,7 +257,10 @@ services:
       g8e-data-operator:
         condition: service_started
     ports:
-      - "8000:8000"
+      # Loopback only: g8ee trusts the Gateway browser-proxy identity stamp,
+      # so it must not be reachable from other hosts. The Gateway reaches it
+      # on the compose network; host tools (eval, e2e) use localhost.
+      - "127.0.0.1:8000:8000"
     volumes:
       - g8e-ensemble-data:/root/.g8e
       - g8e-operator-data:/operator-state:ro

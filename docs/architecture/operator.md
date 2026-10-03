@@ -55,8 +55,6 @@ The startup command accepts numerous flags controlling enrollment, runtime behav
 | `--inference-assistant-model <name>` | Ollama model name for the Assistant chat tier. |
 | `--inference-ollama-endpoint <url>` | Remote Ollama provider endpoint (default: http://127.0.0.1:11434). |
 | `--inference-keep-alive <duration>` | Ollama keep-alive duration (default: -1 for infinite). |
-| `--inference-campaign-id <id>` | Frozen evaluation campaign authorized by this inference Operator. |
-| `--inference-model-registry-digest <sha256>` | SHA-256 digest of the frozen campaign model registry. |
 | `--provider-boundary-observer-enabled` | Enables read-only provider-boundary hardware observation. |
 | `--provider-boundary-observer-id <id>` | Stable observer identity pseudonym. |
 | `--provenance-operator-enabled` | Enables storage-side model provenance attestation at model file site. |

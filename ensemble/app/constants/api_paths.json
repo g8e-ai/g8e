@@ -47,9 +47,7 @@
     "settings": "/settings",
     "settings_llm": "/settings/llm",
     "settings_llm_get": "/settings/llm/get",
-    "settings_llm_models": "/settings/llm/models",
-    "settings_sync": "/settings/sync",
-    "settings_user": "/settings/user"
+    "settings_llm_models": "/settings/llm/models"
   },
   "g8ee_full": {
     "auth_generate_key": "/api/v1/auth/api-key/generate",
@@ -83,9 +81,7 @@
     "settings": "/api/v1/settings",
     "settings_llm": "/api/v1/settings/llm",
     "settings_llm_get": "/api/v1/settings/llm/get",
-    "settings_llm_models": "/api/v1/settings/llm/models",
-    "settings_sync": "/api/v1/settings/sync",
-    "settings_user": "/api/v1/settings/user"
+    "settings_llm_models": "/api/v1/settings/llm/models"
   },
   "internal_prefix": "/api/v1",
   "operator_prefix": "/api"

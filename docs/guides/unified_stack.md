@@ -52,7 +52,7 @@ This guide covers the unified evaluation stack — how to bootstrap it, enroll o
 | INV-STACK-02 | Service health is determined by service-specific health checks defined in docker-compose.yml, not by simple container running state. |
 | INV-STACK-03 | The Inference Operator must enroll with `--inference-enabled` before any scored campaign dispatch reaches the provider. |
 | INV-STACK-04 | Observer and Provenance Operators enroll as separate sessions on the provider host and must not share the same session. |
-| INV-STACK-05 | Campaign identity (campaign ID and registry digest) travels on each governed dispatch from ensemble when `--inference-campaign-id` and `--inference-model-registry-digest` are unset in startup `.env`. |
+| INV-STACK-05 | Campaign identity (campaign ID and registry digest) travels on each governed dispatch from ensemble. The Inference Operator has no startup campaign binding, so console chat and campaigns share it concurrently with nothing to switch. |
 
 ## Owned surfaces
 
@@ -70,8 +70,8 @@ This guide covers the unified evaluation stack — how to bootstrap it, enroll o
 
 - Docker Engine with the Docker Compose v2 plugin. **Note: Local Go or `make` are NOT required on the host** — all builds can run inside Docker.
 - Optional: Host Go toolchain and `make` (when developing locally and using `make build`).
-- Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **3000**, **8081**, **8082**, **5173**. The mirror and explorer ports are loopback-only in the root Compose file.
-- Repository-root `.env` (copy from `.env.example`) with `G8E_OLLAMA_ENDPOINT` set. Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` unset when using dispatch-carried campaign authority.
+- Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **8081**, **8082**, **5173**. The ensemble, mirror, and explorer ports are loopback-only in the root Compose file.
+- Repository-root `.env` (copy from `.env.example`) with `G8E_OLLAMA_ENDPOINT` set.
 - `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider** (defaults to `http://127.0.0.1:11434` if unset).
 - Remote Ollama reachable from the Docker network, for example: `curl -fsS http://192.168.1.2:11434/api/version`.
 
@@ -114,16 +114,16 @@ The platform leverages Docker volume mounts (`./bin:/opt/g8e/bin:ro`) so that a 
 
 ## Compose services and unified stack
 
-The root `docker-compose.yml` defines the core platform services on the `g8e-net` bridge network. All five core services start together in the default profile without requiring clunky bootstrap profiles:
+The root `docker-compose.yml` defines the core platform services on the `g8e-net` bridge network. All four core services start together in the default profile:
 
 | Service | Profile | Published ports | Role |
 | --- | --- | --- | --- |
 | `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS; 8081 private mirror ingest, 8082 public mirror read/SSE, 5173 evaluation explorer (loopback) | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A, public mirror, and evaluation explorer. |
 | `g8e-data-operator` | default | none | **Data Operator** (container hostname `data-operator`) — governed tool/filesystem/process boundary for the Operator container runtime. Evaluations identify it by that hostname and ignore every other enrolled data Operator. |
 | `g8e-inference-operator` | default | none | **Inference Operator** — governed inference to the remote Ollama provider. |
-| `ensemble` | default | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
+| `ensemble` | default | 8000 (loopback) | g8ee chat pipeline (`POST /api/v1/chat`). Loopback only: g8ee trusts the Gateway browser-proxy identity stamp. |
 
-The Gateway and Operator containers use the same image and share the host binary mount. All 5 services start with `docker compose up -d`. The Observer Operator is a separately enrolled process on the remote provider host and is never a service in the unified Compose stack.
+The Gateway and Operator containers use the same image and share the host binary mount. All four services start with `docker compose up -d`. The Observer Operator is a separately enrolled process on the remote provider host and is never a service in the unified Compose stack.
 
 The root Compose file also defines optional profiles for specialized testing:
 
@@ -185,7 +185,7 @@ Rules:
 - A campaign ID freezes its suite catalog. When the catalog changes, `g8e eval rollout run` qualifies the entry under `<campaign-id>-<8 characters of the catalog digest>` instead of failing with `campaign already exists with a different frozen spec`; `g8e eval campaigns create` still fails, so pick a new ID there.
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
-- Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` **unset** in `.env`. Campaign authority travels on each governed dispatch from g8ee; do not rebind the inference operator per model.
+- Campaign authority travels on each governed dispatch from g8ee; the inference operator is never rebound per model or per campaign.
 
 ### Init campaign inventory (one model per campaign)
 
@@ -265,7 +265,7 @@ Copy `.env.example` to `.env` and set the one required value:
 G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 ```
 
-`g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are **not** startup `.env` bindings for the campaign workflow — `g8e eval runs start` resolves them from the campaign definition and the campaign controller attaches them to each governed dispatch. Setting either startup binding causes the Inference Operator to reject governed campaign requests that do not match that static binding; leave both unset for per-dispatch campaign authority.
+`g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are not startup settings: `g8e eval runs start` resolves them from the campaign definition and the campaign controller attaches them to each governed dispatch, so console chat and campaigns run on the same Inference Operator at the same time.
 
 `.env` holds only secrets and user-specific endpoints or identities (INV-ENV-04 in [Developer Guidelines](../devs/devs.md)). Everything else is fixed in `docker-compose.yml` or in the `g8e` binary defaults:
 
@@ -274,10 +274,8 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 | `G8E_OLLAMA_ENDPOINT` | *(required)* | Approved Ollama URL for the Inference Operator; Compose fails fast when unset (required for live inference campaigns and `docker init`). `localhost` is the container itself, so use an address the container can reach. |
 | `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (approval links, CORS, WebAuthn); set only when you reach the stack by another name |
 | `G8E_USER_HOSTNAME` | `localhost` | Same role for the User Gateway (g8ellama profile) |
-| `G8E_INFERENCE_CAMPAIGN_ID` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
-| `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
 
-Container names (`g8e-<service>`) and host ports (8080, 8443, 8000, 3000, and loopback 8081, 8082, 5173) are literals in `docker-compose.yml`. Operators use the `g8e operator start` default heartbeat interval of 30 seconds; the Gateway marks an Operator `stale` after 60 seconds without a heartbeat, so `--heartbeat-interval` accepts at most 30. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
+Container names (`g8e-<service>`) and host ports (8080, 8443, and loopback 8000, 8081, 8082, 5173) are literals in `docker-compose.yml`. Operators use the `g8e operator start` default heartbeat interval of 30 seconds; the Gateway marks an Operator `stale` after 60 seconds without a heartbeat, so `--heartbeat-interval` accepts at most 30. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
 
 ## Standard bootstrap workflow
 
@@ -742,15 +740,10 @@ docker compose logs <service>
 ./g8e docker logs <service>
 ```
 
-### Inference dispatch returns 403 / campaign binding invalid
+### Inference dispatch returns 403
 
-Usually means the inference operator was started with a **stale startup campaign binding** (`G8E_INFERENCE_CAMPAIGN_ID` / `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` set in `.env`) that no longer matches the run. Clear those keys in `.env`, recreate the operator, and use `g8e eval runs start` so g8ee carries campaign authority on each dispatch:
-
-```bash
-# .env: only G8E_OLLAMA_ENDPOINT required; leave campaign keys unset
-docker compose up -d --force-recreate g8e-inference-operator
-./g8e eval runs start eval-init-qwen3-4b --publish --daemon
-```
+- `campaign binding invalid` or `model registry invalid`: the campaign request's assignment correlation or registry is incomplete or does not match its digest. Start runs with `g8e eval runs start` so g8ee carries the campaign's frozen registry on each dispatch.
+- `model override not permitted by role authority`: a request without campaign authority named a model other than the Inference Operator's model for that role. g8ee binds every `g8e`-provider role to the Operator's model, so this points to a stale g8ee image or a direct caller sending its own model.
 
 ### Observer not receiving commands
 

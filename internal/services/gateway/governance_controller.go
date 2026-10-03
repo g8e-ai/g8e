@@ -105,16 +105,19 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	// operator_session_id means no delegated Operator authority is claimed, so
 	// the only admissible binding is the transport-level app workload identity:
 	// an AGENT/CLIENT envelope whose acting_app_id matches the mTLS app
-	// SPIFFE ID (e.g. g8ee persisting platform records for a browser session).
-	// Anything else is rejected at the transport boundary rather than deferred
-	// to the downstream processor, which would otherwise admit it as a
-	// fail-open path. Non-mutation reads keep the pass-through behavior so the
-	// downstream processor validates them.
+	// SPIFFE ID, and only for a platform-record write (g8ee persisting cases,
+	// investigations, and memories for a browser session). The Gateway-mode
+	// command service also registers Operator actions such as EXECUTE_BASH,
+	// FILE_EDIT, and SHUTDOWN, so any other mutation still needs an Operator
+	// binding. Anything else is rejected at the transport boundary rather than
+	// deferred to the downstream processor, which would otherwise admit it as
+	// a fail-open path. Non-mutation reads keep the pass-through behavior so
+	// the downstream processor validates them.
 	if operatorSessionID == "" && operatorID == "" {
 		if !actionType.IsMutation() {
 			return nil
 		}
-		if actingAppID != "" && isAppComponent(sourceComponent) {
+		if isAppRecordWrite(actionType) && actingAppID != "" && isAppComponent(sourceComponent) {
 			for _, uri := range cert.URIs {
 				if wid.MatchesApp(uri.String(), actingAppID) {
 					return nil
@@ -174,6 +177,12 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 // (spiffe://<trust-domain>/app/<operator_id>).
 func isAppComponent(c commonv1.Component) bool {
 	return c == commonv1.Component_COMPONENT_AGENT || c == commonv1.Component_COMPONENT_CLIENT
+}
+
+// isAppRecordWrite reports whether an app may perform actionType with no
+// Operator binding: only platform-record document writes (INV-AUTH-ID-05).
+func isAppRecordWrite(a constants.ActionType) bool {
+	return a == constants.ActionTypeDocumentUpdate || a == constants.ActionTypeDocumentDelete
 }
 
 // injectEnvelopePosture sets the gateway's governance posture on an incoming

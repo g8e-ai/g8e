@@ -203,6 +203,7 @@ Pure helpers in `app/services/observe/` construct deterministic producer payload
 - **`persona_display_name(persona_id)` / `persona_role(persona_id)`** — Registry-owned values. Never accept caller-supplied display metadata when the registry owns it.
 - **`routing_target(g8e_context)`** — Returns the `(web_session_id, cli_session_id)` pair from the request context. Exactly one target reaches the Gateway; if neither is present, projection push is skipped.
 - **`build_agent_state_request(...)`** — Builds a typed `ObserveProducerAgentStateRequest` from registry-owned metadata. Returns `None` for unknown persona or targetless routing.
+- **`agent_state_sequence(status)`** — Returns the agent states to report for one lifecycle step. A terminal status (`completed`, `failed`) is followed by `idle`, because the Gateway's agent transition table accepts only the same state, `idle`, or `offline` after a terminal state, and each persona's agent ID (`<user_id>:<persona>`) runs again on the next turn. Chat (`agent_sse.py`) and Tribunal (`generator.py`) both report through it.
 - **`build_investigation_run_state_request(...)`** — Builds a typed `ObserveProducerRunStateRequest` with truthful zero task counts (no task document creation path is implemented in the ensemble). Returns `None` for targetless routing.
 - **`map_investigation_status_to_run_lifecycle(status)`** — Maps `InvestigationStatus` to `RunLifecycleStatus`.
 - **`resolve_chat_persona_id(active_agent)`** — Maps `ReasoningAgent` to registered persona id, returns `None` for unknown/None.

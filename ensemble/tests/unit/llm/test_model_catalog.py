@@ -17,6 +17,8 @@ from app.llm.model_catalog import list_governed_models, list_models, parse_model
 from app.models.http_context import G8eHttpContext
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
+    MODEL_ROLE_ASSISTANT,
+    InferenceRoleBinding,
     OllamaModelInventoryRequested,
     OllamaModelInventoryResult,
     ProviderModelInventoryEntry,
@@ -145,12 +147,17 @@ async def test_governed_models_use_owner_registered_inference_endpoint():
     inventory = OllamaModelInventoryResult(
         status=EXECUTION_STATUS_COMPLETED,
         entries=[ProviderModelInventoryEntry(served_model_tag="qwen3:4b")],
+        role_bindings=[
+            InferenceRoleBinding(role=MODEL_ROLE_ASSISTANT, served_model_tag="qwen3:4b")
+        ],
     )
     operator_client.dispatch.return_value = {
         "success": True,
         "result_payload": base64.b64encode(inventory.SerializeToString()).decode(),
     }
-    assert await list_governed_models(operator_client, context) == ["qwen3:4b"]
+    listing = await list_governed_models(operator_client, context, "assistant")
+    assert listing.models == ["qwen3:4b"]
+    assert listing.bound_model == "qwen3:4b"
     operator_client.list.assert_awaited_once_with(user_id="owner-1")
     call = operator_client.dispatch.await_args.kwargs
     assert call["context"] is context
@@ -175,4 +182,6 @@ async def test_governed_models_require_one_active_inference_operator(count):
         for i in range(count)
     ]
     with pytest.raises(ServiceUnavailableError):
-        await list_governed_models(operator_client, G8eHttpContext(user_id="owner-1", web_session_id="ws-1"))
+        await list_governed_models(
+            operator_client, G8eHttpContext(user_id="owner-1", web_session_id="ws-1"), "primary"
+        )

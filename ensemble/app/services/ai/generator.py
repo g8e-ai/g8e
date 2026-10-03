@@ -65,7 +65,7 @@ from app.services.ai.tribunal.utils import (
     member_for_pass,
     resolve_model,
 )
-from app.services.observe.payloads import build_agent_state_request
+from app.services.observe.payloads import agent_state_sequence, build_agent_state_request
 
 logger = logging.getLogger(__name__)
 
@@ -83,28 +83,31 @@ async def _push_tribunal_agent_state(
     g8e_context, or the routing is targetless. The persona id is
     always ``"tribunal"`` and display metadata comes from the
     persona registry. Failures are caught at this boundary and do
-    not abort the consensus pipeline.
+    not abort the consensus pipeline. A terminal status is followed by
+    ``idle`` (``agent_state_sequence``).
     """
     if emitter.event_service is None or emitter.g8e_context is None:
         return
-    request = build_agent_state_request(
-        user_id=emitter.g8e_context.user_id or "",
-        persona_id="tribunal",
-        status=status,
-        run_id=run_id,
-        model=model,
-        web_session_id=emitter.g8e_context.web_session_id,
-        cli_session_id=emitter.g8e_context.cli_session_id,
-    )
-    if request is None:
-        return
-    try:
-        await emitter.event_service.publish_agent_state(request)
-    except Exception as exc:
-        logger.warning(
-            "[TRIBUNAL] observe agent-state push failed (non-blocking): %s",
-            exc,
+    for reported_status in agent_state_sequence(status):
+        request = build_agent_state_request(
+            user_id=emitter.g8e_context.user_id or "",
+            persona_id="tribunal",
+            status=reported_status,
+            run_id=run_id,
+            model=model,
+            web_session_id=emitter.g8e_context.web_session_id,
+            cli_session_id=emitter.g8e_context.cli_session_id,
         )
+        if request is None:
+            return
+        try:
+            await emitter.event_service.publish_agent_state(request)
+        except Exception as exc:
+            logger.warning(
+                "[TRIBUNAL] observe agent-state push failed (non-blocking): %s",
+                exc,
+            )
+            return
 
 
 async def _build_and_emit_result(

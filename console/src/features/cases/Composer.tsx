@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { useState, type KeyboardEvent } from 'react';
-import { ROLES, ROLE_INFO, effectiveRole, isConfigured } from '../../lib/inference';
+import { ROLES, ROLE_INFO, isConfigured, roleModelLabel } from '../../lib/inference';
 import { useInference } from '../../state/inference';
 import { operatorLabel, useOperators } from '../../state/operators';
 
@@ -73,9 +73,9 @@ export function Composer({ busy, placeholder, onSend, onStop, onManageOperators,
                   type="button"
                   className="chip"
                   onClick={onManageInference}
-                  title={ROLES.map((r) => `${ROLE_INFO[r].label}: ${effectiveRole(settings, r).model ?? '—'}`).join('\n')}
+                  title={ROLES.map((r) => `${ROLE_INFO[r].label}: ${roleModelLabel(settings, r)}`).join('\n')}
                 >
-                  <span className="mono">{settings.primary.model}</span>
+                  <span className="mono">{roleModelLabel(settings, 'primary')}</span>
                 </button>
               ) : (
                 <button type="button" className="chip chip-warn" onClick={onManageInference}>

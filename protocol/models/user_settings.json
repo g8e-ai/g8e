@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical UserSettings document shape. client is the authority - it creates and updates this document in the settings collection. The g8e-compatible ensemble reads it at request time. Settings are grouped into nested sub-objects (llm, search, eval_judge).",
+  "_comment": "Canonical UserSettings document shape. The ensemble (g8ee) is the authority - it creates and updates this document in the settings collection for the console (POST /api/v1/settings/llm) and reads it at request time. Settings are grouped into nested sub-objects (llm, search, eval_judge).",
 
-  "_authority": "client",
+  "_authority": "agent",
   "_consumers": ["agent"],
   "_collection": "settings",
   "_document_id": "user_settings_{user_id}",

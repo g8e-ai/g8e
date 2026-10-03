@@ -12,6 +12,10 @@ primary, assistant, and lite roles. Those land in the role-specific
 ``LLMSettings`` fields, which ``LLMSettings.resolve()`` reads ahead of the
 provider-level defaults. API keys never leave g8ee: the view reports only
 whether one resolves for the role.
+
+A g8e role stores no model: the Inference Operator binds each role to the
+model it serves (``app.llm.governed_role_models``), and the console shows that
+binding read-only from /settings/llm/models.
 """
 
 from __future__ import annotations
@@ -34,16 +38,19 @@ from app.models.settings import LLMSettings
 
 ROLES: tuple[LLMRole, ...] = get_args(LLMRole)
 
-# Providers a user may assign from the console, in display order. Jev is a
-# lite-only decision provider that requires Tribunal to be disabled, and fake
-# is test-only; both stay configurable through platform settings, not here.
-_PROVIDER_FIELDS: dict[LLMProvider, tuple[str, FieldRequirement, FieldRequirement, bool]] = {
-    LLMProvider.OLLAMA: ("Ollama", "optional", "optional", True),
-    LLMProvider.OPENAI: ("OpenAI-compatible", "optional", "required", True),
-    LLMProvider.ANTHROPIC: ("Anthropic", "optional", "required", True),
-    LLMProvider.GEMINI: ("Google Gemini", "none", "required", True),
-    LLMProvider.LLAMACPP: ("llama.cpp", "optional", "optional", True),
-    LLMProvider.G8E: ("g8e governed inference", "none", "none", True),
+# Providers a user may assign from the console, in display order:
+# (label, endpoint, api_key, model, lists_models). Jev is a lite-only decision
+# provider that requires Tribunal to be disabled, and fake is test-only; both
+# stay configurable through platform settings, not here.
+_PROVIDER_FIELDS: dict[
+    LLMProvider, tuple[str, FieldRequirement, FieldRequirement, FieldRequirement, bool]
+] = {
+    LLMProvider.OLLAMA: ("Ollama", "optional", "optional", "required", True),
+    LLMProvider.OPENAI: ("OpenAI-compatible", "optional", "required", "required", True),
+    LLMProvider.ANTHROPIC: ("Anthropic", "optional", "required", "required", True),
+    LLMProvider.GEMINI: ("Google Gemini", "none", "required", "required", True),
+    LLMProvider.LLAMACPP: ("llama.cpp", "optional", "optional", "required", True),
+    LLMProvider.G8E: ("g8e governed inference", "none", "none", "none", True),
 }
 
 
@@ -63,10 +70,11 @@ def provider_options(llm: LLMSettings) -> list[LLMProviderOption]:
             label=label,
             endpoint=endpoint,
             api_key=api_key,
+            model=model,
             default_endpoint=_provider_default_endpoint(llm, provider) if endpoint != "none" else None,
             lists_models=lists_models,
         )
-        for provider, (label, endpoint, api_key, lists_models) in _PROVIDER_FIELDS.items()
+        for provider, (label, endpoint, api_key, model, lists_models) in _PROVIDER_FIELDS.items()
     ]
 
 
@@ -75,9 +83,10 @@ def role_view(llm: LLMSettings, role: LLMRole) -> LLMRoleView:
     if provider is None:
         return LLMRoleView()
     _, api_key, _, _ = llm.resolve(role)
+    model_rule = _PROVIDER_FIELDS[provider][3] if provider in _PROVIDER_FIELDS else "required"
     return LLMRoleView(
         provider=provider,
-        model=getattr(llm, f"{role}_model"),
+        model=None if model_rule == "none" else getattr(llm, f"{role}_model"),
         endpoint=getattr(llm, f"{role}_endpoint"),
         api_key_set=bool(api_key),
     )
@@ -127,7 +136,8 @@ def normalize_endpoint(endpoint: str | None, field: str) -> str | None:
     return value.rstrip("/")
 
 
-def _check_provider(provider: LLMProvider, field: str) -> FieldRequirement:
+def _check_provider(provider: LLMProvider, field: str) -> tuple[FieldRequirement, FieldRequirement]:
+    """Return the (endpoint, model) requirements of a console provider."""
     fields = _PROVIDER_FIELDS.get(provider)
     if fields is None:
         raise ValidationError(
@@ -135,7 +145,7 @@ def _check_provider(provider: LLMProvider, field: str) -> FieldRequirement:
             field=field,
             constraint="console_provider",
         )
-    return fields[1]
+    return fields[1], fields[3]
 
 
 def apply_role_updates(llm: LLMSettings, request: LLMRoleSettingsUpdateRequest) -> None:
@@ -158,9 +168,17 @@ def apply_role_updates(llm: LLMSettings, request: LLMRoleSettingsUpdateRequest) 
                 )
             normalized[role] = (None, None, None)
             continue
-        endpoint_rule = _check_provider(update.provider, f"{role}.provider")
-        model = (update.model or "").strip()
-        if not model:
+        endpoint_rule, model_rule = _check_provider(update.provider, f"{role}.provider")
+        model: str | None = (update.model or "").strip()
+        if model_rule == "none":
+            if model:
+                raise ValidationError(
+                    f"The {update.provider.value} provider chooses the {role} model itself",
+                    field=f"{role}.model",
+                    constraint="provider_bound",
+                )
+            model = None
+        elif not model:
             raise ValidationError(
                 f"Choose a model for the {role} role", field=f"{role}.model", constraint="required"
             )

@@ -3,7 +3,9 @@
 
 // Per-role model selection. The ensemble stores one provider, model, endpoint,
 // and API key per role and reads them on every chat request, so a saved change
-// applies to the next message. Keys are write-only from the console.
+// applies to the next message. Keys are write-only from the console. A provider
+// whose option has model 'none' (g8e) binds each role's model itself, so the
+// role stores no model and the console shows the binding read-only.
 
 import type { LlmProviderOption, LlmRole, LlmRoleView, LlmSettings } from './types';
 
@@ -64,10 +66,15 @@ export function providerOption(settings: LlmSettings | null, provider: string): 
   return settings?.providers.find((p) => p.provider === provider);
 }
 
+/** The provider binds the role's model itself (g8e: the Inference Operator's role bindings). */
+export function providerBindsModel(settings: LlmSettings | null, provider: string | null): boolean {
+  return Boolean(provider) && providerOption(settings, provider ?? '')?.model === 'none';
+}
+
 export function updateBody(form: InferenceForm): InferenceUpdateBody {
   const role = (f: RoleForm): RoleUpdateBody => {
     if (!f.provider) return { provider: null, model: null, endpoint: null };
-    const body: RoleUpdateBody = { provider: f.provider, model: f.model.trim(), endpoint: f.endpoint.trim() || null };
+    const body: RoleUpdateBody = { provider: f.provider, model: f.model.trim() || null, endpoint: f.endpoint.trim() || null };
     if (f.clearKey) body.api_key = '';
     else if (f.apiKey.trim()) body.api_key = f.apiKey.trim();
     return body;
@@ -76,13 +83,13 @@ export function updateBody(form: InferenceForm): InferenceUpdateBody {
 }
 
 /** Problems that block saving, keyed by role. */
-export function formErrors(form: InferenceForm): Partial<Record<LlmRole, string>> {
+export function formErrors(form: InferenceForm, settings: LlmSettings): Partial<Record<LlmRole, string>> {
   const errors: Partial<Record<LlmRole, string>> = {};
   for (const role of ROLES) {
     const f = form[role];
     if (!f.provider) {
       if (role === 'primary') errors[role] = 'Choose a provider for the primary role.';
-    } else if (!f.model.trim()) {
+    } else if (!providerBindsModel(settings, f.provider) && !f.model.trim()) {
       errors[role] = 'Choose a model.';
     }
   }
@@ -127,22 +134,14 @@ export function effectiveRole(settings: LlmSettings, role: LlmRole): EffectiveRo
   return { provider: null, model: null, inherited: false };
 }
 
+/** A role's model for display: the stored model, or who binds it. */
+export function roleModelLabel(settings: LlmSettings, role: LlmRole): string {
+  const effective = effectiveRole(settings, role);
+  if (effective.model) return effective.model;
+  return providerBindsModel(settings, effective.provider) ? 'Inference Operator model' : '—';
+}
+
 export function isConfigured(settings: LlmSettings | null): boolean {
-  return Boolean(settings?.primary.provider && settings.primary.model);
-}
-
-function formEffective(form: InferenceForm, role: LlmRole): RoleForm | null {
-  const chain: LlmRole[] = role === 'lite' ? ['lite', 'assistant', 'primary'] : role === 'assistant' ? ['assistant', 'primary'] : ['primary'];
-  return chain.map((r) => form[r]).find((f) => f.provider) ?? null;
-}
-
-/**
- * Simple chat turns run the Assistant model through the Lite provider, so a
- * Lite backend that differs from Assistant's must also serve the Assistant model.
- */
-export function liteBackendDiffers(form: InferenceForm): boolean {
-  const lite = formEffective(form, 'lite');
-  const assistant = formEffective(form, 'assistant');
-  if (!form.lite.provider || !lite || !assistant) return false;
-  return lite.provider !== assistant.provider || lite.endpoint.trim() !== assistant.endpoint.trim();
+  const primary = settings?.primary;
+  return Boolean(primary?.provider && (primary.model || providerBindsModel(settings, primary.provider)));
 }

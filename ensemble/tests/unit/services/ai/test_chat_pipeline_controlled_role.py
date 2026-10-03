@@ -114,6 +114,7 @@ async def test_finalize_evaluation_assignment_records_role_not_invoked():
 
     await pipeline._finalize_evaluation_assignment(
         g8e_context=g8e_context,
+        judge_settings=G8eeUserSettings(),
         inputs=inputs,
         state=state,
         memory_holder=None,

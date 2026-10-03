@@ -254,6 +254,38 @@ func TestVerifyEnvelopeIdentityBinding_AppMutationEmptyOperatorFields(t *testing
 	}
 }
 
+// TestVerifyEnvelopeIdentityBinding_AppBindingAdmitsOnlyDocumentMutations
+// pins the scope of the app-only binding (INV-AUTH-ID-05). The Gateway-mode
+// command service also registers EXECUTE_BASH, FILE_EDIT, RESTORE_FILE, and
+// other Operator actions, so an app certificate with no Operator claim must
+// reach only the platform-record writes it exists for: DOCUMENT_UPDATE and
+// DOCUMENT_DELETE. Every other mutation still needs an Operator binding.
+func TestVerifyEnvelopeIdentityBinding_AppBindingAdmitsOnlyDocumentMutations(t *testing.T) {
+	appEnvelope := func(actionType constants.ActionType) []byte {
+		b, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+			ActionType:      string(actionType),
+			ActingAppId:     "g8ee",
+			SourceComponent: commonv1.Component_COMPONENT_AGENT,
+		})
+		require.NoError(t, err)
+		return b
+	}
+	for _, actionType := range constants.AllActionTypes {
+		if !actionType.IsMutation() {
+			continue
+		}
+		t.Run(string(actionType), func(t *testing.T) {
+			err := verifyEnvelopeIdentityBinding(identityBindingRequest(t, "spiffe://g8e.local/app/g8ee"), appEnvelope(actionType))
+			switch actionType {
+			case constants.ActionTypeDocumentUpdate, constants.ActionTypeDocumentDelete:
+				require.NoError(t, err)
+			default:
+				require.ErrorIs(t, err, constants.ErrIdentityBindingFailed)
+			}
+		})
+	}
+}
+
 // TestVerifyEnvelopeIdentityBinding_MutationWithMatchingOperatorCert_Admitted
 // is the positive counterpart: a DOCUMENT_UPDATE envelope carrying both
 // operator_id and operator_session_id, presented via a matching operator

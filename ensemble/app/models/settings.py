@@ -502,39 +502,6 @@ class LLMSettings(_ProtocolLLMSettings):
 
         return effective_provider, api_key, endpoint, model
 
-    @property
-    def primary_endpoint_resolved(self) -> str | None:
-        """Return the active primary provider endpoint, role-specific first."""
-        _, _, endpoint = self.resolve("primary")
-        return endpoint
-
-    @property
-    def assistant_endpoint_resolved(self) -> str | None:
-        """Return the active assistant provider endpoint, role-specific first."""
-        _, _, endpoint = self.resolve("assistant")
-        return endpoint
-
-    @property
-    def lite_endpoint_resolved(self) -> str | None:
-        """Return the active lite provider endpoint, role-specific first."""
-        _, _, endpoint = self.resolve("lite")
-        return endpoint
-
-    def get_primary_api_key(self) -> str | None:
-        """Return the active primary provider API key, role-specific first."""
-        _, api_key, _ = self.resolve("primary")
-        return api_key
-
-    def get_assistant_api_key(self) -> str | None:
-        """Return the active assistant provider API key, role-specific first."""
-        _, api_key, _ = self.resolve("assistant")
-        return api_key
-
-    def get_lite_api_key(self) -> str | None:
-        """Return the active lite provider API key, role-specific first."""
-        _, api_key, _ = self.resolve("lite")
-        return api_key
-
 
 class BatchExecutionSettings(_ProtocolBatchExecutionSettings):
     """Batch execution configuration for operator tools.

@@ -45,16 +45,14 @@ func TestReadDotEnvFile_ParsesValues(t *testing.T) {
 	path := filepath.Join(tmpDir, ".env")
 	content := `# comment
 G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
-G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini
-G8E_INFERENCE_MODEL_REGISTRY_DIGEST=abc123
+UNRELATED_KEY=value
 `
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 
 	values, err := readDotEnvFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, "http://192.168.1.2:11434", values["G8E_OLLAMA_ENDPOINT"])
-	assert.Equal(t, "eval-smoke-mini", values["G8E_INFERENCE_CAMPAIGN_ID"])
-	assert.Equal(t, "abc123", values["G8E_INFERENCE_MODEL_REGISTRY_DIGEST"])
+	assert.Equal(t, "value", values["UNRELATED_KEY"])
 }
 
 func TestCheckDockerInitEnv_MissingFile(t *testing.T) {
@@ -67,7 +65,7 @@ func TestCheckDockerInitEnv_MissingFile(t *testing.T) {
 
 func TestCheckDockerInitEnv_MissingRequiredKeys(t *testing.T) {
 	tmpDir := cmdtest.ChdirTemp(t)
-	content := "G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini\n"
+	content := "UNRELATED_KEY=value\n"
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(content), 0o644))
 
 	err := checkDockerInitEnv()

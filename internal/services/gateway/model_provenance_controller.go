@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -157,6 +158,14 @@ func (c *ModelProvenanceController) handleModelProvenanceAttestPreflight(w http.
 	if servedModelTag == "" || expectedModelDigest == "" {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
 		return
+	}
+	// The probe waits up to ModelProvenanceAttestationPreflightTimeout while the
+	// Provenance Operator hashes the model, longer than the server WriteTimeout.
+	// A deadline expiring mid-response truncates the TLS record and the client
+	// sees "tls: bad record MAC", so clear it; the probe bounds the wait.
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		c.logger.Warn("model provenance attestation preflight: failed to clear WriteTimeout", "error", err)
 	}
 	window, err := c.preflight.PreflightStorageAttestation(r.Context(), servedModelTag, expectedModelDigest)
 	if err != nil {

@@ -133,6 +133,8 @@ export interface LlmProviderOption {
   label: string;
   endpoint: FieldRequirement;
   api_key: FieldRequirement;
+  /** 'none': the provider binds each role's model itself (g8e: the Inference Operator). */
+  model: FieldRequirement;
   default_endpoint?: string | null;
   lists_models: boolean;
 }
@@ -143,6 +145,12 @@ export interface LlmRoleView {
   model: string | null;
   endpoint: string | null;
   api_key_set: boolean;
+}
+
+/** /settings/llm/models. bound_model is set for g8e: the Operator's model for the role. */
+export interface LlmModelList {
+  models: string[];
+  bound_model?: string | null;
 }
 
 export interface LlmSettings {

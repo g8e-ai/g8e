@@ -28,19 +28,19 @@ from app.models.investigations import ConversationMessageMetadata
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from app.dependencies import (
     get_g8ee_case_data_service,
+    get_g8ee_chat_user_settings,
     get_g8ee_investigation_service,
     require_authenticated_context,
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
-    get_g8ee_settings_service,
     get_request_context,
 )
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.data.case_data_service import CaseDataService
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
-from app.services.infra.settings_service import SettingsService
 from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.settings import G8eeUserSettings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -56,15 +56,12 @@ async def answer_triage_question(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_chat_user_settings),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ) -> dict[str, bool]:
     """
     Receive user answer to a triage clarifying question and store in ledger.
     """
-    # Fetch user settings manually using user_id from context to eliminate header dependency
-    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -123,15 +120,12 @@ async def skip_triage_questions(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_chat_user_settings),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ) -> dict[str, bool]:
     """
     Record that user skipped the triage clarifying questions.
     """
-    # Fetch user settings manually using user_id from context to eliminate header dependency
-    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,

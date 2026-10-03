@@ -54,6 +54,8 @@ from app.constants import (
     OLLAMA_GRANITE4_2_8B,
     OLLAMA_GRANITE4_2_3B,
     OLLAMA_LLAMA_3_2_3B,
+    OLLAMA_QWEN3_1_7B,
+    OLLAMA_QWEN3_5_0_8B,
     OLLAMA_QWEN3_5_2B,
     OPENAI_DEFAULT_MODEL,
     OPENAI_GPT_5_4_MINI,
@@ -233,6 +235,26 @@ OLLAMA_LLAMA_3_2_3B_CONFIG = LLModelConfig(
 
 OLLAMA_QWEN3_5_2B_CONFIG = LLModelConfig(
     name=OLLAMA_QWEN3_5_2B,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
+    supports_tools=True,
+    context_window_input=32_768,
+    top_k=40,
+    top_p=1.0,
+)
+
+OLLAMA_QWEN3_1_7B_CONFIG = LLModelConfig(
+    name=OLLAMA_QWEN3_1_7B,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
+    supports_tools=True,
+    context_window_input=32_768,
+    top_k=40,
+    top_p=1.0,
+)
+
+OLLAMA_QWEN3_5_0_8B_CONFIG = LLModelConfig(
+    name=OLLAMA_QWEN3_5_0_8B,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
@@ -592,6 +614,8 @@ _OLLAMA_CONFIGS: tuple[LLModelConfig, ...] = (
     OLLAMA_GRANITE4_2_3B_CONFIG,
     OLLAMA_LLAMA_3_2_3B_CONFIG,
     OLLAMA_QWEN3_5_2B_CONFIG,
+    OLLAMA_QWEN3_1_7B_CONFIG,
+    OLLAMA_QWEN3_5_0_8B_CONFIG,
     OLLAMA_DEFAULT_CONFIG,
 )
 for _cfg in _OLLAMA_CONFIGS:
@@ -620,6 +644,8 @@ MODEL_REGISTRY = LLModelRegistry(
         OLLAMA_GRANITE4_2_3B_CONFIG,
         OLLAMA_LLAMA_3_2_3B_CONFIG,
         OLLAMA_QWEN3_5_2B_CONFIG,
+    OLLAMA_QWEN3_1_7B_CONFIG,
+    OLLAMA_QWEN3_5_0_8B_CONFIG,
         OLLAMA_DEFAULT_CONFIG,
         GEMINI_3_1_PRO_CONFIG,
         GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG,

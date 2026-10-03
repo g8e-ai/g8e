@@ -30,10 +30,6 @@ from app.constants import (
     OperatorStatus,
     Priority,
 )
-from app.constants.collections import (
-    DB_COLLECTION_SETTINGS,
-    USER_SETTINGS_DOC_PREFIX,
-)
 from app.errors import ResourceNotFoundError, ServiceUnavailableError, ValidationError
 from app.models import CaseCreateRequest
 from app.models.cases import (
@@ -87,9 +83,7 @@ from app.models.internal_api import (
     StopAIRequest,
     StopAIResponse,
     StopOperatorRequest,
-    UserSettingsUpdateResponse,
     SettingsGetRequest,
-    SettingsSyncRequest,
 )
 from app.models.triage_api import (
     TriageAnswerRequest,
@@ -153,9 +147,8 @@ from app.dependencies import (
     get_g8ee_gateway_operator_client,
     get_g8ee_api_key_service,
     get_g8ee_certificate_service,
-    get_g8ee_settings_service,
     get_g8ee_settings_service_write,
-    get_g8ee_user_settings,
+    get_g8ee_chat_user_settings,
     get_request_context,
     require_authenticated_context,
 )
@@ -325,7 +318,7 @@ async def _create_investigation_for_case(
 async def internal_chat(
     request: ChatMessageRequest,
     app_settings: G8eeAppSettings = Depends(get_g8ee_app_settings),
-    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_chat_user_settings),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
@@ -584,7 +577,7 @@ async def internal_triage_answer(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_chat_user_settings),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """
@@ -593,9 +586,6 @@ async def internal_triage_answer(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    # Fetch user settings manually using user_id from context to eliminate header dependency
-    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -663,7 +653,7 @@ async def internal_triage_skip(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_chat_user_settings),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """
@@ -672,9 +662,6 @@ async def internal_triage_skip(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    # Fetch user settings manually using user_id from context to eliminate header dependency
-    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -1536,41 +1523,8 @@ async def health_check():
             InternalAPIPaths.G8EE_CHAT_TRIAGE_ANSWER,
             InternalAPIPaths.G8EE_CHAT_TRIAGE_SKIP,
             InternalAPIPaths.G8EE_CHAT_TRIAGE_TIMEOUT,
-            InternalAPIPaths.G8EE_SETTINGS_USER,
         ],
     }
-
-
-@router.post(InternalAPIPaths.G8EE_SETTINGS_USER + "/get", response_model=G8eeUserSettings)
-async def get_user_settings(
-    request: SettingsGetRequest,
-    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
-    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
-):
-    """
-    Get user settings - internal cluster use only.
-    """
-    user_id = g8e_context.user_id
-    logger.info("[INTERNAL-HTTP] Retrieving user settings", extra={"user_id": user_id})
-    return await settings_service.get_user_settings(user_id)
-
-
-@router.post(InternalAPIPaths.G8EE_SETTINGS_SYNC, response_model=UserSettingsUpdateResponse)
-async def settings_sync(
-    request: SettingsSyncRequest,
-    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
-):
-    """
-    Persist LLM and Search settings overrides into user settings.
-
-    This replaces the legacy "sync-on-chat" behavior to avoid side-effects
-    during inference and ensure settings are committed before chat starts.
-    """
-    user_id = request.context.user_id
-    user_settings = await settings_service.get_user_settings(user_id)
-
-    success = await settings_service.sync_settings_overrides(user_id, user_settings, request)
-    return UserSettingsUpdateResponse(success=success)
 
 
 @router.post(InternalAPIPaths.G8EE_SETTINGS_LLM_GET, response_model=LLMRoleSettingsResponse)
@@ -1611,9 +1565,7 @@ async def list_llm_models(
     its typed inventory command; caller-supplied endpoint and key are ignored.
     """
     if request.provider is LLMProvider.G8E:
-        return LLMModelListResponse(
-            models=await list_governed_models(gateway_operator_client, g8e_context)
-        )
+        return await list_governed_models(gateway_operator_client, g8e_context, request.role)
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
     stored_endpoint, stored_key = stored_connection(
         user_settings.llm, request.role, request.provider
@@ -1623,34 +1575,3 @@ async def list_llm_models(
     return LLMModelListResponse(models=models)
 
 
-@router.patch(InternalAPIPaths.G8EE_SETTINGS_USER, response_model=UserSettingsUpdateResponse)
-async def sync_user_settings(
-    request: dict,
-    cache_aside: CacheAsideService = Depends(get_g8ee_cache_aside_service),
-):
-    """
-    Sync user settings from client - internal cluster use only.
-
-    Invalidates the local cache for the user's settings so subsequent
-    requests will fetch the fresh settings from operator.
-    """
-    user_id = request.get("user_id")
-    if not user_id:
-        return UserSettingsUpdateResponse(
-            success=False, error="user_id is required in request body"
-        )
-
-    logger.info(
-        "[INTERNAL-HTTP] Syncing user settings (cache invalidation)", extra={"user_id": user_id}
-    )
-
-    try:
-        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        await cache_aside.invalidate_document(DB_COLLECTION_SETTINGS, user_doc_id)
-        return UserSettingsUpdateResponse(success=True)
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to invalidate settings cache",
-            extra={"error": str(e), "user_id": user_id},
-        )
-        return UserSettingsUpdateResponse(success=False, error=str(e))

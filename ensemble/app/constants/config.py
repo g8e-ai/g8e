@@ -363,6 +363,10 @@ OLLAMA_GRANITE4_2_8B = "granite4.2:8b"
 OLLAMA_GRANITE4_2_3B = "granite4.2:3b"
 OLLAMA_LLAMA_3_2_3B = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B = "qwen3.5:2b"
+# Inference Operator default Assistant and Lite models
+# (internal/constants/inference.go).
+OLLAMA_QWEN3_1_7B = "qwen3:1.7b"
+OLLAMA_QWEN3_5_0_8B = "qwen3.5:0.8b"
 
 # llama.cpp models
 LLAMACPP_GEMMA4_E2B = "llamacpp.gemma4.e2b"

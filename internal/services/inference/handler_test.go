@@ -326,9 +326,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CampaignRegistryAuthorizesE
 				ServedModelDigest: modelDigest,
 			}}
 			handler := mustNewHandler(t, backend, &config.Config{Inference: config.InferenceConfig{
-				Enabled:             true,
-				CampaignID:          campaignID,
-				ModelRegistryDigest: registryDigest,
+				Enabled: true,
 			}}, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 			payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -380,9 +378,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CampaignRegistryRejectsInva
 		t.Run(tt.name, func(t *testing.T) {
 			backend := &stubBackend{}
 			handler := mustNewHandler(t, backend, &config.Config{Inference: config.InferenceConfig{
-				Enabled:             true,
-				CampaignID:          campaignID,
-				ModelRegistryDigest: registryDigest,
+				Enabled:      true,
+				PrimaryModel: "chat-model:1",
 			}}, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 			req := &operatorv1.InferenceRequested{
 				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -449,6 +446,84 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AcceptsGovernedCampaignWith
 
 			require.NoError(t, err)
 			assert.Equal(t, model, backend.lastReq.Model)
+		})
+	}
+}
+
+// TestInferenceHandler_ExecuteVerifiedTransaction_ChatAndCampaignShareOneHandler
+// pins that one Inference Operator serves console chat and evaluation
+// campaigns concurrently: authority is decided per request, so neither kind
+// of request changes how the other is authorized, in either order.
+func TestInferenceHandler_ExecuteVerifiedTransaction_ChatAndCampaignShareOneHandler(t *testing.T) {
+	t.Parallel()
+	const chatModel = "gemma4:e4b"
+	const campaignModel = "frozen-model:1"
+	const campaignID = "campaign-shared"
+	modelDigest := strings.Repeat("d", 64)
+	registry := []*operatorv1.InferenceModelVariant{{Model: campaignModel, Digest: modelDigest}}
+	registryDigest, err := models.ComputeInferenceModelRegistryDigest(campaignID, registry)
+	require.NoError(t, err)
+
+	plain := func() []byte {
+		return mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+			RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+			Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+			Messages:             textInferenceMessages("chat"),
+		})
+	}
+	campaign := func() []byte {
+		return mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+			RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+			Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+			Model:                campaignModel,
+			ModelDigest:          modelDigest,
+			Messages:             textInferenceMessages("eval"),
+			CampaignId:           campaignID,
+			RunId:                "run-1",
+			AssignmentId:         "assignment-1",
+			EvaluationAttemptId:  "attempt-1",
+			ScenarioId:           "scenario-1",
+			ModelRegistry:        registry,
+			ModelRegistryDigest:  registryDigest,
+		})
+	}
+	overrideWithoutAuthority := func() []byte {
+		return mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+			RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+			Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+			Model:                campaignModel,
+			Messages:             textInferenceMessages("chat"),
+		})
+	}
+
+	for _, order := range []string{"chat-first", "campaign-first"} {
+		t.Run(order, func(t *testing.T) {
+			backend := &stubBackend{}
+			handler := mustNewHandler(t, backend, &config.Config{Inference: config.InferenceConfig{
+				Enabled:      true,
+				PrimaryModel: chatModel,
+			}}, mustNewScrubbingSvc(t), testutil.NewTestLogger())
+			runChat := func() {
+				backend.generateResp = &models.GenerateResponse{Parts: textInferenceResponseParts("chat"), FinishReason: "stop", Model: chatModel}
+				_, err := handler.ExecuteInference(context.Background(), &testCommandMessage{payload: plain()})
+				require.NoError(t, err)
+				assert.Equal(t, chatModel, backend.lastReq.Model)
+			}
+			runCampaign := func() {
+				backend.generateResp = &models.GenerateResponse{Parts: textInferenceResponseParts("eval"), FinishReason: "stop", Model: campaignModel, ServedModelDigest: modelDigest}
+				_, err := handler.ExecuteInference(context.Background(), &testCommandMessage{payload: campaign()})
+				require.NoError(t, err)
+				assert.Equal(t, campaignModel, backend.lastReq.Model)
+			}
+			if order == "chat-first" {
+				runChat()
+				runCampaign()
+			} else {
+				runCampaign()
+				runChat()
+			}
+			_, err := handler.ExecuteInference(context.Background(), &testCommandMessage{payload: overrideWithoutAuthority()})
+			require.ErrorIs(t, err, constants.ErrInferenceModelOverrideDenied)
 		})
 	}
 }

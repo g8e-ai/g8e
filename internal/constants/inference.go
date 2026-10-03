@@ -7,6 +7,8 @@
 
 package constants
 
+import "time"
+
 // EvaluationAppName is the platform-enrolled application identity the eval
 // runner presents for governed inference dispatch. It enrolls once through
 // `g8e auth enroll app` and never borrows another component's credentials.
@@ -21,4 +23,14 @@ const (
 	InferenceDefaultAssistantModel = "qwen3:1.7b"
 	InferenceDefaultLiteModel      = "qwen3.5:0.8b"
 	InferenceDefaultKeepAlive      = "-1"
+)
+
+// ModelProvenanceAttestationPreflightTimeout bounds the synchronous storage
+// attestation probe: the Gateway waits this long for the Provenance Operator
+// to hash the model's blobs, and the CLI client allows this plus
+// ModelProvenanceAttestationPreflightClientMargin. Hashing a multi-gigabyte
+// model over a mounted filesystem takes well over 30 seconds.
+const (
+	ModelProvenanceAttestationPreflightTimeout      = 5 * time.Minute
+	ModelProvenanceAttestationPreflightClientMargin = 15 * time.Second
 )

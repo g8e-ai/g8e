@@ -92,15 +92,6 @@ class RequestOverrides(G8eBaseModel):
     web_search_api_key: str | None = Field(default=None, description="Web search API key override")
 
 
-class SettingsSyncRequest(RequestOverrides):
-    """Request model for /settings/sync.
-
-    Includes context for user identification and settings overrides to be persisted.
-    """
-
-    context: RequestContext = Field(..., description="Request context with session/user identity")
-
-
 LLMRole = Literal["primary", "assistant", "lite"]
 FieldRequirement = Literal["required", "optional", "none"]
 
@@ -112,6 +103,12 @@ class LLMProviderOption(G8eBaseModel):
     label: str
     endpoint: FieldRequirement
     api_key: FieldRequirement
+    model: FieldRequirement = Field(
+        description=(
+            '"none" when the provider chooses each role\'s model itself (g8e: the '
+            "Inference Operator's role bindings); the role then stores no model"
+        )
+    )
     default_endpoint: str | None = Field(
         default=None, description="Endpoint used when the role leaves its endpoint empty"
     )
@@ -173,9 +170,14 @@ class LLMModelListRequest(G8eBaseModel):
 
 
 class LLMModelListResponse(G8eBaseModel):
-    """Response for /settings/llm/models."""
+    """Response for /settings/llm/models.
+
+    bound_model is set only for the g8e provider: the model the Inference
+    Operator serves for the requested role. That role always uses it.
+    """
 
     models: list[str]
+    bound_model: str | None = None
 
 
 class ChatMessageRequest(_G8eChatMessageRequest, RequestOverrides):
@@ -633,13 +635,6 @@ class DirectCommandRequest(G8eBaseModel):
         default=None, description="Hostname of the target operator for result display"
     )
     source: str = Field(default="anchored_terminal", description="Source of the command")
-
-
-class UserSettingsUpdateResponse(G8eBaseModel):
-    """Response model for user settings update sync."""
-
-    success: bool
-    error: str | None = None
 
 
 # Client API response models for InternalHttpClient

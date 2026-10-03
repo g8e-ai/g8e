@@ -59,14 +59,12 @@ type ServeOperatorOptions struct {
 
 	// Inference (g8ellama). Enabled when the operator runs as an Inference
 	// Node calling the configured remote Ollama provider.
-	InferenceEnabled             bool
-	InferenceOllamaEndpoint      string
-	InferencePrimaryModel        string
-	InferenceAssistantModel      string
-	InferenceLiteModel           string
-	InferenceKeepAlive           string
-	InferenceCampaignID          string
-	InferenceModelRegistryDigest string
+	InferenceEnabled        bool
+	InferenceOllamaEndpoint string
+	InferencePrimaryModel   string
+	InferenceAssistantModel string
+	InferenceLiteModel      string
+	InferenceKeepAlive      string
 
 	ProviderBoundaryObserverEnabled bool
 	ProviderBoundaryObserverID      string
@@ -256,14 +254,12 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 
 		Lattice: latticeCfg,
 
-		InferenceEnabled:             opts.InferenceEnabled,
-		InferenceOllamaEndpoint:      opts.InferenceOllamaEndpoint,
-		InferencePrimaryModel:        opts.InferencePrimaryModel,
-		InferenceAssistantModel:      opts.InferenceAssistantModel,
-		InferenceLiteModel:           opts.InferenceLiteModel,
-		InferenceKeepAlive:           opts.InferenceKeepAlive,
-		InferenceCampaignID:          opts.InferenceCampaignID,
-		InferenceModelRegistryDigest: opts.InferenceModelRegistryDigest,
+		InferenceEnabled:        opts.InferenceEnabled,
+		InferenceOllamaEndpoint: opts.InferenceOllamaEndpoint,
+		InferencePrimaryModel:   opts.InferencePrimaryModel,
+		InferenceAssistantModel: opts.InferenceAssistantModel,
+		InferenceLiteModel:      opts.InferenceLiteModel,
+		InferenceKeepAlive:      opts.InferenceKeepAlive,
 
 		ProviderBoundaryObserverEnabled: opts.ProviderBoundaryObserverEnabled,
 		ProviderBoundaryObserverID:      opts.ProviderBoundaryObserverID,

@@ -56,6 +56,7 @@ from app.services.protocols import (
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
 from app.clients.gateway_operator_client import GatewayOperatorClient
+from app.llm.governed_role_models import GovernedRoleModelService
 from app.services.data.case_data_service import CaseDataService
 from app.models.settings import G8eeAppSettings
 from app.utils.validation.whitelist_validator import get_whitelist_validator, register_whitelist_validator
@@ -92,6 +93,7 @@ class DataServices:
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
     gateway_operator_client: GatewayOperatorClient
+    governed_role_model_service: GovernedRoleModelService
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
@@ -157,6 +159,7 @@ class AllServices:
     api_key_service: APIKeyService
     certificate_service: CertificateService
     gateway_operator_client: GatewayOperatorClient
+    governed_role_model_service: GovernedRoleModelService
 
 
 class ServiceFactory:
@@ -201,6 +204,7 @@ class ServiceFactory:
         )
 
         gateway_operator_client = GatewayOperatorClient(core_services.internal_http_client)
+        governed_role_model_service = GovernedRoleModelService(gateway_operator_client)
         operator_data_service = OperatorDataService(
             cache=cache_aside_service,
             gateway_operator_client=gateway_operator_client,
@@ -237,6 +241,7 @@ class ServiceFactory:
             investigation_data_service=investigation_data_service,
             operator_data_service=operator_data_service,
             gateway_operator_client=gateway_operator_client,
+            governed_role_model_service=governed_role_model_service,
             memory_data_service=memory_data_service,
             case_data_service=case_data_service,
             agent_activity_data_service=agent_activity_data_service,
@@ -449,6 +454,7 @@ class ServiceFactory:
             api_key_service=operator_services.api_key_service,
             certificate_service=operator_services.certificate_service,
             gateway_operator_client=gateway_operator_client,
+            governed_role_model_service=data_services.governed_role_model_service,
         )
 
     @staticmethod

@@ -24,8 +24,12 @@ from google.protobuf.message import DecodeError
 from app.constants import EventType, LLMProvider
 from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
 from app.models.http_context import G8eHttpContext
+from app.models.internal_api import LLMModelListResponse, LLMRole
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
+    MODEL_ROLE_ASSISTANT,
+    MODEL_ROLE_LITE,
+    MODEL_ROLE_PRIMARY,
     OllamaModelInventoryRequested,
     OllamaModelInventoryResult,
 )
@@ -122,16 +126,15 @@ async def list_models(
     return parse_models(provider, body)
 
 
-async def list_governed_models(
-    operator_client: GatewayOperatorClient, context: G8eHttpContext
-) -> list[str]:
-    """List models at the caller's sole active, registered Inference Operator.
+async def inference_operator_session_id(
+    operator_client: GatewayOperatorClient, user_id: str | None
+) -> str:
+    """Return the session of the caller's sole active, registered Inference Operator.
 
-    The browser cannot supply an endpoint for governed inference. Resolve the
-    target from the Gateway's owner-scoped registry and request inventory over
-    the existing governed Operator command path.
+    The browser cannot supply an endpoint for governed inference, so the target
+    comes from the Gateway's owner-scoped registry.
     """
-    operators = await operator_client.list(user_id=context.user_id)
+    operators = await operator_client.list(user_id=user_id or "")
     inference_operators = [
         op for op in operators
         if isinstance(op, dict)
@@ -145,10 +148,19 @@ async def list_governed_models(
         raise ServiceUnavailableError("No active Inference Operator is available to list models")
     if len(inference_operators) != 1:
         raise ServiceUnavailableError("Multiple Inference Operators are active; model source is ambiguous")
+    return str(inference_operators[0]["operator_session_id"])
+
+
+async def request_governed_inventory(
+    operator_client: GatewayOperatorClient,
+    context: G8eHttpContext,
+    operator_session_id: str,
+) -> OllamaModelInventoryResult:
+    """Request the typed model inventory over the governed Operator command path."""
     request = OllamaModelInventoryRequested(execution_id=f"console-inventory-{uuid4().hex}")
     response = await operator_client.dispatch(
         context=context,
-        operator_session_id=inference_operators[0]["operator_session_id"],
+        operator_session_id=operator_session_id,
         event_type=EventType.OPERATOR_OLLAMA_MODEL_INVENTORY_REQUESTED.value,
         payload=request.SerializeToString(),
         target_resource="ollama-model",
@@ -162,4 +174,36 @@ async def list_governed_models(
         raise ServiceUnavailableError("The Inference Operator returned an invalid model inventory") from exc
     if result.status != EXECUTION_STATUS_COMPLETED:
         raise ServiceUnavailableError("The Inference Operator could not list models")
-    return sorted({entry.served_model_tag for entry in result.entries if entry.served_model_tag})
+    return result
+
+
+_PROTO_ROLES: dict[int, LLMRole] = {
+    MODEL_ROLE_PRIMARY: "primary",
+    MODEL_ROLE_ASSISTANT: "assistant",
+    MODEL_ROLE_LITE: "lite",
+}
+
+
+def role_models_from_inventory(result: OllamaModelInventoryResult) -> dict[LLMRole, str]:
+    """Return the Operator's role -> served model tag bindings."""
+    return {
+        _PROTO_ROLES[binding.role]: binding.served_model_tag
+        for binding in result.role_bindings
+        if binding.role in _PROTO_ROLES and binding.served_model_tag
+    }
+
+
+async def list_governed_models(
+    operator_client: GatewayOperatorClient, context: G8eHttpContext, role: LLMRole
+) -> LLMModelListResponse:
+    """List models at the caller's sole active, registered Inference Operator.
+
+    bound_model is the model the Operator serves for role. Governed inference
+    always uses it; the listing is informational.
+    """
+    session_id = await inference_operator_session_id(operator_client, context.user_id)
+    result = await request_governed_inventory(operator_client, context, session_id)
+    return LLMModelListResponse(
+        models=sorted({entry.served_model_tag for entry in result.entries if entry.served_model_tag}),
+        bound_model=role_models_from_inventory(result).get(role),
+    )

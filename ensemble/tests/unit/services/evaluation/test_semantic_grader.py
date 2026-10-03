@@ -76,7 +76,7 @@ async def test_grade_campaign_assignment_semantically_records_passing_grade():
         semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
             evaluation_context=context.evaluation_context,
             g8e_context=context,
-            request_settings=settings,
+            judge_settings=settings,
             gold_summary=context.evaluation_context.gold_summary,
             designated_role_output="checkout-api failed",
             tool_calls=[
@@ -120,7 +120,7 @@ async def test_grade_campaign_assignment_semantically_uses_lite_model_fallback()
         semantic_grades, _ = await grade_campaign_assignment_semantically(
             evaluation_context=context.evaluation_context,
             g8e_context=context,
-            request_settings=settings,
+            judge_settings=settings,
             gold_summary=context.evaluation_context.gold_summary,
             designated_role_output="delegating to assistant",
             tool_calls=[],
@@ -161,7 +161,7 @@ async def test_grade_campaign_assignment_semantically_uses_jev_decision_provider
         semantic_grades, _ = await grade_campaign_assignment_semantically(
             evaluation_context=context.evaluation_context,
             g8e_context=context,
-            request_settings=settings,
+            judge_settings=settings,
             gold_summary=context.evaluation_context.gold_summary,
             designated_role_output="checkout-api failed",
             tool_calls=[],
@@ -198,7 +198,7 @@ async def test_empty_judge_response_is_unavailable_and_sends_no_output_cap():
         semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
             evaluation_context=context.evaluation_context,
             g8e_context=context,
-            request_settings=settings,
+            judge_settings=settings,
             gold_summary=context.evaluation_context.gold_summary,
             designated_role_output="checkout-api failed",
             tool_calls=[],
@@ -221,7 +221,7 @@ async def test_grade_campaign_assignment_semantically_returns_unavailable_when_j
     semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
         evaluation_context=context.evaluation_context,
         g8e_context=context,
-        request_settings=settings,
+        judge_settings=settings,
         gold_summary=context.evaluation_context.gold_summary,
         designated_role_output="delegating to assistant",
         tool_calls=[],
@@ -258,7 +258,7 @@ async def test_judge_is_called_with_grader_context_without_evaluation_attempt_id
         await grade_campaign_assignment_semantically(
             evaluation_context=context.evaluation_context,
             g8e_context=context,
-            request_settings=settings,
+            judge_settings=settings,
             gold_summary=context.evaluation_context.gold_summary,
             designated_role_output="checkout-api failed",
             tool_calls=[],

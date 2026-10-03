@@ -24,6 +24,7 @@ from app.models.internal_api import (
     ChatMessageRequest,
     DirectCommandRequest,
     LLMModelListRequest,
+    LLMModelListResponse,
     ResourceCreationRequest,
     OperatorApprovalResponse,
     OperatorBindRequest,
@@ -31,7 +32,6 @@ from app.models.internal_api import (
     OperatorSlotCreationRequest,
     OperatorUnbindRequest,
     StopAIRequest,
-    SettingsSyncRequest,
 )
 from app.constants import OperatorStatus
 from app.routers.internal_router import (
@@ -50,8 +50,6 @@ from app.routers.internal_router import (
     unbind_operators,
     update_case,
     get_case,
-    get_user_settings,
-    settings_sync,
 )
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.constants import LLMProvider
@@ -74,10 +72,11 @@ async def test_governed_model_list_ignores_browser_endpoint(request_context, g8e
         api_key="untrusted-key",
     )
     with patch("app.routers.internal_router.list_governed_models", new_callable=AsyncMock) as listing:
-        listing.return_value = ["qwen3:4b"]
+        listing.return_value = LLMModelListResponse(models=["qwen3:4b"], bound_model="qwen3:4b")
         result = await list_llm_models(request, settings_service, g8e_context, gateway_operator_client)
     assert result.models == ["qwen3:4b"]
-    listing.assert_awaited_once_with(gateway_operator_client, g8e_context)
+    assert result.bound_model == "qwen3:4b"
+    listing.assert_awaited_once_with(gateway_operator_client, g8e_context, "primary")
     settings_service.get_user_settings.assert_not_called()
 
 
@@ -776,24 +775,7 @@ def test_status_payload_from_gateway_doc_prefers_snapshot_hostname():
     assert payload.metrics.system_identity.hostname == "live-host"
 
 
-@pytest.mark.asyncio
-async def test_get_user_settings(g8e_context, request_context):
-    from app.models.internal_api import SettingsGetRequest
 
-    mock_settings_service = MagicMock()
-    mock_settings = MagicMock()
-    mock_settings_service.get_user_settings = AsyncMock(return_value=mock_settings)
-
-    request_obj = SettingsGetRequest(context=request_context)
-
-    response = await get_user_settings(
-        request=request_obj,
-        settings_service=mock_settings_service,
-        g8e_context=g8e_context,
-    )
-
-    assert response == mock_settings
-    mock_settings_service.get_user_settings.assert_called_once_with("user-123")
 
 
 @pytest.mark.asyncio
@@ -884,24 +866,6 @@ async def test_internal_chat_settings_service_di_regression(
             settings_service=mock_settings_service,
         )
 
-    # Verify internal_chat returns success
-    # settings_service.update_user_settings is no longer called in internal_chat
-    # as we moved to a dedicated /settings/sync endpoint.
     assert response.success is True
 
 
-@pytest.mark.asyncio
-async def test_settings_sync_success(request_context):
-    request = SettingsSyncRequest(
-        context=request_context, llm_primary_model="gpt-4o", llm_primary_provider="openai"
-    )
-
-    mock_settings_service = MagicMock()
-    mock_settings_service.get_user_settings = AsyncMock()
-    mock_settings_service.sync_settings_overrides = AsyncMock(return_value=True)
-
-    response = await settings_sync(request=request, settings_service=mock_settings_service)
-
-    assert response.success is True
-    mock_settings_service.get_user_settings.assert_called_once_with("user-123")
-    mock_settings_service.sync_settings_overrides.assert_called_once()

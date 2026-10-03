@@ -198,15 +198,13 @@ The current worker path applies these options:
 | `--inference-assistant-model <model>` | Selects the Ollama model name for the Assistant chat tier. |
 | `--inference-lite-model <model>` | Selects the Ollama model name for the Lite chat tier. |
 | `--inference-keep-alive <duration>` | Sets the Ollama keep-alive duration (default: -1 for infinite). |
-| `--inference-campaign-id <id>` | Selects dedicated campaign authorization mode and requires every governed inference request to carry this exact campaign identity and complete assignment correlation. |
-| `--inference-model-registry-digest <sha256>` | Commits the dedicated campaign Operator to one immutable model registry. The Operator recomputes the digest over the request registry and rejects malformed registries, absent models, digest changes, and incomplete campaign bindings. |
 | `--provider-boundary-observer-enabled` | Enrolls a read-only provider-boundary hardware witness with no generic command or provider-lifecycle authority. |
 | `--provider-boundary-observer-id <id>` | Sets the stable Observer Operator identity pseudonym. |
 | `--provenance-operator-enabled` | Enrolls a storage-side model provenance witness. |
 | `--provenance-operator-id <id>` | Sets the stable Provenance Operator identity pseudonym. |
 | `--model-storage-root <path>` | Selects the local content-addressed model storage tree read by the Provenance Operator. |
 
-Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest. Both campaign flags are required together; ordinary inference omits both and retains the configured role-model authority.
+One Inference Operator serves console chat and evaluation campaigns at the same time; authority is decided per request. A request without campaign authority runs on the configured model for its role and is rejected if it names any other model. A request with campaign authority carries its campaign ID, model registry, and registry digest on the dispatch; the Operator recomputes the digest and rejects malformed registries, absent models, digest changes, and incomplete assignment correlation. Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest.
 
 Use `./g8e operator start --help` as the command-surface reference. The Lattice-named flags currently appear in Cobra help but are not copied into `ServeOperatorOptions` by `operatorStartCmd`; setting those flags does not enable the adapter. The adapter's environment-variable path exists in the service layer, but its task handler currently records receipt of a task without dispatching it. Do not treat the Lattice path as an implemented Operator execution integration.
 

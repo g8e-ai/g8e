@@ -143,10 +143,6 @@ func (h *InferenceExecutionHandler) authorizeInferenceModel(req models.Inference
 	if HasCampaignAuthority(req.CampaignID, req.ModelRegistryDigest, req.ModelRegistry) {
 		return authorizeGovernedCampaignModel(req)
 	}
-	startupCampaignMode := h.cfg.Inference.CampaignID != "" || h.cfg.Inference.ModelRegistryDigest != ""
-	if startupCampaignMode {
-		return "", constants.ErrInferenceCampaignBindingInvalid
-	}
 	approved := h.defaultModelForRole(req.Role)
 	if approved == "" {
 		return "", constants.ErrInferenceModelRefInvalid

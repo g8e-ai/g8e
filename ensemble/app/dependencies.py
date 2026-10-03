@@ -53,6 +53,7 @@ from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
 from .services.operator.operator_data_service import OperatorDataService
 from .clients.gateway_operator_client import GatewayOperatorClient
+from .llm.governed_role_models import GovernedRoleModelService
 from .services.auth.api_key_service import APIKeyService
 from .services.auth.auth_service import AuthService
 from .services.auth.certificate_service import CertificateService
@@ -401,6 +402,17 @@ async def get_g8ee_user_settings(
     return await settings_service.get_user_settings(user_id)
 
 
+async def get_g8ee_governed_role_model_service(request: Request) -> GovernedRoleModelService:
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.governed_role_model_service
+    if not service:
+        logger.error(
+            "Governed role model service not found in app state - g8ee initialization may have failed"
+        )
+        raise ServiceUnavailableError("Governed role model service not available")
+    return service
+
+
 async def get_g8ee_current_active_user(request: Request) -> AuthenticatedUser:
     user = getattr(request.state, "user", None)
     if not user:
@@ -461,6 +473,21 @@ async def health_check_dependencies(request: Request) -> HealthCheckResult:
     return await HealthService.check_dependencies(request)
 
 
+async def get_g8ee_chat_user_settings(
+    settings_service: SettingsServiceProtocol = Depends(get_g8ee_settings_service),
+    governed_role_models: GovernedRoleModelService = Depends(get_g8ee_governed_role_model_service),
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+) -> G8eeUserSettings:
+    """Load the caller's settings for a chat turn.
+
+    Every role served by the g8e provider is bound to the Inference Operator's
+    model for that role (``GovernedRoleModelService``), so title, triage,
+    memory, and scored calls never send a model the Operator rejects.
+    """
+    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
+    return await governed_role_models.bind(user_settings, g8e_context)
+
+
 __all__ = [
     "get_g8ee_all_services",
     "get_g8ee_api_key_service",
@@ -475,10 +502,12 @@ __all__ = [
     "get_g8ee_certificate_service",
     "get_g8ee_chat_pipeline",
     "get_g8ee_chat_task_manager",
+    "get_g8ee_chat_user_settings",
     "get_g8ee_client_http_client",
     "get_g8ee_current_active_user",
     "get_g8ee_event_service",
     "get_g8ee_gateway_operator_client",
+    "get_g8ee_governed_role_model_service",
     "get_g8ee_grounding_service",
     "get_g8ee_investigation_data_service",
     "get_g8ee_investigation_seed_service",

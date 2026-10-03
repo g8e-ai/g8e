@@ -220,7 +220,7 @@ Container names (`g8e-<service>`) and host ports are literals in `docker-compose
 | `ensemble` | 8000 |
 | `g8e-gateway-user` (g8ellama profile) | 8090 (HTTP), 8453 (HTTPS) |
 
-The Inference Operator model roles and keep-alive are the `g8e operator start` defaults; `./g8e operator start --help` lists them alongside the `--inference-*` flags. To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`. Do not put them in `.env`. The static campaign binding (`G8E_INFERENCE_CAMPAIGN_ID`, `G8E_INFERENCE_MODEL_REGISTRY_DIGEST`) is left unset; see the [Unified Docker Stack](./unified_stack.md#environment-configuration).
+The Inference Operator model roles and keep-alive are the `g8e operator start` defaults; `./g8e operator start --help` lists them alongside the `--inference-*` flags. To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`. Do not put them in `.env`. Campaign authority travels on each dispatch; see the [Unified Docker Stack](./unified_stack.md#environment-configuration).
 
 Example override that remaps the gateway host ports:
 

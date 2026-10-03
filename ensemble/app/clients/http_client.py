@@ -431,8 +431,13 @@ class HTTPClient:
 
     @staticmethod
     def _counts_toward_circuit_breaker(status_code: int, retry_config: RetryConfig) -> bool:
-        """Statuses we already retried are transient outages, not persistent failures."""
-        return status_code not in retry_config.retry_status_codes
+        """Count only server-side failures that were not already retried.
+
+        A 4xx is a deterministic answer from a healthy server (for example a 403
+        policy rejection); it says nothing about endpoint health. Statuses we
+        already retried are transient outages, not persistent failures.
+        """
+        return status_code >= 500 and status_code not in retry_config.retry_status_codes
 
     async def request(
         self,

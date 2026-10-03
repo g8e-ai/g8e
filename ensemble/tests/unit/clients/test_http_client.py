@@ -311,6 +311,27 @@ class TestCircuitBreaker:
         assert await cb.allow_request() is True
 
 
+class TestCircuitBreakerStatusClassification:
+    """Only a server-side failure the client did not already retry counts toward the breaker.
+
+    A 4xx is a deterministic answer from a healthy server (a policy rejection such as
+    a 403 model-override denial). Counting it turned one misconfigured inference role
+    into an outage of the whole endpoint.
+    """
+
+    @pytest.mark.parametrize("status_code", [400, 401, 403, 404, 409, 422])
+    def test_client_error_status_does_not_count(self, status_code):
+        assert HTTPClient._counts_toward_circuit_breaker(status_code, RetryConfig()) is False
+
+    @pytest.mark.parametrize("status_code", sorted(DEFAULT_RETRY_STATUS_CODES))
+    def test_retried_status_does_not_count(self, status_code):
+        assert HTTPClient._counts_toward_circuit_breaker(status_code, RetryConfig()) is False
+
+    @pytest.mark.parametrize("status_code", [501, 505, 507])
+    def test_unretried_server_error_counts(self, status_code):
+        assert HTTPClient._counts_toward_circuit_breaker(status_code, RetryConfig()) is True
+
+
 # =============================================================================
 # HTTPClient  - init and header injection
 # =============================================================================

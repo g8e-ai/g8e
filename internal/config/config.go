@@ -93,14 +93,12 @@ type LoadOptions struct {
 	Lattice *latticeconfig.LatticeConfig
 
 	// Inference backend (g8ellama). Disabled when InferenceEnabled is false.
-	InferenceEnabled             bool
-	InferenceOllamaEndpoint      string
-	InferencePrimaryModel        string
-	InferenceAssistantModel      string
-	InferenceLiteModel           string
-	InferenceKeepAlive           string
-	InferenceCampaignID          string
-	InferenceModelRegistryDigest string
+	InferenceEnabled        bool
+	InferenceOllamaEndpoint string
+	InferencePrimaryModel   string
+	InferenceAssistantModel string
+	InferenceLiteModel      string
+	InferenceKeepAlive      string
 
 	// ProviderBoundaryObserverEnabled marks the operator as the remote
 	// read-only provider-boundary hardware observer.
@@ -215,9 +213,6 @@ type InferenceConfig struct {
 	PrimaryModel   string
 	AssistantModel string
 	LiteModel      string
-
-	CampaignID          string
-	ModelRegistryDigest string
 
 	// KeepAlive is the Ollama keep-alive duration passed to /api/chat per
 	// request. Default "-1" pins all three chat roles in memory on the
@@ -723,14 +718,12 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 		endpoint = fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
 	}
 	return InferenceConfig{
-		Enabled:             opts.InferenceEnabled,
-		OllamaEndpoint:      endpoint,
-		PrimaryModel:        cmp.Or(opts.InferencePrimaryModel, constants.InferenceDefaultPrimaryModel),
-		AssistantModel:      cmp.Or(opts.InferenceAssistantModel, constants.InferenceDefaultAssistantModel),
-		LiteModel:           cmp.Or(opts.InferenceLiteModel, constants.InferenceDefaultLiteModel),
-		KeepAlive:           cmp.Or(opts.InferenceKeepAlive, constants.InferenceDefaultKeepAlive),
-		CampaignID:          opts.InferenceCampaignID,
-		ModelRegistryDigest: opts.InferenceModelRegistryDigest,
+		Enabled:        opts.InferenceEnabled,
+		OllamaEndpoint: endpoint,
+		PrimaryModel:   cmp.Or(opts.InferencePrimaryModel, constants.InferenceDefaultPrimaryModel),
+		AssistantModel: cmp.Or(opts.InferenceAssistantModel, constants.InferenceDefaultAssistantModel),
+		LiteModel:      cmp.Or(opts.InferenceLiteModel, constants.InferenceDefaultLiteModel),
+		KeepAlive:      cmp.Or(opts.InferenceKeepAlive, constants.InferenceDefaultKeepAlive),
 	}
 }
 
