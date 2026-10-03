@@ -138,7 +138,8 @@ h4 {
   border-radius: 7px;
   background: linear-gradient(135deg, var(--accent), #8b5cf6);
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: -0.02em;
 }
 .brand small {
   display: block;

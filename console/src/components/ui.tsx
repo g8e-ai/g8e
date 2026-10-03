@@ -3,13 +3,14 @@
 
 import { useState, type ReactNode } from 'react';
 
-const OK = new Set(['active', 'bound', 'open', 'approved', 'completed', 'resolved']);
+const OK = new Set(['active', 'open', 'approved', 'completed', 'resolved']);
+const ACCENT = new Set(['bound']);
 const WARN = new Set(['available', 'stale', 'pending', 'issuing', 'requested', 'running', 'in_progress', 'escalated']);
 const BAD = new Set(['offline', 'stopped', 'terminated', 'unavailable', 'failed', 'denied', 'expired', 'closed']);
 
 export function StatusPill({ status, label }: { status: string; label?: string }) {
   const s = status.toLowerCase();
-  const tone = OK.has(s) ? 'pill-ok' : WARN.has(s) ? 'pill-warn' : BAD.has(s) ? 'pill-bad' : '';
+  const tone = OK.has(s) ? 'pill-ok' : ACCENT.has(s) ? 'pill-accent' : WARN.has(s) ? 'pill-warn' : BAD.has(s) ? 'pill-bad' : '';
   return <span className={`pill ${tone}`}>{label ?? s.replace(/_/g, ' ')}</span>;
 }
 

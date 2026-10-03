@@ -92,7 +92,7 @@ function Shell({ intent }: { intent: FragmentIntent }) {
     <div className="shell">
       <nav className="sidebar" aria-label="Primary">
         <div className="brand">
-          <span className="brand-mark">g8</span>
+          <span className="brand-mark">g8e</span>
           <span>
             g8e Console
             <small>{version ? `Gateway ${version}` : 'Gateway'}</small>

@@ -132,7 +132,7 @@ export function AuthScreen({ enrollmentToken, pendingReasons }: Props) {
     <div className="auth">
       <div className="auth-panel">
         <div className="brand">
-          <span className="brand-mark">g8</span>
+          <span className="brand-mark">g8e</span>
           <span>g8e Console</span>
         </div>
         {pendingReasons.map((r) => (

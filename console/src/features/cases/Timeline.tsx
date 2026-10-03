@@ -54,7 +54,7 @@ function Item({ item, onRespond }: { item: TimelineItem; onRespond: Props['onRes
       return (
         <div className="msg-ai">
           <span className="avatar" aria-hidden="true">
-            g8
+            g8e
           </span>
           <div className={`body ${item.streaming ? 'caret' : ''}`}>
             <Markdown text={item.text} />
