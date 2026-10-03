@@ -263,5 +263,3 @@ func CertificateSerialNumber(certPEM string) string {
 	}
 	return cert.SerialNumber.String()
 }
-
-

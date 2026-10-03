@@ -24,7 +24,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-
 func GetNetworkLatency() float64 {
 	start := time.Now().UTC()
 	conn, err := net.DialTimeout(string(constants.NetworkProtocolTCP), "127.0.0.1:22", 1*time.Second)

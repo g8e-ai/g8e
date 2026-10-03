@@ -300,9 +300,13 @@ class TestAgenticReasoningLivesOnSage:
         )
 
     def test_agentic_reasoning_not_in_any_mode_prompt_file(self) -> None:
+        mode_files = [
+            p for p in _MODES_DIR.rglob("*.txt")
+            if not any(part.startswith(".") for part in p.parts) and "venv" not in p.parts
+        ]
         leaked = [
             str(path.relative_to(_PROMPTS_DATA_DIR))
-            for path in sorted(_MODES_DIR.rglob("*.txt"))
+            for path in sorted(mode_files)
             if "<agentic_reasoning>" in path.read_text(encoding="utf-8")
         ]
         assert not leaked, (

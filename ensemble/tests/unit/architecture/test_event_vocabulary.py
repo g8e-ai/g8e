@@ -47,7 +47,12 @@ ACTION_TYPE_STRING_KW = re.compile(r'\baction_type\s*=\s*["\']')
 
 
 def _python_files_under(path: Path) -> list[Path]:
-    return sorted(path.rglob("*.py"))
+    return sorted(
+        p for p in path.rglob("*.py")
+        if not any(part.startswith(".") for part in p.parts)
+        and "venv" not in p.parts
+        and "__pycache__" not in p.parts
+    )
 
 
 def _read(path: Path) -> str:
