@@ -35,6 +35,7 @@ import aiohttp
 
 from g8e.registry import action_for
 from app.models.pubsub_messages import G8eMessage
+from app.models.reputation import ReputationSignRequest, ReputationSignResponse
 from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
 from app.constants import AUTHORIZATION, GatewayAPIPaths
@@ -51,7 +52,6 @@ from g8e.models.governance import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 # Mapping from internal g8ee payload types to canonical g8e protocol payload types
 PAYLOAD_TYPE_MAPPING = {
@@ -620,6 +620,22 @@ class GovernanceClient:
                 category=ErrorCategory.PERMISSION,
                 component="g8ee",
             )
+
+    async def sign_reputation_commitment(self, request: ReputationSignRequest) -> ReputationSignResponse:
+        """Ask the Gateway to sign a reputation claim without exporting its key."""
+        if not self._client_cert_path or not self._client_key_path:
+            raise ValidationError("app mTLS credentials required for reputation signing", component="g8ee")
+        try:
+            session = await self._get_http_session()
+            async with session.post(
+                f"{self._base_url}{GatewayAPIPaths.GATEWAY_REPUTATION_SIGN}",
+                json=request.model_dump(mode="json"),
+            ) as response:
+                if response.status != 200:
+                    raise NetworkError(f"Gateway reputation signing HTTP {response.status}", component="g8ee")
+                return ReputationSignResponse.model_validate(await response.json())
+        except aiohttp.ClientError as exc:
+            raise NetworkError("Gateway reputation signing failed", component="g8ee", cause=exc) from exc
 
     async def update_governed_doc(
         self,

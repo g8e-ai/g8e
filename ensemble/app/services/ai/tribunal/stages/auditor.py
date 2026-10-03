@@ -62,11 +62,9 @@ class TribunalAuditor:
         self,
         emitter: TribunalEmitter,
         reputation_data_service: ReputationDataService,
-        auditor_hmac_key: str,
     ):
         self.emitter = emitter
         self.reputation_data_service = reputation_data_service
-        self.auditor_hmac_key = auditor_hmac_key
 
     async def run(
         self,
@@ -359,7 +357,6 @@ class TribunalAuditor:
                     reputation_data_service=self.reputation_data_service,
                     tribunal_command_id=correlation_id,
                     investigation_id=investigation_id,
-                    hmac_key=self.auditor_hmac_key,
                     context=context,
                 )
                 commitment_id = commitment.id

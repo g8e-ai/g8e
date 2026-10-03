@@ -37,7 +37,6 @@ from app.models.settings import (
 from app.models.base import G8eBaseModel
 
 from app.models.internal_api import LLMRoleSettingsResponse, LLMRoleSettingsUpdateRequest
-from app.services.infra.bootstrap_service import BootstrapService, BootstrapServiceProtocol
 from app.services.infra.llm_role_settings import apply_role_updates, settings_view
 
 if TYPE_CHECKING:
@@ -60,9 +59,6 @@ class SettingsServiceProtocol(Protocol):
         """Retrieve local bootstrap settings (bootstrap)."""
         ...
 
-    def get_bootstrap_service(self) -> BootstrapServiceProtocol:
-        """Get the bootstrap service dependency."""
-        ...
 
 
 class SettingsService:
@@ -71,21 +67,17 @@ class SettingsService:
     def __init__(
         self,
         cache_aside_service: CacheAsideService | None = None,
-        bootstrap_service: BootstrapService | None = None,
     ) -> None:
         self._cache_aside = cache_aside_service
-        self._bootstrap = bootstrap_service or BootstrapService()
         self._logger = logging.getLogger(__name__)
 
     def get_local_settings(self) -> G8eeAppSettings:
-        """Load settings using canonical defaults plus secrets sourced from the
-        bootstrap service (operator volume)."""
+        """Load canonical defaults and local LLM credentials."""
         settings = G8eeAppSettings(
             host="0.0.0.0",
             port=PortConstants.G8E_PORT_G8EE_HTTPS,
             log_level=LogLevel.INFO,
             enable_logging=True,
-            docker_gid="988",
             session_ttl=3600,
             absolute_session_timeout=86400,
             docs_dir=PathConstants.PATH_DOCS_DIR,
@@ -95,19 +87,6 @@ class SettingsService:
             passkey_rp_id="g8e",
             passkey_origin=f"http://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}",
         )
-
-        # Load secrets from bootstrap service
-        auditor_hmac_key = self._bootstrap.load_auditor_hmac_key()
-        if auditor_hmac_key:
-            self._bootstrap.verify_against_manifest("auditor_hmac_key", None)
-            settings.auth.auditor_hmac_key = auditor_hmac_key
-        else:
-            self._logger.info("Auditor HMAC key not available from bootstrap service")
-
-        # Operator session identity is Gateway-owned. The ensemble authenticates
-        # to the Gateway exclusively via its mTLS app cert — no host state crosses
-        # the container boundary (per docs/g8e/guides/build_apps.md § Identity
-        # and Authentication).
 
         # Apply LLM credential and endpoint bootstrap defaults (lowest
         # priority). Only secrets (API keys) and user-specific endpoints come
@@ -337,6 +316,3 @@ class SettingsService:
         """Build SearchSettings from platform or user settings."""
         return settings.search
 
-    def get_bootstrap_service(self) -> BootstrapServiceProtocol:
-        """Get the bootstrap service dependency."""
-        return self._bootstrap

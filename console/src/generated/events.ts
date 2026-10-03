@@ -301,9 +301,6 @@ export const EventType = Object.freeze({
     OPERATOR_STATUS_UPDATED_STOPPED: 'g8e.v1.operator.status.updated.stopped',
     OPERATOR_STATUS_UPDATED_TERMINATED: 'g8e.v1.operator.status.updated.terminated',
     OPERATOR_STATUS_UPDATED_UNAVAILABLE: 'g8e.v1.operator.status.updated.unavailable',
-    OPERATOR_STREAM_APPROVAL_GRANTED: 'g8e.v1.operator.stream.approval.granted',
-    OPERATOR_STREAM_APPROVAL_REJECTED: 'g8e.v1.operator.stream.approval.rejected',
-    OPERATOR_STREAM_APPROVAL_REQUESTED: 'g8e.v1.operator.stream.approval.requested',
     OPERATOR_TERMINAL_APPROVAL_DENIED: 'g8e.v1.operator.terminal.approval.denied',
     OPERATOR_TERMINAL_AUTH_STATE_CHANGED: 'g8e.v1.operator.terminal.auth.state.changed',
     OPERATOR_TERMINAL_THINKING_APPEND: 'g8e.v1.operator.terminal.thinking.append',
@@ -611,7 +608,7 @@ export const EventRegistry = Object.freeze({
     AI_LLM_CHAT_ITERATION_STARTED: Object.freeze({
         kind: 'outcome',
         transport: ['sse'],
-        producers: ['dashboard', 'ensemble'],
+        producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_LLM_CHAT_ITERATION_STOPPED: Object.freeze({
@@ -927,7 +924,7 @@ export const EventRegistry = Object.freeze({
     APP_CASE_CREATED: Object.freeze({
         kind: 'outcome',
         transport: ['sse'],
-        producers: ['cli', 'dashboard', 'ensemble', 'operator'],
+        producers: ['cli', 'ensemble', 'operator'],
         persistence: 'gateway.docstore',
     }),
     APP_CASE_DELETE_REQUESTED: Object.freeze({
@@ -1331,31 +1328,31 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_BOUND: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'operator'],
+        producers: ['operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_APPROVAL_GRANTED: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_APPROVAL_PREPARING: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_APPROVAL_REJECTED: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_APPROVAL_REQUESTED: Object.freeze({
         kind: 'request',
         transport: ['pubsub', 'sse'],
-        producers: ['dashboard', 'ensemble', 'gateway'],
+        producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_CANCEL_ACKNOWLEDGED: Object.freeze({
@@ -1383,30 +1380,30 @@ export const EventRegistry = Object.freeze({
     OPERATOR_COMMAND_CANCELLED: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_COMPLETED: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['cli', 'dashboard', 'ensemble', 'operator'],
+        producers: ['cli', 'ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_EXECUTION: Object.freeze({
         kind: 'outcome',
-        producers: ['cli', 'dashboard', 'ensemble', 'operator'],
+        producers: ['cli', 'ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_FAILED: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_OUTPUT_RECEIVED: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['dashboard', 'operator'],
+        producers: ['operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_REQUESTED: Object.freeze({
@@ -1419,13 +1416,13 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_COMMAND_RESULT: Object.freeze({
         kind: 'outcome',
-        producers: ['cli', 'dashboard', 'ensemble', 'operator'],
+        producers: ['cli', 'ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_STARTED: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_COMMAND_STATUS_UPDATED_CANCELLED: Object.freeze({
@@ -1533,28 +1530,28 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILE_EDIT_APPROVAL_GRANTED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_FILE_EDIT_APPROVAL_REJECTED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_FILE_EDIT_APPROVAL_REQUESTED: Object.freeze({
         kind: 'request',
         transport: ['pubsub', 'sse'],
-        producers: ['cli', 'dashboard', 'ensemble', 'gateway'],
+        producers: ['cli', 'ensemble', 'gateway'],
         persistence: 'ephemeral',
     }),
     OPERATOR_FILE_EDIT_COMPLETED: Object.freeze({
         kind: 'outcome',
-        producers: ['cli', 'dashboard', 'ensemble', 'operator'],
+        producers: ['cli', 'ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_FILE_EDIT_FAILED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_FILE_EDIT_REQUESTED: Object.freeze({
@@ -1567,7 +1564,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILE_EDIT_STARTED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_FILE_EDIT_TIMEOUT: Object.freeze({
@@ -1743,7 +1740,7 @@ export const EventRegistry = Object.freeze({
     OPERATOR_HEARTBEAT_SENT: Object.freeze({
         kind: 'outcome',
         transport: ['pubsub'],
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'gateway.operator_docs',
     }),
     OPERATOR_HISTORY_FETCH_COMPLETED: Object.freeze({
@@ -1801,28 +1798,28 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_INTENT_APPROVAL_GRANTED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_INTENT_APPROVAL_REJECTED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_INTENT_APPROVAL_REQUESTED: Object.freeze({
         kind: 'request',
         transport: ['pubsub', 'sse'],
-        producers: ['dashboard', 'ensemble', 'gateway'],
+        producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
     }),
     OPERATOR_INTENT_DENIED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_INTENT_GRANTED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_INTENT_REQUESTED: Object.freeze({
@@ -1839,7 +1836,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_INTENT_REVOKED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_LOGS_FETCH_COMPLETED: Object.freeze({
@@ -1950,12 +1947,12 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_NETWORK_PORT_CHECK_COMPLETED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_NETWORK_PORT_CHECK_FAILED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'ensemble', 'operator'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_NETWORK_PORT_CHECK_RECEIVED: Object.freeze({
@@ -1967,7 +1964,7 @@ export const EventRegistry = Object.freeze({
     OPERATOR_NETWORK_PORT_CHECK_REQUESTED: Object.freeze({
         kind: 'request',
         transport: ['governed'],
-        producers: ['cli', 'dashboard', 'ensemble', 'mcp'],
+        producers: ['cli', 'ensemble', 'mcp'],
         persistence: 'ephemeral',
         actionType: 'PORT_CHECK',
         payload: 'g8e.operator.v1.CheckPortRequested',
@@ -2034,7 +2031,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_PANEL_LIST_UPDATED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'operator'],
+        producers: ['operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_PROVIDER_BOUNDARY_OBSERVATION_COMPLETED: Object.freeze({
@@ -2139,88 +2136,70 @@ export const EventRegistry = Object.freeze({
     OPERATOR_STATUS_UPDATED_ACTIVE: Object.freeze({
         kind: 'fact',
         transport: ['sse'],
-        producers: ['dashboard', 'ensemble', 'gateway'],
+        producers: ['ensemble', 'gateway'],
         persistence: 'gateway.operator_docs',
     }),
     OPERATOR_STATUS_UPDATED_AVAILABLE: Object.freeze({
         kind: 'fact',
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.operator_docs',
     }),
     OPERATOR_STATUS_UPDATED_BOUND: Object.freeze({
         kind: 'fact',
         transport: ['sse'],
-        producers: ['dashboard', 'ensemble', 'gateway'],
+        producers: ['ensemble', 'gateway'],
         persistence: 'gateway.operator_docs',
     }),
     OPERATOR_STATUS_UPDATED_OFFLINE: Object.freeze({
         kind: 'fact',
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.operator_docs',
     }),
     OPERATOR_STATUS_UPDATED_STALE: Object.freeze({
         kind: 'fact',
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.operator_docs',
     }),
     OPERATOR_STATUS_UPDATED_STOPPED: Object.freeze({
         kind: 'fact',
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.operator_docs',
     }),
     OPERATOR_STATUS_UPDATED_TERMINATED: Object.freeze({
         kind: 'fact',
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.operator_docs',
     }),
     OPERATOR_STATUS_UPDATED_UNAVAILABLE: Object.freeze({
         kind: 'fact',
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.operator_docs',
-    }),
-    OPERATOR_STREAM_APPROVAL_GRANTED: Object.freeze({
-        kind: 'stream',
-        transport: ['sse'],
-        producers: ['ensemble'],
-        persistence: 'ephemeral',
-    }),
-    OPERATOR_STREAM_APPROVAL_REJECTED: Object.freeze({
-        kind: 'stream',
-        transport: ['sse'],
-        producers: ['ensemble'],
-        persistence: 'ephemeral',
-    }),
-    OPERATOR_STREAM_APPROVAL_REQUESTED: Object.freeze({
-        kind: 'request',
-        transport: ['pubsub', 'sse'],
-        producers: ['ensemble', 'gateway'],
-        persistence: 'ephemeral',
     }),
     OPERATOR_TERMINAL_APPROVAL_DENIED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'operator'],
+        producers: ['operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_TERMINAL_AUTH_STATE_CHANGED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'operator'],
+        producers: ['operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_TERMINAL_THINKING_APPEND: Object.freeze({
         kind: 'stream',
         transport: ['sse'],
-        producers: ['dashboard', 'ensemble'],
+        producers: ['ensemble'],
         persistence: 'ephemeral',
     }),
     OPERATOR_TERMINAL_THINKING_COMPLETE: Object.freeze({
         kind: 'stream',
         transport: ['sse'],
-        producers: ['dashboard', 'ensemble'],
+        producers: ['ensemble'],
         persistence: 'ephemeral',
     }),
     OPERATOR_UNBOUND: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'operator'],
+        producers: ['operator'],
         persistence: 'ephemeral',
     }),
     PLATFORM_APPROVALS_CHANGED: Object.freeze({
@@ -2314,12 +2293,12 @@ export const EventRegistry = Object.freeze({
     }),
     PLATFORM_CONSOLE_LOG_CONNECTED_CONFIRMED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'ephemeral',
     }),
     PLATFORM_CONSOLE_LOG_ENTRY_RECEIVED: Object.freeze({
         kind: 'outcome',
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'ephemeral',
     }),
     PLATFORM_ENROLLMENT_CREATE_REQUESTED: Object.freeze({
@@ -2384,37 +2363,37 @@ export const EventRegistry = Object.freeze({
     PLATFORM_SSE_CONNECTION_CLOSED: Object.freeze({
         kind: 'outcome',
         transport: ['sse'],
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.sse_store',
     }),
     PLATFORM_SSE_CONNECTION_ERROR: Object.freeze({
         kind: 'outcome',
         transport: ['sse'],
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.sse_store',
     }),
     PLATFORM_SSE_CONNECTION_ESTABLISHED: Object.freeze({
         kind: 'outcome',
         transport: ['sse'],
-        producers: ['dashboard', 'ensemble', 'gateway'],
+        producers: ['ensemble', 'gateway'],
         persistence: 'gateway.sse_store',
     }),
     PLATFORM_SSE_CONNECTION_FAILED: Object.freeze({
         kind: 'outcome',
         transport: ['sse'],
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.sse_store',
     }),
     PLATFORM_SSE_CONNECTION_OPENED: Object.freeze({
         kind: 'outcome',
         transport: ['sse'],
-        producers: ['dashboard', 'gateway'],
+        producers: ['gateway'],
         persistence: 'gateway.sse_store',
     }),
     PLATFORM_SSE_KEEPALIVE_SENT: Object.freeze({
         kind: 'stream',
         transport: ['sse'],
-        producers: ['dashboard', 'ensemble', 'gateway'],
+        producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
     }),
     PLATFORM_TELEMETRY_AUDIT_LOGGED: Object.freeze({

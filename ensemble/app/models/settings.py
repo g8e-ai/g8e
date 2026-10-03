@@ -82,16 +82,7 @@ class AuthSettings(G8eBaseModel):
     operator_session_id: str | None = Field(None)
     operator_api_key: str | None = Field(None, repr=False)
     internal_api_key: str | None = Field(None, repr=False)
-    auditor_hmac_key: str | None = Field(
-        None,
-        repr=False,
-        description=(
-            "HMAC-SHA256 key used by the Tribunal auditor to sign reputation "
-            "commitments (GDD §14.4 Artifact B). Generated and rotated by "
-            "g8eo SecretManager; mirrored into g8ee via the bootstrap volume "
-            "and tamper-verified against bootstrap_digest.json on load."
-        ),
-    )
+
 
 
 def _env_or(name: str, default: str) -> str:
@@ -542,7 +533,6 @@ class G8eeAppSettings(G8eBaseModel):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     component_urls: ComponentURLsSettings = Field(default_factory=ComponentURLsSettings)
 
-    docker_gid: str = Field("988")
     session_ttl: int = Field(28800)
     absolute_session_timeout: int = Field(86400)
     docs_dir: str = Field(PATHS["infra"]["docs_dir"])

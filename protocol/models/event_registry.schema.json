@@ -31,7 +31,6 @@
           "gateway",
           "operator",
           "ensemble",
-          "dashboard",
           "cli",
           "mcp"
         ]

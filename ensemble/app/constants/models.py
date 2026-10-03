@@ -196,7 +196,6 @@ class InfraPaths(G8eBaseModel):
     ca_cert_path: str
     app_cert_dir: str
     pki_dir: str
-    secrets_dir: str
     docs_dir: str
     ssh_config_path: str
     pending_enrollment_dir: str = ""

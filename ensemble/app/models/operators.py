@@ -15,7 +15,7 @@ Defines data structures for tracking g8eo operators and their runtime configurat
 
 import asyncio
 import logging
-from typing import Any, Literal
+from typing import Any
 
 from app.models.base import (
     ConfigDict,
@@ -627,23 +627,6 @@ class CommandApprovalRequest(ApprovalRequestBase):
     task_id: str | None = Field(default=None, description="AI task identifier")
 
 
-class StreamApprovalRequest(ApprovalRequestBase):
-    """Typed request for operator stream approval."""
-
-    kind: Literal["stream"] = Field(default="stream")
-    hosts: list[str] = Field(description="Hosts to stream the operator to")
-    arch: str = Field(description="Binary architecture")
-    endpoint: str = Field(description="client endpoint for handshake")
-    device_token: str = Field(description="dlk_ token (UI-redacted in event)")
-    concurrency: int = Field(default=5)
-    timeout: int = Field(default=300)
-
-    @property
-    def preview_command(self) -> str:
-        """Derived command for display in the UI."""
-        return (
-            f"g8e-operator stream --hosts {','.join(self.hosts)} --concurrency {self.concurrency}"
-        )
 
 
 class FileEditApprovalRequest(ApprovalRequestBase):
@@ -738,14 +721,6 @@ class CommandApprovalEvent(ApprovalContext):
         return len(self.target_systems) > 1
 
 
-class StreamApprovalEvent(ApprovalContext):
-    """Event payload published to client when operator stream approval is requested."""
-
-    kind: Literal["stream"] = Field(default="stream")
-    hosts: list[str] = Field(description="Hosts to stream the operator to")
-    concurrency: int = Field(description="Maximum parallel hosts")
-    timeout: int = Field(description="Timeout per host in seconds")
-    preview_command: str = Field(description="The command that will be executed")
 
 
 class AgentContinueApprovalEvent(ApprovalContext):

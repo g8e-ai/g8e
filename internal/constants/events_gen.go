@@ -311,9 +311,6 @@ const EventOperatorStatusUpdatedStale EventType = "g8e.v1.operator.status.update
 const EventOperatorStatusUpdatedStopped EventType = "g8e.v1.operator.status.updated.stopped"
 const EventOperatorStatusUpdatedTerminated EventType = "g8e.v1.operator.status.updated.terminated"
 const EventOperatorStatusUpdatedUnavailable EventType = "g8e.v1.operator.status.updated.unavailable"
-const EventOperatorStreamApprovalGranted EventType = "g8e.v1.operator.stream.approval.granted"
-const EventOperatorStreamApprovalRejected EventType = "g8e.v1.operator.stream.approval.rejected"
-const EventOperatorStreamApprovalRequested EventType = "g8e.v1.operator.stream.approval.requested"
 const EventOperatorTerminalApprovalDenied EventType = "g8e.v1.operator.terminal.approval.denied"
 const EventOperatorTerminalAuthStateChanged EventType = "g8e.v1.operator.terminal.auth.state.changed"
 const EventOperatorTerminalThinkingAppend EventType = "g8e.v1.operator.terminal.thinking.append"
@@ -727,7 +724,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "AiLLMChatIterationStarted",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "ensemble"},
+		Producers:   []string{"ensemble"},
 		Persistence: "gateway.sse_store",
 	},
 	EventAiLLMChatIterationStopped: {
@@ -1128,7 +1125,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "AppCaseCreated",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"sse"},
-		Producers:   []string{"cli", "dashboard", "ensemble", "operator"},
+		Producers:   []string{"cli", "ensemble", "operator"},
 		Persistence: "gateway.docstore",
 	},
 	EventAppCaseDeleteRequested: {
@@ -1649,35 +1646,35 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorBound",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "operator"},
+		Producers:   []string{"operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandApprovalGranted: {
 		Key:         "OperatorCommandApprovalGranted",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandApprovalPreparing: {
 		Key:         "OperatorCommandApprovalPreparing",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandApprovalRejected: {
 		Key:         "OperatorCommandApprovalRejected",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandApprovalRequested: {
 		Key:         "OperatorCommandApprovalRequested",
 		Kind:        EventKindRequest,
 		Transport:   []string{"pubsub", "sse"},
-		Producers:   []string{"dashboard", "ensemble", "gateway"},
+		Producers:   []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandCancelAcknowledged: {
@@ -1710,35 +1707,35 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorCommandCancelled",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandCompleted: {
 		Key:         "OperatorCommandCompleted",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"cli", "dashboard", "ensemble", "operator"},
+		Producers:   []string{"cli", "ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandExecution: {
 		Key:         "OperatorCommandExecution",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"cli", "dashboard", "ensemble", "operator"},
+		Producers:   []string{"cli", "ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandFailed: {
 		Key:         "OperatorCommandFailed",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandOutputReceived: {
 		Key:         "OperatorCommandOutputReceived",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"dashboard", "operator"},
+		Producers:   []string{"operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandRequested: {
@@ -1755,14 +1752,14 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorCommandResult",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"cli", "dashboard", "ensemble", "operator"},
+		Producers:   []string{"cli", "ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandStarted: {
 		Key:         "OperatorCommandStarted",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorCommandStatusUpdatedCancelled: {
@@ -1899,35 +1896,35 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorFileEditApprovalGranted",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorFileEditApprovalRejected: {
 		Key:         "OperatorFileEditApprovalRejected",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorFileEditApprovalRequested: {
 		Key:         "OperatorFileEditApprovalRequested",
 		Kind:        EventKindRequest,
 		Transport:   []string{"pubsub", "sse"},
-		Producers:   []string{"cli", "dashboard", "ensemble", "gateway"},
+		Producers:   []string{"cli", "ensemble", "gateway"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorFileEditCompleted: {
 		Key:         "OperatorFileEditCompleted",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"cli", "dashboard", "ensemble", "operator"},
+		Producers:   []string{"cli", "ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorFileEditFailed: {
 		Key:         "OperatorFileEditFailed",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorFileEditRequested: {
@@ -1944,7 +1941,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorFileEditStarted",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorFileEditTimeout: {
@@ -2175,7 +2172,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorHeartbeatSent",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"pubsub"},
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "gateway.operator_docs",
 	},
 	EventOperatorHistoryFetchCompleted: {
@@ -2251,35 +2248,35 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorIntentApprovalGranted",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorIntentApprovalRejected: {
 		Key:         "OperatorIntentApprovalRejected",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorIntentApprovalRequested: {
 		Key:         "OperatorIntentApprovalRequested",
 		Kind:        EventKindRequest,
 		Transport:   []string{"pubsub", "sse"},
-		Producers:   []string{"dashboard", "ensemble", "gateway"},
+		Producers:   []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorIntentDenied: {
 		Key:         "OperatorIntentDenied",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorIntentGranted: {
 		Key:         "OperatorIntentGranted",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorIntentRequested: {
@@ -2300,7 +2297,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorIntentRevoked",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorLogsFetchCompleted: {
@@ -2437,14 +2434,14 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorNetworkPortCheckCompleted",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorNetworkPortCheckFailed: {
 		Key:         "OperatorNetworkPortCheckFailed",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "ensemble", "operator"},
+		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorNetworkPortCheckReceived: {
@@ -2459,7 +2456,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:               "OperatorNetworkPortCheckRequested",
 		Kind:              EventKindRequest,
 		Transport:         []string{"governed"},
-		Producers:         []string{"cli", "dashboard", "ensemble", "mcp"},
+		Producers:         []string{"cli", "ensemble", "mcp"},
 		Persistence:       "ephemeral",
 		GovernanceAction:  ActionTypePortCheck,
 		GovernancePayload: "g8e.operator.v1.CheckPortRequested",
@@ -2546,7 +2543,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorPanelListUpdated",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "operator"},
+		Producers:   []string{"operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorProviderBoundaryObservationCompleted: {
@@ -2676,112 +2673,91 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "OperatorStatusUpdatedActive",
 		Kind:        EventKindFact,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "ensemble", "gateway"},
+		Producers:   []string{"ensemble", "gateway"},
 		Persistence: "gateway.operator_docs",
 	},
 	EventOperatorStatusUpdatedAvailable: {
 		Key:         "OperatorStatusUpdatedAvailable",
 		Kind:        EventKindFact,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.operator_docs",
 	},
 	EventOperatorStatusUpdatedBound: {
 		Key:         "OperatorStatusUpdatedBound",
 		Kind:        EventKindFact,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "ensemble", "gateway"},
+		Producers:   []string{"ensemble", "gateway"},
 		Persistence: "gateway.operator_docs",
 	},
 	EventOperatorStatusUpdatedOffline: {
 		Key:         "OperatorStatusUpdatedOffline",
 		Kind:        EventKindFact,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.operator_docs",
 	},
 	EventOperatorStatusUpdatedStale: {
 		Key:         "OperatorStatusUpdatedStale",
 		Kind:        EventKindFact,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.operator_docs",
 	},
 	EventOperatorStatusUpdatedStopped: {
 		Key:         "OperatorStatusUpdatedStopped",
 		Kind:        EventKindFact,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.operator_docs",
 	},
 	EventOperatorStatusUpdatedTerminated: {
 		Key:         "OperatorStatusUpdatedTerminated",
 		Kind:        EventKindFact,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.operator_docs",
 	},
 	EventOperatorStatusUpdatedUnavailable: {
 		Key:         "OperatorStatusUpdatedUnavailable",
 		Kind:        EventKindFact,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.operator_docs",
-	},
-	EventOperatorStreamApprovalGranted: {
-		Key:         "OperatorStreamApprovalGranted",
-		Kind:        EventKindStream,
-		Transport:   []string{"sse"},
-		Producers:   []string{"ensemble"},
-		Persistence: "ephemeral",
-	},
-	EventOperatorStreamApprovalRejected: {
-		Key:         "OperatorStreamApprovalRejected",
-		Kind:        EventKindStream,
-		Transport:   []string{"sse"},
-		Producers:   []string{"ensemble"},
-		Persistence: "ephemeral",
-	},
-	EventOperatorStreamApprovalRequested: {
-		Key:         "OperatorStreamApprovalRequested",
-		Kind:        EventKindRequest,
-		Transport:   []string{"pubsub", "sse"},
-		Producers:   []string{"ensemble", "gateway"},
-		Persistence: "ephemeral",
 	},
 	EventOperatorTerminalApprovalDenied: {
 		Key:         "OperatorTerminalApprovalDenied",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "operator"},
+		Producers:   []string{"operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorTerminalAuthStateChanged: {
 		Key:         "OperatorTerminalAuthStateChanged",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "operator"},
+		Producers:   []string{"operator"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorTerminalThinkingAppend: {
 		Key:         "OperatorTerminalThinkingAppend",
 		Kind:        EventKindStream,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "ensemble"},
+		Producers:   []string{"ensemble"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorTerminalThinkingComplete: {
 		Key:         "OperatorTerminalThinkingComplete",
 		Kind:        EventKindStream,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "ensemble"},
+		Producers:   []string{"ensemble"},
 		Persistence: "ephemeral",
 	},
 	EventOperatorUnbound: {
 		Key:         "OperatorUnbound",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "operator"},
+		Producers:   []string{"operator"},
 		Persistence: "ephemeral",
 	},
 	EventPlatformApprovalsChanged: {
@@ -2906,14 +2882,14 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "PlatformConsoleLogConnectedConfirmed",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "ephemeral",
 	},
 	EventPlatformConsoleLogEntryReceived: {
 		Key:         "PlatformConsoleLogEntryReceived",
 		Kind:        EventKindOutcome,
 		Transport:   nil,
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "ephemeral",
 	},
 	EventPlatformEnrollmentCreateRequested: {
@@ -2989,42 +2965,42 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key:         "PlatformSseConnectionClosed",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.sse_store",
 	},
 	EventPlatformSseConnectionError: {
 		Key:         "PlatformSseConnectionError",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.sse_store",
 	},
 	EventPlatformSseConnectionEstablished: {
 		Key:         "PlatformSseConnectionEstablished",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "ensemble", "gateway"},
+		Producers:   []string{"ensemble", "gateway"},
 		Persistence: "gateway.sse_store",
 	},
 	EventPlatformSseConnectionFailed: {
 		Key:         "PlatformSseConnectionFailed",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.sse_store",
 	},
 	EventPlatformSseConnectionOpened: {
 		Key:         "PlatformSseConnectionOpened",
 		Kind:        EventKindOutcome,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "gateway"},
+		Producers:   []string{"gateway"},
 		Persistence: "gateway.sse_store",
 	},
 	EventPlatformSseKeepaliveSent: {
 		Key:         "PlatformSseKeepaliveSent",
 		Kind:        EventKindStream,
 		Transport:   []string{"sse"},
-		Producers:   []string{"dashboard", "ensemble", "gateway"},
+		Producers:   []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
 	},
 	EventPlatformTelemetryAuditLogged: {
@@ -3148,7 +3124,6 @@ type _EventOperator struct {
 	ShutdownRequested           EventType
 	SlotInitializationFailed    EventType
 	StatusUpdated               _EventOperatorStatusUpdated
-	StreamApproval              _EventOperatorStreamApproval
 	TerminalApprovalDenied      EventType
 	TerminalAuthStateChanged    EventType
 	TerminalThinkingAppend      EventType
@@ -3363,12 +3338,6 @@ type _EventOperatorStatusUpdated struct {
 	Unavailable EventType
 }
 
-type _EventOperatorStreamApproval struct {
-	Granted   EventType
-	Rejected  EventType
-	Requested EventType
-}
-
 var Event = struct {
 	Operator _EventOperator
 }{
@@ -3563,11 +3532,6 @@ var Event = struct {
 			Stopped:     EventOperatorStatusUpdatedStopped,
 			Terminated:  EventOperatorStatusUpdatedTerminated,
 			Unavailable: EventOperatorStatusUpdatedUnavailable,
-		},
-		StreamApproval: _EventOperatorStreamApproval{
-			Granted:   EventOperatorStreamApprovalGranted,
-			Rejected:  EventOperatorStreamApprovalRejected,
-			Requested: EventOperatorStreamApprovalRequested,
 		},
 		TerminalApprovalDenied:   EventOperatorTerminalApprovalDenied,
 		TerminalAuthStateChanged: EventOperatorTerminalAuthStateChanged,

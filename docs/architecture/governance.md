@@ -89,7 +89,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-GOV-LAY-02 | L2 Consensus member votes MUST be Ed25519 signatures over `<transaction_hash>|<decision>`. Under `consensus` and `notary` postures, affirmative votes (`decision=true`) from distinct members (when `require_distinct` is true) MUST meet policy quorum, or reject with `ErrTxL2QuorumNotMet`. |
 | INV-GOV-LAY-03 | Platform bootstrap action types (`actionType.IsBootstrapAction()`) MUST be exempt from L2 consensus gating across all postures, allowing platform enrollment before consensus members are enrolled. |
 | INV-GOV-LAY-04 | L3 Notary verification MUST gate mutation actions under `ratify` and `notary` postures (`ErrTxL3ProofMissing`). Read-only actions MUST NOT require an L3 proof under any posture. |
-| INV-GOV-LAY-05 | In gateway mode, L3 Notary requires a WebAuthn passkey assertion with challenge matching the transaction hash (`ErrPasskeyProofRequired`). In outbound operator mode, L3 Notary verifies an approved suspended transaction within the 30-minute window (`L3ApprovalWindow`) signed by the operator private key with matching certificate fingerprint. |
+| INV-GOV-LAY-05 | In gateway mode, L3 Notary requires a WebAuthn passkey assertion with challenge matching the transaction hash (`ErrPasskeyProofRequired`). In outbound operator mode, L3 Notary verifies an approved suspended transaction within the 30-minute window (`L3ApprovalWindow`) signed by the operator private key with matching certificate fingerprint. L4 passes `requestor_user_id` as the approving user; `operator_id` identifies the execution target. Attaching approval proof MUST preserve every hashed envelope field. |
 
 ### L4 Warden Pre-Dispatch (`INV-GOV-WARD`)
 

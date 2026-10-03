@@ -82,7 +82,7 @@ pip install -e protocol/python
 pip install -e 'ensemble[dev,test]'
 ```
 
-The service reads `.env` with `python-dotenv` at import time without overriding existing environment variables. Local bootstrap settings are assembled by `SettingsService`; verified bootstrap secrets can come from the configured bootstrap material, and platform settings (LLM provider, models, token limits) are loaded through the Gateway-backed cache-aside service, which is their only source. Request overrides are applied at the user-settings boundary. Environment variables follow INV-ENV-04 in [docs/devs/devs.md](../devs/devs.md): secrets, user-specific endpoints, and host facts only. Do not treat the `/operator-state` mount in the unified Compose deployment as a general host filesystem or execution channel.
+The service reads `.env` with `python-dotenv` at import time without overriding existing environment variables. `SettingsService` assembles local bootstrap settings; platform settings are loaded through the Gateway-backed cache-aside service, and request overrides are applied at the user-settings boundary. g8ee stores its own app identity and reads no Gateway or Operator secret files. Reputation commitments request Gateway-held signing over app mTLS. There is no Operator volume mount, `--secrets-dir` flag, or Docker execution tool. Environment variables follow INV-ENV-04 in [docs/devs/devs.md](../devs/devs.md): secrets, user-specific endpoints, and host facts only.
 
 ## Development commands
 

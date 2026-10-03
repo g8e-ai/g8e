@@ -264,7 +264,6 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - g8e-ensemble-data:/root/.g8e
-      - g8e-operator-data:/operator-state:ro
       - g8e-shared-tmp:/tmp
     command:
       - "--gateway-http-url"
@@ -277,8 +276,6 @@ services:
       - "wss://g8e.local:8443"
       - "--runtime-dir"
       - "/root/.g8e"
-      - "--secrets-dir"
-      - "/operator-state/secrets"
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s

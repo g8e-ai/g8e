@@ -14,7 +14,6 @@ pytestmark = pytest.mark.integration
 _ROOT_COMPOSE_FILE = Path(__file__).resolve().parents[3] / "docker-compose.yml"
 _ENSEMBLE_SERVICE = "  ensemble:"
 _OPERATOR_VOLUME = "      - g8e-operator-data:/operator-state:ro"
-_OPERATOR_SECRETS_ARG = ['      - "--secrets-dir"', '      - "/operator-state/secrets"']
 
 
 def _ensemble_service_block() -> list[str]:
@@ -28,12 +27,12 @@ def _ensemble_service_block() -> list[str]:
     return lines[start:end]
 
 
-def test_ensemble_uses_mounted_operator_secrets_directory() -> None:
+def test_ensemble_uses_only_its_own_runtime_volume() -> None:
     service = _ensemble_service_block()
 
-    assert _OPERATOR_VOLUME in service
-    first = service.index(_OPERATOR_SECRETS_ARG[0])
-    assert service[first : first + 2] == _OPERATOR_SECRETS_ARG
+    assert _OPERATOR_VOLUME not in service
+    assert not any("operator-state" in line or "--secrets-dir" in line for line in service)
+    assert "      - g8e-ensemble-data:/root/.g8e" in service
 
 
 def test_ensemble_platform_config_is_passed_as_arguments_not_environment() -> None:

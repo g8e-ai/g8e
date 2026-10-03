@@ -348,7 +348,7 @@ class InternalHttpClient:
     ) -> OperatorLinkResponse:
         """Generate a single-operator handshake link (dlk_ token) via client.
 
-        This is a prerequisite for the 'stream_operator' tool (Phase 4).
+        The link supports explicit Operator enrollment.
         """
         try:
             logger.info(

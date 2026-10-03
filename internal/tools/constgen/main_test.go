@@ -199,6 +199,7 @@ func TestValidateRegistry_RejectsEntriesThatBreakASingleRule(t *testing.T) {
 		{name: "unknown kind", mutate: func(e *eventEntry) { e.Kind = "notification" }, want: `A: unknown kind "notification"`},
 		{name: "unknown transport", mutate: func(e *eventEntry) { e.Transport = []string{"pubsub", "carrier-pigeon"} }, want: `A: unknown transport "carrier-pigeon"`},
 		{name: "unknown producer", mutate: func(e *eventEntry) { e.Producers = []string{"gateway", "intern"} }, want: `A: unknown producer "intern"`},
+		{name: "removed dashboard producer", mutate: func(e *eventEntry) { e.Producers = []string{"dashboard"} }, want: `A: unknown producer "dashboard"`},
 		{name: "no producers", mutate: func(e *eventEntry) { e.Producers = nil }, want: "A: missing producers"},
 		{name: "missing persistence", mutate: func(e *eventEntry) { e.Persistence = "" }, want: "A: missing persistence"},
 		{name: "unknown persistence", mutate: func(e *eventEntry) { e.Persistence = "gateway.scratchpad" }, want: `A: unknown persistence "gateway.scratchpad"`},

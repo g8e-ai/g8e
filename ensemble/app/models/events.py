@@ -57,7 +57,6 @@ from app.models.operators import (
     FileEditApprovalEvent,
     IntentApprovalEvent,
     OperatorStatusUpdatedPayload,
-    StreamApprovalEvent,
 )
 from app.models.reputation import (
     ReputationCommitmentCreatedPayload,
@@ -142,7 +141,6 @@ SSE_PAYLOADS: dict[EventType, type[G8eBaseModel]] = {
     EventType.OPERATOR_REPUTATION_STATE_UPDATED: StakeResolutionPayload,
     EventType.OPERATOR_STATUS_UPDATED_ACTIVE: OperatorStatusUpdatedPayload,
     EventType.OPERATOR_STATUS_UPDATED_BOUND: OperatorStatusUpdatedPayload,
-    EventType.OPERATOR_STREAM_APPROVAL_REQUESTED: StreamApprovalEvent,
 }
 
 

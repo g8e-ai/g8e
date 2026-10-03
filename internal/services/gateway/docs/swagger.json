@@ -653,6 +653,58 @@
                 }
             }
         },
+        "/api/v1/gateway/reputation/sign": {
+            "post": {
+                "description": "App mTLS only. Returns an HMAC signature over merkle_root || prev_root || tribunal_command_id. The signing key remains in the Gateway keystore. Signing does not validate the application's scores or satisfy governance proof requirements.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "gateway"
+                ],
+                "summary": "Sign an application reputation commitment",
+                "parameters": [
+                    {
+                        "description": "Reputation commitment claim",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ReputationSignRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ReputationSignResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid commitment",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "App identity required",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Signing unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/governance/envelopes": {
             "post": {
                 "description": "Accepts a GovernanceEnvelope, verifies it through the 5-layer gauntlet (L1–L3 pre-flight,\nL4 warden, L5 actuator), and returns the signed ActionReceipt. Transport-to-envelope\nidentity binding is enforced via mTLS certificate URI SAN matching.",
@@ -2521,9 +2573,6 @@
                 "g8e.v1.operator.status.updated.stopped",
                 "g8e.v1.operator.status.updated.terminated",
                 "g8e.v1.operator.status.updated.unavailable",
-                "g8e.v1.operator.stream.approval.granted",
-                "g8e.v1.operator.stream.approval.rejected",
-                "g8e.v1.operator.stream.approval.requested",
                 "g8e.v1.operator.terminal.approval.denied",
                 "g8e.v1.operator.terminal.auth.state.changed",
                 "g8e.v1.operator.terminal.thinking.append",
@@ -2869,9 +2918,6 @@
                 "EventOperatorStatusUpdatedStopped",
                 "EventOperatorStatusUpdatedTerminated",
                 "EventOperatorStatusUpdatedUnavailable",
-                "EventOperatorStreamApprovalGranted",
-                "EventOperatorStreamApprovalRejected",
-                "EventOperatorStreamApprovalRequested",
                 "EventOperatorTerminalApprovalDenied",
                 "EventOperatorTerminalAuthStateChanged",
                 "EventOperatorTerminalThinkingAppend",
@@ -4077,6 +4123,28 @@
                     "type": "integer"
                 },
                 "proof_root_sha256": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ReputationSignRequest": {
+            "type": "object",
+            "properties": {
+                "merkle_root": {
+                    "type": "string"
+                },
+                "prev_root": {
+                    "type": "string"
+                },
+                "tribunal_command_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ReputationSignResponse": {
+            "type": "object",
+            "properties": {
+                "signature": {
                     "type": "string"
                 }
             }

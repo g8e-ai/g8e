@@ -76,7 +76,7 @@ var (
 
 	allowedProducers = map[string]struct{}{
 		"gateway": {}, "operator": {}, "ensemble": {},
-		"dashboard": {}, "cli": {}, "mcp": {},
+		"cli": {}, "mcp": {},
 	}
 
 	allowedPersistence = map[string]struct{}{

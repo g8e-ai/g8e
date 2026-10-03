@@ -179,6 +179,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 
 	// Proxy signing public key: g8ee fetches it over mTLS to verify stamps.
 	r.addExact(constants.APIPaths.GatewayProxySigningKey, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.GatewayReputationSign, RouteAuthMTLS)
 
 	// Ensemble browser proxy (Gateway → g8ee with signed identity stamp).
 	r.addPrefix(constants.APIPaths.EnsembleChatPrefix, RouteAuthWebSession)

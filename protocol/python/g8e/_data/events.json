@@ -500,7 +500,6 @@
       "value": "g8e.v1.ai.llm.chat.iteration.started",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble"
       ],
       "persistence": "gateway.sse_store",
@@ -1079,7 +1078,6 @@
       "kind": "outcome",
       "producers": [
         "cli",
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -1879,7 +1877,6 @@
       "value": "g8e.v1.operator.bound",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "operator"
       ],
       "persistence": "ephemeral"
@@ -1892,7 +1889,6 @@
         "pubsub"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -1906,7 +1902,6 @@
         "pubsub"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -1920,7 +1915,6 @@
         "pubsub"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -1935,7 +1929,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "gateway"
       ],
@@ -1997,7 +1990,6 @@
         "pubsub"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2012,7 +2004,6 @@
       ],
       "producers": [
         "cli",
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2024,7 +2015,6 @@
       "kind": "outcome",
       "producers": [
         "cli",
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2038,7 +2028,6 @@
         "pubsub"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2052,7 +2041,6 @@
         "pubsub"
       ],
       "producers": [
-        "dashboard",
         "operator"
       ],
       "persistence": "ephemeral"
@@ -2091,7 +2079,6 @@
       "kind": "outcome",
       "producers": [
         "cli",
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2105,7 +2092,6 @@
         "pubsub"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2325,7 +2311,6 @@
       "value": "g8e.v1.operator.file.edit.approval.granted",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2336,7 +2321,6 @@
       "value": "g8e.v1.operator.file.edit.approval.rejected",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2352,7 +2336,6 @@
       ],
       "producers": [
         "cli",
-        "dashboard",
         "ensemble",
         "gateway"
       ],
@@ -2364,7 +2347,6 @@
       "kind": "outcome",
       "producers": [
         "cli",
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2375,7 +2357,6 @@
       "value": "g8e.v1.operator.file.edit.failed",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2408,7 +2389,6 @@
       "value": "g8e.v1.operator.file.edit.started",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2779,7 +2759,6 @@
         "pubsub"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2896,7 +2875,6 @@
       "value": "g8e.v1.operator.intent.approval.granted",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2907,7 +2885,6 @@
       "value": "g8e.v1.operator.intent.approval.rejected",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2922,7 +2899,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "gateway"
       ],
@@ -2933,7 +2909,6 @@
       "value": "g8e.v1.operator.intent.denied",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2944,7 +2919,6 @@
       "value": "g8e.v1.operator.intent.granted",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -2981,7 +2955,6 @@
       "value": "g8e.v1.operator.intent.revoked",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -3201,7 +3174,6 @@
       "value": "g8e.v1.operator.network.port.check.completed",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -3212,7 +3184,6 @@
       "value": "g8e.v1.operator.network.port.check.failed",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "ensemble",
         "operator"
       ],
@@ -3241,7 +3212,6 @@
       },
       "producers": [
         "cli",
-        "dashboard",
         "ensemble",
         "mcp"
       ],
@@ -3375,7 +3345,6 @@
       "value": "g8e.v1.operator.panel.list.updated",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "operator"
       ],
       "persistence": "ephemeral"
@@ -3591,7 +3560,6 @@
       "value": "g8e.v1.operator.status.updated.active",
       "kind": "fact",
       "producers": [
-        "dashboard",
         "ensemble",
         "gateway"
       ],
@@ -3605,7 +3573,6 @@
       "value": "g8e.v1.operator.status.updated.available",
       "kind": "fact",
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.operator_docs"
@@ -3615,7 +3582,6 @@
       "value": "g8e.v1.operator.status.updated.bound",
       "kind": "fact",
       "producers": [
-        "dashboard",
         "ensemble",
         "gateway"
       ],
@@ -3629,7 +3595,6 @@
       "value": "g8e.v1.operator.status.updated.offline",
       "kind": "fact",
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.operator_docs"
@@ -3639,7 +3604,6 @@
       "value": "g8e.v1.operator.status.updated.stale",
       "kind": "fact",
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.operator_docs"
@@ -3649,7 +3613,6 @@
       "value": "g8e.v1.operator.status.updated.stopped",
       "kind": "fact",
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.operator_docs"
@@ -3659,7 +3622,6 @@
       "value": "g8e.v1.operator.status.updated.terminated",
       "kind": "fact",
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.operator_docs"
@@ -3669,55 +3631,15 @@
       "value": "g8e.v1.operator.status.updated.unavailable",
       "kind": "fact",
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.operator_docs"
-    },
-    "OperatorStreamApprovalGranted": {
-      "_go_const": "EventOperatorStreamApprovalGranted",
-      "value": "g8e.v1.operator.stream.approval.granted",
-      "kind": "stream",
-      "transport": [
-        "sse"
-      ],
-      "producers": [
-        "ensemble"
-      ],
-      "persistence": "ephemeral"
-    },
-    "OperatorStreamApprovalRejected": {
-      "_go_const": "EventOperatorStreamApprovalRejected",
-      "value": "g8e.v1.operator.stream.approval.rejected",
-      "kind": "stream",
-      "transport": [
-        "sse"
-      ],
-      "producers": [
-        "ensemble"
-      ],
-      "persistence": "ephemeral"
-    },
-    "OperatorStreamApprovalRequested": {
-      "_go_const": "EventOperatorStreamApprovalRequested",
-      "value": "g8e.v1.operator.stream.approval.requested",
-      "kind": "request",
-      "transport": [
-        "pubsub",
-        "sse"
-      ],
-      "producers": [
-        "ensemble",
-        "gateway"
-      ],
-      "persistence": "ephemeral"
     },
     "OperatorTerminalApprovalDenied": {
       "_go_const": "EventOperatorTerminalApprovalDenied",
       "value": "g8e.v1.operator.terminal.approval.denied",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "operator"
       ],
       "persistence": "ephemeral"
@@ -3727,7 +3649,6 @@
       "value": "g8e.v1.operator.terminal.auth.state.changed",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "operator"
       ],
       "persistence": "ephemeral"
@@ -3740,7 +3661,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "ensemble"
       ],
       "persistence": "ephemeral"
@@ -3753,7 +3673,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "ensemble"
       ],
       "persistence": "ephemeral"
@@ -3763,7 +3682,6 @@
       "value": "g8e.v1.operator.unbound",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "operator"
       ],
       "persistence": "ephemeral"
@@ -3913,7 +3831,6 @@
       "value": "g8e.v1.platform.console.log.connected.confirmed",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "ephemeral"
@@ -3923,7 +3840,6 @@
       "value": "g8e.v1.platform.console.log.entry.received",
       "kind": "outcome",
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "ephemeral"
@@ -4076,7 +3992,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.sse_store"
@@ -4089,7 +4004,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.sse_store"
@@ -4102,7 +4016,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "gateway"
       ],
@@ -4116,7 +4029,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.sse_store"
@@ -4129,7 +4041,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "gateway"
       ],
       "persistence": "gateway.sse_store"
@@ -4142,7 +4053,6 @@
         "sse"
       ],
       "producers": [
-        "dashboard",
         "ensemble",
         "gateway"
       ],

@@ -1,6 +1,0 @@
-Stream the operator binary to SSH hosts from the inventory and execute it in parallel. Each host hands back to the client, after which standard operator tools can target it.
-
-<behavior>
-- Requires a follow-up user approval; after approval you receive real-time status as hosts join.
-- `concurrency` defaults to 5 and `timeout_seconds` (per host, stream plus handshake) to 300.
-</behavior>

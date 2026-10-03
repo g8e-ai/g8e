@@ -25,8 +25,8 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-// TestGatewayAuditAttribution tests that audit attribution (operator_id and operator_session_id)
-// is correctly extracted from context and injected into the governance envelope.
+// TestGatewayAuditAttribution keeps caller attribution separate from the
+// embedded Operator that executes Gateway-local calls.
 func TestGatewayAuditAttribution(t *testing.T) {
 	t.Parallel()
 
@@ -62,7 +62,7 @@ func TestGatewayAuditAttribution(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, w.Code)
 		require.NotNil(t, capture.lastEnvelope)
-		assert.Equal(t, opID, capture.lastEnvelope.OperatorId)
+		assert.Equal(t, string(constants.DocIDEmbeddedOperator), capture.lastEnvelope.OperatorId)
 		assert.Equal(t, opSessionID, capture.lastEnvelope.OperatorSessionId)
 	})
 
@@ -87,9 +87,9 @@ func TestGatewayAuditAttribution(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, w.Code)
 		require.NotNil(t, capture.lastEnvelope)
-		// App identity should take precedence and be used for both ID and SessionID
-		assert.Equal(t, appID, capture.lastEnvelope.OperatorId)
-		assert.Equal(t, appID, capture.lastEnvelope.OperatorSessionId)
+		assert.Equal(t, string(constants.DocIDEmbeddedOperator), capture.lastEnvelope.OperatorId)
+		assert.Equal(t, appID, capture.lastEnvelope.ActingAppId)
+		assert.Empty(t, capture.lastEnvelope.OperatorSessionId)
 	})
 
 	t.Run("attribution empty when no context present", func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestGatewayAuditAttribution(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, w.Code)
 		require.NotNil(t, capture.lastEnvelope)
-		assert.Empty(t, capture.lastEnvelope.OperatorId)
+		assert.Equal(t, string(constants.DocIDEmbeddedOperator), capture.lastEnvelope.OperatorId)
 		assert.Empty(t, capture.lastEnvelope.OperatorSessionId)
 	})
 }

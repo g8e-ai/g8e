@@ -230,9 +230,7 @@ class TestLLMEnvVarBootstrapDefaults:
                 monkeypatch.delenv(val, raising=False)
 
     def _make_service(self) -> SettingsService:
-        bootstrap = MagicMock()
-        bootstrap.load_auditor_hmac_key.return_value = None
-        return SettingsService(bootstrap_service=bootstrap)
+        return SettingsService()
 
     def test_env_vars_populate_local_settings(self, monkeypatch):
         """Env vars set the primary endpoint and api_key (user endpoint + secret) on local settings."""

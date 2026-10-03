@@ -414,11 +414,6 @@
         "_go_const": "ApprovalTypeIntent",
         "_python_const": "INTENT",
         "value": "intent"
-      },
-      "stream": {
-        "_go_const": "ApprovalTypeStream",
-        "_python_const": "STREAM",
-        "value": "stream"
       }
     },
     "attachment.type": {
@@ -1679,11 +1674,6 @@
         "_go_const": "G8eToolNameRunCommands",
         "_python_const": "RUN_COMMANDS",
         "value": "run_commands_with_operator"
-      },
-      "stream_operator_to_ssh_fleet": {
-        "_go_const": "G8eToolNameStreamOperator",
-        "_python_const": "STREAM_OPERATOR",
-        "value": "stream_operator_to_ssh_fleet"
       }
     },
     "operator_type": {

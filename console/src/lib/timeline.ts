@@ -11,7 +11,7 @@ import type { ConversationMessage } from './types';
 
 export type ToolStatus = 'requested' | 'running' | 'completed' | 'failed';
 export type ApprovalState = 'pending' | 'approved' | 'denied' | 'submitting';
-export type ApprovalKind = 'command' | 'file_edit' | 'intent' | 'stream' | 'agent_continue';
+export type ApprovalKind = 'command' | 'file_edit' | 'intent' | 'agent_continue';
 
 export type TimelineItem =
   | { kind: 'user'; key: string; text: string; at: string }
@@ -52,8 +52,6 @@ function approvalKind(type: string): ApprovalKind {
       return 'file_edit';
     case Ev.IntentApprovalRequested:
       return 'intent';
-    case Ev.StreamApprovalRequested:
-      return 'stream';
     case Ev.AgentContinueApprovalRequested:
       return 'agent_continue';
     default:
@@ -67,8 +65,6 @@ function approvalSubject(kind: ApprovalKind, d: Record<string, unknown>): string
       return `${str(d.operation) || 'edit'} ${str(d.file_path)}`.trim();
     case 'intent':
       return str(d.intent_question) || str(d.intent_name);
-    case 'stream':
-      return str(d.preview_command);
     case 'agent_continue':
       return `Continue past the ${String(d.turn_limit ?? '')}-turn tool budget (${String(d.turns_completed ?? '')} completed)`;
     default:

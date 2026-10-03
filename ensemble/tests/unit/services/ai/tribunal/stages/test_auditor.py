@@ -34,7 +34,6 @@ class TestRunAuditStage:
         auditor = TribunalAuditor(
             emitter=emitter,
             reputation_data_service=mock_reputation_service,
-            auditor_hmac_key="a" * 64,
         )
 
         result = await auditor.run(
@@ -81,7 +80,6 @@ class TestRunAuditStage:
         auditor = TribunalAuditor(
             emitter=emitter,
             reputation_data_service=mock_reputation_service,
-            auditor_hmac_key="a" * 64,
         )
 
         result = await auditor.run(
@@ -138,7 +136,6 @@ class TestRunAuditStage:
         auditor = TribunalAuditor(
             emitter=emitter,
             reputation_data_service=mock_reputation_service,
-            auditor_hmac_key="a" * 64,
         )
 
         await auditor.run(
@@ -216,7 +213,6 @@ class TestRunAuditStage:
         auditor = TribunalAuditor(
             emitter=emitter,
             reputation_data_service=mock_reputation_service,
-            auditor_hmac_key="a" * 64,
         )
 
         await auditor.run(
@@ -270,7 +266,6 @@ class TestRunAuditStage:
         auditor = TribunalAuditor(
             emitter=emitter,
             reputation_data_service=mock_reputation_service,
-            auditor_hmac_key="a" * 64,
         )
 
         with pytest.raises(TribunalAuditorFailedError):

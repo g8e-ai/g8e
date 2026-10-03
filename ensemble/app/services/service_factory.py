@@ -29,7 +29,6 @@ from app.services.investigation.investigation_service import InvestigationServic
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.operator.approval_service import OperatorApprovalService
-from app.services.operator.stream_executor import OperatorStreamExecutor
 from app.services.ai.reputation_service import ReputationService
 from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.services.data.reputation_data_service import ReputationDataService
@@ -130,7 +129,6 @@ class AllServices:
     grounding_service: GroundingService
     web_search_provider: WebSearchProvider | None
     approval_service: OperatorApprovalService | ApprovalServiceProtocol
-    stream_executor: OperatorStreamExecutor
     operator_command_service: OperatorCommandService
     tool_service: ToolExecutorProtocol
     request_builder: AIRequestBuilder
@@ -356,11 +354,6 @@ class ServiceFactory:
 
         gateway_operator_client = data_services.gateway_operator_client
 
-        stream_executor = OperatorStreamExecutor(
-            approval_service=approval_service,
-            internal_http_client=core_services.internal_http_client,
-            settings=settings,
-        )
 
         whitelist_validator = get_whitelist_validator()
         blacklist_validator = get_blacklist_validator()
@@ -391,7 +384,6 @@ class ServiceFactory:
             reputation_service=domain_services.reputation_service,
             chat_task_manager=chat_task_manager,
             ssh_inventory_service=domain_services.ssh_inventory_service,
-            stream_executor=stream_executor,
             web_search_provider=web_search_provider,
             app_settings=settings,
         )
@@ -426,7 +418,6 @@ class ServiceFactory:
             grounding_service=grounding_service,
             web_search_provider=web_search_provider,
             approval_service=approval_service,
-            stream_executor=stream_executor,
             operator_command_service=operator_command_service,
             tool_service=tool_service,
             request_builder=request_builder,

@@ -28,7 +28,6 @@ export const Ev = {
   CommandApprovalRequested: E.OPERATOR_COMMAND_APPROVAL_REQUESTED,
   FileEditApprovalRequested: E.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED,
   IntentApprovalRequested: E.OPERATOR_INTENT_APPROVAL_REQUESTED,
-  StreamApprovalRequested: E.OPERATOR_STREAM_APPROVAL_REQUESTED,
   AgentContinueApprovalRequested: E.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
 
   ApprovalsChanged: E.PLATFORM_APPROVALS_CHANGED,
@@ -44,7 +43,6 @@ export const APPROVAL_REQUEST_TYPES: ReadonlySet<string> = new Set([
   Ev.CommandApprovalRequested,
   Ev.FileEditApprovalRequested,
   Ev.IntentApprovalRequested,
-  Ev.StreamApprovalRequested,
   Ev.AgentContinueApprovalRequested,
 ]);
 

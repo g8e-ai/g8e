@@ -133,7 +133,6 @@ const (
 	ApprovalTypeCommand       ApprovalType = "command"
 	ApprovalTypeFileEdit      ApprovalType = "file.edit"
 	ApprovalTypeIntent        ApprovalType = "intent"
-	ApprovalTypeStream        ApprovalType = "stream"
 )
 
 // SessionType is a typed string for session type.

@@ -464,7 +464,6 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
     auditor = TribunalAuditor(
         emitter=emitter,
         reputation_data_service=request.reputation_data_service,
-        auditor_hmac_key=request.auditor_hmac_key,
     )
     audit_result = await auditor.run(
         provider=auditor_provider or generation_provider,

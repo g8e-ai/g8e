@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class KVService:
-    """Authoritative key-value service. The sole user of KVCacheClient."""
+    """Document and query cache access through the Gateway KV API."""
 
     def __init__(self, client: KVCacheClient):
         self.client = client
@@ -38,15 +38,6 @@ class KVService:
 
     async def delete_pattern(self, pattern: str) -> int:
         return await self.client.delete_pattern(pattern)
-
-    async def lrange(self, key: str, start: int, stop: int) -> list[object]:
-        return await self.client.lrange(key, start, stop)
-
-    async def incr(self, key: str, amount: int = 1) -> int:
-        return await self.client.incr(key, amount)
-
-    async def decr(self, key: str, amount: int = 1) -> int:
-        return await self.client.decr(key, amount)
 
     def is_healthy(self) -> bool:
         return self.client.is_healthy()

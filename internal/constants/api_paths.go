@@ -24,6 +24,7 @@ var APIPaths = struct {
 	GovernanceSignersPrefix string `json:"governance_signers_prefix"`
 	// Gateway identity routes
 	GatewayProxySigningKey string `json:"gateway_proxy_signing_key"`
+	GatewayReputationSign  string `json:"gateway_reputation_sign"`
 	// Operator routes
 	Operators         string `json:"operators"`
 	OperatorsByID     string `json:"operators_by_id"`
@@ -215,6 +216,7 @@ var APIPaths = struct {
 	GovernanceSignersPrefix: "/api/v1/governance/signers/",
 	// Gateway identity routes
 	GatewayProxySigningKey: "/api/v1/gateway/proxy-signing-key",
+	GatewayReputationSign:  "/api/v1/gateway/reputation/sign",
 	// Operator routes
 	Operators:                            "/api/v1/operators",
 	OperatorsByID:                        "/api/v1/operators/",

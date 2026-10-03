@@ -66,7 +66,7 @@ Metadata is validated against [protocol/models/event_registry.schema.json](proto
   “value”: “g8e.v1.<domain>.<entity>[.<qualifier>...].<terminal>”,
   “kind”: “request|outcome|fact|stream”,
   “transport”: [“governed|pubsub|sse”],
-  “producers”: [“gateway|operator|ensemble|dashboard|cli|mcp”],
+  “producers”: [“gateway|operator|ensemble|cli|mcp”],
   “persistence”: “operator.audit_log|gateway.audit_log|gateway.sse_store|gateway.operator_docs|gateway.docstore|ephemeral”,
   “governance”: {
     “action_type”: “<string>”,

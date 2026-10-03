@@ -230,6 +230,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// g8ee fetches the public key that verifies the Gateway's proxy identity stamps.
 	mux.HandleFunc(constants.APIPaths.GatewayProxySigningKey, h.ensembleBrowserProxyController.handleProxySigningKey)
+	mux.HandleFunc(constants.APIPaths.GatewayReputationSign, h.dataController.handleReputationSign)
 
 	// Ensemble browser proxy (RouteAuthWebSession — Gateway stamps identity for g8ee).
 	mux.HandleFunc(constants.APIPaths.EnsembleChatPrefix, h.ensembleBrowserProxyController.handleProxy)

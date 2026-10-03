@@ -9,7 +9,7 @@
 
 The commit function is pure with respect to the scoreboard: given a
 `ReputationDataService` snapshot and an HMAC key, it must produce a
-deterministic Merkle root, a verifiable HMAC signature, and a commitment
+deterministic Merkle root, a Gateway signature, and a commitment
 whose `prev_root` chains to the previous commitment in the deployment.
 
 These tests exercise the real `ReputationDataService` backed by a real
@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.errors import DatabaseError
-from app.models.reputation import GENESIS_PREV_ROOT, ReputationState
+from app.models.reputation import GENESIS_PREV_ROOT, ReputationState, ReputationSignResponse
 from app.models.http_context import RequestContext
 from app.services.ai.auditor_service import commit_reputation
 from app.services.data.reputation_data_service import ReputationDataService
@@ -85,6 +85,9 @@ class TestCommitReputation:
 
         gov = MagicMock()
         gov.update_governed_doc = AsyncMock(side_effect=_write_through)
+        async def _sign(request):
+            return ReputationSignResponse(signature=_expected_signature(request.merkle_root, request.prev_root, request.tribunal_command_id, _FIXED_HMAC_KEY))
+        gov.sign_reputation_commitment = AsyncMock(side_effect=_sign)
         return ReputationDataService(fake_cache_aside_service, gov)
 
     @pytest.fixture
@@ -108,7 +111,6 @@ class TestCommitReputation:
             reputation_data_service=service,
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
-            hmac_key=_FIXED_HMAC_KEY,
             context=RequestContext(
                 web_session_id="test-web-session",
                 user_id="test-user",
@@ -120,7 +122,7 @@ class TestCommitReputation:
         assert commitment.leaves_count == len(seeded_states)
         assert commitment.tribunal_command_id == "tc-1"
         assert commitment.investigation_id == "inv-1"
-        assert commitment.signed_by == "auditor"
+        assert commitment.signed_by == "gateway"
 
     async def test_merkle_root_is_deterministic_over_fixed_state(self, service, seeded_states):
         await _seed_states(service, seeded_states)
@@ -129,7 +131,6 @@ class TestCommitReputation:
             reputation_data_service=service,
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
-            hmac_key=_FIXED_HMAC_KEY,
             context=RequestContext(
                 web_session_id="test-web-session",
                 user_id="test-user",
@@ -146,7 +147,6 @@ class TestCommitReputation:
             reputation_data_service=service,
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
-            hmac_key=_FIXED_HMAC_KEY,
             context=RequestContext(
                 web_session_id="test-web-session",
                 user_id="test-user",
@@ -169,7 +169,6 @@ class TestCommitReputation:
             reputation_data_service=service,
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
-            hmac_key=_FIXED_HMAC_KEY,
             context=RequestContext(
                 web_session_id="test-web-session",
                 user_id="test-user",
@@ -189,7 +188,6 @@ class TestCommitReputation:
             reputation_data_service=service,
             tribunal_command_id="tc-2",
             investigation_id="inv-1",
-            hmac_key=_FIXED_HMAC_KEY,
             context=RequestContext(
                 web_session_id="test-web-session",
                 user_id="test-user",
@@ -205,7 +203,6 @@ class TestCommitReputation:
             reputation_data_service=service,
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
-            hmac_key=_FIXED_HMAC_KEY,
             context=RequestContext(
                 web_session_id="test-web-session",
                 user_id="test-user",
@@ -224,7 +221,6 @@ class TestCommitReputation:
             reputation_data_service=service,
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
-            hmac_key=_FIXED_HMAC_KEY,
             context=RequestContext(
                 web_session_id="test-web-session",
                 user_id="test-user",
@@ -237,15 +233,16 @@ class TestCommitReputation:
         assert fetched.merkle_root == commitment.merkle_root
         assert fetched.signature == commitment.signature
 
-    async def test_missing_hmac_key_raises(self, service, seeded_states):
+    async def test_gateway_signing_failure_does_not_persist(self, service, seeded_states):
         await _seed_states(service, seeded_states)
 
-        with pytest.raises(ValueError, match="hmac_key"):
+        from app.errors import NetworkError
+        service._governance_client.sign_reputation_commitment.side_effect = NetworkError("Gateway signing unavailable")
+        with pytest.raises(NetworkError):
             await commit_reputation(
                 reputation_data_service=service,
                 tribunal_command_id="tc-1",
                 investigation_id="inv-1",
-                hmac_key="",
                 context=RequestContext(
                     web_session_id="test-web-session",
                     user_id="test-user",
@@ -253,13 +250,14 @@ class TestCommitReputation:
                 ),
             )
 
+        assert await service.get_latest_commitment() is None
+
     async def test_missing_tribunal_command_id_raises(self, service):
         with pytest.raises(ValueError, match="tribunal_command_id"):
             await commit_reputation(
                 reputation_data_service=service,
                 tribunal_command_id="",
                 investigation_id="inv-1",
-                hmac_key=_FIXED_HMAC_KEY,
                 context=RequestContext(
                     web_session_id="test-web-session",
                     user_id="test-user",
@@ -273,7 +271,6 @@ class TestCommitReputation:
                 reputation_data_service=service,
                 tribunal_command_id="tc-1",
                 investigation_id="",
-                hmac_key=_FIXED_HMAC_KEY,
                 context=RequestContext(
                     web_session_id="test-web-session",
                     user_id="test-user",
@@ -297,7 +294,6 @@ class TestCommitReputation:
                 reputation_data_service=service,
                 tribunal_command_id="tc-1",
                 investigation_id="inv-1",
-                hmac_key=_FIXED_HMAC_KEY,
                 context=RequestContext(
                     web_session_id="test-web-session",
                     user_id="test-user",

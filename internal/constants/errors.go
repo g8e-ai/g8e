@@ -826,6 +826,9 @@ var (
 
 	// DB controller errors
 	ErrDBControllerKeyRequired         = errors.New("key required")
+	ErrKVNamespaceForbidden            = errors.New("KV namespace is Gateway-owned; only document and query cache namespaces are accessible")
+	ErrReputationCommitmentInvalid     = errors.New("invalid reputation signing request")
+	ErrReputationSignerUnavailable     = errors.New("reputation signing key unavailable")
 	ErrDBControllerNamespaceRequired   = errors.New("namespace required")
 	ErrDBControllerInvalidNamespace    = errors.New("invalid namespace")
 	ErrDBControllerInvalidBlobID       = errors.New("invalid blob id")

@@ -54,7 +54,6 @@ def mock_tool_executor():
     tool_executor.whitelist_validator = MagicMock(spec=CommandWhitelistValidator)
     tool_executor.blacklist_validator = MagicMock(spec=CommandBlacklistValidator)
     tool_executor.reputation_data_service = MagicMock()
-    tool_executor.auditor_hmac_key = "test-hmac-key"
     tool_executor.ai_response_analyzer = MagicMock()
     return tool_executor
 
