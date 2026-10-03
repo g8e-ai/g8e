@@ -930,3 +930,29 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 	assert.Equal(t, operatorID, resp.OperatorID)
 	assert.Equal(t, userID, resp.UserID)
 }
+
+func TestWithResolvedOperatorRole(t *testing.T) {
+	t.Run("keeps a stored role", func(t *testing.T) {
+		op := models.OperatorDocumentGo{
+			OperatorRole:  constants.OperatorRoleObserver,
+			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+		}
+		withResolvedOperatorRole(&op)
+		assert.Equal(t, constants.OperatorRoleObserver, op.OperatorRole)
+	})
+
+	t.Run("resolves a missing role from runtime config", func(t *testing.T) {
+		op := models.OperatorDocumentGo{
+			Claimed:       true,
+			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+		}
+		withResolvedOperatorRole(&op)
+		assert.Equal(t, constants.OperatorRoleProvenance, op.OperatorRole)
+	})
+
+	t.Run("leaves an unclaimed slot without a role", func(t *testing.T) {
+		op := models.OperatorDocumentGo{IsSlot: true}
+		withResolvedOperatorRole(&op)
+		assert.Empty(t, op.OperatorRole)
+	})
+}

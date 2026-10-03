@@ -3,11 +3,36 @@
 
 import { useState } from 'react';
 import { Empty, StatusPill, relativeTime, shortId } from '../../components/ui';
-import type { Operator } from '../../lib/types';
+import type { Operator, OperatorRole } from '../../lib/types';
 import { canBind, operatorLabel, useOperators } from '../../state/operators';
 import { useSession } from '../../state/session';
 import { errorText, useToast } from '../../state/toast';
 import { DeployPanel } from './DeployPanel';
+
+const ROLES: Record<OperatorRole, { label: string; tone: string; hint: string }> = {
+  data: { label: 'Data', tone: 'pill-ok', hint: 'Governed tool and command execution on its host.' },
+  inference: { label: 'Inference', tone: 'pill-accent', hint: 'Governed model inference backend and model lifecycle.' },
+  provenance: {
+    label: 'Provenance',
+    tone: 'pill-violet',
+    hint: 'Witness: attests local model weights at the storage site. Read-only, cannot execute commands.',
+  },
+  observer: {
+    label: 'Observer',
+    tone: 'pill-cyan',
+    hint: 'Witness: observes provider-boundary hardware telemetry. Read-only, cannot execute commands.',
+  },
+};
+
+function RolePill({ role }: { role?: OperatorRole }) {
+  const info = role ? ROLES[role] : undefined;
+  if (!info) return <span className="muted">{role || '—'}</span>;
+  return (
+    <span className={`pill ${info.tone}`} title={info.hint}>
+      {info.label}
+    </span>
+  );
+}
 
 export function OperatorsView() {
   const { operators, loaded, error, bound, bind, unbind, stop, reload } = useOperators();
@@ -112,6 +137,7 @@ export function OperatorsView() {
                 <tr>
                   <th>Operator</th>
                   <th>Status</th>
+                  <th>Role</th>
                   <th>Type</th>
                   <th>Last heartbeat</th>
                   <th>Binding</th>
@@ -130,7 +156,10 @@ export function OperatorsView() {
                         <div className="mono muted">{shortId(op.id, 18)}</div>
                       </td>
                       <td>
-                        <StatusPill status={op.status} />
+                        <StatusPill status={op.status === 'active' && op.bound_web_session_id ? 'bound' : op.status} />
+                      </td>
+                      <td>
+                        <RolePill role={op.operator_role} />
                       </td>
                       <td className="text-2">{op.operator_type || '—'}</td>
                       <td className="text-2">{relativeTime(op.last_heartbeat_at) || '—'}</td>

@@ -20,6 +20,10 @@
   --warning-soft: rgba(242, 180, 68, 0.12);
   --danger: #ff6b6b;
   --danger-soft: rgba(255, 107, 107, 0.12);
+  --violet: #b794f6;
+  --violet-soft: rgba(183, 148, 246, 0.14);
+  --cyan: #4fd1e0;
+  --cyan-soft: rgba(79, 209, 224, 0.13);
   --radius: 8px;
   --radius-sm: 6px;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -48,6 +52,10 @@
     --warning-soft: rgba(183, 121, 31, 0.1);
     --danger: #d23b3b;
     --danger-soft: rgba(210, 59, 59, 0.08);
+    --violet: #7c4dcc;
+    --violet-soft: rgba(124, 77, 204, 0.1);
+    --cyan: #0e8a9a;
+    --cyan-soft: rgba(14, 138, 154, 0.1);
     --shadow: 0 8px 24px rgba(20, 26, 36, 0.12);
     color-scheme: light;
   }
@@ -351,6 +359,14 @@ h4 {
 .pill-accent {
   background: var(--accent-soft);
   color: var(--accent);
+}
+.pill-violet {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+.pill-cyan {
+  background: var(--cyan-soft);
+  color: var(--cyan);
 }
 .empty {
   padding: 36px 16px;

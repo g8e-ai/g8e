@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -141,7 +142,21 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	for i := range operators {
+		withResolvedOperatorRole(&operators[i])
+	}
 	c.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: operators})
+}
+
+// withResolvedOperatorRole fills operator_role for browser and CLI listings so
+// every enrolled Operator reports whether it is an inference, provenance,
+// observer, or data Operator, including documents whose claim predates the
+// stored role. Unclaimed slots have no runtime and keep an empty role.
+func withResolvedOperatorRole(op *models.OperatorDocumentGo) {
+	if op.OperatorRole != "" || (op.IsSlot && !op.Claimed) {
+		return
+	}
+	op.OperatorRole = operatorcapability.GetOperatorRole(*op)
 }
 
 func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.Request) {

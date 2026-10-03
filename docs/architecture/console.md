@@ -35,7 +35,7 @@ The console covers what an owner needs to operate the platform from a browser:
 
 - **Authentication**: first-owner passkey enrollment, passkey sign-in, and CLI-initiated passkey enrollment (`#enroll=1&token=…`).
 - **Approvals**: L3 Notary approval of suspended transactions (`#approve=…`), CLI recovery approval (`#recovery=…`), and platform workload enrollment review (`#platform-enrollment=…`).
-- **Operator inventory**: list, deploy commands, bind and unbind to the browser's web session, and stop remote Operators.
+- **Operator inventory**: list with each Operator's role (`data`, `inference`, and the read-only witness roles `provenance` and `observer`, shown as distinct badges; the Gateway resolves `operator_role` on every listed Operator), deploy commands, bind and unbind to the browser's web session, and stop remote Operators. An enrolled, live Operator shows `Active`; once bound to a web session it shows `Bound`.
 - **Cases, investigations, and chat**: a case groups investigations; each investigation is one chat session with the ensemble (g8ee), including streamed replies, governed command activity, and in-line approval of ensemble approval requests.
 - **Account**: identity, passkey list, and passkey revocation.
 
