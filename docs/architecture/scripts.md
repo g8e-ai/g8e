@@ -4,7 +4,7 @@ title: Automation Scripts
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-02
-version: v2.2.7
+version: v2.3.0
 owners:
   - scripts/
   - internal/services/gateway/scripts/
@@ -48,7 +48,7 @@ Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-set
 | INV-SCRIPTS-03 | Validator scripts (`cosais_validator`, `audit-dev-guidelines.py`) are triage tools; they identify review candidates but do not prove violations or replace semantic lint and test commands. |
 | INV-SCRIPTS-04 | Gateway-served deploy scripts (`g8e-deploy.sh`, `g8e-deploy.ps1`) are bootstrap conveniences for trusted networks only. They fetch artifacts over plain HTTP, lack TLS protection, and delete `~/.g8e/pki` before startup. Users MUST fetch and inspect the rendered script before execution. |
 | INV-SCRIPTS-05 | Image transfer commands (`g8e demos pull/export/import/images`) require reading `demos/images.json` relative to the current working directory and MUST be run from the repository root. Export MUST NOT include locally built images; import MUST NOT validate tars against the manifest. |
-| INV-SCRIPTS-06 | Unless `--build-only` is passed, the Linux and macOS setup scripts MUST leave a machine that passes `make dev-check`: they check or install `python3`, `uv`, `rg` (ripgrep), `bc`, and a C compiler (required by `go test -race`), then run `make dev-setup` for the Go dev tools, the repo-root `.venv`, and the Node dependencies. `make ci`, `make ci-platform`, `make ci-ensemble`, and `make ci-dashboard` depend on `make dev-check`, so a missing tool fails once with an actionable list instead of partway through the pipeline. |
+| INV-SCRIPTS-06 | Unless `--build-only` is passed, the Linux and macOS setup scripts MUST leave a machine that passes `make dev-check`: they check or install `python3`, `uv`, `rg` (ripgrep), `bc`, and a C compiler (required by `go test -race`), then run `make dev-setup` for the Go dev tools, the repo-root `.venv`, and the Node dependencies. `make ci`, `make ci-platform`, `make ci-ensemble`, and `make ci-console` depend on `make dev-check`, so a missing tool fails once with an actionable list instead of partway through the pipeline. |
 | INV-SCRIPTS-07 | A prerequisite that resolves under `/mnt/<drive>/` MUST NOT count as installed. On WSL the Windows `PATH` is appended to the Linux one and exposes Windows shims such as `npm` and `npx` that cannot build or test this repository. |
 
 ## Owned surfaces
@@ -84,14 +84,14 @@ pwsh scripts/windows-setup.ps1
 
 The Linux and macOS scripts accept `-y` / `--yes` (or `G8E_SETUP_YES=1`) to install without prompting, `--build-only` to stop after `make build`, and `-h` / `--help`. By default each script runs six steps:
 
-1. Checks `git`, `make`, `curl`, `go`, `node`, `npm`, `python3`, `uv`, `rg`, `bc`, and a C compiler. The required Go version is read from `go.mod` (currently 1.26.6) and compared including the patch component. Node.js 22+ is required because `make build` embeds the evaluation-explorer frontend and the console is built with Node. A tool that resolves under `/mnt/<drive>/` does not count (INV-SCRIPTS-07).
-2. If a prerequisite is missing or too old, prompts before installing it. Linux installs `git`, `make`, `curl`, `python3`, `ripgrep`, `bc`, and a compiler (`build-essential` or `gcc`) in one call through `apt`, `dnf`, `pacman`, or `zypper`; installs Go from the official tarball into `/usr/local/go` and Node.js from the latest 22.x tarball into `/usr/local/lib/nodejs` (links in `/usr/local/bin`), verifying the published SHA-256 of each; and installs the `uv` version pinned in the `Makefile` into `~/.local/bin`. The tarball route works on WSL, where `snap` frequently does not run. macOS uses Homebrew for packages, points to `xcode-select --install` for the compiler, and uses the same pinned `uv` installer. Windows prefers `winget` with Chocolatey fallback.
-3. Builds the evaluation-explorer asset when `evaluation-explorer/dist/index.html` is absent, then runs `make build`. The build writes the platform binary and SHA-256 sidecar under `bin/` and copies the host executable to the repository root.
+1. Checks `git`, `make`, `curl`, `go`, `node`, `npm`, `python3`, `uv`, `rg`, `bc`, and a C compiler. The required Go version is read from `go.mod` (currently 1.26.6) and compared including the patch component. Node.js 22+ is required because `make build` embeds the evaluation-explorer frontend and the console is built with Node. A tool that resolves under `/mnt/<drive>/` does not count (INV-SCRIPTS-07). If a prerequisite is missing or too old, the script prompts before installing it, then re-checks. Linux installs `git`, `make`, `curl`, `python3`, `ripgrep`, `bc`, and a compiler (`build-essential` or `gcc`) in one call through `apt`, `dnf`, `pacman`, or `zypper`; installs Go from the official tarball into `/usr/local/go` and Node.js from the latest 22.x tarball into `/usr/local/lib/nodejs` (links in `/usr/local/bin`), verifying the published SHA-256 of each; and installs the `uv` version pinned in the `Makefile` into `~/.local/bin`. The tarball route works on WSL, where `snap` frequently does not run. macOS uses Homebrew for packages, points to `xcode-select --install` for the compiler, and uses the same pinned `uv` installer. Windows prefers `winget` with Chocolatey fallback.
+2. Builds the evaluation-explorer asset when `evaluation-explorer/dist/index.html` is absent.
+3. Runs `make build`, which embeds the evaluation explorer and the console (the committed console embed is used when `console/dist` is absent). The build writes the platform binary and SHA-256 sidecar under `bin/` and copies the host executable to the repository root.
 4. Runs `make dev-setup` (see [Contributor Toolchain](#contributor-toolchain)).
 5. Updates the user PATH persistently: Linux and macOS append the repository root, the Go install directory (`GOBIN` or `GOPATH/bin`), `~/.local/bin`, and `/usr/local/go/bin` (when Go lives there) to `~/.zshrc`, `~/.bashrc`, or `~/.profile` based on detected shell, skipping any directory the profile already mentions; profiles are appended to and never rewritten. Windows updates user-level `Path`. The scripts also export PATH in the current shell, but that change is lost when the shell exits, so users MUST open a new terminal or source the profile before `g8e` is available in other shells.
 6. Runs `make dev-check` to confirm the machine can run `make ci`.
 
-With `--build-only`, the scripts check only `git`, `make`, `curl`, `go`, `node`, and `npm`, then run steps 2, 3, and 5 as a four-step flow. Use it when only the `g8e` binary is needed.
+With `--build-only`, the scripts check only `git`, `make`, `curl`, `go`, `node`, and `npm`, then run steps 2, 3, and 5 as a four-step flow (the script labels them 1 through 4: prerequisites, explorer, build, PATH). Use it when only the `g8e` binary is needed.
 
 After setup, scripts print next steps: `./g8e --version`, `make dev-check` and `make ci` (full flow only), `g8e docker start`, `g8e gw start`, and `g8e auth enroll user -e localhost`.
 
@@ -211,7 +211,7 @@ The manifest covers digest-pinned external base and service images. Export does 
 
 ## Links out
 
-- [Developer Guidelines](devs.md): coding invariants and repository standards.
+- [Developer Guidelines](../devs/devs.md): coding invariants and repository standards.
 - [Documentation Guide](../devs/docs.md): how to audit, write, and review documentation.
 - [Getting Started](../guides/getting_started.md): user-facing setup and first-run steps.
 - [Build and Run a g8e Operator](../guides/build_operator.md): Operator enrollment and configuration.

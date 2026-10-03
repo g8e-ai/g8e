@@ -16,7 +16,7 @@ import (
 
 // PlatformIdentity names the g8e build that froze a campaign.
 type PlatformIdentity struct {
-	// Release is the build version (VERSION, for example "v2.2.8"). Required.
+	// Release is the build version (VERSION, for example "v2.3.0"). Required.
 	Release string
 	// SourceRevision is the source commit of the build, when the build knows it.
 	SourceRevision string

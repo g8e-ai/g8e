@@ -3,8 +3,8 @@ doc_id: ensemble
 title: Ensemble Architecture (g8ee)
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-02
+version: v2.3.0
 owners:
   - ensemble/
   - ensemble/app/main.py
@@ -111,6 +111,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Tribunal & Safety Pipeline | `ensemble/app/services/ai/tribunal/`, `generator.py` | Multi-seat candidate generation, clustering, voting, and validation |
 | Operator Execution & Approval | `ensemble/app/services/operator/execution_service.py`, `approval_service.py` | Command execution dispatch and application approval lifecycle |
 | Governed LLM Provider | `ensemble/app/llm/providers/g8e.py` | Routing inference through Gateway governed dispatch |
+| Per-role model selection | `ensemble/app/services/infra/llm_role_settings.py`, `ensemble/app/llm/model_catalog.py`, `ensemble/app/services/infra/settings_service.py` | `ensemble/.venv/bin/python -m pytest tests/unit/services/infra/test_llm_role_settings.py tests/unit/llm/test_model_catalog.py` |
 | Compose Deployment | `docker-compose.yml`, `ensemble/Dockerfile` | Container configuration, volume mounts, and network ports |
 
 ## Procedures
@@ -124,7 +125,7 @@ The root Docker Compose stack runs `g8ee` as the `ensemble` service in the defau
   - `g8e-ensemble-data` mounted at `/root/.g8e`: Stores the ensemble's mTLS certificate, private key, trusted CA bundle, and pending enrollment state.
   - `g8e-operator-data` mounted read-only at `/operator-state`: Provides bootstrap materials including audit HMAC keys and secret paths at `/operator-state/secrets`.
   - `g8e-shared-tmp` mounted at `/tmp`: Shared temporary volume for inter-service artifacts.
-- **Network**: Connects to the internal bridge network `g8e-net` (subnet `172.28.0.0/16`), routing internal traffic to the Gateway (`g8e.local` or `g8eg`) on port 8080 (plain HTTP discovery) and port 8443 (mTLS HTTPS).
+- **Network**: Connects to the internal bridge network `g8e-net` (subnet `172.28.0.0/16`), routing internal traffic to the Gateway (`g8e.local` or `g8eg`) on port 8080 (plain HTTP discovery) and port 8443 (mTLS HTTPS). The service carries the network alias `g8e-ensemble`; the Gateway's browser proxy reaches it at `http://g8e-ensemble:8000` (`--ensemble-upstream-url`), because the default `127.0.0.1:8000` is the Gateway container itself.
 - **Healthcheck**: Uses `python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"` running every 10 seconds with a 15-second startup grace period.
 
 The ensemble container does not execute host commands directly. It possesses no host bind mounts or elevated privileges; host operations target a separately enrolled Operator container or remote host over the Gateway HTTP dispatch channel.
@@ -147,14 +148,14 @@ The FastAPI application registers three router groups across root and internal p
 
 3. **Internal API Router (`ensemble/app/routers/internal_router.py`)**:
    Mounted under prefix `/api/v1` via `InternalAPIPaths.PREFIX`:
-   - **Chat and Triage**: `POST /api/v1/chat`, `POST /api/v1/chat/stop`, `POST /api/v1/chat/triage/answer`, `POST /api/v1/chat/triage/skip`, `POST /api/v1/chat/triage/timeout`.
+   - **Chat and Triage**: `POST /api/v1/chat` (a request opens a new case with `resource_creation.create_case`, or a new investigation under the caller's own case with `resource_creation.create_investigation` and `context.case_id`; another user's case is reported as not found), `POST /api/v1/chat/stop`, `POST /api/v1/chat/triage/answer`, `POST /api/v1/chat/triage/skip`, `POST /api/v1/chat/triage/timeout`.
    - **Cases**: `POST /api/v1/case/get`, `PATCH /api/v1/case`, `POST /api/v1/case/delete`.
-   - **Investigations**: `POST /api/v1/investigation/get`, `POST /api/v1/investigations/query`.
+   - **Investigations**: `POST /api/v1/investigation/get`, `POST /api/v1/investigations/query` (always scoped to the authenticated user; a caller-supplied `user_id` is overridden).
    - **Approvals**: `GET /api/v1/operator/approval/pending`, `POST /api/v1/operator/approval/respond`.
    - **Direct Command Relay**: `POST /api/v1/operator/direct-command`.
    - **Operator Lifecycle Proxying**: `POST /api/v1/operators/bind`, `POST /api/v1/operators/unbind`, `POST /api/v1/operators/stop`, `POST /api/v1/operators/terminate`, `POST /api/v1/operators/claim-slot`, `POST /api/v1/operators/create-slot`, `POST /api/v1/operators/device-link/register`, `POST /api/v1/operators/gateway-session-auth`, `POST /api/v1/operators/authenticate`, `POST /api/v1/operators/session/refresh`, `POST /api/v1/operators/session/validate`, `POST /api/v1/operators/update-api-key`.
    - **Auth and Credentials**: `POST /api/v1/auth/api-key/generate`, `POST /api/v1/auth/certificate/revoke`.
-   - **Settings**: `POST /api/v1/settings/sync`, `POST /api/v1/settings/user/get`, `PATCH /api/v1/settings/user`.
+   - **Settings**: `POST /api/v1/settings/sync`, `POST /api/v1/settings/user/get`, `PATCH /api/v1/settings/user`, and the per-role model selection routes `POST /api/v1/settings/llm/get`, `POST /api/v1/settings/llm`, and `POST /api/v1/settings/llm/models`. The role routes read and write the provider, model, endpoint, and key of the primary, assistant, and lite roles on the caller's `user_settings` document and report a key only as set or unset. The model listing queries a provider's own listing API with the endpoint and key the role would use, or, for `LLMProvider.G8E`, requests the sole active Inference Operator's typed model inventory through governed dispatch and ignores any caller-supplied endpoint or key. A failed listing reports only the HTTP status or transport error class. See [Console Architecture](console.md#model-selection) for the browser contract.
    - **Evaluation Traces**: `GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}`.
    - **Health**: `GET /api/v1/health`.
 
@@ -328,7 +329,7 @@ sequenceDiagram
 
 - **Payload Translation**: `PAYLOAD_TYPE_MAPPING` maps internal names to canonical protocol schemas (e.g. `document_update` -> `DocumentUpdateRequested`, `command` -> `CommandRequested`).
 - **Source Component Translation**: Internal component strings map to proto enum value names (`g8ee` -> `COMPONENT_AGENT`, `client` -> `COMPONENT_CLIENT`). Unknown components fail closed.
-- **Identity Binding**: Resolves `operator_id` and `operator_session_id` from the client certificate's SPIFFE URI SAN (`spiffe://g8e.local/operator/<org>/<id>/<session>`), ensuring stamped metadata matches transport identity.
+- **Identity Binding**: Resolves `operator_id` and `operator_session_id` from the client certificate's SPIFFE URI SAN (`spiffe://g8e.local/operator/<org>/<id>/<session>`), ensuring stamped metadata matches transport identity. Every envelope also carries `acting_app_id` set to `g8ee`. A record written for a browser session with no Operator in the request context carries no Operator fields, and the Gateway admits it only because `acting_app_id` matches g8ee's app certificate (INV-AUTH-ID-05 in [Authentication](auth.md)).
 - **State Root Verification & Retry**: Fetches the current `state_merkle_root` from `GET /api/v1/health`. If concurrent writes trigger a `403 Forbidden` with `TX_STATE_MISMATCH`, `GovernanceClient` retries up to 3 times by re-fetching the state root and re-signing the envelope under its internal submission lock.
 
 ### Persistence, Cache-Aside Architecture, and State Ownership

@@ -67,7 +67,7 @@ The application uses `BrowserRouter` for client-side routing, which relies on se
 - `/tasks` and `/tasks/:taskId` show the generated scenario catalog.
 - `/methodology` explains metrics and limitations; `/about` describes the platform.
 
-`src/App.tsx` owns route definitions. Comparisons across datasets require matching observed provider environments and suite sets; see [Evaluation Architecture](../../../../../docs/architecture/evals.md#evidence-and-verification) for the producer contract. Each value stays attributed to its run; nothing is pooled or averaged.
+`src/App.tsx` owns route definitions. Comparisons across datasets require matching observed provider environments and suite sets; see [Evaluation Architecture](../../../docs/architecture/evals.md#evidence-and-verification) for the producer contract. Each value stays attributed to its run; nothing is pooled or averaged.
 
 ## Record and event shapes
 
@@ -93,7 +93,7 @@ The campaign-wire validator checks the version-specific allowlist, canonical pro
 
 The closed public unavailable reasons are `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. `observed` activity with zero records is distinct from `unavailable`; `not_applicable` is reserved for a scenario that does not define the activity family. `no_scored_calls` means resource observations are unavailable, not observed zero. The adapter maps the canonical wire spellings to the lowercase view enums without widening the vocabulary or replacing missingness with zero.
 
-The public boundary permits approved scenario descriptions and criterion labels, closed grade explanation codes, grouped reported activity outcomes, bounded scored-inference resources, verification metadata, and content bindings. The optional `model_response`, `failure_output`, and `role_transcripts` extensions carry bounded model and tool text under the checks described in [Public Spectator Architecture](../../../../../docs/architecture/public_spectator.md#public-live-projections). These checks do not perform general secret detection or redact arbitrary paths in model text. Private prompts, reasoning, grade detail, execution identities, receipts, and artifact locations have no general public field. A content binding identifies an approved artifact reference; it does not prove public accessibility or independent verification.
+The public boundary permits approved scenario descriptions and criterion labels, closed grade explanation codes, grouped reported activity outcomes, bounded scored-inference resources, verification metadata, and content bindings. The optional `model_response`, `failure_output`, and `role_transcripts` extensions carry bounded model and tool text under the checks described in [Public Spectator Architecture](../../../docs/architecture/public_spectator.md#public-live-projections). These checks do not perform general secret detection or redact arbitrary paths in model text. Private prompts, reasoning, grade detail, execution identities, receipts, and artifact locations have no general public field. A content binding identifies an approved artifact reference; it does not prove public accessibility or independent verification.
 
 ## Transport and publication
 

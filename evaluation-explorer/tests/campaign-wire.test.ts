@@ -51,7 +51,7 @@ const historicalResultEnvelope = {
 
 describe('campaign projection wire contract', () => {
   it.each([
-    ['PUBLIC_RELEASE_BASIS_RECORDED', 'v2.2.8'],
+    ['PUBLIC_RELEASE_BASIS_RECORDED', 'v2.3.0'],
     ['PUBLIC_RELEASE_BASIS_ASSERTED', 'v2.2.7'],
     ['PUBLIC_RELEASE_BASIS_UNKNOWN', undefined],
   ])('preserves release provenance %s on lifecycle and result envelopes', (basis, release) => {
@@ -63,10 +63,10 @@ describe('campaign projection wire contract', () => {
   });
 
   it.each([
-    { release: 'v2.2.8' },
-    { release: 'v2.2.8', release_basis: 'PUBLIC_RELEASE_BASIS_UNKNOWN' },
+    { release: 'v2.3.0' },
+    { release: 'v2.3.0', release_basis: 'PUBLIC_RELEASE_BASIS_UNKNOWN' },
     { release_basis: 'PUBLIC_RELEASE_BASIS_RECORDED' },
-    { release: 'v2.2.8', release_basis: 'recorded' },
+    { release: 'v2.3.0', release_basis: 'recorded' },
     { release_basis: 'PUBLIC_RELEASE_BASIS_INFERRED' },
     { release_basis: 'PUBLIC_RELEASE_BASIS_UNKNOWN', source_revision: 42 },
   ])('rejects inconsistent or unknown release identity %j', (identity) => {

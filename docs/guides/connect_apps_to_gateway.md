@@ -551,7 +551,7 @@ curl -X POST https://localhost:8443/mcp \
 
 #### Reserved First-Party Component Enrollment
 
-The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot be registered as custom applications; they are reserved for the dashboard, ensemble, and operator platform components. Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`. The enrollment flow:
+The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot be registered as custom applications; `g8ee` and `g8eo` are the ensemble and operator platform components, and `g8ed` stays reserved for the `dashboard` component kind that the protocol still defines after the g8ed dashboard was removed in v2.3.0 (the Gateway serves the console instead). Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`. The enrollment flow:
 
 1. **Request submission** (`POST /api/v1/auth/platform-enrollments/request`) — token-scoped, plain HTTP or HTTPS, available before owner bootstrap
 2. **Status polling** (`GET /api/v1/auth/platform-enrollments/status?token=<token>`) — token-scoped, plain HTTP or HTTPS; the client polls with bounded backoff

@@ -38,7 +38,7 @@ func EvaluationTestCampaignInitRequest(t *testing.T) evaluation.CampaignInitRequ
 		Inventory:                  inventory,
 		ScenarioArtifacts:          artifacts,
 		RepetitionCount:            1,
-		Platform:                   evaluation.PlatformIdentity{Release: "v2.2.8"},
+		Platform:                   evaluation.PlatformIdentity{Release: "v2.3.0"},
 		InferenceOperatorSessionID: "inf-session",
 		DataOperatorSessionID:      "data-session",
 	}

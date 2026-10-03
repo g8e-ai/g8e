@@ -3,8 +3,8 @@ doc_id: gateway
 title: Gateway Architecture
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-02
+version: v2.3.0
 owners:
   - internal/services/gateway/
   - internal/cli/cmd/gw/
@@ -57,9 +57,10 @@ Documents the g8e Governance Gateway (g8eg) architecture: its operational modes,
 | Gateway binary (Linux) | `bin/g8e` | SHA256 in release notes; distributed via HTTP from `/download/bin/g8e/<version>/` |
 | Gateway startup command | `internal/cli/cmd/gw/gateway.go` | `gw start`, `--posture` flag with four values, launch profile write to `.g8e/pids/` |
 | HTTP/HTTPS port constants | `internal/constants/network.go` | `GatewayHTTPPort = "8080"`, `GatewayHTTPSPort = "8443"` |
-| Governance layers | `internal/services/governance/` | Five files: `l1_doctrine.go`, `l3_notary.go`, `l4_warden.go`, `l5_actuator.go`; L2 Consensus delegated to enrolled service |
+| Governance layers | `internal/services/governance/` | `l1_doctrine.go`, `l2_consensus.go`, `l3_notary.go`, `l4_warden.go`, `l5_actuator.go`; L2 deliberation is delegated to the enrolled Consensus service |
 | MCP native tools | `internal/services/mcp/native_tool_registry.go` | All 32 tools registered at startup; input validation per category enforced |
-| HTTP router and auth | `internal/services/gateway/router.go` | Routes classified as public, mTLS-only, web-session-only, dual |
+| HTTP router and auth | `internal/services/gateway/gateway_http_router.go`, `gateway_auth.go` | Routes classified as public, mTLS-only, web-session-only, dual |
+| Console and ensemble browser proxy | `internal/services/gateway/console/`, `ensemble_browser_proxy_controller.go` | `./g8e test unit --pkg ./internal/services/gateway/console`; see [Console Architecture](console.md) |
 | Session types | `protocol/proto/g8e/common/v1/common.proto` | `operator_session_id`, `web_session_id`, `cli_session_id` fields in GovernanceEnvelope |
 | Interactive wizard | `internal/cli/cmd/gw/gateway_setup.go` | `gw setup`, `gw start -i` launch TUI; output merged with resolved CLI flags |
 
@@ -121,10 +122,14 @@ Client certificates are optional at the TLS handshake (allowing public browser a
 | --- | --- | --- |
 | **Public** | Health, state, PKI discovery, landing, logout, Console SPA, browser passkey registration, bootstrap/device enrollment, token-scoped CLI recovery | None required |
 | **mTLS-only** | Data, blob, and KV stores, operator management, governance, consensus, audit, pub/sub, SSE push, PKI management, passkey CLI status, enrollment token generation, CLI rotation, CLI recovery approval via headless `approve-cli` endpoint | Client certificate verified |
-| **Web-session-only** | User profile, approvals, passkey credential management, CLI recovery approval via browser Console SPA | Web session cookie with active user |
+| **Web-session-only** | User profile, approvals, passkey credential management, CLI recovery approval via browser Console SPA, and the ensemble browser proxy prefixes (`/api/v1/chat`, `/api/v1/settings`, `/api/v1/cases`, `/api/v1/investigations`, `/api/v1/operator/`) | Web session cookie with active user |
 | **Dual** | SSE stream and event endpoints | Either valid client certificate or web-session cookie |
 
 The full route list and auth assignments are part of the wire contract in [protocol/docs/spec.md](../../protocol/docs/spec.md).
+
+**Console and Ensemble Browser Proxy**
+
+The Gateway serves the embedded console at `/console/` on the HTTPS port with a self-only Content Security Policy, so the browser shares the Gateway's origin and needs no CORS configuration. Console chat, case, investigation, settings, and ensemble-approval requests reach g8ee only through `EnsembleBrowserProxyController`. For each request it requires a validated web session, forwards to `--ensemble-upstream-url` (default `http://127.0.0.1:8000`; the unified Compose stack sets `http://g8e-ensemble:8000`), and stamps `context.user_id`, `context.web_session_id`, and `context.bound_operators` from its own state, discarding browser-supplied values. `bound_operators` lists the caller's Operators that the registry shows bound to that web session. A registry failure yields an empty list, so a request proceeds with no Operator authority instead of unverified bindings. `GET /api/v1/investigations` is rewritten to an investigation query whose `user_id` is always the session user. See [Console Architecture](console.md) for the browser contract and trust boundaries.
 
 ### 5-Layer Verification Sequence
 

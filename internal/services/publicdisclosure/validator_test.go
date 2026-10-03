@@ -140,13 +140,13 @@ func TestValidatePublicLiveEventIsTypedAndFailsClosed(t *testing.T) {
 		body string
 		ok   bool
 	}{
-		{name: "recorded release on the wire", ok: true, body: head + `,"release":"v2.2.8","release_basis":"PUBLIC_RELEASE_BASIS_RECORDED","completed":1,"total":2,"metric_delta":{"pass":{"value":1}}}`},
+		{name: "recorded release on the wire", ok: true, body: head + `,"release":"v2.3.0","release_basis":"PUBLIC_RELEASE_BASIS_RECORDED","completed":1,"total":2,"metric_delta":{"pass":{"value":1}}}`},
 		{name: "zero progress is a value", ok: true, body: head + `,"completed":0,"total":1}`},
 		{name: "measured zero metric is a value", ok: true, body: head + `,"completed":0,"total":1,"metric_delta":{"pass":{"value":0}}}`},
 		{name: "unavailable metric names its reason", ok: true, body: head + `,"completed":0,"total":1,"metric_delta":{"pass":{"unavailable_reason":"no_scored_calls"}}}`},
 		{name: "missing completed is not zero", body: head + `,"total":1}`},
 		{name: "missing total is not zero", body: head + `,"completed":0}`},
-		{name: "view-form release basis", body: head + `,"release":"v2.2.8","release_basis":"recorded","completed":0,"total":1}`},
+		{name: "view-form release basis", body: head + `,"release":"v2.3.0","release_basis":"recorded","completed":0,"total":1}`},
 		{name: "client-stamped feed sequence is not a wire field", body: head + `,"completed":0,"total":1,"feed_sequence":3}`},
 		{name: "unknown field", body: head + `,"completed":0,"total":1,"served_model_tag":"qwen"}`},
 		{name: "role outside the vocabulary", body: head + `,"role":"sage","completed":0,"total":1}`},

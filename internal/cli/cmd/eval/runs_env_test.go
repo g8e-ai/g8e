@@ -667,7 +667,7 @@ func testFormationCatalogCLIVariants() []*evalv1.ModelVariant {
 }
 
 // testReleaseVersion is the build release the test harness runs commands as.
-const testReleaseVersion = "v2.2.8"
+const testReleaseVersion = "v2.3.0"
 
 // testVersionContext carries the build identity the root command attaches in production.
 func testVersionContext() context.Context {

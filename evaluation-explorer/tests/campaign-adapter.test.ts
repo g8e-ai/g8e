@@ -33,7 +33,7 @@ const failedResultVector = JSON.parse(
 
 describe('isCampaignProjectionEnvelope', () => {
   it.each([
-    ['PUBLIC_RELEASE_BASIS_RECORDED', 'recorded', 'v2.2.8', 'abc123'],
+    ['PUBLIC_RELEASE_BASIS_RECORDED', 'recorded', 'v2.3.0', 'abc123'],
     ['PUBLIC_RELEASE_BASIS_ASSERTED', 'asserted', 'v2.2.7', undefined],
     ['PUBLIC_RELEASE_BASIS_UNKNOWN', 'unknown', undefined, undefined],
   ])('retains campaign release %s through assignment and event adaptation', (wireBasis, basis, release, revision) => {

@@ -9,7 +9,7 @@ On the **provider host** (where Ollama runs), enroll two separate witness operat
 1. **Observer Operator** — `--provider-boundary-observer-enabled` for provider-boundary resource observation.
 2. **Provenance Operator** — `--provenance-operator-enabled` with `--model-storage-root` pointing at the Ollama models directory (for example `~/.ollama/models`).
 
-See [Unified Docker Stack Guide](../../../docs/guides/unified_stack.md#provider-boundary-observer-operator-windows-ollama-host) and [Storage-side Provenance Operator](../../../docs/guides/unified_stack.md#storage-side-provenance-operator).
+See [Unified Docker Stack Guide](../docs/guides/unified_stack.md#provider-boundary-observer-operator-provider-host-windows-example) and [Storage-side Provenance Operator](../docs/guides/unified_stack.md#storage-side-provenance-operator).
 
 ## Start and verify the platform
 

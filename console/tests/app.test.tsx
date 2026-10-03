@@ -43,7 +43,7 @@ class FakeEventSource {
 function signedInRoutes(extra: Record<string, Handler> = {}): Record<string, Handler> {
   return {
     'GET /api/v1/auth/bootstrap/status': () => [200, { bootstrapped: true }],
-    'GET /api/v1/health': () => [200, { version: 'v2.2.8' }],
+    'GET /api/v1/health': () => [200, { version: 'v2.3.0' }],
     'GET /api/v1/users/me': () => [200, { success: true, user: { id: 'u1' } }],
     'GET /api/v1/auth/sessions/me': () => [200, { success: true, user_id: 'u1', web_session_id: 'ws1' }],
     'GET /api/v1/operators': () => [200, { success: true, operators: [] }],
@@ -102,7 +102,7 @@ describe('authentication', () => {
   it('offers first-owner enrollment when the Gateway has no owner', async () => {
     routes = {
       'GET /api/v1/auth/bootstrap/status': () => [200, { bootstrapped: false }],
-      'GET /api/v1/health': () => [200, { version: 'v2.2.8' }],
+      'GET /api/v1/health': () => [200, { version: 'v2.3.0' }],
       'GET /api/v1/users/me': () => [401, { error: 'unauthorized' }],
     };
     renderApp();

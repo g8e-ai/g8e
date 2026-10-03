@@ -767,7 +767,7 @@ export type EvaluationCampaignSpec = Message<"g8e.eval.v1.EvaluationCampaignSpec
   /**
    * platform_release is the g8e build version that froze the campaign. It is
    * part of campaign_digest, so a campaign cannot be re-labeled. Empty only
-   * on campaigns frozen before v2.2.8; their release is an operator-asserted
+   * on campaigns frozen before v2.3.0; their release is an operator-asserted
    * tag held outside the digest.
    *
    * @generated from field: string platform_release = 11;

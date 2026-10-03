@@ -377,7 +377,7 @@ The Gateway-managed X.509 certificate authority tree (`internal/services/pki/`).
 
 ## Platform Enrollment
 
-The owner-approved protocol for enrolling dashboard, ensemble, and Operator component instances (`internal/services/gateway/platform_enrollment_service.go`). A component generates private keys, submits Certificate Signing Requests (CSRs) and fingerprints, and awaits an approval decision. To complete an approved request, the component proves possession of every private key by signing a canonical completion transcript (`PlatformEnrollmentCompletionTranscript`) that binds the protocol version, request ID, token hash, component kind, instance ID, and key fingerprints before certificates are issued.
+The owner-approved protocol for enrolling ensemble and Operator component instances, plus the `dashboard` component kind that the protocol still reserves for the removed g8ed dashboard (`internal/services/gateway/platform_enrollment_service.go`). A component generates private keys, submits Certificate Signing Requests (CSRs) and fingerprints, and awaits an approval decision. To complete an approved request, the component proves possession of every private key by signing a canonical completion transcript (`PlatformEnrollmentCompletionTranscript`) that binds the protocol version, request ID, token hash, component kind, instance ID, and key fingerprints before certificates are issued.
 
 ---
 

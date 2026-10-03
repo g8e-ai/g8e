@@ -17,13 +17,13 @@ func TestPublicFeedReleaseIdentity_PreservesKnownAndUnknownProvenance(t *testing
 		name, view, wire string
 		valid            bool
 	}{
-		{name: "recorded", view: `,"release":"v2.2.8","release_basis":"recorded","source_revision":"abc123"`, wire: `,"release":"v2.2.8","release_basis":"PUBLIC_RELEASE_BASIS_RECORDED","source_revision":"abc123"`, valid: true},
+		{name: "recorded", view: `,"release":"v2.3.0","release_basis":"recorded","source_revision":"abc123"`, wire: `,"release":"v2.3.0","release_basis":"PUBLIC_RELEASE_BASIS_RECORDED","source_revision":"abc123"`, valid: true},
 		{name: "asserted", view: `,"release":"v2.2.7","release_basis":"asserted"`, wire: `,"release":"v2.2.7","release_basis":"PUBLIC_RELEASE_BASIS_ASSERTED"`, valid: true},
 		{name: "unknown", view: `,"release":"","release_basis":"unknown"`, wire: `,"release_basis":"PUBLIC_RELEASE_BASIS_UNKNOWN"`, valid: true},
 		{name: "historical identity absent", valid: true},
-		{name: "release without basis", view: `,"release":"v2.2.8"`, wire: `,"release":"v2.2.8"`},
+		{name: "release without basis", view: `,"release":"v2.3.0"`, wire: `,"release":"v2.3.0"`},
 		{name: "known basis without release", view: `,"release_basis":"recorded"`, wire: `,"release_basis":"PUBLIC_RELEASE_BASIS_RECORDED"`},
-		{name: "unknown cannot name a release", view: `,"release":"v2.2.8","release_basis":"unknown"`, wire: `,"release":"v2.2.8","release_basis":"PUBLIC_RELEASE_BASIS_UNKNOWN"`},
+		{name: "unknown cannot name a release", view: `,"release":"v2.3.0","release_basis":"unknown"`, wire: `,"release":"v2.3.0","release_basis":"PUBLIC_RELEASE_BASIS_UNKNOWN"`},
 		{name: "unknown basis value", view: `,"release_basis":"inferred"`, wire: `,"release_basis":"PUBLIC_RELEASE_BASIS_INFERRED"`},
 		{name: "revision is a string", view: `,"release_basis":"unknown","source_revision":42`, wire: `,"release_basis":"PUBLIC_RELEASE_BASIS_UNKNOWN","source_revision":42`},
 	} {

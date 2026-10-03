@@ -4,7 +4,7 @@ title: Console Architecture
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-02
-version: v2.2.7
+version: v2.3.0
 owners:
   - console/
   - internal/services/gateway/console/
@@ -83,6 +83,7 @@ The console covers what an owner needs to operate the platform from a browser:
 The console is untrusted presentation. It holds no keys and has no authority of its own:
 
 - **Authentication** ends at the Gateway. WebAuthn ceremonies run in the console page; the Gateway verifies them and sets the HttpOnly, Secure `g8e_web_session_cookie`. See [Build a g8e-Compatible Frontend](../guides/build_frontend.md#webauthn-flow-requirements) for the wire contract.
+- **Ensemble reachability** is the Gateway's concern: the proxy forwards to `--ensemble-upstream-url` (default `http://127.0.0.1:8000`; `http://g8e-ensemble:8000` in the unified Compose stack). The console holds no ensemble address.
 - **Authority to act** belongs to Operators and the governance pipeline. The ensemble proposes actions for the Operators bound to the web session; every mutation still passes L1–L5, and L3-gated actions wait for a passkey approval in the console.
 - **Ensemble approvals** (command, file edit, intent, stream, and agent-continue requests) are answered with `POST /api/v1/operator/approval/respond`. They are distinct from L3 Notary approvals, which are passkey-signed and live under `/api/v1/approvals`.
 
@@ -116,7 +117,9 @@ Saving (`POST /api/v1/settings/llm`) writes the role-specific fields of the call
 
 The console opens one `EventSource` per signed-in session to `/api/v1/sse/stream?since_id=<cursor>`. The first connection requests live events only (`since_id=0`) because history is loaded over HTTP; reconnects resume from the highest durable event ID. The stream de-duplicates by ID, reconnects with exponential backoff (1 s doubling to 30 s, plus up to 500 ms of jitter), treats a source that does not open within 10 s as failed, and reconnects when the tab becomes visible.
 
-Events are routed by type and `data.investigation_id`: chat and tool events update the selected investigation's timeline; `app.case.*` events refresh the case list; `operator.status.updated.*` events refresh the Operator inventory. L3 suspensions and platform enrollment requests are not announced over SSE, so the console polls them every 15 s while visible.
+Events the registry marks `persistence: ephemeral` (streamed model output, for example) have no durable row, so the Gateway sends them without an `id:` line. The browser's `lastEventId` still holds the previous frame's ID for such a frame, so the console resolves every ephemeral event type to ID 0 from the generated registry. An ID-0 event bypasses de-duplication and never advances the resume cursor; trusting `lastEventId` would drop it as already seen.
+
+Events are routed by type and `data.investigation_id`: chat and tool events update the selected investigation's timeline; `app.case.*` events refresh the case list; `operator.status.updated.*` events refresh the Operator inventory, including the `active` event the Gateway publishes when an Operator is newly enrolled or claims its slot, so a newly approved Operator appears without a reload. L3 suspensions and platform enrollment requests are not announced over SSE, so the console polls them every 15 s while visible.
 
 ## Procedures
 

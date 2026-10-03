@@ -177,7 +177,7 @@ func (c *CampaignController) StartRun(ctx context.Context, req RunStartRequest) 
 	if err != nil {
 		return nil, err
 	}
-	// Campaigns frozen before v2.2.8 recorded no release; their asserted tag
+	// Campaigns frozen before v2.3.0 recorded no release; their asserted tag
 	// is not a digest-bound fact, so only a recorded release is enforced.
 	if recorded := spec.GetPlatformRelease(); recorded != "" && recorded != req.PlatformRelease {
 		return nil, fmt.Errorf("evaluation: start run %q: campaign %q recorded %q, executing build is %q: %w", req.RunID, req.CampaignID, recorded, req.PlatformRelease, constants.ErrEvaluationPlatformReleaseMismatch)

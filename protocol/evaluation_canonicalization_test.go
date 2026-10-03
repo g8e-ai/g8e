@@ -275,7 +275,7 @@ func TestPublicLiveEventCanonicalizationMatchesCrossLanguageVector(t *testing.T)
 		QualityState:        "live_in_progress",
 		ObservedAt:          "2026-09-24T12:00:05.000Z",
 		SourceRevisionLabel: "g8e-eval-campaign",
-		Release:             "v2.2.8",
+		Release:             "v2.3.0",
 		ReleaseBasis:        evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED,
 		SourceRevision:      "abc123",
 		EventId:             "run-1:assign-failed:metric:pass:event",

@@ -20,7 +20,7 @@ import (
 )
 
 // testPlatform is the build identity campaign fixtures freeze under.
-var testPlatform = PlatformIdentity{Release: "v2.2.8", SourceRevision: "0123abc"}
+var testPlatform = PlatformIdentity{Release: "v2.3.0", SourceRevision: "0123abc"}
 
 func TestMaterializeCampaignSpec_BindsCatalogAndInventory(t *testing.T) {
 	t.Parallel()

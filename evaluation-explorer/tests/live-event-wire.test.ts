@@ -24,7 +24,7 @@ describe('decodeLiveEventWire', () => {
     expect(event.completed).toBe(0);
     expect(event.total).toBe(5);
     expect(event.metric_delta?.pass).toEqual({ value: 0 });
-    expect(event.release).toBe('v2.2.8');
+    expect(event.release).toBe('v2.3.0');
     expect(event.release_basis).toBe('recorded');
     expect(event.source_revision).toBe('abc123');
     expect(() => decodeViewRecord(event.kind, event)).not.toThrow();

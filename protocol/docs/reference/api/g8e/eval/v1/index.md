@@ -367,7 +367,7 @@ EvaluationCampaignSpec is the frozen private campaign definition.
 | governance_posture | [EvaluationGovernancePosture](#g8e-eval-v1-EvaluationGovernancePosture) |  |  |
 | scenario_count | [uint32](#uint32) |  |  |
 | repetition_count | [uint32](#uint32) |  |  |
-| platform_release | [string](#string) |  | platform_release is the g8e build version that froze the campaign. It is part of campaign_digest, so a campaign cannot be re-labeled. Empty only on campaigns frozen before v2.2.8; their release is an operator-asserted tag held outside the digest. |
+| platform_release | [string](#string) |  | platform_release is the g8e build version that froze the campaign. It is part of campaign_digest, so a campaign cannot be re-labeled. Empty only on campaigns frozen before v2.3.0; their release is an operator-asserted tag held outside the digest. |
 | source_revision | [string](#string) |  | source_revision is the source commit of the build that froze the campaign. |
 
 

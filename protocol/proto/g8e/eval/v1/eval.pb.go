@@ -3624,7 +3624,7 @@ type EvaluationCampaignSpec struct {
 	RepetitionCount     uint32                      `protobuf:"varint,10,opt,name=repetition_count,json=repetitionCount,proto3" json:"repetition_count,omitempty"`
 	// platform_release is the g8e build version that froze the campaign. It is
 	// part of campaign_digest, so a campaign cannot be re-labeled. Empty only
-	// on campaigns frozen before v2.2.8; their release is an operator-asserted
+	// on campaigns frozen before v2.3.0; their release is an operator-asserted
 	// tag held outside the digest.
 	PlatformRelease string `protobuf:"bytes,11,opt,name=platform_release,json=platformRelease,proto3" json:"platform_release,omitempty"`
 	// source_revision is the source commit of the build that froze the campaign.

@@ -174,13 +174,13 @@ func TestMarshalPublicLiveEvent_RejectsNil(t *testing.T) {
 }
 
 func TestProjectLiveEvents_CarryTheCampaignReleaseIdentity(t *testing.T) {
-	release := CampaignRelease{Release: "v2.2.8", Basis: ReleaseBasisRecorded, SourceRevision: "abc123"}
+	release := CampaignRelease{Release: "v2.3.0", Basis: ReleaseBasisRecorded, SourceRevision: "abc123"}
 	invoked, err := ProjectModelRoleInvocationEvent(PublicModelRoleInvocationSignal{
 		Release: release, RunID: "run-live-1", AssignmentID: "assign-1", VariantID: "qwen3-4b", Role: models.ModelRolePrimary,
 		ObservedAt: "2026-09-24T12:00:00.000Z", EventID: "run-live-1:assign-1:invocation:primary:47", Completed: 0, Total: 5,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "v2.2.8", invoked.GetRelease())
+	assert.Equal(t, "v2.3.0", invoked.GetRelease())
 	assert.Equal(t, evalv1.PublicReleaseBasis_PUBLIC_RELEASE_BASIS_RECORDED, invoked.GetReleaseBasis())
 	assert.Equal(t, "abc123", invoked.GetSourceRevision())
 

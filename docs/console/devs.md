@@ -4,7 +4,7 @@ title: Console Development Guide
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-02
-version: v2.2.7
+version: v2.3.0
 owners:
   - console/
   - internal/services/gateway/console/
@@ -109,6 +109,8 @@ Component tests in `tests/app.test.tsx` stub `fetch` and `EventSource` with a fa
 1. `make console-lint console-test`.
 2. `make console-build embed-console` and commit `internal/services/gateway/console/static/` with the source change.
 3. If you changed the Gateway handler's Swagger annotations, run `make swagger-generate`.
+
+The `console-tests` CI job runs typecheck and lint, the Vitest suite, a fresh `npm run build` diffed against `internal/services/gateway/console/static`, and the `g8e-adapter` build with `npm run gen:contract-pack:check`. `make ci-console` runs lint, tests, and the embed check locally after `make dev-check`; the `g8e-adapter` build and contract-pack check run only in CI.
 
 ## Anti-patterns
 

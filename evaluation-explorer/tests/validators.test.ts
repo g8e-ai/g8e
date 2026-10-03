@@ -24,7 +24,7 @@ import {
 
 describe('isCatalogSnapshot', () => {
   it.each([
-    { release: 'v2.2.8', release_basis: 'recorded', source_revision: 'abc123' },
+    { release: 'v2.3.0', release_basis: 'recorded', source_revision: 'abc123' },
     { release: 'v2.2.7', release_basis: 'asserted' },
     { release: '', release_basis: 'unknown' },
   ])('accepts explicit campaign provenance %j', (identity) => {
@@ -32,10 +32,10 @@ describe('isCatalogSnapshot', () => {
   });
 
   it.each([
-    { release: 'v2.2.8' },
+    { release: 'v2.3.0' },
     { release_basis: 'recorded' },
-    { release: 'v2.2.8', release_basis: 'unknown' },
-    { release: 'v2.2.8', release_basis: 'inferred' },
+    { release: 'v2.3.0', release_basis: 'unknown' },
+    { release: 'v2.3.0', release_basis: 'inferred' },
     { release_basis: 'unknown', source_revision: 42 },
   ])('rejects invalid campaign provenance %j', (identity) => {
     expect(() => isCatalogSnapshot({ ...fixtureCatalogExploratory, ...identity })).toThrow(ValidationError);

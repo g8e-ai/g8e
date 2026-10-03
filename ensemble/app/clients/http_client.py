@@ -487,7 +487,7 @@ class HTTPClient:
 
         if not await circuit_breaker.allow_request():
             error = NetworkError(
-                message=f"Circuit breaker is open for {circuit_breaker.endpoint}, failing fast",
+                message=f"Circuit breaker is open for {circuit_breaker.endpoint}",
                 code=ErrorCode.API_CONNECTION_ERROR,
                 severity=ErrorSeverity.HIGH,
                 details={
@@ -829,7 +829,7 @@ class HTTPClient:
         circuit_breaker = self._get_circuit_breaker(final_url)
         if not await circuit_breaker.allow_request():
             raise NetworkError(
-                message=f"Circuit breaker is open for {circuit_breaker.endpoint}, failing fast",
+                message=f"Circuit breaker is open for {circuit_breaker.endpoint}",
                 code=ErrorCode.API_CONNECTION_ERROR,
                 details={"url": final_url, "method": method},
                 retry_suggested=False,
