@@ -10,7 +10,6 @@ const APPROVAL_TITLE: Record<ApprovalKind, string> = {
   command: 'Run this command?',
   file_edit: 'Change this file?',
   intent: 'Grant this permission?',
-  stream: 'Deploy Operators to these hosts?',
   agent_continue: 'Let the agent keep going?',
 };
 
