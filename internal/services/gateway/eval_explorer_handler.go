@@ -22,7 +22,7 @@ import (
 	gwexplorer "github.com/g8e-ai/g8e/v2/internal/services/gateway/explorer"
 )
 
-const evalExplorerRelativeRoot = "dashboard/g8e-adapter/evaluation-explorer/dist"
+const evalExplorerRelativeRoot = "evaluation-explorer/dist"
 
 // NewEvalExplorerHandler serves the evaluation explorer SPA with a runtime.json
 // that points at the public mirror origin exposed to browsers. When

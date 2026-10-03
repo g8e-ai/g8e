@@ -285,10 +285,10 @@ func TestDockerRestartCmd(t *testing.T) {
 		cmd := dockerRestartCmd()
 		require.NoError(t, cmd.Flags().Set("profile", "bootstrapped"))
 
-		_, err := runDockerCommand(t, cmd, "g8e-gateway", "g8e-dashboard")
+		_, err := runDockerCommand(t, cmd, "g8e-gateway", "g8e-ensemble")
 
 		require.NoError(t, err)
-		assert.Contains(t, fakeDockerCalls(t, callLog), composeLine(t, []string{"bootstrapped"}, "restart g8e-gateway g8e-dashboard"))
+		assert.Contains(t, fakeDockerCalls(t, callLog), composeLine(t, []string{"bootstrapped"}, "restart g8e-gateway g8e-ensemble"))
 	})
 
 	t.Run("compose failure is reported as a process start failure", func(t *testing.T) {
@@ -368,7 +368,7 @@ func TestDockerLogsCmd(t *testing.T) {
 	}{
 		{name: "all services", wantTail: "logs"},
 		{name: "follow a single service", flags: map[string]string{"follow": "true"}, args: []string{"g8e-gateway"}, wantTail: "logs -f g8e-gateway"},
-		{name: "a single service under a profile", flags: map[string]string{"profile": "bootstrapped"}, args: []string{"g8e-dashboard"}, wantTail: "logs g8e-dashboard", profiles: []string{"bootstrapped"}},
+		{name: "a single service under a profile", flags: map[string]string{"profile": "bootstrapped"}, args: []string{"g8e-ensemble"}, wantTail: "logs g8e-ensemble", profiles: []string{"bootstrapped"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -36,7 +36,7 @@ import (
 
 	// dockerComposePath resolves the root unified-stack compose file relative to
 	// the current working directory. The root compose file deploys the full
-	// platform stack (gateway, operator, ensemble, dashboard).
+	// platform stack (gateway, operator, ensemble). The Gateway serves the console.
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/eval"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
@@ -80,7 +80,7 @@ func confirmDockerVolumeWipe(
 	return shared.ConfirmDestructive(cmd, shared.DestructiveOptions{
 		Effects: []string{
 			"Remove every container, network, and orphan of the unified stack (all profiles)",
-			"Permanently delete the Docker data volumes (gateway, operator, inference, ensemble, dashboard); volumes cannot be recovered",
+			"Permanently delete the Docker data volumes (gateway, operator, inference, ensemble); volumes cannot be recovered",
 			"Destroy the trust domain (PKI, owner and Operator identities); owner and workload enrollment must be repeated",
 			"The host .g8e directory is not touched",
 		},
@@ -184,7 +184,7 @@ func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docker",
 		Short: "Manage the Docker Compose unified stack",
-		Long: `Manage the root Docker Compose unified stack (gateway, operator, inference operator, ensemble, dashboard).
+		Long: `Manage the root Docker Compose unified stack (gateway, operator, inference operator, ensemble).
 
 Use ` + "`" + `g8e docker init` + "`" + ` to build images and bring the full evaluation stack online in one
 command (owner enrollment, platform approvals, readiness checks). See
@@ -290,9 +290,9 @@ docs/guides/unified_stack.md:
   4. Start the gateway and wait for it to become healthy.
   5. Enroll the CLI owner (unless --skip-enroll).
   6. Start bootstrapped + evaluation workloads (operator, inference operator,
-     ensemble, and dashboard).
+     and ensemble).
   7. Auto-approve pending platform enrollment requests in the documented order
-     (data operator, dashboard, ensemble, inference operator) unless
+     (data operator, ensemble, inference operator) unless
      --skip-approvals is set.
   8. Wait for the ensemble health endpoint to respond.
 
@@ -569,13 +569,12 @@ func dockerStartCmdWithConfig(
 		Long: `Start the Docker Compose unified stack in the background.
 
 Starts the full unified stack: gateway, data operator, inference operator,
-ensemble, and dashboard.
+and ensemble. The Gateway serves the console at https://localhost:8443/console/.
 
 When starting without --skip-enroll, the command walks the owner through interactive enrollment:
   1. Enrolls the CLI user (the first owner) with the gateway.
   2. Prompts to approve the Ensemble platform enrollment request.
-  3. Prompts to approve the Dashboard platform enrollment request.
-  4. Prompts to approve the Operator platform enrollment request.
+  3. Prompts to approve the Operator platform enrollment request.
 
 Each component prompt accepts y to approve or n (or any other input) to skip.
 Use --skip-enroll to start the stack without the interactive walkthrough
@@ -642,8 +641,7 @@ Use --skip-enroll to start the stack without the interactive walkthrough
 // runDockerStartWalkthrough drives the interactive enrollment walkthrough after
 // the bootstrapped profile containers are up. It enrolls the CLI owner, waits for
 // the gateway to be reachable, then prompts the owner to approve each
-// component's platform enrollment request in order: ensemble, dashboard,
-// operator. Each prompt is skippable (any answer other than y skips that
+// component's platform enrollment request in order: ensemble, operator. Each prompt is skippable (any answer other than y skips that
 // component without aborting the walkthrough).
 func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 	ctx := shared.CommandContext(cmd)
@@ -694,7 +692,6 @@ func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 
 	components := []models.PlatformComponentKind{
 		models.PlatformComponentEnsemble,
-		models.PlatformComponentDashboard,
 		models.PlatformComponentOperator,
 	}
 	for i, component := range components {
@@ -832,24 +829,22 @@ func isInferenceOperatorPendingRequest(req *models.PlatformEnrollmentPendingRequ
 }
 
 // platformEnrollmentApprovalRank assigns the documented approval order for the
-// unified stack: data operator, dashboard, ensemble, inference operator.
+// unified stack: data operator, ensemble, inference operator.
 func platformEnrollmentApprovalRank(req models.PlatformEnrollmentPendingRequest) int {
 	switch req.ComponentKind {
 	case models.PlatformComponentOperator:
 		if isInferenceOperatorPendingRequest(&req) {
-			return 4
+			return 3
 		}
 		return 1
-	case models.PlatformComponentDashboard:
-		return 2
 	case models.PlatformComponentEnsemble:
-		return 3
+		return 2
 	default:
 		return 99
 	}
 }
 
-const dockerInitApprovalSlotCount = 4
+const dockerInitApprovalSlotCount = 3
 
 // selectDockerInitApprovalCandidate returns the lowest-ranked pending request in
 // the documented order. Workloads with reusable credentials submit no request
@@ -1077,7 +1072,7 @@ first. Use --yes to skip the confirmation (the backup still runs) and
 --skip-backup to opt out of the backup.
 
 Clean always targets the bootstrapped and evaluation profiles so that operator,
-ensemble, dashboard, and inference-operator containers are removed alongside
+ensemble, and inference-operator containers are removed alongside
 the gateway, not just the default-profile gateway container.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
@@ -1093,7 +1088,7 @@ the gateway, not just the default-profile gateway container.`,
 			}
 			cmd.Println("Cleaning Docker Compose stack...")
 			// Always pass the bootstrapped and evaluation profiles so operator,
-			// ensemble, dashboard, and inference-operator containers are removed
+			// ensemble, and inference-operator containers are removed
 			// together with the gateway. Without them, down only touches
 			// default-profile services and profile-gated containers keep running,
 			// holding their volumes and the shared network open.

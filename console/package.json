@@ -1,0 +1,42 @@
+{
+  "name": "@g8e/console",
+  "private": true,
+  "version": "1.0.0",
+  "description": "g8e Console — the Gateway-embedded browser frontend: passkey auth, approvals, Operator inventory and binding, cases, investigations, and chat.",
+  "license": "BUSL-1.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5174 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.8.0",
+    "@typescript-eslint/parser": "^8.8.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "eslint": "^9.11.1",
+    "globals": "^14.0.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.6.2",
+    "vite": "6.4.3",
+    "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

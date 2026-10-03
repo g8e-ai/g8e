@@ -21,7 +21,7 @@ import (
 )
 
 // TestPlatform_FullBootstrap verifies that a fully bootstrapped live stack
-// (gateway, operator, ensemble, dashboard) is healthy and properly connected.
+// (gateway, operator, ensemble, and the Gateway-served console) is healthy and properly connected.
 // It assumes the stack is running and enrolled; it does not start or stop
 // containers.
 func TestPlatform_FullBootstrap(t *testing.T) {
@@ -71,9 +71,9 @@ func TestPlatform_FullBootstrap(t *testing.T) {
 		}
 	})
 
-	t.Run("DashboardIndex", func(t *testing.T) {
-		body, err := e2eClient.GetDashboardIndex(ctx, e2eCfg.dashboardURL)
-		require.NoError(t, err, "dashboard index must be reachable")
-		assert.NotEmpty(t, body, "dashboard index must serve non-empty body")
+	t.Run("ConsoleIndex", func(t *testing.T) {
+		body, err := e2eClient.GetConsoleIndex(ctx)
+		require.NoError(t, err, "console index must be reachable")
+		assert.Contains(t, string(body), "<title>g8e Console</title>", "console index must serve the console SPA")
 	})
 }

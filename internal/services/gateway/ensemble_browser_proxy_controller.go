@@ -21,14 +21,18 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 )
 
 // EnsembleBrowserProxyController forwards browser-authenticated requests to g8ee
-// with Gateway-stamped identity. Browsers never call g8ee directly.
+// with Gateway-stamped identity. Browsers never call g8ee directly. The stamped
+// identity includes the Operators bound to the caller's web session, read from
+// the Gateway registry; browser-supplied bound_operators are discarded.
 type EnsembleBrowserProxyController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
 	responder *response.Writer
+	operators dispatch.OperatorLister
 	client    *http.Client
 }
 
@@ -36,6 +40,7 @@ type EnsembleBrowserProxyControllerDeps struct {
 	Cfg       *config.Config
 	Logger    *slog.Logger
 	Responder *response.Writer
+	Operators dispatch.OperatorLister
 }
 
 func newEnsembleBrowserProxyController(d EnsembleBrowserProxyControllerDeps) *EnsembleBrowserProxyController {
@@ -43,6 +48,7 @@ func newEnsembleBrowserProxyController(d EnsembleBrowserProxyControllerDeps) *En
 		cfg:       d.Cfg,
 		logger:    d.Logger,
 		responder: d.Responder,
+		operators: d.Operators,
 		client: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -83,7 +89,7 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 			return
 		}
 	} else if len(body) > 0 && method != http.MethodGet && method != http.MethodHead {
-		body, err = injectBrowserContext(body, userID, webSessionID)
+		body, err = injectBrowserContext(body, userID, webSessionID, c.boundOperators(userID, webSessionID))
 		if err != nil {
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
@@ -135,6 +141,43 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	}
 }
 
+// browserBoundOperator is one entry of the Gateway-stamped bound_operators
+// list. It mirrors the protocol BoundOperator shape g8ee parses from the
+// request context. Field order matches encoding/json map key order.
+type browserBoundOperator struct {
+	BoundWebSessionID string `json:"bound_web_session_id"`
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id,omitempty"`
+	Status            string `json:"status,omitempty"`
+}
+
+// boundOperators returns the caller's Operators that the registry shows bound
+// to webSessionID. A registry failure yields an empty list, so the request
+// proceeds with no Operator authority rather than with unverified bindings.
+func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID string) []browserBoundOperator {
+	bound := []browserBoundOperator{}
+	if c.operators == nil {
+		return bound
+	}
+	ops, err := c.operators.ListUserOperators(userID)
+	if err != nil {
+		c.logger.Warn("gateway: ensemble browser proxy could not list bound operators", "error", err)
+		return bound
+	}
+	for _, op := range ops {
+		if op.BoundWebSessionID != webSessionID {
+			continue
+		}
+		bound = append(bound, browserBoundOperator{
+			BoundWebSessionID: op.BoundWebSessionID,
+			OperatorID:        op.ID,
+			OperatorSessionID: op.OperatorSessionID,
+			Status:            string(op.Status),
+		})
+	}
+	return bound
+}
+
 // browserProxyContext is the identity object the browser proxy stamps onto
 // ensemble requests. Field order matches encoding/json map key order.
 type browserProxyContext struct {
@@ -143,7 +186,9 @@ type browserProxyContext struct {
 }
 
 // browserInvestigationsQuery is the body of the GET investigations compatibility
-// rewrite. Field order matches encoding/json map key order.
+// rewrite. UserID is always the session user so g8ee scopes the query to the
+// caller; a query-string user_id is never honored. Field order matches
+// encoding/json map key order.
 type browserInvestigationsQuery struct {
 	CaseID            string              `json:"case_id,omitempty"`
 	Context           browserProxyContext `json:"context"`
@@ -153,6 +198,7 @@ type browserInvestigationsQuery struct {
 	OrderDirection    string              `json:"order_direction,omitempty"`
 	Priority          string              `json:"priority,omitempty"`
 	Status            string              `json:"status,omitempty"`
+	UserID            string              `json:"user_id"`
 	WebSessionID      string              `json:"web_session_id,omitempty"`
 }
 
@@ -162,7 +208,8 @@ func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request
 			UserID:       userID,
 			WebSessionID: webSessionID,
 		},
-		Limit: 20,
+		Limit:  20,
+		UserID: userID,
 	}
 	for key, vals := range r.URL.Query() {
 		if len(vals) == 0 {
@@ -193,10 +240,11 @@ func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request
 	return json.Marshal(payload)
 }
 
-// injectBrowserContext stamps browser identity onto a JSON object body.
+// injectBrowserContext stamps browser identity and the session's bound
+// Operators onto a JSON object body, replacing any caller-supplied values.
 // The outer document and any extra context keys are caller-defined JSON with
 // no stable schema, so they stay map[string]interface{} and round-trip.
-func injectBrowserContext(body []byte, userID, webSessionID string) ([]byte, error) {
+func injectBrowserContext(body []byte, userID, webSessionID string, bound []browserBoundOperator) ([]byte, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return body, nil
@@ -207,6 +255,7 @@ func injectBrowserContext(body []byte, userID, webSessionID string) ([]byte, err
 	}
 	ctx["user_id"] = userID
 	ctx["web_session_id"] = webSessionID
+	ctx["bound_operators"] = bound
 	if caseID, ok := payload["case_id"].(string); ok && caseID != "" {
 		ctx["case_id"] = caseID
 	}

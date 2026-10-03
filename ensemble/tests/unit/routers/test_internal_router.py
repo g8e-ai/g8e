@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import ComponentName
-from app.errors import ResourceNotFoundError
+from app.errors import ResourceNotFoundError, ValidationError
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.cases import (
     CaseGetRequest,
@@ -19,6 +19,7 @@ from app.models.cases import (
     CaseDeleteRequest,
 )
 from app.models.http_context import BoundOperator, G8eHttpContext, RequestContext
+from app.models.investigations import InvestigationQueryRequest
 from app.models.internal_api import (
     ChatMessageRequest,
     DirectCommandRequest,
@@ -42,6 +43,7 @@ from app.routers.internal_router import (
     execute_direct_command,
     internal_chat,
     operator_approval_respond,
+    query_investigations,
     stop_ai_processing,
     unbind_operators,
     update_case,
@@ -165,6 +167,121 @@ async def test_internal_chat_missing_investigation(request_context, g8e_context,
 
     assert response.success is True
     assert response.investigation_id != ""
+
+
+async def _run_internal_chat(request, g8e_context, task_tracker, case_service, investigation_service):
+    mock_chat_pipeline = MagicMock()
+    mock_chat_pipeline.run_chat = AsyncMock()
+    mock_chat_task_manager = MagicMock()
+    mock_chat_task_manager.track = AsyncMock()
+    with task_tracker.patch_create_task("app.routers.internal_router"):
+        return await internal_chat(
+            request=request,
+            app_settings=MagicMock(),
+            user_settings=MagicMock(),
+            chat_pipeline=mock_chat_pipeline,
+            chat_task_manager=mock_chat_task_manager,
+            case_service=case_service,
+            investigation_service=investigation_service,
+            attachment_service=MagicMock(),
+            event_service=MagicMock(),
+            g8e_context=g8e_context,
+        )
+
+
+@pytest.mark.asyncio
+async def test_internal_chat_new_investigation_in_existing_case(
+    request_context, g8e_context, task_tracker
+):
+    g8e_context = g8e_context.model_copy(update={"investigation_id": None})
+    request = ChatMessageRequest(
+        context=request_context.model_copy(update={"investigation_id": None}),
+        message="follow-up",
+        resource_creation=ResourceCreationRequest(create_investigation=True),
+    )
+    mock_case_service = MagicMock()
+    mock_case_service.get_case = AsyncMock(
+        return_value=build_case_model(case_id="case-123", user_id="user-123")
+    )
+    mock_case_service.create_case = AsyncMock()
+    mock_investigation_service = MagicMock()
+    mock_investigation_service.create_investigation = AsyncMock(
+        return_value=create_investigation_data(investigation_id="inv-456", case_id="case-123")
+    )
+
+    response = await _run_internal_chat(
+        request, g8e_context, task_tracker, mock_case_service, mock_investigation_service
+    )
+
+    assert response.success is True
+    assert response.case_id == "case-123"
+    assert response.investigation_id == "inv-456"
+    mock_case_service.create_case.assert_not_called()
+    created = mock_investigation_service.create_investigation.call_args.args[0]
+    assert created.case_id == "case-123"
+    assert created.user_id == "user-123"
+    assert created.created_with_case is False
+
+
+@pytest.mark.asyncio
+async def test_internal_chat_new_investigation_rejects_foreign_case(
+    request_context, g8e_context, task_tracker
+):
+    request = ChatMessageRequest(
+        context=request_context,
+        message="follow-up",
+        resource_creation=ResourceCreationRequest(create_investigation=True),
+    )
+    mock_case_service = MagicMock()
+    mock_case_service.get_case = AsyncMock(
+        return_value=build_case_model(case_id="case-123", user_id="someone-else")
+    )
+    mock_investigation_service = MagicMock()
+    mock_investigation_service.create_investigation = AsyncMock()
+
+    with pytest.raises(ResourceNotFoundError):
+        await _run_internal_chat(
+            request, g8e_context, task_tracker, mock_case_service, mock_investigation_service
+        )
+    mock_investigation_service.create_investigation.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_internal_chat_new_investigation_requires_case_id(
+    request_context, g8e_context, task_tracker
+):
+    g8e_context = g8e_context.model_copy(update={"case_id": None})
+    request = ChatMessageRequest(
+        context=request_context.model_copy(update={"case_id": None}),
+        message="follow-up",
+        resource_creation=ResourceCreationRequest(create_investigation=True),
+    )
+    mock_investigation_service = MagicMock()
+    mock_investigation_service.create_investigation = AsyncMock()
+
+    with pytest.raises(ValidationError):
+        await _run_internal_chat(
+            request, g8e_context, task_tracker, MagicMock(), mock_investigation_service
+        )
+    mock_investigation_service.create_investigation.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_query_investigations_scopes_to_authenticated_user(request_context, g8e_context):
+    request = InvestigationQueryRequest(context=request_context, user_id="someone-else")
+    mock_investigation_service = MagicMock()
+    mock_investigation_service.investigation_data_service.query_investigations = AsyncMock(
+        return_value=[]
+    )
+
+    await query_investigations(
+        request=request,
+        investigation_service=mock_investigation_service,
+        g8e_context=g8e_context,
+    )
+
+    scoped = mock_investigation_service.investigation_data_service.query_investigations.call_args.args[0]
+    assert scoped.user_id == "user-123"
 
 
 @pytest.mark.asyncio

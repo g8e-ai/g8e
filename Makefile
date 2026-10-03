@@ -195,7 +195,7 @@ help:
 	@echo "  dev-setup     Install everything 'make ci' needs: dev-tools + dev-python + dev-node"
 	@echo "  dev-tools     Install pinned Go tools (buf, protoc plugins, golangci-lint, govulncheck, swag)"
 	@echo "  dev-python    Create .venv (Python $(PYTHON_VERSION)) with protocol + ensemble deps via uv"
-	@echo "  dev-node      npm ci for protocol/node, dashboard, and dashboard/g8e-adapter"
+	@echo "  dev-node      npm ci for protocol/node, console, and g8e-adapter"
 	@echo "  dev-check     Verify every tool 'make ci' needs is installed (runs before ci targets)"
 	@echo ""
 	@echo "CI/CD (Local):"
@@ -262,9 +262,12 @@ help:
 	@echo "  ensemble-lint   Run ruff + pyright on the ensemble"
 	@echo "  build-ensemble  Build the ensemble Docker image"
 	@echo ""
-	@echo "Dashboard (g8ed):"
-	@echo "  dashboard-test   Run the dashboard vitest suite (requires npm ci in dashboard/)"
-	@echo "  build-dashboard  Build the dashboard Docker image"
+	@echo "Console (Gateway-embedded browser frontend, served at /console/):"
+	@echo "  console-build        Build the console SPA (requires npm ci in console/)"
+	@echo "  embed-console        Copy console/dist into the Gateway's embedded static directory"
+	@echo "  console-test         Run the console vitest suite"
+	@echo "  console-lint         Typecheck and ESLint the console"
+	@echo "  console-embed-check  Fail if the embedded console differs from a fresh build"
 
 .PHONY: python-build
 python-build:
@@ -477,11 +480,11 @@ dev-python:
 
 .PHONY: dev-node
 dev-node:
-	@echo "Installing Node dependencies (protocol/node, dashboard, g8e-adapter)..."
+	@echo "Installing Node dependencies (protocol/node, console, g8e-adapter)..."
 	@npm ci --prefix protocol/node
-	@npm ci --prefix dashboard
-	@npm ci --prefix dashboard/g8e-adapter
-	@npm run build --prefix dashboard/g8e-adapter
+	@npm ci --prefix console
+	@npm ci --prefix g8e-adapter
+	@npm run build --prefix g8e-adapter
 
 # Preflight for `make ci`: reports every missing or mismatched tool at once.
 .PHONY: dev-check
@@ -502,7 +505,7 @@ INSTALL_EXECUTABLE = \
 		cp "$$INSTALL_SRC" "$$INSTALL_DST.new" && chmod +x "$$INSTALL_DST.new" && mv -f "$$INSTALL_DST.new" "$$INSTALL_DST"; \
 	fi
 
-EXPLORER_DIST := dashboard/g8e-adapter/evaluation-explorer/dist
+EXPLORER_DIST := evaluation-explorer/dist
 EXPLORER_EMBED := internal/services/gateway/explorer/static
 
 .PHONY: embed-explorer
@@ -511,8 +514,21 @@ embed-explorer:
 	@rm -rf $(EXPLORER_EMBED)
 	@cp -a $(EXPLORER_DIST) $(EXPLORER_EMBED)
 
+# The console embed is committed, like the explorer's. When console/dist has
+# not been built (Go-only checkouts), the committed embed is used as-is.
+CONSOLE_DIST := console/dist
+CONSOLE_EMBED := internal/services/gateway/console/static
+
+.PHONY: embed-console
+embed-console:
+	@if [ -f $(CONSOLE_DIST)/index.html ]; then \
+		rm -rf $(CONSOLE_EMBED) && cp -a $(CONSOLE_DIST) $(CONSOLE_EMBED); \
+	else \
+		echo "console/dist not built; using the committed console embed (run 'make console-build' to refresh)"; \
+	fi
+
 .PHONY: build
-build: embed-explorer
+build: embed-explorer embed-console
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
 	@rm -f $(BIN_DIR)/g8e-binaries.json
@@ -712,7 +728,7 @@ test-integration:
 #
 # The default target runs the steady-state suite: tests that exercise an
 # approved stack (gateway, auth, operator registry, heartbeat, command
-# roundtrip, ensemble, dashboard, compliance, approved-restart). Stateful
+# roundtrip, ensemble, console, compliance, approved-restart). Stateful
 # scenario tests (pending-discovery, denial, restart-during-pending, headless)
 # require specific platform states and are run individually via:
 #   ./g8e test e2e --run TestPlatformEnrollment_PendingDiscovery
@@ -730,7 +746,7 @@ test-integration:
 .PHONY: test-docker
 test-docker:
 	@echo "Running Tier 3 (Docker E2E) steady-state tests..."
-	@./g8e test e2e --run 'TestGateway|TestAuth|TestOperatorRegistry|TestPubSub|TestCommandRoundtrip|TestEnsemble|TestDashboard|TestCompliance|TestApprovedRestart'
+	@./g8e test e2e --run 'TestGateway|TestAuth|TestOperatorRegistry|TestPubSub|TestCommandRoundtrip|TestEnsemble|TestConsole|TestCompliance|TestApprovedRestart'
 
 # Tier 3: Cross-Enrollment E2E Tests - a gateway enrolling as an operator of
 # another gateway. Requires the cross-enrollment profile, which starts a
@@ -830,38 +846,31 @@ build-ensemble:
 	@echo "Ensemble image built: g8e-ensemble:$(VERSION)"
 
 # =============================================================================
-# DASHBOARD (g8ed) — Node.js first-party component
+# CONSOLE — Gateway-embedded browser frontend (console/, served at /console/)
 # =============================================================================
-# The dashboard requires node_modules installed first:
-#   cd dashboard && npm ci
+# Requires node_modules installed first:
+#   cd console && npm ci
 
-.PHONY: dashboard-lint
-dashboard-lint:
-	@echo "Running dashboard (g8ed) ESLint checks..."
-	@cd dashboard && npm run lint
+.PHONY: console-build
+console-build:
+	@echo "Building the console SPA..."
+	@cd console && npm run build
 
-.PHONY: dashboard-test
-dashboard-test:
-	@echo "Running dashboard (g8ed) vitest suite..."
-	@cd dashboard && npm test
+.PHONY: console-lint
+console-lint:
+	@echo "Typechecking and linting the console..."
+	@cd console && npm run typecheck && npm run lint
 
-.PHONY: dashboard-boundary-check
-dashboard-boundary-check:
-	@echo "Checking g8ed gateway boundary invariants..."
-	@if rg -q 'ServiceName\.g8ed|/api/operators|cache_aside|operator_slot|VSE_INTERNAL' \
-		dashboard/public dashboard/server.js dashboard/services dashboard/entrypoint.sh; then \
-		echo "g8ed boundary violation: forbidden BFF patterns found in dashboard runtime paths"; \
-		rg 'ServiceName\.g8ed|/api/operators|cache_aside|operator_slot|VSE_INTERNAL' \
-			dashboard/public dashboard/server.js dashboard/services dashboard/entrypoint.sh; \
-		exit 1; \
-	fi
-	@echo "g8ed boundary grep clean."
+.PHONY: console-test
+console-test:
+	@echo "Running the console vitest suite..."
+	@cd console && npm test
 
-.PHONY: build-dashboard
-build-dashboard:
-	@echo "Building dashboard (g8ed) Docker image..."
-	@DOCKER_BUILDKIT=1 docker build -f dashboard/Dockerfile -t g8e-dashboard:$(VERSION) .
-	@echo "Dashboard image built: g8e-dashboard:$(VERSION)"
+# Rebuilds the console and fails if the committed embed is stale.
+.PHONY: console-embed-check
+console-embed-check: console-build
+	@diff -r $(CONSOLE_DIST) $(CONSOLE_EMBED) >/dev/null || { echo "ERROR: $(CONSOLE_EMBED) is stale; run 'make console-build embed-console' and commit the result"; exit 1; }
+	@echo "Embedded console is current."
 
 # Coverage tests
 .PHONY: test-coverage
@@ -1018,7 +1027,7 @@ docker-build:
 # CI/CD (LOCAL)
 # =============================================================================
 .PHONY: ci
-ci: ci-platform ci-ensemble ci-dashboard
+ci: ci-platform ci-ensemble ci-console
 	@echo "CI complete."
 
 .PHONY: ci-platform
@@ -1029,9 +1038,9 @@ ci-platform: dev-check _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-t
 ci-ensemble: dev-check ensemble-lint ensemble-test
 	@echo "Ensemble CI complete."
 
-.PHONY: ci-dashboard
-ci-dashboard: dev-check dashboard-lint dashboard-boundary-check dashboard-test
-	@echo "Dashboard CI complete."
+.PHONY: ci-console
+ci-console: dev-check console-lint console-test console-embed-check
+	@echo "Console CI complete."
 
 .PHONY: check-bsl-headers
 check-bsl-headers:

@@ -902,6 +902,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Cfg:       cfg,
 			Logger:    logger,
 			Responder: ls.responder,
+			Operators: &gatewayOperatorListerAdapter{svc: reg},
 		},
 	})
 	if err != nil {

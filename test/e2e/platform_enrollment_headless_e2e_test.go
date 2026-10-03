@@ -22,8 +22,8 @@ import (
 )
 
 // TestPlatformEnrollment_Headless verifies the gateway-only deployment mode
-// (headless): the gateway is running and bootstrapped, but no operator,
-// dashboard, or ensemble workloads are running. The user starts only the
+// (headless): the gateway is running and bootstrapped, but no operator or
+// ensemble workloads are running. The user starts only the
 // gateway service (docker compose up -d --no-deps g8e-gateway or the
 // equivalent), bootstraps the owner identity, then runs:
 //
@@ -32,8 +32,8 @@ import (
 // The test asserts that the gateway health and CA bundle endpoints succeed,
 // that the authenticated pending enrollment list is empty (no workloads are
 // running to submit requests), that the operator list is empty (no operators
-// are registered), and that the ensemble and dashboard endpoints are absent
-// (their services are not running). This is the headless deployment mode: a
+// are registered), and that the ensemble endpoint is absent (its service is
+// not running). This is the headless deployment mode: a
 // usable gateway with no pending workloads or registered operators.
 //
 // This replaces the prior TestPlatformEnrollment_HeadlessGatewayOnly_E2E
@@ -46,7 +46,7 @@ func TestPlatformEnrollment_Headless(t *testing.T) {
 
 	// Precondition: this test requires a gateway-only deployment (headless
 	// mode). The user starts only the gateway service and bootstraps the
-	// owner identity. If the ensemble or dashboard is reachable, the
+	// owner identity. If the ensemble is reachable, the
 	// platform is not in headless mode and this test would produce false
 	// results — fail fast with an actionable message.
 	endpointCtx, endpointCancel := context.WithTimeout(ctx, 3*time.Second)
@@ -100,12 +100,11 @@ func TestPlatformEnrollment_Headless(t *testing.T) {
 		"operator list must be empty in headless mode — no operators are registered")
 	t.Logf("operator list is empty in headless mode")
 
-	// Ensemble and dashboard endpoints must be absent. Their services are
-	// not running in headless mode, so connecting to their ports must fail.
+	// The ensemble endpoint must be absent. Its service is not running in
+	// headless mode, so connecting to its port must fail.
 	// A short timeout ensures the test fails fast rather than hanging on
 	// a connection attempt to a non-listening port.
 	assertEnsembleUnreachable(t, ctx, e2eCfg.ensembleURL)
-	assertDashboardUnreachable(t, ctx, e2eCfg.dashboardURL)
 }
 
 // assertEnsembleUnreachable verifies the ensemble endpoint is not reachable,
@@ -121,19 +120,4 @@ func assertEnsembleUnreachable(t *testing.T, ctx context.Context, ensembleURL st
 	assert.Error(t, ensembleErr,
 		"ensemble endpoint must be unreachable in headless mode — the ensemble service is not running")
 	t.Logf("ensemble endpoint correctly absent in headless mode: %v", ensembleErr)
-}
-
-// assertDashboardUnreachable verifies the dashboard endpoint is not reachable,
-// proving the dashboard service is not running in headless mode.
-func assertDashboardUnreachable(t *testing.T, ctx context.Context, dashboardURL string) {
-	t.Helper()
-	endpointCtx, endpointCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer endpointCancel()
-	dashboardReq, err := http.NewRequestWithContext(endpointCtx, http.MethodGet, dashboardURL+"/", nil)
-	require.NoError(t, err, "build dashboard index request must succeed")
-	dashboardClient := &http.Client{Timeout: 5 * time.Second}
-	_, dashboardErr := dashboardClient.Do(dashboardReq)
-	assert.Error(t, dashboardErr,
-		"dashboard endpoint must be unreachable in headless mode — the dashboard service is not running")
-	t.Logf("dashboard endpoint correctly absent in headless mode: %v", dashboardErr)
 }

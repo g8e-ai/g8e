@@ -116,12 +116,18 @@ func TestSelectDockerInitApprovalCandidate(t *testing.T) {
 			wantID: "op-1",
 		},
 		{
-			name: "existing data operator does not block dashboard",
+			name: "existing data operator does not block ensemble",
 			pending: []models.PlatformEnrollmentPendingRequest{
+				{RequestID: "inf-1", ComponentKind: models.PlatformComponentOperator, Hostname: "inference-operator"},
 				{RequestID: "ensemble-1", ComponentKind: models.PlatformComponentEnsemble},
+			},
+			wantID: "ensemble-1",
+		},
+		{
+			name: "dashboard request is not auto-approved",
+			pending: []models.PlatformEnrollmentPendingRequest{
 				{RequestID: "dashboard-1", ComponentKind: models.PlatformComponentDashboard},
 			},
-			wantID: "dashboard-1",
 		},
 		{
 			name: "unrelated request is not auto-approved",
@@ -162,18 +168,11 @@ func TestPlatformEnrollmentApprovalRank(t *testing.T) {
 			want: 1,
 		},
 		{
-			name: "dashboard second",
-			req: models.PlatformEnrollmentPendingRequest{
-				ComponentKind: models.PlatformComponentDashboard,
-			},
-			want: 2,
-		},
-		{
-			name: "ensemble third",
+			name: "ensemble second",
 			req: models.PlatformEnrollmentPendingRequest{
 				ComponentKind: models.PlatformComponentEnsemble,
 			},
-			want: 3,
+			want: 2,
 		},
 		{
 			name: "inference operator last",
@@ -181,7 +180,14 @@ func TestPlatformEnrollmentApprovalRank(t *testing.T) {
 				ComponentKind: models.PlatformComponentOperator,
 				Hostname:      "inference-operator",
 			},
-			want: 4,
+			want: 3,
+		},
+		{
+			name: "dashboard is not part of the unified stack",
+			req: models.PlatformEnrollmentPendingRequest{
+				ComponentKind: models.PlatformComponentDashboard,
+			},
+			want: 99,
 		},
 	}
 	for _, tc := range tests {

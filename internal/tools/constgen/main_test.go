@@ -408,7 +408,7 @@ func TestExecute_WriteGeneratesFilesThatCheckModeThenAccepts(t *testing.T) {
 
 	require.NoError(t, execute(root, true, &stdout))
 	assert.Equal(t, "generated constants from protocol/constants/events.json\n", stdout.String())
-	for _, rel := range []string{eventsGoRel, actionTypesGoRel, dashboardJSRel} {
+	for _, rel := range []string{eventsGoRel, actionTypesGoRel, consoleTSRel} {
 		_, err := os.Stat(filepath.Join(root, rel))
 		assert.NoError(t, err, rel)
 	}
@@ -450,7 +450,7 @@ func TestExecute_RejectsInvalidRegistryWithoutWritingAnyGeneratedFile(t *testing
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "events registry is empty")
-	for _, rel := range []string{eventsGoRel, actionTypesGoRel, dashboardJSRel, pythonEventsRel} {
+	for _, rel := range []string{eventsGoRel, actionTypesGoRel, consoleTSRel, pythonEventsRel} {
 		_, statErr := os.Stat(filepath.Join(root, rel))
 		assert.ErrorIs(t, statErr, os.ErrNotExist, rel)
 	}

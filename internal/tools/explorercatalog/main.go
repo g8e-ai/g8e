@@ -29,7 +29,7 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const outputRelPath = "dashboard/g8e-adapter/evaluation-explorer/src/content/scenario-catalog.generated.ts"
+const outputRelPath = "evaluation-explorer/src/content/scenario-catalog.generated.ts"
 
 type inlineContent struct {
 	Kind    string `json:"kind"`

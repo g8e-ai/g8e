@@ -1,0 +1,63 @@
+{
+  "files": [
+    {
+      "path": "disclosure-matrix.json",
+      "sha256": "fa9489fe8cb8bfd3f80d79babebdb71bf57667cbddbdc3af7250482bd473a7be"
+    },
+    {
+      "path": "event-schemas.json",
+      "sha256": "1d1a8c5f2a0ad2be51a661664a9ebbae77fbbcdf811127eda718942a86fdefcb"
+    },
+    {
+      "path": "fixtures/active.json",
+      "sha256": "cb0788440609fb91fc3fc72641edbe6194368cf2ce0cc946fc651a534457f3ab"
+    },
+    {
+      "path": "fixtures/delayed.json",
+      "sha256": "1f410f0a4421467c7d823937b6bf5bc470550d5a4e65f9207e1913af90efd541"
+    },
+    {
+      "path": "fixtures/intentionally-stopped.json",
+      "sha256": "f949737e4ba788c06c9caae67af4d14f524552f3adc70995efc9ba95b019f5fe"
+    },
+    {
+      "path": "fixtures/safety-stopped.json",
+      "sha256": "eacc2e5dd26139706de1935ff36838996b78f2d606716e32a33aaf904828bcfd"
+    },
+    {
+      "path": "fixtures/source-offline.json",
+      "sha256": "eada5dd4397f90e1c9ea1768d1346aecef6119188ba38c2845bce5e905f39973"
+    },
+    {
+      "path": "fixtures/stale.json",
+      "sha256": "95dff2b2b9d119e82a5f8bfbb7e657e7831f694d35aa1466ebbb59997e04aee7"
+    },
+    {
+      "path": "models.ts",
+      "sha256": "81e5d1c120aef881ec3bf5f16e36c5d5c7c4d83d59dab3ac778b29ca86751cae"
+    },
+    {
+      "path": "offline-verifier.md",
+      "sha256": "ab648a2ca10e547a6e5167d0736b79ff1ac6c94685dc3d0e247e0ec4bbe9db82"
+    },
+    {
+      "path": "proof-schemas.json",
+      "sha256": "920fd70cb9164945c45f2faab2f67657157dc3bcc9fc04823cf3fce43329b3aa"
+    },
+    {
+      "path": "public-read.openapi.json",
+      "sha256": "004e88462ff84486038ff60fd4b8878b7df64e0aeb854d3f4fc6f2e68cd552cd"
+    },
+    {
+      "path": "README.md",
+      "sha256": "90c5db86e3ac81be057930278e207f61a796e75ad0968251b52c00f315a3bad0"
+    },
+    {
+      "path": "runtime-config.schema.json",
+      "sha256": "dac454d762353a2bd846e3d2a0f89ef5a270777783acf53700688faf9de82801"
+    }
+  ],
+  "generated_at": "deterministic",
+  "generator": "g8e-adapter/generator/gen-contract-pack.mjs",
+  "schema_version": "1.0.0"
+}

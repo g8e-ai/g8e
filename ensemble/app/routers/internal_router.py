@@ -263,6 +263,57 @@ async def _generate_and_update_title(
         )
 
 
+async def _create_investigation_for_case(
+    g8e_context: G8eHttpContext,
+    sentinel_mode: bool,
+    case_service: CaseDataService,
+    investigation_service: InvestigationService,
+) -> G8eHttpContext:
+    """Open a new investigation under an existing case the caller owns.
+
+    A case the caller does not own is reported as not found, matching the
+    ownership checks on the other case and investigation read paths.
+    """
+    if not g8e_context.case_id:
+        raise ValidationError(
+            "create_investigation requires context.case_id",
+            field="context.case_id",
+            constraint="required",
+        )
+    case = await case_service.get_case(g8e_context.case_id)
+    if case.user_id != g8e_context.user_id:
+        raise ResourceNotFoundError(
+            "Case not found",
+            resource_type="case",
+            resource_id=g8e_context.case_id,
+            component="g8ee",
+        )
+
+    from app.models.investigations import InvestigationCreateRequest
+
+    investigation = await investigation_service.create_investigation(
+        InvestigationCreateRequest(
+            case_id=case.id,
+            case_title=case.title,
+            case_description=case.description,
+            web_session_id=g8e_context.web_session_id,
+            priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
+            user_email=case.user_email,
+            user_id=case.user_id,
+            operator_id=g8e_context.operator_id,
+            operator_session_id=g8e_context.operator_session_id,
+            sentinel_mode=sentinel_mode,
+            created_with_case=False,
+            case_source=case.source,
+        )
+    )
+    logger.info(
+        "[INTERNAL-HTTP] New investigation opened under existing case",
+        extra={"case_id": case.id, "investigation_id": investigation.id},
+    )
+    return g8e_context.model_copy(update={"investigation_id": investigation.id})
+
+
 @router.post(InternalAPIPaths.G8EE_CHAT, response_model=ChatStartedResponse)
 async def internal_chat(
     request: ChatMessageRequest,
@@ -281,8 +332,10 @@ async def internal_chat(
     """
     Non-streaming chat endpoint - default path for browser sessions.
 
-    Creates case + investigation inline when case_id is absent, then fires
-    run_chat as a background task. The AI response and all tool events are
+    Creates case + investigation inline when resource_creation.create_case is
+    set, or a new investigation under the caller's existing case when
+    resource_creation.create_investigation is set, then fires run_chat as a
+    background task. The AI response and all tool events are
     delivered to the browser via the existing SSE connection; this endpoint
     returns immediately with case/investigation IDs so the browser can update
     its state without waiting for the LLM.
@@ -298,6 +351,9 @@ async def internal_chat(
     """
     resource_creation = request.resource_creation
     create_new_case = resource_creation.create_case if resource_creation else False
+    create_new_investigation = bool(
+        resource_creation and resource_creation.create_investigation and not create_new_case
+    )
     seed = request.evaluation_context.seed if request.evaluation_context is not None else None
     if seed is not None and not create_new_case:
         raise ValidationError(
@@ -329,8 +385,9 @@ async def internal_chat(
         lite_endpoint_override=request.llm_lite_endpoint,
     )
 
-    # Validate investigation_id exists before proceeding, UNLESS we are creating a new case
-    if not create_new_case:
+    # Validate investigation_id exists before proceeding, UNLESS we are creating
+    # a new case or a new investigation under an existing case
+    if not create_new_case and not create_new_investigation:
         if not g8e_context.investigation_id:
             logger.error(
                 "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing",
@@ -457,6 +514,13 @@ async def internal_chat(
                 "case_id": g8e_context.case_id,
                 "investigation_id": g8e_context.investigation_id,
             },
+        )
+    elif create_new_investigation:
+        g8e_context = await _create_investigation_for_case(
+            g8e_context=g8e_context,
+            sentinel_mode=request.sentinel_mode,
+            case_service=case_service,
+            investigation_service=investigation_service,
         )
 
     resolved_attachments = []
@@ -1373,8 +1437,9 @@ async def query_investigations(
         extra={"user_id": g8e_context.user_id, "source": g8e_context.source_component},
     )
 
-    # Use the request object directly since it already contains the filters
-    return await investigation_service.investigation_data_service.query_investigations(request)
+    # Scope to the authenticated user; a caller-supplied user_id never widens the query.
+    scoped = request.model_copy(update={"user_id": g8e_context.user_id})
+    return await investigation_service.investigation_data_service.query_investigations(scoped)
 
 
 @router.post(InternalAPIPaths.G8EE_INVESTIGATION + "/get", response_model=InvestigationModel)

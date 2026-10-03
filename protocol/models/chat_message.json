@@ -12,6 +12,12 @@
       "default": false,
       "description": "Whether to create a new case"
     },
+    "create_investigation": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Whether to create a new investigation under the existing context.case_id. Ignored when create_case is true."
+    },
     "case_title": {
       "type": "string",
       "required": false,
