@@ -46,14 +46,19 @@ class FakeSource {
   onerror: (() => void) | null = null;
   onmessage: ((m: MessageEvent<string>) => void) | null = null;
   closed = false;
+  // Per the SSE spec, the browser's last-event-ID buffer only changes when a
+  // frame carries its own `id:` line; a frame without one (hasId = false)
+  // keeps dispatching whatever the buffer already held.
+  private idBuffer = '';
   constructor(public url: string) {
     FakeSource.instances.push(this);
   }
   close() {
     this.closed = true;
   }
-  emit(id: number, type: string, data: Record<string, unknown> = {}) {
-    this.onmessage?.({ data: JSON.stringify({ event: { type, data } }), lastEventId: String(id) } as MessageEvent<string>);
+  emit(id: number, type: string, data: Record<string, unknown> = {}, hasId = true) {
+    if (hasId) this.idBuffer = String(id);
+    this.onmessage?.({ data: JSON.stringify({ event: { type, data } }), lastEventId: this.idBuffer } as MessageEvent<string>);
   }
 }
 
@@ -92,6 +97,25 @@ describe('GatewayStream', () => {
     expect(first.closed).toBe(true);
     vi.advanceTimersByTime(1500);
     expect(FakeSource.instances[1]!.url).toBe('/api/v1/sse/stream?since_id=7');
+  });
+
+  it('forwards ephemeral events that inherit a stale lastEventId from a preceding persisted event', () => {
+    const { events } = start();
+    const first = FakeSource.instances[0]!;
+    first.onopen?.();
+
+    // A persisted event sets the browser's lastEventId buffer to "5".
+    first.emit(5, 'g8e.v1.app.case.created');
+    // Ephemeral chat-stream deltas carry no `id:` line of their own, so the
+    // buffer (and thus MessageEvent.lastEventId) stays "5" for both.
+    first.emit(0, 'g8e.v1.ai.llm.chat.iteration.text.chunk.received', { text: 'a' }, false);
+    first.emit(0, 'g8e.v1.ai.llm.chat.iteration.text.chunk.received', { text: 'b' }, false);
+
+    expect(events.map((e) => e.type)).toEqual([
+      'g8e.v1.app.case.created',
+      'g8e.v1.ai.llm.chat.iteration.text.chunk.received',
+      'g8e.v1.ai.llm.chat.iteration.text.chunk.received',
+    ]);
   });
 
   it('treats a source that never opens as failed and retries', () => {

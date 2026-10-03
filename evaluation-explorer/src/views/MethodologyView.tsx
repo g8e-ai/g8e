@@ -244,7 +244,7 @@ function ArchitectureDiagram() {
             <g key={operator.role}>
               <line x1={center} y1="396" x2={center} y2="350" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
               <g transform={`translate(${x}, 396)`}>
-                <rect width="204" height="96" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
+                <rect width="204" height="96" rx="8" fill="var(--navy)" stroke="var(--border)" />
                 <text x="102" y="28" textAnchor="middle" fill="var(--fg)" fontSize="14" fontWeight="700">
                   {operator.role}
                 </text>

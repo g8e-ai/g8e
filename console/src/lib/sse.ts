@@ -7,6 +7,21 @@
 // is sent on reconnect.
 
 import { Paths } from './paths';
+import { EventRegistry, EventType } from '../generated/events';
+
+// Per the SSE spec, the browser's last-event-ID buffer is only overwritten by
+// a frame that carries its own `id:` line; a frame without one (every
+// ephemeral event — the Gateway omits `id:` for those, see sse_controller.go)
+// inherits whatever ID the *previous* frame set. Trusting `lastEventId` for
+// these would silently misattribute a stale persisted ID to the new event,
+// which the dedup set in GatewayStream.handle then treats as already-seen
+// and drops. Event types the registry marks ephemeral must always resolve to
+// id 0 regardless of what the browser reports.
+const EPHEMERAL_EVENT_TYPES: ReadonlySet<string> = new Set<string>(
+  (Object.keys(EventRegistry) as Array<keyof typeof EventRegistry>)
+    .filter((key) => EventRegistry[key].persistence === 'ephemeral')
+    .map((key) => EventType[key as keyof typeof EventType]),
+);
 
 export interface StreamEvent {
   /** Durable Gateway event ID (0 when the producer supplied none). */
@@ -47,9 +62,11 @@ export function normalizeEvent(raw: string, lastEventId = ''): StreamEvent | nul
   if (!inner || typeof inner.type !== 'string' || !inner.type) return null;
 
   let id = 0;
-  const parsedLast = parseInt(lastEventId, 10);
-  if (!Number.isNaN(parsedLast)) id = parsedLast;
-  else if (typeof outer.id === 'number') id = outer.id;
+  if (!EPHEMERAL_EVENT_TYPES.has(inner.type)) {
+    const parsedLast = parseInt(lastEventId, 10);
+    if (!Number.isNaN(parsedLast)) id = parsedLast;
+    else if (typeof outer.id === 'number') id = outer.id;
+  }
 
   const data = asObject(inner.data) ?? {};
   const timestamp =
