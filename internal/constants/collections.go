@@ -59,3 +59,25 @@ const (
 	CollectionPublicFeedOutbox             CollectionName = "public_feed_outbox"
 	CollectionEvalCampaignPublicationState CollectionName = "eval_campaign_publication_state"
 )
+
+// IsGovernedDocument reports whether DOCUMENT_UPDATE and DOCUMENT_DELETE may
+// target the collection. The set mirrors the `_governed` flag in
+// protocol/constants/collections.json: the application records g8ee persists
+// through governed envelopes. Every other collection, including the
+// platform-authority records (users, trusted_signers, app_policies,
+// revoked_certificates), is written only by its owning Gateway service.
+func (c CollectionName) IsGovernedDocument() bool {
+	switch c {
+	case CollectionCases,
+		CollectionTasks,
+		CollectionInvestigations,
+		CollectionMemories,
+		CollectionAgentActivityMetadata,
+		CollectionStakeResolutions,
+		CollectionReputationState,
+		CollectionReputationCommitments:
+		return true
+	default:
+		return false
+	}
+}

@@ -92,7 +92,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-ENS-COMM-01 | Protected application mutations (cases, investigations, memories, settings) must be submitted via `GovernanceClient` to `POST /api/v1/governance/envelopes` with deterministic transaction hashes, nonces, and current state roots. State root mismatches (`TX_STATE_MISMATCH`) must be retried up to 3 times by re-fetching the state root from `GET /api/v1/health`. |
+| INV-ENS-COMM-01 | Protected application mutations (cases, tasks, investigations, memories, agent activity metadata, reputation state and commitments, stake resolutions: the collections marked `_governed` in `protocol/constants/collections.json`, INV-GOV-WARD-06) must be submitted via `GovernanceClient` to `POST /api/v1/governance/envelopes` with deterministic transaction hashes, nonces, and current state roots. State root mismatches (`TX_STATE_MISMATCH`) must be retried up to 3 times by re-fetching the state root from `GET /api/v1/health`. |
 | INV-ENS-COMM-02 | Session and background events are published to the Gateway SSE push endpoint (`POST /api/v1/sse/push`). Events lacking both `web_session_id` and `cli_session_id` must be skipped before dispatch to prevent Gateway 400 rejections and downstream circuit breaker trips. |
 | INV-ENS-COMM-03 | When configured with `LLMProvider.G8E`, inference requests are routed through Gateway endpoint `POST /api/v1/inference/dispatch` via `InternalHttpClient` over mTLS, running generation through the full L1-L5 gauntlet on an Inference Node. |
 

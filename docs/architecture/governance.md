@@ -97,9 +97,10 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-GOV-WARD-01 | L4 Warden MUST track nonces in memory (`inFlight`) before stateful operations to prevent race conditions, and MUST durably reserve the nonce in `ReplayStore` before payload validation. |
 | INV-GOV-WARD-02 | Expiry (`envelope.ExpiresAt`) MUST be strictly checked against the clock before nonce reservation. Expired transactions MUST fail closed with `ErrTxTransactionExpired`. |
-| INV-GOV-WARD-03 | Stateless checks MUST run before stateful checks: protocol version, L1 doctrine presence, non-empty ID, event type validation, known action type, non-empty payload (except heartbeat), typed payload decoding, L1 doctrine scanning, and dual hash matching. |
+| INV-GOV-WARD-03 | Stateless checks MUST run before stateful checks: protocol version, L1 doctrine presence, non-empty ID, event type validation, known action type, non-empty payload (except heartbeat), typed payload decoding, document collection scope, L1 doctrine scanning, and dual hash matching. |
 | INV-GOV-WARD-04 | The state Merkle root (`envelope.StateMerkleRoot`) MUST match the current root from `StateRootProvider` (or the pre-fetched root in context for in-process gateway builds); mismatches MUST fail closed with `ErrTxStateRootMismatch`. |
 | INV-GOV-WARD-05 | Any validation failure occurring after nonce reservation MUST release the nonce reservation via `replayStore.ReleaseNonce` so that non-admitted transactions do not leave dangling replay locks. |
+| INV-GOV-WARD-06 | A `DOCUMENT_UPDATE` or `DOCUMENT_DELETE` payload MUST target a collection marked `_governed` in `protocol/constants/collections.json` (`CollectionName.IsGovernedDocument`); any other collection MUST fail closed with `ErrTxDocumentCollectionNotGoverned` before execution. The governed document store is the Gateway's platform document store, which also holds `users`, `trusted_signers`, `app_policies`, and other authority records that only their owning Gateway services write. |
 
 ### L5 Actuator and Execution (`INV-GOV-ACT`)
 
@@ -324,7 +325,7 @@ The L4 Warden executes ordered pre-dispatch verification before any mutation rea
 1. Durable Nonce Reservation (ReplayStore.ReserveNonce + Expiry Check)
         │
         ▼
-2. Stateless Validation (Version 2, L1 Doctrine, Typed Decode, Hash Match)
+2. Stateless Validation (Version 2, L1 Doctrine, Typed Decode, Document Collection Scope, Hash Match)
         │ ──[Failure]──► Release Nonce Reservation & Reject
         ▼
 3. Stateful Validation (State Merkle Root Verification)

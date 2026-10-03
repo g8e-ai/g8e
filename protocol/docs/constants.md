@@ -11,7 +11,7 @@ The g8e constants system maintains canonical constant definitions across the pla
 
 ### Database Collections (`collections.go`)
 
-Canonical collection names for the operator embedded SQLite database, typed as `CollectionName`:
+Canonical collection names for the operator embedded SQLite database, typed as `CollectionName`. Entries marked `_governed` in `collections.json` are the only collections `DOCUMENT_UPDATE` and `DOCUMENT_DELETE` may target; `CollectionName.IsGovernedDocument()` mirrors that flag, and the L4 Warden enforces it (INV-GOV-WARD-06):
 
 - `CollectionUsers`, `CollectionWebSessions`, `CollectionOperatorSessions`, `CollectionCLISessions`
 - `CollectionLoginAudit`, `CollectionAuthAdminAudit`, `CollectionAccountLocks`
@@ -95,7 +95,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - SSE: `SSEPush`, `SSEEvents`, `SSEStream`
 - Observe (browser read-only): `ObservePrefix` (`/api/v1/observe/`), `ObserveBootstrap`, `ObserveRuns`, `ObserveRunsByID`, `ObserveEvals`, `ObserveEvalsByID`, `ObserveDownloads`, `ObserveDownloadsByID`
 - Observe producers (mTLS, ensemble-only): `ObserveProducerPrefix` (`/api/v1/observe/producer/`), `ObserveProducerAgentState` (`/api/v1/observe/producer/agent-state`), `ObserveProducerRunState` (`/api/v1/observe/producer/run-state`)
-- PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
+- PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
 - Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`, `AuditStream`
 - User: `Users`, `UsersMe`, `UsersPrefix`
 - Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryApproveCLI`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthCLIRefresh`, `AuthCLISession`, `AuthCLIBind` (`/api/v1/auth/cli/bind`), `AuthCLIUnbind` (`/api/v1/auth/cli/unbind`), `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthPasskeysEnrollmentRegisterChallenge`, `AuthPasskeysEnrollmentRegisterVerify`, `AuthPasskeysEnrollmentPrefix`, `AuthSessionsMe`, `AuthSessionsPrefix`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`, `AuthPlatformEnrollmentRequest` (`/api/v1/auth/platform-enrollments/request`), `AuthPlatformEnrollmentStatus` (`/api/v1/auth/platform-enrollments/status`), `AuthPlatformEnrollmentComplete` (`/api/v1/auth/platform-enrollments/complete`), `AuthPlatformEnrollmentPending` (`/api/v1/auth/platform-enrollments/pending`), `AuthPlatformEnrollmentDecision` (`/api/v1/auth/platform-enrollments/decision`)

@@ -847,6 +847,55 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
+// TestAuthService_ValidateWebSessionCookie_ReturnsCookieSessionID pins the web
+// session ID that browser SSE routing keys on. The stored session body does not
+// carry its own ID, so the returned ID must be the cookie value that keyed the
+// lookup, both from ValidateWebSessionCookie and in the middleware's request
+// context. Returning the body's empty ID routed every browser stream to "".
+func TestAuthService_ValidateWebSessionCookie_ReturnsCookieSessionID(t *testing.T) {
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+
+	userID := "web-session-id-user"
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+
+	webSessionID := "web-session-id-cookie"
+	sessionBytes, err := json.Marshal(&models.WebSession{
+		UserID:          userID,
+		CreatedAtUnixMs: time.Now().UnixMilli(),
+		ExpiresAtUnixMs: time.Now().Add(time.Hour).UnixMilli(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, sessionBytes))
+
+	newRequest := func() *http.Request {
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.SSEStream, nil)
+		req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
+		return req
+	}
+
+	gotSessionID, gotUserID, err := auth.ValidateWebSessionCookie(newRequest())
+	require.NoError(t, err)
+	assert.Equal(t, webSessionID, gotSessionID)
+	assert.Equal(t, userID, gotUserID)
+
+	var ctxSessionID any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctxSessionID = r.Context().Value(constants.ContextKeyWebSessionID)
+		w.WriteHeader(http.StatusOK)
+	})
+	rr := httptest.NewRecorder()
+	auth.Middleware(handler).ServeHTTP(rr, newRequest())
+	require.Equal(t, http.StatusOK, rr.Code, "body: %s", rr.Body.String())
+	assert.Equal(t, webSessionID, ctxSessionID)
+}
+
 func TestAuthService_HasJWKS(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()

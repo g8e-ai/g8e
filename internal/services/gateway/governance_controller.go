@@ -100,23 +100,20 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 
 	wid := protocol.NewWorkloadIdentity()
 
-	// Fail closed for governed mutations: an envelope that performs a
-	// mutation MUST bind to a transport identity. An empty operator_id AND
-	// operator_session_id means no delegated Operator authority is claimed, so
-	// the only admissible binding is the transport-level app workload identity:
-	// an AGENT/CLIENT envelope whose acting_app_id matches the mTLS app
-	// SPIFFE ID, and only for a platform-record write (g8ee persisting cases,
-	// investigations, and memories for a browser session). The Gateway-mode
-	// command service also registers Operator actions such as EXECUTE_BASH,
-	// FILE_EDIT, and SHUTDOWN, so any other mutation still needs an Operator
-	// binding. Anything else is rejected at the transport boundary rather than
-	// deferred to the downstream processor, which would otherwise admit it as
-	// a fail-open path. Non-mutation reads keep the pass-through behavior so
-	// the downstream processor validates them.
+	// Fail closed for any envelope with no Operator binding. An empty
+	// operator_id AND operator_session_id means no delegated Operator authority
+	// is claimed, so the only admissible binding is the transport-level app
+	// workload identity: an AGENT/CLIENT envelope whose acting_app_id matches
+	// the mTLS app SPIFFE ID, and only for a platform-record write (g8ee
+	// persisting cases, investigations, and memories for a browser session).
+	// The envelope executes on the Gateway's own command service, which also
+	// registers Operator actions: mutations such as EXECUTE_BASH, FILE_EDIT,
+	// and SHUTDOWN, and host reads such as FS_READ, FS_GREP, and FETCH_LOGS.
+	// An unbound read would therefore read the Gateway container, so reads get
+	// no pass-through. MCP and platform enrollment reach the processor
+	// in-process, not through this endpoint. A cli_session_id claim alone is
+	// not an Operator binding.
 	if operatorSessionID == "" && operatorID == "" {
-		if !actionType.IsMutation() {
-			return nil
-		}
 		if isAppRecordWrite(actionType) && actingAppID != "" && isAppComponent(sourceComponent) {
 			for _, uri := range cert.URIs {
 				if wid.MatchesApp(uri.String(), actingAppID) {
@@ -124,7 +121,7 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 				}
 			}
 		}
-		return fmt.Errorf("%w: mutation action %q requires operator_id or operator_session_id binding, or an acting_app_id matching the app certificate",
+		return fmt.Errorf("%w: action %q requires operator_id or operator_session_id binding, or a document write with an acting_app_id matching the app certificate",
 			constants.ErrIdentityBindingFailed, actionType)
 	}
 
@@ -327,6 +324,7 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, constants.ErrTxPayloadMissing),
 		errors.Is(err, constants.ErrTxPayloadDecodeFailed),
 		errors.Is(err, constants.ErrTxL1ValidationFailed),
+		errors.Is(err, constants.ErrTxDocumentCollectionNotGoverned),
 		errors.Is(err, constants.ErrTxTransactionHashMissing),
 		errors.Is(err, constants.ErrTxTransactionHashMismatch),
 		errors.Is(err, constants.ErrTxProtocolVersionUnsupported),

@@ -98,7 +98,10 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 	require.NotEmpty(t, targetOperatorID, "active operator must exist")
 	require.NotEmpty(t, targetSessionID, "active operator session must exist")
 
-	collection := "e2e_tests"
+	// A governed document collection (L4 rejects any other). agent_activity_metadata
+	// is looked up only by investigation ID, so a document left by an aborted run
+	// never surfaces in a case or investigation list.
+	collection := string(constants.CollectionAgentActivityMetadata)
 	docID := fmt.Sprintf("doc-%d-%d", time.Now().UnixNano(), os.Getpid())
 	targetResource := collection + "/" + docID
 	actingAppID := "g8ee"

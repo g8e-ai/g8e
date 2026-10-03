@@ -104,7 +104,7 @@ Request events that declare a `governance` block become governed transactions. T
 
 1. Receives the protobuf GovernanceEnvelope over mTLS with identity bindings (operator_id, operator_session_id, cli_session_id, acting_app_id, source_component).
 2. Looks up the `event_type` in the registry and derives `action_type`.
-3. Verifies the envelope's identity bindings match the mTLS certificate's SPIFFE ID and rejects unbound mutations. The one exception is an application's own platform-record write (`DOCUMENT_UPDATE` or `DOCUMENT_DELETE` with an `acting_app_id` matching its app certificate); see INV-AUTH-ID-05 in [Authentication](auth.md).
+3. Verifies the envelope's identity bindings match the mTLS certificate's SPIFFE ID and rejects unbound mutations. The one exception is an application's own platform-record write (`DOCUMENT_UPDATE` or `DOCUMENT_DELETE` with an `acting_app_id` matching its app certificate); see INV-AUTH-ID-05 in [Authentication](auth.md). Any document action, bound or not, may target only a `_governed` collection (INV-GOV-WARD-06 in [Governance](governance.md)).
 4. Enforces policies (ACL, rate limit, quotas) derived from `action_type`.
 5. Forwards the envelope to the operator; the operator includes both `event_type` and `action_type` in signed receipts.
 
