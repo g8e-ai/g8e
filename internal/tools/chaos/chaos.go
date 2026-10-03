@@ -377,10 +377,6 @@ func Run(cfg Config) error {
 	var testVaultDir string
 	if cfg.DataDir == "" {
 		testVaultDir = paths.Infra.TestVaultDir
-		if err := os.MkdirAll(testVaultDir, constants.PermDirStandard); err != nil {
-			return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
-		}
-
 		// Create unique subdirectory for this test run
 		testRunID := fmt.Sprintf("%s-chaos-test", time.Now().Format("20060102-150405"))
 		baseDir = filepath.Join(testVaultDir, testRunID)

@@ -505,23 +505,9 @@ func (s *PublicPublisherService) BuildBatch(records []models.PublicFeedRecord) (
 	return batch, nil
 }
 
-// computeBatchContentHash computes the SHA-256 content hash over the
-// canonical batch fields (protocol_version, schema_version, source_id,
-// first_sequence, last_sequence, previous_batch_hash, record_hashes,
-// generated_at). The signature field is excluded.
+// computeBatchContentHash delegates to the package-level computeBatchContentHash.
 func (s *PublicPublisherService) computeBatchContentHash(batch models.PublicFeedBatch) string {
-	h := sha256.New()
-	h.Write([]byte(batch.ProtocolVersion))
-	h.Write([]byte(batch.SchemaVersion))
-	h.Write([]byte(batch.SourceID))
-	_, _ = fmt.Fprintf(h, "%d", batch.FirstSequence)
-	_, _ = fmt.Fprintf(h, "%d", batch.LastSequence)
-	h.Write([]byte(batch.PreviousBatchHash))
-	for _, rh := range batch.RecordHashes {
-		h.Write([]byte(rh))
-	}
-	h.Write([]byte(batch.GeneratedAt.UTC().Format(time.RFC3339Nano)))
-	return hex.EncodeToString(h.Sum(nil))
+	return computeBatchContentHash(batch)
 }
 
 // VerifyBatch verifies the batch signature and content hash against the

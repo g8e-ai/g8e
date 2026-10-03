@@ -12,11 +12,14 @@ Runs once on first startup to configure the admin account, database connection,
 and pre-load the two required DCBS/OHA compliance queries.
 """
 import json
+import logging
+import os
+import sys
 import time
 import urllib.error
 import urllib.request
-import sys
-import os
+
+logger = logging.getLogger("setup_metabase")
 
 METABASE_URL = os.environ.get("METABASE_URL", "http://compliance-dashboard:3000")
 ADMIN_EMAIL = os.environ.get("MB_ADMIN_EMAIL", "admin@g8e.local")
@@ -53,8 +56,8 @@ def wait_for_metabase(timeout=180):
             if status == 200 and json.loads(body).get("status") == "ok":
                 print("Metabase is ready.")
                 return True
-        except (urllib.error.URLError, OSError):
-            pass
+        except (urllib.error.URLError, OSError) as exc:
+            logger.debug("Metabase not yet ready: %s", exc)
         if i % 10 == 0 and i > 0:
             print(f"  still waiting... ({i}s)")
         time.sleep(1)
@@ -67,8 +70,8 @@ def get_setup_token():
         status, body = _http_get(f"{METABASE_URL}/api/session/properties", timeout=5)
         if status == 200:
             return json.loads(body).get("setup-token")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Could not get setup token: %s", exc)
     return None
 
 

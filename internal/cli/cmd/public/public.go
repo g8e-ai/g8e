@@ -340,24 +340,12 @@ func loadPublicCommandRuntime(cmd *cobra.Command, configLoader publicConfigLoade
 	return fileSvc, exportConfig, nil
 }
 
-func readPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, expectedBytes int, missingErr error) ([]byte, error) {
-	data, err := fileSvc.ReadFile(ctx, relPath)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", missingErr, err)
-	}
-	decoded, err := hex.DecodeString(strings.TrimSpace(string(data)))
-	if err != nil || len(decoded) != expectedBytes {
-		return nil, missingErr
-	}
-	return decoded, nil
-}
-
 func newPublicPublisherForCommand(ctx context.Context, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig) (*gateway.PublicPublisherService, error) {
-	key, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
+	key, err := gateway.ReadPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
 	if err != nil {
 		return nil, err
 	}
-	token, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
+	token, err := gateway.ReadPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 	if err != nil {
 		return nil, err
 	}

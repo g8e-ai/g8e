@@ -9,13 +9,17 @@ package models
 
 import (
 	"encoding/json"
+	"os/user"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/uuid"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
 // OperatorRegistrationRequest is the inbound body for /api/pki/device-enroll (CSR-based enrollment).
@@ -438,6 +442,36 @@ type LocalOSUser struct {
 	UID      string `json:"uid,omitempty"`
 	GID      string `json:"gid,omitempty"`
 	SID      string `json:"sid,omitempty"`
+}
+
+// CurrentLocalOSUser retrieves the current OS user information.
+func CurrentLocalOSUser() *LocalOSUser {
+	currentUser, err := user.Current()
+	if err != nil {
+		return nil
+	}
+
+	var domain, username string
+	parts := strings.SplitN(currentUser.Username, "\\", 2)
+	if len(parts) == 2 {
+		domain = parts[0]
+		username = parts[1]
+	} else {
+		username = currentUser.Username
+	}
+
+	var sid string
+	if runtime.GOOS == "windows" {
+		sid = currentUser.Uid
+	}
+
+	return &LocalOSUser{
+		Domain:   domain,
+		Username: username,
+		UID:      currentUser.Uid,
+		GID:      currentUser.Gid,
+		SID:      sid,
+	}
 }
 
 // User represents a platform user with passkey credentials.

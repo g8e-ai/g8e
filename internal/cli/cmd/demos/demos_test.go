@@ -30,7 +30,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -553,22 +552,10 @@ func TestSummarizeScenarioResults(t *testing.T) {
 
 func TestGetProjectRoot(t *testing.T) {
 	t.Run("returns current working directory when available", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
+		wd, err := os.Getwd()
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = os.Chdir(originalWd) })
-
-		// Change to a temporary directory
-		tmpDir := testutil.TempDir(t)
-		err = os.Chdir(tmpDir)
-		require.NoError(t, err)
-
 		root := getProjectRoot()
-		expected, err := filepath.EvalSymlinks(tmpDir)
-		require.NoError(t, err)
-		actual, err := filepath.EvalSymlinks(root)
-		require.NoError(t, err)
-		assert.Equal(t, expected, actual)
+		assert.Equal(t, wd, root)
 	})
 
 	t.Run("falls back to executable path when cwd fails", func(t *testing.T) {

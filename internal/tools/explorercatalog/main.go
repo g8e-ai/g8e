@@ -92,7 +92,7 @@ func run(args []string, root string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if *checkOnly && *write {
-		return errors.New("use only one of -check or -write")
+		return fmt.Errorf("use only one of -check or -write")
 	}
 	generated, err := generate()
 	if err != nil {

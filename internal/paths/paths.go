@@ -190,6 +190,7 @@ var Infra struct {
 	RuntimeDir:              constants.RuntimeDirname,
 	DataDir:                 constants.RuntimeDirname + "/" + constants.DataDirname,
 	VaultDir:                constants.RuntimeDirname + "/" + constants.VaultDirname,
+	VaultKeyPath:            constants.RuntimeDirname + "/" + constants.VaultDirname + "/" + constants.VaultKeyFilename,
 	TestVaultDir:            constants.RuntimeDirname + "/" + constants.TestVaultDirname,
 	LocalStateDBPath:        constants.RuntimeDirname + "/" + constants.LocalStateDBFilename,
 	AuditVaultDBPath:        constants.RuntimeDirname + "/" + constants.AuditVaultDBFilename,

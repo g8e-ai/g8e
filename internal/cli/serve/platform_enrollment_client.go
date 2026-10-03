@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
@@ -694,30 +693,9 @@ func signTranscript(privateKey *ecdsa.PrivateKey, transcript []byte) (string, er
 // --- CSR fingerprint ---
 
 // csrFingerprint computes the SHA-256 fingerprint of the public key in
-// a CSR PEM, matching the gateway's parsePlatformEnrollmentCSR: it
-// hashes the SubjectPublicKeyInfo DER bytes and returns hex.
+// a CSR PEM.
 func csrFingerprint(csrPEM string) (string, error) {
-	block, _ := pem.Decode([]byte(csrPEM))
-	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return "", fmt.Errorf("csr fingerprint: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	csr, err := x509.ParseCertificateRequest(block.Bytes)
-	if err != nil {
-		return "", fmt.Errorf("csr fingerprint: parse: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	if err := csr.CheckSignature(); err != nil {
-		return "", fmt.Errorf("csr fingerprint: verify signature: %w", constants.ErrPlatformEnrollmentInvalidCSR)
-	}
-	publicKey, ok := csr.PublicKey.(*ecdsa.PublicKey)
-	if !ok || publicKey.Curve != elliptic.P256() {
-		return "", constants.ErrPlatformEnrollmentUnsupportedKey
-	}
-	publicDER, err := x509.MarshalPKIXPublicKey(publicKey)
-	if err != nil {
-		return "", fmt.Errorf("csr fingerprint: marshal public key: %w", err)
-	}
-	digest := sha256.Sum256(publicDER)
-	return hex.EncodeToString(digest[:]), nil
+	return auth.CSRFingerprint(csrPEM)
 }
 
 // --- Helpers ---

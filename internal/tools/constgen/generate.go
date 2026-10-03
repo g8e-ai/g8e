@@ -24,6 +24,15 @@ type generationOutputs struct {
 	ConsoleTS     string
 }
 
+const (
+	relPathEventsGo          = "internal/constants/events_gen.go"
+	relPathActionTypesGo     = "internal/constants/action_types_gen.go"
+	relPathConsoleTS         = "console/src/generated/events.ts"
+	relPathPythonEventsJSON  = "protocol/python/g8e/_data/events.json"
+	relPathProtocolEvents    = "protocol/constants/events.json"
+	relPathOperatorHierarchy = "internal/tools/constgen/operator_hierarchy.json"
+)
+
 func generateAll(root string, reg registryFile, actionTypes map[string]actionTypeMeta) (generationOutputs, error) {
 	hierarchy, err := loadOperatorHierarchy(root)
 	if err != nil {
@@ -60,9 +69,9 @@ func generateAll(root string, reg registryFile, actionTypes map[string]actionTyp
 
 func writeGenerated(root string, out generationOutputs) error {
 	targets := map[string]string{
-		filepath.Join(root, "internal/constants/events_gen.go"):       out.EventsGo,
-		filepath.Join(root, "internal/constants/action_types_gen.go"): out.ActionTypesGo,
-		filepath.Join(root, "console/src/generated/events.ts"):        out.ConsoleTS,
+		filepath.Join(root, relPathEventsGo):      out.EventsGo,
+		filepath.Join(root, relPathActionTypesGo): out.ActionTypesGo,
+		filepath.Join(root, relPathConsoleTS):     out.ConsoleTS,
 	}
 	for path, content := range targets {
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -77,9 +86,9 @@ func writeGenerated(root string, out generationOutputs) error {
 
 func verifyGenerated(root string, out generationOutputs) error {
 	targets := map[string]string{
-		filepath.Join(root, "internal/constants/events_gen.go"):       out.EventsGo,
-		filepath.Join(root, "internal/constants/action_types_gen.go"): out.ActionTypesGo,
-		filepath.Join(root, "console/src/generated/events.ts"):        out.ConsoleTS,
+		filepath.Join(root, relPathEventsGo):      out.EventsGo,
+		filepath.Join(root, relPathActionTypesGo): out.ActionTypesGo,
+		filepath.Join(root, relPathConsoleTS):     out.ConsoleTS,
 	}
 	var diffs []string
 	for path, expected := range targets {
@@ -103,11 +112,11 @@ func verifyGenerated(root string, out generationOutputs) error {
 }
 
 func bundledPythonEventsPath(root string) string {
-	return filepath.Join(root, "protocol/python/g8e/_data/events.json")
+	return filepath.Join(root, relPathPythonEventsJSON)
 }
 
 func syncBundledPythonEvents(root string) error {
-	canonical, err := os.ReadFile(filepath.Join(root, "protocol/constants/events.json"))
+	canonical, err := os.ReadFile(filepath.Join(root, relPathProtocolEvents))
 	if err != nil {
 		return fmt.Errorf("read canonical events.json: %w", err)
 	}
@@ -119,7 +128,7 @@ func syncBundledPythonEvents(root string) error {
 }
 
 func verifyBundledPythonEvents(root string) error {
-	canonical, err := os.ReadFile(filepath.Join(root, "protocol/constants/events.json"))
+	canonical, err := os.ReadFile(filepath.Join(root, relPathProtocolEvents))
 	if err != nil {
 		return fmt.Errorf("read canonical events.json: %w", err)
 	}
@@ -135,7 +144,7 @@ func verifyBundledPythonEvents(root string) error {
 }
 
 func loadOperatorHierarchy(root string) (map[string]string, error) {
-	path := filepath.Join(root, "internal/tools/constgen/operator_hierarchy.json")
+	path := filepath.Join(root, relPathOperatorHierarchy)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read operator_hierarchy.json: %w", err)
