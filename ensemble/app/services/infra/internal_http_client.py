@@ -28,7 +28,11 @@ from app.constants import (
     UNKNOWN_ERROR_MESSAGE,
 )
 from app.errors import NetworkError
-from app.models.auth import OperatorSessionValidationRequest, OperatorSessionValidationResponse
+from app.models.auth import (
+    OperatorSessionValidationRequest,
+    OperatorSessionValidationResponse,
+    ProxySigningKeyResponse,
+)
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (
@@ -141,6 +145,22 @@ class InternalHttpClient:
         if not result.valid or result.user_id != user_id:
             return None
         return result
+
+    async def fetch_proxy_signing_key(self) -> ProxySigningKeyResponse:
+        """Fetch the public key the Gateway signs browser-proxy stamps with.
+
+        The caller treats any failure as "no key": proxy identity is then
+        rejected rather than trusted.
+        """
+        self._ensure_mtls()
+        response = await self._http.get(GatewayAPIPaths.GATEWAY_PROXY_SIGNING_KEY)
+        if not response.is_success:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Gateway proxy signing key returned HTTP {response.status_code}",
+                component=G8EE_COMPONENT,
+                details={"status_code": response.status_code},
+            )
+        return ProxySigningKeyResponse.model_validate(response.json())
 
     async def push_sse_event(
         self,

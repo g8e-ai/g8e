@@ -22,6 +22,14 @@ class OperatorSessionValidationResponse(G8eBaseModel):
     user_id: str
 
 
+class ProxySigningKeyResponse(G8eBaseModel):
+    """Public key the Gateway signs browser-proxy identity stamps with."""
+
+    key_id: str
+    public_key: str = Field(description="Hex-encoded Ed25519 public key")
+    algorithm: str
+
+
 class AuthenticatedUser(G8eBaseModel):
     """Authenticated user context returned by g8ee auth dependencies."""
 

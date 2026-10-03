@@ -61,6 +61,7 @@
   "data_settings": "/api/v1/data/settings",
   "deploy_script_linux": "/g8e-deploy.sh",
   "deploy_script_windows": "/g8e-deploy.ps1",
+  "gateway_proxy_signing_key": "/api/v1/gateway/proxy-signing-key",
   "governance_envelopes": "/api/v1/governance/envelopes",
   "governance_signers": "/api/v1/governance/signers",
   "governance_signers_by_id": "/api/v1/governance/signers/",

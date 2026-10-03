@@ -177,7 +177,10 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// builder tooling (mTLS). Not public: it enumerates the full route surface.
 	r.addExact(constants.SwaggerDocPath, RouteAuthDual)
 
-	// Ensemble browser proxy (Gateway → g8ee with stamped identity).
+	// Proxy signing public key: g8ee fetches it over mTLS to verify stamps.
+	r.addExact(constants.APIPaths.GatewayProxySigningKey, RouteAuthMTLS)
+
+	// Ensemble browser proxy (Gateway → g8ee with signed identity stamp).
 	r.addPrefix(constants.APIPaths.EnsembleChatPrefix, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.EnsembleSettingsPrefix, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.EnsembleCasesPrefix, RouteAuthWebSession)

@@ -64,7 +64,7 @@ Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-set
 | Go package smoke test | `scripts/smoke-test-go.sh` | Temporary module creation, `replace` directive, import verification |
 | Python package smoke test | `scripts/smoke-test-python.sh` | Virtual environment, editable install, import and example verification |
 | COSAiS validation | `internal/tools/cosais_validator` | Finalized overlay ID coverage check; invoked by `make validate-cosais` |
-| Developer-guideline audit | `scripts/audit-dev-guidelines.py` | Static pattern matching against `docs/devs/devs.md` rules |
+| Developer-guideline audit | `scripts/audit-dev-guidelines.py` | Go/Python guideline checks, function clones, and protocol alignment |
 | Gateway-embedded deploy (Bash) | `internal/services/gateway/scripts/g8e-deploy.sh` | Embedded by `make build`; served at `/g8e-deploy.sh` |
 | Gateway-embedded deploy (PowerShell) | `internal/services/gateway/scripts/g8e-deploy.ps1` | Embedded by `make build`; served at `/g8e-deploy.ps1` |
 | Gateway binary download manifest | `g8e-binaries.json` (validated at build time) | Validated platform matrix: Linux amd64/arm64/386, Windows amd64/arm64, Darwin amd64/arm64 |
@@ -151,7 +151,28 @@ Run from the repository root:
 python3 scripts/audit-dev-guidelines.py
 ```
 
-Ranks files by statically detectable patterns in `docs/devs/devs.md`. Default output shows the 25 files with the most findings, including matching lines and rule identifiers. Use `--limit 0` to print all files, `--min-violations N` to focus on high-count files, `--include-generated` to include generated and Swagger/OpenAPI paths, or `--json` for machine-readable output. This is an intentionally heuristic tool: it identifies review candidates and does not prove violations or replace semantic lint and test commands.
+The standard-library-only audit maps findings to `docs/devs/devs.md` invariants and the Ensemble coding guide. Go checks use a comment/string-aware lexer; Python checks use ASTs. It reports substantial exact function duplicates and renamed clones, possible unused private helpers, copied public protocol constants in g8ee, disagreement between literal Go declarations and explicit `_go_const` registry entries, semantic drift between `protocol/constants/*.json` and bundled Python registries, and missing literal owners in `docs/devs/codemap.md`. Additional rules cover runtime I/O, errors, environment keys, untyped maps, hidden-creation helper names, Pydantic imports, discarded exceptions, and local subprocess execution in Ensemble.
+
+Default output shows the 25 files ranked by confidence-weighted finding count, with guideline references and related locations. `--list-rules` shows the rule catalog. `--rule` is repeatable; `--confidence high` filters weaker signals. Existing `--limit 0`, `--min-violations N`, `--include-generated`, and `--json` options remain available. `--root` must identify the repository root so ownership exemptions retain their meaning; the default guidelines path follows that root.
+
+```bash
+# Review duplicate paths and their existing owners.
+python3 scripts/audit-dev-guidelines.py --rule duplicate-function --rule renamed-function-clone --limit 0
+# Inspect g8e/g8ee shared-contract alignment.
+python3 scripts/audit-dev-guidelines.py --rule protocol-constant-copy --rule protocol-go-constant-drift --rule protocol-registry-drift --json
+# Optional automation gate for selected rules; existing debt can fail this command.
+python3 scripts/audit-dev-guidelines.py --rule protocol-registry-drift --fail-on high --json
+# Isolated audit regression tests; no platform services or third-party packages required.
+python3 -m unittest discover -s scripts/tests -p 'test_audit_dev_guidelines.py'
+```
+
+Exit status is 0 for a completed report, 1 when selected findings meet `--fail-on`, and 2 for invalid inputs or incomplete coverage caused by read/Python parse failures. Gating uses all selected findings before display limits and minimum file-count filters. JSON includes untruncated totals by rule and coverage errors even when those errors are excluded from displayed rules.
+
+Vendor trees, agent worktrees, runtime directories, dependencies, generated files, and embedded frontend builds are excluded by default. Tests contribute symbol references for unused-helper checks, but production checks skip injected test failures; test-specific checks still inspect integration/E2E parallelism and working-directory changes. Exact clones retain literal values; Python renamed clones preserve global names, call targets, and attributes, while Go renamed clones use a lexical fingerprint. `--min-clone-tokens` adjusts the default 60-token threshold. Private-helper checks include small functions and exclude methods, decorated Python functions, and Go entry points.
+
+Alignment checks read generated Go constant owners and bundled JSON even when generated files are excluded from smell checks. Computed constants, aliases, struct-backed registries, and identifiers without explicit ownership metadata remain the owning conformance tests’ responsibility.
+
+These findings are review candidates. Generic maps may be appropriate for open-ended data, duplicate bodies may implement distinct contracts or build variants, and dynamic imports, reflection, registration, and generated consumers can make a helper appear unused. The audit does not prove call-graph reachability, governance enforcement, Go type correctness, or semantic equivalence across languages; TypeScript/JavaScript do not receive structural checks. It performs no deletions and does not replace the owning conformance checks, semantic lint, or tests.
 
 ### Gateway-Embedded Operator Bootstrap
 

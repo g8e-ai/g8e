@@ -360,7 +360,11 @@ from g8e.constants import (
     HTTP_G8E_SYSTEM_FINGERPRINT_HEADER as SYSTEM_FINGERPRINT,
     HTTP_ACCEL_BUFFERING_HEADER as X_ACCEL_BUFFERING,
     HTTP_X_FORWARDED_FOR_HEADER as X_FORWARDED_FOR,
+    PROXY_ISSUED_AT_HEADER as X_PROXY_ISSUED_AT,
+    PROXY_KEY_ID_HEADER as X_PROXY_KEY_ID,
+    PROXY_NONCE_HEADER as X_PROXY_NONCE,
     PROXY_ORGANIZATION_ID_HEADER as X_PROXY_ORGANIZATION_ID,
+    PROXY_SIGNATURE_HEADER as X_PROXY_SIGNATURE,
     PROXY_USER_ID_HEADER as X_PROXY_USER_ID,
 )
 
@@ -370,8 +374,11 @@ from g8e.constants import (
 X_PROXY_USER_EMAIL = "X-Proxy-User-Email"
 X_PROXY_CLI_SESSION_ID = "X-Proxy-CLI-Session-Id"
 X_PROXY_WEB_SESSION_ID = "X-Proxy-Web-Session-Id"
-GATEWAY_BROWSER_PROXY_HEADER = "X-G8E-Gateway-Browser-Proxy"
-GATEWAY_BROWSER_PROXY_VALUE = "1"
+# Domain tag and clock window of the Gateway's browser-proxy identity stamp. They
+# must match internal/constants/browser_proxy.go; the shared vector file in
+# protocol/conformance/browser_proxy_stamp_vectors.json fails if they drift.
+BROWSER_PROXY_STAMP_DOMAIN = "g8e.browser-proxy-stamp.v1"
+BROWSER_PROXY_STAMP_MAX_SKEW_SECONDS = 30
 
 __all__ = [
     "ACCEPT",
@@ -402,6 +409,8 @@ __all__ = [
     "AUTHORIZATION",
     "BATCH_OUTPUT_SECTION_SEPARATOR",
     "BOUND_OPERATORS",
+    "BROWSER_PROXY_STAMP_DOMAIN",
+    "BROWSER_PROXY_STAMP_MAX_SKEW_SECONDS",
     "CACHE_CONTROL",
     "CACHE_PREFIX",
     "CACHE_TTL_DEFAULT",
@@ -567,7 +576,11 @@ __all__ = [
     "X_ACCEL_BUFFERING",
     "X_FORWARDED_FOR",
     "X_PROXY_CLI_SESSION_ID",
+    "X_PROXY_ISSUED_AT",
+    "X_PROXY_KEY_ID",
+    "X_PROXY_NONCE",
     "X_PROXY_ORGANIZATION_ID",
+    "X_PROXY_SIGNATURE",
     "X_PROXY_USER_EMAIL",
     "X_PROXY_USER_ID",
     "X_PROXY_WEB_SESSION_ID",

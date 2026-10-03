@@ -1,0 +1,22 @@
+{
+  "description": "Shared Go/Python vector for the Gateway browser-proxy identity stamp. Ed25519 signatures are deterministic, so both sides must reproduce canonical_bytes and signature exactly.",
+  "algorithm": "ed25519",
+  "key_id": "test-actuator-key",
+  "private_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "public_key_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+  "body_utf8": "{\"message\":\"hi\"}",
+  "stamp": {
+    "method": "POST",
+    "request_uri": "/api/v1/chat/send?stream=1",
+    "body_sha256": "adbd982b8fe0bbd8477f09262028d3ac264001dc36e3c7579905e72c0b718755",
+    "user_id": "user-1",
+    "user_email": "user-1@g8e.local",
+    "web_session_id": "web-1",
+    "organization_id": "",
+    "cli_session_id": "",
+    "issued_at_unix": 1790000000,
+    "nonce": "0123456789abcdef0123456789abcdef"
+  },
+  "canonical_bytes_hex": "6738652e62726f777365722d70726f78792d7374616d702e76310a504f53540a2f6170692f76312f636861742f73656e643f73747265616d3d310a616462643938326238666530626264383437376630393236323032386433616332363430303164633336653363373537393930356537326330623731383735350a757365722d310a757365722d31406738652e6c6f63616c0a7765622d310a0a0a313739303030303030300a3031323334353637383961626364656630313233343536373839616263646566",
+  "signature_hex": "3ce4fe47c6fe5bd9adaf52a743771fba8141b148cd801c78ec364102d6a92a9477c1f4594881e2a64031a8839aa040d404d3e950d89b5602bf0c49aa1a2c6d01"
+}

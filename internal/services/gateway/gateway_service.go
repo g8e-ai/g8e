@@ -687,6 +687,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
 	modelProvenanceDeps.ProvenanceCoordinator = ls.modelProvenanceCoord
 
+	proxySigner, err := ls.newBrowserProxySigner()
+	if err != nil {
+		return fmt.Errorf("gateway: initialize browser proxy signer: %w", err)
+	}
+
 	g8eReader, err := g8ebinaries.OpenReader(constants.G8eBinariesDir)
 	if err != nil {
 		return fmt.Errorf("gateway: initialize g8e-binary reader: %w", err)
@@ -904,6 +909,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Logger:    logger,
 			Responder: ls.responder,
 			Operators: &gatewayOperatorListerAdapter{svc: reg},
+			Signer:    proxySigner,
 		},
 	})
 	if err != nil {
@@ -1024,6 +1030,18 @@ func (ls *GatewayModeService) GetKVStore() *KVStoreService {
 // GetReplayStore returns the replay store service.
 func (ls *GatewayModeService) GetReplayStore() *ReplayStoreService {
 	return ls.replayStore
+}
+
+// newBrowserProxySigner builds the signer for Gateway-to-g8ee identity stamps
+// from the Gateway's Actuator key. The Gateway does not start without it: g8ee
+// accepts no unsigned proxy identity, so a Gateway that cannot sign has no
+// working console chat.
+func (ls *GatewayModeService) newBrowserProxySigner() (*BrowserProxySigner, error) {
+	priv, keyID, err := ls.db.GetSecretManager().GetActuatorKey()
+	if err != nil {
+		return nil, fmt.Errorf("load actuator key: %w", err)
+	}
+	return NewBrowserProxySigner(priv, keyID)
 }
 
 // GetSecretManager returns the secret manager initialized during database open.

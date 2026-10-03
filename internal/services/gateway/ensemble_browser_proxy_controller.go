@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 )
@@ -33,6 +35,7 @@ type EnsembleBrowserProxyController struct {
 	logger    *slog.Logger
 	responder *response.Writer
 	operators dispatch.OperatorLister
+	signer    *BrowserProxySigner
 	client    *http.Client
 }
 
@@ -41,6 +44,9 @@ type EnsembleBrowserProxyControllerDeps struct {
 	Logger    *slog.Logger
 	Responder *response.Writer
 	Operators dispatch.OperatorLister
+	// Signer signs every proxied request. A nil Signer makes the proxy refuse
+	// to forward anything: there is no unsigned mode.
+	Signer *BrowserProxySigner
 }
 
 func newEnsembleBrowserProxyController(d EnsembleBrowserProxyControllerDeps) *EnsembleBrowserProxyController {
@@ -49,6 +55,7 @@ func newEnsembleBrowserProxyController(d EnsembleBrowserProxyControllerDeps) *En
 		logger:    d.Logger,
 		responder: d.Responder,
 		operators: d.Operators,
+		signer:    d.Signer,
 		client: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -64,6 +71,10 @@ func (c *EnsembleBrowserProxyController) upstreamBase() string {
 }
 
 func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *http.Request) {
+	if c.signer == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrBrowserProxySignerUnavailable.Error())
+		return
+	}
 	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
 	if strings.TrimSpace(userID) == "" || strings.TrimSpace(webSessionID) == "" {
@@ -111,10 +122,15 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 		return
 	}
 
-	req.Header.Set(constants.HeaderGatewayBrowserProxy, constants.GatewayBrowserProxyValue)
-	req.Header.Set(constants.HeaderProxyUserID, userID)
-	req.Header.Set(constants.HeaderProxyUserEmail, userID+"@g8e.local")
-	req.Header.Set(constants.HeaderProxyWebSessionID, webSessionID)
+	if err := c.signer.Apply(req, body, BrowserProxyIdentity{
+		UserID:       userID,
+		UserEmail:    userID + "@g8e.local",
+		WebSessionID: webSessionID,
+	}); err != nil {
+		c.logger.Error("gateway: ensemble browser proxy could not sign request", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+		return
+	}
 	if ct := r.Header.Get("Content-Type"); ct != "" {
 		req.Header.Set("Content-Type", ct)
 	} else if len(body) > 0 {
@@ -139,6 +155,34 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		c.logger.Warn("gateway: ensemble browser proxy response copy failed", "path", upstreamPath, "error", err)
 	}
+}
+
+// handleProxySigningKey serves the public half of the proxy signing key so g8ee
+// can verify stamps without sharing a volume or a file with the Gateway. The
+// route is mTLS-only; the key is public.
+//
+// @Summary		Browser proxy signing key
+// @Description	Returns the Ed25519 public key (and its key ID) the Gateway uses to sign browser-proxy identity stamps. g8ee fetches it over its mTLS client and verifies every proxied request against it.
+// @Tags			gateway
+// @Produce		json
+// @Success		200	{object}	models.ActuatorPublicKeyExport
+// @Failure		405	{string}	string	"Method Not Allowed"
+// @Failure		503	{string}	string	"Service Unavailable — no signing key is loaded"
+// @Router			/api/v1/gateway/proxy-signing-key [get]
+func (c *EnsembleBrowserProxyController) handleProxySigningKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.signer == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrBrowserProxySignerUnavailable.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, models.ActuatorPublicKeyExport{
+		KeyID:     c.signer.KeyID(),
+		PublicKey: hex.EncodeToString(c.signer.PublicKey()),
+		Algorithm: "ed25519",
+	})
 }
 
 // browserBoundOperator is one entry of the Gateway-stamped bound_operators

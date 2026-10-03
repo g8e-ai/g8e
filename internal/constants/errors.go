@@ -751,6 +751,10 @@ var (
 	ErrSystemFingerprintRequired   = errors.New("system_fingerprint is required")
 	ErrHostnameRequired            = errors.New("hostname is required")
 
+	// Browser proxy stamp (Gateway -> g8ee identity assertion)
+	ErrBrowserProxyStampFieldInvalid = errors.New("browser proxy stamp field contains a line break")
+	ErrBrowserProxySignerUnavailable = errors.New("browser proxy signer unavailable")
+
 	ErrBootstrapNoConfig    = errors.New("bootstrap: no configuration returned from Auth Services")
 	ErrBootstrapNoSessionID = errors.New("bootstrap: no operator_session_id returned from Auth Services")
 	ErrBootstrapCertParse   = errors.New("bootstrap: failed to parse per-operator cert+key")

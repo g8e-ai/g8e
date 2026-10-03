@@ -40,6 +40,7 @@ from app.services.infra.event_service import EventService
 from app.services.infra.settings_service import SettingsService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.auth_service import AuthService
+from app.services.auth.proxy_stamp import ProxyStampVerifier
 from app.services.auth.certificate_service import CertificateService
 from app.services.auth.certificate_data_service import CertificateDataService
 from app.services.protocols import (
@@ -292,7 +293,11 @@ class ServiceFactory:
         certificate_service = CertificateService(
             data_service=CertificateDataService(cache_aside_service)
         )
-        auth_service = AuthService(internal_http_client=core_services.internal_http_client)
+        internal_http_client = core_services.internal_http_client
+        auth_service = AuthService(
+            internal_http_client=internal_http_client,
+            proxy_stamp_verifier=ProxyStampVerifier(internal_http_client.fetch_proxy_signing_key),
+        )
 
         return OperatorServices(
             auth_service=auth_service,
