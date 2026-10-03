@@ -3,8 +3,8 @@ doc_id: ensemble_llm_providers
 title: LLM Providers
 audience: platform and feature developers, coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-02
+version: v2.3.0
 owners:
   - ensemble/app/llm/
   - ensemble/app/models/model_configs.py
@@ -51,6 +51,7 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 | INV-LLM-BOOTSTRAP-01 | Environment variables provide the lowest-priority bootstrap values for API keys and endpoints only (INV-ENV-04). Platform settings replace them when explicitly set, and request-specific role overrides take precedence over platform settings. |
 | INV-LLM-BOOTSTRAP-02 | Each role (`primary`, `assistant`, `lite`) accepts `ENDPOINT` and `API_KEY` environment variables under prefixes `G8E_LLM_PRIMARY_*`, `G8E_LLM_ASSISTANT_*`, `G8E_LLM_LITE_*`. Provider and model selection come only from Gateway-backed platform settings and request overrides, never from the environment. Role-specific credentials and endpoints take precedence over provider-level values. |
 | INV-LLM-BOOTSTRAP-03 | A model name remains required in settings; the system does not automatically select a provider's default model. |
+| INV-LLM-BOOTSTRAP-04 | A user's per-role provider, model, endpoint, and API key chosen in the console are written to that user's `user_settings` document by `SettingsService.update_llm_role_settings` and take effect on the next chat request. The selectable providers are Ollama, OpenAI-compatible, Anthropic, Gemini, llama.cpp, and g8e; Jev and Fake are not offered. g8ee never returns a stored API key, only whether one resolves for the role, and a role that changes provider drops its stored key unless a new one is supplied. |
 
 ### Provider registry (`INV-LLM-PROVIDERS`)
 
@@ -89,6 +90,7 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 | Provider factory | [factory.py](../../ensemble/app/llm/factory.py) | Role resolution, cache key generation, provider instantiation |
 | Model registry | [model_configs.py](../../ensemble/app/models/model_configs.py) | MODEL_REGISTRY and model profile definitions |
 | LLM settings | [settings.py](../../ensemble/app/models/settings.py) | LLMSettings.resolve() method, role fallback chains, environment variable support |
+| Console role selection and model listing | `ensemble/app/services/infra/llm_role_settings.py`, `ensemble/app/llm/model_catalog.py` | `ensemble/.venv/bin/python -m pytest tests/unit/services/infra/test_llm_role_settings.py tests/unit/llm/test_model_catalog.py` |
 | Thinking translation | [thinking.py](../../ensemble/app/llm/thinking.py) | Provider-specific thinking level translation and wire format mapping |
 
 ## Procedures
@@ -108,6 +110,12 @@ Wire values are canonical in APIs, settings, telemetry, and persisted records. U
 Configure a provider and model for every role that uses a distinct backend. If the assistant role has no provider, provider resolution falls back to primary. If the lite role has no provider, resolution falls back to assistant and then primary. Model resolution follows the same direction, with assistant falling back to primary and lite falling back to assistant and then primary.
 
 The main chat agent always uses the primary generation call shape because both simple and complex turns can enter the tool loop. Complex turns select the primary model and provider. Simple turns select the assistant model, while provider lookup follows the lite role, so the configured lite provider must accept the assistant model when those roles use different backends.
+
+### Select roles from the console
+
+The console's Inference view reads and writes the three roles through `POST /api/v1/settings/llm/get` and `POST /api/v1/settings/llm` (see [Console Architecture](../architecture/console.md#model-selection) for the browser contract). g8ee reports the selectable providers with the fields each one needs (endpoint and API key are `none`, `optional`, or `required`), validates every role before writing any of them, and requires a provider and a model for the primary role and for any role that sets a provider. An endpoint is normalized to an `http` or `https` URL without a trailing slash, and a bare `host:port` is read as `http`.
+
+`POST /api/v1/settings/llm/models` lists the models a provider endpoint serves, using `/api/tags` for Ollama, `/v1/models` for OpenAI-compatible, llama.cpp, and Anthropic endpoints, and `models` for Gemini. A missing endpoint or key falls back to what the role would resolve for that provider. For `g8e` it ignores any supplied endpoint or key and requests the typed model inventory of the caller's sole active Inference Operator through governed dispatch; zero or several active Inference Operators fail with a service-unavailable error. A failed listing reports only the HTTP status or the transport error class, never the upstream body.
 
 ### Environment bootstrap
 

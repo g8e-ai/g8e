@@ -77,9 +77,10 @@ func (s *OllamaMaintenanceService) HandleInventoryRequest(ctx context.Context, m
 	}
 
 	payload := &operatorv1.OllamaModelInventoryResult{
-		ExecutionId: executionID,
-		Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-		Entries:     inference.ProviderModelInventoryEntriesToProto(entries),
+		ExecutionId:  executionID,
+		Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		Entries:      inference.ProviderModelInventoryEntriesToProto(entries),
+		RoleBindings: s.inferenceRoleBindings(),
 	}
 	publishLFAATypedResponseTo(ctx, s.client, s.config, s.logger, msg, constants.Event.Operator.OllamaModelInventory.Completed, payload, s.auditStore, s.scrubbing)
 }
@@ -115,6 +116,30 @@ func (s *OllamaMaintenanceService) HandleResidencyRequest(ctx context.Context, m
 	payload.ExecutionId = executionID
 	payload.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	publishLFAATypedResponseTo(ctx, s.client, s.config, s.logger, msg, constants.Event.Operator.OllamaModelResidency.Completed, payload, s.auditStore, s.scrubbing)
+}
+
+// inferenceRoleBindings reports the models this Operator serves for each
+// chat-tier role. The Operator is the sole authority for these bindings;
+// callers learn them here and never choose them. Roles with no configured
+// model are omitted.
+func (s *OllamaMaintenanceService) inferenceRoleBindings() []*operatorv1.InferenceRoleBinding {
+	cfg := s.config.Inference
+	candidates := []struct {
+		role  operatorv1.ModelRole
+		model string
+	}{
+		{operatorv1.ModelRole_MODEL_ROLE_PRIMARY, cfg.PrimaryModel},
+		{operatorv1.ModelRole_MODEL_ROLE_ASSISTANT, cfg.AssistantModel},
+		{operatorv1.ModelRole_MODEL_ROLE_LITE, cfg.LiteModel},
+	}
+	bindings := make([]*operatorv1.InferenceRoleBinding, 0, len(candidates))
+	for _, c := range candidates {
+		if c.model == "" {
+			continue
+		}
+		bindings = append(bindings, &operatorv1.InferenceRoleBinding{Role: c.role, ServedModelTag: c.model})
+	}
+	return bindings
 }
 
 func (s *OllamaMaintenanceService) ollamaBackend() (*inference.OllamaBackend, error) {

@@ -1160,19 +1160,29 @@ class ProviderModelInventoryEntry(_message.Message):
     advertised_capabilities: _containers.RepeatedScalarFieldContainer[str]
     def __init__(self, provider_class: _Optional[str] = ..., served_model_tag: _Optional[str] = ..., model_digest: _Optional[str] = ..., model_family: _Optional[str] = ..., parameter_size: _Optional[str] = ..., parameter_count: _Optional[int] = ..., quantization: _Optional[str] = ..., format: _Optional[str] = ..., context_limit: _Optional[int] = ..., advertised_capabilities: _Optional[_Iterable[str]] = ...) -> None: ...
 
+class InferenceRoleBinding(_message.Message):
+    __slots__ = ("role", "served_model_tag")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    SERVED_MODEL_TAG_FIELD_NUMBER: _ClassVar[int]
+    role: ModelRole
+    served_model_tag: str
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., served_model_tag: _Optional[str] = ...) -> None: ...
+
 class OllamaModelInventoryResult(_message.Message):
-    __slots__ = ("execution_id", "status", "entries", "error_message", "error_type")
+    __slots__ = ("execution_id", "status", "entries", "error_message", "error_type", "role_bindings")
     EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
     ENTRIES_FIELD_NUMBER: _ClassVar[int]
     ERROR_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     ERROR_TYPE_FIELD_NUMBER: _ClassVar[int]
+    ROLE_BINDINGS_FIELD_NUMBER: _ClassVar[int]
     execution_id: str
     status: ExecutionStatus
     entries: _containers.RepeatedCompositeFieldContainer[ProviderModelInventoryEntry]
     error_message: str
     error_type: str
-    def __init__(self, execution_id: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., entries: _Optional[_Iterable[_Union[ProviderModelInventoryEntry, _Mapping]]] = ..., error_message: _Optional[str] = ..., error_type: _Optional[str] = ...) -> None: ...
+    role_bindings: _containers.RepeatedCompositeFieldContainer[InferenceRoleBinding]
+    def __init__(self, execution_id: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., entries: _Optional[_Iterable[_Union[ProviderModelInventoryEntry, _Mapping]]] = ..., error_message: _Optional[str] = ..., error_type: _Optional[str] = ..., role_bindings: _Optional[_Iterable[_Union[InferenceRoleBinding, _Mapping]]] = ...) -> None: ...
 
 class OllamaModelResidencyRequested(_message.Message):
     __slots__ = ("execution_id",)

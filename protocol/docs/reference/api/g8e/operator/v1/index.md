@@ -73,6 +73,7 @@
     - [InferenceResponseFormat](#g8e-operator-v1-InferenceResponseFormat)
     - [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart)
     - [InferenceResult](#g8e-operator-v1-InferenceResult)
+    - [InferenceRoleBinding](#g8e-operator-v1-InferenceRoleBinding)
     - [InferenceThinkingControl](#g8e-operator-v1-InferenceThinkingControl)
     - [InferenceToolCall](#g8e-operator-v1-InferenceToolCall)
     - [InferenceToolChoice](#g8e-operator-v1-InferenceToolChoice)
@@ -1655,6 +1656,24 @@ InferenceResult carries ordered response parts, usage metadata, and the finish r
 
 
 
+<a name="g8e-operator-v1-InferenceRoleBinding"></a>
+
+### InferenceRoleBinding
+InferenceRoleBinding is the Inference Operator&#39;s authoritative binding of one
+chat-tier role to the model it serves for that role. Callers (g8ee) learn
+role models from the Operator; they never choose them.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| role | [ModelRole](#g8e-operator-v1-ModelRole) |  |  |
+| served_model_tag | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-operator-v1-InferenceThinkingControl"></a>
 
 ### InferenceThinkingControl
@@ -2020,6 +2039,7 @@ Reads a specific resource from the downstream MCP server.
 | entries | [ProviderModelInventoryEntry](#g8e-operator-v1-ProviderModelInventoryEntry) | repeated |  |
 | error_message | [string](#string) |  |  |
 | error_type | [string](#string) |  |  |
+| role_bindings | [InferenceRoleBinding](#g8e-operator-v1-InferenceRoleBinding) | repeated | role_bindings lists the Operator&#39;s configured Primary/Assistant/Lite models. Each served_model_tag matches an entry in entries when installed. |
 
 
 

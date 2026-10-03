@@ -2793,6 +2793,11 @@
         "_go_const": "TriagePostureEscalated",
         "_python_const": "ESCALATED",
         "value": "escalated"
+      },
+      "confused": {
+        "_go_const": "TriagePostureConfused",
+        "_python_const": "CONFUSED",
+        "value": "confused"
       }
     },
     "thinking_phase": {
