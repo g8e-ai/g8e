@@ -14,12 +14,24 @@ status or transport error class, never the upstream body.
 
 from __future__ import annotations
 
-from typing import Any
+import base64
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 import httpx
+from google.protobuf.message import DecodeError
 
-from app.constants import LLMProvider
-from app.errors import ExternalServiceError, ValidationError
+from app.constants import EventType, LLMProvider
+from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
+from app.models.http_context import G8eHttpContext
+from g8e.operator.v1.operator_pb2 import (
+    EXECUTION_STATUS_COMPLETED,
+    OllamaModelInventoryRequested,
+    OllamaModelInventoryResult,
+)
+
+if TYPE_CHECKING:
+    from app.clients.gateway_operator_client import GatewayOperatorClient
 
 _TIMEOUT = httpx.Timeout(10.0)
 _GEMINI_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -108,3 +120,46 @@ async def list_models(
             service_name=provider.value,
         ) from exc
     return parse_models(provider, body)
+
+
+async def list_governed_models(
+    operator_client: GatewayOperatorClient, context: G8eHttpContext
+) -> list[str]:
+    """List models at the caller's sole active, registered Inference Operator.
+
+    The browser cannot supply an endpoint for governed inference. Resolve the
+    target from the Gateway's owner-scoped registry and request inventory over
+    the existing governed Operator command path.
+    """
+    operators = await operator_client.list(user_id=context.user_id)
+    inference_operators = [
+        op for op in operators
+        if isinstance(op, dict)
+        and op.get("status") == "active"
+        and op.get("operator_type") == "remote"
+        and op.get("operator_session_id")
+        and isinstance(op.get("runtime_config"), dict)
+        and op["runtime_config"].get("inference_enabled") is True
+    ]
+    if not inference_operators:
+        raise ServiceUnavailableError("No active Inference Operator is available to list models")
+    if len(inference_operators) != 1:
+        raise ServiceUnavailableError("Multiple Inference Operators are active; model source is ambiguous")
+    request = OllamaModelInventoryRequested(execution_id=f"console-inventory-{uuid4().hex}")
+    response = await operator_client.dispatch(
+        context=context,
+        operator_session_id=inference_operators[0]["operator_session_id"],
+        event_type=EventType.OPERATOR_OLLAMA_MODEL_INVENTORY_REQUESTED.value,
+        payload=request.SerializeToString(),
+        target_resource="ollama-model",
+    )
+    if not response.get("success") or not isinstance(response.get("result_payload"), str):
+        raise ServiceUnavailableError("The Inference Operator did not return a model inventory")
+    try:
+        payload = base64.b64decode(response["result_payload"], validate=True)
+        result = OllamaModelInventoryResult.FromString(payload)
+    except (ValueError, TypeError, DecodeError) as exc:
+        raise ServiceUnavailableError("The Inference Operator returned an invalid model inventory") from exc
+    if result.status != EXECUTION_STATUS_COMPLETED:
+        raise ServiceUnavailableError("The Inference Operator could not list models")
+    return sorted({entry.served_model_tag for entry in result.entries if entry.served_model_tag})

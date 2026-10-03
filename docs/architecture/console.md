@@ -110,7 +110,7 @@ The Inference view assigns a provider, endpoint, API key, and model to each ense
 
 Saving (`POST /api/v1/settings/llm`) writes the role-specific fields of the caller's `user_settings_{user_id}` document and invalidates its cache entry. g8ee reads user settings on every chat request, so the next message uses the new selection with no reload. The composer shows the Primary model and links to the view, or warns when no model is selected.
 
-`POST /api/v1/settings/llm/models` lists the models an endpoint serves (Ollama `/api/tags`, OpenAI-compatible and llama.cpp `/v1/models`, Anthropic `/v1/models`, Gemini `models`), using the endpoint and key typed in the form, or else the role's stored ones. The `g8e` governed-inference provider takes a typed model name because the Inference Node has no browser-reachable model listing. A failed listing reports only the HTTP status or transport error, never the upstream body.
+`POST /api/v1/settings/llm/models` lists the models an endpoint serves (Ollama `/api/tags`, OpenAI-compatible and llama.cpp `/v1/models`, Anthropic `/v1/models`, Gemini `models`), using the endpoint and key typed in the form, or else the role's stored ones. For `g8e` governed inference, g8ee resolves the caller's sole active Inference Operator through the Gateway and requests its typed model inventory through governed Operator dispatch. The browser cannot override the endpoint. A failed listing reports only the HTTP status or transport error, never the upstream body.
 
 ## Event Delivery
 

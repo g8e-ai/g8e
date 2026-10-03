@@ -5,12 +5,22 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import base64
+from unittest.mock import AsyncMock
+
 import httpx
 import pytest
 
 from app.constants.config import LLMProvider
-from app.errors import ExternalServiceError, ValidationError
-from app.llm.model_catalog import list_models, parse_models
+from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
+from app.llm.model_catalog import list_governed_models, list_models, parse_models
+from app.models.http_context import G8eHttpContext
+from g8e.operator.v1.operator_pb2 import (
+    EXECUTION_STATUS_COMPLETED,
+    OllamaModelInventoryRequested,
+    OllamaModelInventoryResult,
+    ProviderModelInventoryEntry,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -110,3 +120,59 @@ async def test_unreachable_endpoint_is_external_service_error():
 async def test_missing_inputs_are_validation_errors(provider, endpoint, key):
     with pytest.raises(ValidationError):
         await list_models(provider, endpoint, key)
+
+
+async def test_governed_models_use_owner_registered_inference_endpoint():
+    context = G8eHttpContext(user_id="owner-1", web_session_id="ws-1")
+    operator_client = AsyncMock()
+    operator_client.list.return_value = [
+        {
+            "status": "active",
+            "operator_type": "remote",
+            "operator_session_id": "data-session",
+            "runtime_config": {"inference_enabled": False},
+        },
+        {
+            "status": "active",
+            "operator_type": "remote",
+            "operator_session_id": "inference-session",
+            "runtime_config": {
+                "inference_enabled": True,
+                "inference_ollama_endpoint": "http://approved-ollama:11434",
+            },
+        },
+    ]
+    inventory = OllamaModelInventoryResult(
+        status=EXECUTION_STATUS_COMPLETED,
+        entries=[ProviderModelInventoryEntry(served_model_tag="qwen3:4b")],
+    )
+    operator_client.dispatch.return_value = {
+        "success": True,
+        "result_payload": base64.b64encode(inventory.SerializeToString()).decode(),
+    }
+    assert await list_governed_models(operator_client, context) == ["qwen3:4b"]
+    operator_client.list.assert_awaited_once_with(user_id="owner-1")
+    call = operator_client.dispatch.await_args.kwargs
+    assert call["context"] is context
+    assert call["operator_session_id"] == "inference-session"
+    assert call["event_type"] == "g8e.v1.operator.ollama.model.inventory.requested"
+    assert OllamaModelInventoryRequested.FromString(call["payload"]).execution_id
+
+
+@pytest.mark.parametrize("count", [0, 2])
+async def test_governed_models_require_one_active_inference_operator(count):
+    operator_client = AsyncMock()
+    operator_client.list.return_value = [
+        {
+            "status": "active",
+            "operator_type": "remote",
+            "operator_session_id": f"inference-{i}",
+            "runtime_config": {
+                "inference_enabled": True,
+                "inference_ollama_endpoint": "http://approved-ollama:11434",
+            },
+        }
+        for i in range(count)
+    ]
+    with pytest.raises(ServiceUnavailableError):
+        await list_governed_models(operator_client, G8eHttpContext(user_id="owner-1", web_session_id="ws-1"))

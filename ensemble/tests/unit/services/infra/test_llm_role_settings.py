@@ -165,7 +165,7 @@ class TestSettingsView:
             LLMProvider.G8E,
         }
         assert options[LLMProvider.OLLAMA].default_endpoint == "http://ollama.lan:11434"
-        assert options[LLMProvider.G8E].lists_models is False
+        assert options[LLMProvider.G8E].lists_models is True
         assert options[LLMProvider.GEMINI].endpoint == "none"
 
 

@@ -26,6 +26,7 @@ from app.constants import (
     DB_COLLECTION_MEMORIES,
     EventType,
     InternalAPIPaths,
+    LLMProvider,
     OperatorStatus,
     Priority,
 )
@@ -113,7 +114,7 @@ from app.models.operators import (
 )
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.errors import NetworkError
-from app.llm.model_catalog import list_models
+from app.llm.model_catalog import list_governed_models, list_models
 from app.services.data.case_data_service import CaseDataService
 from app.services.data.attachment_store_service import AttachmentService
 from app.services.investigation.investigation_service import InvestigationService
@@ -1600,12 +1601,19 @@ async def list_llm_models(
     request: LLMModelListRequest,
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+    gateway_operator_client: GatewayOperatorClient = Depends(get_g8ee_gateway_operator_client),
 ):
     """List the models a provider endpoint serves.
 
     A missing endpoint or key falls back to what the caller's role would
     resolve for that provider, so stored keys need not be re-entered.
+    Governed inference instead queries the active Inference Operator through
+    its typed inventory command; caller-supplied endpoint and key are ignored.
     """
+    if request.provider is LLMProvider.G8E:
+        return LLMModelListResponse(
+            models=await list_governed_models(gateway_operator_client, g8e_context)
+        )
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
     stored_endpoint, stored_key = stored_connection(
         user_settings.llm, request.role, request.provider

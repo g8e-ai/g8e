@@ -23,6 +23,7 @@ from app.models.investigations import InvestigationQueryRequest
 from app.models.internal_api import (
     ChatMessageRequest,
     DirectCommandRequest,
+    LLMModelListRequest,
     ResourceCreationRequest,
     OperatorApprovalResponse,
     OperatorBindRequest,
@@ -42,6 +43,7 @@ from app.routers.internal_router import (
     delete_case,
     execute_direct_command,
     internal_chat,
+    list_llm_models,
     operator_approval_respond,
     query_investigations,
     stop_ai_processing,
@@ -52,11 +54,31 @@ from app.routers.internal_router import (
     settings_sync,
 )
 from app.services.ai.chat_task_manager import BackgroundTaskManager
+from app.constants import LLMProvider
 from tests.fakes.factories import build_case_model, create_investigation_data
 
 # Canonical API key format from protocol/constants/api_key_patterns.json
 API_KEY_OPERATOR_REGEX = re.compile(r"^g8e_[a-f0-9]{8}_[a-f0-9]{64}$")
 API_KEY_REGULAR_REGEX = re.compile(r"^g8e_[a-f0-9]{64}$")
+
+
+@pytest.mark.asyncio
+async def test_governed_model_list_ignores_browser_endpoint(request_context, g8e_context):
+    settings_service = MagicMock()
+    gateway_operator_client = MagicMock()
+    request = LLMModelListRequest(
+        context=request_context,
+        role="primary",
+        provider=LLMProvider.G8E,
+        endpoint="http://untrusted.example:11434",
+        api_key="untrusted-key",
+    )
+    with patch("app.routers.internal_router.list_governed_models", new_callable=AsyncMock) as listing:
+        listing.return_value = ["qwen3:4b"]
+        result = await list_llm_models(request, settings_service, g8e_context, gateway_operator_client)
+    assert result.models == ["qwen3:4b"]
+    listing.assert_awaited_once_with(gateway_operator_client, g8e_context)
+    settings_service.get_user_settings.assert_not_called()
 
 
 @pytest.fixture

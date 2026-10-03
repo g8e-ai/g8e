@@ -58,7 +58,7 @@ function signedInRoutes(extra: Record<string, Handler> = {}): Record<string, Han
 const PROVIDERS = [
   { provider: 'ollama', label: 'Ollama', endpoint: 'optional', api_key: 'optional', default_endpoint: 'http://localhost:11434', lists_models: true },
   { provider: 'openai', label: 'OpenAI-compatible', endpoint: 'optional', api_key: 'required', default_endpoint: 'https://api.openai.com/v1', lists_models: true },
-  { provider: 'g8e', label: 'g8e governed inference', endpoint: 'none', api_key: 'none', lists_models: false },
+  { provider: 'g8e', label: 'g8e governed inference', endpoint: 'none', api_key: 'none', lists_models: true },
 ];
 const UNSET = { provider: null, model: null, endpoint: null, api_key_set: false };
 
@@ -254,6 +254,31 @@ describe('operators', () => {
 });
 
 describe('inference', () => {
+  it('loads governed models from the registered inference provider and saves a selection', async () => {
+    let saved: Record<string, unknown> | null = null;
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'g8e', model: null, endpoint: null, api_key_set: false })],
+      'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b', 'qwen3:1.7b'] }],
+      'POST /api/v1/settings/llm': (body) => {
+        saved = body as Record<string, unknown>;
+        return [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b', endpoint: null, api_key_set: false })];
+      },
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    const user = userEvent.setup();
+    renderApp();
+
+    const primary = await screen.findByRole('region', { name: 'Primary' });
+    expect(await within(primary).findByRole('option', { name: 'qwen3:4b' })).toBeInTheDocument();
+    expect(calls.find((c) => c.path === '/api/v1/settings/llm/models')?.body).toEqual({
+      context: {}, role: 'primary', provider: 'g8e',
+    });
+    await user.selectOptions(within(primary).getByLabelText('Model'), 'qwen3:4b');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saved).not.toBeNull());
+    expect(saved!.primary).toEqual({ provider: 'g8e', model: 'qwen3:4b', endpoint: null });
+  });
+
   it('selects a provider, endpoint, and listed model per role and saves them', async () => {
     let saved: Record<string, unknown> | null = null;
     routes = signedInRoutes({

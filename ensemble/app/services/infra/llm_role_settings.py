@@ -43,7 +43,7 @@ _PROVIDER_FIELDS: dict[LLMProvider, tuple[str, FieldRequirement, FieldRequiremen
     LLMProvider.ANTHROPIC: ("Anthropic", "optional", "required", True),
     LLMProvider.GEMINI: ("Google Gemini", "none", "required", True),
     LLMProvider.LLAMACPP: ("llama.cpp", "optional", "optional", True),
-    LLMProvider.G8E: ("g8e governed inference", "none", "none", False),
+    LLMProvider.G8E: ("g8e governed inference", "none", "none", True),
 }
 
 
