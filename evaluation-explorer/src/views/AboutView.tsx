@@ -2,25 +2,27 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import {
+  ABOUT_AVAILABILITY,
   ABOUT_AVAILABILITY_DETAIL,
   ABOUT_AVAILABILITY_HEADING,
-  ABOUT_AVAILABILITY_LEDE_AFTER,
-  ABOUT_AVAILABILITY_LEDE_BEFORE,
-  ABOUT_AVAILABILITY_LEDE_MIDDLE,
   ABOUT_BACKGROUND,
-  ABOUT_DELIVER_HEADING,
-  ABOUT_DELIVER_INTRO,
-  ABOUT_DELIVERABLES,
   ABOUT_EXPERIENCE,
   ABOUT_HEADING,
-  ABOUT_LEADERSHIP,
+  ABOUT_METHOD,
   ABOUT_OPENING_AFTER,
   ABOUT_OPENING_BEFORE,
+  ABOUT_ORIGIN,
+  ABOUT_ORIGIN_HEADING,
+  ABOUT_PRINCIPLES,
+  ABOUT_PURPOSE,
+  ABOUT_PURPOSE_HEADING,
   ABOUT_SITE_INTRO_AFTER,
   ABOUT_SITE_INTRO_BEFORE,
+  G8E_CORE_DOCS,
   G8E_REPO_URL,
   PLATFORM_CONTACT_CALENDLY,
   PLATFORM_CONTACT_EMAIL,
+  PLATFORM_CONTACT_LINKEDIN,
 } from '../content/platform';
 import { StreamStatusIndicator } from '../components/shared';
 import { useConnection, useStoreState } from '../state/store';
@@ -47,7 +49,26 @@ export function AboutView() {
             {ABOUT_SITE_INTRO_AFTER}
           </p>
 
+          <h3 className="sys-platform-heading">{ABOUT_PURPOSE_HEADING}</h3>
+          <p className="sys-platform-lede">{ABOUT_PURPOSE}</p>
+          <ul className="about-highlights" aria-label="g8e principles">
+            {ABOUT_PRINCIPLES.map((item) => (
+              <li key={item.label}>
+                <strong>{item.label}:</strong> {item.detail}
+              </li>
+            ))}
+          </ul>
+          <p className="sys-platform-lede">
+            Read <a href={G8E_CORE_DOCS.about} target="_blank" rel="noopener noreferrer">About g8e</a>
+            {' '}and the{' '}
+            <a href={G8E_CORE_DOCS.position} target="_blank" rel="noopener noreferrer">position paper</a>.
+          </p>
+
           <hr className="about-divider" />
+
+          <h3 className="sys-platform-heading">{ABOUT_ORIGIN_HEADING}</h3>
+          <p className="sys-platform-lede">{ABOUT_ORIGIN}</p>
+          <p className="sys-platform-lede">{ABOUT_METHOD}</p>
 
           <h3 className="sys-platform-heading">{ABOUT_HEADING}</h3>
           <p className="sys-platform-lede">
@@ -56,7 +77,6 @@ export function AboutView() {
             {ABOUT_OPENING_AFTER}
           </p>
           <p className="sys-platform-lede">{ABOUT_BACKGROUND}</p>
-          <p className="sys-platform-lede">{ABOUT_LEADERSHIP}</p>
           <ul className="about-highlights" aria-label="Career highlights">
             {ABOUT_EXPERIENCE.map((item) => (
               <li key={item.company}>
@@ -67,26 +87,8 @@ export function AboutView() {
 
           <hr className="about-divider" />
 
-          <h3 className="sys-platform-heading">{ABOUT_DELIVER_HEADING}</h3>
-          <p className="sys-platform-lede">{ABOUT_DELIVER_INTRO}</p>
-          <ul className="about-highlights" aria-label="Areas of practice">
-            {ABOUT_DELIVERABLES.map((item) => (
-              <li key={item.label}>
-                <strong>{item.label}:</strong> {item.detail}
-              </li>
-            ))}
-          </ul>
-
-          <hr className="about-divider" />
-
           <h3 className="sys-platform-heading">{ABOUT_AVAILABILITY_HEADING}</h3>
-          <p className="sys-platform-lede about-availability">
-            {ABOUT_AVAILABILITY_LEDE_BEFORE}
-            <strong>contract engagements</strong>
-            {ABOUT_AVAILABILITY_LEDE_MIDDLE}
-            <strong>full-time</strong>
-            {ABOUT_AVAILABILITY_LEDE_AFTER}
-          </p>
+          <p className="sys-platform-lede about-availability">{ABOUT_AVAILABILITY}</p>
           <p className="sys-platform-lede about-availability">{ABOUT_AVAILABILITY_DETAIL}</p>
           <p className="sys-platform-lede about-availability">
             Reach me at{' '}
@@ -102,6 +104,14 @@ export function AboutView() {
                 rel="noopener noreferrer"
               >
                 Book a call with Calendly
+              </a>
+              <a
+                className="sys-platform-cta-architecture"
+                href={PLATFORM_CONTACT_LINKEDIN}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Connect on LinkedIn
               </a>
               <a
                 className="sys-platform-cta-architecture"

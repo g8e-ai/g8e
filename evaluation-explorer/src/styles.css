@@ -1010,6 +1010,27 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   line-height: 1.55;
   color: var(--fg-muted);
 }
+.docs-card > p:not(.docs-card-lede):not(.docs-card-foot) {
+  margin: 0 0 14px;
+  color: var(--fg-muted);
+  font-size: 15px;
+  line-height: 1.65;
+}
+.docs-card > p:last-child { margin-bottom: 0; }
+.docs-diagram-card { padding: 16px 20px; }
+.docs-command-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.docs-command {
+  display: inline-block;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elev2);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
 .docs-card-foot {
   margin: 16px 0 0;
   padding-top: 16px;

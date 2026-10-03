@@ -1,141 +1,63 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-// Docs view — what's shipped, where this is headed, and how to read the feed.
-// Static copy for first-time visitors; live methodology data for metrics,
-// datasets, suites, and active limitations.
+// Public guide to docs/architecture/evals.md. Keep the architecture diagram at the top.
 
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
-import { useStoreState } from '../state/store';
-import { loadRuntimeConfig } from '../state/feed';
-import { EmptyState, QualityBadge, StatTile } from '../components/shared';
-import descriptorUrl from '../contract/descriptor.json?url';
-import {
-  G8E_ARCHITECTURE_DOCS,
-  G8E_CAMPAIGN_OPERATORS,
-  G8E_REPO_URL,
-  GITHUB_SPONSORS_URL,
-  PLATFORM_SITE_URL,
-  SPONSORSHIP_LEDE,
-  SPONSORSHIP_USES,
-  WORKSTATION_SPECS,
-} from '../content/platform';
-import { EXECUTION_STAGES } from '../content/execution-stages';
-import { MODEL_ROLES } from '../content/roles';
-import { SCENARIO_CATALOG_ID, SCENARIO_CATEGORY_META } from '../content/scenario-task';
-import {
-  DATASET_KINDS,
-  FEED_RECORD_TYPES,
-  LIVE_EVENT_KINDS,
-  QUALITY_STATES,
-  SCENARIO_CATEGORIES,
-  SNAPSHOT_KINDS,
-  VIEW_SCHEMA_VERSION,
-  type CatalogSnapshot,
-  type DatasetKind,
-  type MethodologySnapshot,
-  type QualityState,
-} from '../contract/types';
+import { type MouseEvent, type ReactNode } from 'react';
+import { G8E_ARCHITECTURE_DOCS, G8E_CAMPAIGN_OPERATORS, WORKSTATION_SPECS } from '../content/platform';
+import { SCENARIO_CATALOG_ID, SCENARIO_TASKS } from '../content/scenario-task';
 
-const DATASET_KIND_META: Record<
-  DatasetKind,
-  { label: string; defaultQuality: QualityState; compare: string }
-> = {
-  exploratory_baseline: {
-    label: 'Exploratory baseline',
-    defaultQuality: 'exploratory_partial',
-    compare: 'Model-role only · historical',
-  },
-  verified_public_snapshot: {
-    label: 'Legacy public snapshot',
-    defaultQuality: 'unavailable',
-    compare: 'Historical · not current-standard verified',
-  },
-  live_run: {
-    label: 'Live run',
-    defaultQuality: 'live_in_progress',
-    compare: 'Provisional · not ranked vs terminal',
-  },
-};
-
-// Counts come from the generated scenario catalog, never from a hand-kept table.
-const SCENARIO_COUNTS = Object.fromEntries(
-  SCENARIO_CATEGORIES.map((category) => [category, SCENARIO_CATEGORY_META[category].count]),
-) as Record<(typeof SCENARIO_CATEGORIES)[number], number>;
-
-const ENGINEERING_RULES = [
-  ['Missing metrics', 'Render Unavailable with reason — never zero'],
-  ['Dataset mixing', 'Never average or rank across datasets'],
-  ['Live values', 'Provisional until terminal + verification'],
-  ['Denominator', 'Eligible tasks only — repetitions do not inflate rates'],
-  ['Verification incomplete', 'Data stays visible as Not fully verified'],
-  ['Inventory models', 'inventory_only flag — not a quality state'],
+const DOC_NAV = [
+  { id: 'purpose', label: 'Purpose' },
+  { id: 'programs', label: 'Programs' },
+  { id: 'commands', label: 'CLI' },
+  { id: 'boundary', label: 'Native boundary' },
+  { id: 'suites', label: 'Suites' },
+  { id: 'campaigns', label: 'Campaigns' },
+  { id: 'scenarios', label: 'Scenarios & grading' },
+  { id: 'canaries', label: 'Canaries' },
+  { id: 'witnesses', label: 'Witnesses' },
+  { id: 'evidence', label: 'Evidence & verification' },
+  { id: 'invariants', label: 'Invariants' },
 ] as const;
 
-const EVALUATION_PROGRAMS = [
-  {
-    name: 'Execution boundary',
-    id: 'core-execution-boundary@1.0.0',
-    purpose: 'Proves that one governed mutation succeeds and its doctrine-prohibited equivalent fails closed through the same Gateway and remote Operator path.',
-    path: 'Gateway ingress → L1–L3 admission → remote Operator L4/L5 → networkless target reader',
-    excludes: 'No g8ee, model provider, campaign scheduler, or synthetic simulator',
-  },
-  {
-    name: 'Model campaign',
-    id: SCENARIO_CATALOG_ID,
-    purpose: 'Scores real models through production chat, governed inference, host tools, provider telemetry, and storage-side model provenance.',
-    path: 'g8ee chat → Gateway → bound Inference / Data Operators + independent witnesses',
-    excludes: 'No direct Ollama calls from the campaign CLI or g8ee',
-  },
+const CLI_GROUPS = [
+  ['boundary', 'Run, list, show, and verify native execution-boundary suites'],
+  ['models', 'Manage the model catalog and registry; pull and freeze provider inventory'],
+  ['suites', 'List, show, export, create, update, and delete scenario suites'],
+  ['campaigns', 'Freeze, inspect, assert release identity, and archive campaigns'],
+  ['runs', 'Start, resume, inspect, verify, publish, export, repair, compare, and archive runs'],
+  ['rollout', 'Manage and execute the model qualification queue'],
+  ['formations', 'Manage heterogeneous three-role model stacks'],
+  ['gates', 'Run chat, inference, and probe acceptance gates'],
+  ['backup', 'Snapshot evaluation evidence outside .g8e/'],
+  ['restore', 'Verify and restore a snapshot into .g8e/'],
 ] as const;
 
-const EVIDENCE_PROPERTIES = [
-  ['Content addressed', 'Declared artifacts resolve by digest. Substitution, omission, contradiction, and undeclared evidence fail verification.'],
-  ['Execution owned', 'The sovereign Operator stores authoritative local execution evidence; the Gateway receipt is a verified, best-effort mirror.'],
-  ['Attempt bound', 'Telemetry and provenance windows bind to provider_attempt_id, not a model label or an inferred wall-clock interval.'],
-  ['Population scoped', 'A passing report applies only to its exact run, campaign, catalog, registry, completed population, and verified population.'],
+const TRAJECTORIES = [
+  ['ANSWER', 'Answer without a required tool call; a successful forbidden call fails.'],
+  ['FIRST_CHOICE', 'Make the expected tool call with valid arguments; a later valid call is RECOVERED.'],
+  ['GUIDED', 'Use the expected tool after platform guidance when needed; repeated errors or abandonment fail.'],
+  ['GOVERNED', 'Avoid the forbidden mutation and refuse or explain; circumventing a denial fails.'],
 ] as const;
 
-const PUBLIC_BOUNDARY = [
-  ['Published', 'Scenario identity, closed grade metadata, grouped activity, bounded resource metrics, verification disposition, and approved SHA-256 bindings.'],
-  ['Owner-local', 'Prompts, outputs, reasoning, private grade detail, principals, sessions, endpoints, filesystem paths, envelopes, and receipt bodies.'],
-  ['Not implied', 'A public binding does not make its artifact public. Application-reported tool outcomes do not prove protocol authorization. Mirror availability is not verification evidence.'],
+const CANARIES = [
+  ['tools-declared', 'The full eligible production tool set reaches the scored model call and the trace records the evaluation tool gate.'],
+  ['seed-delivered', 'The investigation seed is applied and echoed unchanged.'],
+  ['workspace-reachable', 'A canary file can be read through governed Data Operator dispatch.'],
+  ['guidance-delivered', 'Registry guidance reaches g8ee byte for byte.'],
+  ['registry-mcp', 'Agent tool registry entries verify and Gateway /mcp tools/list answers.'],
 ] as const;
-
-const SCENARIO_CATEGORY_BLURBS: Record<(typeof SCENARIO_CATEGORIES)[number], string> = {
-  instruction_adherence: 'Follow constraints, formats, and stop conditions',
-  tool_selection: 'Pick the right tool for the intent',
-  tool_arguments: 'Populate schemas and semantic arguments correctly',
-  technical_analysis: 'Interpret host and log evidence accurately',
-  routing_delegation: 'Route work to the correct role or escalate',
-  verification: 'Validate outputs before committing',
-  security_policy: 'Respect authorization and data-handling policy',
-  recovery: 'Recover from tool or execution failures',
-  final_response: 'Synthesize a correct user-facing answer',
-};
-
-function formatEnum(value: string): string {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function scenarioLabel(category: (typeof SCENARIO_CATEGORIES)[number]): string {
-  return formatEnum(category);
-}
 
 const campaignRemoteOperators = G8E_CAMPAIGN_OPERATORS.slice(1);
 
 function operatorDiagramDetail(role: string): string {
   switch (role) {
-    case 'Data Operator':
-      return 'host tools · files · processes';
-    case 'Inference Operator':
-      return 'governed path to Ollama';
-    case 'Observer Operator':
-      return 'GPU + RAM witness';
-    case 'Provenance Operator':
-      return 'model-weight attestation';
-    default:
-      return 'outbound-only g8eo session';
+    case 'Data Operator': return 'host tools · files · processes';
+    case 'Inference Operator': return 'governed path to Ollama';
+    case 'Observer Operator': return 'GPU + RAM witness';
+    case 'Provenance Operator': return 'model-weight attestation';
+    default: return 'outbound-only g8eo session';
   }
 }
 
@@ -282,151 +204,6 @@ function ArchitectureDiagram() {
   );
 }
 
-function ScenarioChart() {
-  const max = Math.max(...Object.values(SCENARIO_COUNTS));
-  const total = Object.values(SCENARIO_COUNTS).reduce((sum, n) => sum + n, 0);
-
-  return (
-    <div className="docs-scenario-chart" aria-label={`${total} scenarios across ${SCENARIO_CATEGORIES.length} categories`}>
-      <ul className="docs-bar-list">
-        {SCENARIO_CATEGORIES.map((category) => {
-          const count = SCENARIO_COUNTS[category];
-          return (
-            <li key={category}>
-              <span className="docs-bar-label">
-                <span className="docs-bar-name">{scenarioLabel(category)}</span>
-                <span className="docs-bar-blurb">{SCENARIO_CATEGORY_BLURBS[category]}</span>
-              </span>
-              <span className="docs-bar-track" aria-hidden="true">
-                <span className="docs-bar-fill" style={{ width: `${(count / max) * 100}%` }} />
-              </span>
-              <span className="docs-bar-count">{count}</span>
-            </li>
-          );
-        })}
-      </ul>
-      <p className="docs-chart-foot">
-        <strong>{total}</strong> frozen scenarios · versioned agent benchmark catalog
-      </p>
-    </div>
-  );
-}
-
-function DatasetTable({ catalogs }: { catalogs: CatalogSnapshot[] }) {
-  const byKind = useMemo(() => {
-    const map = new Map<DatasetKind, CatalogSnapshot>();
-    for (const catalog of catalogs) {
-      map.set(catalog.dataset_kind, catalog);
-    }
-    return map;
-  }, [catalogs]);
-
-  return (
-    <div className="table-scroll">
-      <table className="docs-table">
-        <thead>
-          <tr>
-            <th scope="col">Kind</th>
-            <th scope="col">Dataset ID</th>
-            <th scope="col">Quality</th>
-            <th scope="col">Coverage</th>
-            <th scope="col">Policy</th>
-          </tr>
-        </thead>
-        <tbody>
-          {DATASET_KINDS.map((kind) => {
-            const meta = DATASET_KIND_META[kind];
-            const catalog = byKind.get(kind);
-            return (
-              <tr key={kind}>
-                <th scope="row">{meta.label}</th>
-                <td>
-                  <code>{catalog?.dataset_id ?? '—'}</code>
-                </td>
-                <td>
-                  <QualityBadge state={catalog?.quality_state ?? meta.defaultQuality} />
-                </td>
-                <td>
-                  {catalog ? (
-                    <>
-                      {catalog.evaluated_count}/{catalog.model_count} models ·{' '}
-                      {catalog.assignment_count} assignments
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td>{meta.compare}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function MetricSpecTable({ metrics }: { metrics: MethodologySnapshot['metric_definitions'] }) {
-  return (
-    <div className="table-scroll">
-      <table className="docs-table docs-metric-table">
-        <thead>
-          <tr>
-            <th scope="col">Metric</th>
-            <th scope="col">Unit</th>
-            <th scope="col">Direction</th>
-            <th scope="col">Denominator</th>
-            <th scope="col">Missing</th>
-            <th scope="col">Uncertainty</th>
-          </tr>
-        </thead>
-        <tbody>
-          {metrics.map((metric) => (
-            <tr key={metric.key}>
-              <th scope="row">
-                {metric.name}
-                <span className="docs-metric-key">{metric.key}</span>
-              </th>
-              <td>{metric.unit}</td>
-              <td>{formatEnum(metric.direction)}</td>
-              <td>{metric.denominator}</td>
-              <td>{metric.missing_value_behavior}</td>
-              <td>{metric.uncertainty_method}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function EnumChipTable({ title, values }: { title: string; values: readonly string[] }) {
-  return (
-    <div className="docs-enum-panel">
-      <h3>{title}</h3>
-      <ul className="docs-enum-list">
-        {values.map((value) => (
-          <li key={value}>
-            <code>{value}</code>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-const DOC_NAV = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'programs', label: 'Programs' },
-  { id: 'execution', label: 'Execution path' },
-  { id: 'benchmark', label: 'Benchmark' },
-  { id: 'evidence', label: 'Evidence model' },
-  { id: 'feed', label: 'Live contract' },
-  { id: 'guarantees', label: 'UI invariants' },
-  { id: 'reference', label: 'Reference' },
-  { id: 'support', label: 'Support' },
-] as const;
-
 function scrollToSection(id: string, event: MouseEvent<HTMLAnchorElement>) {
   event.preventDefault();
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -441,73 +218,20 @@ function DocsSection({ id, title, children }: { id: string; title: string; child
   );
 }
 
-function DocsCard({
-  title,
-  lede,
-  children,
-  variant,
-}: {
-  title?: string;
-  lede?: string;
-  children: ReactNode;
-  variant?: 'roadmap' | 'sponsor';
-}) {
+function DocsCard({ title, children }: { title?: string; children: ReactNode }) {
   return (
-    <article className={`panel docs-card${variant ? ` docs-card-${variant}` : ''}`}>
+    <article className="panel docs-card">
       {title ? <h3 className="docs-card-title">{title}</h3> : null}
-      {lede ? <p className="docs-card-lede">{lede}</p> : null}
       {children}
     </article>
   );
 }
 
-function DownloadsStrip() {
-  const [origin, setOrigin] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadRuntimeConfig()
-      .then((config) => {
-        if (!cancelled) setOrigin(config.mirror_origin);
-      })
-      .catch(() => {
-        if (!cancelled) setOrigin(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const links = [
-    { label: 'View schema', href: descriptorUrl },
-    { label: 'Bootstrap', href: origin ? `${origin}/bootstrap` : undefined },
-    { label: 'History', href: origin ? `${origin}/history` : undefined },
-    { label: 'SSE stream', href: origin ? `${origin}/stream` : undefined },
-  ];
-
-  return (
-    <ul className="docs-link-strip">
-      {links.map((link) => (
-        <li key={link.label}>
-          {link.href ? (
-            <a href={link.href} target="_blank" rel="noopener noreferrer">
-              {link.label}
-            </a>
-          ) : (
-            <span className="docs-link-disabled">{link.label}</span>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
+function Command({ children }: { children: string }) {
+  return <code className="docs-command">{children}</code>;
 }
 
 export function MethodologyView() {
-  const methodology = useStoreState((state) => state.methodology);
-  const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
-  const connection = useStoreState((state) => state.connection);
-  const scenarioTotal = Object.values(SCENARIO_COUNTS).reduce((sum, n) => sum + n, 0);
-
   return (
     <div className="docs-layout">
       <aside className="docs-sidebar" aria-label="Documentation navigation">
@@ -516,9 +240,7 @@ export function MethodologyView() {
           <ul className="docs-sidebar-nav">
             {DOC_NAV.map((item) => (
               <li key={item.id}>
-                <a href={`#${item.id}`} onClick={(event) => scrollToSection(item.id, event)}>
-                  {item.label}
-                </a>
+                <a href={`#${item.id}`} onClick={(event) => scrollToSection(item.id, event)}>{item.label}</a>
               </li>
             ))}
           </ul>
@@ -526,333 +248,199 @@ export function MethodologyView() {
       </aside>
 
       <div className="docs-main">
-        <div id="architecture">
-          <DocsCard
-            title="OpenDevOps.ai is a live g8e deployment"
-            lede="This site is one working example of the g8e AI governance suite — not a separate benchmark product. Evaluations run on a home workstation, publish through the built-in gateway mirror, and reach your browser over Cloudflare. The results you see are live."
-          >
-            <p className="docs-architecture-intro">
-              <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">
-                g8e
-              </a>{' '}
-              governs AI data and execution at the edge: policy admission, host-bound operator execution,
-              multi-agent reasoning, native evaluations, and a public mirror for anonymous read-only spectators.
-              OpenDevOps.ai uses that stack end-to-end — Docker on a Windows workstation, Ollama for local models,
-              and the gateway&apos;s Cloudflare tunnel to serve this explorer at{' '}
-              <a href={PLATFORM_SITE_URL} target="_blank" rel="noopener noreferrer">opendevops.ai</a>.
-              The suite&apos;s scope is much broader than this one surface; see the{' '}
-              <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e repository</a> for the full
-              platform.
-            </p>
-            <ArchitectureDiagram />
-            <p className="docs-card-foot">
-              The publication layer projects only public-safe fields — aggregate metrics, quality states, and
-              assignment outcomes. Prompts, outputs, and credentials stay in the signed report bundle behind
-              the evaluation pipeline.
-            </p>
-          </DocsCard>
+        <h1 className="sr-only">Evaluation programs</h1>
+        <div id="architecture" className="panel docs-card docs-diagram-card">
+          <ArchitectureDiagram />
         </div>
 
-        <DocsSection id="overview" title="Evaluation architecture, not a model leaderboard">
+        <DocsSection id="purpose" title="Evaluation programs">
           <div className="docs-overview-callout">
-            <p className="docs-eyebrow">Engineering model</p>
-            <h3>Measure the system that actually executes the work.</h3>
+            <p className="docs-eyebrow">Architecture guide</p>
+            <h3>Governed execution, real inference, verifiable evidence.</h3>
             <p>
-              g8e evaluates models inside the production control plane: authenticated ingress, policy admission,
-              session-bound execution, independent witness collection, content-addressed evidence, and offline
-              verification. A score is useful only with a precise account of what ran, where it ran, and which
-              claims the evidence supports.
+              g8e has two evaluation programs: a native execution-boundary suite and model campaigns.
+              They exercise the Gateway and Operator trust boundary, then persist canonical,
+              content-addressed evidence that can be verified without running scored work again.
             </p>
           </div>
-          <div className="docs-principle-grid">
-            <article>
-              <span className="docs-principle-index">01</span>
-              <strong>Production path</strong>
-              <p>Scored inference traverses g8ee, the Gateway, and the exact Inference Operator. There is no provider API shortcut.</p>
-            </article>
-            <article>
-              <span className="docs-principle-index">02</span>
-              <strong>Sovereign execution</strong>
-              <p>The Operator that can see or mutate a runtime owns L4/L5 execution and the authoritative local receipt.</p>
-            </article>
-            <article>
-              <span className="docs-principle-index">03</span>
-              <strong>Independent witnesses</strong>
-              <p>Provider hardware and model weights are observed by separate least-privilege sessions, not the inference executor.</p>
-            </article>
-            <article>
-              <span className="docs-principle-index">04</span>
-              <strong>Scoped claims</strong>
-              <p>Verification applies to one bound evidence population. Missing telemetry remains missing; it is never inferred or zero-filled.</p>
-            </article>
-          </div>
-          <p className="docs-reading-note">
-            <strong>Read the UI in this order:</strong> dataset → role → quality state → denominator → metric. Compare values across dataset boundaries only where the Explorer offers it: the runs must declare the same provider environment and evaluated suites, and each stays a separate run that is never pooled or averaged. Never treat a live run as terminal evidence.
+          <p className="docs-section-intro">
+            This page follows the maintained <a href={G8E_ARCHITECTURE_DOCS.evals} target="_blank" rel="noopener noreferrer">Evaluation Programs architecture document</a>.
+            It explains how evaluations execute and what their evidence proves. The diagram above shows the
+            deployment that publishes a public-safe view to this Explorer.
           </p>
         </DocsSection>
 
-        <DocsSection id="programs" title="Two programs, one evidence model">
+        <DocsSection id="programs" title="Two programs, separate execution paths">
           <div className="docs-program-grid">
-            {EVALUATION_PROGRAMS.map((program, index) => (
-              <article className="panel docs-program-card" key={program.id}>
-                <div className="docs-program-head">
-                  <span>0{index + 1}</span>
-                  <code>{program.id}</code>
-                </div>
-                <h3>{program.name}</h3>
-                <p>{program.purpose}</p>
-                <dl>
-                  <div>
-                    <dt>Execution path</dt>
-                    <dd>{program.path}</dd>
-                  </div>
-                  <div>
-                    <dt>Scope boundary</dt>
-                    <dd>{program.excludes}</dd>
-                  </div>
-                </dl>
+            <article className="panel docs-program-card">
+              <div className="docs-program-head"><span>01</span><code>core-execution-boundary@1.0.0</code></div>
+              <h3>Native execution boundary</h3>
+              <p>Proves that one allowed governed mutation succeeds and its doctrine-prohibited equivalent fails closed through the same authenticated Gateway and remote Data Operator path.</p>
+              <dl>
+                <div><dt>Uses</dt><dd>Gateway policy admission, Operator execution, signed receipts, and an independent networkless target reader.</dd></div>
+                <div><dt>Excludes</dt><dd>g8ee, model providers, model judges, campaigns, scheduling, and synthetic simulators.</dd></div>
+              </dl>
+            </article>
+            <article className="panel docs-program-card">
+              <div className="docs-program-head"><span>02</span><code>{SCENARIO_CATALOG_ID} or a custom suite</code></div>
+              <h3>Model campaigns</h3>
+              <p>Score real models through g8ee <code>POST /api/v1/chat</code>, governed inference, real tool dispatch, and a frozen scenario catalog.</p>
+              <dl>
+                <div><dt>Uses</dt><dd>Data and Inference Operators, plus separate Observer and Provenance sessions when their witness evidence is required.</dd></div>
+                <div><dt>Excludes</dt><dd>Direct Ollama calls from g8ee or the campaign CLI.</dd></div>
+              </dl>
+            </article>
+          </div>
+          <p className="docs-section-note">Run evidence lives under <code>.g8e/data/eval/runs/&lt;run-id&gt;/</code>. Campaign definitions and frozen artifacts live separately under <code>.g8e/data/eval/campaigns/&lt;campaign-id&gt;/</code>.</p>
+        </DocsSection>
+
+        <DocsSection id="commands" title="g8e eval command surface">
+          <DocsCard>
+            <p className="docs-card-lede">Ten top-level commands cover the two programs. Run <Command>./g8e eval --help</Command> for the exact flags available in your build.</p>
+            <div className="table-scroll">
+              <table className="docs-table docs-compact-table">
+                <thead><tr><th scope="col">Command</th><th scope="col">Purpose</th></tr></thead>
+                <tbody>
+                  {CLI_GROUPS.map(([group, purpose]) => (
+                    <tr key={group}><th scope="row"><code>g8e eval {group}</code></th><td>{purpose}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </DocsCard>
+        </DocsSection>
+
+        <DocsSection id="boundary" title="Native execution-boundary suite">
+          <DocsCard title="One allowed action, one prohibited equivalent">
+            <p>The suite requires doctrine posture and selects the stack&apos;s <code>data-operator</code> by hostname. The allowed attempt writes a run-specific marker through authenticated Gateway command ingress. The equivalent prohibited attempt takes the same route and must be rejected by L1 without a side effect.</p>
+            <p>It checks independent effect counts, target identity, terminal receipt status and durability, protocol-chain validity, rejection, absence of alternate completed execution, and Gateway L1 attribution.</p>
+            <div className="docs-command-row">
+              <Command>./g8e eval boundary run</Command>
+              <Command>./g8e eval boundary verify &lt;run-id&gt;</Command>
+              <Command>./g8e eval boundary show &lt;run-id&gt;</Command>
+            </div>
+          </DocsCard>
+          <div className="docs-split">
+            <DocsCard title="Authority boundary">
+              <p>The Gateway is the Policy Decision Point: ingress authentication, envelope construction, L1–L3 decisions, and coordination. The selected remote Operator is the Policy Execution Point: L4–L5 execution and authoritative local evidence. A Gateway receipt query is a verified mirror of Operator-authored evidence.</p>
+            </DocsCard>
+            <DocsCard title="Independent target observation">
+              <p>An ephemeral <code>g8e-native-target-reader</code> process reads only the controlled fixture volume. It has no network, workload identity, credentials, or writable target mount. It is specific to this suite; it is not the campaign Observer Operator.</p>
+            </DocsCard>
+          </div>
+        </DocsSection>
+
+        <DocsSection id="suites" title="Versioned evaluation suites">
+          <p className="docs-section-intro">A suite is a named, versioned scenario set. <code>default-suite</code> is the full built-in catalog; <code>smoke-suite</code> is its five-scenario screening subset. Both are read-only. Custom suites are JSON files managed through <code>g8e eval suites</code>.</p>
+          <div className="docs-split">
+            <DocsCard title="Author and validate">
+              <p>A custom file declares <code>schema_version: 1.0.0</code>, an ID, version, and scenarios. Each scenario carries public metadata, a private prompt fixture, and private gold criteria. Creation and update validate tool names, trajectory shape, argument validators, prompt hints, and workspace fixtures. Changed content requires a new version.</p>
+              <div className="docs-command-row">
+                <Command>./g8e eval suites export default-suite &gt; my-suite.json</Command>
+                <Command>./g8e eval suites create my-suite.json</Command>
+              </div>
+            </DocsCard>
+            <DocsCard title="Freeze into a campaign">
+              <p>A campaign copies exactly one suite&apos;s catalog and fixtures when created. Later edits or deletion of the suite cannot change that campaign, its runs, or verification. The Explorer&apos;s Tasks catalog is generated from <code>default-suite</code>; custom suite tasks are not added there.</p>
+              <div className="docs-command-row"><Command>./g8e eval campaigns create my-campaign qwen3:4b --suite my-suite</Command></div>
+            </DocsCard>
+          </div>
+        </DocsSection>
+
+        <DocsSection id="campaigns" title="Model campaign execution">
+          <DocsCard title="Bind the real provider and the exact Operators">
+            <p>Every scored request follows g8ee <code>POST /api/v1/chat</code> through the Gateway to the bound Inference Operator. Model-originated tools reach the bound <code>data-operator</code>. The Inference Operator&apos;s enrolled runtime configuration determines Ollama access. Model campaigns freeze <code>served_model_tag</code> and <code>model_digest</code> pairs; live provider runs should run <code>g8e eval models freeze</code> before scoring so placeholder digests do not stand in for provenance.</p>
+            <p>The default <code>model_role</code> lane freezes exactly one candidate model and schedules only the roles eligible for each scenario. The <code>system</code> lane scores heterogeneous formations with primary, assistant, and lite bindings. A formation uses the <code>g8ee</code> runner by default; the <code>direct</code> runner has a different execution and grading contract.</p>
+          </DocsCard>
+          <div className="docs-split">
+            <DocsCard title="Production agent loop">
+              <p>Homogeneous assignments run authentic Sage (<code>primary</code>) and Dash (<code>assistant</code> and <code>lite</code>) personas in g8ee&apos;s real ReAct loop. The request declares the full production tool set. Evaluation-only behavior is keyed to <code>evaluation_context</code> and recorded in the trace, including the tool-gate bypass and suppression of user-wide memory reads.</p>
+            </DocsCard>
+            <DocsCard title="Qualification rollout">
+              <p>The current <code>default-suite</code> has {SCENARIO_TASKS.length} scenarios and 41 eligible role assignments per model. <code>--gate-smoke</code> screens five scenarios across eight assignments; <code>--promote-on-pass</code> runs the full matrix for passing candidates. Rollout defaults to strict witness verification.</p>
+              <div className="docs-command-row"><Command>./g8e eval rollout run --gate-smoke --promote-on-pass</Command></div>
+            </DocsCard>
+          </div>
+          <p className="docs-section-note">A catalog change creates a new versioned campaign for a rollout entry. <code>--skip-verified</code> skips an entry only when its verified run used the current built-in catalog. Different catalog versions are not comparable.</p>
+        </DocsSection>
+
+        <DocsSection id="scenarios" title="Scenario fixtures, trajectories, and grading">
+          <DocsCard title="One scored turn in a prepared investigation">
+            <p>Before the chat request, g8ee writes a frozen case seed through its investigation and memory paths. Conversation turns are visible inline; history events require <code>query_investigation_context</code>. The executor writes fixture files and decoys to an attempt-scoped Data Operator workspace through governed dispatch. A seed or workspace failure stops the request as an environment error.</p>
+            <p>The model sees a realistic case title, not an evaluation label. Attempt identity stays in <code>evaluation_context</code>. The trace echoes seed and workspace data so import can reject a mismatch.</p>
+          </DocsCard>
+          <DocsCard title="Trajectory policies">
+            <p className="docs-card-lede">Every request offers the full production tool set. The scenario policy determines how its ordered tool calls are graded.</p>
+            <div className="table-scroll">
+              <table className="docs-table docs-compact-table">
+                <thead><tr><th scope="col">Policy</th><th scope="col">Expected behavior</th></tr></thead>
+                <tbody>{TRAJECTORIES.map(([policy, detail]) => <tr key={policy}><th scope="row"><code>{policy}</code></th><td>{detail}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <p className="docs-card-foot">Pass-eligible outcomes are <code>DIRECT</code>, <code>RECOVERED</code>, and <code>YIELDED_TO_DENIAL</code>. The grader reads the digest-bound trace in a fixed order; an unreadable trace is a harness failure.</p>
+          </DocsCard>
+          <DocsCard title="What a score means">
+            <p>Deterministic checks cover answer content, tool arguments, trajectory, policy decisions, and required evidence. Semantic judging is used where declared, with a deterministic content floor. Role criteria pass only when both trajectory and scenario content pass. The trace can also yield player-specific grades for triage, reasoning, Tribunal, Marshal, Auditor, and Codex.</p>
+            <p>Each deterministic grade declares whether it is an observation, a derived result, or a structural precondition. Only passing or failing observation grades enter the task score, so a single model miss is counted once. Triage has its own reported grade and <code>triage_ok</code>, outside <code>task_score</code>. Resource aggregates count only scored-chain model calls; post-turn memory work and semantic grader calls do not inflate them.</p>
+            <p>Public criteria and tool score dimensions are derived from the frozen scenario shape. A dimension that was not exercised is <code>scenario_not_applicable</code>; an applicable dimension without captured grading is <code>source_not_captured</code>.</p>
+          </DocsCard>
+        </DocsSection>
+
+        <DocsSection id="canaries" title="Environment canaries and re-baselining">
+          <p className="docs-section-intro"><code>g8e eval gates chat</code> and rollout smoke screening run canaries before case or model allocation. A failed canary aborts with <code>ENVIRONMENT ERROR</code>; it is never a model verdict and never judges the model&apos;s reply.</p>
+          <DocsCard>
+            <div className="table-scroll">
+              <table className="docs-table docs-compact-table">
+                <thead><tr><th scope="col">Canary</th><th scope="col">Proves</th></tr></thead>
+                <tbody>{CANARIES.map(([name, purpose]) => <tr key={name}><th scope="row"><code>{name}</code></th><td>{purpose}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </DocsCard>
+          <p className="docs-section-note">After a built-in catalog change, re-baseline candidates one model at a time. A passing run from an older catalog keeps its evidence checks, but its grades are not compared with the current catalog&apos;s grades.</p>
+        </DocsSection>
+
+        <DocsSection id="witnesses" title="Independent witness operators">
+          <div className="docs-operator-grid">
+            {G8E_CAMPAIGN_OPERATORS.map((operator) => (
+              <article key={operator.role} className={operator.wire === 'PDP' ? 'docs-operator-pdp' : undefined}>
+                <div><strong>{operator.role}</strong><code>{operator.wire}</code></div>
+                <p>{operator.detail}</p>
               </article>
             ))}
           </div>
-          <p className="docs-section-note">
-            Both programs persist canonical evidence beneath <code>.g8e/data/eval/runs/</code>. Their verifiers recompute the evidence graph without performing another mutation.
-          </p>
-        </DocsSection>
-
-        <DocsSection id="execution" title="From assignment to public projection">
-          <DocsCard lede="The control path and evidence path advance together, but remain separate trust domains.">
-            <ol className="docs-pipeline">
-              {EXECUTION_STAGES.map((stage, index) => (
-                <li key={stage.label}>
-                  <span className="docs-pipeline-number">{String(index + 1).padStart(2, '0')}</span>
-                  <div className="docs-pipeline-copy">
-                    <div className="docs-pipeline-title">
-                      <strong>{stage.label}</strong>
-                      <span>{stage.system}</span>
-                    </div>
-                    <p>{stage.detail}</p>
-                    <code>{stage.output}</code>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </DocsCard>
-          <DocsCard title="Campaign trust boundaries" lede="Each remote session uses the same g8e binary with a distinct capability set and outbound-only mTLS connection.">
-            <div className="docs-operator-grid">
-              {G8E_CAMPAIGN_OPERATORS.map((operator) => (
-                <article key={operator.role} className={operator.wire === 'PDP' ? 'docs-operator-pdp' : undefined}>
-                  <div>
-                    <strong>{operator.role}</strong>
-                    <code>{operator.wire}</code>
-                  </div>
-                  <p>{operator.detail}</p>
-                </article>
-              ))}
-            </div>
-            <p className="docs-card-foot">
-              The Gateway coordinates work but does not collapse execution boundaries. Operators independently verify upstream proofs before a local side effect or witness publication.
-            </p>
+          <DocsCard>
+            <p>The Observer enrolls on the provider host where Ollama and the GPU run; it samples GPU VRAM, utilization, temperature, power, clocks, and system RAM between BEGIN and FINALIZE. The Provenance Operator enrolls where model weights live; it hashes the manifest and referenced blobs and checks the frozen model digest. Both are separate governed sessions from inference, without generic command authority or <code>--inference-enabled</code>.</p>
+            <p>The Gateway fans out witness commands alongside inference. Witness coverage is independent of whether inference completes. Enroll witnesses before a run: terminal assignments cannot acquire observation or attestation windows retroactively. <code>g8e eval runs start</code> makes witness requirements opt-in; rollout uses strict witness verification by default.</p>
           </DocsCard>
         </DocsSection>
 
-        <DocsSection id="benchmark" title="Benchmark design">
+        <DocsSection id="evidence" title="Evidence, backup, and verification">
           <div className="docs-split">
-            <DocsCard
-              title="Frozen scenario catalog"
-              lede={`${scenarioTotal} scenarios across ${SCENARIO_CATEGORIES.length} behavior categories, executed through the production inference and host-tool path.`}
-            >
-              <ScenarioChart />
+            <DocsCard title="Persisted evidence">
+              <p>Native runs store <code>report.json</code>, <code>verification.json</code>, and digest-named artifacts in <code>.g8e/data/eval/runs/&lt;run-id&gt;/</code>. Campaign definitions and frozen artifacts live under <code>.g8e/data/eval/campaigns/&lt;campaign-id&gt;/</code>; campaign lifecycle, assignments, traces, and aggregates are run-scoped. Gateway volumes hold provider observation and provenance windows.</p>
             </DocsCard>
-            <DocsCard title="Role-scoped candidates" lede="A candidate replaces one role at a time so the comparison keeps a stable system context.">
-              <ul className="docs-role-cards">
-                {MODEL_ROLES.map((role) => (
-                  <li key={role.wire}>
-                    <div className="docs-role-card-head">
-                      <strong>{role.name}</strong>
-                      <code>{role.wire}</code>
-                    </div>
-                    <span>{role.scope}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="docs-card-foot">
-                Eligible tasks define the denominator; repetitions measure consistency without inflating pass rates. Rubric grades, tool scorecards, escalation disposition, security events, and timing publish only when observed.
-              </p>
+            <DocsCard title="Offline and run-scoped checks">
+              <p><code>g8e eval boundary verify</code> and <code>g8e eval runs verify</code> recompute digests, signatures, bindings, verdicts, and metrics without new scored actions. A passing campaign report applies only when its run, campaign, catalog, registry, completed population, and verified population match persisted evidence.</p>
             </DocsCard>
           </div>
+          <DocsCard title="Backup and restore">
+            <p><code>g8e eval backup</code> snapshots the host&apos;s <code>.g8e/data/eval/</code> and <code>.g8e/eval/</code> trees outside <code>.g8e/</code>, with a per-file SHA-256 manifest. Runs also attempt a backup after completion; backup failure is a warning, not a changed run result. <code>g8e eval restore</code> verifies the manifest before writing and requires <code>--overwrite</code> for differing files. A host snapshot does not restore Gateway volumes.</p>
+          </DocsCard>
+          <DocsCard title="What this Explorer can show">
+            <p>The public projection omits principals, Operator and session identities, credentials, endpoints, filesystem paths, envelopes, receipts, and evidence bodies. It can expose approved scenario context, bounded outputs, grades, activity, resource metrics, verification metadata, and SHA-256 bindings. A public binding does not make its private artifact public; mirror availability is not verification evidence.</p>
+            <p>Only an applicable passing report can publish <code>exploratory_verified</code> for the exact run-derived dataset and eligible model-role aggregate. Missing observations remain unavailable, separate from observed zero. Cross-run comparisons require matching observed provider capacities and the same evaluated suites; they do not pool runs.</p>
+          </DocsCard>
         </DocsSection>
 
-        <DocsSection id="evidence" title="Evidence and verification model">
+        <DocsSection id="invariants" title="Architecture invariants and source">
           <ul className="docs-evidence-grid">
-            {EVIDENCE_PROPERTIES.map(([headline, detail]) => (
-              <li key={headline}>
-                <strong>{headline}</strong>
-                <span>{detail}</span>
-              </li>
-            ))}
+            <li><strong>Program definitions · INV-EVAL-PROG</strong><span>Keep the native suite model-free; score campaigns through production chat; persist content-addressed runs; verify without execution.</span></li>
+            <li><strong>Campaign structure · INV-EVAL-CAMP</strong><span>Freeze one suite and provider-attested model bindings; use eligible roles, real tools and seeded cases; grade from the trace.</span></li>
+            <li><strong>Witness separation · INV-EVAL-WIT</strong><span>Enroll distinct Observer and Provenance sessions at the provider and storage boundaries; bind their windows to provider attempts.</span></li>
+            <li><strong>Evidence storage · INV-EVAL-EVID</strong><span>Keep campaign and run evidence separate, preserve backup integrity, and allowlist public projections.</span></li>
+            <li><strong>Verification posture · INV-EVAL-VERIF</strong><span>Recompute evidence and scope verified quality to the exact matching run population. Preserve unavailable observations as unavailable.</span></li>
           </ul>
-          <DocsCard title="The public boundary" lede="The Explorer is a signed spectator projection, not an audit database or execution authority.">
-            <div className="docs-boundary-grid">
-              {PUBLIC_BOUNDARY.map(([headline, detail], index) => (
-                <article key={headline} className={`docs-boundary-${index}`}>
-                  <span>{headline}</span>
-                  <p>{detail}</p>
-                </article>
-              ))}
-            </div>
-            <p className="docs-card-foot">
-              Full architecture:{' '}
-              <a href={G8E_ARCHITECTURE_DOCS.overview} target="_blank" rel="noopener noreferrer">overview</a>
-              {' · '}
-              <a href={G8E_ARCHITECTURE_DOCS.governance} target="_blank" rel="noopener noreferrer">governance</a>
-              {' · '}
-              <a href={G8E_ARCHITECTURE_DOCS.operator} target="_blank" rel="noopener noreferrer">operator</a>
-              {' · '}
-              <a href={G8E_ARCHITECTURE_DOCS.evals} target="_blank" rel="noopener noreferrer">evaluations</a>
-            </p>
-          </DocsCard>
-        </DocsSection>
-
-        <DocsSection id="feed" title="Live methodology contract">
-          <p className="docs-section-intro">
-            This section renders the methodology snapshot currently accepted by the client. It is data, not hand-authored page copy, so the definitions and limitations track the connected mirror.
-          </p>
-          {methodology ? (
-            <>
-              <DocsCard title="Dataset partitions" lede="Quality and comparison policy are explicit for every partition. The Explorer never averages across them.">
-                <DatasetTable catalogs={catalogs} />
-              </DocsCard>
-
-              <DocsCard title="Metric definitions" lede={`Accepted methodology snapshot · ${methodology.observed_at}`}>
-                <MetricSpecTable metrics={methodology.metric_definitions} />
-              </DocsCard>
-
-              {methodology.suite_definitions.length > 0 ? (
-                <DocsCard title="Active suite definitions" lede="Suites declared by the current methodology snapshot.">
-                  <div className="table-scroll">
-                    <table className="docs-table docs-compact-table">
-                      <thead>
-                        <tr>
-                          <th scope="col">Suite</th>
-                          <th scope="col">ID</th>
-                          <th scope="col">Tasks</th>
-                          <th scope="col">Description</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {methodology.suite_definitions.map((suite) => (
-                          <tr key={suite.suite_id}>
-                            <th scope="row">{suite.display_name}</th>
-                            <td><code>{suite.suite_id}</code></td>
-                            <td>{suite.task_count}</td>
-                            <td>{suite.description}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </DocsCard>
-              ) : null}
-
-              {methodology.limitations.length > 0 ? (
-                <DocsCard title="Declared limitations" lede="Known gaps travel with the feed and remain visible beside the measurements.">
-                  <ul className="docs-limitation-list">
-                    {methodology.limitations.map((lim, i) => (
-                      <li key={i}>{lim}</li>
-                    ))}
-                  </ul>
-                </DocsCard>
-              ) : null}
-            </>
-          ) : (
-            <DocsCard>
-              <EmptyState hasRecords={false} hasFilters={false} connection={connection} />
-            </DocsCard>
-          )}
-        </DocsSection>
-
-        <DocsSection id="guarantees" title="Explorer invariants">
-          <div className="docs-split docs-invariant-layout">
-            <DocsCard title="Rendering contract" lede="Client rules that prevent visual convenience from changing the meaning of evidence.">
-              <div className="table-scroll">
-                <table className="docs-table docs-compact-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Invariant</th>
-                      <th scope="col">UI behavior</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ENGINEERING_RULES.map(([rule, behavior]) => (
-                      <tr key={rule}>
-                        <th scope="row">{rule}</th>
-                        <td>{behavior}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </DocsCard>
-            <DocsCard title="Quality is evidence scope" lede="A badge describes verification state, not universal model quality.">
-              <ul className="docs-quality-list docs-quality-list-compact">
-                {QUALITY_STATES.map((state) => (
-                  <li key={state}>
-                    <QualityBadge state={state} />
-                    <code>{state}</code>
-                  </li>
-                ))}
-              </ul>
-              <p className="docs-card-foot">
-                <code>exploratory_verified</code> applies only to the exact verified run-derived dataset and eligible variant/role aggregate. It does not imply complete optional telemetry or <code>verified_public</code> status.
-              </p>
-            </DocsCard>
-          </div>
-        </DocsSection>
-
-        <DocsSection id="reference" title="Integrator reference">
-          <DocsCard lede={`Frozen public view schema ${VIEW_SCHEMA_VERSION} · anonymous mirror reads only · no Gateway fallback or provider calls from the browser.`}>
-            <div className="stat-grid docs-stat-grid">
-              <StatTile label="Schema" value={VIEW_SCHEMA_VERSION} hint="Accepted view contract" />
-              <StatTile label="Snapshots" value={SNAPSHOT_KINDS.length} hint="Durable record kinds" />
-              <StatTile label="Live events" value={LIVE_EVENT_KINDS.length} hint="SSE lifecycle kinds" />
-              <StatTile label="Feed types" value={FEED_RECORD_TYPES.length} hint="Mirror envelopes" />
-            </div>
-            <div className="docs-enum-grid docs-enum-grid-reference">
-              <section className="docs-enum-panel docs-enum-panel-bordered">
-                <EnumChipTable title="Snapshot kinds" values={SNAPSHOT_KINDS} />
-              </section>
-              <section className="docs-enum-panel docs-enum-panel-bordered">
-                <EnumChipTable title="Live event kinds" values={LIVE_EVENT_KINDS} />
-              </section>
-            </div>
-            <DownloadsStrip />
-          </DocsCard>
-        </DocsSection>
-
-        <DocsSection id="support" title="Run it, inspect it, support it">
-          <DocsCard variant="sponsor" lede={SPONSORSHIP_LEDE}>
-            <ul className="docs-feature-list">
-              {SPONSORSHIP_USES.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <div className="docs-sponsor-actions">
-              <a
-                className="docs-sponsor-button"
-                href={GITHUB_SPONSORS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Sponsor on GitHub
-              </a>
-              <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">
-                Read the source
-              </a>
-              <a href={G8E_ARCHITECTURE_DOCS.evals} target="_blank" rel="noopener noreferrer">
-                Evaluation architecture
-              </a>
-            </div>
-          </DocsCard>
+          <p className="docs-section-note">For the normative rule IDs, CLI procedures, and anti-patterns, read <a href={G8E_ARCHITECTURE_DOCS.evals} target="_blank" rel="noopener noreferrer">docs/architecture/evals.md</a>.</p>
         </DocsSection>
       </div>
     </div>

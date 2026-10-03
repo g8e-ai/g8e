@@ -30,81 +30,78 @@ export const PLATFORM_SOLO_NOTE = 'Solo operator · home-PC hardware · live pip
 export const PLATFORM_OVERVIEW_LEDE =
   'This site is a live deployment of the g8e AI governance suite, not a separate benchmark product. Evaluations run through the governed execution path and publish public-safe results to this Explorer.';
 
-export const ABOUT_SITE_INTRO_BEFORE = 'This Explorer is a live window into ';
+export const ABOUT_SITE_INTRO_BEFORE = 'This Evaluation Explorer is a live window into ';
 export const ABOUT_SITE_INTRO_AFTER =
-  ' — the sovereign execution-governance platform I designed, built, and operate end-to-end. Every campaign you see here runs through the same governed path a production agent workload would take, with public-safe telemetry and cryptographic proofs published live to this mirror.';
+  ' — a zero-trust execution platform between people, AI systems, and the systems they affect. Evaluations are one application of g8e: this Explorer makes their results and available evidence inspectable.';
 
-export const ABOUT_HEADING = 'Who Builds This — And Can Help You Ship Yours?';
+export const ABOUT_PURPOSE_HEADING = 'Capable help. Control stays with you.';
+export const ABOUT_PURPOSE =
+  'An AI system can investigate, reason, and propose work. g8e separates that reasoning from the authority to act, so people can get useful help without surrendering control of their systems and data.';
 
+export const ABOUT_PRINCIPLES = [
+  {
+    label: 'Govern the action',
+    detail:
+      'Bind identity, intent, payload, and state to a verifiable transaction. Enforce policy, with consensus and exact-action human approval when the active posture requires them.',
+  },
+  {
+    label: 'Verify where execution happens',
+    detail:
+      'The Gateway admits work; the Operator independently verifies it at the managed system. Execution authority and authoritative receipts stay at the data owner’s boundary.',
+  },
+  {
+    label: 'Show the evidence',
+    detail:
+      'Signed receipts record execution attempts and outcomes. Claims follow the evidence: g8e governs its execution path, not tools or side channels that bypass it.',
+  },
+] as const;
+
+export const ABOUT_ORIGIN_HEADING = 'Why I built it';
+export const ABOUT_ORIGIN =
+  'During production incidents, customers needed someone to take the problem off their plate: gather context, explain the next step, work inside their controls, verify the fix, and leave a clear record. I wanted people to have that kind of help in their pocket.';
+export const ABOUT_METHOD =
+  'I call that operating method “Danny-as-Code”: investigate carefully, justify the next action, obtain approval when required, execute within the owner’s controls, and follow through with evidence. It is the design philosophy behind g8e.';
+
+export const ABOUT_HEADING = 'The solo builder';
 export const ABOUT_OPENING_BEFORE = "I'm ";
 export const ABOUT_OPENING_AFTER =
-  ' — Principal Engineer, U.S. Navy veteran, and founder of Lateralus Labs.';
-
+  ' — founder of Lateralus Labs, principal engineer, and U.S. Navy veteran in Portland, Oregon. I designed, built, and operate g8e as a solo builder.';
 export const ABOUT_BACKGROUND =
-  "For thirty years, I have built and operated mission-critical distributed systems: commissioning shipboard IT from bare steel, running one of the world's largest enterprise backup environments at Nike, scaling petabyte-scale NAS-to-cloud platforms at Igneous and Rubrik, and now shipping sovereign agentic infrastructure that keeps state, credentials, and execution strictly under your control — not the model provider's.";
-
-export const ABOUT_LEADERSHIP =
-  "I don't architect and hand off. I lead from the front — design the system, write the code, stand up the platform, run the incidents, mentor the team, and ship.";
+  'Thirty years in data protection, distributed systems, and production operations shape my work in AI security and agentic infrastructure. I take work from architecture through code, deployment, and incident response, while mentoring engineers and working directly with customers.';
 
 export const ABOUT_EXPERIENCE = [
   {
-    company: 'At Igneous',
-    text:
-      "I built the SRE practice from 0→1 and carried it through acquisition into Rubrik's NAS Cloud Direct product.",
+    company: 'Lateralus Labs · 2025–present',
+    text: 'Built g8e end to end: execution governance, identity, agent orchestration, evaluations, APIs, and the operator experience.',
   },
   {
-    company: 'At Rubrik',
-    text:
-      'I owned reliability for a multi-petabyte platform and turned manual operations into observable, automated services.',
+    company: 'Igneous → Rubrik · 2019–2025',
+    text: 'Built reliability and support practices from the ground up, carried them through acquisition, and owned service reliability for multi-petabyte NAS Cloud Direct.',
   },
   {
-    company: 'At Lateralus Labs',
-    text:
-      'I shipped g8e as sole engineer: heterogeneous consensus, zero-trust admission, cryptographic audit state, evaluation infrastructure, edge operators, APIs, SDKs, and this Explorer — work that typically requires entire platform, security, AI, and frontend teams.',
+    company: 'Quantum · 2015–2019',
+    text: 'Led complex NAS and StorNext investigations; built diagnostic labs and Go automation for production support.',
+  },
+  {
+    company: 'Nike Global Backup · 2000–2015',
+    text: 'Engineered enterprise data protection, recovery, automation, and chain-of-custody operations across four service providers.',
+  },
+  {
+    company: 'U.S. Navy · 1996–2000',
+    text: 'Commissioned shipboard IT aboard USS Bataan and led UNIX, database, and help-desk operations.',
   },
 ] as const;
 
-export const ABOUT_DELIVER_HEADING = 'What I Own & Deliver';
-
-export const ABOUT_DELIVER_INTRO =
-  'I work best with founders and engineering leaders who need someone to own ambiguous, high-stakes problems end to end:';
-
-export const ABOUT_DELIVERABLES = [
-  {
-    label: 'Agentic Execution & Governance',
-    detail:
-      'Multi-agent orchestration, agentic execution environments, and fail-closed governance layers.',
-  },
-  {
-    label: 'Platform Engineering & 0→1 SRE',
-    detail:
-      'Reliability practices, observability pipelines, and infrastructure scaling through acquisition and hypergrowth.',
-  },
-  {
-    label: 'Zero-Trust Security',
-    detail:
-      'Policy enforcement, identity management, and cryptographic attestation for autonomous workloads.',
-  },
-  {
-    label: 'LLM Evaluation & Red-Teaming',
-    detail:
-      'Adversarial testing, benchmark telemetry, and CI-integrated regression detection.',
-  },
-  {
-    label: 'Sovereign Infrastructure',
-    detail:
-      'Petabyte-scale distributed systems, data protection, and air-gapped data plane management.',
-  },
-] as const;
-
-export const ABOUT_AVAILABILITY_HEADING = 'Availability & Engagement';
-
-export const ABOUT_AVAILABILITY_LEDE_BEFORE = 'I am available for ';
-export const ABOUT_AVAILABILITY_LEDE_MIDDLE = ' and open to joining the right team ';
-export const ABOUT_AVAILABILITY_LEDE_AFTER = '.';
-
+export const ABOUT_AVAILABILITY_HEADING = 'Let’s work together';
+export const ABOUT_AVAILABILITY =
+  'Reach out about g8e licensing, consulting, contract engagements, or full-time W-2 roles.';
 export const ABOUT_AVAILABILITY_DETAIL =
-  'I am looking for hands-on leadership roles where I can wear multiple hats — architect and implement, mentor engineers, lead by example, and stay close to production. High agency, low supervision. Give me a hard problem and the authority to execute; I will drive it from design through operations.';
+  'I can help with AI security and agentic systems, platform engineering and SRE, or distributed data infrastructure — from an ambiguous problem through implementation and production ownership.';
+
+export const G8E_CORE_DOCS = {
+  about: `${G8E_REPO_URL}/blob/main/docs/core/about.md`,
+  position: `${G8E_REPO_URL}/blob/main/docs/core/position_paper.md`,
+} as const;
 
 export const WORKSTATION_SPECS = [
   { label: 'CPU', value: 'Intel Core i9-13900K' },
