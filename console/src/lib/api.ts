@@ -38,6 +38,11 @@ function errorMessage(body: unknown, fallback: string): string {
   if (body && typeof body === 'object') {
     const b = body as Record<string, unknown>;
     if (typeof b.error === 'string' && b.error) return b.error;
+    // g8ee errors arrive through the browser proxy as {error: {message, ...}}.
+    if (b.error && typeof b.error === 'object') {
+      const nested = (b.error as Record<string, unknown>).message;
+      if (typeof nested === 'string' && nested) return nested;
+    }
     if (typeof b.message === 'string' && b.message) return b.message;
     if (typeof b.detail === 'string' && b.detail) return b.detail;
   }

@@ -44,6 +44,9 @@ export const Paths = {
   chatStop: '/api/v1/chat/stop',
   investigations: '/api/v1/investigations',
   operatorApprovalRespond: '/api/v1/operator/approval/respond',
+  llmSettingsGet: '/api/v1/settings/llm/get',
+  llmSettings: '/api/v1/settings/llm',
+  llmModels: '/api/v1/settings/llm/models',
 
   sseStream: '/api/v1/sse/stream',
 

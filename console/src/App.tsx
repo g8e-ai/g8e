@@ -6,15 +6,17 @@ import { AccountView } from './features/account/AccountView';
 import { ApprovalsView } from './features/approvals/ApprovalsView';
 import { AuthScreen } from './features/auth/AuthScreen';
 import { CasesView } from './features/cases/CasesView';
+import { InferenceView } from './features/inference/InferenceView';
 import { OperatorsView } from './features/operators/OperatorsView';
 import type { FragmentIntent } from './lib/fragment';
 import { ApprovalsProvider, useApprovals } from './state/approvals';
+import { InferenceProvider } from './state/inference';
 import { OperatorsProvider, useOperators } from './state/operators';
 import { useSession } from './state/session';
 import { StreamProvider, useStream } from './state/stream';
 
-export type View = 'cases' | 'operators' | 'approvals' | 'account';
-const VIEWS: readonly View[] = ['cases', 'operators', 'approvals', 'account'];
+export type View = 'cases' | 'operators' | 'inference' | 'approvals' | 'account';
+const VIEWS: readonly View[] = ['cases', 'operators', 'inference', 'approvals', 'account'];
 
 export function initialView(search: string, intent: FragmentIntent): View {
   if (intent.approveTxHash || intent.recoveryToken || intent.platformEnrollmentId) return 'approvals';
@@ -53,7 +55,9 @@ export function App({ intent }: { intent: FragmentIntent }) {
     <StreamProvider enabled>
       <OperatorsProvider>
         <ApprovalsProvider>
-          <Shell intent={intent} />
+          <InferenceProvider>
+            <Shell intent={intent} />
+          </InferenceProvider>
         </ApprovalsProvider>
       </OperatorsProvider>
     </StreamProvider>
@@ -77,6 +81,7 @@ function Shell({ intent }: { intent: FragmentIntent }) {
   const nav: { id: View; label: string; count?: number }[] = [
     { id: 'cases', label: 'Cases' },
     { id: 'operators', label: 'Operators', count: bound.length || undefined },
+    { id: 'inference', label: 'Inference' },
     { id: 'approvals', label: 'Approvals', count: total || undefined },
     { id: 'account', label: 'Account' },
   ];
@@ -118,8 +123,9 @@ function Shell({ intent }: { intent: FragmentIntent }) {
         </div>
       </nav>
       <main className="main">
-        {view === 'cases' && <CasesView onManageOperators={() => setView('operators')} />}
+        {view === 'cases' && <CasesView onManageOperators={() => setView('operators')} onManageInference={() => setView('inference')} />}
         {view === 'operators' && <OperatorsView />}
+        {view === 'inference' && <InferenceView />}
         {view === 'approvals' && (
           <ApprovalsView
             autoApproveTxHash={intent.approveTxHash}

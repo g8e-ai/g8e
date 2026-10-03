@@ -5,6 +5,8 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from typing import Literal
+
 from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
 from g8e.models.internal_api import ChatStartedResponse as _G8eChatStartedResponse
 from g8e.models.internal_api import EvaluationTraceResponse as _G8eEvaluationTraceResponse
@@ -19,6 +21,7 @@ from g8e.operator.v1.operator_pb2 import (
     InferenceDispatchResponse as _G8eInferenceDispatchResponse,
 )
 
+from app.constants import LLMProvider
 from app.models.attachments import AttachmentMetadata
 from app.models.base import ConfigDict, Field, G8eBaseModel
 from app.models.cases import CaseModel
@@ -96,6 +99,83 @@ class SettingsSyncRequest(RequestOverrides):
     """
 
     context: RequestContext = Field(..., description="Request context with session/user identity")
+
+
+LLMRole = Literal["primary", "assistant", "lite"]
+FieldRequirement = Literal["required", "optional", "none"]
+
+
+class LLMProviderOption(G8eBaseModel):
+    """A provider the browser may assign to a role, with the fields it needs."""
+
+    provider: LLMProvider
+    label: str
+    endpoint: FieldRequirement
+    api_key: FieldRequirement
+    default_endpoint: str | None = Field(
+        default=None, description="Endpoint used when the role leaves its endpoint empty"
+    )
+    lists_models: bool = Field(description="Whether /settings/llm/models can enumerate models")
+
+
+class LLMRoleView(G8eBaseModel):
+    """One role's stored selection. API keys are never returned, only whether one is set."""
+
+    provider: LLMProvider | None = None
+    model: str | None = None
+    endpoint: str | None = None
+    api_key_set: bool = False
+
+
+class LLMRoleSettingsResponse(G8eBaseModel):
+    """Response for /settings/llm/get and /settings/llm."""
+
+    providers: list[LLMProviderOption]
+    primary: LLMRoleView
+    assistant: LLMRoleView
+    lite: LLMRoleView
+
+
+class LLMRoleUpdate(G8eBaseModel):
+    """One role's new selection.
+
+    provider null on assistant or lite means "same as primary". api_key null keeps
+    the stored key (cleared anyway when the provider changes); "" clears it.
+    """
+
+    provider: LLMProvider | None = None
+    model: str | None = None
+    endpoint: str | None = None
+    api_key: str | None = Field(default=None, repr=False)
+
+
+class LLMRoleSettingsUpdateRequest(G8eBaseModel):
+    """Request for /settings/llm: the full per-role selection for the caller."""
+
+    context: RequestContext = Field(..., description="Request context with session/user identity")
+    primary: LLMRoleUpdate
+    assistant: LLMRoleUpdate
+    lite: LLMRoleUpdate
+
+
+class LLMModelListRequest(G8eBaseModel):
+    """Request for /settings/llm/models.
+
+    endpoint and api_key fall back to the caller's stored values for role, so a
+    saved key does not have to be re-entered to browse models.
+    """
+
+    context: RequestContext = Field(..., description="Request context with session/user identity")
+    role: LLMRole
+    provider: LLMProvider
+    endpoint: str | None = None
+    api_key: str | None = Field(default=None, repr=False)
+
+
+class LLMModelListResponse(G8eBaseModel):
+    """Response for /settings/llm/models."""
+
+    models: list[str]
 
 
 class ChatMessageRequest(_G8eChatMessageRequest, RequestOverrides):

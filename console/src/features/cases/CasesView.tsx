@@ -59,7 +59,7 @@ function asInvestigations(res: unknown): Investigation[] {
   return Array.isArray(list) ? (list as Investigation[]) : [];
 }
 
-export function CasesView({ onManageOperators }: { onManageOperators: () => void }) {
+export function CasesView({ onManageOperators, onManageInference }: { onManageOperators: () => void; onManageInference: () => void }) {
   const toast = useToast();
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [casesLoaded, setCasesLoaded] = useState(false);
@@ -341,6 +341,7 @@ export function CasesView({ onManageOperators }: { onManageOperators: () => void
           onSend={send}
           onStop={stop}
           onManageOperators={onManageOperators}
+          onManageInference={onManageInference}
         />
       </section>
     </div>

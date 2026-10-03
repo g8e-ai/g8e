@@ -55,6 +55,10 @@ from app.models.internal_api import (
     DirectCommandSentResponse,
     OperatorApprovalResponse,
     InternalOperatorAuthCall,
+    LLMModelListRequest,
+    LLMModelListResponse,
+    LLMRoleSettingsResponse,
+    LLMRoleSettingsUpdateRequest,
     OperatorAuthenticateResponse,
     OperatorDeviceLinkRegisterRequest,
     OperatorDeviceLinkRegisterResponse,
@@ -109,6 +113,7 @@ from app.models.operators import (
 )
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.errors import NetworkError
+from app.llm.model_catalog import list_models
 from app.services.data.case_data_service import CaseDataService
 from app.services.data.attachment_store_service import AttachmentService
 from app.services.investigation.investigation_service import InvestigationService
@@ -119,6 +124,7 @@ from app.services.infra.event_service import EventService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
+from app.services.infra.llm_role_settings import normalize_endpoint, stored_connection
 from app.services.infra.settings_service import SettingsService
 from app.constants.message_sender import MessageSender
 
@@ -1566,6 +1572,49 @@ async def settings_sync(
     return UserSettingsUpdateResponse(success=success)
 
 
+@router.post(InternalAPIPaths.G8EE_SETTINGS_LLM_GET, response_model=LLMRoleSettingsResponse)
+async def get_llm_role_settings(
+    request: SettingsGetRequest,
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+):
+    """Return the caller's provider and model per role (primary, assistant, lite).
+
+    API keys are reported only as set or unset.
+    """
+    return await settings_service.get_llm_role_settings(g8e_context.user_id)
+
+
+@router.post(InternalAPIPaths.G8EE_SETTINGS_LLM, response_model=LLMRoleSettingsResponse)
+async def update_llm_role_settings(
+    request: LLMRoleSettingsUpdateRequest,
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+):
+    """Save the caller's provider and model per role. The next chat request uses them."""
+    return await settings_service.update_llm_role_settings(g8e_context.user_id, request)
+
+
+@router.post(InternalAPIPaths.G8EE_SETTINGS_LLM_MODELS, response_model=LLMModelListResponse)
+async def list_llm_models(
+    request: LLMModelListRequest,
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+):
+    """List the models a provider endpoint serves.
+
+    A missing endpoint or key falls back to what the caller's role would
+    resolve for that provider, so stored keys need not be re-entered.
+    """
+    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
+    stored_endpoint, stored_key = stored_connection(
+        user_settings.llm, request.role, request.provider
+    )
+    endpoint = normalize_endpoint(request.endpoint, "endpoint") or stored_endpoint
+    models = await list_models(request.provider, endpoint, request.api_key or stored_key)
+    return LLMModelListResponse(models=models)
+
+
 @router.patch(InternalAPIPaths.G8EE_SETTINGS_USER, response_model=UserSettingsUpdateResponse)
 async def sync_user_settings(
     request: dict,
@@ -1589,9 +1638,7 @@ async def sync_user_settings(
 
     try:
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        await cache_aside.invalidate_local_cache(
-            collection=DB_COLLECTION_SETTINGS, document_id=user_doc_id
-        )
+        await cache_aside.invalidate_document(DB_COLLECTION_SETTINGS, user_doc_id)
         return UserSettingsUpdateResponse(success=True)
     except Exception as e:
         logger.error(

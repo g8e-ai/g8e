@@ -123,3 +123,31 @@ export interface CaseSummary {
   updatedAt: string;
   investigations: Investigation[];
 }
+
+export type LlmRole = 'primary' | 'assistant' | 'lite';
+export type FieldRequirement = 'required' | 'optional' | 'none';
+
+/** A provider the ensemble accepts for a role, with the fields it needs. */
+export interface LlmProviderOption {
+  provider: string;
+  label: string;
+  endpoint: FieldRequirement;
+  api_key: FieldRequirement;
+  default_endpoint?: string | null;
+  lists_models: boolean;
+}
+
+/** One role's stored selection. Keys are never returned, only whether one is set. */
+export interface LlmRoleView {
+  provider: string | null;
+  model: string | null;
+  endpoint: string | null;
+  api_key_set: boolean;
+}
+
+export interface LlmSettings {
+  providers: LlmProviderOption[];
+  primary: LlmRoleView;
+  assistant: LlmRoleView;
+  lite: LlmRoleView;
+}

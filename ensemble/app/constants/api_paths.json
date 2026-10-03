@@ -45,6 +45,9 @@
     "operators_update_api_key": "/operators/update-api-key",
     "operators_validate_session": "/operators/session/validate",
     "settings": "/settings",
+    "settings_llm": "/settings/llm",
+    "settings_llm_get": "/settings/llm/get",
+    "settings_llm_models": "/settings/llm/models",
     "settings_sync": "/settings/sync",
     "settings_user": "/settings/user"
   },
@@ -78,6 +81,9 @@
     "operators_update_api_key": "/api/v1/operators/update-api-key",
     "operators_validate_session": "/api/v1/operators/session/validate",
     "settings": "/api/v1/settings",
+    "settings_llm": "/api/v1/settings/llm",
+    "settings_llm_get": "/api/v1/settings/llm/get",
+    "settings_llm_models": "/api/v1/settings/llm/models",
     "settings_sync": "/api/v1/settings/sync",
     "settings_user": "/api/v1/settings/user"
   },

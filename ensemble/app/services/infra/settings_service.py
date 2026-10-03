@@ -36,7 +36,9 @@ from app.models.settings import (
 )
 from app.models.base import G8eBaseModel
 
+from app.models.internal_api import LLMRoleSettingsResponse, LLMRoleSettingsUpdateRequest
 from app.services.infra.bootstrap_service import BootstrapService, BootstrapServiceProtocol
+from app.services.infra.llm_role_settings import apply_role_updates, settings_view
 
 if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService
@@ -313,6 +315,29 @@ class SettingsService:
             data=doc.model_dump(mode="json"),
             merge=False,
         )
+        # The next request must read what was just written, including when KV
+        # cache reads are enabled.
+        await self._cache_aside.invalidate_document(DB_COLLECTION_SETTINGS, user_doc_id)
+
+    async def get_llm_role_settings(self, user_id: str) -> LLMRoleSettingsResponse:
+        """Return the caller's per-role LLM selection with API keys masked."""
+        user_settings = await self.get_user_settings(user_id)
+        return settings_view(user_settings.llm)
+
+    async def update_llm_role_settings(
+        self, user_id: str, request: LLMRoleSettingsUpdateRequest
+    ) -> LLMRoleSettingsResponse:
+        """Persist the caller's per-role LLM selection; the next chat request uses it."""
+        user_settings = await self.get_user_settings(user_id)
+        apply_role_updates(user_settings.llm, request)
+        await self.update_user_settings(user_id, user_settings)
+        self._logger.info(
+            "[SettingsService] Updated LLM role settings for user %s (primary=%s/%s)",
+            user_id,
+            user_settings.llm.primary_provider,
+            user_settings.llm.primary_model,
+        )
+        return settings_view(user_settings.llm)
 
     async def sync_settings_overrides(
         self, user_id: str, user_settings: G8eeUserSettings, overrides: RequestOverrides

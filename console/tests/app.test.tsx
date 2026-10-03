@@ -50,8 +50,20 @@ function signedInRoutes(extra: Record<string, Handler> = {}): Record<string, Han
     'GET /api/v1/approvals': () => [200, { transactions: [] }],
     'GET /api/v1/auth/platform-enrollments/pending': () => [200, { requests: [] }],
     'GET /api/v1/investigations': () => [200, []],
+    'POST /api/v1/settings/llm/get': () => [200, llmSettings()],
     ...extra,
   };
+}
+
+const PROVIDERS = [
+  { provider: 'ollama', label: 'Ollama', endpoint: 'optional', api_key: 'optional', default_endpoint: 'http://localhost:11434', lists_models: true },
+  { provider: 'openai', label: 'OpenAI-compatible', endpoint: 'optional', api_key: 'required', default_endpoint: 'https://api.openai.com/v1', lists_models: true },
+  { provider: 'g8e', label: 'g8e governed inference', endpoint: 'none', api_key: 'none', lists_models: false },
+];
+const UNSET = { provider: null, model: null, endpoint: null, api_key_set: false };
+
+function llmSettings(primary: Record<string, unknown> = UNSET) {
+  return { providers: PROVIDERS, primary, assistant: UNSET, lite: UNSET };
 }
 
 beforeEach(() => {
@@ -238,5 +250,98 @@ describe('operators', () => {
     expect(calls.find((c) => c.path === '/api/v1/operators/bind')!.body).toEqual({ operator_ids: ['op1'] });
     expect(await screen.findByText('This session')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Unbind' })).toBeInTheDocument();
+  });
+});
+
+describe('inference', () => {
+  it('selects a provider, endpoint, and listed model per role and saves them', async () => {
+    let saved: Record<string, unknown> | null = null;
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/models': () => [200, { models: ['gemma4:e4b', 'qwen3:4b'] }],
+      'POST /api/v1/settings/llm': (body) => {
+        saved = body as Record<string, unknown>;
+        const primary = (body as { primary: Record<string, unknown> }).primary;
+        return [200, llmSettings({ ...primary, endpoint: 'http://192.168.1.2:11434', api_key_set: false })];
+      },
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    const user = userEvent.setup();
+    renderApp();
+
+    const primary = await screen.findByRole('region', { name: 'Primary' });
+    await user.selectOptions(within(primary).getByLabelText('Provider'), 'ollama');
+    await user.type(within(primary).getByLabelText('Endpoint'), '192.168.1.2:11434');
+    await user.click(within(primary).getByRole('button', { name: 'Refresh' }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.path === '/api/v1/settings/llm/models').at(-1)?.body).toEqual({
+        context: {},
+        role: 'primary',
+        provider: 'ollama',
+        endpoint: '192.168.1.2:11434',
+      }),
+    );
+    await user.selectOptions(await within(primary).findByLabelText('Model'), 'gemma4:e4b');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(saved).not.toBeNull());
+    expect(saved).toEqual({
+      context: {},
+      primary: { provider: 'ollama', model: 'gemma4:e4b', endpoint: '192.168.1.2:11434' },
+      assistant: { provider: null, model: null, endpoint: null },
+      lite: { provider: null, model: null, endpoint: null },
+    });
+    expect(await screen.findByText('Saved. The next message uses these models.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('never shows a stored key and only sends one that is typed', async () => {
+    let saved: { primary: Record<string, unknown> } | null = null;
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'openai', model: 'gpt-x', endpoint: null, api_key_set: true })],
+      'POST /api/v1/settings/llm/models': () => [200, { models: ['gpt-x', 'gpt-y'] }],
+      'POST /api/v1/settings/llm': (body) => {
+        saved = body as { primary: Record<string, unknown> };
+        return [200, llmSettings({ provider: 'openai', model: 'gpt-y', endpoint: null, api_key_set: true })];
+      },
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    const user = userEvent.setup();
+    renderApp();
+
+    const primary = await screen.findByRole('region', { name: 'Primary' });
+    const key = within(primary).getByLabelText('API key');
+    expect(key).toHaveValue('');
+    expect(key).toHaveAttribute('placeholder', 'Saved — leave blank to keep');
+    await user.selectOptions(await within(primary).findByLabelText('Model'), 'gpt-y');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(saved).not.toBeNull());
+    expect(saved!.primary).toEqual({ provider: 'openai', model: 'gpt-y', endpoint: null });
+  });
+
+  it('shows the next message model in the composer and links to the view', async () => {
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'g8e', model: 'gemma4:e4b', endpoint: null, api_key_set: false })],
+    });
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByRole('button', { name: 'gemma4:e4b' }));
+    expect(await screen.findByRole('heading', { name: 'Inference' })).toBeInTheDocument();
+    const primary = screen.getByRole('region', { name: 'Primary' });
+    expect(within(primary).getByLabelText('Model')).toHaveValue('gemma4:e4b');
+    expect(within(primary).queryByLabelText('Endpoint')).toBeNull();
+  });
+
+  it('prompts for a model when none is configured and surfaces ensemble errors', async () => {
+    routes = signedInRoutes({
+      'POST /api/v1/chat': () => [400, { error: { code: 'CONFIG_ERROR', message: 'No LLM model configured.' } }],
+    });
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByRole('button', { name: 'No model selected — choose one' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Message'), 'hello{Enter}');
+    expect(await screen.findByText('No LLM model configured.')).toBeInTheDocument();
   });
 });
