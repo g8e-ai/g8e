@@ -1,10 +1,7 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-// Overview view — the landing page. Layout mirrors the OpenDevOps.ai
-// surface: the live event stream, recent campaigns, and the
-// public mirror download endpoints. Every panel renders real store data;
-// nothing on this page is decorative.
+// Overview view — the live event stream, recent campaigns, and public data.
 
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -231,11 +228,13 @@ export function OverviewView() {
         isReconciling={isReconciling}
       />
 
-      <div className="ov-grid-bottom">
+      <div className="overview-content">
+        <div className="overview-primary">
+          <RecentCampaigns catalogs={catalogs} evaluations={allEvaluations} />
+          <DownloadsPanel />
+        </div>
         <WhatAmILookingAt />
-        <RecentCampaigns catalogs={catalogs} evaluations={allEvaluations} />
       </div>
-      <DownloadsPanel />
     </div>
   );
 }

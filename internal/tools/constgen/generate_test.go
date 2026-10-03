@@ -27,7 +27,7 @@ const (
 
 	eventsGoRel      = "internal/constants/events_gen.go"
 	actionTypesGoRel = "internal/constants/action_types_gen.go"
-	consoleTSRel   = "console/src/generated/events.ts"
+	consoleTSRel     = "console/src/generated/events.ts"
 	pythonEventsRel  = "protocol/python/g8e/_data/events.json"
 )
 
@@ -72,7 +72,7 @@ func sampleOutputs() generationOutputs {
 	return generationOutputs{
 		EventsGo:      "package constants // events\n",
 		ActionTypesGo: "package constants // actions\n",
-		ConsoleTS:   "export const EventType = {};\n",
+		ConsoleTS:     "export const EventType = {};\n",
 	}
 }
 
@@ -201,7 +201,7 @@ func TestWriteGenerated_WritesEveryTargetAndSyncsBundledPythonRegistry(t *testin
 	for rel, want := range map[string]string{
 		eventsGoRel:      out.EventsGo,
 		actionTypesGoRel: out.ActionTypesGo,
-		consoleTSRel:   out.ConsoleTS,
+		consoleTSRel:     out.ConsoleTS,
 	} {
 		got, err := os.ReadFile(filepath.Join(root, rel))
 		require.NoError(t, err, rel)

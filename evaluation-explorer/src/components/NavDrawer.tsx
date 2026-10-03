@@ -8,11 +8,10 @@ interface NavItemConfig {
   to: string;
   label: string;
   description: string;
-  badge?: string;
 }
 
 const NAV_ITEMS: NavItemConfig[] = [
-  { to: '/', label: 'Live', description: 'Real-time campaign feed & telemetry', badge: 'Live' },
+  { to: '/', label: 'Live', description: 'Real-time campaign feed & telemetry' },
   { to: '/evaluations', label: 'Evals', description: 'Campaign runs & assignment outcomes' },
   { to: '/tasks', label: 'Tasks', description: 'Benchmark scenarios & task suite' },
   { to: '/models', label: 'Models', description: 'Evaluated models & scorecards' },
@@ -69,7 +68,6 @@ export function NavDrawer() {
             title={item.description}
           >
             {item.label}
-            {item.badge ? <span className="nav-inline-badge">{item.badge}</span> : null}
           </NavLink>
         ))}
       </nav>
@@ -130,9 +128,6 @@ export function NavDrawer() {
                   <div className="nav-drawer-item-content">
                     <div className="nav-drawer-item-title-row">
                       <span className="nav-drawer-item-label">{item.label}</span>
-                      {item.badge ? (
-                        <span className="nav-drawer-item-badge">{item.badge}</span>
-                      ) : null}
                     </div>
                     <span className="nav-drawer-item-desc">{item.description}</span>
                   </div>

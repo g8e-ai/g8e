@@ -105,6 +105,10 @@ services:
       - "${G8E_HOSTNAME:-localhost}"
       - "--passkey-rp-name"
       - "g8e"
+      # The browser proxy forwards console chat/case traffic to g8ee, which
+      # runs in its own container (the default 127.0.0.1:8000 is this one).
+      - "--ensemble-upstream-url"
+      - "http://g8e-ensemble:8000"
     restart: unless-stopped
     ulimits:
       nofile:
@@ -248,7 +252,9 @@ services:
       dockerfile: ensemble/Dockerfile
     container_name: g8e-ensemble
     networks:
-      - g8e-net
+      g8e-net:
+        aliases:
+          - g8e-ensemble
     depends_on:
       g8e-gateway:
         condition: service_healthy

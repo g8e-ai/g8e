@@ -693,15 +693,24 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 				c.logger.Warn("SSE Stream: failed to unmarshal published event", "channel", channel, "error", err)
 				continue
 			}
-			if pubEvent.ID <= lastEmittedID {
+			if pubEvent.ID > 0 && pubEvent.ID <= lastEmittedID {
 				// Already emitted via replay; suppress the duplicate.
 				continue
 			}
-			if _, wErr := fmt.Fprintf(w, "id: %d\ndata: %s\n\n", pubEvent.ID, string(pubEvent.Payload)); wErr != nil {
+			// Ephemeral events are never persisted, so they carry ID 0: they
+			// are emitted without an `id:` field (it would rewind the client's
+			// Last-Event-ID cursor) and never advance the dedup cursor.
+			frame := fmt.Sprintf("data: %s\n\n", string(pubEvent.Payload))
+			if pubEvent.ID > 0 {
+				frame = fmt.Sprintf("id: %d\n%s", pubEvent.ID, frame)
+			}
+			if _, wErr := fmt.Fprint(w, frame); wErr != nil {
 				c.logger.Info("SSE Stream: write error on live event, disconnecting", "channel", channel, "error", wErr)
 				return
 			}
-			lastEmittedID = pubEvent.ID
+			if pubEvent.ID > 0 {
+				lastEmittedID = pubEvent.ID
+			}
 			flusher.Flush()
 		}
 	}

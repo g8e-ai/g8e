@@ -196,6 +196,45 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	assert.Contains(t, body, "id: 1")
 }
 
+// Ephemeral events are never persisted, so they are published with ID 0. They
+// must still reach the client (without an `id:` field), including after a
+// persisted event has advanced the dedup cursor.
+func TestHandleInternalSSEStream_EphemeralEventDelivered(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	ctx, _, cliSessionID, _ := seedCLISessionCtx(t, h, "ephemeral")
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(streamCtx)
+	rr := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		h.sseController.handleInternalSSEStream(rr, req)
+		close(done)
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	publish := func(id int64, name string) {
+		payload := `{"cli_session_id":"` + cliSessionID + `","event":{"type":"` + name + `"}}`
+		envelopeJSON, err := json.Marshal(models.SSEPublishedEvent{ID: id, Payload: json.RawMessage(payload)})
+		require.NoError(t, err)
+		h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, envelopeJSON)
+	}
+	publish(0, "ephemeral_first")
+	publish(5, "persisted")
+	publish(0, "ephemeral_after_persisted")
+
+	time.Sleep(40 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := rr.Body.String()
+	assert.Contains(t, body, "ephemeral_first")
+	assert.Contains(t, body, "persisted")
+	assert.Contains(t, body, "ephemeral_after_persisted")
+	assert.NotContains(t, body, "id: 0")
+}
+
 func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	// Override to a short interval so the test can observe a real heartbeat.

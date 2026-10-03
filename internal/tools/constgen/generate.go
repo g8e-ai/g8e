@@ -21,7 +21,7 @@ import (
 type generationOutputs struct {
 	EventsGo      string
 	ActionTypesGo string
-	ConsoleTS   string
+	ConsoleTS     string
 }
 
 func generateAll(root string, reg registryFile, actionTypes map[string]actionTypeMeta) (generationOutputs, error) {
@@ -54,15 +54,15 @@ func generateAll(root string, reg registryFile, actionTypes map[string]actionTyp
 	return generationOutputs{
 		EventsGo:      string(formattedEvents),
 		ActionTypesGo: string(formattedActionTypes),
-		ConsoleTS:   consoleTS,
+		ConsoleTS:     consoleTS,
 	}, nil
 }
 
 func writeGenerated(root string, out generationOutputs) error {
 	targets := map[string]string{
-		filepath.Join(root, "internal/constants/events_gen.go"):        out.EventsGo,
-		filepath.Join(root, "internal/constants/action_types_gen.go"):  out.ActionTypesGo,
-		filepath.Join(root, "console/src/generated/events.ts"): out.ConsoleTS,
+		filepath.Join(root, "internal/constants/events_gen.go"):       out.EventsGo,
+		filepath.Join(root, "internal/constants/action_types_gen.go"): out.ActionTypesGo,
+		filepath.Join(root, "console/src/generated/events.ts"):        out.ConsoleTS,
 	}
 	for path, content := range targets {
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -77,9 +77,9 @@ func writeGenerated(root string, out generationOutputs) error {
 
 func verifyGenerated(root string, out generationOutputs) error {
 	targets := map[string]string{
-		filepath.Join(root, "internal/constants/events_gen.go"):        out.EventsGo,
-		filepath.Join(root, "internal/constants/action_types_gen.go"):  out.ActionTypesGo,
-		filepath.Join(root, "console/src/generated/events.ts"): out.ConsoleTS,
+		filepath.Join(root, "internal/constants/events_gen.go"):       out.EventsGo,
+		filepath.Join(root, "internal/constants/action_types_gen.go"): out.ActionTypesGo,
+		filepath.Join(root, "console/src/generated/events.ts"):        out.ConsoleTS,
 	}
 	var diffs []string
 	for path, expected := range targets {

@@ -225,17 +225,6 @@ button { font-family: inherit; cursor: pointer; }
   border-color: color-mix(in srgb, var(--accent) 30%, transparent);
   color: var(--accent);
 }
-.nav-inline-badge {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  letter-spacing: 0.5px;
-}
 /* Full menu on desktop; hamburger only at tablet/mobile widths */
 @media (min-width: 1001px) {
   .nav-hamburger-btn,
@@ -349,17 +338,6 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 14px;
   font-weight: 600;
   line-height: 1.2;
-}
-.nav-drawer-item-badge {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  letter-spacing: 0.5px;
 }
 .nav-drawer-item-desc {
   font-size: 11px;
@@ -1285,11 +1263,15 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 /* ===== Overview (landing) ===== */
 
 .overview {
+  --page-gutter: 24px;
   --overview-title-size: 17px;
   --overview-subtitle-size: 14px;
   --overview-body-size: 14px;
   --overview-meta-size: 13px;
   --overview-label-size: 12px;
+  width: calc(100vw - (2 * var(--page-gutter)));
+  max-width: none;
+  margin-left: calc(50% - 50vw + var(--page-gutter));
 }
 
 /* Panels */
@@ -1328,13 +1310,6 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .stream-panel {
   display: flex;
   flex-direction: column;
-}
-/* Overview landing: span viewport width with page gutters, not app-main max-width */
-.overview > .stream-panel {
-  --page-gutter: 24px;
-  width: calc(100vw - (2 * var(--page-gutter)));
-  max-width: none;
-  margin-left: calc(50% - 50vw + var(--page-gutter));
 }
 .stream-panel .stream-scroll {
   flex: 0 1 auto;
@@ -1563,8 +1538,15 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .campaign-secondary-action { font-size: var(--text-md); font-weight: 500; }
 .run-live-action { margin-bottom: 8px; }
 
-/* Bottom grid */
-.ov-grid-bottom { display: grid; grid-template-columns: minmax(280px, 0.85fr) minmax(250px, 1.15fr); gap: 16px; align-items: start; margin-top: 16px; }
+/* Live view: campaign details and public data sit beside the reading guide. */
+.overview-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.85fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+.overview-primary { display: grid; gap: 16px; min-width: 0; }
 .about {
   display: flex;
   justify-content: center;
@@ -1689,11 +1671,10 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .campaign-evidence-foot-unavailable { margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--border); }
 
 /* Public data and APIs */
-.public-data-panel { margin-top: 16px; }
 .public-data-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 10px; }
 .public-data-head h2 { margin: 0; }
 .public-data-head .panel-note { margin: 0; }
-.public-resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.public-resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
 .public-resource-card {
   display: flex; flex-direction: column; height: 100%; padding: 10px 12px; border: 1px solid var(--border);
   border-radius: 8px; background: linear-gradient(145deg, var(--bg-elev) 0%, var(--bg-elev2) 100%); color: var(--fg);
@@ -1921,7 +1902,9 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   .header-campaign-tail { flex: 0 0 130px; }
   .header-campaign-role-progress-label { display: none; }
   .header-campaign-role-status-text { display: none; }
-  .ov-grid-bottom { grid-template-columns: 1fr; }
+  .overview-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .stream-panel .stream-scroll {
     min-height: 220px;
     max-height: min(52vh, 520px);
@@ -1957,7 +1940,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 @media (max-width: 768px) {
   .app-header { --header-sticky-offset: 102px; padding: 10px 14px 8px; }
   .app-main { padding: 14px; }
-  .overview > .stream-panel { --page-gutter: 14px; }
+  .overview { --page-gutter: 14px; }
   .header-primary { gap: 8px 10px; }
   .header-utilities { flex-wrap: wrap; justify-content: flex-end; }
   .header-campaign-bar { min-height: 38px; padding: 6px 10px; gap: 8px; }
@@ -1995,7 +1978,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 
 @media (max-width: 320px) {
   .app-main { padding: 10px; }
-  .overview > .stream-panel { --page-gutter: 10px; }
+  .overview { --page-gutter: 10px; }
   .stat-grid { grid-template-columns: 1fr; }
   .metric-grid { grid-template-columns: 1fr; }
   .agents-grid { grid-template-columns: 1fr; }
