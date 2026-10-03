@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { AccountView } from './features/account/AccountView';
+import { ApiView } from './features/api/ApiView';
 import { ApprovalsView } from './features/approvals/ApprovalsView';
 import { AuthScreen } from './features/auth/AuthScreen';
 import { CasesView } from './features/cases/CasesView';
@@ -15,8 +16,8 @@ import { OperatorsProvider, useOperators } from './state/operators';
 import { useSession } from './state/session';
 import { StreamProvider, useStream } from './state/stream';
 
-export type View = 'cases' | 'operators' | 'inference' | 'approvals' | 'account';
-const VIEWS: readonly View[] = ['cases', 'operators', 'inference', 'approvals', 'account'];
+export type View = 'cases' | 'operators' | 'inference' | 'approvals' | 'api' | 'account';
+const VIEWS: readonly View[] = ['cases', 'operators', 'inference', 'approvals', 'api', 'account'];
 
 export function initialView(search: string, intent: FragmentIntent): View {
   if (intent.approveTxHash || intent.recoveryToken || intent.platformEnrollmentId) return 'approvals';
@@ -83,6 +84,7 @@ function Shell({ intent }: { intent: FragmentIntent }) {
     { id: 'operators', label: 'Operators', count: bound.length || undefined },
     { id: 'inference', label: 'Inference' },
     { id: 'approvals', label: 'Approvals', count: total || undefined },
+    { id: 'api', label: 'API' },
     { id: 'account', label: 'Account' },
   ];
 
@@ -133,6 +135,7 @@ function Shell({ intent }: { intent: FragmentIntent }) {
             recoveryToken={intent.recoveryToken}
           />
         )}
+        {view === 'api' && <ApiView />}
         {view === 'account' && <AccountView />}
       </main>
     </div>

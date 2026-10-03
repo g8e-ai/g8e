@@ -173,6 +173,10 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// Browser operator detail/stop under /api/v1/operators/{id}/ (terminate remains mTLS-enforced in handler).
 	r.addPrefix(constants.APIPaths.OperatorsByID, RouteAuthDual)
 
+	// API reference spec — read by the Console API view (cookie) and by CLI or
+	// builder tooling (mTLS). Not public: it enumerates the full route surface.
+	r.addExact(constants.SwaggerDocPath, RouteAuthDual)
+
 	// Ensemble browser proxy (Gateway → g8ee with stamped identity).
 	r.addPrefix(constants.APIPaths.EnsembleChatPrefix, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.EnsembleSettingsPrefix, RouteAuthWebSession)

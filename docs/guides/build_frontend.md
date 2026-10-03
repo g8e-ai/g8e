@@ -128,7 +128,7 @@ When the frontend and Gateway are cross-site (for example, a hosted frontend at 
 
 All paths are relative to the gateway's base URL. All authenticated routes require `credentials: 'include'`.
 
-The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Use this for auto-discovering the API surface.
+The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Use this for auto-discovering the API surface. The spec route accepts a web session cookie or mTLS; it is not public. The embedded console renders it as its API view.
 
 ### Public Routes (no auth required)
 

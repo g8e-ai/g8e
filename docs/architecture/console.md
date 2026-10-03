@@ -48,6 +48,7 @@ The console covers what an owner needs to operate the platform from a browser:
 - [Cases and Investigations](#cases-and-investigations)
 - [Operator Binding](#operator-binding)
 - [Model Selection](#model-selection)
+- [API Reference](#api-reference)
 - [Event Delivery](#event-delivery)
 - [Procedures](#procedures)
 - [Anti-patterns](#anti-patterns)
@@ -75,6 +76,7 @@ The console covers what an owner needs to operate the platform from a browser:
 | Generated event registry | `console/src/generated/events.ts` | `make constants-check` |
 | Ensemble browser proxy (identity and bound-Operator stamping) | `internal/services/gateway/ensemble_browser_proxy_controller.go` | `./g8e test unit --pkg ./internal/services/gateway --run 'TestInvestigationsQueryBody\|TestInjectBrowserContext\|TestBoundOperators'` |
 | Browser Operator routes | `internal/services/gateway/operator_browser.go`, `operator_controller.go` | `./g8e test unit --pkg ./internal/services/gateway --run TestOperator` |
+| API reference view | `console/src/features/api/`, `console/src/lib/openapi.ts`, `internal/services/gateway/gateway_http_router.go` (`handleSwaggerDoc`) | `make console-test`; `./g8e test unit --pkg ./internal/services/gateway --run TestHandleSwaggerDoc`; `./g8e test integration --pkg ./internal/services/gateway --run TestRouteAuthRegistry_SwaggerDocIsDualAuth` |
 | Per-role model selection | `ensemble/app/services/infra/llm_role_settings.py`, `ensemble/app/llm/model_catalog.py`, `console/src/lib/inference.ts` | `ensemble/.venv/bin/python -m pytest tests/unit/services/infra/test_llm_role_settings.py tests/unit/llm/test_model_catalog.py`; `make console-test` |
 | Investigation creation within a case | `ensemble/app/routers/internal_router.py` (`resource_creation.create_investigation`) | `ensemble/.venv/bin/python -m pytest tests/unit/routers/test_internal_router.py` |
 
@@ -112,6 +114,12 @@ The Inference view assigns a provider, endpoint, API key, and model to each ense
 Saving (`POST /api/v1/settings/llm`) writes the role-specific fields of the caller's `user_settings_{user_id}` document and invalidates its cache entry. g8ee reads user settings on every chat request, so the next message uses the new selection with no reload. The composer shows the Primary model (or "Inference Operator model" for `g8e`) and links to the view, or warns when no model is selected.
 
 `POST /api/v1/settings/llm/models` lists the models an endpoint serves (Ollama `/api/tags`, OpenAI-compatible and llama.cpp `/v1/models`, Anthropic `/v1/models`, Gemini `models`), using the endpoint and key typed in the form, or else the role's stored ones. For `g8e` governed inference, g8ee resolves the caller's sole active Inference Operator through the Gateway and requests its typed model inventory through governed Operator dispatch, and the response's `bound_model` is the Operator's model for the role (its `--inference-<role>-model`). The browser cannot override the endpoint or the model. A failed listing reports only the HTTP status or transport error, never the upstream body.
+
+## API Reference
+
+The API view (`?view=api`) is a browsable reference for the Gateway's HTTP API. It fetches `GET /swagger/doc.json` with the session cookie and renders the swag-generated OpenAPI 2.0 document natively: operations grouped by tag, a text and tag filter, per-operation parameters and responses, and request and response types that expand in place into their definitions. It adds no third-party code, because the console CSP allows only same-origin scripts; the standalone Swagger UI at `/swagger/` loads from a CDN and is not used here.
+
+The spec is compiled into the Gateway (`internal/services/gateway/docs`, `docs.SwaggerJSON`), so the route works from a bare binary. `/swagger/doc.json` is classified `RouteAuthDual` (web session or mTLS), not public, because it enumerates the full route surface. The view lists only operations that carry Swagger annotations; a route without annotations does not appear. `make swagger-generate` refreshes the spec, and CI fails when the committed copy is stale.
 
 ## Event Delivery
 

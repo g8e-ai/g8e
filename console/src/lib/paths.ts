@@ -50,6 +50,10 @@ export const Paths = {
 
   sseStream: '/api/v1/sse/stream',
 
+  // OpenAPI 2.0 spec compiled into the Gateway (internal/services/gateway/docs);
+  // classified RouteAuthDual, so the session cookie is accepted.
+  apiSpec: '/swagger/doc.json',
+
   // Served on the Gateway's plain-HTTP bootstrap port, not the HTTPS console port.
   operatorBinary: (filename: string) => `/.well-known/g8e/bin/${filename}`,
   deployScriptLinux: '/g8e-deploy.sh',

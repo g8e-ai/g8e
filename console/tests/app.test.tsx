@@ -374,3 +374,69 @@ describe('inference', () => {
     expect(await screen.findByText('No LLM model configured.')).toBeInTheDocument();
   });
 });
+
+describe('API reference', () => {
+  const SPEC = {
+    swagger: '2.0',
+    info: {},
+    paths: {
+      '/api/v1/operators': {
+        get: {
+          summary: 'List operators',
+          description: 'Lists bound Operators.',
+          tags: ['operators'],
+          parameters: [{ name: 'status', in: 'query', type: 'string', description: 'Filter by status' }],
+          responses: { '200': { description: 'OK', schema: { $ref: '#/definitions/models.Operator' } } },
+        },
+      },
+      '/api/v1/health': { get: { summary: 'Health check', tags: ['health'], responses: { '200': { description: 'OK' } } } },
+    },
+    definitions: { 'models.Operator': { type: 'object', required: ['id'], properties: { id: { type: 'string', description: 'Operator ID' } } } },
+  };
+
+  it('loads the spec with the session cookie and renders operations grouped by tag', async () => {
+    window.history.replaceState(null, '', '/console/?view=api');
+    routes = signedInRoutes({ 'GET /swagger/doc.json': () => [200, SPEC] });
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByRole('heading', { name: 'API' })).toBeInTheDocument();
+    expect(await screen.findByText('/api/v1/operators')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'health' })).toBeInTheDocument();
+    expect(calls.find((c) => c.path === '/swagger/doc.json')?.credentials).toBe('include');
+
+    await user.click(screen.getByRole('button', { name: /List operators/ }));
+    expect(screen.getByText('Filter by status')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /models\.Operator/ }));
+    expect(screen.getByText('Operator ID')).toBeInTheDocument();
+  });
+
+  it('filters by text and by tag', async () => {
+    window.history.replaceState(null, '', '/console/?view=api');
+    routes = signedInRoutes({ 'GET /swagger/doc.json': () => [200, SPEC] });
+    const user = userEvent.setup();
+    renderApp();
+
+    await screen.findByText('/api/v1/operators');
+    await user.type(screen.getByLabelText('Filter operations'), 'health');
+    expect(screen.queryByText('/api/v1/operators')).toBeNull();
+    expect(screen.getByText('/api/v1/health')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Filter operations'));
+    await user.click(within(screen.getByRole('group', { name: 'Filter by tag' })).getByRole('button', { name: /operators/ }));
+    expect(screen.getByText('/api/v1/operators')).toBeInTheDocument();
+    expect(screen.queryByText('/api/v1/health')).toBeNull();
+
+    await user.type(screen.getByLabelText('Filter operations'), 'nothing-matches');
+    expect(screen.getByText('No operations match')).toBeInTheDocument();
+  });
+
+  it('reports a load failure instead of an empty reference', async () => {
+    window.history.replaceState(null, '', '/console/?view=api');
+    routes = signedInRoutes({ 'GET /swagger/doc.json': () => [403, { error: 'forbidden' }] });
+    renderApp();
+
+    expect(await screen.findByText('Could not load the API spec')).toBeInTheDocument();
+    expect(screen.getByText('forbidden')).toBeInTheDocument();
+  });
+});

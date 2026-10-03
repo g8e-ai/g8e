@@ -80,7 +80,6 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Integration Gateway fixture | `test/fixtures/gateway_fixture.go` | `NewGatewayFixture` |
 | File service test isolation | `internal/testutil/tempdir.go`, `internal/services/fs/file_service.go` | `testutil.TempDir` |
 | Live E2E suite | `test/e2e/` | `./g8e test e2e` |
-| Ensemble enrollment client against a real Gateway | `test/ensemble_enrollment_integration_test.go` | `./g8e test integration --pkg ./test --run TestEnsembleEnrollmentClient` (requires `make setup` in `ensemble/`; fails, does not skip, when the virtualenv is missing) |
 | Completion transcript wire contract (Go side) | `internal/services/gateway/platform_enrollment_validation_test.go` | `TestPlatformEnrollmentCompletionTranscriptGoldenVector` |
 
 ## Procedures

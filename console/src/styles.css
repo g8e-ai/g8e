@@ -945,3 +945,156 @@ select.input {
   color: var(--danger);
   margin-top: 4px;
 }
+
+/* ---------- api reference ---------- */
+.api-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.api-tags {
+  flex-wrap: wrap;
+}
+.chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.api-group .card-head {
+  margin-bottom: 4px;
+}
+.api-op {
+  border-top: 1px solid var(--border);
+}
+.api-op-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.api-op-head:hover {
+  background: var(--surface-2);
+}
+.api-method {
+  flex: none;
+  min-width: 56px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.api-method-get {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.api-method-post {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.api-method-put,
+.api-method-patch {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.api-method-delete {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.api-path {
+  overflow-wrap: anywhere;
+}
+.api-summary {
+  margin-left: auto;
+  color: var(--text-2);
+  text-align: right;
+}
+.api-op-body {
+  padding: 4px 4px 16px 72px;
+}
+.api-desc {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  white-space: pre-line;
+}
+.api-media {
+  margin-bottom: 8px;
+}
+.api-sub {
+  margin: 14px 0 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.api-table td {
+  padding: 8px 12px;
+  vertical-align: top;
+}
+.api-req {
+  margin-left: 8px;
+  color: var(--danger);
+  font-size: 11px;
+}
+.api-type {
+  color: var(--text-2);
+}
+.api-type-ref {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.api-type-ref:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.api-toggle {
+  display: inline-block;
+}
+.api-props {
+  margin: 6px 0 4px;
+  padding: 0 0 0 14px;
+  border-left: 1px solid var(--border);
+  list-style: none;
+}
+.api-prop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 2px 0;
+}
+.api-prop-desc {
+  color: var(--muted);
+}
+.api-enum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 6px 0;
+}
+@media (max-width: 760px) {
+  .api-op-head {
+    flex-wrap: wrap;
+  }
+  .api-summary {
+    margin-left: 0;
+    text-align: left;
+  }
+  .api-op-body {
+    padding-left: 4px;
+  }
+}

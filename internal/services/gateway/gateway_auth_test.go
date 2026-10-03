@@ -441,6 +441,13 @@ func TestRouteAuthRegistry_RemovedTrustScriptPaths(t *testing.T) {
 	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.WellKnownPKIFingerprint), "fingerprint must remain RouteAuthNone")
 }
 
+func TestRouteAuthRegistry_SwaggerDocIsDualAuth(t *testing.T) {
+	registry := NewRouteAuthRegistry(false)
+
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.SwaggerDocPath), "the Console API view reads the spec with a session cookie")
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.SwaggerUIPath), "the Swagger UI shell stays mTLS-only")
+}
+
 func TestRouteAuthRegistry_BrowserOperatorAndEnsembleProxy(t *testing.T) {
 	registry := NewRouteAuthRegistry(false)
 
