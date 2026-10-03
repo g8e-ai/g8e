@@ -17,10 +17,11 @@ import {
   emptyTimeline,
   eventTargets,
   fromHistory,
+  markIdle,
   setApprovalState,
   type TimelineState,
 } from '../../lib/timeline';
-import type { CaseSummary, ChatStartedResponse, Investigation } from '../../lib/types';
+import type { CaseSummary, ChatStartedResponse, ChatStopResponse, Investigation } from '../../lib/types';
 import { useStreamEvents } from '../../state/stream';
 import { errorText, useToast } from '../../state/toast';
 import { Composer } from './Composer';
@@ -204,11 +205,20 @@ export function CasesView({ onManageOperators, onManageInference }: { onManageOp
     }
   };
 
-  const stop = () => {
+  const stop = async () => {
     const s = selRef.current;
-    void api
-      .post(Paths.chatStop, { reason: 'User requested stop', context: { case_id: s.caseId, investigation_id: s.investigationId } })
-      .catch((err) => toast('error', errorText(err)));
+    if (!s.investigationId) return;
+    try {
+      const res = await api.post<ChatStopResponse>(Paths.chatStop, {
+        reason: 'User requested stop',
+        context: { case_id: s.caseId, investigation_id: s.investigationId },
+      });
+      // A cancelled turn is closed by its stopped event. With nothing running,
+      // none will come, so clear the stale busy state here.
+      if (!res.was_active) setTimeline((t) => (selRef.current.investigationId === s.investigationId ? markIdle(t) : t));
+    } catch (err) {
+      toast('error', errorText(err));
+    }
   };
 
   const respond = async (approvalId: string, approved: boolean) => {
@@ -339,7 +349,7 @@ export function CasesView({ onManageOperators, onManageInference }: { onManageOp
           busy={timeline.busy}
           placeholder={sel.draft === 'case' ? 'Describe what you are investigating…' : 'Message the ensemble…'}
           onSend={send}
-          onStop={stop}
+          onStop={() => void stop()}
           onManageOperators={onManageOperators}
           onManageInference={onManageInference}
         />

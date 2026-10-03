@@ -113,6 +113,13 @@ export interface ChatStartedResponse {
   investigation_id: string;
 }
 
+export interface ChatStopResponse {
+  success: boolean;
+  investigation_id: string;
+  /** False when no turn was running, so no stopped event will follow. */
+  was_active: boolean;
+}
+
 // A case as the console presents it: g8ee has no case list endpoint, so cases
 // are grouped from the caller's investigations.
 export interface CaseSummary {

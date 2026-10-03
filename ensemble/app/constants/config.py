@@ -343,6 +343,9 @@ OPENAI_GPT_5_4_NANO = "gpt-5.4-nano"
 OPENAI_GPT_5_4_PRO = "gpt-5.4-pro"
 OPENAI_GPT_5_4_MINI = "gpt-5.4-mini"
 
+# OpenAI-compatible (vLLM / SGLang) self-hosted models
+OPENAI_QWEN3_8_FLASH_NEXT = "Qwen/Qwen3.8-Flash-Next"
+
 # Anthropic models
 ANTHROPIC_CLAUDE_OPUS_4_6 = "claude-opus-4-6"
 ANTHROPIC_CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"

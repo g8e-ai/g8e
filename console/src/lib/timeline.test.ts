@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { Ev, Sender } from './events';
 import type { StreamEvent } from './sse';
-import { appendUserMessage, applyEvent, emptyTimeline, eventTargets, fromHistory, setApprovalState } from './timeline';
+import { appendUserMessage, applyEvent, emptyTimeline, eventTargets, fromHistory, markIdle, setApprovalState } from './timeline';
 
 let seq = 1;
 const ev = (type: string, data: Record<string, unknown> = {}): StreamEvent => ({
@@ -49,9 +49,31 @@ describe('applyEvent', () => {
     expect(t.items).toHaveLength(2);
     expect(t.items[1]).toMatchObject({ kind: 'assistant', text: 'Hello', streaming: true });
     t = applyEvent(t, ev(Ev.TextCompleted, { content: 'Hello.' }));
-    t = applyEvent(t, ev(Ev.IterationCompleted));
     expect(t.items[1]).toMatchObject({ kind: 'assistant', text: 'Hello.', streaming: false });
+    // A text-only turn ends at TextCompleted; IterationCompleted never follows.
     expect(t.busy).toBe(false);
+    expect(t.phase).toBeNull();
+  });
+
+  it('clears busy when a turn ends with no streamed chunks', () => {
+    let t = applyEvent(appendUserMessage(emptyTimeline, 'hi'), ev(Ev.IterationStarted));
+    t = applyEvent(t, ev(Ev.TextCompleted, { content: 'Hello.' }));
+    expect(t.busy).toBe(false);
+    expect(t.items[1]).toMatchObject({ kind: 'assistant', text: 'Hello.', streaming: false });
+  });
+
+  it('closes a stopped turn with a notice', () => {
+    let t = applyEvent(appendUserMessage(emptyTimeline, 'hi'), ev(Ev.TextChunk, { content: 'par' }));
+    t = applyEvent(t, ev(Ev.IterationStopped));
+    expect(t.busy).toBe(false);
+    expect(t.items[1]).toMatchObject({ kind: 'assistant', streaming: false });
+    expect(t.items[2]).toMatchObject({ kind: 'notice', text: 'Stopped.' });
+  });
+
+  it('markIdle ends a stale turn without adding a notice', () => {
+    const t = markIdle(appendUserMessage(emptyTimeline, 'hi'));
+    expect(t.busy).toBe(false);
+    expect(t.items).toHaveLength(1);
   });
 
   it('starts a new assistant message after the next user turn', () => {

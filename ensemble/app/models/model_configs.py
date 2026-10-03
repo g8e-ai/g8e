@@ -59,6 +59,7 @@ from app.constants import (
     OLLAMA_QWEN3_5_2B,
     OPENAI_DEFAULT_MODEL,
     OPENAI_GPT_5_4_MINI,
+    OPENAI_QWEN3_8_FLASH_NEXT,
     THINKING_LEVEL_PRIORITY_ASC,
     ThinkingDialect,
     ThinkingLevel,
@@ -395,6 +396,16 @@ OPENAI_GPT_5_4_MINI_CONFIG = LLModelConfig(
     top_p=1.0,
 )
 
+OPENAI_QWEN3_8_FLASH_NEXT_CONFIG = LLModelConfig(
+    name=OPENAI_QWEN3_8_FLASH_NEXT,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    supports_tools=True,
+    supports_structured_output=True,
+    context_window_input=262_144,
+    top_k=40,
+    top_p=1.0,
+)
+
 OPENAI_DEFAULT_CONFIG = LLModelConfig(
     name=OPENAI_DEFAULT_MODEL,
     supported_thinking_levels=[],
@@ -635,6 +646,7 @@ MODEL_REGISTRY = LLModelRegistry(
         ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG,
         ANTHROPIC_DEFAULT_CONFIG,
         OPENAI_GPT_5_4_MINI_CONFIG,
+        OPENAI_QWEN3_8_FLASH_NEXT_CONFIG,
         OPENAI_DEFAULT_CONFIG,
         OLLAMA_GEMMA4_E4B_CONFIG,
         OLLAMA_GEMMA4_E2B_CONFIG,

@@ -186,7 +186,7 @@ The registry contains these unique model names:
 | --- | --- | --- | --- |
 | Gemini | `gemini-3.1-pro-preview`, `gemini-3.1-pro-preview-customtools`, `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | Off, low, medium, and high; flash-lite also supports minimal | Enabled |
 | Anthropic | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Opus and Sonnet: off, low, medium, high; Haiku: off, minimal, low | Not declared |
-| OpenAI | `gpt-5.4-mini` | Off, minimal, and low | Enabled |
+| OpenAI | `gpt-5.4-mini`, `Qwen/Qwen3.8-Flash-Next` | `gpt-5.4-mini`: off, minimal, low; `Qwen/Qwen3.8-Flash-Next`: off and high | Enabled |
 | Ollama | `gemma4:e4b`, `gemma4:e2b`, `gemma4:e2b-g8ea`, `gemma4:12b`, `granite4.2:8b`, `granite4.2:3b`, `llama3.2:3b`, `qwen3.5:2b` | Gemma4, Granite, Qwen: off/high native toggle; Llama: none | Disabled; adapter serializes caller-supplied schemas |
 
 Adapters can send other model names to a backend, but unknown names use the shared unknown profile. That profile disables thinking, tools, and provider-enforced structured-output decisions. Register a model profile before relying on reasoning, tools, or provider-enforced structured output for a custom model. Unregistered llama.cpp model names use the unknown profile.

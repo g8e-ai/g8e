@@ -207,7 +207,10 @@ export function applyEvent(state: TimelineState, ev: StreamEvent): TimelineState
       } else if (full) {
         items = [...items, { kind: 'assistant', key: `s:${ev.id || at}`, text: full, streaming: false, at }];
       }
-      return { ...state, items };
+      // TEXT_COMPLETED is the end-of-turn event: the ensemble emits it once, after
+      // the model (and any tool loop) finishes. IterationCompleted fires only per
+      // tool round, so a text-only reply would otherwise leave the turn busy.
+      return { items: closeStreaming(items), busy: false, phase: null };
     }
     case Ev.IterationCompleted:
       return { items: closeStreaming(state.items), busy: false, phase: null };
@@ -280,6 +283,11 @@ export function setApprovalState(state: TimelineState, approvalId: string, next:
     items: state.items.map((it) => (it.kind === 'approval' && it.approvalId === approvalId ? { ...it, state: next } : it)),
     phase: next === 'approved' || next === 'denied' ? 'Working' : state.phase,
   };
+}
+
+/** Ends the turn locally, without a notice, when the server reports nothing left to stop. */
+export function markIdle(state: TimelineState): TimelineState {
+  return { items: closeStreaming(state.items), busy: false, phase: null };
 }
 
 /** Optimistically appends the user's message when a turn is submitted. */
