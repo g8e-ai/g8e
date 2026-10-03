@@ -342,7 +342,8 @@ describe('inference', () => {
     const key = within(primary).getByLabelText('API key');
     expect(key).toHaveValue('');
     expect(key).toHaveAttribute('placeholder', 'Saved — leave blank to keep');
-    await user.selectOptions(await within(primary).findByLabelText('Model'), 'gpt-y');
+    expect(await within(primary).findByRole('option', { name: 'gpt-y' })).toBeInTheDocument();
+    await user.selectOptions(within(primary).getByLabelText('Model'), 'gpt-y');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(saved).not.toBeNull());
