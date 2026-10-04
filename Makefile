@@ -990,11 +990,8 @@ clean:
 	@set -e; read -r -p "This removes build artifacts and resets .g8e (a backup will be kept). Continue? [y/N] " answer; \
 	if [ "$$answer" != "y" ]; then echo "Clean cancelled."; exit 1; fi; \
 	if [ -d .g8e ]; then \
-		stamp=$$(date '+%m%d%H%M'); backup=".g8e-$$stamp"; suffix=2; \
-		while [ -e "$$backup" ]; do backup=".g8e-$$stamp-$$suffix"; suffix=$$((suffix + 1)); done; \
-		cp -a .g8e "$$backup" || { echo "Could not back up .g8e; clean aborted." >&2; exit 1; }; \
-		rm -rf .g8e; mkdir .g8e; \
-		echo "Previous runtime state copied to $$backup; .g8e is fresh."; \
+		test -x ./g8e || { echo "ERROR: ./g8e is required to stop the Gateway and archive .g8e safely; run 'make build' first" >&2; exit 1; }; \
+		./g8e gw clean --yes --skip-backup; \
 	fi
 	@echo "Cleaning up build artifacts..."
 	@rm -rf .g8e-test-tmp/
