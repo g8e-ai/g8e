@@ -561,7 +561,9 @@ class AppEnrollmentService:
 
         _atomic_write_file(cert_path, combined, 0o600)
         _atomic_write_file(key_path, key_pem, 0o600)
-        if trust_bundle:
+        # Enrollment must retain an installed CA, including local recovery trust.
+        # Resetting that trust is an explicit identity-reset operation.
+        if trust_bundle and not Path(ca_cert_path).exists():
             _atomic_write_file(ca_cert_path, trust_bundle, 0o644)
 
         logger.info(

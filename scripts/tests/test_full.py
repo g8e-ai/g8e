@@ -53,7 +53,9 @@ class FullTests(unittest.TestCase):
                 [sys.executable, "-c", "import time; time.sleep(30)", "app.serve"]
             )
             self.addCleanup(process.wait)
-            self.addCleanup(lambda: process.terminate() if process.poll() is None else None)
+            self.addCleanup(
+                lambda: process.terminate() if process.poll() is None else None
+            )
             root = Path(temp)
             pid_file = root / ".local.dev/full/ensemble/full.pid"
             pid_file.parent.mkdir(parents=True)
@@ -65,7 +67,9 @@ class FullTests(unittest.TestCase):
 
     def test_ensemble_dry_run_restart_does_not_stop(self):
         with (
-            patch.object(sys, "argv", ["full.py", "--ensemble-action", "restart", "--dry-run"]),
+            patch.object(
+                sys, "argv", ["full.py", "--ensemble-action", "restart", "--dry-run"]
+            ),
             patch.object(FULL, "stop_ensemble") as stop,
             patch.object(FULL, "start_ensemble") as start,
         ):
@@ -78,12 +82,148 @@ class FullTests(unittest.TestCase):
             patch.object(sys, "argv", ["full.py", "--ensemble-action", "restart"]),
             patch.object(FULL, "stop_ensemble") as stop,
             patch.object(FULL, "start_ensemble") as start,
+            patch.object(FULL, "prepare_identities") as prepare,
+            patch.object(FULL, "report_workloads", return_value=False),
             patch("builtins.input") as prompt,
         ):
             FULL.main()
         stop.assert_called_once()
         start.assert_called_once_with(False)
         prompt.assert_not_called()
+        prepare.assert_called_once_with([], False, False)
+
+    def setup_identities(self, root):
+        current = (
+            "-----BEGIN CERTIFICATE-----\nY3VycmVudA==\n-----END CERTIFICATE-----\n"
+        )
+        old = "-----BEGIN CERTIFICATE-----\nb2xk\n-----END CERTIFICATE-----\n"
+        ca = root / ".g8e/pki/root/root_ca.crt"
+        ca.parent.mkdir(parents=True)
+        ca.write_text(current)
+        bundle = root / FULL.TRUST_PATH
+        bundle.parent.mkdir(parents=True)
+        bundle.write_text(current)
+        directory = root / "operator"
+        saved = directory / FULL.TRUST_PATH
+        saved.parent.mkdir(parents=True)
+        saved.write_text(old)
+        return directory, saved, current
+
+    def test_stale_identity_declined_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            directory, saved, _ = self.setup_identities(root)
+            before = saved.read_bytes()
+            with (
+                patch.object(FULL, "ROOT", root),
+                patch("builtins.input", return_value="n"),
+                patch.object(FULL.subprocess, "run") as run,
+                self.assertRaisesRegex(RuntimeError, "declined"),
+            ):
+                FULL.prepare_identities([("observer", "localhost", str(directory))])
+            run.assert_not_called()
+            self.assertEqual(saved.read_bytes(), before)
+            self.assertFalse((root / FULL.WORKLOADS_PATH).exists())
+
+    def test_confirmed_reset_scoped_to_selected_local_workloads(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            directory, saved, current = self.setup_identities(root)
+            with (
+                patch.object(FULL, "ROOT", root),
+                patch.object(FULL.subprocess, "run") as run,
+                patch("builtins.input") as prompt,
+            ):
+                FULL.prepare_identities(
+                    [
+                        ("observer", "localhost", str(directory)),
+                        ("provenance", "remote", "/remote"),
+                    ],
+                    reset=True,
+                )
+            prompt.assert_not_called()
+            self.assertEqual(
+                run.call_args.args[0][1:],
+                [
+                    "operator",
+                    "reset-identity",
+                    "--working-dir",
+                    str(directory),
+                    "--yes",
+                ],
+            )
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(saved.read_text(), current)
+            self.assertEqual(
+                (root / ".local.dev/full/ensemble" / FULL.TRUST_PATH).read_text(),
+                current,
+            )
+
+    def test_same_ca_does_not_reset_or_prompt(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            directory, saved, current = self.setup_identities(root)
+            saved.write_text(current)
+            with (
+                patch.object(FULL, "ROOT", root),
+                patch.object(FULL.subprocess, "run") as run,
+                patch("builtins.input") as prompt,
+            ):
+                FULL.prepare_identities([("observer", "localhost", str(directory))])
+            prompt.assert_not_called()
+            run.assert_not_called()
+
+    def test_preflight_refuses_symlink_before_any_reset(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            directory, saved, _ = self.setup_identities(root)
+            saved.unlink()
+            saved.symlink_to(root / FULL.TRUST_PATH)
+            with (
+                patch.object(FULL, "ROOT", root),
+                patch.object(FULL.subprocess, "run") as run,
+                self.assertRaisesRegex(RuntimeError, "symlink"),
+            ):
+                FULL.prepare_identities(
+                    [("observer", "localhost", str(directory))], reset=True
+                )
+            run.assert_not_called()
+
+    def test_startup_report_ignores_previous_connection_and_detects_exit(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            (directory / "full.pid").write_text("123")
+            log = directory / "full.log"
+            old = "operator pub/sub WebSocket connected\n"
+            log.write_text(old + "operator enrollment: request submitted\n")
+            with patch.object(FULL, "ensemble_running", return_value=True):
+                self.assertEqual(
+                    FULL.workload_state("observer", directory, len(old))[0],
+                    "awaiting approval",
+                )
+            with patch.object(FULL, "ensemble_running", return_value=False):
+                self.assertEqual(
+                    FULL.workload_state("observer", directory)[0], "failed"
+                )
+
+    def test_reset_failure_does_not_replace_trust(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            directory, saved, _ = self.setup_identities(root)
+            before = saved.read_bytes()
+            with (
+                patch.object(FULL, "ROOT", root),
+                patch.object(
+                    FULL.subprocess,
+                    "run",
+                    side_effect=subprocess.CalledProcessError(1, []),
+                ),
+                self.assertRaises(subprocess.CalledProcessError),
+            ):
+                FULL.prepare_identities(
+                    [("observer", "localhost", str(directory))], reset=True
+                )
+            self.assertEqual(saved.read_bytes(), before)
 
     def test_dry_run_never_starts_or_creates_state(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -165,7 +305,9 @@ class FullTests(unittest.TestCase):
     def test_summary_uses_live_status_and_cli_management(self):
         output = io.StringIO()
         results = [
-            subprocess.CompletedProcess([], 0, "  Gateway    online\n  Operators  2 connected\n", ""),
+            subprocess.CompletedProcess(
+                [], 0, "  Gateway    online\n  Operators  2 connected\n", ""
+            ),
             subprocess.CompletedProcess([], 0, "  g8ee       running; not ready\n", ""),
         ]
         with (

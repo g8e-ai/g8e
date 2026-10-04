@@ -8,9 +8,13 @@
 """Interactive host stack launcher for `make full`."""
 
 import argparse
+import hashlib
+import json
 import os
+import re
 import shlex
 import signal
+import ssl
 import subprocess
 import sys
 import time
@@ -18,6 +22,175 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ROLES = ("provenance", "observer", "inference")
+TRUST_PATH = Path(".g8e/pki/trust/g8eg-ca-bundle.pem")
+WORKLOADS_PATH = Path(".local.dev/full/workloads.json")
+LAUNCHES = {}
+
+
+def certificate_fingerprints(pem):
+    blocks = re.findall(
+        r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", pem, re.DOTALL
+    )
+    if not blocks:
+        raise ValueError("CA file contains no certificates")
+    return {
+        hashlib.sha256(ssl.PEM_cert_to_DER_cert(block)).hexdigest() for block in blocks
+    }
+
+
+def local_workloads(plan):
+    return [
+        (role, Path(directory)) for role, system, directory in plan if is_local(system)
+    ] + [("g8ee", ROOT / ".local.dev/full/ensemble")]
+
+
+def prepare_identities(plan, reset=False, dry_run=False):
+    """Trust changes are authorized from local disk, never from a TLS failure."""
+    workloads = local_workloads(plan)
+    root_path = ROOT / ".g8e/pki/root/root_ca.crt"
+    if dry_run:
+        print(
+            "\nIdentity preflight: compare saved trust with the local Gateway CA before launch."
+        )
+        return
+    current_root = certificate_fingerprints(root_path.read_text())
+    bundle = (ROOT / TRUST_PATH).read_text()
+    if not current_root.issubset(certificate_fingerprints(bundle)):
+        raise RuntimeError("Local Gateway trust bundle does not contain its root CA")
+    stale = []
+    for role, directory in workloads:
+        if (directory / ".g8e/pki/root/root_ca.crt").exists():
+            raise RuntimeError(
+                f"Workload directory contains a Gateway runtime: {directory}"
+            )
+        saved = directory / TRUST_PATH
+        for path in [saved, *list(saved.parents)[:3]]:
+            if path.is_symlink():
+                raise RuntimeError(f"Refusing symlink trust path: {path}")
+        identity = directory / (
+            ".g8e/pki/issued/apps/g8ee.crt"
+            if role == "g8ee"
+            else ".g8e/pki/operator.crt"
+        )
+        pending = directory / (
+            ".g8e/pki/pending-enrollment/g8ee.json"
+            if role == "g8ee"
+            else ".g8e/pki/pending-enrollment/g8eo.json"
+        )
+        if saved.exists():
+            try:
+                matches = current_root.issubset(
+                    certificate_fingerprints(saved.read_text())
+                )
+            except ValueError:
+                matches = False
+            if not matches:
+                stale.append((role, directory))
+        elif identity.exists() or pending.exists():
+            stale.append((role, directory))
+    if stale:
+        print(
+            "\nGateway identity has changed or saved workload trust is missing/invalid."
+        )
+        print("These local workloads need fresh enrollment:")
+        for role, directory in stale:
+            print(f"  {role:<12} {directory}")
+        print(
+            "Working data, model files, vault keys, configuration, and logs will be preserved."
+        )
+        if not reset and prompt(
+            "Reset their identities and request fresh enrollment? (y/N)", "n"
+        ).lower() not in ("y", "yes"):
+            raise RuntimeError("Identity reset declined; no workloads launched")
+        for role, directory in stale:
+            command = [str(ROOT / "g8e")]
+            if role == "g8ee":
+                command += ["ensemble", "reset-identity", "--yes"]
+            else:
+                command += [
+                    "operator",
+                    "reset-identity",
+                    "--working-dir",
+                    str(directory),
+                    "--yes",
+                ]
+            subprocess.run(command, cwd=ROOT, check=True)
+    for _, directory in workloads:
+        # Refuse symlinked runtime paths before installing local authoritative trust.
+        target = directory / TRUST_PATH
+        for path in [target, *list(target.parents)[:3]]:
+            if path.is_symlink():
+                raise RuntimeError(f"Refusing symlink trust path: {path}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name("g8eg-ca-bundle.pem.new")
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(fd, "w") as output:
+                output.write(bundle)
+            temporary.replace(target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    registry = ROOT / WORKLOADS_PATH
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    if plan or not registry.exists():
+        registry.write_text(
+            json.dumps(
+                [
+                    {"role": role, "directory": str(directory)}
+                    for role, directory in workloads
+                ],
+                indent=2,
+            )
+            + "\n"
+        )
+
+
+def workload_state(name, directory, offset=0):
+    pid_file = directory / "full.pid"
+    try:
+        pid = int(pid_file.read_text().strip())
+        running = pid > 0 and ensemble_running(pid)
+    except (FileNotFoundError, ValueError):
+        running = False
+    log_path = directory / "full.log"
+    if not running:
+        return "failed", f"see {log_path}"
+    with log_path.open("rb") as log:
+        log.seek(offset)
+        recent = log.read().decode(errors="replace")
+    if "operator pub/sub WebSocket connected" in recent:
+        return "connected", ""
+    if "Application startup complete" in recent:
+        return "ready", ""
+    if (
+        "request submitted" in recent
+        or "approval url" in recent.lower()
+        or "resuming pending" in recent
+        or "polling for approval" in recent
+    ):
+        return "awaiting approval", "run ./g8e auth enroll pending"
+    if "gateway not yet bootstrapped" in recent:
+        return "awaiting enrollment", "run ./g8e auth enroll user -e localhost"
+    return "starting", f"see {log_path}"
+
+
+def report_workloads(timeout=20):
+    deadline = time.monotonic() + timeout
+    while True:
+        states = [
+            (name, *workload_state(name, directory, offset))
+            for name, (directory, offset) in LAUNCHES.items()
+        ]
+        if (
+            all(state != "starting" for _, state, _ in states)
+            or time.monotonic() >= deadline
+        ):
+            break
+        time.sleep(0.2)
+    print("\nWorkload startup")
+    for name, state, detail in states:
+        print(f"  {name:<12} {state}" + (f"; {detail}" if detail else ""))
+    return any(state == "failed" for _, state, _ in states)
 
 
 def model_root():
@@ -88,9 +261,13 @@ def powershell_quote(value):
 
 
 def remote_commands(system, directory, args):
+    args = [*args, "--trust-bundle", "gateway-ca-bundle.pem"]
     print(f"\nRun on {system} with a g8e binary built for that host.")
     print(
         "Use a Gateway hostname/IP reachable from that host and matching its TLS certificate."
+    )
+    print(
+        "Copy the Gateway CA bundle into this working directory as gateway-ca-bundle.pem using a trusted channel; verify its fingerprint independently."
     )
     print("POSIX shell (place g8e in the working directory):")
 
@@ -128,13 +305,17 @@ def start_local(name, directory, command, dry_run=False):
     pid_file = directory / "full.pid"
     if pid_file.exists():
         try:
-            os.kill(int(pid_file.read_text().strip()), 0)
+            pid = int(pid_file.read_text().strip())
+            if pid <= 0 or not ensemble_running(pid):
+                raise ProcessLookupError
         except (ProcessLookupError, ValueError):
             pass
         else:
-            print(f"  {name:<12} already running")
+            LAUNCHES[name] = (directory, 0)
+            print(f"  {name:<12} running; checking startup")
             return
     log_path = directory / "full.log"
+    offset = log_path.stat().st_size if log_path.exists() else 0
     with log_path.open("ab") as log:
         process = subprocess.Popen(
             command,
@@ -152,7 +333,8 @@ def start_local(name, directory, command, dry_run=False):
         raise RuntimeError(
             f"{name} exited with status {process.returncode}; see {log_path}"
         )
-    print(f"  {name:<12} launched")
+    LAUNCHES[name] = (directory, offset)
+    print(f"  {name:<12} started; checking startup")
 
 
 def start_ensemble(dry_run=False):
@@ -212,7 +394,9 @@ def stop_ensemble():
         deadline = time.monotonic() + 10
         while ensemble_running(pid):
             if time.monotonic() >= deadline:
-                raise RuntimeError("g8ee did not stop within 10 seconds; check ensemble logs")
+                raise RuntimeError(
+                    "g8ee did not stop within 10 seconds; check ensemble logs"
+                )
             time.sleep(0.1)
     pid_file.unlink(missing_ok=True)
     print("  g8ee       stopped (host)")
@@ -226,6 +410,11 @@ def main():
         help="Prompt and print without starting processes",
     )
     parser.add_argument("--ensemble-action", choices=("start", "stop", "restart"))
+    parser.add_argument(
+        "--reset-identities",
+        action="store_true",
+        help="Confirm reset of stale identities in the selected local workload directories",
+    )
     args = parser.parse_args()
     if args.ensemble_action:
         if args.dry_run and args.ensemble_action in ("stop", "restart"):
@@ -236,7 +425,10 @@ def main():
         if args.ensemble_action in ("stop", "restart"):
             stop_ensemble()
         if args.ensemble_action in ("start", "restart"):
+            prepare_identities([], args.reset_identities, args.dry_run)
             start_ensemble(args.dry_run)
+            if not args.dry_run and report_workloads():
+                raise RuntimeError("g8ee failed during startup; see its log")
         return
     print("\nSet up operators · press Enter to use the defaults.")
     print("Choose localhost or a remote host for each role.")
@@ -264,9 +456,7 @@ def main():
             directory = str(Path(directory).expanduser().resolve())
         plan.append((role, system, directory))
         if role == "provenance":
-            storage_default = (
-                model_root() if is_local(system) else "~/.ollama/models"
-            )
+            storage_default = model_root() if is_local(system) else "~/.ollama/models"
             storage = prompt(
                 f"Provenance Ollama models directory (on {system})", storage_default
             )
@@ -301,6 +491,7 @@ def main():
             raise RuntimeError(
                 "g8ee dependencies are missing; run make dev-python and retry"
             ) from exc
+    prepare_identities(plan, args.reset_identities, args.dry_run)
     print("\nLaunching workloads" if not args.dry_run else "\nLaunch preview")
     for role, system, directory in plan:
         gateway = "localhost" if is_local(system) else remote_gateway
@@ -312,11 +503,20 @@ def main():
         else:
             remote_commands(system, directory, command_args)
     start_ensemble(args.dry_run)
+    failed = report_workloads() if not args.dry_run else False
     print_summary(args.dry_run, any(not is_local(system) for _, system, _ in plan))
+    if failed:
+        raise RuntimeError(
+            "One or more workloads failed during startup; see the logs listed above"
+        )
 
 
 def print_summary(dry_run=False, has_remote=False):
-    print("\nPlatform status" if not dry_run else "\nPreview complete · no workloads started")
+    print(
+        "\nPlatform status"
+        if not dry_run
+        else "\nPreview complete · no workloads started"
+    )
     if not dry_run:
         for command, label in (
             (["gw", "status", "--brief"], "Gateway / operators"),
@@ -334,9 +534,13 @@ def print_summary(dry_run=False, has_remote=False):
                 if result.returncode == 0:
                     print(result.stdout.rstrip())
                 else:
-                    print(f"  {label:<12} status unavailable; run ./g8e {shlex.join(command)}")
+                    print(
+                        f"  {label:<12} status unavailable; run ./g8e {shlex.join(command)}"
+                    )
             except (OSError, subprocess.TimeoutExpired):
-                print(f"  {label:<12} status unavailable; run ./g8e {shlex.join(command)}")
+                print(
+                    f"  {label:<12} status unavailable; run ./g8e {shlex.join(command)}"
+                )
     if has_remote:
         print("  Remote roles need the launch commands above run on their hosts.")
     print("\nManage with g8e (from this repository)")

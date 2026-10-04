@@ -1025,7 +1025,7 @@ up: build
 full: build
 	@echo "Starting the host platform..."
 	@./g8e gw start --quiet
-	@$(PYTHON) scripts/full.py
+	@$(PYTHON) scripts/full.py $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,)
 
 .PHONY: down
 down:

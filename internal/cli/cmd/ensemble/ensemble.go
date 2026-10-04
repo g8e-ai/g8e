@@ -22,6 +22,7 @@ func Cmd() *cobra.Command {
 		hostLifecycleCmd("start", "Start g8ee with local Python"),
 		hostLifecycleCmd("stop", "Stop the local g8ee process"),
 		hostLifecycleCmd("restart", "Restart g8ee with local Python"),
+		hostResetIdentityCmd(),
 		hostReadCmd("status", "Show local g8ee status"),
 		hostReadCmd("logs", "Show local g8ee logs"),
 	)

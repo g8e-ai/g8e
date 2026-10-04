@@ -306,7 +306,7 @@ Gateway restart restores the complete validated launch profile from the last suc
 
 ### Stop the Operator
 
-From an enrolled CLI, `g8e operator stop <operator-session-id> [--reason <text>]` stops a remote Operator through its governed shutdown channel. On the Operator host, send `SIGINT` or `SIGTERM` to the foreground Operator process. It cancels the service context, stops the heartbeat scheduler and pub/sub service, closes local services, and exits after graceful shutdown.
+From an enrolled CLI, `g8e operator stop <operator-session-id> [--reason <text>]` stops a remote Operator through its governed shutdown channel. On Linux, a matched local worker gets two seconds to exit, then TERM and another two seconds before KILL; `--grace <duration>` adjusts both waits. Bare `g8e operator stop` stops all local `g8e operator start` workers owned by the current user, including workers missing from the gateway registry or waiting for enrollment. It attempts governed shutdown when a unique session can be identified, and falls back to local termination if the gateway is unavailable. Local termination does not synthesize a gateway shutdown acknowledgement. On the Operator host, send `SIGINT` or `SIGTERM` to the foreground Operator process. It cancels the service context, stops the heartbeat scheduler and pub/sub service, closes local services, and exits after graceful shutdown.
 
 ---
 

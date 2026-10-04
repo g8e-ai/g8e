@@ -1164,6 +1164,7 @@ still runs unless --skip-backup is also given).`,
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
+			reportWorkloadIdentities(cmd)
 
 			proceed, err := shared.ConfirmDestructive(cmd, shared.DestructiveOptions{
 				Effects: []string{

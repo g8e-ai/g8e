@@ -18,11 +18,40 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
+	"github.com/g8e-ai/g8e/v2/internal/cli/identityreset"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/spf13/cobra"
 )
 
 const hostRuntime = ".local.dev/full/ensemble"
+
+func hostResetIdentityCmd() *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{Use: "reset-identity", Short: "Stop local g8ee and remove its enrollment identity", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			proceed, err := shared.ConfirmDestructive(cmd, shared.DestructiveOptions{Effects: []string{
+				"Stop local g8ee in " + hostRuntime, "Remove g8ee certificates, private keys, cached trust, and pending enrollment", "Preserve data, configuration, and logs; fresh enrollment requires gateway approval",
+			}, AssumeYes: yes})
+			if err != nil || !proceed {
+				return err
+			}
+			stop := hostLifecycleCmd("stop", "")
+			stop.SetOut(cmd.OutOrStdout())
+			stop.SetErr(cmd.ErrOrStderr())
+			stop.SetContext(cmd.Context())
+			if err := stop.RunE(stop, nil); err != nil {
+				return err
+			}
+			if err := identityreset.Reset(hostRuntime, "ensemble"); err != nil {
+				return err
+			}
+			cmd.Println("g8ee identity reset. Start g8ee to request fresh enrollment.")
+			return nil
+		}}
+	cmd.Flags().BoolVar(&yes, "yes", false, "Confirm identity reset")
+	return cmd
+}
 
 func hostReadCmd(name, short string) *cobra.Command {
 	var host bool

@@ -10,6 +10,7 @@ package serve
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net"
@@ -330,6 +331,21 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	// pki/pending-enrollment/g8eo.json so a kill-and-restart resumes
 	// the same request and key material.
 	if privateKey == "" && clientCert == "" && opts.Endpoint != "" {
+		// Persist an explicitly supplied CA before enrollment so the bootstrap
+		// response cannot replace the trust selected by the operator owner.
+		if opts.TrustBundlePath != "" {
+			pemData, err := os.ReadFile(opts.TrustBundlePath)
+			pool := x509.NewCertPool()
+			if err != nil || !pool.AppendCertsFromPEM(pemData) {
+				logger.Error("Invalid explicit trust bundle", "path", opts.TrustBundlePath)
+				os.Exit(constants.ExitConfigError)
+			}
+			path := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+			if err := fileSvc.WriteFile(context.Background(), path, pemData, constants.PermFilePublic); err != nil {
+				logger.Error("Failed to persist explicit trust bundle", "error", err)
+				os.Exit(constants.ExitConfigError)
+			}
+		}
 		logger.Info("No installed operator credentials found; starting platform enrollment", "endpoint", opts.Endpoint)
 		gatewayHTTPURL := buildGatewayHTTPBaseURL(opts.Endpoint)
 		hostname, err := os.Hostname()
