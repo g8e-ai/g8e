@@ -12,6 +12,30 @@ g8e is a zero-trust execution and evidence platform for AI agents, human operato
 
 ---
 
+## Try g8e — pick your door
+
+g8e is experimental and built solo. Pick the smallest door that fits you; you can always go deeper later. See [Early testers](EARLY_TESTERS.md) for how this project runs (small cohorts, async replies, no SLA).
+
+**1. Look first (2 min, nothing to install)**
+Browse live governed evaluation results on [OpenDevOps.ai](https://opendevops.ai) — the public, read-only explorer fed by g8e. This is what governed execution evidence looks like when it is working.
+
+**2. Protocol only (5–10 min, Python or Go)**
+Use the wire protocol, constants, and receipt verification without running the platform:
+
+```bash
+pip install g8e==2.3.0
+```
+
+Go: `go get github.com/g8e-ai/g8e/v2@v2.3.0`. Runnable examples live in `protocol/python/examples/` in a clone of this repo.
+
+**3. The binary (5 min)**
+Get the `g8e` CLI and explore `./g8e --help`. The repo ships a checksum-verified installer in `website/static/g8e.sh` (Windows: `website/static/g8e.ps1`), and the [Getting Started guide](docs/guides/getting_started.md) documents downloading the binary from a running Gateway's bootstrap endpoint.
+
+**4. Full governed stack (30+ min, advanced)**
+Gateway + Operator + ensemble + dashboard via Docker Compose. This is the complete zero-trust deployment, including passkey enrollment and approving each workload. Follow [Quick start](#quick-start) below.
+
+Stuck on any door? File a First Run Report from the issue chooser — tell us the door, the step, and what happened. That is the most valuable feedback you can give right now.
+
 ## Why g8e exists
 
 Traditional AI agent frameworks collapse four separate responsibilities into a single process: reasoning, authorization, execution, and audit logging. Giving an LLM or autonomous agent direct shell access, long-lived API keys, or unrestricted MCP tools turns every prompt, heuristic, or model decision into an unverified production side effect.

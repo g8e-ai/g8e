@@ -18,17 +18,28 @@ Before contributing, ensure you understand the core platform architecture:
 
 ## Finding Work
 
-We maintain a list of "good first issues" directly in the codebase using `TODO` comments. You can find them by running:
+New here? Start with [Early testers](../EARLY_TESTERS.md) — small cohorts, async only, batch replies, no SLA. The most useful first contributions don't require understanding the full platform:
 
-```bash
-grep -rn "TODO" --include="*.go" .
-```
+**For anyone (no build required)**
+1. **First Run Report on your OS.** Take any README door (explorer, protocol, binary, full stack) and file the First Run Report issue form with where you got stuck. Windows, macOS arm64, and Linux arm64 reports are especially valuable.
+2. **Explorer feedback.** Browse [OpenDevOps.ai](https://opendevops.ai) for 10 minutes and file what was clear, what was cryptic, and what you wanted to see but couldn't find.
+3. **README cold read.** Read the README as a stranger and report the first sentence that made you want to stop. One sentence is a complete contribution.
 
-This will show pending tasks, improvements, and architectural migrations across the Go source.
+**For Python folks (protocol only, ~30 min)**
+4. **Run the protocol examples.** `pip install g8e==2.3.0`, run `protocol/python/examples/`, and report Python version, OS, and anything surprising.
+5. **Conformance test report.** Run `protocol/conformance/` tests and file the result. A green run on a new environment is useful signal.
+
+**For careful readers (~1 hr)**
+6. **Guide vs binary audit — one guide.** Pick one file in `docs/guides/`, follow it literally, and file every place the text and actual command output disagree.
+7. **Threat-model question.** Read `docs/architecture/overview.md` and `governance.md`, then file one question about the trust boundary the docs don't answer. A good unanswered question becomes a docs fix.
+
+Look for issues labeled `first-run`, `good-first-task`, and `docs`. Experienced contributors can also search the Go source for architectural work, but newcomers should start above — the starter tasks are the curated on-ramp.
 
 ## Filing Issues
 
-When [filing an issue](https://github.com/g8e-ai/g8e/issues/new), please include:
+First time running g8e and got stuck installing or enrolling? Use the **First Run Report** form in the [issue chooser](https://github.com/g8e-ai/g8e/issues/new/choose) — it asks for the door you tried, your OS, `./g8e version`, and the exact step.
+
+For a bug in a running deployment, [file a bug report](https://github.com/g8e-ai/g8e/issues/new) and include:
 
 1. **Version**: Output of `./g8e version`.
 2. **Environment**: OS and processor architecture.
