@@ -198,7 +198,6 @@ help-legacy:
 		'  clean-harness        -> harness-clean' \\
 		'  constants            -> constants-generate' \\
 		'  docker               -> docker-up' \\
-		'  down                 -> host-down' \\
 		'  embed-console        -> console-embed' \\
 		'  embed-explorer       -> explorer-embed' \\
 		'  explorer-catalog     -> explorer-catalog-generate' \\
@@ -207,7 +206,6 @@ help-legacy:
 		'  proto-force          -> proto-generate' \\
 		'  python-build         -> protocol-python-build' \\
 		'  test-external        -> ensemble-test-external' \\
-		'  up                   -> host-up' \\
 		'  validate-cosais      -> cosais-validate' \\
 		'  validate-doctrines   -> doctrines-validate' \\
 		'  verify-fips          -> fips-verify'
@@ -281,8 +279,8 @@ help:
 		'  demo-verify               Build and run all demo environments' \
 		'' \
 		'Run locally' \
-		'  host-up                   Build and start the Gateway on this host' \
-		'  host-down                 Stop the host Gateway' \
+		'  up                        Build and start the Gateway on this host' \
+		'  down                      Stop the host Gateway' \
 		'  docker-up                 Build and start the Docker Compose stack' \
 		'  docker-down               Stop the stack and preserve volumes' \
 		'  docker-restart-operators  Restart the Data and Inference Operators' \
@@ -1018,15 +1016,15 @@ harness-clean:
 # These targets run the platform directly on the development host. They must
 # not call Docker or Docker Compose; the Docker lifecycle is defined separately
 # below under explicitly Docker-named targets.
-.PHONY: host-up
-host-up: build
+.PHONY: up
+up: build
 	@echo "Starting the g8e Gateway on this host..."
 	@./g8e gw start
 	@echo "Host platform started. Check it with: ./g8e gw status"
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
 
-.PHONY: host-down
-host-down:
+.PHONY: down
+down:
 	@test -x ./g8e || { echo "ERROR: ./g8e is missing; run 'make build' first" >&2; exit 1; }
 	@echo "Stopping the g8e Gateway running on this host..."
 	@./g8e gw stop
@@ -1081,8 +1079,8 @@ docker-build:
 # documentation and Makefile dependencies should use the canonical targets.
 .PHONY: \
 	agent-tool-registry build-ensemble build-fips check-bsl-headers clean-docker \
-	clean-harness constants docker down embed-console embed-explorer \
-	explorer-catalog generate proto proto-force python-build test-external up \
+	clean-harness constants docker embed-console embed-explorer \
+	explorer-catalog generate proto proto-force python-build test-external \
 	validate-cosais validate-doctrines verify-fips
 
 agent-tool-registry: agent-tool-registry-generate
@@ -1093,7 +1091,6 @@ clean-docker: docker-clean
 clean-harness: harness-clean
 constants: constants-generate
 docker: docker-up
-down: host-down
 embed-console: console-embed
 embed-explorer: explorer-embed
 explorer-catalog: explorer-catalog-generate
@@ -1102,7 +1099,6 @@ proto: proto-generate
 proto-force: proto-generate
 python-build: protocol-python-build
 test-external: ensemble-test-external
-up: host-up
 validate-cosais: cosais-validate
 validate-doctrines: doctrines-validate
 verify-fips: fips-verify
