@@ -95,7 +95,7 @@ When auditing ensemble documentation:
 - Listing documents without YAML front matter or outdated `version` metadata in the index.
 - Duplicating platform governance or architecture content from `docs/architecture/` in ensemble-specific documents.
 - Adding entries for aspirational or placeholder documents that lack implementation.
-- Hand-editing generated protobuf references without regenerating via `make proto`.
+- Hand-editing generated protobuf references without regenerating via `make proto-generate`.
 - Hard-coding line numbers or absolute paths in cross-references instead of repository-relative paths.
 
 ## Links out

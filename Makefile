@@ -192,6 +192,7 @@ help-legacy:
 		'' \\
 		'  build-ensemble       -> ensemble-build' \\
 		'  build-fips           -> fips-build' \\
+		'  agent-tool-registry  -> agent-tool-registry-generate' \\
 		'  check-bsl-headers    -> bsl-headers-check' \\
 		'  clean-docker         -> docker-clean' \\
 		'  clean-harness        -> harness-clean' \\
@@ -200,8 +201,10 @@ help-legacy:
 		'  down                 -> host-down' \\
 		'  embed-console        -> console-embed' \\
 		'  embed-explorer       -> explorer-embed' \\
+		'  explorer-catalog     -> explorer-catalog-generate' \\
 		'  generate             -> proto-generate' \\
 		'  proto                -> proto-generate' \\
+		'  proto-force          -> proto-generate' \\
 		'  python-build         -> protocol-python-build' \\
 		'  test-external        -> ensemble-test-external' \\
 		'  up                   -> host-up' \\
@@ -400,7 +403,7 @@ proto-lockfiles:
 # =============================================================================
 # TOOL INSTALLATION
 #
-# NOTE: protoc-install is OPTIONAL. `make proto` uses buf, which ships its own
+# NOTE: protoc-install is OPTIONAL. `make proto-generate` uses buf, which ships its own
 # compiler and does not require the standalone protoc binary. This target exists
 # only for manual use (e.g. invoking protoc directly for debugging).
 # =============================================================================
@@ -985,6 +988,15 @@ update-doctrines:
 # =============================================================================
 .PHONY: clean
 clean:
+	@set -e; read -r -p "This removes build artifacts and resets .g8e (a backup will be kept). Continue? [y/N] " answer; \
+	if [ "$$answer" != "y" ]; then echo "Clean cancelled."; exit 1; fi; \
+	if [ -d .g8e ]; then \
+		stamp=$$(date '+%m%d%H%M'); backup=".g8e-$$stamp"; suffix=2; \
+		while [ -e "$$backup" ]; do backup=".g8e-$$stamp-$$suffix"; suffix=$$((suffix + 1)); done; \
+		cp -a .g8e "$$backup" || { echo "Could not back up .g8e; clean aborted." >&2; exit 1; }; \
+		rm -rf .g8e; mkdir .g8e; \
+		echo "Previous runtime state copied to $$backup; .g8e is fresh."; \
+	fi
 	@echo "Cleaning up build artifacts..."
 	@rm -rf .g8e-test-tmp/
 	@rm -rf bin/

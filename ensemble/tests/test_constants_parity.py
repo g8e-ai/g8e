@@ -12,7 +12,7 @@ Ensures that JSON files in protocol/constants/ match the pydantic models
 in app.constants.models. This test will fail loudly if the exporter
 (Worker B in ssot_go_constants.md) produces malformed JSON.
 
-Run after 'make constants' to verify the exporter output is valid.
+Run after 'make constants-generate' to verify the exporter output is valid.
 """
 
 import json
