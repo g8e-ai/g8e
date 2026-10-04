@@ -5,11 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Interactive host stack launcher, invoked after `make up` by `make full`."""
+"""Interactive host stack launcher for `make full`."""
 
 import argparse
 import os
 import shlex
+import signal
 import subprocess
 import sys
 import time
@@ -120,8 +121,8 @@ def remote_commands(system, directory, args):
 
 def start_local(name, directory, command, dry_run=False):
     directory = Path(directory).expanduser().resolve()
-    print(f"\n{name}: {shlex.join(command)}\n  working directory: {directory}")
     if dry_run:
+        print(f"\n{name}: {shlex.join(command)}\n  working directory: {directory}")
         return
     directory.mkdir(parents=True, exist_ok=True)
     pid_file = directory / "full.pid"
@@ -131,9 +132,7 @@ def start_local(name, directory, command, dry_run=False):
         except (ProcessLookupError, ValueError):
             pass
         else:
-            print(
-                f"  Already running (PID {pid_file.read_text().strip()}); keeping existing process."
-            )
+            print(f"  {name:<12} already running")
             return
     log_path = directory / "full.log"
     with log_path.open("ab") as log:
@@ -153,9 +152,70 @@ def start_local(name, directory, command, dry_run=False):
         raise RuntimeError(
             f"{name} exited with status {process.returncode}; see {log_path}"
         )
-    print(
-        f"  Started PID {process.pid}; log: {log_path} (may be awaiting enrollment approval)"
+    print(f"  {name:<12} launched")
+
+
+def start_ensemble(dry_run=False):
+    ensemble_dir = ROOT / ".local.dev/full/ensemble"
+    start_local(
+        "g8ee",
+        ensemble_dir,
+        [
+            sys.executable,
+            "-m",
+            "app.serve",
+            "--host",
+            "127.0.0.1",
+            "--runtime-dir",
+            str(ensemble_dir / ".g8e"),
+            "--gateway-http-url",
+            "http://localhost:8080",
+            "--gateway-url",
+            "https://localhost:8443",
+            "--gateway-https-url",
+            "https://localhost:8443",
+            "--gateway-pubsub-url",
+            "wss://localhost:8443",
+        ],
+        dry_run,
     )
+
+
+def ensemble_running(pid):
+    # Linux signal-0 also sees zombies; treat them as stopped.
+    stat = Path(f"/proc/{pid}/stat")
+    try:
+        if stat.read_text().rsplit(")", 1)[1].split()[0] == "Z":
+            return False
+    except FileNotFoundError:
+        pass
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def stop_ensemble():
+    pid_file = ROOT / ".local.dev/full/ensemble/full.pid"
+    if not pid_file.exists():
+        print("  g8ee       stopped (host)")
+        return
+    pid = int(pid_file.read_text().strip())
+    if pid <= 0:
+        raise ValueError(f"Invalid ensemble PID in {pid_file}")
+    if ensemble_running(pid):
+        cmdline = Path(f"/proc/{pid}/cmdline")
+        if cmdline.exists() and b"app.serve" not in cmdline.read_bytes().split(b"\0"):
+            raise RuntimeError(f"PID {pid} is not the ensemble; refusing to stop it")
+        os.kill(pid, signal.SIGTERM)
+        deadline = time.monotonic() + 10
+        while ensemble_running(pid):
+            if time.monotonic() >= deadline:
+                raise RuntimeError("g8ee did not stop within 10 seconds; check ensemble logs")
+            time.sleep(0.1)
+    pid_file.unlink(missing_ok=True)
+    print("  g8ee       stopped (host)")
 
 
 def main():
@@ -165,16 +225,30 @@ def main():
         action="store_true",
         help="Prompt and print without starting processes",
     )
+    parser.add_argument("--ensemble-action", choices=("start", "stop", "restart"))
     args = parser.parse_args()
-    print(
-        "Each operator uses its own identity directory. Provenance reads model files;"
-    )
-    print(
-        "Observer should run on the Ollama/GPU host. Remote roles print launch commands."
-    )
+    if args.ensemble_action:
+        if args.dry_run and args.ensemble_action in ("stop", "restart"):
+            print("g8ee: stop the local Python process")
+            if args.ensemble_action == "restart":
+                start_ensemble(True)
+            return
+        if args.ensemble_action in ("stop", "restart"):
+            stop_ensemble()
+        if args.ensemble_action in ("start", "restart"):
+            start_ensemble(args.dry_run)
+        return
+    print("\nSet up operators · press Enter to use the defaults.")
+    print("Choose localhost or a remote host for each role.")
     plan = []
     storage = ollama = None
+    descriptions = {
+        "provenance": "tracks model files; place it where models are stored",
+        "observer": "observes provider activity; place it on the Ollama/GPU host",
+        "inference": "runs inference through your Ollama endpoint",
+    }
     for role in ROLES:
+        print(f"\n{role.title()} · {descriptions[role]}")
         system = prompt(
             f"{role.title()} system (localhost or remote host)", "localhost"
         )
@@ -220,11 +294,14 @@ def main():
                 [sys.executable, "-c", "import app.serve"],
                 cwd=ROOT / "ensemble",
                 check=True,
+                capture_output=True,
+                text=True,
             )
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(
                 "g8ee dependencies are missing; run make dev-python and retry"
             ) from exc
+    print("\nLaunching workloads" if not args.dry_run else "\nLaunch preview")
     for role, system, directory in plan:
         gateway = "localhost" if is_local(system) else remote_gateway
         command_args = operator_args(role, gateway, directory, storage, ollama)
@@ -234,35 +311,45 @@ def main():
             )
         else:
             remote_commands(system, directory, command_args)
-    ensemble_dir = ROOT / ".local.dev/full/ensemble"
-    start_local(
-        "g8ee",
-        ensemble_dir,
-        [
-            sys.executable,
-            "-m",
-            "app.serve",
-            "--host",
-            "127.0.0.1",
-            "--runtime-dir",
-            str(ensemble_dir / ".g8e"),
-            "--gateway-http-url",
-            "http://localhost:8080",
-            "--gateway-url",
-            "https://localhost:8443",
-            "--gateway-https-url",
-            "https://localhost:8443",
-            "--gateway-pubsub-url",
-            "wss://localhost:8443",
-        ],
-        args.dry_run,
-    )
-    print("\nBootstrap owner if needed: ./g8e auth enroll user -e localhost")
-    print("Review workload requests: ./g8e auth enroll pending")
-    print("Approve each intended request: ./g8e auth enroll approve <request-id> --yes")
-    print("g8ee becomes ready after approval: http://127.0.0.1:8000/health")
-    print("To stop a local workload: kill $(cat <working-directory>/full.pid)")
-    print("make down stops the Gateway; workload processes are separate.")
+    start_ensemble(args.dry_run)
+    print_summary(args.dry_run, any(not is_local(system) for _, system, _ in plan))
+
+
+def print_summary(dry_run=False, has_remote=False):
+    print("\nPlatform status" if not dry_run else "\nPreview complete · no workloads started")
+    if not dry_run:
+        for command, label in (
+            (["gw", "status", "--brief"], "Gateway / operators"),
+            (["ensemble", "status"], "g8ee"),
+        ):
+            try:
+                result = subprocess.run(
+                    [str(ROOT / "g8e"), *command],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    print(result.stdout.rstrip())
+                else:
+                    print(f"  {label:<12} status unavailable; run ./g8e {shlex.join(command)}")
+            except (OSError, subprocess.TimeoutExpired):
+                print(f"  {label:<12} status unavailable; run ./g8e {shlex.join(command)}")
+    if has_remote:
+        print("  Remote roles need the launch commands above run on their hosts.")
+    print("\nManage with g8e (from this repository)")
+    print("  ./g8e gw status                  Gateway and connected operators")
+    print("  ./g8e ensemble status            g8ee readiness")
+    print("  ./g8e operator list              Operator IDs and sessions")
+    print("  ./g8e operator show <id>         Operator details")
+    print("  ./g8e ensemble logs              g8ee startup issues")
+    print("\nIf workloads need approval")
+    print("  ./g8e auth enroll user -e localhost   Enroll your CLI identity first")
+    print("  ./g8e auth enroll pending             Review requests")
+    print("  ./g8e auth enroll approve <id> --yes   Approve an intended request")
+    print("\nConsole: https://localhost:8443/console/")
 
 
 if __name__ == "__main__":

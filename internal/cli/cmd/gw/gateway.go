@@ -416,6 +416,7 @@ func gatewayStartCmdWithConfig(
 	var flags GatewayFlags
 	var follow bool
 	var interactive bool
+	var quiet bool
 
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingPhaseStart),
@@ -439,6 +440,11 @@ base URL) is read from this profile and restored. If the profile is missing or
 malformed, the restart fails closed rather than falling back to default settings.
 Valid posture values are 'doctrine', 'consensus', 'ratify', and 'notary'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if quiet {
+				previousOut := cmd.OutOrStdout()
+				defer cmd.SetOut(previousOut)
+				cmd.SetOut(io.Discard)
+			}
 			_, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
@@ -575,6 +581,7 @@ Valid posture values are 'doctrine', 'consensus', 'ratify', and 'notary'.`,
 	}
 
 	addGatewayFlags(cmd, &flags)
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "Suppress startup guidance")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Run gateway in foreground (Ctrl+C stops gateway)")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Launch interactive onboarding wizard")
 
@@ -639,6 +646,7 @@ func gatewayStatusCmdWithConfig(
 	clientFactory authcmd.APIClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
+	var brief bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check Gateway health and status",
@@ -651,6 +659,10 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
+			}
+
+			if brief {
+				return printBriefStatus(cmd, cfg, clientFactory, fileSvcFactory)
 			}
 
 			cmd.Println("g8e Gateway Status")
@@ -732,6 +744,7 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 		},
 	}
 
+	cmd.Flags().BoolVar(&brief, "brief", false, "Show a compact Gateway and connected operator summary")
 	return cmd
 }
 

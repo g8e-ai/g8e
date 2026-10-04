@@ -1022,7 +1022,9 @@ up: build
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
 
 .PHONY: full
-full: up
+full: build
+	@echo "Starting the host platform..."
+	@./g8e gw start --quiet
 	@$(PYTHON) scripts/full.py
 
 .PHONY: down

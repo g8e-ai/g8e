@@ -5,11 +5,10 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-// Package ensemble manages the g8ee service in the local unified Compose stack.
+// Package ensemble manages the local g8ee service.
 package ensemble
 
 import (
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
 	"github.com/spf13/cobra"
 )
 
@@ -17,25 +16,14 @@ func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ensemble",
 		Short: "Manage the local g8ee ensemble service",
-		Long:  "Manage only the ensemble service in the repository's unified Docker Compose stack. Run from the repository root.",
+		Long:  "Manage the local Python ensemble service started by make full. Uses the active virtual environment, repository .venv, or python3. Run from the repository root.",
 	}
 	cmd.AddCommand(
-		composeCmd("start", "Start g8ee", []string{"up", "-d", "ensemble"}),
-		composeCmd("stop", "Stop g8ee", []string{"stop", "ensemble"}),
-		composeCmd("restart", "Restart g8ee", []string{"restart", "ensemble"}),
-		composeCmd("status", "Show g8ee container status", []string{"ps", "ensemble"}),
-		composeCmd("logs", "Show g8ee logs", []string{"logs", "--tail=100", "ensemble"}),
+		hostLifecycleCmd("start", "Start g8ee with local Python"),
+		hostLifecycleCmd("stop", "Stop the local g8ee process"),
+		hostLifecycleCmd("restart", "Restart g8ee with local Python"),
+		hostReadCmd("status", "Show local g8ee status"),
+		hostReadCmd("logs", "Show local g8ee logs"),
 	)
 	return cmd
-}
-
-func composeCmd(name, short string, args []string) *cobra.Command {
-	return &cobra.Command{
-		Use:   name,
-		Short: short,
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return docker.RunDockerComposeContext(cmd.Context(), args)
-		},
-	}
 }
