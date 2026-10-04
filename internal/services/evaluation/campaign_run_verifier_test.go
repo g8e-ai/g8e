@@ -319,3 +319,107 @@ func TestCampaignRunVerifier_PassesHeterogeneousFormationAssignment(t *testing.T
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, report.GetStatus())
 }
+
+func TestCaptureCampaignRunEvidence_ValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		store    *Store
+		runID    string
+		callObs  bool
+		callProv bool
+		callBoth bool
+		wantErr  error
+	}{
+		{
+			name:    "provider observation missing store",
+			store:   nil,
+			runID:   "run-1",
+			callObs: true,
+			wantErr: constants.ErrMissingRequiredField,
+		},
+		{
+			name:    "provider observation missing run id",
+			store:   NewStore(newCampaignMemoryFileService()),
+			runID:   "",
+			callObs: true,
+			wantErr: constants.ErrMissingRequiredField,
+		},
+		{
+			name:     "model provenance missing store",
+			store:    nil,
+			runID:    "run-1",
+			callProv: true,
+			wantErr:  constants.ErrMissingRequiredField,
+		},
+		{
+			name:     "model provenance missing run id",
+			store:    NewStore(newCampaignMemoryFileService()),
+			runID:    "",
+			callProv: true,
+			wantErr:  constants.ErrMissingRequiredField,
+		},
+		{
+			name:     "witness evidence missing store",
+			store:    nil,
+			runID:    "run-1",
+			callBoth: true,
+			wantErr:  constants.ErrMissingRequiredField,
+		},
+		{
+			name:     "witness evidence missing run id",
+			store:    NewStore(newCampaignMemoryFileService()),
+			runID:    "",
+			callBoth: true,
+			wantErr:  constants.ErrMissingRequiredField,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			var err error
+			if tt.callObs {
+				err = CaptureCampaignRunProviderObservationEvidence(ctx, tt.store, tt.runID, nil)
+			} else if tt.callProv {
+				err = CaptureCampaignRunModelProvenanceEvidence(ctx, tt.store, tt.runID, nil)
+			} else if tt.callBoth {
+				err = CaptureCampaignRunWitnessEvidence(ctx, tt.store, tt.runID, nil, nil)
+			}
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestCaptureCampaignRunEvidence_DecoupledObservationAndProvenance(t *testing.T) {
+	t.Parallel()
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	req := testCampaignInitRequest(t)
+	_, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// 1. With nil readers, each function returns cleanly (safe no-op).
+	assert.NoError(t, CaptureCampaignRunProviderObservationEvidence(ctx, store, req.RunID, nil))
+	assert.NoError(t, CaptureCampaignRunModelProvenanceEvidence(ctx, store, req.RunID, nil))
+	assert.NoError(t, CaptureCampaignRunWitnessEvidence(ctx, store, req.RunID, nil, nil))
+
+	// 2. With real local-only readers, evidence capture succeeds without error.
+	obsReader, err := NewCampaignProviderObservationReader(files)
+	require.NoError(t, err)
+	provReader, err := NewCampaignModelProvenanceReader(files)
+	require.NoError(t, err)
+
+	assert.NoError(t, CaptureCampaignRunProviderObservationEvidence(ctx, store, req.RunID, obsReader))
+	assert.NoError(t, CaptureCampaignRunModelProvenanceEvidence(ctx, store, req.RunID, provReader))
+	assert.NoError(t, CaptureCampaignRunWitnessEvidence(ctx, store, req.RunID, obsReader, provReader))
+}

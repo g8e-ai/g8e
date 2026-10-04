@@ -1385,7 +1385,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_COMMAND_COMPLETED: Object.freeze({
         kind: 'outcome',
-        transport: ['pubsub'],
+        transport: ['pubsub', 'sse'],
         producers: ['cli', 'ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
@@ -1396,7 +1396,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_COMMAND_FAILED: Object.freeze({
         kind: 'outcome',
-        transport: ['pubsub'],
+        transport: ['pubsub', 'sse'],
         producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
@@ -1421,7 +1421,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_COMMAND_STARTED: Object.freeze({
         kind: 'outcome',
-        transport: ['pubsub'],
+        transport: ['pubsub', 'sse'],
         producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),

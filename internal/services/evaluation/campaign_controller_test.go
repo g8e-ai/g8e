@@ -156,3 +156,47 @@ func TestCampaignControllerRunSummaryCountsAssignments(t *testing.T) {
 	assert.Greater(t, summary.ExpectedAssignment, uint64(0))
 	assert.Equal(t, uint32(count), summary.QueuedCount)
 }
+
+func TestCampaignControllerCreateCampaign_IdempotencyAndParameterConflict(t *testing.T) {
+	t.Parallel()
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	req := testCampaignInitRequest(t)
+
+	// Initial creation
+	spec, err := controller.CreateCampaign(context.Background(), CampaignCreateRequest{
+		CampaignID:        req.CampaignID,
+		Catalog:           req.Catalog,
+		Inventory:         req.Inventory,
+		ScenarioArtifacts: req.ScenarioArtifacts,
+		RepetitionCount:   req.RepetitionCount,
+		Platform:          req.Platform,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, spec)
+
+	// Re-creating identical campaign must succeed (idempotent across revisions)
+	recreated, err := controller.CreateCampaign(context.Background(), CampaignCreateRequest{
+		CampaignID:        req.CampaignID,
+		Catalog:           req.Catalog,
+		Inventory:         req.Inventory,
+		ScenarioArtifacts: req.ScenarioArtifacts,
+		RepetitionCount:   req.RepetitionCount,
+		Platform:          req.Platform,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, spec.GetCampaignDigest(), recreated.GetCampaignDigest())
+
+	// Re-creating with different repetition count must fail with ErrEvaluationCampaignConflict
+	_, err = controller.CreateCampaign(context.Background(), CampaignCreateRequest{
+		CampaignID:        req.CampaignID,
+		Catalog:           req.Catalog,
+		Inventory:         req.Inventory,
+		ScenarioArtifacts: req.ScenarioArtifacts,
+		RepetitionCount:   req.RepetitionCount + 1,
+		Platform:          req.Platform,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvaluationCampaignConflict)
+}

@@ -21,6 +21,7 @@ The canonical encoding is pinned by the shared vector file
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import time
@@ -119,6 +120,13 @@ class ProxyStampVerifier:
         self._verify_key: VerifyKey | None = None
         self._last_fetch: float | None = None
         self._nonces: dict[str, float] = {}
+        self._lock: asyncio.Lock | None = None
+
+    @property
+    def _fetch_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def verify(self, request: Request) -> None:
         """Raise AuthenticationError unless the request carries a valid stamp.
@@ -178,19 +186,24 @@ class ProxyStampVerifier:
         if self._verify_key is not None and self._key_id == key_id:
             return self._verify_key
 
-        can_fetch = self._last_fetch is None or now - self._last_fetch >= KEY_REFRESH_MIN_INTERVAL_SECONDS
-        if not can_fetch:
-            self._reject("unknown key id")
+        async with self._fetch_lock:
+            if self._verify_key is not None and self._key_id == key_id:
+                return self._verify_key
 
-        self._last_fetch = now
-        published = await self._key_source()
-        if published.algorithm != "ed25519":
-            self._reject("gateway published a non-ed25519 key")
-        self._verify_key = VerifyKey(bytes.fromhex(published.public_key))
-        self._key_id = published.key_id
-        if self._key_id != key_id:
-            self._reject("unknown key id")
-        return self._verify_key
+            current_time = self._clock()
+            can_fetch = self._last_fetch is None or current_time - self._last_fetch >= KEY_REFRESH_MIN_INTERVAL_SECONDS
+            if not can_fetch:
+                self._reject("unknown key id")
+
+            self._last_fetch = current_time
+            published = await self._key_source()
+            if published.algorithm != "ed25519":
+                self._reject("gateway published a non-ed25519 key")
+            self._verify_key = VerifyKey(bytes.fromhex(published.public_key))
+            self._key_id = published.key_id
+            if self._key_id != key_id:
+                self._reject("unknown key id")
+            return self._verify_key
 
     def _remember(self, nonce: str, now: float) -> None:
         window = BROWSER_PROXY_STAMP_MAX_SKEW_SECONDS * 2

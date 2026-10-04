@@ -535,7 +535,6 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultFailedAssignmentWi
 	require.Len(t, exporter.records, 1)
 }
 
-
 // completedTestCampaign runs one full stubbed campaign: init, schedule, and
 // every assignment executed to a terminal result.
 func completedTestCampaign(t *testing.T, store *Store) *evalv1.EvaluationRun {

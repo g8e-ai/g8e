@@ -228,3 +228,27 @@ class TestProxyStampVerifier:
             with pytest.raises(AuthenticationError):
                 await v.verify(make_request(stamped_headers(key, key_id=f"bogus-{i}", nonce=f"{i}" * 32)))
         assert source.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_requests_on_cold_cache_do_not_reject(self):
+        import asyncio
+
+        key = _key()
+
+        class DelayedKeySource:
+            def __init__(self):
+                self.calls = 0
+
+            async def __call__(self):
+                self.calls += 1
+                await asyncio.sleep(0.01)
+                return _response(key)
+
+        source = DelayedKeySource()
+        v = verifier(source)
+        req1 = make_request(stamped_headers(key, nonce="a" * 32))
+        req2 = make_request(stamped_headers(key, nonce="b" * 32))
+        req3 = make_request(stamped_headers(key, nonce="c" * 32))
+        await asyncio.gather(v.verify(req1), v.verify(req2), v.verify(req3))
+        assert source.calls == 1
+

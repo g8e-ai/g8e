@@ -146,8 +146,14 @@ func (c *CampaignController) CreateCampaign(ctx context.Context, req CampaignCre
 	existing, err := c.store.LoadCampaignSpec(ctx, req.CampaignID)
 	switch {
 	case err == nil:
-		if existing.GetCampaignDigest() != spec.GetCampaignDigest() {
+		if existing.GetCatalogDigest() != spec.GetCatalogDigest() ||
+			existing.GetModelRegistryDigest() != spec.GetModelRegistryDigest() ||
+			existing.GetRepetitionCount() != spec.GetRepetitionCount() ||
+			(existing.GetPlatformRelease() != "" && existing.GetPlatformRelease() != spec.GetPlatformRelease()) {
 			return nil, fmt.Errorf("evaluation: create campaign %q: %w", req.CampaignID, constants.ErrEvaluationCampaignConflict)
+		}
+		if err := ValidateCampaignSpecDigest(existing); err != nil {
+			return nil, fmt.Errorf("evaluation: create campaign %q: %w", req.CampaignID, err)
 		}
 		return existing, nil
 	case !isNotFound(err):

@@ -146,6 +146,12 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		c.logger.Warn("gateway: ensemble browser proxy rejected proxy stamp", "path", upstreamPath)
+		c.responder.Error(w, http.StatusBadGateway, "ensemble upstream authentication failed")
+		return
+	}
+
 	for k, vals := range resp.Header {
 		for _, v := range vals {
 			w.Header().Add(k, v)

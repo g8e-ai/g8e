@@ -392,4 +392,3 @@ func TestToolCallStatusConstants(t *testing.T) {
 		assert.Equal(t, tc.value, string(tc.goConst))
 	}
 }
-

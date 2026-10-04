@@ -53,6 +53,20 @@ func (l *registrationOwnerOperatorLister) ListOperatorsForObservation() ([]model
 	return l.reg.ListUserOperators(ownerID)
 }
 
+func (l *registrationOwnerOperatorLister) ListOperatorsForProvenance() ([]models.OperatorDocumentGo, error) {
+	if l.reg == nil || l.userSvc == nil {
+		return nil, constants.ErrServiceUnavailable
+	}
+	ownerID, err := l.userSvc.FirstUserID()
+	if err != nil {
+		return nil, err
+	}
+	if ownerID == "" {
+		return nil, constants.ErrNotFound
+	}
+	return l.reg.ListUserOperators(ownerID)
+}
+
 // ProviderBoundaryObservationCoordinator fans out BEGIN/FINALIZE observation
 // commands to the remote provider-boundary observer operator and ingests
 // completed windows on the campaign Gateway host.

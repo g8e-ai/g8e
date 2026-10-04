@@ -201,4 +201,3 @@ func TestCampaignPublicationCoordinator_BuildAssignmentAuditBindings_EmptyLiveRe
 	assert.Nil(t, bindings)
 	assert.Empty(t, proofPublisher.inputs)
 }
-

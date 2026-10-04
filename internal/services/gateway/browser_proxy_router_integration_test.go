@@ -117,3 +117,33 @@ func TestBrowserProxyRouter_MTLSKeyAndSignedBrowserRequests(t *testing.T) {
 		})
 	}
 }
+
+func TestBrowserProxyRouter_UpstreamUnauthorizedMappedToBadGateway(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(upstream.Close)
+	h, cfg, infra := setupTestHTTPHandler(t)
+	cfg.Gateway.EnsembleUpstreamURL = upstream.URL
+	_, key, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signer, err := NewBrowserProxySigner(key, "router-test-key")
+	require.NoError(t, err)
+	controller := h.ensembleBrowserProxyController
+	controller.cfg = cfg
+	controller.logger = infra.Logger
+	controller.responder = infra.Responder
+	controller.signer = signer
+
+	userID := "test-user-401"
+	seedActiveUser(t, infra, userID)
+	sessionID := seedWebSession(t, infra, userID)
+
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.EnsembleSettingsPrefix+"/llm/get", bytes.NewBufferString(`{}`))
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: sessionID})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadGateway, w.Code, "upstream 401 must be mapped to 502 Bad Gateway to preserve web session")
+}
+

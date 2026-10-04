@@ -217,8 +217,11 @@ func verifyRun(
 		provenancePolicy = evaluation.ModelProvenancePolicyStrict
 	}
 	verifier = verifier.WithModelProvenanceReader(provenanceReader, provenancePolicy)
-	if err := evaluation.CaptureCampaignRunWitnessEvidence(cmd.Context(), store, runID, observationReader, provenanceReader); err != nil {
-		return nil, fmt.Errorf("evaluation: runs verify: %w", err)
+	if err := evaluation.CaptureCampaignRunProviderObservationEvidence(cmd.Context(), store, runID, observationReader); err != nil {
+		return nil, fmt.Errorf("evaluation: runs verify: provider observation: %w", err)
+	}
+	if err := evaluation.CaptureCampaignRunModelProvenanceEvidence(cmd.Context(), store, runID, provenanceReader); err != nil {
+		return nil, fmt.Errorf("evaluation: runs verify: model provenance: %w", err)
 	}
 	report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
 	if err != nil {

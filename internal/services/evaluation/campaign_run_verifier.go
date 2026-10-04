@@ -71,13 +71,18 @@ func (v *CampaignRunVerifier) WithModelProvenanceReader(reader *CampaignModelPro
 	return v
 }
 
-func CaptureCampaignRunWitnessEvidence(ctx context.Context, store *Store, runID string, providerReader *CampaignProviderObservationReader, provenanceReader *CampaignModelProvenanceReader) error {
+// CaptureCampaignRunProviderObservationEvidence ingests provider-boundary observer windows
+// for all completed assignments in a run.
+func CaptureCampaignRunProviderObservationEvidence(ctx context.Context, store *Store, runID string, providerReader *CampaignProviderObservationReader) error {
 	if store == nil || runID == "" {
-		return fmt.Errorf("evaluation: capture campaign witness evidence: %w", constants.ErrMissingRequiredField)
+		return fmt.Errorf("evaluation: capture provider observation evidence: %w", constants.ErrMissingRequiredField)
+	}
+	if providerReader == nil {
+		return nil
 	}
 	assignments, err := store.ListAssignments(ctx, runID)
 	if err != nil {
-		return fmt.Errorf("evaluation: capture campaign witness evidence: list assignments: %w", err)
+		return fmt.Errorf("evaluation: capture provider observation evidence: list assignments: %w", err)
 	}
 	for _, assignment := range assignments {
 		if assignment == nil {
@@ -85,23 +90,64 @@ func CaptureCampaignRunWitnessEvidence(ctx context.Context, store *Store, runID 
 		}
 		exists, err := store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
 		if err != nil {
-			return fmt.Errorf("evaluation: capture campaign witness evidence: inspect assignment result: %w", err)
+			return fmt.Errorf("evaluation: capture provider observation evidence: inspect assignment result: %w", err)
 		}
 		if !exists {
 			continue
 		}
 		result, err := store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
 		if err != nil {
-			return fmt.Errorf("evaluation: capture campaign witness evidence: load assignment result: %w", err)
+			return fmt.Errorf("evaluation: capture provider observation evidence: load assignment result: %w", err)
 		}
 		if err := providerReader.CaptureAssignmentEvidence(ctx, result); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// CaptureCampaignRunModelProvenanceEvidence ingests model provenance attestation windows
+// for all completed assignments in a run.
+func CaptureCampaignRunModelProvenanceEvidence(ctx context.Context, store *Store, runID string, provenanceReader *CampaignModelProvenanceReader) error {
+	if store == nil || runID == "" {
+		return fmt.Errorf("evaluation: capture model provenance evidence: %w", constants.ErrMissingRequiredField)
+	}
+	if provenanceReader == nil {
+		return nil
+	}
+	assignments, err := store.ListAssignments(ctx, runID)
+	if err != nil {
+		return fmt.Errorf("evaluation: capture model provenance evidence: list assignments: %w", err)
+	}
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		exists, err := store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return fmt.Errorf("evaluation: capture model provenance evidence: inspect assignment result: %w", err)
+		}
+		if !exists {
+			continue
+		}
+		result, err := store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return fmt.Errorf("evaluation: capture model provenance evidence: load assignment result: %w", err)
 		}
 		if err := provenanceReader.CaptureAssignmentEvidence(ctx, result); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// CaptureCampaignRunWitnessEvidence captures both provider observation and model provenance
+// evidence for all completed assignments in a run.
+func CaptureCampaignRunWitnessEvidence(ctx context.Context, store *Store, runID string, providerReader *CampaignProviderObservationReader, provenanceReader *CampaignModelProvenanceReader) error {
+	if err := CaptureCampaignRunProviderObservationEvidence(ctx, store, runID, providerReader); err != nil {
+		return err
+	}
+	return CaptureCampaignRunModelProvenanceEvidence(ctx, store, runID, provenanceReader)
 }
 
 // VerifyRun recomputes assignment verification for every terminal assignment

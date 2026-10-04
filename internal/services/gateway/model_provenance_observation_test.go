@@ -50,6 +50,15 @@ func testModelProvenanceWindow(t *testing.T, providerAttemptID string) *evalv1.M
 	return window
 }
 
+type stubModelProvenanceOperatorLister struct {
+	operators []models.OperatorDocumentGo
+	err       error
+}
+
+func (s *stubModelProvenanceOperatorLister) ListOperatorsForProvenance() ([]models.OperatorDocumentGo, error) {
+	return s.operators, s.err
+}
+
 func TestModelProvenanceObservationCoordinator_EnsureOperator_SubscribesToProvenanceOperator(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
@@ -59,7 +68,7 @@ func TestModelProvenanceObservationCoordinator_EnsureOperator_SubscribesToProven
 
 	coordinator := NewModelProvenanceObservationCoordinator(
 		&DispatchService{},
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{
 			{
 				ID:                "prov-1",
 				OperatorSessionID: "sess-prov-1",
@@ -87,7 +96,7 @@ func TestModelProvenanceObservationCoordinator_PreflightCommandDelivery_FailsWit
 
 	coordinator := NewModelProvenanceObservationCoordinator(
 		&DispatchService{pubsub: pubsubHandler},
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{
 			{
 				ID:                "prov-1",
 				OperatorSessionID: "sess-prov-1",
@@ -115,7 +124,7 @@ func TestModelProvenanceObservationCoordinator_IngestPersistsAttestationWindow(t
 
 	coordinator := NewModelProvenanceObservationCoordinator(
 		&DispatchService{},
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{
 			{
 				ID:                "prov-1",
 				OperatorSessionID: "sess-prov-1",
@@ -161,7 +170,7 @@ func TestModelProvenanceObservationCoordinator_NotifyAttemptBegin_FailsWithoutCm
 
 	coordinator := NewModelProvenanceObservationCoordinator(
 		dispatchSvc,
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{
 			{
 				ID:                op.ID,
 				OperatorSessionID: op.OperatorSessionID,
