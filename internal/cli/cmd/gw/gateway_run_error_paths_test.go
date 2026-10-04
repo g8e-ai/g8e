@@ -9,6 +9,7 @@ package gw
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,9 +21,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // setupGatewayTestEnv creates a temp dir with minimal .g8e structure so that
@@ -208,11 +212,10 @@ func TestGatewayStatusCmd_NotRunningReturnsStopped(t *testing.T) {
 	assert.Contains(t, buf.String(), "STOPPED")
 }
 
-// TestGatewayStatusCmd_ReportsBothLocalhostAndDockerSections verifies that
-// `g8e gw status` emits both the Localhost Gateway section and the Docker
-// Compose Stack section in a single invocation, so users do not need to run
-// `g8e docker status` separately.
-func TestGatewayStatusCmd_ReportsBothLocalhostAndDockerSections(t *testing.T) {
+// TestGatewayStatusCmd_DoesNotShowDockerSectionWhenNoContainersRunning verifies that
+// `g8e gw status` does not show the Docker Compose Stack section when no containers
+// are actually running.
+func TestGatewayStatusCmd_DoesNotShowDockerSectionWhenNoContainersRunning(t *testing.T) {
 	setupGatewayTestEnv(t)
 
 	cmd := gatewayStatusCmd()
@@ -225,21 +228,16 @@ func TestGatewayStatusCmd_ReportsBothLocalhostAndDockerSections(t *testing.T) {
 
 	output := buf.String()
 	assert.Contains(t, output, "Localhost Gateway")
-	assert.Contains(t, output, "Docker Compose Stack")
-	// No compose file in the temp cwd, so the docker section reports that.
-	assert.Contains(t, output, "No docker-compose.yml found in current directory")
+	assert.NotContains(t, output, "Docker Compose Stack")
 }
 
-// TestGatewayStatusCmd_DockerSectionShowsNotAvailableWhenDockerMissing
-// verifies the docker section degrades gracefully when Docker is not
-// installed, while the localhost section still reports STOPPED.
-func TestGatewayStatusCmd_DockerSectionShowsNotAvailableWhenDockerMissing(t *testing.T) {
+// TestGatewayStatusCmd_DockerSectionNotShownWhenDockerMissing
+// verifies the docker section is not shown when Docker is not installed.
+func TestGatewayStatusCmd_DockerSectionNotShownWhenDockerMissing(t *testing.T) {
 	if cmdtest.DockerAvailable() {
 		t.Skip("test exercises the no-Docker status note")
 	}
 	tmpDir := setupGatewayTestEnv(t)
-	// Place a compose file so the existence guard passes and the
-	// checkDockerAvailable guard is reached instead.
 	require.NoError(t, os.WriteFile(
 		filepath.Join(tmpDir, constants.DockerComposeFile),
 		[]byte("version: '3'\n"), constants.PermFilePublic))
@@ -254,7 +252,141 @@ func TestGatewayStatusCmd_DockerSectionShowsNotAvailableWhenDockerMissing(t *tes
 
 	output := buf.String()
 	assert.Contains(t, output, "STOPPED")
-	assert.Contains(t, output, "Docker not available")
+	assert.NotContains(t, output, "Docker Compose Stack")
+}
+
+type statusMockClient struct {
+	responses map[string][]byte
+}
+
+func (m *statusMockClient) Get(path string) ([]byte, error) {
+	if resp, ok := m.responses[path]; ok {
+		return resp, nil
+	}
+	for k, v := range m.responses {
+		if strings.HasPrefix(path, k) {
+			return v, nil
+		}
+	}
+	return nil, fmt.Errorf("unexpected path: %s", path)
+}
+
+func (m *statusMockClient) Post(string, interface{}) ([]byte, error) { return nil, nil }
+func (m *statusMockClient) Put(string, interface{}) ([]byte, error)  { return nil, nil }
+func (m *statusMockClient) Delete(string) ([]byte, error)            { return nil, nil }
+
+func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+
+	healthResp, _ := json.Marshal(models.HealthResponse{
+		Status: constants.GatewayModeStatusOK,
+		PID:    9999,
+	})
+	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{
+		Success: true,
+		Operators: []models.OperatorDocumentGo{
+			{
+				ID:                "g8e-model-provenance-operator",
+				OperatorRole:      constants.OperatorRoleProvenance,
+				OperatorType:      constants.OperatorTypeRemote,
+				CurrentHostname:   "beepboop",
+				OperatorSessionID: "sess-prov-1",
+				Status:            constants.OperatorStatusActive,
+			},
+			{
+				ID:                "g8e-provider-boundary-observer",
+				OperatorRole:      constants.OperatorRoleObserver,
+				OperatorType:      constants.OperatorTypeRemote,
+				CurrentHostname:   "beepboop",
+				OperatorSessionID: "sess-obs-1",
+				Status:            constants.OperatorStatusActive,
+			},
+			{
+				ID:                "g8e-inference-operator",
+				OperatorRole:      constants.OperatorRoleInference,
+				OperatorType:      constants.OperatorTypeRemote,
+				CurrentHostname:   "beepboop",
+				OperatorSessionID: "sess-inf-1",
+				Status:            constants.OperatorStatusActive,
+			},
+			{
+				ID:           "old-stopped-op",
+				OperatorRole: constants.OperatorRoleData,
+				OperatorType: constants.OperatorTypeRemote,
+				Status:       constants.OperatorStatusStopped,
+			},
+		},
+	})
+
+	mockClient := &statusMockClient{
+		responses: map[string][]byte{
+			"/api/v1/health":             healthResp,
+			constants.APIPaths.Operators: operatorsResp,
+		},
+	}
+
+	clientFactory := func(fs.RuntimeFileService, *config.Config) (authcmd.APIClient, error) {
+		return mockClient, nil
+	}
+
+	cmd := gatewayStatusCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), clientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "Localhost Gateway")
+	assert.Contains(t, out, "State: RUNNING (PID: 9999)")
+	assert.Contains(t, out, "Connected Operators")
+	assert.Contains(t, out, "g8e-model-provenance-operator")
+	assert.Contains(t, out, "provenance")
+	assert.Contains(t, out, "g8e-provider-boundary-observer")
+	assert.Contains(t, out, "observer")
+	assert.Contains(t, out, "g8e-inference-operator")
+	assert.Contains(t, out, "inference")
+	assert.NotContains(t, out, "old-stopped-op")
+	assert.NotContains(t, out, "Docker Compose Stack")
+}
+
+func TestGatewayStatusCmd_ReportsNoConnectedOperatorsWhenEmpty(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+
+	healthResp, _ := json.Marshal(models.HealthResponse{
+		Status: constants.GatewayModeStatusOK,
+		PID:    9999,
+	})
+	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{
+		Success:   true,
+		Operators: []models.OperatorDocumentGo{},
+	})
+
+	mockClient := &statusMockClient{
+		responses: map[string][]byte{
+			"/api/v1/health":             healthResp,
+			constants.APIPaths.Operators: operatorsResp,
+		},
+	}
+
+	clientFactory := func(fs.RuntimeFileService, *config.Config) (authcmd.APIClient, error) {
+		return mockClient, nil
+	}
+
+	cmd := gatewayStatusCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), clientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "Localhost Gateway")
+	assert.Contains(t, out, "Connected Operators")
+	assert.Contains(t, out, "No connected operators")
+	assert.NotContains(t, out, "Docker Compose Stack")
 }
 
 func TestGatewayLogsCmd_NoLogFileReturnsMessage(t *testing.T) {

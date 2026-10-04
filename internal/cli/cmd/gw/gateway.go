@@ -8,10 +8,12 @@
 package gw
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"runtime"
@@ -23,7 +25,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/api"
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -36,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
 func getBinaryName() string {
@@ -628,11 +631,12 @@ managed process. If the gateway is not running, this command is a no-op.`,
 }
 
 func gatewayStatusCmd() *cobra.Command {
-	return gatewayStatusCmdWithConfig(shared.LoadConfig, shared.NewFileSvc)
+	return gatewayStatusCmdWithConfig(shared.LoadConfig, authcmd.DefaultAPIClientFactory, shared.NewFileSvc)
 }
 
 func gatewayStatusCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
+	clientFactory authcmd.APIClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	cmd := &cobra.Command{
@@ -640,8 +644,8 @@ func gatewayStatusCmdWithConfig(
 		Short: "Check Gateway health and status",
 		Long: `Check whether the g8e Gateway is running by first attempting an HTTP health
 check against the gateway API, then falling back to a process-manager check.
-Also reports the status of the Docker Compose unified stack, so a single command
-shows both the localhost (host-mode) gateway and any Docker-managed gateway.
+Reports connected operators when the gateway is running.
+Also reports the status of the Docker Compose unified stack when containers are running.
 Displays the process ID and endpoint URLs when the gateway is running.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
@@ -662,8 +666,10 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			cmd.Println("Localhost Gateway")
 			cmd.Println("-----------------")
 			httpOK := false
-			client, err := api.NewClient(fileSvc, cfg)
+			var apiClient authcmd.APIClient
+			client, err := clientFactory(fileSvc, cfg)
 			if err == nil {
+				apiClient = client
 				respBody, err := client.Get("/api/v1/health")
 				if err == nil {
 					var health models.HealthResponse
@@ -685,16 +691,18 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			// Fallback to ProcessManager check (for background/host mode) when
 			// the HTTP health probe did not succeed. Fail-closed on internal
 			// errors, matching the pre-Docker-section behavior.
+			running := httpOK
 			if !httpOK {
 				pm, err := platform.NewProcessManager(fileSvc)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 				}
-				running, pid, err := pm.OperatorStatus()
+				pmRunning, pid, err := pm.OperatorStatus()
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
 				}
-				if running {
+				if pmRunning {
+					running = true
 					cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 					cmd.Printf("\nEndpoints:\n")
 					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
@@ -706,17 +714,116 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 				}
 			}
 
-			// Report the Docker Compose unified stack status. Errors are
-			// surfaced as in-section notes rather than aborting the command,
-			// since the localhost status above already succeeded.
-			cmd.Println()
-			_ = docker.PrintDockerStackStatus(cmd.OutOrStdout(), "")
+			// Report connected operators when the gateway is running.
+			if running {
+				cmd.Println()
+				printConnectedOperators(cmd.OutOrStdout(), apiClient, fileSvc, cfg)
+			}
+
+			// Report the Docker Compose unified stack status if at least one
+			// container is actually running.
+			var dockerBuf bytes.Buffer
+			if err := docker.PrintDockerStackStatus(&dockerBuf, ""); err == nil && dockerBuf.Len() > 0 {
+				cmd.Println()
+				cmd.Print(dockerBuf.String())
+			}
 
 			return nil
 		},
 	}
 
 	return cmd
+}
+
+func printConnectedOperators(w io.Writer, client authcmd.APIClient, fileSvc fs.RuntimeFileService, cfg *config.Config) {
+	fmt.Fprintln(w, "Connected Operators")
+	fmt.Fprintln(w, "-------------------")
+
+	if client == nil {
+		fmt.Fprintln(w, "No connected operators")
+		return
+	}
+
+	creds, _ := auth.LoadCredentials(fileSvc, cfg)
+	reqPath := constants.APIPaths.Operators
+	if creds != nil && creds.UserID != "" {
+		reqPath += "?user_id=" + creds.UserID
+	}
+
+	resp, err := client.Get(reqPath)
+	if err != nil {
+		fmt.Fprintln(w, "No connected operators")
+		return
+	}
+
+	var slotResp models.OperatorSlotResponse
+	if err := json.Unmarshal(resp, &slotResp); err != nil {
+		fmt.Fprintln(w, "No connected operators")
+		return
+	}
+
+	var connected []models.OperatorDocumentGo
+	for _, op := range slotResp.Operators {
+		if isOperatorConnected(op) {
+			connected = append(connected, op)
+		}
+	}
+
+	if len(connected) == 0 {
+		fmt.Fprintln(w, "No connected operators")
+		return
+	}
+
+	fmt.Fprintf(w, "  %-36s  %-12s  %-24s  %-36s  %-15s\n", "ID", "Role", "Hostname", "Session ID", "Status")
+	for _, op := range connected {
+		sessionID := op.OperatorSessionID
+		if sessionID == "" {
+			sessionID = "-"
+		}
+		fmt.Fprintf(w, "  %-36s  %-12s  %-24s  %-36s  %-15s\n",
+			op.ID,
+			operatorRoleDisplay(op),
+			operatorHostnameDisplay(op),
+			sessionID,
+			op.Status,
+		)
+	}
+}
+
+func isOperatorConnected(op models.OperatorDocumentGo) bool {
+	if op.IsSlot && !op.Claimed {
+		return false
+	}
+	switch op.Status {
+	case constants.OperatorStatusActive, constants.OperatorStatusBound, constants.OperatorStatusStale:
+		return true
+	default:
+		return false
+	}
+}
+
+func operatorRoleDisplay(op models.OperatorDocumentGo) string {
+	if op.OperatorRole != "" {
+		return string(op.OperatorRole)
+	}
+	role := operatorcapability.GetOperatorRole(op)
+	if role != "" {
+		return string(role)
+	}
+	if op.OperatorType != "" {
+		return string(op.OperatorType)
+	}
+	return "-"
+}
+
+func operatorHostnameDisplay(op models.OperatorDocumentGo) string {
+	if op.CurrentHostname != "" {
+		return op.CurrentHostname
+	}
+	if op.Name != "" {
+		return op.Name
+	}
+	return "-"
 }
 
 func gatewayRestartCmd() *cobra.Command {

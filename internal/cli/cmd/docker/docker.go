@@ -10,7 +10,6 @@ package docker
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -151,38 +150,60 @@ func runDockerComposeOutput(args []string, profiles ...string) (string, error) {
 	return string(out), nil
 }
 
-// printDockerStackStatus writes a "Docker Compose Stack" section to w showing
-// the output of `docker compose ps`. It prints a friendly in-section note and
-// returns the error when Docker is not available or the root compose file is
-// missing, so callers can decide whether to abort (docker status) or continue
-// (gw status, which reports both localhost and Docker status in one view).
+// PrintDockerStackStatus writes a "Docker Compose Stack" section to w showing
+// the output of `docker compose ps` if at least one container is currently
+// running. If no containers are running, or if Docker/compose is unavailable,
+// nothing is written to w.
 func PrintDockerStackStatus(w io.Writer, profile string) error {
-	fmt.Fprintln(w, "Docker Compose Stack")
-	fmt.Fprintln(w, "---------------------")
 	if err := checkDockerComposeFileExists(); err != nil {
-		if errors.Is(err, constants.ErrNotFound) {
-			fmt.Fprintln(w, "No docker-compose.yml found in current directory")
-		} else {
-			fmt.Fprintf(w, "Docker status unavailable: %v\n", err)
-		}
 		return err
 	}
 	if err := demos.CheckDockerAvailable(); err != nil {
-		fmt.Fprintln(w, "Docker not available (install Docker or start the daemon)")
 		return err
 	}
 	out, err := runDockerComposeOutput([]string{"ps"}, profile)
 	if err != nil {
-		fmt.Fprintf(w, "Docker status unavailable: %v\n", err)
 		return err
 	}
-	trimmed := strings.TrimSpace(out)
-	if trimmed == "" {
-		fmt.Fprintln(w, "No running containers")
+	if !hasRunningContainers(out) {
 		return nil
 	}
-	fmt.Fprintln(w, trimmed)
+	fmt.Fprintln(w, "Docker Compose Stack")
+	fmt.Fprintln(w, "---------------------")
+	fmt.Fprintln(w, strings.TrimSpace(out))
 	return nil
+}
+
+// hasRunningContainers reports whether docker compose ps output indicates
+// at least one container is currently in a running state.
+func hasRunningContainers(out string) bool {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) == 0 {
+		return false
+	}
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Skip header line(s) if present
+		if i == 0 && (strings.HasPrefix(trimmed, "NAME") || strings.HasPrefix(trimmed, "Name")) {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "---") || strings.HasPrefix(trimmed, "===") {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if strings.Contains(trimmed, "Up ") ||
+			strings.Contains(trimmed, "Up\t") ||
+			strings.HasSuffix(trimmed, "Up") ||
+			strings.Contains(trimmed, " Up") ||
+			strings.Contains(lower, "running") ||
+			strings.Contains(lower, "healthy") {
+			return true
+		}
+	}
+	return false
 }
 
 func Cmd() *cobra.Command {

@@ -147,7 +147,7 @@ func TestGatewayStopCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestGatewayStatusCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := cmdtest.NewCmdTestEnv(t)
-	cmd := gatewayStatusCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FailingFileSvcFactory(errFactory))
+	cmd := gatewayStatusCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), authcmd.DefaultAPIClientFactory, cmdtest.FailingFileSvcFactory(errFactory))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

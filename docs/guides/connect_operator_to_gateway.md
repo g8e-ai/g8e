@@ -251,7 +251,7 @@ The Gateway allows at most three live (non-terminal) Operator enrollment request
 ./g8e gw status
 ```
 
-This checks the Gateway HTTP health endpoint, checks the local process manager for foreground mode, and reports Docker Compose stack status if running. It verifies the Gateway, not connected Operator processes.
+This checks the Gateway HTTP health endpoint, process manager status, connected operators, and Docker Compose stack status (if containers are running).
 
 ### List Connected Operators
 
