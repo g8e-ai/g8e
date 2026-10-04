@@ -166,6 +166,7 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | `test` | `testcmd` | `internal/cli/cmd/test/` | | Unit, integration, e2e, e2e-full, coverage, lint, chaos, summary, and `public-loop`. |
 | `demos` | `demos` | `internal/cli/cmd/demos/` | `demo` | Demo environment and scenario lifecycle. |
 | `docker` | `docker` | `internal/cli/cmd/docker/` | | Unified Compose stack lifecycle. |
+| `ensemble` | `ensemblecmd` | `internal/cli/cmd/ensemble/` | | g8ee service lifecycle in the unified Compose stack. |
 | `audit` | `audit` | `internal/cli/cmd/audit/` | | Receipt, event, summary, export, and report queries against a running Gateway. |
 | `report` | `report` | `internal/cli/cmd/report/` | | Deterministic CSV evidence generation and offline verification. |
 | `public` | `public` | `internal/cli/cmd/public/` | | Public spectator feed. `restore` is constructed in the eval package (INV-PKG-02). |

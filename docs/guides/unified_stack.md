@@ -700,6 +700,7 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 | `./g8e docker restart [service...]` | `docker compose restart g8e-data-operator g8e-inference-operator` | `make docker-restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
 | `./g8e docker stop` | `docker compose down` | `make docker-down` | Stops stack, preserves volumes. |
 | `./g8e docker status` | `docker compose ps` | — | Shows running containers and health status. |
+| `./g8e ensemble start/stop/restart/status/logs` | `docker compose up -d/stop/restart/ps/logs ensemble` | — | Manages only the g8ee service in the local unified stack. Run from the repository root. |
 | `./g8e docker build` | `docker compose build && docker compose cp g8e-gateway:/g8e bin/g8e && cp bin/g8e ./g8e` | `make docker-build` | Build stack images in container via Makefile, export binary to `bin/g8e` and `./g8e`. |
 | `./g8e docker rebuild` | `docker compose down && docker compose build && docker compose up -d` | — | Stop stack, rebuild images with in-container Makefile, and restart. |
 | `./g8e docker clean` | `docker compose down -v --remove-orphans` | `make docker-clean` | Destructive wipe of containers, volumes, networks. |

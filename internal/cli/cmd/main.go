@@ -21,6 +21,7 @@ import (
 	compliancecmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
+	ensemblecmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/ensemble"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/eval"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gw"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/mcp"
@@ -102,6 +103,7 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 		testcmd.Cmd(),
 		demos.Cmd(),
 		docker.Cmd(),
+		ensemblecmd.Cmd(),
 		audit.Cmd(),
 		report.Cmd(),
 		public.Cmd(),

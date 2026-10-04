@@ -101,7 +101,7 @@ func prepareDockerHostRuntime(ctx context.Context, fileSvc fs.RuntimeFileService
 
 // composeCommand builds a `docker compose` invocation against the root compose
 // file after confirming Docker is available. Empty profile names are skipped.
-func composeCommand(args []string, profiles []string) (*exec.Cmd, error) {
+func composeCommand(ctx context.Context, args []string, profiles []string) (*exec.Cmd, error) {
 	composePath, err := dockerComposePath()
 	if err != nil {
 		return nil, err
@@ -115,14 +115,19 @@ func composeCommand(args []string, profiles []string) (*exec.Cmd, error) {
 			fullArgs = append(fullArgs, "--profile", profile)
 		}
 	}
-	return exec.Command("docker", append(fullArgs, args...)...), nil
+	return exec.CommandContext(ctx, "docker", append(fullArgs, args...)...), nil
 }
 
 // RunDockerCompose runs a `docker compose` command against the root compose
 // file, streaming stdout/stderr to the console. Optional profiles activate
 // compose profiles.
 func RunDockerCompose(args []string, profiles ...string) error {
-	c, err := composeCommand(args, profiles)
+	return RunDockerComposeContext(context.Background(), args, profiles...)
+}
+
+// RunDockerComposeContext runs a Compose command and stops it when ctx is canceled.
+func RunDockerComposeContext(ctx context.Context, args []string, profiles ...string) error {
+	c, err := composeCommand(ctx, args, profiles)
 	if err != nil {
 		return err
 	}
@@ -135,7 +140,7 @@ func RunDockerCompose(args []string, profiles ...string) error {
 // compose file and returns its combined output instead of streaming it, so
 // callers can embed it in a larger status view (e.g. `g8e gw status`).
 func runDockerComposeOutput(args []string, profiles ...string) (string, error) {
-	c, err := composeCommand(args, profiles)
+	c, err := composeCommand(context.Background(), args, profiles)
 	if err != nil {
 		return "", err
 	}
