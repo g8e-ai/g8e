@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -295,6 +296,43 @@ func TestVerifyEnvelopeIdentityBinding_MutationWithMatchingOperatorCert_Admitted
 	env := mutationEnvelopeBytes(t, constants.ActionTypeDocumentUpdate, "op-1", "sess-1", commonv1.Component_COMPONENT_G8EO)
 	err := verifyEnvelopeIdentityBinding(req, env)
 	require.NoError(t, err)
+}
+
+func TestVerifyEnvelopeIdentityBinding_ReplacementCLISessionUsesAuthenticatedContext(t *testing.T) {
+	req := identityBindingRequest(t, "spiffe://g8e.local/cli/user-1/predecessor-cli-session")
+	ctx := context.WithValue(req.Context(), constants.ContextKeyCLISessionID, "replacement-cli-session")
+	ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, "op-1")
+	ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, "sess-1")
+	req = req.WithContext(ctx)
+
+	envelope, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		CliSessionId:      "replacement-cli-session",
+		OperatorId:        "op-1",
+		OperatorSessionId: "sess-1",
+		ActingAppId:       "g8ee",
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
+	})
+	require.NoError(t, err)
+	require.NoError(t, verifyEnvelopeIdentityBinding(req, envelope))
+}
+
+func TestVerifyEnvelopeIdentityBinding_AuthenticatedContextRejectsClaimMismatch(t *testing.T) {
+	req := identityBindingRequest(t, "spiffe://g8e.local/cli/user-1/predecessor-cli-session")
+	ctx := context.WithValue(req.Context(), constants.ContextKeyCLISessionID, "replacement-cli-session")
+	ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, "op-1")
+	ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, "sess-1")
+	req = req.WithContext(ctx)
+
+	envelope, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		CliSessionId:      "replacement-cli-session",
+		OperatorId:        "other-op",
+		OperatorSessionId: "sess-1",
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
+	})
+	require.NoError(t, err)
+	require.ErrorIs(t, verifyEnvelopeIdentityBinding(req, envelope), constants.ErrURISANMismatch)
 }
 
 // TestVerifyEnvelopeIdentityBinding_UnboundEnvelopeAdmitsOnlyAppRecordWrites

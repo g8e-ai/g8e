@@ -59,7 +59,8 @@ type ApprovalAutoApprover struct {
 	ensemble string // ensemble base URL for approval respond POST
 	wg       sync.WaitGroup
 	cancel   context.CancelFunc
-	approved int // count of approvals sent (for diagnostics)
+	err      error // first approval failure, returned to the scenario
+	approved int   // count of approvals sent (for diagnostics)
 	mu       sync.Mutex
 	// connectedCh is closed once the SSE subscription's first HTTP
 	// connection succeeds (signaled via the SSE client's SetOnConnect
@@ -124,7 +125,13 @@ func (a *ApprovalAutoApprover) Start(ctx context.Context) {
 	go func() {
 		defer a.wg.Done()
 		sseClient.Run(listenerCtx, func(eventType, data string) {
-			a.handleSSEEvent(eventType, data)
+			if err := a.handleSSEEvent(listenerCtx, eventType, data); err != nil {
+				a.mu.Lock()
+				if a.err == nil {
+					a.err = err
+				}
+				a.mu.Unlock()
+			}
 		})
 	}()
 }
@@ -162,15 +169,37 @@ func (a *ApprovalAutoApprover) ApprovedCount() int {
 	return a.approved
 }
 
+// Err returns the first failure reported by the SSE approval listener.
+func (a *ApprovalAutoApprover) Err() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.err
+}
+
+type ensembleFileEditApproval struct {
+	ApprovalID      string `json:"approval_id"`
+	UserID          string `json:"user_id"`
+	CLISessionID    string `json:"cli_session_id"`
+	CaseID          string `json:"case_id"`
+	InvestigationID string `json:"investigation_id"`
+}
+
+type ensembleApprovalResponse struct {
+	Context    EnsembleRequestContext `json:"context"`
+	ApprovalID string                 `json:"approval_id"`
+	Approved   bool                   `json:"approved"`
+	Reason     string                 `json:"reason"`
+}
+
 // handleSSEEvent parses an SSE data frame and, if it is a file edit approval
 // request, posts an approval response to the ensemble. The SSE data is a
 // SSEPushPayload JSON; the inner Event field is a SessionEventWire JSON whose
 // event.type identifies the event and event.data carries the
 // FileEditApprovalEvent payload (with approval_id, file_path, etc.).
-func (a *ApprovalAutoApprover) handleSSEEvent(eventType, data string) {
+func (a *ApprovalAutoApprover) handleSSEEvent(ctx context.Context, eventType, data string) error {
 	var payload models.SSEPushPayload
 	if err := json.Unmarshal([]byte(data), &payload); err != nil {
-		return
+		return nil
 	}
 
 	// SSEPushPayload.Event is the wire event JSON directly:
@@ -181,7 +210,7 @@ func (a *ApprovalAutoApprover) handleSSEEvent(eventType, data string) {
 		Data json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(payload.Event, &wire); err != nil {
-		return
+		return nil
 	}
 
 	// When the server omits the event: field (R14), eventType is empty.
@@ -191,45 +220,26 @@ func (a *ApprovalAutoApprover) handleSSEEvent(eventType, data string) {
 		innerType = wire.Type
 	}
 	if innerType != FileEditApprovalEventType {
-		return
+		return nil
 	}
 
 	// The data field is the FileEditApprovalEvent dict (plus routing
 	// metadata injected by SessionEventWire.from_session_event). Extract
 	// the approval_id and context fields needed for the respond POST.
-	var approvalData struct {
-		ApprovalID      string `json:"approval_id"`
-		UserID          string `json:"user_id"`
-		CLISessionID    string `json:"cli_session_id"`
-		WebSessionID    string `json:"web_session_id"`
-		CaseID          string `json:"case_id"`
-		InvestigationID string `json:"investigation_id"`
-		TaskID          string `json:"task_id"`
-	}
+	var approvalData ensembleFileEditApproval
+
 	if err := json.Unmarshal(wire.Data, &approvalData); err != nil {
-		return
+		return nil
 	}
 	if approvalData.ApprovalID == "" {
-		return
+		return nil
 	}
 
-	a.respondApproval(approvalData)
+	return a.respondApproval(ctx, approvalData)
 }
 
-// respondApproval posts an approval response to the ensemble's approval
-// respond endpoint, approving the file edit. The ensemble's
-// require_authenticated_context dependency reads identity from proxy
-// headers (X-Proxy-User-Id, X-Proxy-User-Email, X-Proxy-CLI-Session-Id),
-// so the POST uses the same header pattern as EnsembleChat.
-func (a *ApprovalAutoApprover) respondApproval(ad struct {
-	ApprovalID      string `json:"approval_id"`
-	UserID          string `json:"user_id"`
-	CLISessionID    string `json:"cli_session_id"`
-	WebSessionID    string `json:"web_session_id"`
-	CaseID          string `json:"case_id"`
-	InvestigationID string `json:"investigation_id"`
-	TaskID          string `json:"task_id"`
-}) {
+// respondApproval authenticates and submits the typed Ensemble approval response.
+func (a *ApprovalAutoApprover) respondApproval(parent context.Context, ad ensembleFileEditApproval) error {
 	userID := ad.UserID
 	if userID == "" {
 		userID = a.persona.UserID
@@ -239,64 +249,49 @@ func (a *ApprovalAutoApprover) respondApproval(ad struct {
 		cliSessionID = a.persona.CLISessionID
 	}
 
-	// Build the OperatorApprovalResponse body. The context field carries
-	// the session/case/investigation identity; the router enriches it with
-	// operator_id/operator_session_id from the bound operator.
-	body := map[string]any{
-		"context": map[string]any{
-			"cli_session_id":   cliSessionID,
-			"user_id":          userID,
-			"case_id":          ad.CaseID,
-			"investigation_id": ad.InvestigationID,
-			"source_component": "CLIENT",
-			"bound_operators":  []map[string]any{},
-		},
-		"approval_id": ad.ApprovalID,
-		"approved":    true,
-		"reason":      "Auto-approved by harness",
+	body := ensembleApprovalResponse{
+		Context:    EnsembleRequestContext{CLISessionID: cliSessionID, UserID: userID, CaseID: ad.CaseID, InvestigationID: ad.InvestigationID, SourceComponent: "CLIENT"},
+		ApprovalID: ad.ApprovalID, Approved: true, Reason: "Auto-approved by harness",
 	}
 	if a.persona.OperatorID != "" {
-		body["context"].(map[string]any)["bound_operators"] = []map[string]any{
-			{
-				"operator_id":         a.persona.OperatorID,
-				"operator_session_id": a.persona.OperatorSessionID,
-				"status":              "bound",
-			},
-		}
+		body.Context.BoundOperators = []EnsembleBoundOperator{{OperatorID: a.persona.OperatorID, OperatorSessionID: a.persona.OperatorSessionID, Status: "bound"}}
 	}
 
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
-		return
+		return fmt.Errorf("respond to approval %s: %w", ad.ApprovalID, err)
 	}
 
 	url := a.ensemble + EnsembleApprovalRespondPath
-	ctx, cancel := context.WithTimeout(context.Background(), ApprovalRespondTimeout)
+	ctx, cancel := context.WithTimeout(parent, ApprovalRespondTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return
+		return fmt.Errorf("respond to approval %s: %w", ad.ApprovalID, err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", constants.HeaderValueApplicationJSON)
+	p := a.persona
 	if userID != "" {
-		req.Header.Set(HeaderProxyUserID, userID)
-		req.Header.Set(HeaderProxyUserEmail, userID+ProxyUserEmailSyntheticDomain)
+		p.UserID = userID
 	}
 	if cliSessionID != "" {
-		req.Header.Set(HeaderProxyCLISessionID, cliSessionID)
+		p.CLISessionID = cliSessionID
 	}
+	applyEnsemblePersonaHeaders(req, p)
 
 	resp, err := a.client.http.Do(req)
 	if err != nil {
-		return
+		return fmt.Errorf("respond to approval %s: %w", ad.ApprovalID, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 400 {
-		a.mu.Lock()
-		a.approved++
-		a.mu.Unlock()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("%w: approval %s returned status %d", constants.ErrHTTPStatusError, ad.ApprovalID, resp.StatusCode)
 	}
+	a.mu.Lock()
+	a.approved++
+	a.mu.Unlock()
+	return nil
 }
 
 // StartApprovalAutoApprover is a convenience that starts an

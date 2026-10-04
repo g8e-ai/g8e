@@ -65,6 +65,7 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessCLIKey, "cli-key", "", "host CLI client key PEM for notary submits")
 	cmd.Flags().StringVar(&harnessCLICA, "cli-ca", "", "gateway CA bundle PEM for CLI-cert client (defaults to --ca)")
 	cmd.Flags().StringVar(&HarnessAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
+	cmd.Flags().String("operator-id", "", "logical Operator ID (defaults to CLI binding or discovered data worker)")
 	cmd.Flags().StringVar(&HarnessSessionID, "operator-session", "", "scope audit to a specific Operator session")
 	cmd.Flags().StringVar(&harnessUserID, "user-id", "", "host CLI user_id for SSE approval subscription")
 	cmd.Flags().StringVar(&harnessCLISessionID, "cli-session-id", "", "host CLI session id for X-CLI-Session-ID submit header")
@@ -77,7 +78,11 @@ func demosScenariosRunCmd() *cobra.Command {
 
 func RunAgentHarness(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
-	applyAgentHarnessFlags(&cfg)
+	operatorID, err := cmd.Flags().GetString("operator-id")
+	if err != nil {
+		return fmt.Errorf("scenarios run: operator flag: %w", err)
+	}
+	applyAgentHarnessFlags(&cfg, operatorID)
 
 	if HarnessConfigPath != "" {
 		if err := cfg.LoadFile(HarnessConfigPath); err != nil {
@@ -123,7 +128,11 @@ func RunAgentHarness(cmd *cobra.Command, args []string) error {
 
 	opSession := cfg.OperatorSessionID
 	if opSession == "" {
-		opSession = client.DiscoverOperatorSession(ctx)
+		_, discoveredSession, discoverErr := client.DiscoverOperator(ctx)
+		if discoverErr != nil {
+			return fmt.Errorf("scenarios run: export target: %w", discoverErr)
+		}
+		opSession = discoveredSession
 	}
 	if export, err := client.ExportReceipts(ctx, opSession); err == nil && len(export) > 0 {
 		if mkErr := os.MkdirAll(cfg.OutDir, constants.PermDirStandard); mkErr != nil {
@@ -157,7 +166,7 @@ func failedScenariosError(results []scenarios.Result) error {
 	return nil
 }
 
-func applyAgentHarnessFlags(cfg *config.Config) {
+func applyAgentHarnessFlags(cfg *config.Config, operatorID string) {
 	if HarnessMTLSURL != "" {
 		cfg.MTLSBaseURL = HarnessMTLSURL
 	}
@@ -182,7 +191,10 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	if HarnessAPIKey != "" {
 		cfg.Auth.APIKey = HarnessAPIKey
 	}
-	if HarnessSessionID != "" {
+	if operatorID != "" || HarnessSessionID != "" {
+		// An explicit target replaces the inherited pair; resolve the missing half
+		// from one registry record rather than retaining another operator's identity.
+		cfg.OperatorID = operatorID
 		cfg.OperatorSessionID = HarnessSessionID
 	}
 	if harnessUserID != "" {
@@ -255,12 +267,13 @@ func needsGovKit(ss []scenarios.Scenario) bool {
 }
 
 func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Config, selected []scenarios.Scenario) error {
-	opID := cfg.OperatorSessionID
-	opSessionID := ""
-	if opID == "" {
-		opID, opSessionID = client.DiscoverOperator(ctx)
-	} else {
-		opSessionID = opID
+	opID, opSessionID := cfg.OperatorID, cfg.OperatorSessionID
+	if opID == "" || opSessionID == "" {
+		var err error
+		opID, opSessionID, err = client.DiscoverOperator(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	gk := &scenarios.GovKit{

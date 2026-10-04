@@ -104,7 +104,7 @@ func TestHandleSSEEvent_FileEditApprovalDispatchesApproval(t *testing.T) {
 		CLISessionID: "cli-session-123",
 	}, srv.URL)
 
-	ap.handleSSEEvent("", buildSSEData(t, FileEditApprovalEventType, approveID, nil))
+	ap.handleSSEEvent(t.Context(), "", buildSSEData(t, FileEditApprovalEventType, approveID, nil))
 
 	assert.Equal(t, 1, ap.ApprovedCount(), "approval count should increment on 200 response")
 	assert.Equal(t, approveID, receivedBody["approval_id"])
@@ -140,7 +140,7 @@ func TestHandleSSEEvent_BoundOperatorStampsContext(t *testing.T) {
 		OperatorSessionID: "operator-session-789",
 	}, srv.URL)
 
-	ap.handleSSEEvent("", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
+	ap.handleSSEEvent(t.Context(), "", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
 
 	ctxObj, ok := receivedBody["context"].(map[string]any)
 	require.True(t, ok)
@@ -169,9 +169,9 @@ func TestHandleSSEEvent_NonMatchingEventTypeDoesNotDispatch(t *testing.T) {
 	ap := NewApprovalAutoApprover(c, Persona{ID: "test"}, srv.URL)
 
 	// A different event type (file edit completed, not approval requested).
-	ap.handleSSEEvent("", buildSSEData(t, string(constants.EventOperatorFileEditCompleted), "approval-1", nil))
+	ap.handleSSEEvent(t.Context(), "", buildSSEData(t, string(constants.EventOperatorFileEditCompleted), "approval-1", nil))
 	// Event type passed via the SSE event: field but inner wire type differs.
-	ap.handleSSEEvent(string(constants.EventOperatorFileEditCompleted),
+	ap.handleSSEEvent(t.Context(), string(constants.EventOperatorFileEditCompleted),
 		buildSSEData(t, string(constants.EventOperatorFileEditCompleted), "approval-1", nil))
 
 	assert.Equal(t, int32(0), atomic.LoadInt32(&calls), "no approval POST should be made for non-matching event types")
@@ -195,13 +195,13 @@ func TestHandleSSEEvent_EventTypeFromSSEFieldPreferredOverWire(t *testing.T) {
 
 	// SSE event: field says "completed" but inner wire says "approval.requested".
 	// The SSE field wins, so no approval is dispatched.
-	ap.handleSSEEvent(string(constants.EventOperatorFileEditCompleted),
+	ap.handleSSEEvent(t.Context(), string(constants.EventOperatorFileEditCompleted),
 		buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
 	assert.Equal(t, int32(0), atomic.LoadInt32(&calls))
 
 	// SSE event: field is empty, inner wire says "approval.requested".
 	// The inner wire type is used as the fallback, so approval is dispatched.
-	ap.handleSSEEvent("", buildSSEData(t, FileEditApprovalEventType, "approval-2", nil))
+	ap.handleSSEEvent(t.Context(), "", buildSSEData(t, FileEditApprovalEventType, "approval-2", nil))
 	assert.Equal(t, int32(1), atomic.LoadInt32(&calls))
 	assert.Equal(t, 1, ap.ApprovedCount())
 }
@@ -222,7 +222,7 @@ func TestHandleSSEEvent_MissingApprovalIDDoesNotDispatch(t *testing.T) {
 
 	// Build a payload with an empty approval_id.
 	data := buildSSEData(t, FileEditApprovalEventType, "", nil)
-	ap.handleSSEEvent("", data)
+	ap.handleSSEEvent(t.Context(), "", data)
 
 	assert.Equal(t, int32(0), atomic.LoadInt32(&calls))
 	assert.Equal(t, 0, ap.ApprovedCount())
@@ -247,7 +247,7 @@ func TestHandleSSEEvent_InvalidJSONDoesNotDispatch(t *testing.T) {
 		`{"event":"{invalid"}`,
 		`{"event":"{\"type\":\""}`,
 	} {
-		ap.handleSSEEvent("", bad)
+		ap.handleSSEEvent(t.Context(), "", bad)
 	}
 	assert.Equal(t, int32(0), atomic.LoadInt32(&calls))
 	assert.Equal(t, 0, ap.ApprovedCount())
@@ -265,7 +265,7 @@ func TestHandleSSEEvent_Non2xxResponseDoesNotIncrementCount(t *testing.T) {
 	c := newApprovalTestClient(t, srv.URL)
 	ap := NewApprovalAutoApprover(c, Persona{ID: "test"}, srv.URL)
 
-	ap.handleSSEEvent("", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
+	ap.handleSSEEvent(t.Context(), "", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
 	assert.Equal(t, 0, ap.ApprovedCount(), "approved count should not increment on non-2xx response")
 }
 
@@ -340,7 +340,7 @@ func TestRespondApproval_PersonaFallback(t *testing.T) {
 		"user_id":        "",
 		"cli_session_id": "",
 	})
-	ap.handleSSEEvent("", data)
+	ap.handleSSEEvent(t.Context(), "", data)
 
 	ctxObj, ok := receivedBody["context"].(map[string]any)
 	require.True(t, ok)
@@ -367,7 +367,7 @@ func TestRespondApproval_BoundedTimeoutDoesNotHang(t *testing.T) {
 	// synchronously. We expect it to return within ApprovalRespondTimeout.
 	done := make(chan struct{})
 	go func() {
-		ap.handleSSEEvent("", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
+		ap.handleSSEEvent(t.Context(), "", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
 		close(done)
 	}()
 	select {
@@ -393,4 +393,26 @@ func TestEnsembleApprovalRespondPathConstant(t *testing.T) {
 // matches the g8e protocol constant for file edit approval requests.
 func TestFileEditApprovalEventTypeConstant(t *testing.T) {
 	assert.Equal(t, "g8e.v1.operator.file.edit.approval.requested", FileEditApprovalEventType)
+}
+
+func TestApprovalResponseRequiresBearerSession(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer data-session" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	ap := NewApprovalAutoApprover(newApprovalTestClient(t, srv.URL), Persona{UserID: "user-123", CLISessionID: "cli-session-123", OperatorSessionID: "data-session"}, srv.URL)
+	ap.handleSSEEvent(t.Context(), "", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
+	assert.Equal(t, 1, ap.ApprovedCount())
+}
+
+func TestApprovalResponseRejectsRedirect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusFound) }))
+	t.Cleanup(srv.Close)
+	ap := NewApprovalAutoApprover(newApprovalTestClient(t, srv.URL), Persona{}, srv.URL)
+	ap.handleSSEEvent(t.Context(), "", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
+	assert.Zero(t, ap.ApprovedCount())
 }

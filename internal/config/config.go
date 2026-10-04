@@ -579,16 +579,13 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 // Load creates configuration from explicit options passed by main
 func Load(opts LoadOptions) (*Config, error) {
-	// Initialize paths relative to project root
+	// Resolve the worker root before initializing process-wide runtime paths.
+	// An explicit --working-dir owns the Operator's .g8e vault, ledger, PKI,
+	// and databases; the repository root is only the default when it is absent.
 	projectRoot := FindProjectRoot()
 	if projectRoot == "" {
 		projectRoot = "."
 	}
-	if err := paths.InitWithBase(projectRoot); err != nil {
-		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
-	}
-
-	// Resolve working directory - default to project root when not specified
 	workDir := opts.WorkDir
 	if workDir == "" {
 		workDir = projectRoot
@@ -598,6 +595,9 @@ func Load(opts LoadOptions) (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%w: %q", constants.ErrConfigInvalidWorkingDir, opts.WorkDir)
 		}
+	}
+	if err := paths.InitWithBase(workDir); err != nil {
+		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
 	}
 
 	if opts.OperatorEndpoint == "" {

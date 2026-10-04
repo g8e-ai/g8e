@@ -103,6 +103,9 @@ func TestLoad_WorkDir_Flag(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, tmpDir, cfg.WorkDir)
+	assert.Equal(t, filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname), cfg.PKIDir)
+	assert.Equal(t, filepath.Join(tmpDir, constants.RuntimeDirname, constants.VaultDirname), cfg.VaultDir)
+	assert.Equal(t, filepath.Join(tmpDir, constants.RuntimeDirname, constants.VaultDirname, constants.VaultKeyFilename), cfg.VaultKeyPath)
 }
 
 func TestLoad_FieldPassthrough(t *testing.T) {
