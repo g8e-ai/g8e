@@ -66,12 +66,13 @@ func (s BrowserProxyStamp) CanonicalBytes() ([]byte, error) {
 }
 
 // BrowserProxyIdentity is the identity the Gateway vouches for on a proxied
-// request. Organization and CLI session are never vouched for; they are signed
-// as empty so g8ee cannot be handed unsigned values for them.
+// request. Organization is never vouched for; it is signed as empty so g8ee
+// cannot be handed unsigned values for it.
 type BrowserProxyIdentity struct {
 	UserID       string
 	UserEmail    string
 	WebSessionID string
+	CLISessionID string
 }
 
 // BrowserProxySigner signs browser-proxy stamps with the Gateway's Actuator key.
@@ -125,6 +126,7 @@ func (s *BrowserProxySigner) Apply(req *http.Request, body []byte, id BrowserPro
 		UserID:       id.UserID,
 		UserEmail:    id.UserEmail,
 		WebSessionID: id.WebSessionID,
+		CLISessionID: id.CLISessionID,
 		IssuedAtUnix: s.now().Unix(),
 		Nonce:        hex.EncodeToString(nonce),
 	}
@@ -135,9 +137,17 @@ func (s *BrowserProxySigner) Apply(req *http.Request, body []byte, id BrowserPro
 
 	req.Header.Set(constants.HeaderProxyUserID, stamp.UserID)
 	req.Header.Set(constants.HeaderProxyUserEmail, stamp.UserEmail)
-	req.Header.Set(constants.HeaderProxyWebSessionID, stamp.WebSessionID)
+	if stamp.WebSessionID != "" {
+		req.Header.Set(constants.HeaderProxyWebSessionID, stamp.WebSessionID)
+	} else {
+		req.Header.Del(constants.HeaderProxyWebSessionID)
+	}
+	if stamp.CLISessionID != "" {
+		req.Header.Set(constants.HeaderProxyCLISessionID, stamp.CLISessionID)
+	} else {
+		req.Header.Del(constants.HeaderProxyCLISessionID)
+	}
 	req.Header.Del(constants.HeaderProxyOrganizationID)
-	req.Header.Del(constants.HeaderProxyCLISessionID)
 	req.Header.Set(constants.HeaderProxyKeyID, s.keyID)
 	req.Header.Set(constants.HeaderProxyIssuedAt, strconv.FormatInt(stamp.IssuedAtUnix, 10))
 	req.Header.Set(constants.HeaderProxyNonce, stamp.Nonce)

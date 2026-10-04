@@ -59,10 +59,12 @@ func approveCmdWithConfig(
 	clientFactory APIClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
+	var yesFlag bool
 	cmd := &cobra.Command{
 		Use:   "approve <transaction_hash>",
-		Short: "Approve a suspended L3 transaction via browser WebAuthn",
-		Long: `Approve a suspended transaction by opening the gateway's browser-based approval page.
+		Short: "Approve a suspended L3 transaction via browser WebAuthn or mTLS",
+		Long: `Approve a suspended transaction by opening the gateway's browser-based approval page
+or directly over mTLS with --yes.
 The browser handles the WebAuthn/passkey ceremony; the CLI subscribes to the
 gateway's SSE stream and waits for the approval.completed event. CLI credentials
 (mTLS) are required for L3 approval flows.`,
@@ -82,6 +84,28 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("approve: create API client: %w", err)
+			}
+
+			if yesFlag {
+				reqBody := map[string]interface{}{
+					"approval_id": txHash,
+					"approved":    true,
+				}
+				respBytes, postErr := client.Post(constants.APIPaths.EnsembleOperatorApprovalPrefix+"respond", reqBody)
+				if postErr != nil {
+					return fmt.Errorf("approve directly: %w", postErr)
+				}
+				var res struct {
+					Success    bool   `json:"success"`
+					ApprovalID string `json:"approval_id"`
+					Approved   bool   `json:"approved"`
+				}
+				if jsonErr := json.Unmarshal(respBytes, &res); jsonErr == nil && res.Success && res.Approved {
+					cmd.Printf("\n✓ Transaction %s approved successfully via mTLS\n", txHash)
+					return nil
+				}
+				cmd.Printf("\n✓ Transaction %s approved: %s\n", txHash, string(respBytes))
+				return nil
 			}
 
 			// Build the browser approval URL (public endpoint, redirects to console SPA)
@@ -105,6 +129,7 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 		},
 	}
 
+	cmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "Approve directly over mTLS without opening browser")
 	return cmd
 }
 
