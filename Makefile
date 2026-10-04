@@ -280,6 +280,7 @@ help:
 		'' \
 		'Run locally' \
 		'  up                        Build and start the Gateway on this host' \
+		'  full                      Start Gateway, prompt for operators, and launch local g8ee' \
 		'  down                      Stop the host Gateway' \
 		'  docker-up                 Build and start the Docker Compose stack' \
 		'  docker-down               Stop the stack and preserve volumes' \
@@ -1022,6 +1023,10 @@ up: build
 	@./g8e gw start
 	@echo "Host platform started. Check it with: ./g8e gw status"
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
+
+.PHONY: full
+full: up
+	@$(PYTHON) scripts/full.py
 
 .PHONY: down
 down:

@@ -314,7 +314,7 @@ Related Docker Compose lifecycle targets:
 Build and start the host-native gateway in one command:
 
 ```bash
-make host-up
+make up
 ```
 
 This runs the local `g8e` binary directly; it does not invoke Docker. The
@@ -325,7 +325,51 @@ make build
 ./g8e gw start
 ```
 
-Stop the host-native gateway with `make host-down` (equivalent to `./g8e gw stop`).
+Stop the host-native gateway with `make down` (equivalent to `./g8e gw stop`).
+
+For the Gateway, three separate operator roles, and local g8ee, run:
+
+```bash
+make full
+```
+
+`full` first runs `make up`, then configures each role together: Provenance
+system, working directory, and model-storage directory; Observer system and
+working directory; then Inference system, working directory, and Ollama URL.
+Systems default to `localhost`; local identity directories default to
+`~/.ollama/g8e/<role>`. Provenance model-storage defaults to `OLLAMA_MODELS`, the local
+Ollama Snap configuration, or an existing standard Ollama storage directory
+(including `/var/snap/ollama/common/models` and
+`/usr/share/ollama/.ollama/models`), falling back to `~/.ollama/models`.
+Operator identities stay separate from the model manifests and blobs.
+
+The Ollama URL defaults to `http://localhost:11434`. For Ollama on the Windows
+host of WSL, enter `http://192.168.1.2:11434`. Place Provenance on the system
+holding the actual model files and Observer on the system running Ollama and
+its GPUs. For remote systems, the launcher prints POSIX and PowerShell commands
+to run there with a host-compatible `g8e` binary; it prompts for a reachable
+Gateway hostname that matches the Gateway TLS certificate. Enter Windows paths
+for remote Windows directories. The launcher does not start or test Ollama.
+
+g8ee runs locally on `127.0.0.1:8000`, using the root `.venv` when available.
+If its dependencies are missing, run `make dev-python` first. Its isolated
+runtime and logs are under `.local.dev/full/ensemble/`. Local operators write
+`full.log` and `full.pid` in their selected working directories. Existing live
+processes recorded in those PID files are kept; stop them before changing their
+launch settings. Bootstrap the owner with `./g8e auth enroll user -e localhost`
+if needed, then review `./g8e auth enroll pending` and approve the intended
+requests with `./g8e auth enroll approve <request-id> --yes`. g8ee becomes ready
+after its enrollment is approved.
+
+Preview the prompts and commands without building or starting the stack:
+
+```bash
+python3 scripts/full.py --dry-run
+```
+
+`make down` stops the Gateway. Stop each local workload separately with
+`kill "$(cat /path/to/working-directory/full.pid)"`; stop remote operators on
+their hosts. Runtime state is preserved for the next start.
 
 The gateway starts in Doctrine mode (L1 enforced, L2/L3 audited). To specify a security posture:
 
