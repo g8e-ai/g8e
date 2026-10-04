@@ -204,20 +204,21 @@ These checks establish service availability, owner-visible operator registration
 
 For a deterministic smoke test, no provider variables are required. The harness defaults to the fake provider and model, which exercises the ensemble, governance, operator execution, receipt, and read-back paths without an external model.
 
-To include a real Ollama call, export all three values in the shell that runs step 8:
+To include a real Ollama call, save its endpoint on the console's Inference
+page, then export the provider and model selection in the shell that runs step 8:
 
 ```bash
 export G8E_HARNESS_LLM_PROVIDER=ollama
 export G8E_HARNESS_LLM_MODEL='<tool-capable-model-tag>'
-export G8E_HARNESS_LLM_ENDPOINT='http://<ollama-host>:<port>'
-curl -fsS "${G8E_HARNESS_LLM_ENDPOINT}/api/tags" | grep -F "\"name\":\"${G8E_HARNESS_LLM_MODEL}\""
+OLLAMA_ENDPOINT='http://<ollama-host>:<port>'
+curl -fsS "${OLLAMA_ENDPOINT}/api/tags" | grep -F "\"name\":\"${G8E_HARNESS_LLM_MODEL}\""
 ```
 
 The model must support tool calls and be available at the endpoint. If the real provider is unavailable, return to the deterministic path with:
 
 ```bash
 export G8E_HARNESS_LLM_PROVIDER=fake
-unset G8E_HARNESS_LLM_MODEL G8E_HARNESS_LLM_ENDPOINT
+unset G8E_HARNESS_LLM_MODEL
 ```
 
 ### Step 8: Run governed file and document mutations

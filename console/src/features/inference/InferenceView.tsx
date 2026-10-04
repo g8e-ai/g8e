@@ -203,9 +203,7 @@ function ProviderCard({
   const id = `provider-${option.provider}`;
   const dirty = isProviderDirty(form, option);
   const endpointValue = option.endpoint === 'none' ? '' : form.endpoint;
-  const needsKey = option.api_key === 'required' && (
-    form.clearKey || (!form.keyStored && !option.role_api_key_set && !form.apiKey.trim())
-  );
+  const needsKey = option.api_key === 'required' && (form.clearKey || (!form.keyStored && !form.apiKey.trim()));
 
   return (
     <section className="card provider-card" aria-labelledby={`${id}-title`}>
@@ -270,9 +268,6 @@ function ProviderCard({
                 )}
               </div>
               {needsKey && <span className="hint hint-warn">Add an API key here before using this provider.</span>}
-              {!form.keyStored && option.role_api_key_set && !form.apiKey.trim() && !form.clearKey && (
-                <span className="hint">A saved key is attached to an existing role. Add a key here to share it across all roles.</span>
-              )}
               {form.keyStored && !form.clearKey && !form.apiKey.trim() && (
                 <span className="hint">A saved API key is available to all three roles.</span>
               )}
@@ -377,7 +372,7 @@ function ModelField({
     setLoading(true);
     setListError(null);
     try {
-      const response = await api.post<LlmModelList>(Paths.llmModels, { context: {}, role, provider });
+      const response = await api.post<LlmModelList>(Paths.llmModels, { context: {}, provider });
       if (sequence !== latest.current) return;
       setModels(response.models ?? []);
     } catch (err) {

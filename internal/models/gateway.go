@@ -462,12 +462,15 @@ type UserLLMSettings struct {
 	Model             string `json:"llm_model,omitempty"`
 	AssistantModel    string `json:"llm_assistant_model,omitempty"`
 	LiteModel         string `json:"llm_lite_model,omitempty"`
-	PrimaryAPIKey     string `json:"primary_api_key,omitempty"`
-	PrimaryEndpoint   string `json:"primary_endpoint,omitempty"`
-	AssistantAPIKey   string `json:"assistant_api_key,omitempty"`
-	AssistantEndpoint string `json:"assistant_endpoint,omitempty"`
-	LiteAPIKey        string `json:"lite_api_key,omitempty"`
-	LiteEndpoint      string `json:"lite_endpoint,omitempty"`
+	OpenAIAPIKey      string `json:"openai_api_key,omitempty"`
+	OpenAIEndpoint    string `json:"openai_endpoint,omitempty"`
+	OllamaAPIKey      string `json:"ollama_api_key,omitempty"`
+	OllamaEndpoint    string `json:"ollama_endpoint,omitempty"`
+	AnthropicAPIKey   string `json:"anthropic_api_key,omitempty"`
+	AnthropicEndpoint string `json:"anthropic_endpoint,omitempty"`
+	GeminiAPIKey      string `json:"gemini_api_key,omitempty"`
+	LlamaCppAPIKey    string `json:"llamacpp_api_key,omitempty"`
+	LlamaCppEndpoint  string `json:"llamacpp_endpoint,omitempty"`
 }
 
 // UserSearchSettings is the search group of a user_settings document.

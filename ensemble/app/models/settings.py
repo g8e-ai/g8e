@@ -390,8 +390,6 @@ class LLMSettings(_ProtocolLLMSettings):
         self,
         role: str,
         provider_override: str | None = None,
-        api_key_override: str | None = None,
-        endpoint_override: str | None = None,
         model_override: str | None = None,
     ) -> tuple[str | None, str | None, str | None, str | None]:
         """Resolve provider, API key, endpoint, and model for a given role.
@@ -399,41 +397,27 @@ class LLMSettings(_ProtocolLLMSettings):
         Args:
             role: One of 'primary', 'assistant', or 'lite'.
             provider_override: Optional provider string to override the stored provider.
-            api_key_override: Optional API key to override the resolved key.
-            endpoint_override: Optional endpoint to override the resolved endpoint.
             model_override: Optional model name to override the resolved model.
 
         Returns:
             Tuple of (provider, api_key, endpoint, model). Provider is the string value of the LLMProvider enum.
         """
         role_to_attrs = {
-            "primary": (
-                self.primary_provider,
-                self.primary_api_key,
-                self.primary_endpoint,
-                self.primary_model,
-            ),
-            "assistant": (
-                self.assistant_provider,
-                self.assistant_api_key,
-                self.assistant_endpoint,
-                self.assistant_model,
-            ),
-            "lite": (self.lite_provider, self.lite_api_key, self.lite_endpoint, self.lite_model),
+            "primary": (self.primary_provider, self.primary_model),
+            "assistant": (self.assistant_provider, self.assistant_model),
+            "lite": (self.lite_provider, self.lite_model),
         }
 
         if role not in role_to_attrs:
             raise ValueError(f"Invalid role: {role}. Must be one of: primary, assistant, lite")
 
-        stored_provider, stored_role_key, stored_role_endpoint, stored_role_model = role_to_attrs[
-            role
-        ]
+        stored_provider, stored_role_model = role_to_attrs[role]
 
         effective_provider = provider_override or (
             stored_provider.value if stored_provider else None
         )
-        api_key = api_key_override or stored_role_key
-        endpoint = endpoint_override or stored_role_endpoint
+        api_key = None
+        endpoint = None
         model = model_override or stored_role_model
 
         if effective_provider:
@@ -467,14 +451,9 @@ class LLMSettings(_ProtocolLLMSettings):
                 ),
             }
 
-            p_key, p_endpoint, p_model = provider_defaults.get(
+            api_key, endpoint, p_model = provider_defaults.get(
                 effective_provider, (None, None, None)
             )
-
-            if not api_key:
-                api_key = p_key
-            if not endpoint:
-                endpoint = p_endpoint
             if not model:
                 model = p_model
 

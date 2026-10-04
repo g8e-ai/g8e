@@ -127,12 +127,6 @@ def _llm_settings_from_env():
     else:
         lite_provider = assistant_provider
 
-    api_key = os.environ.get(EnvVar.TEST_LLM_PRIMARY_API_KEY, "").strip() or None
-    endpoint = os.environ.get(EnvVar.TEST_LLM_PRIMARY_ENDPOINT, "").strip() or None
-    assistant_api_key = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_API_KEY, "").strip() or None
-    assistant_endpoint = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_ENDPOINT, "").strip() or None
-    lite_api_key = os.environ.get(EnvVar.TEST_LLM_LITE_API_KEY, "").strip() or None
-    lite_endpoint = os.environ.get(EnvVar.TEST_LLM_LITE_ENDPOINT, "").strip() or None
     primary = os.environ.get(EnvVar.TEST_LLM_PRIMARY_MODEL, "").strip() or None
     assistant = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_MODEL, "").strip() or None
     lite = os.environ.get(EnvVar.TEST_LLM_LITE_MODEL, "").strip() or None
@@ -174,19 +168,6 @@ def _llm_settings_from_env():
     if lite:
         kwargs["lite_model"] = lite
 
-    _PROVIDER_KEY_FIELD = {
-        LLMProvider.GEMINI: "gemini_api_key",
-        LLMProvider.OPENAI: "openai_api_key",
-        LLMProvider.ANTHROPIC: "anthropic_api_key",
-        LLMProvider.OLLAMA: "ollama_api_key",
-        LLMProvider.LLAMACPP: "llamacpp_api_key",
-    }
-    _PROVIDER_ENDPOINT_FIELD = {
-        LLMProvider.OPENAI: "openai_endpoint",
-        LLMProvider.ANTHROPIC: "anthropic_endpoint",
-        LLMProvider.OLLAMA: "ollama_endpoint",
-        LLMProvider.LLAMACPP: "llamacpp_endpoint",
-    }
     _PROVIDER_MODEL_FIELD = {
         LLMProvider.GEMINI: "gemini_model",
         LLMProvider.OPENAI: "openai_model",
@@ -195,37 +176,11 @@ def _llm_settings_from_env():
         LLMProvider.LLAMACPP: "llamacpp_model",
     }
 
-    if api_key:
-        kwargs["primary_api_key"] = api_key
-        key_field = _PROVIDER_KEY_FIELD.get(provider)
-        if key_field:
-            kwargs[key_field] = api_key
-
-    if endpoint:
-        kwargs["primary_endpoint"] = endpoint
-        end_field = _PROVIDER_ENDPOINT_FIELD.get(provider)
-        if end_field:
-            kwargs[end_field] = endpoint
-
     if primary:
         kwargs["primary_model"] = primary
         mod_field = _PROVIDER_MODEL_FIELD.get(provider)
         if mod_field:
             kwargs[mod_field] = primary
-
-    if assistant_api_key:
-        kwargs["assistant_api_key"] = assistant_api_key
-        key_field = _PROVIDER_KEY_FIELD.get(assistant_provider)
-        if key_field:
-            kwargs[key_field] = assistant_api_key
-    elif api_key:
-        kwargs["assistant_api_key"] = api_key
-
-    if assistant_endpoint:
-        kwargs["assistant_endpoint"] = assistant_endpoint
-        end_field = _PROVIDER_ENDPOINT_FIELD.get(assistant_provider)
-        if end_field:
-            kwargs[end_field] = assistant_endpoint
 
     if assistant:
         kwargs["assistant_model"] = assistant
@@ -233,10 +188,24 @@ def _llm_settings_from_env():
         if mod_field:
             kwargs[mod_field] = assistant
 
-    # Lite key/endpoint/model fallback
-    kwargs["lite_api_key"] = lite_api_key or assistant_api_key or api_key
-    kwargs["lite_endpoint"] = lite_endpoint or assistant_endpoint or endpoint
     kwargs["lite_model"] = lite or assistant or primary
+
+    # Connections are configured once per provider, using the same environment
+    # variables as the running service. Role-specific test credentials no
+    # longer exist.
+    for field, env_var in (
+        ("openai_api_key", EnvVar.LLM_OPENAI_API_KEY),
+        ("openai_endpoint", EnvVar.LLM_OPENAI_ENDPOINT),
+        ("ollama_api_key", EnvVar.LLM_OLLAMA_API_KEY),
+        ("ollama_endpoint", EnvVar.LLM_OLLAMA_ENDPOINT),
+        ("anthropic_api_key", EnvVar.LLM_ANTHROPIC_API_KEY),
+        ("anthropic_endpoint", EnvVar.LLM_ANTHROPIC_ENDPOINT),
+        ("gemini_api_key", EnvVar.LLM_GEMINI_API_KEY),
+        ("llamacpp_api_key", EnvVar.LLM_LLAMACPP_API_KEY),
+        ("llamacpp_endpoint", EnvVar.LLM_LLAMACPP_ENDPOINT),
+    ):
+        if value := os.environ.get(env_var, "").strip():
+            kwargs[field] = value
 
     return LLMSettings(**kwargs)
 

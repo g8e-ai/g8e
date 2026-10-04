@@ -75,7 +75,6 @@ func uniqueDocumentID(kind string) string {
 //
 //	G8E_HARNESS_LLM_PROVIDER=ollama
 //	G8E_HARNESS_LLM_MODEL=gemma4:12b
-//	G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
 
 // ensemblePollTimeout returns the maximum time to wait for an audit receipt
 // to appear after sending a chat request. The LLM + governance round-trip can
@@ -117,8 +116,9 @@ const ensembleSmokeContent = "g8e ensemble governed file write smoke test"
 // ensemble-created cases/investigations in the document store.
 const harnessDocIDPrefix = "harness"
 
-// ensembleLLMOverrides reads LLM provider config from env vars and returns
-// the override fields for the EnsembleChatRequest. Defaults to the "fake"
+// ensembleLLMOverrides reads LLM role selection from env vars and returns
+// the override fields for the EnsembleChatRequest. Provider connections are
+// configured on the ensemble, not carried by chat requests. Defaults to the "fake"
 // provider for CI determinism. Set G8E_HARNESS_LLM_PROVIDER to override
 // (e.g., "ollama" for local dev with a real LLM).
 //
@@ -129,13 +129,12 @@ const harnessDocIDPrefix = "harness"
 // used for routing). Without a model default, the ensemble rejects the
 // request with "No LLM model configured" even though the provider override
 // is present.
-func ensembleLLMOverrides() (provider, model, endpoint string) {
+func ensembleLLMOverrides() (provider, model string) {
 	provider = os.Getenv(string(constants.EnvVar.HarnessLLMProvider))
 	if provider == "" {
 		provider = "fake"
 	}
 	model = os.Getenv(string(constants.EnvVar.HarnessLLMModel))
-	endpoint = os.Getenv(string(constants.EnvVar.HarnessLLMEndpoint))
 	if model == "" && provider == "fake" {
 		model = "fake"
 	}
@@ -148,7 +147,7 @@ func ensembleLLMOverrides() (provider, model, endpoint string) {
 // title is per-run unique (C.4) so the ensemble creates a distinct case per
 // run rather than reusing a prior run's case.
 func ensembleChatRequest(persona clientpkg.Persona, message, caseTitle string) clientpkg.EnsembleChatRequest {
-	provider, model, endpoint := ensembleLLMOverrides()
+	provider, model := ensembleLLMOverrides()
 	ctx := clientpkg.EnsembleRequestContext{
 		CLISessionID:    persona.CLISessionID,
 		UserID:          persona.UserID,
@@ -170,13 +169,10 @@ func ensembleChatRequest(persona clientpkg.Persona, message, caseTitle string) c
 		ResourceCreation:     &clientpkg.EnsembleResourceCreation{CreateCase: true, CaseTitle: caseTitle},
 		LLMPrimaryProvider:   provider,
 		LLMPrimaryModel:      model,
-		LLMPrimaryEndpoint:   endpoint,
 		LLMAssistantProvider: provider,
 		LLMAssistantModel:    model,
-		LLMAssistantEndpoint: endpoint,
 		LLMLiteProvider:      provider,
 		LLMLiteModel:         model,
-		LLMLiteEndpoint:      endpoint,
 	}
 }
 

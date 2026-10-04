@@ -107,17 +107,17 @@ The Makefile provides several build targets:
 Docker Engine with the Docker Compose plugin can build the binaries without a local Go toolchain:
 
 ```bash
-make up
+make docker
 ```
 
-This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts the complete default Compose profile (gateway, operators, and ensemble). `make up` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
+This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts the complete default Compose profile (gateway, operators, and ensemble). `make docker` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
 
 ```bash
 docker cp g8e-gateway:/g8e ./g8e
 chmod +x ./g8e
 ```
 
-Owner and workload enrollment are separate from `make up`; complete them before starting profile-gated services. See [Docker Gateway](docker_gateway.md) for the bootstrap sequence and [Unified Stack](unified_stack.md) for the complete two-phase deployment.
+Owner and workload enrollment are separate from `make docker`; complete them before starting profile-gated services. See [Docker Gateway](docker_gateway.md) for the bootstrap sequence and [Unified Stack](unified_stack.md) for the complete two-phase deployment.
 
 The Dockerfile builder produces only the image target platform binary (`linux/amd64` or `linux/arm64`). Run `make build-all` on the host when you need the full Linux, Windows, and macOS deployment matrix. Linux builds link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the FIPS compliance claim is restricted to linux/amd64. Approved mode is enabled by the build, while strict runtime enforcement is separate and requires `GODEBUG=fips140=only`. Check the deployed binary with `g8e version --fips`; see [Docker Gateway](docker_gateway.md#fips-runtime-mode) for the enforcement caveat.
 

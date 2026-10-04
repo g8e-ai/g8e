@@ -146,19 +146,16 @@ export interface LlmProviderOption {
   default_endpoint?: string | null;
   configured_endpoint?: string | null;
   api_key_set?: boolean;
-  role_api_key_set?: boolean;
   lists_models: boolean;
 }
 
-/** One role's stored selection. Keys are never returned, only whether one is set. */
+/** One role's stored provider and model selection. */
 export interface LlmRoleView {
   provider: string | null;
   model: string | null;
-  endpoint: string | null;
-  api_key_set: boolean;
 }
 
-/** /settings/llm/models: the models the role's provider serves. */
+/** /settings/llm/models: the models a saved provider connection serves. */
 export interface LlmModelList {
   models: string[];
 }

@@ -9,9 +9,7 @@
 
 The console saves one endpoint and API key per provider, then assigns a
 provider/model pair independently to primary, assistant, and lite roles.
-Legacy role-specific credentials remain supported and take precedence until a
-caller updates the shared provider connection. API keys never leave g8ee: the
-view reports only whether one is stored.
+API keys never leave g8ee: the view reports only whether one is stored.
 
 Every provider, g8e included, stores the model the user chose for the role. The
 Inference Operator is a worker and never decides it; the console lists the
@@ -37,7 +35,6 @@ from app.models.internal_api import (
     LLMRole,
     LLMRoleSettingsResponse,
     LLMRoleSettingsUpdateRequest,
-    LLMRoleUpdate,
     LLMRoleView,
 )
 from app.models.settings import LLMSettings
@@ -97,7 +94,14 @@ _PROVIDER_CONNECTION_FIELDS: dict[LLMProvider, tuple[str | None, str | None]] = 
 def provider_connection(
     llm: LLMSettings, provider: LLMProvider
 ) -> tuple[str | None, str | None]:
-    endpoint_field, key_field = _PROVIDER_CONNECTION_FIELDS[provider]
+    fields = _PROVIDER_CONNECTION_FIELDS.get(provider)
+    if fields is None:
+        raise ValidationError(
+            f"Provider '{provider.value}' cannot be selected here",
+            field="provider",
+            constraint="console_provider",
+        )
+    endpoint_field, key_field = fields
     endpoint = getattr(llm, endpoint_field) if endpoint_field else None
     api_key = getattr(llm, key_field) if key_field else None
     return endpoint, api_key
@@ -184,8 +188,6 @@ def apply_role_updates(llm: LLMSettings, request: LLMRoleSettingsUpdateRequest) 
     for role, (provider, model) in normalized.items():
         setattr(llm, f"{role}_provider", provider)
         setattr(llm, f"{role}_model", model)
-        setattr(llm, f"{role}_endpoint", None)
-        setattr(llm, f"{role}_api_key", None)
 
 
 def apply_provider_updates(llm: LLMSettings, updates: list[LLMProviderUpdate]) -> None:

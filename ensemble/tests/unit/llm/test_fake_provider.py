@@ -206,7 +206,6 @@ class TestFakeProviderFactoryWiring:
         settings = LLMSettings(
             primary_provider=LLMProvider.FAKE,
             primary_model="fake-model",
-            primary_endpoint="",
         )
         provider = get_llm_provider(settings)
         assert isinstance(provider, FakeProvider)

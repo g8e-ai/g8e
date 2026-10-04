@@ -119,7 +119,7 @@ from app.services.infra.event_service import EventService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
-from app.services.infra.llm_role_settings import normalize_endpoint, stored_connection
+from app.services.infra.llm_role_settings import provider_connection
 from app.services.infra.settings_service import SettingsService
 from app.constants.message_sender import MessageSender
 
@@ -377,12 +377,6 @@ async def internal_chat(
         primary_provider_override=request.llm_primary_provider,
         assistant_provider_override=request.llm_assistant_provider,
         lite_provider_override=request.llm_lite_provider,
-        primary_api_key_override=request.llm_primary_api_key,
-        primary_endpoint_override=request.llm_primary_endpoint,
-        assistant_api_key_override=request.llm_assistant_api_key,
-        assistant_endpoint_override=request.llm_assistant_endpoint,
-        lite_api_key_override=request.llm_lite_api_key,
-        lite_endpoint_override=request.llm_lite_endpoint,
     )
 
     # Validate investigation_id exists before proceeding, UNLESS we are creating
@@ -545,12 +539,6 @@ async def internal_chat(
             llm_primary_model=request.llm_primary_model,
             llm_assistant_model=request.llm_assistant_model,
             llm_lite_model=request.llm_lite_model,
-            llm_primary_api_key=request.llm_primary_api_key,
-            llm_primary_endpoint=request.llm_primary_endpoint,
-            llm_assistant_api_key=request.llm_assistant_api_key,
-            llm_assistant_endpoint=request.llm_assistant_endpoint,
-            llm_lite_api_key=request.llm_lite_api_key,
-            llm_lite_endpoint=request.llm_lite_endpoint,
             _task_manager=chat_task_manager,
             user_settings=user_settings,
             seed_application=seed_application,
@@ -1559,19 +1547,15 @@ async def list_llm_models(
 ):
     """List the models a provider endpoint serves.
 
-    A missing endpoint or key falls back to what the caller's role would
-    resolve for that provider, so stored keys need not be re-entered.
+    Model inventory uses the caller's saved provider endpoint and API key.
     Governed inference instead queries the active Inference Operator through
-    its typed inventory command; caller-supplied endpoint and key are ignored.
+    its typed inventory command.
     """
     if request.provider is LLMProvider.G8E:
         return LLMModelListResponse(
             models=await list_governed_models(gateway_operator_client, g8e_context)
         )
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-    stored_endpoint, stored_key = stored_connection(
-        user_settings.llm, request.role, request.provider
-    )
-    endpoint = normalize_endpoint(request.endpoint, "endpoint") or stored_endpoint
-    models = await list_models(request.provider, endpoint, request.api_key or stored_key)
+    endpoint, api_key = provider_connection(user_settings.llm, request.provider)
+    models = await list_models(request.provider, endpoint, api_key)
     return LLMModelListResponse(models=models)

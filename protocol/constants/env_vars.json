@@ -205,12 +205,6 @@
       "category": "violation",
       "description": "Agent harness ensemble LLM model"
     },
-    "HarnessLLMEndpoint": {
-      "_go_const": "EnvVar.HarnessLLMEndpoint",
-      "value": "G8E_HARNESS_LLM_ENDPOINT",
-      "category": "violation",
-      "description": "Agent harness ensemble LLM endpoint"
-    },
     "TestReexec": {
       "_go_const": "EnvVar.TestReexec",
       "value": "G8E_TEST_REEXEC",

@@ -87,36 +87,6 @@
       "type": "string",
       "required": false,
       "description": "Override: lite LLM model name"
-    },
-    "llm_primary_api_key": {
-      "type": "string",
-      "required": false,
-      "description": "Override: primary LLM API key"
-    },
-    "llm_primary_endpoint": {
-      "type": "string",
-      "required": false,
-      "description": "Override: primary LLM endpoint URL"
-    },
-    "llm_assistant_api_key": {
-      "type": "string",
-      "required": false,
-      "description": "Override: assistant LLM API key"
-    },
-    "llm_assistant_endpoint": {
-      "type": "string",
-      "required": false,
-      "description": "Override: assistant LLM endpoint URL"
-    },
-    "llm_lite_api_key": {
-      "type": "string",
-      "required": false,
-      "description": "Override: lite LLM API key"
-    },
-    "llm_lite_endpoint": {
-      "type": "string",
-      "required": false,
-      "description": "Override: lite LLM endpoint URL"
     }
   },
 

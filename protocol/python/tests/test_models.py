@@ -174,6 +174,21 @@ class TestG8eeUserSettings:
         assert settings.search.enabled is False
         assert settings.search.location == "global"
 
+    def test_llm_connections_are_provider_scoped(self):
+        llm = LLMSettings(
+            llm_primary_provider="openai",
+            llm_model="gpt-test",
+            openai_endpoint="https://proxy.example/v1",
+            openai_api_key="secret",
+        )
+        dumped = llm.model_dump(by_alias=True)
+        assert dumped["llm_primary_provider"] == "openai"
+        assert dumped["llm_model"] == "gpt-test"
+        assert dumped["openai_endpoint"] == "https://proxy.example/v1"
+        assert dumped["openai_api_key"] == "secret"
+        assert "primary_endpoint" not in type(llm).model_fields
+        assert "primary_api_key" not in type(llm).model_fields
+
 
 class TestChatModels:
     """Verify chat-related models."""
@@ -331,12 +346,6 @@ class TestLLMOverrides:
             llm_primary_model="d",
             llm_assistant_model="e",
             llm_lite_model="f",
-            llm_primary_api_key="k1",
-            llm_primary_endpoint="u1",
-            llm_assistant_api_key="k2",
-            llm_assistant_endpoint="u2",
-            llm_lite_api_key="k3",
-            llm_lite_endpoint="u3",
         )
         for field in (
             "llm_primary_provider",
@@ -345,12 +354,6 @@ class TestLLMOverrides:
             "llm_primary_model",
             "llm_assistant_model",
             "llm_lite_model",
-            "llm_primary_api_key",
-            "llm_primary_endpoint",
-            "llm_assistant_api_key",
-            "llm_assistant_endpoint",
-            "llm_lite_api_key",
-            "llm_lite_endpoint",
         ):
             assert getattr(overrides, field) is not None
 

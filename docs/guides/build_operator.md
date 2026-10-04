@@ -116,7 +116,7 @@ The binary is self-contained, but the running Operator is stateful. It creates a
 | `make build-fips` | Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`. |
 | `make verify-fips` | Builds the FIPS variant and runs `g8e version --fips` with FIPS-only enforcement enabled. |
 
-`make fmt`, `make up`, `make down`, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` also removes `.g8e/` runtime state, so do not use it to clean only build artifacts on a host with state that must be retained.
+`make fmt`, the host-native `make up` / `make down` lifecycle, the separate `make docker` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` also removes `.g8e/` runtime state, so do not use it to clean only build artifacts on a host with state that must be retained.
 
 #### Cross-Compilation
 

@@ -48,10 +48,10 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 
 | ID | Rule |
 | --- | --- |
-| INV-LLM-BOOTSTRAP-01 | Environment variables provide the lowest-priority bootstrap values for API keys and endpoints only (INV-ENV-04). Platform settings replace them when explicitly set, and request-specific role overrides take precedence over platform settings. |
-| INV-LLM-BOOTSTRAP-02 | Each role (`primary`, `assistant`, `lite`) accepts `ENDPOINT` and `API_KEY` environment variables under prefixes `G8E_LLM_PRIMARY_*`, `G8E_LLM_ASSISTANT_*`, `G8E_LLM_LITE_*`. Provider and model selection come only from Gateway-backed platform settings and request overrides, never from the environment. Role-specific credentials and endpoints take precedence over provider-level values. |
+| INV-LLM-BOOTSTRAP-01 | Environment variables provide the lowest-priority bootstrap values for provider API keys and endpoints only (INV-ENV-04). Explicitly stored provider connections replace them. Request-specific role overrides can change provider/model selection but never carry a connection. |
+| INV-LLM-BOOTSTRAP-02 | Connections use provider-specific fields (`G8E_LLM_OPENAI_*`, `G8E_LLM_OLLAMA_*`, and so on). Provider and model role selection comes from caller settings or request overrides, never from the environment. There are no role-specific endpoint or API-key fields. |
 | INV-LLM-BOOTSTRAP-03 | A model name remains required in settings; the system does not automatically select a provider's default model. |
-| INV-LLM-BOOTSTRAP-04 | A user's per-role provider, model, endpoint, and API key chosen in the console are written to that user's `user_settings` document by `SettingsService.update_llm_role_settings` and take effect on the next chat request. The selectable providers are Ollama, OpenAI-compatible, Anthropic, Gemini, llama.cpp, and g8e; Jev and Fake are not offered. g8ee never returns a stored API key, only whether one resolves for the role, and a role that changes provider drops its stored key unless a new one is supplied. |
+| INV-LLM-BOOTSTRAP-04 | Provider connections and per-role provider/model selections chosen in the console are stored separately in the user's `user_settings` document by `SettingsService.update_llm_role_settings` and take effect on the next chat request. The selectable providers are Ollama, OpenAI-compatible, Anthropic, Gemini, llama.cpp, and g8e; Jev and Fake are not offered. g8ee never returns a stored API key, only whether one is set for a provider. |
 
 ### Provider registry (`INV-LLM-PROVIDERS`)
 
@@ -115,21 +115,17 @@ The main chat agent always uses the primary generation call shape because both s
 
 ### Select roles from the console
 
-The console's Inference view reads and writes the three roles through `POST /api/v1/settings/llm/get` and `POST /api/v1/settings/llm` (see [Console Architecture](../architecture/console.md#model-selection) for the browser contract). g8ee reports the selectable providers with the fields each one needs (endpoint and API key are `none`, `optional`, or `required`), validates every role before writing any of them, and requires a provider for the primary role and a model for every role that sets a provider, `g8e` included: the user picks the model, and the Inference Operator, a worker, never decides it. An endpoint is normalized to an `http` or `https` URL without a trailing slash, and a bare `host:port` is read as `http`.
+The console's Inference page reads and writes one connection per provider through `POST /api/v1/settings/llm/get` and `POST /api/v1/settings/llm`. The Model Roles navigation edits the provider/model pair for each role through the same routes (see [Console Architecture](../architecture/console.md#model-selection) for the browser contract). g8ee reports the selectable providers with the connection fields each one needs (endpoint and API key are `none`, `optional`, or `required`), requires a provider for Primary and a model for every role that sets a provider, `g8e` included. The Inference Operator is a worker and never decides the role model. Endpoints are normalized to `http` or `https` URLs without trailing slashes; a bare `host:port` is read as `http`.
 
-`POST /api/v1/settings/llm/models` lists the models a provider endpoint serves, using `/api/tags` for Ollama, `/v1/models` for OpenAI-compatible, llama.cpp, and Anthropic endpoints, and `models` for Gemini. A missing endpoint or key falls back to what the role would resolve for that provider. For `g8e` it ignores any supplied endpoint or key, requests the typed model inventory of the caller's sole active Inference Operator through governed dispatch, and returns the models it serves for the user to pick from; zero or several active Inference Operators fail with a service-unavailable error. A failed listing reports only the HTTP status or the transport error class, never the upstream body.
+`POST /api/v1/settings/llm/models` accepts a provider and lists the models its saved connection serves, using `/api/tags` for Ollama, `/v1/models` for OpenAI-compatible, llama.cpp, and Anthropic endpoints, and `models` for Gemini. For `g8e` it requests the typed model inventory of the caller's sole active Inference Operator through governed dispatch; zero or several active Inference Operators fail with a service-unavailable error. A failed listing reports only the HTTP status or transport error class, never the upstream body.
 
 ### Environment bootstrap
 
-Environment variables provide the lowest-priority bootstrap values. Platform settings replace them when explicitly set, and request-specific role overrides take precedence over platform settings.
+Environment variables provide the lowest-priority provider connections. Stored
+connections replace them. Role provider/model selections are not read from the
+environment.
 
-Each role accepts `PROVIDER`, `MODEL`, `ENDPOINT`, and `API_KEY` variables under these prefixes:
-
-- `G8E_LLM_PRIMARY_*`
-- `G8E_LLM_ASSISTANT_*`
-- `G8E_LLM_LITE_*`
-
-Provider-level credentials and endpoints are also available through:
+Credentials and endpoints are provider-specific:
 
 - OpenAI: `G8E_LLM_OPENAI_API_KEY`, `G8E_LLM_OPENAI_ENDPOINT`
 - Anthropic: `G8E_LLM_ANTHROPIC_API_KEY`, `G8E_LLM_ANTHROPIC_ENDPOINT`
@@ -138,7 +134,7 @@ Provider-level credentials and endpoints are also available through:
 - llama.cpp: `G8E_LLM_LLAMACPP_API_KEY`, `G8E_LLM_LLAMACPP_ENDPOINT`
 - System One (via Ollama): `G8E_LLM_JEV_MODEL` (uses existing Ollama endpoint settings)
 
-Role-specific credentials and endpoints take precedence over provider-level values. A model name remains required; the settings layer does not automatically select a provider's default model.
+A model name remains required; the settings layer does not automatically select a provider's default model.
 
 ### Generation and execution controls
 

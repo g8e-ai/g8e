@@ -95,8 +95,8 @@ class SettingsService:
         # Apply LLM credential and endpoint bootstrap defaults (lowest
         # priority). Only secrets (API keys) and user-specific endpoints come
         # from the environment (INV-ENV-04); provider and model selection are
-        # Gateway-backed platform settings only. Priority order:
-        # platform DB settings > per-request overrides > env-var defaults.
+        # caller/platform settings only. Provider connection priority here is:
+        # platform DB settings > env-var bootstrap defaults.
         self._apply_llm_env_defaults(settings.llm)
 
         return settings
@@ -107,27 +107,11 @@ class SettingsService:
         This is the lowest-priority bootstrap source. Each field is set only
         when the env var is present and non-empty; unset env vars leave the
         field at its model default (None). The platform DB overlay
-        (overlay_platform_data) and per-request overrides both take
-        precedence over these values. Provider and model names are never read
+        (overlay_platform_data) takes precedence over these values. Provider
+        and model role selections are never read
         from the environment.
         """
         env = os.environ.get
-
-        # Role-specific endpoint/api-key
-        if env(EnvVar.LLM_PRIMARY_ENDPOINT):
-            llm.primary_endpoint = env(EnvVar.LLM_PRIMARY_ENDPOINT)
-        if env(EnvVar.LLM_PRIMARY_API_KEY):
-            llm.primary_api_key = env(EnvVar.LLM_PRIMARY_API_KEY)
-
-        if env(EnvVar.LLM_ASSISTANT_ENDPOINT):
-            llm.assistant_endpoint = env(EnvVar.LLM_ASSISTANT_ENDPOINT)
-        if env(EnvVar.LLM_ASSISTANT_API_KEY):
-            llm.assistant_api_key = env(EnvVar.LLM_ASSISTANT_API_KEY)
-
-        if env(EnvVar.LLM_LITE_ENDPOINT):
-            llm.lite_endpoint = env(EnvVar.LLM_LITE_ENDPOINT)
-        if env(EnvVar.LLM_LITE_API_KEY):
-            llm.lite_api_key = env(EnvVar.LLM_LITE_API_KEY)
 
         # Provider-specific endpoint/api-key defaults
         if env(EnvVar.LLM_OPENAI_API_KEY):
@@ -169,8 +153,8 @@ class SettingsService:
         LLM merges with platform-DB-wins semantics: platform DB values take
         precedence when present, and env-var bootstrap defaults (lowest
         priority, already applied in get_local_settings) fill gaps the
-        platform DB leaves unset. Priority order:
-        platform DB settings > per-request overrides > env-var defaults.
+        platform DB leaves unset. Priority order: platform DB settings >
+        env-var defaults.
         """
         for field_name in type(settings).model_fields:
             if field_name.startswith("_"):
@@ -198,7 +182,7 @@ class SettingsService:
                 # defaults. Only override the local/env value when the
                 # platform value differs from the model default — a platform
                 # value equal to the default means the DB didn't set it.
-                # Priority: platform DB > per-request overrides > env-var defaults.
+                # Priority: platform DB > env-var defaults.
                 llm_defaults = LLMSettings()
                 for sub_field in type(local_value).model_fields:
                     p_val = getattr(platform_value, sub_field, None)

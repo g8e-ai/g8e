@@ -242,12 +242,16 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean             Remove build artifacts (bin/, test/coverage outputs, Go caches)"
-	@echo "  clean-docker      Stop all containers and remove volumes (docker compose down -v --remove-orphans)"
+	@echo "  docker-clean      Stop all containers and remove volumes (docker compose down -v --remove-orphans)"
 	@echo ""
-	@echo "Docker Compose:"
-	@echo "  up                Build and start the full stack (docker compose up -d --build)"
-	@echo "  down              Stop all containers, keep volumes (docker compose down --remove-orphans)"
-	@echo "  restart-operators Restart Data and Inference Operators to pick up newly built binary"
+	@echo "Host Platform:"
+	@echo "  up                Build and start the Gateway on this host"
+	@echo "  down              Stop the Gateway running on this host"
+	@echo ""
+	@echo "Docker Compose (separate from the host lifecycle):"
+	@echo "  docker            Build and start the full Docker stack (docker compose up -d --build)"
+	@echo "  docker-down       Stop all containers, keep volumes"
+	@echo "  docker-restart-operators Restart Docker Data and Inference Operators"
 	@echo "  docker-build      Build Docker images in container and export binary to ./g8e"
 	@echo ""
 	@echo "Demos:"
@@ -982,32 +986,52 @@ clean-harness:
 	@echo "Clean complete."
 
 # =============================================================================
-# DOCKER COMPOSE LIFECYCLE
+# HOST PLATFORM LIFECYCLE
 # =============================================================================
-# Convenience wrappers around docker compose. Docker-first: `docker compose
-# up -d --build` works standalone; these targets are not prerequisites.
+# These targets run the platform directly on the development host. They must
+# not call Docker or Docker Compose; the Docker lifecycle is defined separately
+# below under explicitly Docker-named targets.
 .PHONY: up
-up:
-	@echo "Building and starting the unified stack..."
-	@docker compose up -d --build
-	@echo "Stack started. Gateway is healthy; workloads await owner approval."
+up: build
+	@echo "Starting the g8e Gateway on this host..."
+	@./g8e gw start
+	@echo "Host platform started. Check it with: ./g8e gw status"
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
-	@echo "Then approve workloads: ./g8e auth enroll pending && ./g8e auth enroll approve <id> --yes"
 
 .PHONY: down
 down:
-	@echo "Stopping the unified stack (volumes preserved)..."
-	@docker compose down --remove-orphans
-	@echo "Stack stopped. Volumes preserved; rerun 'make up' to resume."
+	@test -x ./g8e || { echo "ERROR: ./g8e is missing; run 'make build' first" >&2; exit 1; }
+	@echo "Stopping the g8e Gateway running on this host..."
+	@./g8e gw stop
+	@echo "Host platform stopped. Runtime state in .g8e/ is preserved."
 
-.PHONY: clean-docker
-clean-docker:
+# =============================================================================
+# DOCKER COMPOSE LIFECYCLE
+# =============================================================================
+# Docker is deliberately isolated behind Docker-named targets. The host-native
+# `up` and `down` targets above never invoke these recipes.
+.PHONY: docker
+docker:
+	@echo "Building and starting the Docker Compose unified stack..."
+	@docker compose up -d --build
+	@echo "Docker stack started. Workloads await owner approval."
+	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
+	@echo "Then approve workloads: ./g8e auth enroll pending && ./g8e auth enroll approve <id> --yes"
+
+.PHONY: docker-down
+docker-down:
+	@echo "Stopping the Docker Compose unified stack (volumes preserved)..."
+	@docker compose down --remove-orphans
+	@echo "Docker stack stopped. Volumes preserved; rerun 'make docker' to resume."
+
+.PHONY: docker-clean clean-docker
+docker-clean clean-docker:
 	@echo "Stopping the unified stack and removing volumes..."
 	@docker compose down -v --remove-orphans
-	@echo "Stack stopped and volumes removed. The next 'make up' re-bootstraps the CA and requires re-enrollment."
+	@echo "Stack stopped and volumes removed. The next 'make docker' re-bootstraps the CA and requires re-enrollment."
 
-.PHONY: restart-operators
-restart-operators:
+.PHONY: docker-restart-operators
+docker-restart-operators:
 	@echo "Restarting Data and Inference Operators to align with current binary..."
 	@docker compose restart g8e-data-operator g8e-inference-operator
 	@echo "Operators restarted."

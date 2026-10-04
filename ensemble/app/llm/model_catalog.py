@@ -7,8 +7,8 @@
 
 """List the models a provider endpoint serves, for the console's model picker.
 
-Each provider's own listing API is called with the endpoint and key the role
-would use. Failures surface as ExternalServiceError carrying only the HTTP
+Each provider's own listing API is called with the caller's saved provider
+connection. Failures surface as ExternalServiceError carrying only the HTTP
 status or transport error class, never the upstream body.
 """
 
