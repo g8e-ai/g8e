@@ -4,7 +4,7 @@ title: Release Process
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-04
-version: v2.3.0
+version: v2.3.1
 owners:
   - VERSION
   - Makefile
