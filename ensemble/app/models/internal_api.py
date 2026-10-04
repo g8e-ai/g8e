@@ -23,7 +23,7 @@ from g8e.operator.v1.operator_pb2 import (
 
 from app.constants import LLMProvider
 from app.models.attachments import AttachmentMetadata
-from app.models.base import ConfigDict, Field, G8eBaseModel
+from app.models.base import ConfigDict, Field, G8eBaseModel, model_validator
 from app.models.cases import CaseModel
 from app.models.operators import PendingApproval
 from app.models.http_context import RequestContext
@@ -104,18 +104,22 @@ class LLMProviderOption(G8eBaseModel):
     endpoint: FieldRequirement
     api_key: FieldRequirement
     default_endpoint: str | None = Field(
-        default=None, description="Endpoint used when the role leaves its endpoint empty"
+        default=None, description="Provider default endpoint when no caller endpoint is set"
+    )
+    configured_endpoint: str | None = Field(
+        default=None, description="Caller-configured endpoint for this provider"
+    )
+    api_key_set: bool = Field(
+        default=False, description="Whether a caller-owned provider API key is stored"
     )
     lists_models: bool = Field(description="Whether /settings/llm/models can enumerate models")
 
 
 class LLMRoleView(G8eBaseModel):
-    """One role's stored selection. API keys are never returned, only whether one is set."""
+    """One role's provider and model selection."""
 
     provider: LLMProvider | None = None
     model: str | None = None
-    endpoint: str | None = None
-    api_key_set: bool = False
 
 
 class LLMRoleSettingsResponse(G8eBaseModel):
@@ -128,39 +132,42 @@ class LLMRoleSettingsResponse(G8eBaseModel):
 
 
 class LLMRoleUpdate(G8eBaseModel):
-    """One role's new selection.
-
-    provider null on assistant or lite means "same as primary". api_key null keeps
-    the stored key (cleared anyway when the provider changes); "" clears it.
-    """
+    """One role's provider and model selection."""
 
     provider: LLMProvider | None = None
     model: str | None = None
+
+
+class LLMProviderUpdate(G8eBaseModel):
+    """One caller-owned provider connection update. API keys are write-only."""
+
+    provider: LLMProvider
     endpoint: str | None = None
     api_key: str | None = Field(default=None, repr=False)
 
 
 class LLMRoleSettingsUpdateRequest(G8eBaseModel):
-    """Request for /settings/llm: the full per-role selection for the caller."""
+    """Request for /settings/llm: provider connections or per-role selections."""
 
     context: RequestContext = Field(..., description="Request context with session/user identity")
-    primary: LLMRoleUpdate
-    assistant: LLMRoleUpdate
-    lite: LLMRoleUpdate
+    primary: LLMRoleUpdate | None = None
+    assistant: LLMRoleUpdate | None = None
+    lite: LLMRoleUpdate | None = None
+    providers: list[LLMProviderUpdate] | None = None
+
+    @model_validator(mode="after")
+    def validate_update_scope(self):
+        role_updates = (self.primary, self.assistant, self.lite)
+        if not any(update is not None for update in role_updates) and self.providers is None:
+            raise ValueError("Provide provider connections or role selections")
+        return self
 
 
 class LLMModelListRequest(G8eBaseModel):
-    """Request for /settings/llm/models.
-
-    endpoint and api_key fall back to the caller's stored values for role, so a
-    saved key does not have to be re-entered to browse models.
-    """
+    """Request to list models using the caller's saved provider connection."""
 
     context: RequestContext = Field(..., description="Request context with session/user identity")
-    role: LLMRole
     provider: LLMProvider
-    endpoint: str | None = None
-    api_key: str | None = Field(default=None, repr=False)
 
 
 class LLMModelListResponse(G8eBaseModel):

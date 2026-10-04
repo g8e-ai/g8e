@@ -144,6 +144,9 @@ export interface LlmProviderOption {
   endpoint: FieldRequirement;
   api_key: FieldRequirement;
   default_endpoint?: string | null;
+  configured_endpoint?: string | null;
+  api_key_set?: boolean;
+  role_api_key_set?: boolean;
   lists_models: boolean;
 }
 

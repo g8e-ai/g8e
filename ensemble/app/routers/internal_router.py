@@ -1533,7 +1533,7 @@ async def get_llm_role_settings(
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """Return the caller's provider and model per role (primary, assistant, lite).
+    """Return caller-owned provider connections and model selections per role.
 
     API keys are reported only as set or unset.
     """
@@ -1546,7 +1546,7 @@ async def update_llm_role_settings(
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """Save the caller's provider and model per role. The next chat request uses them."""
+    """Save caller-owned provider connections or role selections to user settings."""
     return await settings_service.update_llm_role_settings(g8e_context.user_id, request)
 
 
@@ -1575,5 +1575,3 @@ async def list_llm_models(
     endpoint = normalize_endpoint(request.endpoint, "endpoint") or stored_endpoint
     models = await list_models(request.provider, endpoint, request.api_key or stored_key)
     return LLMModelListResponse(models=models)
-
-
