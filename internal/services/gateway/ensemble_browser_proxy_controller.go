@@ -218,11 +218,18 @@ func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID str
 		if op.BoundWebSessionID != webSessionID {
 			continue
 		}
+		// The registry tracks lifecycle separately from the web-session
+		// binding. Binding an active Operator leaves its document status
+		// active; g8ee's BoundOperator status describes the binding instead.
+		status := op.Status
+		if status == constants.OperatorStatusActive {
+			status = constants.OperatorStatusBound
+		}
 		bound = append(bound, browserBoundOperator{
 			BoundWebSessionID: op.BoundWebSessionID,
 			OperatorID:        op.ID,
 			OperatorSessionID: op.OperatorSessionID,
-			Status:            string(op.Status),
+			Status:            string(status),
 		})
 	}
 	return bound

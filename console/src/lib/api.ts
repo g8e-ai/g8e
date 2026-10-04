@@ -75,6 +75,19 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
   return parsed as T;
 }
 
+// Gateway 502 messages for a g8ee that is starting, enrolling, or has not yet
+// trusted the Gateway's proxy signing key. Both are transient upstream states,
+// never a lapsed browser session: the Gateway maps an upstream 401 to 502 so
+// the unauthorized listeners above only ever fire for the Gateway's own
+// session check.
+const ENSEMBLE_UNAVAILABLE_MESSAGES = ['ensemble upstream unavailable', 'ensemble upstream authentication failed'];
+
+/** True when a proxied g8ee call failed because the ensemble is not reachable or not yet trusted. */
+export function isEnsembleUnavailable(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return ENSEMBLE_UNAVAILABLE_MESSAGES.some((m) => msg.includes(m));
+}
+
 export const api = {
   get: <T>(path: string, opts?: Omit<RequestOptions, 'method' | 'body'>) => request<T>(path, { ...opts, method: 'GET' }),
   post: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, 'method' | 'body'>) =>

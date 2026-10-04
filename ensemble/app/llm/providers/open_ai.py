@@ -44,34 +44,38 @@ def _contents_to_messages(
 
     for content in contents:
         role = "assistant" if content.role == "model" else content.role
+        calls = [part.tool_call for part in content.parts if part.tool_call]
+        if calls:
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "".join(part.text for part in content.parts if part.text) or None,
+                    "tool_calls": [
+                        {
+                            "id": call.id or f"call_{call.name}",
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.args),
+                            },
+                        }
+                        for call in calls
+                    ],
+                }
+            )
 
         for part in content.parts:
             if part.tool_call:
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [
-                            {
-                                "id": f"call_{part.tool_call.name}",
-                                "type": "tool",
-                                "tool": {
-                                    "name": part.tool_call.name,
-                                    "arguments": json.dumps(part.tool_call.args),
-                                },
-                            }
-                        ],
-                    }
-                )
-            elif part.tool_response:
+                continue
+            if part.tool_response:
                 messages.append(
                     {
                         "role": "tool",
-                        "tool_call_id": f"call_{part.tool_response.name}",
+                        "tool_call_id": part.tool_response.id or f"call_{part.tool_response.name}",
                         "content": json.dumps(part.tool_response.response),
                     }
                 )
-            elif part.text:
+            elif part.text and not calls:
                 messages.append({"role": role, "content": part.text})
 
     return messages
@@ -247,6 +251,7 @@ class OpenAIProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
+        self._record_declared_tools(tool["function"]["name"] for tool in (openai_tools or []))
 
         effective_max_tokens = primary_llm_settings.max_output_tokens
 

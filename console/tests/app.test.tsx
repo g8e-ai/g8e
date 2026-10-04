@@ -402,6 +402,42 @@ describe('inference', () => {
     expect(within(primary).getByLabelText('Model')).toHaveValue('qwen3:4b');
   });
 
+  it('keeps the session when g8ee has not yet trusted the Gateway proxy key', async () => {
+    let upstreamTrusted = false;
+    const untrusted: [number, unknown] = [502, { error: 'ensemble upstream authentication failed' }];
+    routes = signedInRoutes({
+      'GET /api/v1/investigations': () => (upstreamTrusted ? [200, []] : untrusted),
+      'POST /api/v1/settings/llm/get': () =>
+        upstreamTrusted ? [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b', endpoint: null, api_key_set: false })] : untrusted,
+      'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b'] }],
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    renderApp();
+
+    expect(await screen.findByText('Connecting to ensemble…')).toBeInTheDocument();
+    expect(screen.queryByLabelText('User ID')).toBeNull();
+    expect(screen.queryByText(/Could not load/)).toBeNull();
+
+    upstreamTrusted = true;
+    act(() => {
+      FakeEventSource.last?.push(1, Ev.ApprovalsChanged, { subject: 'enrollments' });
+    });
+
+    const primary = await screen.findByRole('region', { name: 'Primary' });
+    expect(within(primary).getByLabelText('Model')).toHaveValue('qwen3:4b');
+    expect(screen.queryByLabelText('User ID')).toBeNull();
+  });
+
+  it('signs out when the Gateway itself rejects the session on a proxied route', async () => {
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () => [401, { error: 'unauthorized' }],
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    renderApp();
+
+    expect(await screen.findByLabelText('User ID')).toBeInTheDocument();
+  });
+
   it('shows enrolling state when pending platform enrollment exists and links to approvals', async () => {
     routes = signedInRoutes({
       'POST /api/v1/settings/llm/get': () => [502, { error: 'ensemble upstream unavailable' }],

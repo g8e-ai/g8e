@@ -119,14 +119,22 @@ func TestBoundOperators_FiltersToWebSession(t *testing.T) {
 		logger: slog.Default(),
 		operators: fakeOperatorLister{ops: []models.OperatorDocumentGo{
 			{ID: "op-1", OperatorSessionID: "os-1", BoundWebSessionID: "web-1", Status: constants.OperatorStatusBound},
+			{ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "os-embedded", BoundWebSessionID: "web-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded},
+			{ID: "op-remote", OperatorSessionID: "os-remote", BoundWebSessionID: "web-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
 			{ID: "op-2", OperatorSessionID: "os-2", BoundWebSessionID: "web-other", Status: constants.OperatorStatusBound},
 			{ID: "op-3", OperatorSessionID: "os-3", Status: constants.OperatorStatusActive},
+			{ID: "op-stopped", OperatorSessionID: "os-stopped", BoundWebSessionID: "web-1", Status: constants.OperatorStatusStopped},
 		}},
 	}
 
 	got := c.boundOperators("user-1", "web-1")
 
-	assert.Equal(t, []browserBoundOperator{{BoundWebSessionID: "web-1", OperatorID: "op-1", OperatorSessionID: "os-1", Status: "bound"}}, got)
+	assert.Equal(t, []browserBoundOperator{
+		{BoundWebSessionID: "web-1", OperatorID: "op-1", OperatorSessionID: "os-1", Status: "bound"},
+		{BoundWebSessionID: "web-1", OperatorID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "os-embedded", Status: "bound"},
+		{BoundWebSessionID: "web-1", OperatorID: "op-remote", OperatorSessionID: "os-remote", Status: "bound"},
+		{BoundWebSessionID: "web-1", OperatorID: "op-stopped", OperatorSessionID: "os-stopped", Status: "stopped"},
+	}, got)
 }
 
 func TestBoundOperators_RegistryErrorYieldsEmptyList(t *testing.T) {

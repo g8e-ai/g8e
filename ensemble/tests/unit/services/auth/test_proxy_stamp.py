@@ -7,6 +7,7 @@
 
 """The Gateway's signed browser-proxy identity stamp, verified by g8ee."""
 
+import asyncio
 import hashlib
 
 import pytest
@@ -230,25 +231,39 @@ class TestProxyStampVerifier:
         assert source.calls == 1
 
     @pytest.mark.asyncio
-    async def test_concurrent_requests_on_cold_cache_do_not_reject(self):
-        import asyncio
-
+    async def test_concurrent_requests_on_cold_cache_share_one_fetch(self):
+        # Browser fan-out on first console load: every request must wait for
+        # the in-flight fetch, not trip the refetch throttle and 401.
         key = _key()
-
-        class DelayedKeySource:
-            def __init__(self):
-                self.calls = 0
-
-            async def __call__(self):
-                self.calls += 1
-                await asyncio.sleep(0.01)
-                return _response(key)
-
-        source = DelayedKeySource()
+        source = KeySource(_response(key), delay=0.01)
         v = verifier(source)
-        req1 = make_request(stamped_headers(key, nonce="a" * 32))
-        req2 = make_request(stamped_headers(key, nonce="b" * 32))
-        req3 = make_request(stamped_headers(key, nonce="c" * 32))
-        await asyncio.gather(v.verify(req1), v.verify(req2), v.verify(req3))
+        await asyncio.gather(*(v.verify(make_request(stamped_headers(key, nonce=c * 32))) for c in "abc"))
         assert source.calls == 1
 
+    @pytest.mark.asyncio
+    async def test_concurrent_requests_during_key_rotation_share_one_fetch(self):
+        old, new = _key(1), _key(2)
+        source = KeySource(_response(old, "k1"), _response(new, "k2"), delay=0.01)
+        clock = Clock()
+        v = verifier(source, clock)
+        await v.verify(make_request(stamped_headers(old, key_id="k1", nonce="a" * 32)))
+        clock.now = NOW + 11
+        await asyncio.gather(
+            *(
+                v.verify(make_request(stamped_headers(new, key_id="k2", nonce=c * 32, issued_at=int(clock.now))))
+                for c in "bcd"
+            )
+        )
+        assert source.calls == 2
+
+    @pytest.mark.asyncio
+    async def test_concurrent_requests_fail_closed_when_the_shared_fetch_fails(self):
+        key = _key()
+        source = KeySource(RuntimeError("gateway down"), delay=0.01)
+        v = verifier(source)
+        results = await asyncio.gather(
+            *(v.verify(make_request(stamped_headers(key, nonce=c * 32))) for c in "abc"),
+            return_exceptions=True,
+        )
+        assert all(isinstance(r, AuthenticationError) for r in results)
+        assert source.calls == 1

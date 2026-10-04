@@ -120,13 +120,10 @@ class ProxyStampVerifier:
         self._verify_key: VerifyKey | None = None
         self._last_fetch: float | None = None
         self._nonces: dict[str, float] = {}
-        self._lock: asyncio.Lock | None = None
-
-    @property
-    def _fetch_lock(self) -> asyncio.Lock:
-        if self._lock is None:
-            self._lock = asyncio.Lock()
-        return self._lock
+        # Serializes key fetches. Browsers fan out several proxied requests on
+        # console load; without this, the first starts a fetch and the rest hit
+        # the refetch throttle and reject a valid stamp as "unknown key id".
+        self._fetch_lock = asyncio.Lock()
 
     async def verify(self, request: Request) -> None:
         """Raise AuthenticationError unless the request carries a valid stamp.
@@ -174,7 +171,7 @@ class ProxyStampVerifier:
             nonce=nonce,
         )
 
-        verify_key = await self._key_for(key_id, now)
+        verify_key = await self._key_for(key_id)
         try:
             verify_key.verify(stamp.canonical_bytes(), signature)
         except BadSignatureError:
@@ -182,11 +179,13 @@ class ProxyStampVerifier:
 
         self._remember(nonce, now)
 
-    async def _key_for(self, key_id: str, now: float) -> VerifyKey:
+    async def _key_for(self, key_id: str) -> VerifyKey:
         if self._verify_key is not None and self._key_id == key_id:
             return self._verify_key
 
         async with self._fetch_lock:
+            # Re-check: a fetch that finished while we waited may already
+            # have published this key ID.
             if self._verify_key is not None and self._key_id == key_id:
                 return self._verify_key
 
