@@ -532,4 +532,3 @@ func TestTranslateSSEEvents_ChatAndApprovals(t *testing.T) {
 		assert.Equal(t, "tx-999", pm.TxID)
 	})
 }
-

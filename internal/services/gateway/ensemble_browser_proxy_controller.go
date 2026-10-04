@@ -47,10 +47,10 @@ type EnsembleBrowserProxyController struct {
 }
 
 type EnsembleBrowserProxyControllerDeps struct {
-	Cfg            *config.Config
-	Logger         *slog.Logger
-	Responder      *response.Writer
-	Operators      dispatch.OperatorLister
+	Cfg       *config.Config
+	Logger    *slog.Logger
+	Responder *response.Writer
+	Operators dispatch.OperatorLister
 	// Signer signs every proxied request. A nil Signer makes the proxy refuse
 	// to forward anything: there is no unsigned mode.
 	Signer         *BrowserProxySigner

@@ -12,12 +12,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"testing"
 	"time"
 
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"

@@ -77,7 +77,7 @@ func operatorResetIdentityCmdWithDiscovery(discover func() ([]localOperatorProce
 		},
 	}
 	cmd.Flags().StringVar(&directory, "working-dir", "", "Operator working directory (required)")
-	cmd.MarkFlagRequired("working-dir")
+	_ = cmd.MarkFlagRequired("working-dir")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Confirm identity reset")
 	return cmd
 }
