@@ -69,7 +69,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-DOC-GEN-01 | Generated protobuf references in `protocol/docs/reference/` MUST change only through edits to `.proto` files in `protocol/proto/g8e/` followed by `make proto`. MUST NOT hand-edit generated protobuf output. |
+| INV-DOC-GEN-01 | Generated protobuf references in `protocol/docs/reference/` MUST change only through edits to `.proto` files in `protocol/proto/g8e/` followed by `make proto-generate`. MUST NOT hand-edit generated protobuf output. |
 | INV-DOC-GEN-02 | Gateway OpenAPI specifications (`internal/services/gateway/docs/swagger.json` and `swagger.yaml`) MUST change only through Go Swagger annotations followed by `make swagger-generate`. |
 | INV-DOC-GEN-03 | Machine-readable protocol constants and schemas under `protocol/constants/`, `protocol/models/`, and `protocol/schemas/` MUST remain synchronized with their Go, Python, and TypeScript mirrors via owning validation commands. |
 
@@ -87,9 +87,9 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | --- | --- | --- |
 | Dev docs format | `docs/devs/` | YAML front matter and required H2 section order |
 | Documentation catalog | `docs/devs/docs.md` | Authoritative inventory of all first-party docs |
-| Protobuf API references | `protocol/proto/g8e/`, `protocol/docs/reference/` | `make proto` |
+| Protobuf API references | `protocol/proto/g8e/`, `protocol/docs/reference/` | `make proto-generate` |
 | Gateway OpenAPI | `internal/services/gateway/docs/`, Go Swagger annotations | `make swagger-generate` |
-| Protocol constants | `protocol/constants/`, `internal/constants/` | `make validate-doctrines`, `make validate-cosais` |
+| Protocol constants | `protocol/constants/`, `internal/constants/` | `make doctrines-validate`, `make cosais-validate` |
 
 ## Procedures
 
@@ -100,7 +100,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 3. Inventory every claim (commands, flags, routes, defaults, ports, paths, contracts).
 4. Trace each claim to its primary owning source in the repository.
 5. Inspect related documentation to update cross-links and eliminate conflicting duplicates.
-6. Refresh generated outputs through source owners (`make proto`, `make swagger-generate`).
+6. Refresh generated outputs through source owners (`make proto-generate`, `make swagger-generate`).
 7. Review revised document end-to-end for coherence, relative links, and clean formatting.
 8. Update `last_updated` and `version` metadata last.
 9. Run owning validation commands (`./g8e test lint`, component tests, or schema validators).
@@ -109,14 +109,14 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 ```bash
 # Protobuf references, Go/Python/Node code, downstream lockfiles
-make proto
+make proto-generate
 
 # Gateway Swagger / OpenAPI JSON and YAML
 make swagger-generate
 
 # Validate doctrine and COSAiS JSON catalogs
-make validate-doctrines
-make validate-cosais
+make doctrines-validate
+make cosais-validate
 ```
 
 ## Anti-patterns

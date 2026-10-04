@@ -99,7 +99,7 @@ func verifyGenerated(root string, out generationOutputs) error {
 			continue
 		}
 		if !bytes.Equal(actual, []byte(expected)) {
-			diffs = append(diffs, fmt.Sprintf("%s: generated output differs from committed file (run make constants)", path))
+			diffs = append(diffs, fmt.Sprintf("%s: generated output differs from committed file (run make constants-generate)", path))
 		}
 	}
 	if err := verifyBundledPythonEvents(root); err != nil {
@@ -139,7 +139,7 @@ func verifyBundledPythonEvents(root string) error {
 		return fmt.Errorf("%s: %v", path, err)
 	}
 	if !bytes.Equal(actual, canonical) {
-		return fmt.Errorf("%s: bundled Python events.json differs from protocol/constants/events.json (run make constants)", path)
+		return fmt.Errorf("%s: bundled Python events.json differs from protocol/constants/events.json (run make constants-generate)", path)
 	}
 	return nil
 }

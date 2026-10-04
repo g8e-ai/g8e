@@ -96,7 +96,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-PROTO-01 | Root `buf.gen.yaml` MUST be described as the Go and Markdown protobuf generator only (`make proto-go`, output beside `protocol/proto/g8e/` and under `protocol/docs/reference/api/`). Python stubs MUST be attributed to `protocol/python/scripts/generate_protos.py` (`make proto-python`, modules under `protocol/python/g8e/`). TypeScript stubs MUST be attributed to `protocol/node/buf.gen.yaml` (`make proto-node`, output under `protocol/node/src/gen/`). `make proto` runs Go, Python, TypeScript, and `proto-lockfiles`. MUST NOT attribute Python or TypeScript generation to the root `buf.gen.yaml`. Hand-editing generated output is INV-GEN-01. |
+| INV-PROTO-01 | Root `buf.gen.yaml` MUST be described as the Go and Markdown protobuf generator only (`make proto-go`, output beside `protocol/proto/g8e/` and under `protocol/docs/reference/api/`). Python stubs MUST be attributed to `protocol/python/scripts/generate_protos.py` (`make proto-python`, modules under `protocol/python/g8e/`). TypeScript stubs MUST be attributed to `protocol/node/buf.gen.yaml` (`make proto-node`, output under `protocol/node/src/gen/`). `make proto-generate` runs Go, Python, TypeScript, and `proto-lockfiles`. MUST NOT attribute Python or TypeScript generation to the root `buf.gen.yaml`. Hand-editing generated output is INV-GEN-01. |
 
 ### Test commands (`INV-TESTMAP`)
 
@@ -344,7 +344,7 @@ Schemas live under `protocol/proto/g8e/`. Wire requirements: [Protocol Specifica
 | Markdown under `protocol/docs/reference/api/` | Root `buf.gen.yaml` (`protoc-gen-doc`) | `make proto-go` |
 | Python modules under `protocol/python/g8e/` | `protocol/python/scripts/generate_protos.py` | `make proto-python` |
 | TypeScript under `protocol/node/src/gen/` | `protocol/node/buf.gen.yaml` | `make proto-node` |
-| Ensemble `uv.lock` after the Python package changes | `make proto-lockfiles` | `make proto` runs all four |
+| Ensemble `uv.lock` after the Python package changes | `make proto-lockfiles` | `make proto-generate` runs all four |
 
 | Path | Owns |
 | --- | --- |
@@ -356,7 +356,7 @@ Schemas live under `protocol/proto/g8e/`. Wire requirements: [Protocol Specifica
 | `protocol/node/` | TypeScript protocol package. |
 | `examples/` | Runnable Go/Python examples, external-console app, and MCP client configuration templates (demo environments stay in `demos/`). |
 | `protocol/docs/` | Protocol specifications and generated API references. |
-| `internal/tools/constgen/` | Regenerates event and action-type constants from `protocol/constants/events.json` and `protocol/constants/status.json`. `make constants` writes. `make constants-check` verifies. Outputs include `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `console/src/generated/events.ts`, and `protocol/python/g8e/_data/events.json`. |
+| `internal/tools/constgen/` | Regenerates event and action-type constants from `protocol/constants/events.json` and `protocol/constants/status.json`. `make constants-generate` writes. `make constants-check` verifies. Outputs include `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `console/src/generated/events.ts`, and `protocol/python/g8e/_data/events.json`. |
 
 ### Adapters and native tools
 
@@ -401,7 +401,7 @@ Depth is [Testing](tests.md). `e2e-full` and Compose profiles: INV-TESTMAP-02, I
 | `./g8e test summary` | | Reads the chaos summary from the test vault. |
 | `./g8e test public-loop` | | Provider-free public-feed qualification. Stays in `testcmd` (INV-PKG-02). |
 
-Component test entry points named by the root Makefile: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make ensemble-test`, `make test-external`, `make console-test`. `make test-external` is the Ensemble external-provider suite (Tier 4 in [Testing](tests.md)), not a `./g8e test` subcommand.
+Component test entry points named by the root Makefile: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make ensemble-test`, `make ensemble-test-external`, `make console-test`. `make ensemble-test-external` is the Ensemble external-provider suite (Tier 4 in [Testing](tests.md)), not a `./g8e test` subcommand.
 
 ### Build and validation
 
@@ -409,16 +409,16 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 
 | Target | Owns |
 | --- | --- |
-| `make build` | Host binary. Writes `bin/g8e-<os>-<arch>` and a repo-root copy. Depends on `embed-explorer`. |
-| `make proto` | Go, Python, TypeScript, and Ensemble lockfile refresh (INV-PROTO-01). |
-| `make constants`, `make constants-check` | `internal/tools/constgen` write and verify. |
-| `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `validate-doctrines`, `validate-cosais`, `swagger-generate`, then `golangci-lint run`. |
+| `make build` | Host binary. Writes `bin/g8e-<os>-<arch>` and a repo-root copy. Depends on `explorer-embed`. |
+| `make proto-generate` | Go, Python, TypeScript, and Ensemble lockfile refresh (INV-PROTO-01). |
+| `make constants-generate`, `make constants-check` | `internal/tools/constgen` write and verify. |
+| `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `doctrines-validate`, `cosais-validate`, `swagger-generate`, then `golangci-lint run`. |
 | `make test`, `make test-unit`, `make test-integration`, `make test-docker` | Platform tiers. `make test` is unit plus integration. |
-| `make python-build` | Python protocol distribution with bundled registries. |
-| `make console-test`, `make ensemble-test`, `make test-external`, `make website-test` | Console, Ensemble, external-provider, and website checks. |
-| `make build-fips`, `make verify-fips` | Pinned Linux AMD64 FIPS variant. Reference: [FIPS 140-3](../reference/fips140-3.md). |
-| `make validate-doctrines` | Doctrine JSON under `protocol/constants/doctrine/`. |
-| `make validate-cosais` | `go run ./internal/tools/cosais_validator`. |
+| `make protocol-python-build` | Python protocol distribution with bundled registries. |
+| `make console-test`, `make ensemble-test`, `make ensemble-test-external`, `make website-test` | Console, Ensemble, external-provider, and website checks. |
+| `make fips-build`, `make fips-verify` | Pinned Linux AMD64 FIPS variant. Reference: [FIPS 140-3](../reference/fips140-3.md). |
+| `make doctrines-validate` | Doctrine JSON under `protocol/constants/doctrine/`. |
+| `make cosais-validate` | `go run ./internal/tools/cosais_validator`. |
 | `make swagger-generate` | Gateway OpenAPI from Swagger annotations. |
 
 Other tools under `internal/tools/`: `agent_harness` (scripted Go governance client and demo scenarios, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `constgen`, `doctrine_validator`, `explorercatalog` (evaluation-explorer scenario catalog generation, see `make explorer-catalog`), `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
@@ -453,7 +453,7 @@ Other tools under `internal/tools/`: `agent_harness` (scripted Go governance cli
 1. Protobuf language outputs use the generator table (INV-PROTO-01). Refresh with:
 
 ```bash
-make proto
+make proto-generate
 ```
 
 2. Event and action-type constants:
@@ -462,7 +462,7 @@ make proto
 make constants-check
 ```
 
-Write them with `make constants` when the registry change requires it.
+Write them with `make constants-generate` when the registry change requires it.
 
 3. Gateway OpenAPI:
 

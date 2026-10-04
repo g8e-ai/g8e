@@ -215,11 +215,11 @@ g8e_check_python3() {
         echo "  python3: detected ($(g8e_extract_version "$(python3 --version 2>&1)"))"
         return 0
     fi
-    echo "  python3: missing (used by make validate-doctrines and check-bsl-headers)"
+    echo "  python3: missing (used by make doctrines-validate and bsl-headers-check)"
     return 1
 }
 
-# uv is pinned because 'make proto' re-locks ensemble/uv.lock with it. A
+# uv is pinned because 'make proto-generate' re-locks ensemble/uv.lock with it. A
 # different version still works, so it only warns.
 g8e_check_uv() {
     if ! g8e_have uv; then
@@ -231,7 +231,7 @@ g8e_check_uv() {
     if [[ "$version" == "$G8E_UV_VERSION" ]]; then
         echo "  uv: detected (v$version)"
     else
-        echo "  uv: detected (v$version; CI pins v${G8E_UV_VERSION}, 'make proto' may re-lock ensemble/uv.lock differently)"
+        echo "  uv: detected (v$version; CI pins v${G8E_UV_VERSION}, 'make proto-generate' may re-lock ensemble/uv.lock differently)"
     fi
     return 0
 }

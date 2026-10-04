@@ -84,7 +84,7 @@ Defines how to set up, run, and audit the g8ee ensemble test suite. The ensemble
 | End-to-end directory | [ensemble/tests/e2e/](ensemble/tests/e2e/) | Package support only; no executable test cases |
 | Enrollment client tests | [ensemble/tests/unit/services/infra/](ensemble/tests/unit/services/infra/) | Mocked client behavior and completion transcript contract |
 | Fake implementations | [ensemble/tests/fakes/](ensemble/tests/fakes/) | Service doubles and mock Gateway |
-| Makefile test targets | [ensemble/Makefile](ensemble/Makefile:48), [Makefile](Makefile:690) | `make test`, `make setup`, root `make ensemble-test`, `make test-external`, `make ensemble-lint`, `make ci-ensemble` |
+| Makefile test targets | [ensemble/Makefile](ensemble/Makefile:48), [Makefile](Makefile:690) | `make test`, `make setup`, root `make ensemble-test`, `make ensemble-test-external`, `make ensemble-lint`, `make ci-ensemble` |
 
 ## Procedures
 
@@ -110,10 +110,10 @@ Run commands from the repository root unless a command explicitly says otherwise
 ### Run test suites from the repository root
 
 - `make ensemble-test` runs `ensemble/tests/unit/` and `ensemble/tests/integration/` with `-m "not ai_integration and not requires_web_search and not requires_api"`. Tests marked `requires_system_one` are gated at collection time when Ollama with a System One model is unavailable.
-- `make test-external` runs only tests in `ensemble/tests/integration/` marked with `ai_integration`, `requires_web_search`, `requires_api`, or `requires_system_one`.
+- `make ensemble-test-external` runs only tests in `ensemble/tests/integration/` marked with `ai_integration`, `requires_web_search`, `requires_api`, or `requires_system_one`.
 - `make ensemble-lint` runs Ruff and Pyright against [ensemble/app](ensemble/app).
 - `make ci-ensemble` runs `ensemble-lint` followed by `ensemble-test`.
-- `make build-ensemble` builds the `g8e-ensemble:<VERSION>` Docker image without running tests.
+- `make ensemble-build` builds the `g8e-ensemble:<VERSION>` Docker image without running tests.
 
 ### Run test suites from `ensemble/`
 

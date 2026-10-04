@@ -18,7 +18,7 @@ import (
 )
 
 // staticFS holds the production build of the console SPA. The source lives in
-// console/ at the repository root; `make embed-console` copies its dist/ here.
+// console/ at the repository root; `make console-embed` copies its dist/ here.
 //
 //go:embed static
 var staticFS embed.FS

@@ -150,7 +150,7 @@ Compliance campaign sources retain the canonical campaign spec, including its di
 | CLI command tree and subcommands | `internal/cli/cmd/eval/` | `./g8e eval --help` and per-subcommand help |
 | Campaign definitions and frozen artifacts | `eval/` (checked-in program data), `examples/eval/` (templates), `.g8e/data/eval/campaigns/` (runtime) | `g8e eval campaigns create` and `g8e eval campaigns show` |
 | Model inventory and rollout intake | `eval/base-model-inventory.json`, `eval/rollout-intake-hf.json` | `g8e eval models list` and registry inspection |
-| Protocol contracts and envelopes | `protocol/proto/g8e/eval/v1/` | `make proto` generates Go, Python, TypeScript bindings |
+| Protocol contracts and envelopes | `protocol/proto/g8e/eval/v1/` | `make proto-generate` generates Go, Python, TypeScript bindings |
 
 ## Procedures
 

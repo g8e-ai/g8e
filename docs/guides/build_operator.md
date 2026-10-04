@@ -113,10 +113,10 @@ The binary is self-contained, but the running Operator is stateful. It creates a
 | `make build-windows` | Builds `bin/g8e-windows-{amd64,arm64}.exe` and checksum files. |
 | `make build-darwin` | Builds `bin/g8e-darwin-{amd64,arm64}` and checksum files. |
 | `make build-compressed` | Builds the host binary and compresses it with UPX. This target requires UPX. |
-| `make build-fips` | Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`. |
-| `make verify-fips` | Builds the FIPS variant and runs `g8e version --fips` with FIPS-only enforcement enabled. |
+| `make fips-build` | Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`. |
+| `make fips-verify` | Builds the FIPS variant and runs `g8e version --fips` with FIPS-only enforcement enabled. |
 
-`make fmt`, the host-native `make up` / `make down` lifecycle, the separate `make docker` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` also removes `.g8e/` runtime state, so do not use it to clean only build artifacts on a host with state that must be retained.
+`make fmt`, the host-native `make host-up` / `make host-down` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` also removes `.g8e/` runtime state, so do not use it to clean only build artifacts on a host with state that must be retained.
 
 #### Cross-Compilation
 

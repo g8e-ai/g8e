@@ -70,7 +70,7 @@ func validate(overlayPath, doctrineGlob string, out io.Writer) error {
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, "Action required: populate overlay_ids in doctrine JSON files")
 		fmt.Fprintln(out, "to reference each finalized overlay, then re-run:")
-		fmt.Fprintln(out, "  make validate-cosais")
+		fmt.Fprintln(out, "  make cosais-validate")
 		return fmt.Errorf("cosais coverage: %d finalized overlay(s) lack detector coverage", len(uncovered))
 	}
 

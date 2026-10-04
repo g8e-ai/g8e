@@ -25,7 +25,7 @@ Canonical collection names for the operator embedded SQLite database, typed as `
 
 ### Event Types (`protocol/constants/events.json` → `events_gen.go`)
 
-Typed event identifiers for the pub/sub system, typed as `EventType`. `make constants` generates `internal/constants/events_gen.go` from the registry JSON. Each entry carries `kind`, `transport`, `producers`, `persistence`, and optional `governance` / `outcomes` metadata. Governed request events resolve their action class through `constants.Registry.ActionFor(event)` — there is no hand-maintained event→action map. The registry currently defines 339 events organized across the following categories:
+Typed event identifiers for the pub/sub system, typed as `EventType`. `make constants-generate` generates `internal/constants/events_gen.go` from the registry JSON. Each entry carries `kind`, `transport`, `producers`, `persistence`, and optional `governance` / `outcomes` metadata. Governed request events resolve their action class through `constants.Registry.ActionFor(event)` — there is no hand-maintained event→action map. The registry currently defines 339 events organized across the following categories:
 
 - App Case: `EventAppCaseCreated`, `EventAppCaseUpdated`, `EventAppCaseAssigned`, `EventAppCaseEscalated`, `EventAppCaseResolved`, `EventAppCaseClosed`, `EventAppCaseSelected`, `EventAppCaseCleared`, `EventAppCaseSwitched`, `EventAppCaseCreateRequested`, `EventAppCaseUpdateRequested`
 - App Task: `EventAppTaskCreated`, `EventAppTaskUpdated`, `EventAppTaskAssigned`, `EventAppTaskStarted`, `EventAppTaskCompleted`, `EventAppTaskFailed`
@@ -226,7 +226,7 @@ Additional constants in `auth.go`:
 
 ### Action Types (`protocol/constants/status.json` → `action_types_gen.go`)
 
-GovernanceEnvelope action types, typed as `ActionType`. `make constants` generates `internal/constants/action_types_gen.go` from `status.json`. The generated file defines `AllActionTypes`, `IsMutation()` (driven by `_mutation` flags in JSON), and `IsBootstrapAction()` (driven by `_bootstrap` flags) for platform enrollment actions exempt from L2/L3 enforcement gates:
+GovernanceEnvelope action types, typed as `ActionType`. `make constants-generate` generates `internal/constants/action_types_gen.go` from `status.json`. The generated file defines `AllActionTypes`, `IsMutation()` (driven by `_mutation` flags in JSON), and `IsBootstrapAction()` (driven by `_bootstrap` flags) for platform enrollment actions exempt from L2/L3 enforcement gates:
 
 - `ActionTypeA2aCall`, `ActionTypeCancel`, `ActionTypeDocumentDelete`, `ActionTypeDocumentUpdate`, `ActionTypeEvalAnswer`, `ActionTypeExecuteBash`, `ActionTypeFetchFileDiff`, `ActionTypeFetchFileHistory`, `ActionTypeFetchHistory`, `ActionTypeFetchLogs`, `ActionTypeFileEdit`, `ActionTypeFsGrep`, `ActionTypeFsList`, `ActionTypeFsRead`, `ActionTypeHeartbeat`, `ActionTypeMcpCall`, `ActionTypeMcpPromptGet`, `ActionTypeMcpPromptList`, `ActionTypeMcpResourceList`, `ActionTypeMcpResourceRead`, `ActionTypePortCheck`, `ActionTypeRestoreFile`, `ActionTypeShutdown`, `ActionTypePlatformEnrollmentCreate`, `ActionTypePlatformEnrollmentDecide`, `ActionTypePlatformEnrollmentIssue`, `ActionTypePlatformEnrollmentPersistPolicy`, `ActionTypePlatformEnrollmentCreateSession`
 
@@ -467,7 +467,7 @@ JSON files: `agents.json`, `api_paths.json`, `auth.json`, `channels.json`, `coll
 ### Generate Protocol Artifacts
 
 ```bash
-make generate
+make proto-generate
 ```
 
 Generates Go, Python, and Node TypeScript Protobuf code from `.proto` files and refreshes downstream Python lockfiles. Go and Node generation use Buf; Python generation uses the canonical `grpcio-tools` generator.
@@ -477,7 +477,7 @@ Language-specific targets are available as `make proto-go`, `make proto-python`,
 ## Constants Generation and CI
 
 ```bash
-make constants        # regenerate events_gen.go, action_types_gen.go, console/src/generated/events.ts, protocol/python/g8e/_data/events.json
+make constants-generate        # regenerate events_gen.go, action_types_gen.go, console/src/generated/events.ts, protocol/python/g8e/_data/events.json
 make constants-check  # validate registry and fail on generated-file drift (runs in make test-unit)
 ```
 
@@ -490,12 +490,12 @@ make constants-check  # validate registry and fail on generated-file drift (runs
 - `outcomes` entries reference existing `kind: outcome` or `kind: fact` events
 - stream events use `ephemeral` persistence only
 
-CI also runs proto verification (`make _ci-verify-proto`), doctrine validation (`make validate-doctrines`), linting, and tests.
+CI also runs proto verification (`make _ci-verify-proto`), doctrine validation (`make doctrines-validate`), linting, and tests.
 
 ## Adding New Constants
 
 1. **Edit JSON** in `protocol/constants/` (events, status, or other SSOT files).
-2. **Run** `make constants` to regenerate the Go, console, and Python outputs.
+2. **Run** `make constants-generate` to regenerate the Go, console, and Python outputs.
 3. **Run** `make constants-check` and language tests.
 4. **Commit** JSON source and generated files together.
 

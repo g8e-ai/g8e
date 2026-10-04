@@ -292,7 +292,7 @@ until curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null; do sleep 2; done
 ./g8e docker start
 
 # make equivalent:
-make docker
+make docker-up
 ```
 
 ### 2. Export host binary (optional for Docker-only hosts)
@@ -695,8 +695,8 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 
 | Command | Pure Docker Equivalent | Make Equivalent | Behavior |
 | --- | --- | --- | --- |
-| `./g8e docker init` | `docker compose up -d` + exec enroll/approvals | `make docker` (manual approvals) | Build images, enroll owner, start unified stack, auto-approve platform enrollments, and wait for readiness. |
-| `./g8e docker start` | `docker compose up -d` | `make docker` | Starts default unified stack (all 5 core services) and offers enrollment walkthrough. |
+| `./g8e docker init` | `docker compose up -d` + exec enroll/approvals | `make docker-up` (manual approvals) | Build images, enroll owner, start unified stack, auto-approve platform enrollments, and wait for readiness. |
+| `./g8e docker start` | `docker compose up -d` | `make docker-up` | Starts default unified stack (all 5 core services) and offers enrollment walkthrough. |
 | `./g8e docker restart [service...]` | `docker compose restart g8e-data-operator g8e-inference-operator` | `make docker-restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
 | `./g8e docker stop` | `docker compose down` | `make docker-down` | Stops stack, preserves volumes. |
 | `./g8e docker status` | `docker compose ps` | — | Shows running containers and health status. |

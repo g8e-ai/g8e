@@ -284,7 +284,7 @@ Requires only Docker 24.0+. No local Go installation needed.
 Build the images and start the unified stack:
 
 ```bash
-make docker
+make docker-up
 ```
 
 This runs `docker compose up -d --build`, which starts all platform services. See the [Quick Start](#quick-start-docker-compose) section for enrollment and approval steps.
@@ -301,7 +301,7 @@ Related Docker Compose lifecycle targets:
 
 | Target | Description |
 |---|---|
-| `make docker` | Build images and start the unprofiled gateway (`docker compose up -d --build`) |
+| `make docker-up` | Build images and start the unprofiled gateway (`docker compose up -d --build`) |
 | `make docker-down` | Stop services from all profiles and preserve volumes |
 | `make docker-clean` | Stop services from all profiles and remove volumes |
 
@@ -314,7 +314,7 @@ Related Docker Compose lifecycle targets:
 Build and start the host-native gateway in one command:
 
 ```bash
-make up
+make host-up
 ```
 
 This runs the local `g8e` binary directly; it does not invoke Docker. The
@@ -325,7 +325,7 @@ make build
 ./g8e gw start
 ```
 
-Stop the host-native gateway with `make down` (equivalent to `./g8e gw stop`).
+Stop the host-native gateway with `make host-down` (equivalent to `./g8e gw stop`).
 
 The gateway starts in Doctrine mode (L1 enforced, L2/L3 audited). To specify a security posture:
 

@@ -265,7 +265,7 @@ func TestVerifyGenerated_ReportsEachStaleOrMissingTargetInSortedOrder(t *testing
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "generated constants are stale:")
-	assert.Contains(t, err.Error(), filepath.Join(root, eventsGoRel)+": generated output differs from committed file (run make constants)")
+	assert.Contains(t, err.Error(), filepath.Join(root, eventsGoRel)+": generated output differs from committed file (run make constants-generate)")
 	assert.Contains(t, err.Error(), filepath.Join(root, consoleTSRel)+": ")
 	assert.NotContains(t, err.Error(), filepath.Join(root, actionTypesGoRel), "an up-to-date file must not be reported")
 	assert.Less(t, strings.Index(err.Error(), filepath.Join(root, consoleTSRel)), strings.Index(err.Error(), filepath.Join(root, eventsGoRel)), "diagnostics are sorted")
@@ -280,7 +280,7 @@ func TestVerifyGenerated_DetectsBundledPythonRegistryDrift(t *testing.T) {
 	err := verifyGenerated(root, out)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "bundled Python events.json differs from protocol/constants/events.json (run make constants)")
+	assert.Contains(t, err.Error(), "bundled Python events.json differs from protocol/constants/events.json (run make constants-generate)")
 }
 
 func TestVerifyBundledPythonEvents_ReportsMissingCanonicalAndMissingBundle(t *testing.T) {

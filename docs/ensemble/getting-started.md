@@ -58,7 +58,7 @@ None specific to this guide. Refer to [PKI and Trust](pki.md) for workload enrol
 | Ensemble startup | `ensemble/app/main.py` lifespan context manager | Bootstrap phases, service initialization order |
 | Health endpoints | `ensemble/app/routers/health_router.py` | GET `/health`, `/health/live`, `/health/details` response schemas |
 | Docker build | `ensemble/Dockerfile` | Multi-stage build, Python 3.12, runtime command |
-| Make commands | `Makefile` targets and `ensemble/Makefile` | ensemble-test, ensemble-lint, test-external |
+| Make commands | `Makefile` targets and `ensemble/Makefile` | ensemble-test, ensemble-lint, ensemble-test-external |
 
 ## Procedures
 
@@ -198,7 +198,7 @@ make ensemble-lint
 `make ensemble-test` runs unit and in-process integration suites without live LLM or external API calls. `make ensemble-lint` runs Ruff and Pyright against `ensemble/app`. Tests requiring live providers or external APIs are separate and may require credentials:
 
 ```bash
-make test-external
+make ensemble-test-external
 ```
 
 See [Development](devs.md) for component commands and [Testing](tests.md) for test tiers and external-service gates.

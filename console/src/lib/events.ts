@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 // The events the console reacts to, named from the generated registry
-// (src/generated/events.ts, produced by `make constants` from
+// (src/generated/events.ts, produced by `make constants-generate` from
 // protocol/constants/events.json). Unknown types are ignored, never guessed at.
 
 import { EventType as E } from '../generated/events';

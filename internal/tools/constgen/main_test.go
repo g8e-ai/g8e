@@ -440,7 +440,7 @@ func TestExecute_CheckDetectsHandEditedGeneratedFile(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), edited)
-	assert.Contains(t, err.Error(), "run make constants")
+	assert.Contains(t, err.Error(), "run make constants-generate")
 }
 
 func TestExecute_RejectsInvalidRegistryWithoutWritingAnyGeneratedFile(t *testing.T) {
