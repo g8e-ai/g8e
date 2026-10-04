@@ -38,7 +38,7 @@ from app.constants import (
     AITaskId,
     DEFAULT_FINISH_REASON,
 )
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, model_boundary_json
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.provider import LLMProvider
 from app.llm.providers.g8e import G8EProvider
@@ -490,6 +490,7 @@ class g8eEnsemble:
 
                     gated = gated_result_out[0]
                 except Exception as exc:
+                    llm_provider.record_processing_error(exc)
                     model_calls.append(
                         build_model_call_telemetry(
                             provider=llm_provider,
@@ -505,6 +506,9 @@ class g8eEnsemble:
                     )
                     raise
                 turn_result = gated.turn_result
+                llm_provider.record_processed_response(
+                    model_boundary_json(turn_result.model_response_parts)
+                )
                 monotonic_end = time.monotonic()
                 model_calls.append(
                     build_model_call_telemetry(

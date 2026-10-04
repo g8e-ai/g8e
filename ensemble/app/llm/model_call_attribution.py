@@ -119,6 +119,7 @@ def build_model_call_telemetry(
         error_type=error_type,
         input_artifact_hash=resolved_input_hash,
         output_artifact_hash=output_artifact_hash,
+        response_artifact=provider.response_artifact if isinstance(provider, LLMProvider) else None,
         model_boundary_privacy=recorded_model_boundary_privacy(provider),
         tools_declared=recorded_declared_tool_names(provider),
         **governed_telemetry_fields(provider),

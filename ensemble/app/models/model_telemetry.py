@@ -8,6 +8,7 @@
 from g8e.models.events import (
     ModelBoundaryPrivacyAttestation,
     ModelCallTelemetry,
+    ModelResponseArtifact,
 )
 
 from app.models.base import G8eBaseModel
@@ -16,6 +17,7 @@ __all__ = [
     "GovernedDispatchEvidence",
     "ModelBoundaryPrivacyAttestation",
     "ModelCallTelemetry",
+    "ModelResponseArtifact",
 ]
 
 

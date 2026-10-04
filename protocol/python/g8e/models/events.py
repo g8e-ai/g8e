@@ -126,6 +126,19 @@ class ModelBoundaryPrivacyAttestation(G8eBaseModel):
 CallClassification = Literal["scored_chain", "post_turn", "grader"]
 
 
+class ModelResponseArtifact(G8eBaseModel):
+    """Provider output captured before translation, plus its processing outcome.
+
+    raw_frames contain SDK response JSON (governed wire bytes are also retained
+    on the executing Operator). Processing never edits or replaces those frames.
+    """
+
+    raw_frames: list[str] = Field(default_factory=list)
+    received_complete: bool = False
+    processed_response: str | None = None
+    processing_error: str | None = None
+
+
 class ModelCallTelemetry(G8eBaseModel):
     agent_role: str
     # Chain the call belongs to, stated at the call site. Aggregators select
@@ -153,6 +166,7 @@ class ModelCallTelemetry(G8eBaseModel):
     error_type: str | None = None
     input_artifact_hash: str = ""
     output_artifact_hash: str = ""
+    response_artifact: ModelResponseArtifact | None = None
     model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None
     # Tool names as actually sent to the provider on this call, in order. None
     # means the provider did not report them; [] means none were declared.

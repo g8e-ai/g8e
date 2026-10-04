@@ -368,52 +368,25 @@ class OllamaProvider(LLMProvider):
             )
             raise
 
-        thinking_buffer = []
         first_token_at: float | None = None
-
-        async for chunk in stream:
+        chunks = await self._receive_stream(stream)
+        for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):
-                first_token_at = time.monotonic()
+                first_token_at = self._response_received_at.get()[index]
             if getattr(msg, "thinking", None):
-                thinking = msg.thinking
-                if thinking and "\\n" in thinking:
-                    thinking = thinking.replace("\\n", "\n")
-                thinking_buffer.append(thinking)
-                combined = "".join(thinking_buffer)
-                should_flush = combined and any(
-                    combined.endswith(delim) for delim in [". ", "! ", "? ", "\n", "\t"]
-                )
-                if should_flush or len(combined) > 200:
-                    yield StreamChunkFromModel(text=combined, thought=True)
-                    thinking_buffer.clear()
+                yield StreamChunkFromModel(text=msg.thinking, thought=True)
             if getattr(msg, "content", None):
-                if thinking_buffer:
-                    combined = "".join(thinking_buffer)
-                    if combined:
-                        yield StreamChunkFromModel(text=combined, thought=True)
-                    thinking_buffer.clear()
                 yield StreamChunkFromModel(text=msg.content)
-
             if getattr(msg, "tool_calls", None):
-                if thinking_buffer:
-                    combined = "".join(thinking_buffer)
-                    if combined:
-                        yield StreamChunkFromModel(text=combined, thought=True)
-                    thinking_buffer.clear()
                 calls = []
                 for tc in msg.tool_calls:
-                    args = tc.function.arguments
-                    calls.append(ToolCall(name=tc.function.name, args=args, id=None))
+                    if not isinstance(tc.function.arguments, dict):
+                        from app.errors import ValidationError
+                        raise ValidationError("Provider tool arguments must be a JSON object")
+                    calls.append(ToolCall(name=tc.function.name, args=tc.function.arguments, id=None))
                 yield StreamChunkFromModel(tool_calls=calls)
-
             if chunk.done:
-                if thinking_buffer:
-                    combined = "".join(thinking_buffer)
-                    if combined:
-                        yield StreamChunkFromModel(text=combined, thought=True)
-                    thinking_buffer.clear()
-
                 usage = _ollama_usage_metadata(chunk)
                 if first_token_at is not None:
                     usage.time_to_first_token_seconds = first_token_at - request_start
@@ -445,6 +418,7 @@ class OllamaProvider(LLMProvider):
         try:
             self._record_model_boundary(chat_kwargs)
             response = await self._client.chat(**chat_kwargs)
+            self._record_response(response, complete=True)
         except Exception as e:
             translate_capability_error(
                 e,
@@ -523,10 +497,11 @@ class OllamaProvider(LLMProvider):
         stream = await self._client.chat(**chat_kwargs)
 
         first_token_at: float | None = None
-        async for chunk in stream:
+        chunks = await self._receive_stream(stream)
+        for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):
-                first_token_at = time.monotonic()
+                first_token_at = self._response_received_at.get()[index]
             if getattr(msg, "content", None):
                 yield StreamChunkFromModel(text=msg.content)
 
@@ -565,6 +540,7 @@ class OllamaProvider(LLMProvider):
         self._apply_think_kwarg(chat_kwargs, model, None)
         self._record_model_boundary(chat_kwargs)
         response = await self._client.chat(**chat_kwargs)
+        self._record_response(response, complete=True)
 
         _raise_on_empty_content(
             response,
@@ -620,10 +596,11 @@ class OllamaProvider(LLMProvider):
         stream = await self._client.chat(**chat_kwargs)
 
         first_token_at: float | None = None
-        async for chunk in stream:
+        chunks = await self._receive_stream(stream)
+        for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):
-                first_token_at = time.monotonic()
+                first_token_at = self._response_received_at.get()[index]
             if getattr(msg, "content", None):
                 yield StreamChunkFromModel(text=msg.content)
 
@@ -662,6 +639,7 @@ class OllamaProvider(LLMProvider):
         self._apply_think_kwarg(chat_kwargs, model, None)
         self._record_model_boundary(chat_kwargs)
         response = await self._client.chat(**chat_kwargs)
+        self._record_response(response, complete=True)
 
         _raise_on_empty_content(
             response,

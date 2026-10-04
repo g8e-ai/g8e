@@ -270,6 +270,7 @@ class OpenAIProvider(LLMProvider):
             )
             self._record_model_boundary(kwargs)
             response = await self._client.chat.completions.create(**kwargs)
+            self._record_response(response, complete=True)
             choice = response.choices[0] if response.choices else None
             finish_reason = choice.finish_reason if choice else None
 
@@ -287,8 +288,12 @@ class OpenAIProvider(LLMProvider):
                     for tc in choice.message.tool_calls:
                         try:
                             args = json.loads(tc.function.arguments)
-                        except json.JSONDecodeError:
-                            args = {}
+                        except json.JSONDecodeError as exc:
+                            from app.errors import ValidationError
+                            raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+                        if not isinstance(args, dict):
+                            from app.errors import ValidationError
+                            raise ValidationError("Provider tool arguments must be a JSON object")
                         calls.append(
                             ToolCall(name=tc.function.name, args=args, id=getattr(tc, "id", None))
                         )
@@ -310,7 +315,7 @@ class OpenAIProvider(LLMProvider):
             self._record_model_boundary(kwargs)
             stream = await self._client.chat.completions.create(**kwargs)
 
-            async for chunk in stream:
+            for chunk in await self._receive_stream(stream):
                 delta = chunk.choices[0].delta if chunk.choices else None
                 finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
                 usage = _usage_from_sdk(getattr(chunk, "usage", None))
@@ -353,6 +358,7 @@ class OpenAIProvider(LLMProvider):
         try:
             self._record_model_boundary(kwargs)
             response = await self._client.chat.completions.create(**kwargs)
+            self._record_response(response, complete=True)
         except Exception as e:
             translate_capability_error(
                 e,
@@ -380,8 +386,12 @@ class OpenAIProvider(LLMProvider):
                 for tc in choice.message.tool_calls:
                     try:
                         args = json.loads(tc.function.arguments)
-                    except json.JSONDecodeError:
-                        args = {}
+                    except json.JSONDecodeError as exc:
+                        from app.errors import ValidationError
+                        raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+                    if not isinstance(args, dict):
+                        from app.errors import ValidationError
+                        raise ValidationError("Provider tool arguments must be a JSON object")
                     parts.append(
                         Part(
                             tool_call=ToolCall(
@@ -451,7 +461,7 @@ class OpenAIProvider(LLMProvider):
         self._record_model_boundary(kwargs)
         stream = await self._client.chat.completions.create(**kwargs)
 
-        async for chunk in stream:
+        for chunk in await self._receive_stream(stream):
             delta = chunk.choices[0].delta if chunk.choices else None
             finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
 
@@ -508,6 +518,7 @@ class OpenAIProvider(LLMProvider):
         )
         self._record_model_boundary(kwargs)
         response = await self._client.chat.completions.create(**kwargs)
+        self._record_response(response, complete=True)
 
         parts = []
         choice = response.choices[0] if response.choices else None
@@ -576,7 +587,7 @@ class OpenAIProvider(LLMProvider):
         self._record_model_boundary(kwargs)
         stream = await self._client.chat.completions.create(**kwargs)
 
-        async for chunk in stream:
+        for chunk in await self._receive_stream(stream):
             delta = chunk.choices[0].delta if chunk.choices else None
             finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
 
@@ -631,6 +642,7 @@ class OpenAIProvider(LLMProvider):
         )
         self._record_model_boundary(kwargs)
         response = await self._client.chat.completions.create(**kwargs)
+        self._record_response(response, complete=True)
 
         parts = []
         choice = response.choices[0] if response.choices else None

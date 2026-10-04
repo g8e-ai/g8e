@@ -233,6 +233,22 @@ func (s *fallbackProviderObservationAttempts) Fail(ctx context.Context, provider
 	return s.local.Fail(ctx, providerAttemptID, failureSummary)
 }
 
+func (s *fallbackProviderObservationAttempts) SaveRawResponse(ctx context.Context, providerAttemptID string, response []byte) error {
+	return s.local.SaveRawResponse(ctx, providerAttemptID, response)
+}
+
+func (s *fallbackProviderObservationAttempts) RawResponse(ctx context.Context, providerAttemptID string) ([]byte, error) {
+	return s.local.RawResponse(ctx, providerAttemptID)
+}
+
+func (s *fallbackProviderObservationAttempts) SaveResult(ctx context.Context, providerAttemptID string, result *operatorv1.InferenceResult) error {
+	return s.local.SaveResult(ctx, providerAttemptID, result)
+}
+
+func (s *fallbackProviderObservationAttempts) Result(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceResult, error) {
+	return s.local.Result(ctx, providerAttemptID)
+}
+
 func (s *fallbackProviderObservationAttempts) Get(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceProviderAttemptRecord, error) {
 	attempt, err := s.local.Get(ctx, providerAttemptID)
 	if err == nil || !isProviderEvidenceNotFound(err) || s.remote == nil {
