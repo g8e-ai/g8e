@@ -302,6 +302,49 @@ func TestOperatorPubSubService_handleGovernanceEnvelope_AcceptsPDPBoundRootDespi
 	assert.True(t, executed, "gateway-dispatched envelope must execute despite live state-root drift")
 }
 
+func TestOperatorPubSubService_handleGovernanceEnvelope_ActuatorFailClosedNilReceiptDoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	const stateRoot = "state-root"
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	svc, err := NewOperatorPubSubService(CommandServiceConfig{
+		Config:             cfg,
+		Logger:             logger,
+		PubSubClient:       pubsubtest.NewMockOperatorPubSubClient(),
+		ActuatorSigningKey: priv,
+		ActuatorKeyID:      "actuator-key",
+	}, OutboundModeDeps{
+		GovernanceCoreDeps: GovernanceCoreDeps{
+			ExecutionTarget:   &testutil.MockExecutionTarget{OperatorIDs: []string{"operator-1", "op-1"}},
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider(stateRoot),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			SignerStore: &governance.FailClosedSignerStore{
+				Signers: map[string]ed25519.PublicKey{"test-key": pub},
+			},
+			Doctrine: governance.NewL1Doctrine(),
+		},
+	})
+	require.NoError(t, err)
+	svc.ctx = context.Background()
+
+	// A nil ExecutionHandler makes Execute fail closed and return a nil receipt,
+	// the same shape as a receipt-persistence (SQLITE_BUSY) failure.
+	svc.SetActuator(&governance.L5Actuator{
+		Logger:     logger,
+		SigningKey: priv,
+		KeyID:      "actuator-key",
+	})
+
+	env := buildGatewayDispatchedDoctrineEnvelope(t, stateRoot, "nonce-actuator-nil-receipt")
+	assert.NotPanics(t, func() { svc.handleGovernanceEnvelope(env) })
+}
+
 func buildGatewayDispatchedDoctrineEnvelope(t *testing.T, stateRoot, nonce string) *govpkg.GovernanceEnvelope {
 	t.Helper()
 	env := &govpkg.GovernanceEnvelope{

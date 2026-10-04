@@ -535,3 +535,58 @@ async def test_universal_tool_call_lifecycle_typed_result():
     assert completed_events[0].payload.status == ToolCallStatus.COMPLETED
     assert completed_events[0].payload.content == "enriched context data"
 
+
+async def test_operator_tool_call_lifecycle_none_execution_id():
+    inputs, state = make_agent_run_args(
+        case_id="case-obs-15",
+        investigation_id="inv-obs-15",
+        web_session_id="web-obs-15",
+        user_id="user-obs-15",
+        active_agent=ReasoningAgent.SAGE,
+    )
+    event_svc = FakeEventService()
+
+    await deliver_via_sse(
+        stream=_stream(
+            _text("Attempting tool without execution_id."),
+            StreamChunkFromModel(
+                type=StreamChunkFromModelType.TOOL_CALL,
+                data=StreamChunkData(
+                    tool_name="run_commands_with_operator",
+                    execution_id=None,
+                ),
+            ),
+            StreamChunkFromModel(
+                type=StreamChunkFromModelType.TOOL_RESULT,
+                data=StreamChunkData(
+                    tool_name="run_commands_with_operator",
+                    execution_id=None,
+                    error="Tribunal generation failed",
+                    success=False,
+                    status=ToolCallStatus.FAILED,
+                ),
+            ),
+            _text("Handled."),
+            _complete(),
+        ),
+        inputs=inputs,
+        state=state,
+        event_service=event_svc,
+    )
+
+    started_events = [
+        e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_STARTED
+    ]
+    failed_events = [
+        e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_FAILED
+    ]
+    assert len(started_events) == 1
+    assert isinstance(started_events[0].payload.execution_id, str)
+    assert len(started_events[0].payload.execution_id) > 0
+
+    assert len(failed_events) == 1
+    assert isinstance(failed_events[0].payload.execution_id, str)
+    assert len(failed_events[0].payload.execution_id) > 0
+    assert failed_events[0].payload.status == ToolCallStatus.FAILED
+
+

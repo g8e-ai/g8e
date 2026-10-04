@@ -379,6 +379,7 @@ def _tribunal_error_result(
     arguments: dict[str, object],
     request: str,
     error_msg: str,
+    execution_id: str | None = None,
     player_steps: list[EvaluationPlayerStep] | None = None,
 ) -> ToolCallResult:
     """Build a failed ToolCallResult when the Tribunal cannot produce a command.
@@ -387,6 +388,8 @@ def _tribunal_error_result(
     (truncated if long) as the display detail so the UI and the LLM can see
     what Sage asked for.
     """
+    if execution_id is None:
+        execution_id = generate_command_execution_id()
     error_result = CommandExecutionResult(
         success=False,
         error=error_msg,
@@ -397,14 +400,15 @@ def _tribunal_error_result(
         tool_name=tool_name,
         call_info=StreamChunkData(
             tool_name=tool_name,
-            execution_id=None,
+            execution_id=execution_id,
             command=display_detail,
             arguments=arguments,
             is_operator_tool=True,
+            status=ToolCallStatus.STARTED,
         ),
         result_info=StreamChunkData(
             tool_name=tool_name,
-            execution_id=None,
+            execution_id=execution_id,
             command=display_detail,
             arguments=arguments,
             is_operator_tool=True,
@@ -455,6 +459,13 @@ async def orchestrate_tool_execution(
         PlayerStepRecorder() if g8e_context.evaluation_context is not None else None
     )
 
+    if execution_id is None:
+        execution_id = (
+            call_info.execution_id
+            if call_info and call_info.execution_id
+            else generate_command_execution_id()
+        )
+
     try:
         if tool_name == OperatorToolName.RUN_COMMANDS:
             sage_request = SageOperatorRequest.model_validate(raw_args)
@@ -499,13 +510,11 @@ async def orchestrate_tool_execution(
                         arguments=model_args,
                         request=request,
                         error_msg=error_msg,
+                        execution_id=execution_id,
                         player_steps=step_recorder.steps if step_recorder else None,
                     )
 
                 raw_args = executor_args.model_dump(by_alias=True)
-
-        if execution_id is None:
-            execution_id = generate_command_execution_id()
 
         result = await tool_executor.execute_tool_call(
             tool_name,

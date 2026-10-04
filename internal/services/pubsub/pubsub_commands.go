@@ -885,10 +885,12 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 			rs.publishInferenceCompletion(rs.ctx, env, cmdMsg.InferenceResult, receipt)
 		}
 		if err != nil {
+			// Execute returns a nil receipt when it fails closed before the
+			// initial receipt is persisted; GetStatus is nil-safe.
 			rs.logger.Error("Actuator execution failed",
 				string(constants.ConnectionStateError), err,
 				"message_id", env.Id,
-				"receipt_status", receipt.Status.String())
+				"receipt_status", receipt.GetStatus().String())
 			return
 		}
 		if env.ActionType == string(constants.ActionTypeShutdown) {

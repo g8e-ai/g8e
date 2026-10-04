@@ -58,6 +58,7 @@ from app.models.tool_results import (
     SshInventoryToolResult,
 )
 from app.utils.time_ids.timestamp import now
+from app.utils.time_ids.ids import generate_command_execution_id
 from app.errors import ValidationError
 from app.services.infra.event_service import EventService
 from app.services.evaluation.tool_evidence import (
@@ -309,7 +310,8 @@ async def deliver_via_sse(
 
             elif chunk.type == StreamChunkFromModelType.TOOL_CALL:
                 fn = chunk.data.tool_name or ""
-                exec_id = chunk.data.execution_id
+                exec_id = chunk.data.execution_id or generate_command_execution_id()
+                chunk.data.execution_id = exec_id
 
                 # Track tool call in state for metadata recording
                 state.tool_call_count += 1
@@ -379,7 +381,8 @@ async def deliver_via_sse(
                     await _push_run_state("waiting")
 
             elif chunk.type == StreamChunkFromModelType.TOOL_RESULT:
-                exec_id = chunk.data.execution_id
+                exec_id = chunk.data.execution_id or generate_command_execution_id()
+                chunk.data.execution_id = exec_id
                 fn = chunk.data.tool_name or ""
                 if inputs.g8e_context is not None:
                     record_tool_call_completed(state, inputs.g8e_context, chunk.data)
