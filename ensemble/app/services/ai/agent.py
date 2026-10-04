@@ -490,7 +490,8 @@ class g8eEnsemble:
 
                     gated = gated_result_out[0]
                 except Exception as exc:
-                    llm_provider.record_processing_error(exc)
+                    if hasattr(llm_provider, "record_processing_error"):
+                        llm_provider.record_processing_error(exc)
                     model_calls.append(
                         build_model_call_telemetry(
                             provider=llm_provider,
@@ -506,9 +507,10 @@ class g8eEnsemble:
                     )
                     raise
                 turn_result = gated.turn_result
-                llm_provider.record_processed_response(
-                    model_boundary_json(turn_result.model_response_parts)
-                )
+                if hasattr(llm_provider, "record_processed_response"):
+                    llm_provider.record_processed_response(
+                        model_boundary_json(turn_result.model_response_parts)
+                    )
                 monotonic_end = time.monotonic()
                 model_calls.append(
                     build_model_call_telemetry(

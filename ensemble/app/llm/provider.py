@@ -57,8 +57,8 @@ class LLMProvider(ABC):
         self._response_artifact: ContextVar[ModelResponseArtifact | None] = ContextVar(
             f"{type(self).__name__}_response_artifact_{id(self)}", default=None
         )
-        self._response_received_at: ContextVar[list[float]] = ContextVar(
-            f"{type(self).__name__}_response_received_at_{id(self)}", default=[]
+        self._response_received_at: ContextVar[tuple[float, ...]] = ContextVar(
+            f"{type(self).__name__}_response_received_at_{id(self)}", default=()
         )
 
     @property
@@ -82,8 +82,10 @@ class LLMProvider(ABC):
         if artifact is None:
             artifact = ModelResponseArtifact()
             self._response_artifact.set(artifact)
-            self._response_received_at.set([])
-        self._response_received_at.get().append(time.monotonic())
+            self._response_received_at.set(())
+        self._response_received_at.set(
+            (*self._response_received_at.get(), time.monotonic())
+        )
         if isinstance(response, BaseModel):
             artifact.raw_frames.append(response.model_dump_json())
         elif isinstance(response, Message):
@@ -124,7 +126,7 @@ class LLMProvider(ABC):
         self._input_artifact_hash.set("")
         self._model_boundary_privacy.set(None)
         self._response_artifact.set(None)
-        self._response_received_at.set([])
+        self._response_received_at.set(())
 
     def clear_declared_tools(self) -> None:
         self._declared_tool_names.set(None)
@@ -146,7 +148,7 @@ class LLMProvider(ABC):
 
     def _record_model_boundary(self, payload: object) -> str:
         self._response_artifact.set(ModelResponseArtifact())
-        self._response_received_at.set([])
+        self._response_received_at.set(())
         attestation = model_boundary_privacy_attestation(payload)
         self._input_artifact_hash.set(attestation.input_artifact_hash)
         self._model_boundary_privacy.set(attestation)

@@ -78,9 +78,13 @@ func demosScenariosRunCmd() *cobra.Command {
 
 func RunAgentHarness(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
-	operatorID, err := cmd.Flags().GetString("operator-id")
-	if err != nil {
-		return fmt.Errorf("scenarios run: operator flag: %w", err)
+	operatorID := ""
+	if cmd != nil && cmd.Flags().Lookup("operator-id") != nil {
+		var err error
+		operatorID, err = cmd.Flags().GetString("operator-id")
+		if err != nil {
+			return fmt.Errorf("scenarios run: operator flag: %w", err)
+		}
 	}
 	applyAgentHarnessFlags(&cfg, operatorID)
 

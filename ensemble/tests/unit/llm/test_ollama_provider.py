@@ -11,6 +11,7 @@ Unit tests for OllamaProvider.
 Tests SSL verification strategy, close behavior, construction, and content generation.
 """
 
+from contextvars import copy_context
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -31,6 +32,7 @@ from app.llm.llm_types import (
 )
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.providers.ollama import OllamaProvider
+from app.models.model_telemetry import ModelResponseArtifact
 
 PATCH_TARGET = "app.llm.providers.ollama.AsyncClient"
 
@@ -133,6 +135,18 @@ class TestOllamaProviderGeneration:
                 api_key="test-key",
             )
             yield provider, mock_client
+
+    def test_response_timestamps_do_not_leak_between_copied_contexts(self, provider):
+        provider, _ = provider
+        provider._response_artifact.set(ModelResponseArtifact())
+        first_context = copy_context()
+        second_context = copy_context()
+
+        first_context.run(provider._record_response, object())
+        second_context.run(provider._record_response, object())
+
+        assert len(first_context.run(provider._response_received_at.get)) == 1
+        assert len(second_context.run(provider._response_received_at.get)) == 1
 
     @pytest.mark.asyncio
     async def test_generate_content_primary_records_exact_scrubbed_outbound_payload(self, provider):
