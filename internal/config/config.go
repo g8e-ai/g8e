@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	latticeconfig "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/config"
@@ -617,7 +618,7 @@ func Load(opts LoadOptions) (*Config, error) {
 
 		// Derived values - ports default to values from paths.json
 		Endpoint:  opts.OperatorEndpoint,
-		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, tlsServerName, opts.HTTPSPort),
+		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, opts.HTTPSPort),
 
 		HTTPPort:      httpPortOrDefault(opts.HTTPPort),
 		HTTPSPort:     httpsPortOrDefault(opts.HTTPSPort),
@@ -737,15 +738,12 @@ func newProvenanceOperatorConfig(opts LoadOptions) ProvenanceOperatorConfig {
 	}
 }
 
-// buildPubSubURL creates a WebSocket URL using the HTTPS port (WSS runs over TLS).
-// Uses tlsServerName for the hostname when provided (for IP-to-g8e.local mapping).
-func buildPubSubURL(endpoint string, tlsServerName string, httpsPort int) string {
+// buildPubSubURL creates a WebSocket URL using the network endpoint and HTTPS
+// port (WSS runs over TLS). TLS certificate identity is configured separately
+// through Config.TLSServerName; it must not replace the TCP dial target.
+func buildPubSubURL(endpoint string, httpsPort int) string {
 	port := httpsPortOrDefault(httpsPort)
-	hostname := endpoint
-	if tlsServerName != "" {
-		hostname = tlsServerName
-	}
-	return fmt.Sprintf("wss://%s:%d", hostname, port)
+	return "wss://" + net.JoinHostPort(endpoint, strconv.Itoa(port))
 }
 
 // httpPortOrDefault returns p if non-zero, otherwise the default from paths.json.
