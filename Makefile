@@ -205,6 +205,7 @@ help-legacy:
 		'  proto                -> proto-generate' \\
 		'  proto-force          -> proto-generate' \\
 		'  python-build         -> protocol-python-build' \\
+		'  stop                 -> down' \\
 		'  test-external        -> ensemble-test-external' \\
 		'  validate-cosais      -> cosais-validate' \\
 		'  validate-doctrines   -> doctrines-validate' \\
@@ -282,6 +283,7 @@ help:
 		'  up                        Build and start the Gateway on this host' \
 		'  full                      Start Gateway, prompt for operators, and launch local g8ee' \
 		'  down                      Stop the host Gateway' \
+		'  stop                      Stop the host Gateway and local workloads (alias for down)' \
 		'  docker-up                 Build and start the Docker Compose stack' \
 		'  docker-down               Stop the stack and preserve volumes' \
 		'  docker-restart-operators  Restart the Data and Inference Operators' \
@@ -1027,12 +1029,16 @@ full: build
 	@./g8e gw start --quiet
 	@$(PYTHON) scripts/full.py $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,)
 
-.PHONY: down
+.PHONY: down stop
 down:
 	@test -x ./g8e || { echo "ERROR: ./g8e is missing; run 'make build' first" >&2; exit 1; }
+	@./g8e ensemble stop 2>/dev/null || true
+	@./g8e operator stop 2>/dev/null || true
 	@echo "Stopping the g8e Gateway running on this host..."
 	@./g8e gw stop
 	@echo "Host platform stopped. Runtime state in .g8e/ is preserved."
+
+stop: down
 
 # =============================================================================
 # DOCKER COMPOSE LIFECYCLE
@@ -1084,7 +1090,7 @@ docker-build:
 .PHONY: \
 	agent-tool-registry build-ensemble build-fips check-bsl-headers clean-docker \
 	clean-harness constants docker embed-console embed-explorer \
-	explorer-catalog generate proto proto-force python-build test-external \
+	explorer-catalog generate proto proto-force python-build stop test-external \
 	validate-cosais validate-doctrines verify-fips
 
 agent-tool-registry: agent-tool-registry-generate

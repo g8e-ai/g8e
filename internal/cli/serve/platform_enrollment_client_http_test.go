@@ -730,6 +730,32 @@ func TestEnroll_RefusesCorruptPendingStateWithoutContactingGateway(t *testing.T)
 	assert.Zero(t, stub.requestHits.Load(), "a corrupt pending file must not silently trigger a brand-new enrollment")
 }
 
+func TestEnroll_ExpiredPendingStateStartsFresh(t *testing.T) {
+	goodKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	goodPEM, err := encodeECPrivateKeyPEM(goodKey)
+	require.NoError(t, err)
+
+	stub := newEnrollStub(t, enrollRoutes{request: createdReply("new-req", "new-tok")})
+	client, fileSvc := newEnrollClient(t, stub.server.URL)
+	require.NoError(t, client.persistPendingState(client.pendingStatePath(), &operatorPendingState{
+		RequestID: "old-expired-req", Token: "old-tok", OperatorKeyPEM: goodPEM, CLIKeyPEM: goodPEM,
+		ExpiresAt: time.Now().Add(-time.Hour),
+	}))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	_, _ = client.Enroll(ctx)
+
+	assert.Equal(t, int32(1), stub.requestHits.Load(), "an expired pending file must trigger a brand-new enrollment request")
+	pending, err := client.loadPendingState(client.pendingStatePath())
+	require.NoError(t, err)
+	if assert.NotNil(t, pending) {
+		assert.Equal(t, "new-req", pending.RequestID)
+	}
+	_ = fileSvc
+}
+
 func TestEnroll_ResumeRejectsCorruptPersistedKeys(t *testing.T) {
 	goodKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)

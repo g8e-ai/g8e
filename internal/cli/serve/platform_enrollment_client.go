@@ -158,6 +158,12 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		operatorKey, cliKey       *ecdsa.PrivateKey
 	)
 
+	if pending != nil && !pending.ExpiresAt.IsZero() && !time.Now().Before(pending.ExpiresAt) {
+		c.logger.Info("operator enrollment: pending attempt expired; starting fresh", "request_id", pending.RequestID)
+		_ = c.removePendingState(pendingPath)
+		pending = nil
+	}
+
 	if pending != nil && pending.Token != "" && pending.RequestID != "" {
 		// Resume the existing pending attempt. Do not generate new keys.
 		token = pending.Token
@@ -432,6 +438,7 @@ func (c *OperatorPlatformEnrollmentClient) pollUntilApproved(ctx context.Context
 			return ctx.Err()
 		}
 		if time.Now().After(deadlineTime) {
+			_ = c.removePendingState(c.pendingStatePath())
 			return fmt.Errorf("operator enrollment: polling deadline reached before approval")
 		}
 
@@ -476,6 +483,10 @@ func (c *OperatorPlatformEnrollmentClient) pollUntilApproved(ctx context.Context
 		if err != nil {
 			return fmt.Errorf("operator enrollment: read status response: %w", err)
 		}
+		if resp.StatusCode == http.StatusGone {
+			_ = c.removePendingState(c.pendingStatePath())
+			return fmt.Errorf("operator enrollment: request has expired (HTTP 410)")
+		}
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("operator enrollment: status query failed: HTTP %d: %s", resp.StatusCode, string(respBody))
 		}
@@ -491,6 +502,7 @@ func (c *OperatorPlatformEnrollmentClient) pollUntilApproved(ctx context.Context
 		case models.PlatformEnrollmentStateDenied:
 			return fmt.Errorf("operator enrollment: request was denied by the owner")
 		case models.PlatformEnrollmentStateExpired:
+			_ = c.removePendingState(c.pendingStatePath())
 			return fmt.Errorf("operator enrollment: request has expired")
 		}
 

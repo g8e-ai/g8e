@@ -266,6 +266,8 @@ class FullTests(unittest.TestCase):
             "localhost",
             "/tmp/observer",
             "http://localhost:11434",
+            "localhost",
+            "/tmp/data",
         ]
         with (
             patch.object(sys, "argv", ["full.py", "--dry-run"]),
