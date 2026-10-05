@@ -5,7 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before reporting, please ensure you have attempted to reproduce the bug in the `g8ep` test-runner container.
+        New to g8e and stuck on install or first run? Please use the **First Run Report** form instead — it's shorter and made for that.
+        For a bug in a running deployment, include `./g8e version`, your OS/arch, and the steps below.
   - type: textarea
     id: reproduction
     attributes:
