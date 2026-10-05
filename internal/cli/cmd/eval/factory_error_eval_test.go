@@ -39,7 +39,7 @@ func TestEvalCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 			panic("auth loader should not be called when fileSvcFactory fails")
 		},
 		now:   time.Now,
-		newID: func() string { return "run-id" },
+		newID: func() (string, error) { return "run-id", nil },
 	}
 	tests := []struct {
 		name string

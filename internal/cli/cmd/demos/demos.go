@@ -1160,7 +1160,10 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool, fileSvc fs.Runt
 	// scenario execution; the evidence-grade scenario results remain the
 	// authoritative per-scenario record.
 	startedAt := time.Now().UTC()
-	runID := newDemoRunID(org, startedAt)
+	runID, err := newDemoRunID(org, startedAt)
+	if err != nil {
+		return err
+	}
 	manifestErr := buildAndPersistDemoManifest(cmd.Context(), fileSvc, org, demoDir, runID, startedAt)
 
 	if useTUI {
@@ -1180,8 +1183,12 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool, fileSvc fs.Runt
 // buildAndPersistDemoManifest constructs a typed DemoManifest for the demo org
 // and persists it under the runtime compliance evidence tree. It returns any
 // error so the caller can join it with scenario execution errors.
-func newDemoRunID(org string, startedAt time.Time) string {
-	return fmt.Sprintf("%s-run-%s-%s", org, startedAt.Format("20060102T150405Z"), uuid.NewString())
+func newDemoRunID(org string, startedAt time.Time) (string, error) {
+	id, err := uuid.NewString()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-run-%s-%s", org, startedAt.Format("20060102T150405Z"), id), nil
 }
 
 func buildAndPersistDemoManifest(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID string, generatedAt time.Time) error {

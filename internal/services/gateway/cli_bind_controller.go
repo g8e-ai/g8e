@@ -141,7 +141,11 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		loginMethod = oldSession.LoginMethod
 	}
 
-	newCLISessionID := uuid.NewString()
+	newCLISessionID, err := uuid.NewString()
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to generate session ID")
+		return
+	}
 	_, err = c.cliSessionSvc.RefreshCLISession(
 		oldCLISessionID,
 		newCLISessionID,
@@ -298,7 +302,11 @@ func (c *CLIRefreshController) handleUnbind(w http.ResponseWriter, r *http.Reque
 		loginMethod = oldSession.LoginMethod
 	}
 
-	newCLISessionID := uuid.NewString()
+	newCLISessionID, err := uuid.NewString()
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to generate session ID")
+		return
+	}
 	_, err = c.cliSessionSvc.UnbindCLISession(
 		oldCLISessionID,
 		newCLISessionID,

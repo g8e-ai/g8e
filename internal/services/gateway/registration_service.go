@@ -344,7 +344,10 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 // completeRegistration performs the common registration logic after Operator slot is resolved.
 func (s *RegistrationService) completeRegistration(operator *models.OperatorDocumentGo, userID, organizationID string, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
 	// Create Operator session
-	operatorSessionID := uuid.NewString()
+	operatorSessionID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	operatorSessionSummary := &models.SessionSummary{
 		OperatorSessionID: operatorSessionID,
 		CreatedAt:         time.Now().UTC(),
@@ -384,7 +387,11 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	// Only generate CLI session ID if CLI CSR is provided
 	var cliSessionID string
 	if req.CLICSR != "" {
-		cliSessionID = uuid.NewString()
+		id, err := uuid.NewString()
+		if err != nil {
+			return nil, err
+		}
+		cliSessionID = id
 	}
 
 	// CSR-based enrollment
@@ -517,7 +524,10 @@ func (s *RegistrationService) toOperatorDoc(doc *models.Document) (*models.Opera
 }
 
 func (s *RegistrationService) createSlot(userID, orgID string) (*models.OperatorDocumentGo, error) {
-	id := uuid.NewString()
+	id, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	if orgID == "" {
 		orgID = userID
 	}

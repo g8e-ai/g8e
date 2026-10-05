@@ -225,7 +225,11 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		boundOperatorSessionIDs = oldSession.BoundOperatorSessionIDs
 	}
 
-	newCLISessionID := uuid.NewString()
+	newCLISessionID, err := uuid.NewString()
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to generate session ID")
+		return
+	}
 	_, err = c.cliSessionSvc.RefreshCLISession(
 		oldCLISessionID,
 		newCLISessionID,

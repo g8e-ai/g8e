@@ -67,11 +67,20 @@ func newCommitmentTestActuator(t *testing.T) (*L5Actuator, *storage.SQLAuditStor
 	return actuator, auditStore
 }
 
+// mustUUID returns a fresh UUID string, failing the test on the
+// (practically impossible) failure of the OS random source.
+func mustUUID(t *testing.T) string {
+	t.Helper()
+	id, err := uuid.NewString()
+	require.NoError(t, err)
+	return id
+}
+
 func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 	actuator, auditStore := newCommitmentTestActuator(t)
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -145,7 +154,7 @@ func TestL5ActuatorExecuteCommitmentFailureStopsBeforeHandler(t *testing.T) {
 	actuator.AuditorKeyID = strings.Repeat("0", ed25519.PublicKeySize*2)
 	vt := &VerifiedTransaction{
 		Envelope: &govtypes.GovernanceEnvelope{
-			Id:                uuid.NewString(),
+			Id:                mustUUID(t),
 			TransactionHash:   "test-hash-commitment-failure",
 			OperatorId:        "test-operator",
 			OperatorSessionId: "test-operator-session",

@@ -139,7 +139,7 @@ type runShowJSON struct {
 }
 
 func loadRunShow(ctx context.Context, deps nativeEvalDeps, store *evaluation.Store, archived bool, runID string, live evaluation.LeaseLiveness) (*runShowJSON, error) {
-	row, summary, err := summarizeRun(ctx, store, archived, runID, live, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+	row, summary, err := summarizeRun(ctx, store, archived, runID, live, deps.now, adaptNewID(deps.newID))
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +395,7 @@ func runsRepairCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: runs repair: %w", err)
 			}
 			store := evaluation.NewStore(fileSvc)
-			controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			controller := evaluation.NewCampaignController(store, nil, deps.now, adaptNewID(deps.newID))
 			payload := runRepairJSON{RunID: runID}
 			var message string
 			if results {

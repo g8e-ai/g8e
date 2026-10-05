@@ -417,9 +417,18 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	if err != nil {
 		return nil, "", "", "", "", "", err
 	}
-	operatorID := uuid.NewString()
-	operatorSessionID := uuid.NewString()
-	cliSessionID := uuid.NewString()
+	operatorID, err := uuid.NewString()
+	if err != nil {
+		return nil, "", "", "", "", "", err
+	}
+	operatorSessionID, err := uuid.NewString()
+	if err != nil {
+		return nil, "", "", "", "", "", err
+	}
+	cliSessionID, err := uuid.NewString()
+	if err != nil {
+		return nil, "", "", "", "", "", err
+	}
 	now := time.Now().UTC()
 
 	operatorCertPEM, operatorChainPEM, err := h.deps.PKI.SignCSR(

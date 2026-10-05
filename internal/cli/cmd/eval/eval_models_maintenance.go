@@ -50,7 +50,7 @@ func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (g
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	prefixedNewID := func(prefix string) string { return prefix + "-" + deps.newID() }
+	prefixedNewID := adaptNewID(deps.newID)
 	inferenceSessionID := sessions.InferenceSessionID
 	return governedModelMaintenanceEnv{
 		Maintenance: evaluation.OllamaModelMaintenanceContext{

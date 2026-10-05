@@ -395,7 +395,12 @@ func dispatchOperatorRunOnce(client authcmd.APIClient, target operatorRunTarget,
 		OperatorID:        target.OperatorID,
 	}
 
-	request, err := operator.BuildExecuteBashDispatchRequest(target.OperatorSessionID, command, uuid.NewString(), cliSessionID)
+	requestID, err := uuid.NewString()
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	request, err := operator.BuildExecuteBashDispatchRequest(target.OperatorSessionID, command, requestID, cliSessionID)
 	if err != nil {
 		result.Error = err.Error()
 		return result

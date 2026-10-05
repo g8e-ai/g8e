@@ -253,7 +253,10 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		return nil, err
 	}
 	tokenHash := platformEnrollmentTokenHash(token)
-	requestID := uuid.NewString()
+	requestID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	expiresAt := now.Add(constants.PlatformEnrollmentRequestTTL)
 
@@ -639,7 +642,10 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 // material and generated IDs, submits the downstream PERSIST_POLICY
 // or CREATE_SESSION envelope, and returns the issued response.
 func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *models.PlatformEnrollmentRequest) (*models.PlatformEnrollmentCompleteResponse, error) {
-	leaseOwner := uuid.NewString()
+	leaseOwner, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	leaseExpiry := time.Now().UTC().Add(constants.PlatformEnrollmentIssuanceLeaseTTL)
 
 	// Acquire the issuance lease: approved -> issuing with lease owner
@@ -727,7 +733,11 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble, models.PlatformComponentApplication:
 		policyID := req.PolicyID
 		if policyID == "" {
-			policyID = uuid.NewString()
+			id, err := uuid.NewString()
+			if err != nil {
+				return err
+			}
+			policyID = id
 		}
 		if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionPersistPolicy, constants.PlatformEnrollmentIntentIssue, &commonv1.PlatformEnrollmentGovernancePayload{
 			Action:                 string(constants.PlatformEnrollmentActionPersistPolicy),

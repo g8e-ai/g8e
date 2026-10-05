@@ -149,7 +149,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	}
 	store := evaluation.NewStore(fileSvc)
 	controllerFactory := func(executor evaluation.CampaignAssignmentExecutor) *evaluation.CampaignController {
-		return evaluation.NewCampaignController(store, executor, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+		return evaluation.NewCampaignController(store, executor, deps.now, adaptNewID(deps.newID))
 	}
 	summary, err := controllerFactory(nil).RunSummary(cmd.Context(), opts.RunID)
 	if err != nil {
@@ -212,7 +212,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	waitForTrace := func(ctx context.Context, fetch func(context.Context) (evaluation.EvaluationTrace, error)) (evaluation.EvaluationTrace, error) {
 		return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), opts.JSONOutput))
 	}
-	newID := func(prefix string) string { return prefix + "-" + deps.newID() }
+	newID := adaptNewID(deps.newID)
 	chatExecutor := evaluation.NewCampaignChatExecutor(
 		chatClient,
 		persona,
@@ -402,7 +402,7 @@ func releaseResidentProviderModels(
 		TargetOperatorSessionID: inferenceSessionID,
 		Environment:             modelCommandEnvironment(endpoint),
 		CaseID:                  opts.RunID,
-		NewID:                   func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID:                   adaptNewID(deps.newID),
 	}
 	residency, err := evaluation.ReadOllamaProviderResidency(cmd.Context(), dispatcher, maintenance)
 	if err != nil {
@@ -461,7 +461,7 @@ func releaseRunModels(
 		TargetOperatorSessionID: inferenceSessionID,
 		Environment:             modelCommandEnvironment(endpoint),
 		CaseID:                  opts.RunID,
-		NewID:                   func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID:                   adaptNewID(deps.newID),
 	}
 	residency, err := evaluation.ReadOllamaProviderResidency(cmd.Context(), dispatcher, maintenance)
 	if err != nil {

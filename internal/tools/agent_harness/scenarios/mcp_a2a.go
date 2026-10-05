@@ -202,22 +202,34 @@ func a2aScenarios() []Scenario {
 		{
 			Name: "a2a-plain", Title: "Plain A2A skill invocation", Persona: a2aPeer, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				_, err := c.A2ACall(ctx, a2aPeer, "list_directory",
-					clientpkg.ListDirectorySkillPayload{Path: "."}, uuid.NewString())
+				reqID, err := uuid.NewString()
+				if err != nil {
+					return err
+				}
+				_, err = c.A2ACall(ctx, a2aPeer, "list_directory",
+					clientpkg.ListDirectorySkillPayload{Path: "."}, reqID)
 				return err
 			},
 		},
 		{
 			Name: "a2a-secured", Title: "A2A with simple security (mTLS + L1 skill gate)", Persona: a2aSecure, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
+				reqID, err := uuid.NewString()
+				if err != nil {
+					return err
+				}
 				if _, err := c.A2ACall(ctx, a2aSecure, "read_file",
-					clientpkg.ReadFileSkillPayload{Path: "/etc/hostname"}, uuid.NewString()); err != nil {
+					clientpkg.ReadFileSkillPayload{Path: "/etc/hostname"}, reqID); err != nil {
 					return err
 				}
 				r.note("authenticated A2A skill submitted (transport: mTLS%s)", apiKeyNote(c))
 				// skill_name carries L1 forbidden patterns (sudo, su); this must be gated.
+				reqID2, err := uuid.NewString()
+				if err != nil {
+					return err
+				}
 				resp, err := c.A2ACall(ctx, a2aSecure, "sudo",
-					clientpkg.CommandSkillPayload{Cmd: "cat /etc/shadow"}, uuid.NewString())
+					clientpkg.CommandSkillPayload{Cmd: "cat /etc/shadow"}, reqID2)
 				if err != nil {
 					return err
 				}
@@ -237,7 +249,11 @@ func a2aScenarios() []Scenario {
 				// A2ACallProto accepts a JSON string built from the typed skill payload.
 				recursive := false
 				inner, _ := json.Marshal(clientpkg.ListDirectorySkillPayload{Path: ".", Recursive: &recursive})
-				_, err := c.A2ACallProto(ctx, a2aProto, "list_directory", string(inner), uuid.NewString())
+				reqID, err := uuid.NewString()
+				if err != nil {
+					return err
+				}
+				_, err = c.A2ACallProto(ctx, a2aProto, "list_directory", string(inner), reqID)
 				if err != nil {
 					return err
 				}

@@ -732,9 +732,20 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	runID := "formation-" + deps.newID()
-	assignmentID := "formation-assignment-" + deps.newID()
-	evaluationAttemptID := deps.newID()
+	runIDPart, err := deps.newID()
+	if err != nil {
+		return nil, "", err
+	}
+	runID := "formation-" + runIDPart
+	assignmentIDPart, err := deps.newID()
+	if err != nil {
+		return nil, "", err
+	}
+	assignmentID := "formation-assignment-" + assignmentIDPart
+	evaluationAttemptID, err := deps.newID()
+	if err != nil {
+		return nil, "", err
+	}
 	productionDeps := evaluation.FormationProductionDependencies{
 		RunContext: evaluation.FormationRunContext{
 			CampaignID:          freeze.CampaignID,
@@ -751,7 +762,7 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 		InferenceDispatcher:    &harnessFormationInferenceDispatcher{client: appClient},
 		ModelCommandDispatcher: modelDispatcher,
 		OllamaEnvironment:      modelCommandEnvironment(endpoint),
-		NewID:                  func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID:                  adaptNewID(deps.newID),
 		Now:                    deps.now,
 	}
 	ctx, cancel := context.WithTimeout(cmd.Context(), 20*time.Minute)
@@ -893,7 +904,7 @@ func buildCampaignFormationProductionDeps(
 		InferenceDispatcher:    &harnessFormationInferenceDispatcher{client: appClient},
 		ModelCommandDispatcher: modelDispatcher,
 		OllamaEnvironment:      modelCommandEnvironment(endpoint),
-		NewID:                  func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID:                  adaptNewID(deps.newID),
 		Now:                    deps.now,
 		RunContext: evaluation.FormationRunContext{
 			ModelRegistryDigest: registryDigest,

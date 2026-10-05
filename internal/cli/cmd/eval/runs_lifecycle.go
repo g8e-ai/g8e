@@ -158,7 +158,7 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 	if laneName == campaignLaneSystem {
 		lane = evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM
 	}
-	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+	controller := evaluation.NewCampaignController(store, nil, deps.now, adaptNewID(deps.newID))
 	if _, err := controller.StartRun(cmd.Context(), evaluation.RunStartRequest{
 		CampaignID:                 opts.CampaignID,
 		RunID:                      runID,
@@ -393,7 +393,7 @@ runs until the matrix is exhausted. An archived run cannot be resumed.`,
 			if err != nil {
 				return err
 			}
-			summary, err := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() }).RunSummary(cmd.Context(), runID)
+			summary, err := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, adaptNewID(deps.newID)).RunSummary(cmd.Context(), runID)
 			if err != nil {
 				return fmt.Errorf("evaluation: runs resume: %w", err)
 			}
@@ -468,7 +468,7 @@ assignment. A lease whose process is gone is cleared and reported.`,
 			case !isMissingRecord(err):
 				return fmt.Errorf("evaluation: runs cancel: %w", err)
 			}
-			controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			controller := evaluation.NewCampaignController(store, nil, deps.now, adaptNewID(deps.newID))
 			if result.Stopped, err = controller.CancelRun(cmd.Context(), runID); err != nil {
 				return fmt.Errorf("evaluation: runs cancel: %w", err)
 			}

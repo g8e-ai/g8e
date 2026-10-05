@@ -169,7 +169,12 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 	// session ID is pre-generated here so the certificate URI SAN binds to
 	// it, and the same ID is passed to ReplaceCLISession so the persisted
 	// session and the signed cert stay bound.
-	newCLISessionID := uuid.NewString()
+	newCLISessionID, err := uuid.NewString()
+	if err != nil {
+		c.logger.Error("CLI rotation: failed to generate new CLI session ID", "error", err, "user_id", userID)
+		c.writeRotationError(w, fmt.Errorf("%s: %w", constants.ErrCLIRotationFailed, err))
+		return
+	}
 	newCertPEM, newCertChainPEM, err := c.pki.SignCSR(
 		req.CLICSRPEM,
 		constants.LeafTypeCLI,

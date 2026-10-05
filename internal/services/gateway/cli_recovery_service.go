@@ -100,7 +100,10 @@ func (s *CLIRecoveryService) CreateRequest(cliCSRPEM, systemFingerprint string, 
 	token = hex.EncodeToString(tokenBytes)
 	tokenHash := hashToken(token)
 
-	requestID = uuid.NewString()
+	requestID, err = uuid.NewString()
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
 	now := time.Now().UTC()
 	expiresAt = now.Add(cliRecoveryRequestTTL)
 

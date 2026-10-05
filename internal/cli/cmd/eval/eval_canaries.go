@@ -146,7 +146,7 @@ func runLiveEnvironmentCanaries(cmd *cobra.Command, deps nativeEvalDeps, opts ca
 			ModelRegistry:           model.Registry,
 			TargetOperatorSessionID: inference.OperatorSessionID,
 		},
-		NewID: func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID: adaptNewID(deps.newID),
 	})
 	return reportEnvironmentCanaries(cmd, report, runErr)
 }

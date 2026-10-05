@@ -79,12 +79,17 @@ func (s *UserService) CreateUserWithSub(sub string) (*models.User, error) {
 		return existing, nil
 	}
 
+	webAuthnUserID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
+
 	user := &models.User{
 		ID:                 sub,
 		PasskeyCredentials: []models.PasskeyCredential{},
 		Provider:           string(constants.AuthProviderJWT),
 		Status:             constants.UserStatusActive,
-		WebAuthnUserID:     uuid.NewString(),
+		WebAuthnUserID:     webAuthnUserID,
 	}
 
 	if err := s.persistNewUser(user); err != nil {
@@ -100,7 +105,10 @@ func getLocalOSUser() *models.LocalOSUser {
 }
 
 func (s *UserService) createUser(localOSUser *models.LocalOSUser, roles []string) (*models.User, error) {
-	userID := uuid.NewString()
+	userID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 
 	// Use provided OS user info, or fall back to gateway's local OS user
 	if localOSUser == nil {
@@ -109,7 +117,10 @@ func (s *UserService) createUser(localOSUser *models.LocalOSUser, roles []string
 
 	// Generate WebAuthnUserID for v4 compliance (Windows Hello requires a GUID, not SID)
 	// This is a stable 16-byte GUID used for WebAuthn operations
-	webAuthnUserID := uuid.NewString()
+	webAuthnUserID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 
 	// Zero-PII: Only user ID and passkey credentials are stored
 	user := &models.User{
@@ -257,7 +268,11 @@ func (s *UserService) IsFirstUser(userID string) (bool, error) {
 
 func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	if entry.ID == "" {
-		entry.ID = uuid.NewString()
+		id, err := uuid.NewString()
+		if err != nil {
+			return err
+		}
+		entry.ID = id
 	}
 	if entry.At.IsZero() {
 		entry.At = time.Now().UTC()

@@ -36,8 +36,10 @@ import (
 func TestNewDemoRunID_DiffersForRunsStartedInSameSecond(t *testing.T) {
 	startedAt := time.Date(2026, time.September, 2, 14, 27, 58, 0, time.UTC)
 
-	first := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
-	second := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+	first, err := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+	require.NoError(t, err)
+	second, err := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+	require.NoError(t, err)
 
 	assert.NotEqual(t, first, second)
 	assert.True(t, strings.HasPrefix(first, "fedramp-run-20260902T142758Z-"))

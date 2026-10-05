@@ -36,7 +36,10 @@ func NewWebSessionService(docStore *DocumentStoreService, logger *slog.Logger) *
 
 // CreateWebSession creates a new web session after successful authentication.
 func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession, error) {
-	webSessionID := uuid.NewString()
+	webSessionID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 
 	webSession := &models.WebSession{

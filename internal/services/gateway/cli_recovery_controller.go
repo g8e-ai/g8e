@@ -455,7 +455,10 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("approving user is not active")
 	}
 
-	cliSessionID := uuid.NewString()
+	cliSessionID, err := uuid.NewString()
+	if err != nil {
+		return models.CLIRecoveryCompleteResponse{}, err
+	}
 	orgID := user.ID // Use user ID as org ID (matches bootstrap/CLI-enroll pattern)
 	now := time.Now().UTC()
 
@@ -474,8 +477,15 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 	}
 	mintRecoveryOperator := operatorSessionID == ""
 	if mintRecoveryOperator {
-		operatorID = uuid.NewString()
-		operatorSessionID = uuid.NewString()
+		var err error
+		operatorID, err = uuid.NewString()
+		if err != nil {
+			return models.CLIRecoveryCompleteResponse{}, err
+		}
+		operatorSessionID, err = uuid.NewString()
+		if err != nil {
+			return models.CLIRecoveryCompleteResponse{}, err
+		}
 	}
 
 	// Sign the CLI CSR stored in the recovery request BEFORE persisting any

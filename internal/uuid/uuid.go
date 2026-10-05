@@ -15,18 +15,17 @@ import (
 
 // NewString returns a randomly generated RFC 4122 version 4 UUID string
 // in canonical 36-character form (8-4-4-4-12) with hyphens.
-// It panics if the system's cryptographic random source fails (INV-CODE-06
-// exception: unrecoverable — without OS randomness no secure UUID can be
-// minted and the process cannot safely continue).
-func NewString() string {
+// It returns an error if the system's cryptographic random source fails
+// (INV-CODE-06: a production path must return errors, never panic).
+func NewString() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		panic(fmt.Sprintf("uuid: crypto/rand failed: %v", err))
+		return "", fmt.Errorf("uuid: crypto/rand failed: %w", err)
 	}
 	// Set version 4 and variant bits per RFC 4122.
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
-	return format(b)
+	return format(b), nil
 }
 
 // Parse decodes a canonical 36-character UUID string into a [16]byte.
