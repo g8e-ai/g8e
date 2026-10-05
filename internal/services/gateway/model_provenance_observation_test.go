@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -210,99 +211,101 @@ func (eventOnlyProvenanceStore) Load(context.Context, string) (*evalv1.ModelProv
 func TestModelProvenanceObservationCoordinator_PreflightStorageAttestation(t *testing.T) {
 	for _, scenario := range []string{"begin failure", "finalize failure", "delayed finalize failure", "success with unrelated failure", "cancellation", "silent operator"} {
 		t.Run(scenario, func(t *testing.T) {
-			logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-			store, err := model_provenance.NewWindowStore(storagetest.NewTestFileSvc(t, t.TempDir()))
-			require.NoError(t, err)
-			op := models.OperatorDocumentGo{ID: "prov-1", OperatorSessionID: "sess-prov-1", Status: constants.OperatorStatusActive,
-				OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true}}
-			dispatch, broker := newTestDispatchService(t, "root-abc", &op)
-			coordinator := NewModelProvenanceObservationCoordinator(dispatch, &stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{op}}, broker, eventOnlyProvenanceStore{store}, logger)
-			defer coordinator.Stop()
-			cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-			subscriber := &wsSubscriber{buf: newDropOldestBuf(4), done: make(chan struct{})}
-			broker.subscribe(cmdChannel, subscriber)
-			defer broker.unsubscribe(cmdChannel, subscriber)
-			requestTimeout := 2 * time.Second
-			if scenario == "silent operator" {
-				requestTimeout = 12 * time.Second
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-			defer cancel()
-			commands := 0
-			unregister := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
-				commands++
-				env := &commonv1.GovernanceEnvelope{}
-				require.NoError(t, protojson.Unmarshal(data, env))
-				command := &evalv1.ModelProvenanceObservationCommand{}
-				require.NoError(t, proto.Unmarshal(env.Payload, command))
-				finalize := command.Phase == evalv1.ModelProvenanceObservationPhase_MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE
-				if scenario == "begin failure" || ((scenario == "finalize failure" || scenario == "delayed finalize failure") && finalize) || scenario == "success with unrelated failure" {
-					txID := env.Id
-					if scenario == "success with unrelated failure" {
-						txID = "unrelated-transaction"
+			synctest.Test(t, func(t *testing.T) {
+				logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+				store, err := model_provenance.NewWindowStore(storagetest.NewTestFileSvc(t, t.TempDir()))
+				require.NoError(t, err)
+				op := models.OperatorDocumentGo{ID: "prov-1", OperatorSessionID: "sess-prov-1", Status: constants.OperatorStatusActive,
+					OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true}}
+				dispatch, broker := newTestDispatchService(t, "root-abc", &op)
+				coordinator := NewModelProvenanceObservationCoordinator(dispatch, &stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{op}}, broker, eventOnlyProvenanceStore{store}, logger)
+				defer coordinator.Stop()
+				cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
+				subscriber := &wsSubscriber{buf: newDropOldestBuf(4), done: make(chan struct{})}
+				broker.subscribe(cmdChannel, subscriber)
+				defer broker.unsubscribe(cmdChannel, subscriber)
+				requestTimeout := 2 * time.Second
+				if scenario == "silent operator" {
+					requestTimeout = 12 * time.Second
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+				defer cancel()
+				commands := 0
+				unregister := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+					commands++
+					env := &commonv1.GovernanceEnvelope{}
+					require.NoError(t, protojson.Unmarshal(data, env))
+					command := &evalv1.ModelProvenanceObservationCommand{}
+					require.NoError(t, proto.Unmarshal(env.Payload, command))
+					finalize := command.Phase == evalv1.ModelProvenanceObservationPhase_MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE
+					if scenario == "begin failure" || ((scenario == "finalize failure" || scenario == "delayed finalize failure") && finalize) || scenario == "success with unrelated failure" {
+						txID := env.Id
+						if scenario == "success with unrelated failure" {
+							txID = "unrelated-transaction"
+						}
+						payload, err := proto.Marshal(&operatorv1.ActionReceipt{TransactionId: txID, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, ResultSummary: "manifest missing"})
+						require.NoError(t, err)
+						wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.Receipt.Recorded), OperatorId: op.ID, OperatorSessionId: op.OperatorSessionID, Payload: payload})
+						require.NoError(t, err)
+						// Simulate broker fan-out after receipt signature verification.
+						if scenario == "delayed finalize failure" {
+							go func() {
+								select {
+								case <-ctx.Done():
+								case <-time.After(10 * time.Millisecond):
+									broker.Publish(pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID), wire)
+								}
+							}()
+						} else {
+							broker.Publish(pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID), wire)
+						}
 					}
-					payload, err := proto.Marshal(&operatorv1.ActionReceipt{TransactionId: txID, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, ResultSummary: "manifest missing"})
-					require.NoError(t, err)
-					wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.Receipt.Recorded), OperatorId: op.ID, OperatorSessionId: op.OperatorSessionID, Payload: payload})
-					require.NoError(t, err)
-					// Simulate broker fan-out after receipt signature verification.
-					if scenario == "delayed finalize failure" {
-						go func() {
-							select {
-							case <-ctx.Done():
-							case <-time.After(10 * time.Millisecond):
-								broker.Publish(pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID), wire)
-							}
-						}()
-					} else {
+					if !finalize && scenario != "begin failure" && scenario != "silent operator" {
+						payload, err := proto.Marshal(&operatorv1.ActionReceipt{TransactionId: env.Id, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED})
+						require.NoError(t, err)
+						wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.Receipt.Recorded), OperatorId: op.ID, OperatorSessionId: op.OperatorSessionID, Payload: payload})
+						require.NoError(t, err)
 						broker.Publish(pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID), wire)
 					}
-				}
-				if !finalize && scenario != "begin failure" && scenario != "silent operator" {
-					payload, err := proto.Marshal(&operatorv1.ActionReceipt{TransactionId: env.Id, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED})
+					if finalize && scenario == "success with unrelated failure" {
+						payload, err := proto.Marshal(&evalv1.ModelProvenanceObservationCompleted{Window: testModelProvenanceWindow(t, command.ProviderAttemptId)})
+						require.NoError(t, err)
+						wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.ModelProvenanceObservation.Completed), Payload: payload})
+						require.NoError(t, err)
+						broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+					}
+					if finalize && scenario == "cancellation" {
+						cancel()
+					}
+				})
+				defer unregister()
+				window, err := coordinator.PreflightStorageAttestation(ctx, "probe-model:7b", strings.Repeat("a", 64))
+				switch scenario {
+				case "success with unrelated failure":
 					require.NoError(t, err)
-					wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.Receipt.Recorded), OperatorId: op.ID, OperatorSessionId: op.OperatorSessionID, Payload: payload})
-					require.NoError(t, err)
-					broker.Publish(pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID), wire)
+					require.NotNil(t, window)
+				case "cancellation":
+					require.ErrorIs(t, err, context.Canceled)
+				case "silent operator":
+					require.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
+					require.ErrorContains(t, err, "did not acknowledge BEGIN")
+					require.NoError(t, ctx.Err(), "acknowledgement deadline must precede the full probe deadline")
+				default:
+					require.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
+					require.ErrorContains(t, err, "manifest missing")
+					require.NoError(t, ctx.Err(), "failure must arrive before request timeout")
 				}
-				if finalize && scenario == "success with unrelated failure" {
-					payload, err := proto.Marshal(&evalv1.ModelProvenanceObservationCompleted{Window: testModelProvenanceWindow(t, command.ProviderAttemptId)})
-					require.NoError(t, err)
-					wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.ModelProvenanceObservation.Completed), Payload: payload})
-					require.NoError(t, err)
-					broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+				if scenario == "begin failure" || scenario == "silent operator" {
+					require.Equal(t, 1, commands)
 				}
-				if finalize && scenario == "cancellation" {
-					cancel()
+				if scenario != "begin failure" && scenario != "silent operator" {
+					require.Equal(t, 2, commands)
 				}
+				broker.handlersMu.RLock()
+				remaining := len(broker.handlers[pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID)])
+				broker.handlersMu.RUnlock()
+				require.Zero(t, remaining, "preflight receipt subscription must be cleaned up")
 			})
-			defer unregister()
-			window, err := coordinator.PreflightStorageAttestation(ctx, "probe-model:7b", strings.Repeat("a", 64))
-			switch scenario {
-			case "success with unrelated failure":
-				require.NoError(t, err)
-				require.NotNil(t, window)
-			case "cancellation":
-				require.ErrorIs(t, err, context.Canceled)
-			case "silent operator":
-				require.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
-				require.ErrorContains(t, err, "did not acknowledge BEGIN")
-				require.NoError(t, ctx.Err(), "acknowledgement deadline must precede the full probe deadline")
-			default:
-				require.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
-				require.ErrorContains(t, err, "manifest missing")
-				require.NoError(t, ctx.Err(), "failure must arrive before request timeout")
-			}
-			if scenario == "begin failure" || scenario == "silent operator" {
-				require.Equal(t, 1, commands)
-			}
-			if scenario != "begin failure" && scenario != "silent operator" {
-				require.Equal(t, 2, commands)
-			}
-			broker.handlersMu.RLock()
-			remaining := len(broker.handlers[pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID)])
-			broker.handlersMu.RUnlock()
-			require.Zero(t, remaining, "preflight receipt subscription must be cleaned up")
 		})
 	}
 }

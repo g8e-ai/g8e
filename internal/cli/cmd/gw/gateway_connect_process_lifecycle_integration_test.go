@@ -69,15 +69,7 @@ func (w *launchProfileWriteFailingFileSvc) WriteFile(ctx context.Context, relPat
 // so init adopts and reaps it).
 func withServeReExec(t *testing.T, fileSvc fs.RuntimeFileService) {
 	t.Helper()
-	old, hadOld := os.LookupEnv("G8E_TEST_REEXEC")
-	require.NoError(t, os.Setenv("G8E_TEST_REEXEC", "serve"))
-	t.Cleanup(func() {
-		if hadOld {
-			_ = os.Setenv("G8E_TEST_REEXEC", old)
-		} else {
-			_ = os.Unsetenv("G8E_TEST_REEXEC")
-		}
-	})
+	t.Setenv(string(constants.EnvVar.TestReexec), "serve")
 	t.Cleanup(func() {
 		reapRemainingChild(t, fileSvc)
 	})
@@ -95,7 +87,9 @@ func withServeReExec(t *testing.T, fileSvc fs.RuntimeFileService) {
 func startZombieReaper(t *testing.T) {
 	t.Helper()
 	stop := make(chan struct{})
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		for {
 			select {
 			case <-stop:
@@ -109,7 +103,10 @@ func startZombieReaper(t *testing.T) {
 			}
 		}
 	}()
-	t.Cleanup(func() { close(stop) })
+	t.Cleanup(func() {
+		close(stop)
+		<-done
+	})
 }
 
 // reapRemainingChild reads the operator PID file, sends SIGKILL to the process

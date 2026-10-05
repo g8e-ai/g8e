@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -868,26 +869,28 @@ func TestEnroll_RecoveryExpired_ReturnsTypedError(t *testing.T) {
 
 func TestEnroll_RecoveryPollsUntilApproved(t *testing.T) {
 	t.Parallel()
-	coord, gw, keys, _, _, _, _, _, _ := setupCoordinatorTest(t)
+	synctest.Test(t, func(t *testing.T) {
+		coord, gw, keys, _, _, _, _, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapped = true
-	gw.recoveryRequestID = "req-poll"
-	gw.recoveryToken = "token-poll"
-	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-poll"
-	// Pending twice, then approved.
-	gw.recoveryStates = []models.CLIRecoveryState{
-		models.CLIRecoveryStatePending,
-		models.CLIRecoveryStatePending,
-		models.CLIRecoveryStateApproved,
-	}
-	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
-	gw.recoveryCompleteArtifact = artifacts
-	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+		gw.bootstrapped = true
+		gw.recoveryRequestID = "req-poll"
+		gw.recoveryToken = "token-poll"
+		gw.recoveryApprovalURL = "https://example.com/console#recovery=token-poll"
+		// Pending twice, then approved.
+		gw.recoveryStates = []models.CLIRecoveryState{
+			models.CLIRecoveryStatePending,
+			models.CLIRecoveryStatePending,
+			models.CLIRecoveryStateApproved,
+		}
+		artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
+		gw.recoveryCompleteArtifact = artifacts
+		keys.csr, keys.key = "test-csr", artifacts.CLIKey
 
-	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, EnrollmentSourceRecovery, result.Source)
-	assert.Equal(t, 1, gw.recoveryCompleteCalls)
+		result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, EnrollmentSourceRecovery, result.Source)
+		assert.Equal(t, 1, gw.recoveryCompleteCalls)
+	})
 }
 
 // --- Cancellation tests ---

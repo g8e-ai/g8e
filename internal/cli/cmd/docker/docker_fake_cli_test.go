@@ -24,7 +24,9 @@ import (
 
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
@@ -89,6 +91,11 @@ func runDockerCommand(t *testing.T, cmd *cobra.Command, args ...string) (string,
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
+	// Build/export tests use a stamped binary identity, as the root command
+	// does in production, rather than discovering the developer's source tree.
+	cmd.SetContext(shared.ContextWithVersionInfo(t.Context(), serve.VersionInfo{
+		SourceTreeStateHash: strings.Repeat("a", 64),
+	}))
 	err := cmd.RunE(cmd, args)
 	return buf.String(), err
 }

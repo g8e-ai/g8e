@@ -3,7 +3,7 @@ doc_id: tests
 title: Testing Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
+last_updated: 2026-10-05
 version: v2.2.6
 owners:
   - internal/cli/cmd/test/test.go
@@ -78,7 +78,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Test tiers and CLI commands | `internal/cli/cmd/test/test.go` | `./g8e test --help` |
 | Makefile test targets | `Makefile` | `make test`, `make test-unit`, `make test-integration`, `make test-coverage` |
 | Integration Gateway fixture | `test/fixtures/gateway_fixture.go` | `NewGatewayFixture` |
-| File service test isolation | `internal/testutil/tempdir.go`, `internal/services/fs/file_service.go` | `testutil.TempDir` |
+| File service test isolation | `internal/testutil/paths.go`, `internal/services/fs/file_service.go` | `testutil.TempDir` |
 | Live E2E suite | `test/e2e/` | `./g8e test e2e` |
 | Completion transcript wire contract (Go side) | `internal/services/gateway/platform_enrollment_validation_test.go` | `TestPlatformEnrollmentCompletionTranscriptGoldenVector` |
 
@@ -87,7 +87,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 ### Run Test Tiers
 
 ```bash
-# Tier 1: Fast unit tests (no network, no disk I/O, parallel across packages)
+# Tier 1: Fast unit tests (no network or databases, parallel across packages)
 ./g8e test unit
 
 # Narrow Tier 1 by package pattern or test name
@@ -114,6 +114,44 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 1. Use `cmdtest.NewCmdTestEnv(t)` from `internal/cli/cmd/cmdtest/` to obtain an isolated `RuntimeFileService` and matching configuration.
 2. Inject `cmdtest.ConfigLoaderFor(cfg)`, client factories, and file-service factories into the command constructor under test.
 3. For file-service error paths, add a test case in `internal/cli/cmd/<group>/factory_error_<group>_test.go` using `cmdtest.FailingFileSvcFactory(errFactory)` to verify that `constants.ErrFileServiceInit` is wrapped and downstream calls are skipped.
+
+Hermetic command tests may use small, isolated file fixtures. `testutil.TempDir`
+returns an absolute base directory backed by `testing.T.TempDir`, outside the
+source tree by default; the owning test removes it regardless of later working
+directory changes. Pass the base directory directly to the runtime file service.
+
+### Diagnose Slow Tests
+
+Measure uncached execution through the canonical entry point. Integration runs
+already use `-count=1` and the race detector on non-Windows. The package duration
+in an `ok` line includes test setup and cleanup, but excludes compilation.
+
+```bash
+# Preserve individual test durations while keeping the normal integration settings.
+GOFLAGS=-json ./g8e test integration --pkg ./internal/services/gateway > /tmp/g8e-tests.jsonl
+
+# Profile a representative selection in one package.
+GOFLAGS=-cpuprofile=/tmp/g8e-gateway.cpu ./g8e test integration --pkg ./internal/services/gateway --run '^TestHandleBootstrap'
+go tool pprof -top -cum /tmp/g8e-gateway.cpu
+```
+
+The CLI prints progress lines alongside Go's JSON events; ignore non-JSON lines
+when parsing the capture. Compare top-level `pass` events for package totals and
+individual tests. Do not add parent and subtest durations together.
+
+Use `testing/synctest` for self-contained timer, timeout, and cancellation tests
+whose goroutines communicate through in-process channels. It advances virtual
+time while preserving production deadlines and waits for the bubble's goroutines
+to exit. Do not use it around real network listeners or subprocesses. For HTTP or
+process tests, synchronize on explicit events, cancel contexts, and join owned
+goroutines. An ordering test should finish after proving the ordering; it should
+not wait for an unrelated enrollment timeout to release a stub TUI.
+
+Construct only the dependencies the behavior exercises. Use `httptest.NewRecorder`
+and a minimal handler for middleware unit tests. Reserve SQLite/PKI/Gateway
+fixtures for real integration boundaries, and keep one authoritative test for
+each behavior instead of repeating a unit assertion inside a full fixture.
+Keep race detection and per-test isolation when optimizing fixture cost.
 
 ## Anti-patterns
 

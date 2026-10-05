@@ -222,7 +222,7 @@ func TestRegister_SSEReadyBeforeBrowserLaunch(t *testing.T) {
 		case browserCalled <- struct{}{}:
 		default:
 		}
-		// Return an error to stop the flow — we only need to verify ordering.
+		// Browser failure keeps the TUI open; its Run stub exits explicitly.
 		return fmt.Errorf("test browser: stop")
 	}
 
@@ -231,10 +231,16 @@ func TestRegister_SSEReadyBeforeBrowserLaunch(t *testing.T) {
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {
-		return newMockProgram(m, nil)
+		prog := newMockProgram(m, nil)
+		// Ordering is established before Run; simulate the user exiting the TUI.
+		prog.runFn = func() (tea.Model, error) {
+			return enrollModel{err: context.Canceled}, nil
+		}
+		return prog
 	}
 
-	_ = r.Register(context.Background(), "test-user", "test-session")
+	err := r.Register(t.Context(), "test-user", "test-session")
+	require.ErrorIs(t, err, context.Canceled)
 
 	// The browser must have been called.
 	select {
@@ -582,6 +588,11 @@ func TestPasskeyRegistrar_Out_EmitsURLBeforeBrowser(t *testing.T) {
 
 	browserCalled := make(chan struct{}, 1)
 	browser := func(url string) error {
+		outMu.Lock()
+		printed := append([]string(nil), outLines...)
+		outMu.Unlock()
+		require.NotEmpty(t, printed, "the URL must already be printed when the browser opens")
+		assert.Equal(t, "Passkey enrollment URL: "+url, printed[0])
 		select {
 		case browserCalled <- struct{}{}:
 		default:
@@ -595,10 +606,16 @@ func TestPasskeyRegistrar_Out_EmitsURLBeforeBrowser(t *testing.T) {
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {
-		return newMockProgram(m, nil)
+		prog := newMockProgram(m, nil)
+		// Ordering is established before Run; simulate the user exiting the TUI.
+		prog.runFn = func() (tea.Model, error) {
+			return enrollModel{err: context.Canceled}, nil
+		}
+		return prog
 	}
 
-	_ = r.Register(context.Background(), "test-user", "test-session")
+	err := r.Register(t.Context(), "test-user", "test-session")
+	require.ErrorIs(t, err, context.Canceled)
 
 	// The browser must have been called (so we know the URL print happened
 	// before it).
