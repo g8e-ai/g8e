@@ -182,11 +182,11 @@ Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing 
 | Output | Source | Update |
 | --- | --- | --- |
 | Root `README.md` | Handwritten product overview | Re-read the changed sections, check links, and run every command whose behavior the prose states |
-| Go, Python, TypeScript, and Markdown protobuf output | `protocol/proto/g8e/` | `make proto` (`make generate` depends on `proto`) plus the affected conformance tests |
+| Go, Python, TypeScript, and Markdown protobuf output | `protocol/proto/g8e/` | `make proto-generate` (`make proto-generate` depends on `proto`) plus the affected conformance tests |
 | Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
 | Website | Root `README.md` | `make website-test` and `make website-build` when rendering changes |
-| Doctrine references | `protocol/constants/doctrine/` and demo doctrine inputs | `make validate-doctrines` |
-| COSAiS overlays | Canonical overlay and doctrine references | `make validate-cosais` |
+| Doctrine references | `protocol/constants/doctrine/` and demo doctrine inputs | `make doctrines-validate` |
+| COSAiS overlays | Canonical overlay and doctrine references | `make cosais-validate` |
 
 The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full matrix. The [Release Process](release_process.md) owns native evaluation and signed compliance evidence.
 
@@ -196,7 +196,7 @@ The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full m
 | --- | --- |
 | INV-DOCTRINE-01 | `governance.NewL1DoctrineFromDir` MUST remain the loader: built-in MITRE-oriented detectors, plus enabled entries from `*.json` files in the configured directory. An empty directory argument falls back to `NewL1Doctrine()`. |
 | INV-DOCTRINE-02 | `./g8e gw start --doctrine-dir <path>` sets that directory. `G8E_DOCTRINE_DIR` supplies it when the flag is absent. The Gateway loads doctrine during construction, so a runtime doctrine change MUST be followed by a Gateway restart. |
-| INV-DOCTRINE-03 | Reference JSON under `protocol/constants/doctrine/` MUST pass `make validate-doctrines`. An identifier or public-shape change MUST update the owning JSON and the affected Go or protocol contracts together. |
+| INV-DOCTRINE-03 | Reference JSON under `protocol/constants/doctrine/` MUST pass `make doctrines-validate`. An identifier or public-shape change MUST update the owning JSON and the affected Go or protocol contracts together. |
 
 ### Native MCP (`INV-MCP`)
 
@@ -270,7 +270,7 @@ make lint
 ```
 
 2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
-3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make test-external`, `make console-test`.
+3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make ensemble-test-external`, `make console-test`.
 4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-full` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
 
 ### Add a runtime-file CLI command
@@ -304,7 +304,7 @@ make lint
 ### Change runtime doctrine
 
 1. Edit the owning JSON under `protocol/constants/doctrine/` or the Gateway doctrine directory, together with any Go or protocol contract that names the same identifier (INV-DOCTRINE-03).
-2. Run `make validate-doctrines`.
+2. Run `make doctrines-validate`.
 3. Restart the Gateway after a runtime directory change. `./g8e gw start --doctrine-dir <path>` sets the directory; `G8E_DOCTRINE_DIR` applies only when the flag is absent (INV-DOCTRINE-02).
 
 ## Anti-patterns

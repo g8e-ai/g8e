@@ -56,7 +56,7 @@ posture when non-approved primitives such as ChaCha20-Poly1305 SSH are
 required), the command prints a warning and exits 0 — this is informational
 for operators, not a failure. CI/release gates that require the strict
 posture should run the binary under GODEBUG=fips140=only (see 'make
-verify-fips').`,
+fips-verify').`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVersion(cmd.OutOrStdout(), shared.VersionInfoFromCmd(cmd), fips, output.JSONEnabled(cmd))
 		},
@@ -178,7 +178,7 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool, asJSON bool) error
 		fmt.Fprintln(w)
 		fmt.Fprint(w, "FIPS 140-3 approved mode is NOT active. Build with GOFIPS140=v1.0.0 to link\n")
 		fmt.Fprint(w, "the Go Cryptographic Module (CMVP Cert #5247) and enable approved mode by\n")
-		fmt.Fprint(w, "default (e.g. `make build-fips` or the Dockerfile builder stage).\n")
+		fmt.Fprint(w, "default (e.g. `make fips-build` or the Dockerfile builder stage).\n")
 		return constants.ErrFIPSModeNotActive
 	}
 	if !enforced {
@@ -186,7 +186,7 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool, asJSON bool) error
 		// production posture when non-approved primitives (e.g. ChaCha20-Poly1305
 		// for SSH streaming) are required. Warn but do not fail — operators get a
 		// status report, not a false alarm. CI/release gates that need the strict
-		// posture run under GODEBUG=fips140=only (see `make verify-fips`).
+		// posture run under GODEBUG=fips140=only (see `make fips-verify`).
 		fmt.Fprintln(w)
 		fmt.Fprint(w, "WARNING: FIPS 140-3 approved mode is active but enforcement is OFF.\n")
 		fmt.Fprint(w, "Non-approved cryptographic primitives are not rejected at runtime.\n")

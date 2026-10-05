@@ -109,9 +109,10 @@ func (a *Adapter) Run(ctx context.Context) {
 				a.sender.Send(ConnStatusMsg{Status: ConnConnected})
 				connected = true
 			}
-			msg := translateSSEEvent(eventType, data)
-			if msg != nil {
-				a.sender.Send(msg)
+			for _, msg := range translateSSEEvents(eventType, data) {
+				if msg != nil {
+					a.sender.Send(msg)
+				}
 			}
 		})
 		if err == nil {
@@ -130,16 +131,22 @@ func (a *Adapter) Run(ctx context.Context) {
 	}
 }
 
-// translateSSEEvent maps an SSE event_type + data payload to a tea.Msg.
-// The SSE event types are free-form strings; this function maps known
-// patterns to the appropriate TUI message types. When the server omits the
-// event: field (R14), eventType is empty and the type is extracted from the
-// data payload. The data may be a direct sseEvent JSON or a SSEPushPayload
-// envelope wrapping the inner event JSON.
+// translateSSEEvent maps an SSE event_type + data payload to the primary tea.Msg.
+// Deprecated: use translateSSEEvents for full multi-message routing.
 func translateSSEEvent(eventType, data string) tea.Msg {
+	msgs := translateSSEEvents(eventType, data)
+	if len(msgs) > 0 {
+		return msgs[0]
+	}
+	return nil
+}
+
+// translateSSEEvents maps an SSE event_type + data payload to tea.Msg values.
+// Supports pipeline, ledger, consensus, chat, and operator approval events.
+func translateSSEEvents(eventType, data string) []tea.Msg {
 	var raw sseEvent
 	if err := json.Unmarshal([]byte(data), &raw); err != nil {
-		return LedgerMsg{Level: LevelInfo, Message: data, Time: timeNow()}
+		return []tea.Msg{LedgerMsg{Level: LevelInfo, Message: data, Time: timeNow()}}
 	}
 
 	innerType := raw.Type
@@ -170,13 +177,180 @@ func translateSSEEvent(eventType, data string) tea.Msg {
 
 	switch {
 	case strings.HasPrefix(innerType, "pipeline."):
-		return parsePipelineEvent(innerPayload)
+		return []tea.Msg{parsePipelineEvent(innerPayload)}
 	case strings.HasPrefix(innerType, "ledger."):
-		return parseLedgerEvent(innerPayload)
+		return []tea.Msg{parseLedgerEvent(innerPayload)}
 	case strings.HasPrefix(innerType, "consensus."):
-		return parseConsensusEvent(innerPayload)
+		return []tea.Msg{parseConsensusEvent(innerPayload)}
+
+	// Chat events
+	case innerType == string(constants.EventAiLLMChatIterationStarted):
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL1, Status: StatusActive, Detail: "LLM chat iteration started"},
+			LedgerMsg{Level: LevelInfo, Message: "AI chat iteration started", Time: timeNow()},
+		}
+	case innerType == string(constants.EventAiLLMChatIterationTextChunkReceived):
+		var p struct {
+			Chunk   string `json:"chunk"`
+			Text    string `json:"text"`
+			Content string `json:"content"`
+			Delta   string `json:"delta"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		text := p.Chunk
+		if text == "" {
+			text = p.Delta
+		}
+		if text == "" {
+			text = p.Text
+		}
+		if text == "" {
+			text = p.Content
+		}
+		if text == "" {
+			text = string(innerPayload)
+		}
+		return []tea.Msg{LedgerMsg{Level: LevelInfo, Message: text, Time: timeNow()}}
+	case innerType == string(constants.EventAiLLMChatIterationTextReceived):
+		var p struct {
+			Text    string `json:"text"`
+			Content string `json:"content"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		text := p.Text
+		if text == "" {
+			text = p.Content
+		}
+		if text == "" {
+			text = string(innerPayload)
+		}
+		return []tea.Msg{LedgerMsg{Level: LevelInfo, Message: text, Time: timeNow()}}
+	case innerType == string(constants.EventAiLLMChatIterationCompleted):
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL5, Status: StatusPassed, Detail: "LLM chat iteration completed"},
+			LedgerMsg{Level: LevelInfo, Message: "AI chat iteration completed", Time: timeNow()},
+		}
+	case innerType == string(constants.EventAiLLMChatIterationFailed):
+		var p struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+			Reason  string `json:"reason"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		errDetail := p.Error
+		if errDetail == "" {
+			errDetail = p.Message
+		}
+		if errDetail == "" {
+			errDetail = p.Reason
+		}
+		if errDetail == "" {
+			errDetail = "unknown error"
+		}
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL5, Status: StatusFailed, Detail: "LLM chat iteration failed: " + errDetail},
+			LedgerMsg{Level: LevelWarn, Message: "AI chat iteration failed: " + errDetail, Time: timeNow()},
+		}
+
+	// Operator approvals requested
+	case innerType == string(constants.EventOperatorCommandApprovalRequested):
+		var p struct {
+			ApprovalID string `json:"approval_id"`
+			TxHash     string `json:"tx_hash"`
+			Command    string `json:"command"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		txID := p.TxHash
+		if txID == "" {
+			txID = p.ApprovalID
+		}
+		cmd := p.Command
+		if cmd == "" {
+			cmd = txID
+		}
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL3, Status: StatusWaiting, TxID: txID, Detail: "Command approval requested: " + cmd},
+			LedgerMsg{Level: LevelWarn, Message: "APPROVAL REQUIRED: Command execution: " + cmd, Time: timeNow()},
+		}
+	case innerType == string(constants.EventOperatorFileEditApprovalRequested):
+		var p struct {
+			ApprovalID string `json:"approval_id"`
+			Path       string `json:"path"`
+			File       string `json:"file"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		targetPath := p.Path
+		if targetPath == "" {
+			targetPath = p.File
+		}
+		if targetPath == "" {
+			targetPath = p.ApprovalID
+		}
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL3, Status: StatusWaiting, TxID: p.ApprovalID, Detail: "File edit approval requested: " + targetPath},
+			LedgerMsg{Level: LevelWarn, Message: "APPROVAL REQUIRED: File edit: " + targetPath, Time: timeNow()},
+		}
+	case innerType == string(constants.EventOperatorIntentApprovalRequested):
+		var p struct {
+			ApprovalID string `json:"approval_id"`
+			Intent     string `json:"intent"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		intent := p.Intent
+		if intent == "" {
+			intent = p.ApprovalID
+		}
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL3, Status: StatusWaiting, TxID: p.ApprovalID, Detail: "Intent approval requested: " + intent},
+			LedgerMsg{Level: LevelWarn, Message: "APPROVAL REQUIRED: Intent authorization: " + intent, Time: timeNow()},
+		}
+	case innerType == string(constants.EventOperatorNotaryApprovalRequested):
+		var p struct {
+			ApprovalID string `json:"approval_id"`
+			TxHash     string `json:"tx_hash"`
+			ToolName   string `json:"tool_name"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		txID := p.TxHash
+		if txID == "" {
+			txID = p.ApprovalID
+		}
+		tool := p.ToolName
+		if tool == "" {
+			tool = "transaction"
+		}
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL3, Status: StatusWaiting, TxID: txID, Detail: "Notary approval requested: " + tool},
+			LedgerMsg{Level: LevelWarn, Message: "APPROVAL REQUIRED: Notary approval for " + tool, Time: timeNow()},
+		}
+	case innerType == string(constants.EventAiAgentContinueApprovalRequested):
+		var p struct {
+			ApprovalID string `json:"approval_id"`
+			Turn       int    `json:"turn"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL3, Status: StatusWaiting, TxID: p.ApprovalID, Detail: fmt.Sprintf("Agent continuation approval requested (turn %d)", p.Turn)},
+			LedgerMsg{Level: LevelWarn, Message: fmt.Sprintf("APPROVAL REQUIRED: Agent continuation at turn %d", p.Turn), Time: timeNow()},
+		}
+
+	// Approval completed and changed
+	case innerType == constants.SSEEventTypeApprovalCompleted || strings.HasSuffix(innerType, ".approval.completed"):
+		var p struct {
+			TxHash   string `json:"tx_hash"`
+			UserID   string `json:"user_id"`
+			Approved bool   `json:"approved"`
+		}
+		_ = json.Unmarshal(innerPayload, &p)
+		return []tea.Msg{
+			PipelineMsg{Stage: StageL3, Status: StatusPassed, TxID: p.TxHash, Detail: "Approval completed"},
+			LedgerMsg{Level: LevelInfo, Message: "Approval completed for tx " + p.TxHash, Time: timeNow()},
+		}
+	case innerType == string(constants.EventPlatformApprovalsChanged):
+		return []tea.Msg{LedgerMsg{Level: LevelInfo, Message: "Pending approvals list changed", Time: timeNow()}}
+
 	default:
-		return LedgerMsg{Level: LevelInfo, Message: innerType + ": " + string(innerPayload), Time: timeNow()}
+		return []tea.Msg{LedgerMsg{Level: LevelInfo, Message: innerType + ": " + string(innerPayload), Time: timeNow()}}
 	}
 }
 

@@ -206,7 +206,7 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 		Publish:                  opts.Publish,
 		Daemon:                   opts.Daemon,
 		EnsembleURL:              opts.EnsembleURL,
-		EnforceProviderResidency: opts.RequireObservation || opts.RequireProvenance,
+		EnforceProviderResidency: opts.RequireObservation,
 		NoAutoBind:               opts.NoAutoBind,
 		FormationRunner:          opts.FormationRunner,
 		JSONOutput:               opts.JSONOutput,

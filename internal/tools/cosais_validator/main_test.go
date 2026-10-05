@@ -170,7 +170,7 @@ func TestValidate_FailsListingEachUncoveredFinalizedOverlay(t *testing.T) {
 	assert.Contains(t, report, "  - OV-GAP-2\n")
 	assert.NotContains(t, report, "OV-COVERED")
 	assert.NotContains(t, report, "OV-DRAFT-GAP", "draft overlays do not require coverage")
-	assert.Contains(t, report, "make validate-cosais")
+	assert.Contains(t, report, "make cosais-validate")
 }
 
 func TestValidate_TreatsCoverageFromAnyDoctrineFileAsSufficient(t *testing.T) {

@@ -679,6 +679,15 @@ func TestWriteCredentials_PersistsChainsKeysTrustBundleAndActuatorSigner(t *test
 	assert.Equal(t, os.FileMode(constants.PermFilePrivate), perm)
 }
 
+func TestWriteCredentialsRetainsPinnedRecoveryTrust(t *testing.T) {
+	client, fileSvc := newEnrollClient(t, "http://gw:8080")
+	require.NoError(t, client.atomicWrite(t.Context(), client.trustBundlePath(), []byte("PINNED-LOCAL-CA"), constants.PermFilePublic))
+	creds := &models.PlatformEnrollmentOperatorCredentials{OperatorCert: "OPERATOR-CERT", CLICert: "CLI-CERT", HubTrustBundle: "UNEXPECTED-CA"}
+	require.NoError(t, client.writeCredentials(creds, "OPERATOR-KEY", "CLI-KEY"))
+	content, _ := readRuntimeFile(t, fileSvc, client.trustBundlePath())
+	assert.Equal(t, "PINNED-LOCAL-CA", content)
+}
+
 func TestWriteCredentials_OmitsOptionalMaterialThatWasNotIssued(t *testing.T) {
 	tests := []struct {
 		name  string

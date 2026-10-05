@@ -37,7 +37,11 @@ from app.models.settings import (
 from app.models.base import G8eBaseModel
 
 from app.models.internal_api import LLMRoleSettingsResponse, LLMRoleSettingsUpdateRequest
-from app.services.infra.llm_role_settings import apply_role_updates, settings_view
+from app.services.infra.llm_role_settings import (
+    apply_provider_updates,
+    apply_role_updates,
+    settings_view,
+)
 
 if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService
@@ -91,8 +95,8 @@ class SettingsService:
         # Apply LLM credential and endpoint bootstrap defaults (lowest
         # priority). Only secrets (API keys) and user-specific endpoints come
         # from the environment (INV-ENV-04); provider and model selection are
-        # Gateway-backed platform settings only. Priority order:
-        # platform DB settings > per-request overrides > env-var defaults.
+        # caller/platform settings only. Provider connection priority here is:
+        # platform DB settings > env-var bootstrap defaults.
         self._apply_llm_env_defaults(settings.llm)
 
         return settings
@@ -103,27 +107,11 @@ class SettingsService:
         This is the lowest-priority bootstrap source. Each field is set only
         when the env var is present and non-empty; unset env vars leave the
         field at its model default (None). The platform DB overlay
-        (overlay_platform_data) and per-request overrides both take
-        precedence over these values. Provider and model names are never read
+        (overlay_platform_data) takes precedence over these values. Provider
+        and model role selections are never read
         from the environment.
         """
         env = os.environ.get
-
-        # Role-specific endpoint/api-key
-        if env(EnvVar.LLM_PRIMARY_ENDPOINT):
-            llm.primary_endpoint = env(EnvVar.LLM_PRIMARY_ENDPOINT)
-        if env(EnvVar.LLM_PRIMARY_API_KEY):
-            llm.primary_api_key = env(EnvVar.LLM_PRIMARY_API_KEY)
-
-        if env(EnvVar.LLM_ASSISTANT_ENDPOINT):
-            llm.assistant_endpoint = env(EnvVar.LLM_ASSISTANT_ENDPOINT)
-        if env(EnvVar.LLM_ASSISTANT_API_KEY):
-            llm.assistant_api_key = env(EnvVar.LLM_ASSISTANT_API_KEY)
-
-        if env(EnvVar.LLM_LITE_ENDPOINT):
-            llm.lite_endpoint = env(EnvVar.LLM_LITE_ENDPOINT)
-        if env(EnvVar.LLM_LITE_API_KEY):
-            llm.lite_api_key = env(EnvVar.LLM_LITE_API_KEY)
 
         # Provider-specific endpoint/api-key defaults
         if env(EnvVar.LLM_OPENAI_API_KEY):
@@ -165,8 +153,8 @@ class SettingsService:
         LLM merges with platform-DB-wins semantics: platform DB values take
         precedence when present, and env-var bootstrap defaults (lowest
         priority, already applied in get_local_settings) fill gaps the
-        platform DB leaves unset. Priority order:
-        platform DB settings > per-request overrides > env-var defaults.
+        platform DB leaves unset. Priority order: platform DB settings >
+        env-var defaults.
         """
         for field_name in type(settings).model_fields:
             if field_name.startswith("_"):
@@ -194,7 +182,7 @@ class SettingsService:
                 # defaults. Only override the local/env value when the
                 # platform value differs from the model default — a platform
                 # value equal to the default means the DB didn't set it.
-                # Priority: platform DB > per-request overrides > env-var defaults.
+                # Priority: platform DB > env-var defaults.
                 llm_defaults = LLMSettings()
                 for sub_field in type(local_value).model_fields:
                     p_val = getattr(platform_value, sub_field, None)
@@ -291,19 +279,22 @@ class SettingsService:
         await self._cache_aside.invalidate_document(DB_COLLECTION_SETTINGS, user_doc_id)
 
     async def get_llm_role_settings(self, user_id: str) -> LLMRoleSettingsResponse:
-        """Return the caller's per-role LLM selection with API keys masked."""
+        """Return the caller's provider connections and per-role selections with keys masked."""
         user_settings = await self.get_user_settings(user_id)
         return settings_view(user_settings.llm)
 
     async def update_llm_role_settings(
         self, user_id: str, request: LLMRoleSettingsUpdateRequest
     ) -> LLMRoleSettingsResponse:
-        """Persist the caller's per-role LLM selection; the next chat request uses it."""
+        """Persist caller-owned provider connections and/or role selections."""
         user_settings = await self.get_user_settings(user_id)
-        apply_role_updates(user_settings.llm, request)
+        if request.providers is not None:
+            apply_provider_updates(user_settings.llm, request.providers)
+        if any((request.primary, request.assistant, request.lite)):
+            apply_role_updates(user_settings.llm, request)
         await self.update_user_settings(user_id, user_settings)
         self._logger.info(
-            "[SettingsService] Updated LLM role settings for user %s (primary=%s/%s)",
+            "[SettingsService] Updated inference settings for user %s (primary=%s/%s)",
             user_id,
             user_settings.llm.primary_provider,
             user_settings.llm.primary_model,
@@ -315,4 +306,3 @@ class SettingsService:
     ) -> SearchSettings:
         """Build SearchSettings from platform or user settings."""
         return settings.search
-

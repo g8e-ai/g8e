@@ -10,6 +10,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -339,161 +340,6 @@ func TestExportReceipts(t *testing.T) {
 	}
 }
 
-func TestDiscoverOperatorSession(t *testing.T) {
-	tests := []struct {
-		name            string
-		cfgSessionID    string
-		useCLIConfig    bool
-		responseBody    string
-		expectedSession string
-		setupHandler    func(*http.Request)
-	}{
-		{
-			name:            "session ID pinned in config",
-			cfgSessionID:    "pinned-session-123",
-			useCLIConfig:    false,
-			responseBody:    `{"operators":[]}`,
-			expectedSession: "pinned-session-123",
-			setupHandler:    nil, // should not make HTTP call
-		},
-		{
-			name:            "no session ID, no CLI config, empty response",
-			cfgSessionID:    "",
-			useCLIConfig:    false,
-			responseBody:    `{"operators":[]}`,
-			expectedSession: "",
-		},
-		{
-			name:            "wrapped operators array",
-			cfgSessionID:    "",
-			useCLIConfig:    false,
-			responseBody:    `{"operators":[{"operator_session_id":"session-456"}]}`,
-			expectedSession: "session-456",
-		},
-		{
-			name:            "bare operators array",
-			cfgSessionID:    "",
-			useCLIConfig:    false,
-			responseBody:    `[{"operator_session_id":"session-789"}]`,
-			expectedSession: "session-789",
-		},
-		{
-			name:            "multiple operators, returns first",
-			cfgSessionID:    "",
-			useCLIConfig:    false,
-			responseBody:    `[{"operator_session_id":"session-1"},{"operator_session_id":"session-2"}]`,
-			expectedSession: "session-1",
-		},
-		{
-			name:            "operator without session ID",
-			cfgSessionID:    "",
-			useCLIConfig:    false,
-			responseBody:    `[{"operator_id":"op-1"}]`,
-			expectedSession: "",
-		},
-		{
-			name:            "invalid JSON response",
-			cfgSessionID:    "",
-			useCLIConfig:    false,
-			responseBody:    `invalid json`,
-			expectedSession: "",
-		},
-		{
-			name:            "network error",
-			cfgSessionID:    "",
-			useCLIConfig:    false,
-			responseBody:    ``,
-			expectedSession: "",
-			setupHandler: func(r *http.Request) {
-				// Simulate network error by closing connection
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodGet {
-					t.Errorf("expected GET, got %s", r.Method)
-				}
-				if r.URL.Path != constants.APIPaths.Operators {
-					t.Errorf("expected path %s, got %s", constants.APIPaths.Operators, r.URL.Path)
-				}
-
-				if tt.setupHandler != nil {
-					tt.setupHandler(r)
-				}
-
-				if tt.name == "network error" {
-					hj, ok := w.(http.Hijacker)
-					if ok {
-						conn, _, _ := hj.Hijack()
-						conn.Close()
-						return
-					}
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(tt.responseBody))
-			})
-
-			server := httptest.NewServer(handler)
-			defer server.Close()
-
-			cfg := config.Config{
-				MTLSBaseURL:       server.URL,
-				OperatorSessionID: tt.cfgSessionID,
-				UseCLIConfig:      tt.useCLIConfig,
-				Auth:              config.Auth{},
-			}
-
-			client, err := New(cfg)
-			if err != nil {
-				t.Fatalf("New() failed: %v", err)
-			}
-
-			ctx := context.Background()
-			sessionID := client.DiscoverOperatorSession(ctx)
-
-			if sessionID != tt.expectedSession {
-				t.Errorf("DiscoverOperatorSession() = %s, want %s", sessionID, tt.expectedSession)
-			}
-		})
-	}
-}
-
-func TestDiscoverOperatorSession_WithUserID(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Note: CLI config loading can't be mocked in unit test without filesystem access
-		// so user_id won't be present. This test verifies the HTTP call structure.
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`[{"operator_session_id":"session-456"}]`))
-	})
-
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	cfg := config.Config{
-		MTLSBaseURL:  server.URL,
-		UseCLIConfig: true,
-		Auth:         config.Auth{},
-	}
-
-	client, err := New(cfg)
-	if err != nil {
-		t.Fatalf("New() failed: %v", err)
-	}
-
-	ctx := context.Background()
-	sessionID := client.DiscoverOperatorSession(ctx)
-
-	// Since we can't mock the CLI config loading, this will make
-	// the HTTP call without user_id. The test verifies the call
-	// structure completes without error.
-	_ = sessionID
-}
-
 func TestReceipt(t *testing.T) {
 	tests := []struct {
 		name string
@@ -628,5 +474,66 @@ func TestReceipt_MarshalJSON(t *testing.T) {
 
 	if decoded["transaction_id"] != "tx-123" {
 		t.Error("TransactionID should be in JSON output")
+	}
+}
+
+func TestDiscoverOperatorKeepsIdentityPaired(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"success":true,"operators":[{"id":"embedded-operator","operator_session_id":"embedded-session","status":"active","operator_type":"embedded"},{"id":"data-worker","operator_session_id":"data-session","status":"active","operator_type":"remote","operator_role":"data"}]}`))
+	}))
+	t.Cleanup(server.Close)
+	for _, tt := range []struct{ name, id, session, wantID, wantSession string }{
+		{"select data worker", "", "", "data-worker", "data-session"},
+		{"resolve logical ID", "data-worker", "", "data-worker", "data-session"},
+		{"resolve session", "", "data-session", "data-worker", "data-session"},
+		{"reject conflicting pair", "embedded-operator", "data-session", "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := New(config.Config{MTLSBaseURL: server.URL, UserID: "user-123", OperatorID: tt.id, OperatorSessionID: tt.session})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			id, session, discoverErr := c.DiscoverOperator(ctx)
+			if tt.wantID == "" {
+				if discoverErr == nil {
+					t.Fatal("expected discovery rejection")
+				}
+			} else if discoverErr != nil {
+				t.Fatal(discoverErr)
+			}
+			if id != tt.wantID || session != tt.wantSession {
+				t.Fatalf("got (%q, %q), want (%q, %q)", id, session, tt.wantID, tt.wantSession)
+			}
+		})
+	}
+}
+
+func TestDiscoverOperatorRejectsUnresolvedTargets(t *testing.T) {
+	for _, tt := range []struct {
+		name, body string
+		status     int
+		want       error
+	}{
+		{"missing target", `{"success":true,"operators":[]}`, http.StatusOK, constants.ErrEvaluationTargetUnavailable},
+		{"registry unauthorized", `{}`, http.StatusUnauthorized, constants.ErrHTTPStatusError},
+		{"malformed registry", `broken`, http.StatusOK, constants.ErrInvalidJSONResponse},
+		{"incomplete registry", `{"success":false}`, http.StatusOK, constants.ErrInvalidJSONResponse},
+		{"ambiguous data workers", `{"success":true,"operators":[{"id":"one","operator_session_id":"s1","status":"active","operator_type":"remote","operator_role":"data"},{"id":"two","operator_session_id":"s2","status":"active","operator_type":"remote","operator_role":"data"}]}`, http.StatusOK, constants.ErrEvaluationTargetAmbiguous},
+		{"inactive worker", `{"success":true,"operators":[{"id":"one","operator_session_id":"s1","status":"inactive","operator_type":"remote","operator_role":"data"}]}`, http.StatusOK, constants.ErrEvaluationTargetUnavailable},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tt.status); w.Write([]byte(tt.body)) }))
+			t.Cleanup(srv.Close)
+			c, err := New(config.Config{MTLSBaseURL: srv.URL, UserID: "user-123"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, session, err := c.DiscoverOperator(t.Context())
+			if id != "" || session != "" || !errors.Is(err, tt.want) {
+				t.Fatalf("got (%q,%q,%v), want %v", id, session, err, tt.want)
+			}
+		})
 	}
 }

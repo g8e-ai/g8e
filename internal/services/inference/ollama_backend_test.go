@@ -1399,7 +1399,7 @@ func TestOllamaBackend_GenerateStreamingPublishesProgressEvents(t *testing.T) {
 	assert.Equal(t, "lo", progressEvents[1].GetParts()[0].GetText())
 }
 
-func TestOllamaBackend_GenerateStreamingReporterErrorFailsClosed(t *testing.T) {
+func TestOllamaBackend_GenerateStreamingReporterErrorDoesNotFailGeneration(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1416,7 +1416,9 @@ func TestOllamaBackend_GenerateStreamingReporterErrorFailsClosed(t *testing.T) {
 	backend, err := NewOllamaBackend(server.URL, logger)
 	require.NoError(t, err)
 
+	var reportedEvents int
 	ctx := WithProgressReporter(context.Background(), func(event *operatorv1.InferenceProgressEvent) error {
+		reportedEvents++
 		return constants.ErrInferenceProgressBackpressure
 	})
 	resp, err := backend.Generate(ctx, models.GenerateRequest{
@@ -1429,7 +1431,8 @@ func TestOllamaBackend_GenerateStreamingReporterErrorFailsClosed(t *testing.T) {
 			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "hi"}}},
 		}},
 	})
-	require.Error(t, err)
-	assert.Nil(t, resp)
-	assert.ErrorIs(t, err, constants.ErrInferenceProgressBackpressure)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "hello", resp.Parts[0].GetText())
+	assert.Equal(t, 1, reportedEvents)
 }

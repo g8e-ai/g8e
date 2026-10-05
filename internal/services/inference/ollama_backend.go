@@ -325,11 +325,26 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	}
 	defer resp.Body.Close()
 
+	// Receive and preserve the entire bounded body before interpreting it.
+	// Neither response parsing nor progress delivery can interrupt ingestion.
+	responseBody, received, readErr := b.receiveResponse(resp.Body, requestStartedAt)
+	if store := attemptStoreFromContext(ctx); store != nil {
+		if err := store.SaveRawResponse(context.WithoutCancel(ctx), req.ProviderAttemptID, responseBody); err != nil {
+			return nil, errors.Join(readErr, fmt.Errorf("ollama_backend: save raw response: %w", err))
+		}
+	}
+	if readErr != nil {
+		return nil, transportError(ctx, "generate", readErr)
+	}
+	if int64(len(responseBody)) > b.maxResponseBytes {
+		return nil, fmt.Errorf("ollama_backend: generate: %w: response exceeds %d bytes", constants.ErrInferenceProviderResponseInvalid, b.maxResponseBytes)
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		// Read a bounded slice of the error body for connection reuse and
 		// capability classification. Provider error text is never returned
 		// or logged: it can echo prompt material and provider internals.
-		errorBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+		errorBody := responseBody
 		switch {
 		case resp.StatusCode == http.StatusRequestTimeout:
 			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceBackendTimeout)
@@ -347,7 +362,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	if req.Stream {
 		reporter = ProgressReporterFromContext(ctx)
 	}
-	chatResp, parts, timeToFirstToken, err := b.decodeChatStream(ctx, resp.Body, allowParallelToolCalls, requestStartedAt, req.ProviderAttemptID, reporter)
+	chatResp, parts, timeToFirstToken, err := b.decodeChatStream(responseBody, received, allowParallelToolCalls, req.ProviderAttemptID, reporter)
 	if err != nil {
 		return nil, err
 	}
@@ -561,16 +576,41 @@ func ollamaResponseParts(message ollamaChatMessage, allowParallelToolCalls bool)
 	return parts, nil
 }
 
+// responseRead records arrival times without interpreting provider payloads.
+// Decoder offsets later locate the delivery time of the first content event.
+type responseRead struct {
+	endOffset int64
+	elapsedNS int64
+}
+
+func (b *OllamaBackend) receiveResponse(body io.Reader, startedAt time.Time) ([]byte, []responseRead, error) {
+	limited := io.LimitReader(body, b.maxResponseBytes+1)
+	var raw bytes.Buffer
+	var received []responseRead
+	buffer := make([]byte, 32<<10)
+	for {
+		n, err := limited.Read(buffer)
+		if n > 0 {
+			raw.Write(buffer[:n])
+			received = append(received, responseRead{endOffset: int64(raw.Len()), elapsedNS: time.Since(startedAt).Nanoseconds()})
+		}
+		if errors.Is(err, io.EOF) {
+			return raw.Bytes(), received, nil
+		}
+		if err != nil {
+			return raw.Bytes(), received, err
+		}
+	}
+}
+
 func (b *OllamaBackend) decodeChatStream(
-	ctx context.Context,
-	body io.Reader,
+	body []byte,
+	received []responseRead,
 	allowParallelToolCalls bool,
-	requestStartedAt time.Time,
 	providerAttemptID string,
 	reporter ProgressReporter,
 ) (ollamaChatResponse, []*operatorv1.InferenceResponsePart, *int64, error) {
-	limited := &io.LimitedReader{R: body, N: b.maxResponseBytes + 1}
-	decoder := json.NewDecoder(limited)
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	parts := make([]*operatorv1.InferenceResponsePart, 0)
 	var terminal *ollamaChatResponse
 	var servedModel string
@@ -584,13 +624,7 @@ func (b *OllamaBackend) decodeChatStream(
 			break
 		}
 		if err != nil {
-			if ctx.Err() != nil {
-				return ollamaChatResponse{}, nil, nil, transportError(ctx, "generate", err)
-			}
 			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: %w: %w", constants.ErrInferenceProviderResponseInvalid, err)
-		}
-		if limited.N == 0 {
-			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: %w: response exceeds %d bytes", constants.ErrInferenceProviderResponseInvalid, b.maxResponseBytes)
 		}
 		if terminal != nil {
 			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: %w", constants.ErrInferenceProviderResponseInvalid)
@@ -611,8 +645,13 @@ func (b *OllamaBackend) decodeChatStream(
 		}
 		if len(eventParts) > 0 {
 			if timeToFirstToken == nil {
-				duration := time.Since(requestStartedAt).Nanoseconds()
-				timeToFirstToken = &duration
+				for _, read := range received {
+					if read.endOffset >= decoder.InputOffset() {
+						duration := read.elapsedNS
+						timeToFirstToken = &duration
+						break
+					}
+				}
 			}
 			if reporter != nil {
 				progressSequence++
@@ -627,7 +666,8 @@ func (b *OllamaBackend) decodeChatStream(
 					progressEvent.TimeToFirstTokenNs = &ttft
 				}
 				if err := reporter(progressEvent); err != nil {
-					return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: progress: %w", err)
+					b.logger.Warn("Inference progress delivery failed", "provider_attempt_id", providerAttemptID, "error", err)
+					reporter = nil
 				}
 			}
 		}
@@ -635,9 +675,6 @@ func (b *OllamaBackend) decodeChatStream(
 		if event.Done {
 			terminal = &event
 		}
-	}
-	if limited.N == 0 {
-		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: %w: response exceeds %d bytes", constants.ErrInferenceProviderResponseInvalid, b.maxResponseBytes)
 	}
 	if terminal == nil || terminal.Model == "" || servedModel != terminal.Model || len(parts) == 0 {
 		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: %w", constants.ErrInferenceProviderResponseInvalid)

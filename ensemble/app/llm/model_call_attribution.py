@@ -34,10 +34,14 @@ def prepare_provider_call(
     retry_count: int = 0,
 ) -> None:
     """Reset per-call evidence and bind request-scoped evaluation context."""
-    provider.clear_input_artifact_hash()
-    provider.clear_declared_tools()
-    provider.set_g8e_context(g8e_context)
-    provider.set_provider_retry_count(retry_count)
+    if hasattr(provider, "clear_input_artifact_hash"):
+        provider.clear_input_artifact_hash()
+    if hasattr(provider, "clear_declared_tools"):
+        provider.clear_declared_tools()
+    if hasattr(provider, "set_g8e_context"):
+        provider.set_g8e_context(g8e_context)
+    if hasattr(provider, "set_provider_retry_count"):
+        provider.set_provider_retry_count(retry_count)
 
 
 def governed_telemetry_fields(provider: LLMProvider) -> dict[str, Any]:
@@ -119,6 +123,7 @@ def build_model_call_telemetry(
         error_type=error_type,
         input_artifact_hash=resolved_input_hash,
         output_artifact_hash=output_artifact_hash,
+        response_artifact=provider.response_artifact if isinstance(provider, LLMProvider) else None,
         model_boundary_privacy=recorded_model_boundary_privacy(provider),
         tools_declared=recorded_declared_tool_names(provider),
         **governed_telemetry_fields(provider),

@@ -46,12 +46,15 @@ class LLMSettings(G8eBaseModel):
     primary_model: str | None = Field(default=None, alias="llm_model")
     assistant_model: str | None = Field(default=None, alias="llm_assistant_model")
     lite_model: str | None = Field(default=None, alias="llm_lite_model")
-    primary_api_key: str | None = Field(default=None)
-    primary_endpoint: str | None = Field(default=None)
-    assistant_api_key: str | None = Field(default=None)
-    assistant_endpoint: str | None = Field(default=None)
-    lite_api_key: str | None = Field(default=None)
-    lite_endpoint: str | None = Field(default=None)
+    openai_endpoint: str | None = Field(default=None)
+    openai_api_key: str | None = Field(default=None, repr=False)
+    ollama_endpoint: str | None = Field(default=None)
+    ollama_api_key: str | None = Field(default=None, repr=False)
+    anthropic_endpoint: str | None = Field(default=None)
+    anthropic_api_key: str | None = Field(default=None, repr=False)
+    gemini_api_key: str | None = Field(default=None, repr=False)
+    llamacpp_endpoint: str | None = Field(default=None)
+    llamacpp_api_key: str | None = Field(default=None, repr=False)
 
 class PlatformSettings(G8eBaseModel):
     """Platform governance and feature configuration."""

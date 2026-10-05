@@ -61,10 +61,10 @@ const PROVIDERS = [
   { provider: 'openai', label: 'OpenAI-compatible', endpoint: 'optional', api_key: 'required', default_endpoint: 'https://api.openai.com/v1', lists_models: true },
   { provider: 'g8e', label: 'g8e governed inference', endpoint: 'none', api_key: 'none', lists_models: true },
 ];
-const UNSET = { provider: null, model: null, endpoint: null, api_key_set: false };
+const UNSET = { provider: null, model: null };
 
-function llmSettings(primary: Record<string, unknown> = UNSET) {
-  return { providers: PROVIDERS, primary, assistant: UNSET, lite: UNSET };
+function llmSettings(primary: Record<string, unknown> = UNSET, providers = PROVIDERS) {
+  return { providers, primary, assistant: UNSET, lite: UNSET };
 }
 
 beforeEach(() => {
@@ -262,103 +262,120 @@ describe('inference', () => {
   it('loads governed models from the registered inference provider and saves a selection', async () => {
     let saved: Record<string, unknown> | null = null;
     routes = signedInRoutes({
-      'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'g8e', model: null, endpoint: null, api_key_set: false })],
+      'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'g8e', model: null })],
       'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b', 'qwen3:1.7b'] }],
       'POST /api/v1/settings/llm': (body) => {
         saved = body as Record<string, unknown>;
-        return [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b', endpoint: null, api_key_set: false })];
+        return [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b' })];
       },
     });
-    window.history.replaceState(null, '', '/console/?view=inference');
+    window.history.replaceState(null, '', '/console/?view=inference&role=primary');
     const user = userEvent.setup();
     renderApp();
 
     const primary = await screen.findByRole('region', { name: 'Primary' });
     expect(await within(primary).findByRole('option', { name: 'qwen3:4b' })).toBeInTheDocument();
     expect(calls.find((c) => c.path === '/api/v1/settings/llm/models')?.body).toEqual({
-      context: {}, role: 'primary', provider: 'g8e',
+      context: {}, provider: 'g8e',
     });
     await user.selectOptions(within(primary).getByLabelText('Model'), 'qwen3:4b');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saved).not.toBeNull());
-    expect(saved!.primary).toEqual({ provider: 'g8e', model: 'qwen3:4b', endpoint: null });
+    expect(saved!.primary).toEqual({ provider: 'g8e', model: 'qwen3:4b' });
   });
 
-  it('selects a provider, endpoint, and listed model per role and saves them', async () => {
-    let saved: Record<string, unknown> | null = null;
+  it('saves provider connections separately from model role selections', async () => {
+    let current = llmSettings();
+    const saved: Record<string, unknown>[] = [];
     routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () => [200, current],
       'POST /api/v1/settings/llm/models': () => [200, { models: ['gemma4:e4b', 'qwen3:4b'] }],
       'POST /api/v1/settings/llm': (body) => {
-        saved = body as Record<string, unknown>;
-        const primary = (body as { primary: Record<string, unknown> }).primary;
-        return [200, llmSettings({ ...primary, endpoint: 'http://192.168.1.2:11434', api_key_set: false })];
+        const request = body as Record<string, unknown>;
+        saved.push(request);
+        if (request.providers) {
+          current = llmSettings(UNSET, PROVIDERS.map((provider) =>
+            provider.provider === 'ollama'
+              ? { ...provider, configured_endpoint: 'http://192.168.1.2:11434', api_key_set: true }
+              : provider));
+        } else {
+          current = llmSettings(request.primary as Record<string, unknown>, current.providers);
+        }
+        return [200, current];
       },
     });
     window.history.replaceState(null, '', '/console/?view=inference');
     const user = userEvent.setup();
     renderApp();
 
+    const ollama = await screen.findByRole('region', { name: 'Ollama' });
+    await user.type(within(ollama).getByLabelText('Endpoint'), '192.168.1.2:11434');
+    await user.type(within(ollama).getByLabelText('API key'), 'local-secret');
+    await user.click(within(ollama).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]).toEqual({
+      context: {},
+      providers: [{ provider: 'ollama', endpoint: '192.168.1.2:11434', api_key: 'local-secret' }],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Primary' }));
     const primary = await screen.findByRole('region', { name: 'Primary' });
     await user.selectOptions(within(primary).getByLabelText('Provider'), 'ollama');
-    await user.type(within(primary).getByLabelText('Endpoint'), '192.168.1.2:11434');
-    await user.click(within(primary).getByRole('button', { name: 'Refresh' }));
-    await waitFor(() =>
-      expect(calls.filter((c) => c.path === '/api/v1/settings/llm/models').at(-1)?.body).toEqual({
-        context: {},
-        role: 'primary',
-        provider: 'ollama',
-        endpoint: '192.168.1.2:11434',
-      }),
-    );
+    await waitFor(() => expect(calls.filter((c) => c.path === '/api/v1/settings/llm/models').at(-1)?.body).toEqual({
+      context: {}, provider: 'ollama',
+    }));
     await user.selectOptions(await within(primary).findByLabelText('Model'), 'gemma4:e4b');
     await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(saved).toHaveLength(2));
+    expect(saved[1]).toEqual({
+      context: {},
+      primary: { provider: 'ollama', model: 'gemma4:e4b' },
+    });
+    expect(await screen.findByText('Model selection saved. The next message uses it.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('keeps provider keys write-only and sends only a replacement', async () => {
+    let saved: Record<string, unknown> | null = null;
+    const providers = PROVIDERS.map((provider) =>
+      provider.provider === 'openai'
+        ? { ...provider, configured_endpoint: 'https://proxy.example/v1', api_key_set: true }
+        : provider);
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () => [200, llmSettings(UNSET, providers)],
+      'POST /api/v1/settings/llm': (body) => {
+        saved = body as Record<string, unknown>;
+        return [200, llmSettings(UNSET, providers)];
+      },
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    const user = userEvent.setup();
+    renderApp();
+
+    const openai = await screen.findByRole('region', { name: 'OpenAI-compatible' });
+    const key = within(openai).getByLabelText('API key');
+    expect(key).toHaveValue('');
+    expect(key).toHaveAttribute('placeholder', 'Saved — leave blank to keep');
+    await user.type(key, 'replacement-key');
+    await user.click(within(openai).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(saved).not.toBeNull());
     expect(saved).toEqual({
       context: {},
-      primary: { provider: 'ollama', model: 'gemma4:e4b', endpoint: '192.168.1.2:11434' },
-      assistant: { provider: null, model: null, endpoint: null },
-      lite: { provider: null, model: null, endpoint: null },
+      providers: [{ provider: 'openai', api_key: 'replacement-key' }],
     });
-    expect(await screen.findByText('Saved. The next message uses these models.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-  });
-
-  it('never shows a stored key and only sends one that is typed', async () => {
-    let saved: { primary: Record<string, unknown> } | null = null;
-    routes = signedInRoutes({
-      'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'openai', model: 'gpt-x', endpoint: null, api_key_set: true })],
-      'POST /api/v1/settings/llm/models': () => [200, { models: ['gpt-x', 'gpt-y'] }],
-      'POST /api/v1/settings/llm': (body) => {
-        saved = body as { primary: Record<string, unknown> };
-        return [200, llmSettings({ provider: 'openai', model: 'gpt-y', endpoint: null, api_key_set: true })];
-      },
-    });
-    window.history.replaceState(null, '', '/console/?view=inference');
-    const user = userEvent.setup();
-    renderApp();
-
-    const primary = await screen.findByRole('region', { name: 'Primary' });
-    const key = within(primary).getByLabelText('API key');
-    expect(key).toHaveValue('');
-    expect(key).toHaveAttribute('placeholder', 'Saved — leave blank to keep');
-    expect(await within(primary).findByRole('option', { name: 'gpt-y' })).toBeInTheDocument();
-    await user.selectOptions(within(primary).getByLabelText('Model'), 'gpt-y');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => expect(saved).not.toBeNull());
-    expect(saved!.primary).toEqual({ provider: 'openai', model: 'gpt-y', endpoint: null });
   });
 
   it('shows the next message model in the composer and links to the view', async () => {
     routes = signedInRoutes({
-      'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'g8e', model: 'gemma4:e4b', endpoint: null, api_key_set: false })],
+      'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'g8e', model: 'gemma4:e4b' })],
     });
     const user = userEvent.setup();
     renderApp();
 
     await user.click(await screen.findByRole('button', { name: 'gemma4:e4b' }));
-    expect(await screen.findByRole('heading', { name: 'Inference' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Primary model' })).toBeInTheDocument();
     const primary = screen.getByRole('region', { name: 'Primary' });
     expect(within(primary).getByLabelText('Model')).toHaveValue('gemma4:e4b');
     expect(within(primary).queryByLabelText('Endpoint')).toBeNull();
@@ -381,11 +398,11 @@ describe('inference', () => {
     routes = signedInRoutes({
       'POST /api/v1/settings/llm/get': () =>
         settingsAvailable
-          ? [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b', endpoint: null, api_key_set: false })]
+          ? [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b' })]
           : [502, { error: 'ensemble upstream unavailable' }],
       'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b'] }],
     });
-    window.history.replaceState(null, '', '/console/?view=inference');
+    window.history.replaceState(null, '', '/console/?view=inference&role=primary');
     renderApp();
 
     expect(await screen.findByText('Connecting to ensemble…')).toBeInTheDocument();
@@ -400,6 +417,42 @@ describe('inference', () => {
     const primary = await screen.findByRole('region', { name: 'Primary' });
     expect(primary).toBeInTheDocument();
     expect(within(primary).getByLabelText('Model')).toHaveValue('qwen3:4b');
+  });
+
+  it('keeps the session when g8ee has not yet trusted the Gateway proxy key', async () => {
+    let upstreamTrusted = false;
+    const untrusted: [number, unknown] = [502, { error: 'ensemble upstream authentication failed' }];
+    routes = signedInRoutes({
+      'GET /api/v1/investigations': () => (upstreamTrusted ? [200, []] : untrusted),
+      'POST /api/v1/settings/llm/get': () =>
+        upstreamTrusted ? [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b' })] : untrusted,
+      'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b'] }],
+    });
+    window.history.replaceState(null, '', '/console/?view=inference&role=primary');
+    renderApp();
+
+    expect(await screen.findByText('Connecting to ensemble…')).toBeInTheDocument();
+    expect(screen.queryByLabelText('User ID')).toBeNull();
+    expect(screen.queryByText(/Could not load/)).toBeNull();
+
+    upstreamTrusted = true;
+    act(() => {
+      FakeEventSource.last?.push(1, Ev.ApprovalsChanged, { subject: 'enrollments' });
+    });
+
+    const primary = await screen.findByRole('region', { name: 'Primary' });
+    expect(within(primary).getByLabelText('Model')).toHaveValue('qwen3:4b');
+    expect(screen.queryByLabelText('User ID')).toBeNull();
+  });
+
+  it('signs out when the Gateway itself rejects the session on a proxied route', async () => {
+    routes = signedInRoutes({
+      'POST /api/v1/settings/llm/get': () => [401, { error: 'unauthorized' }],
+    });
+    window.history.replaceState(null, '', '/console/?view=inference');
+    renderApp();
+
+    expect(await screen.findByLabelText('User ID')).toBeInTheDocument();
   });
 
   it('shows enrolling state when pending platform enrollment exists and links to approvals', async () => {

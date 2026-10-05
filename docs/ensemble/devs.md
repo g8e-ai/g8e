@@ -46,7 +46,7 @@ The in-tree `g8e` Python package under [protocol/python/](../../protocol/python/
 
 Ensemble-only values live under [ensemble/app/constants/](../../ensemble/app/constants/). These include internal API paths, environment variable names, runtime paths, provider configuration, message-sender identifiers, and mappings that have no protocol equivalent. [app/constants/generated_paths.py](../../ensemble/app/constants/generated_paths.py) and related generated modules expose values copied from the protocol package; update their source rather than hand-editing generated output.
 
-Generated Python protobuf modules (`<package>_pb2.py` and `.pyi`, for example `eval/v1/eval_pb2.py`) are placed under [protocol/python/g8e/](../../protocol/python/g8e/) by the canonical protocol generator. The ensemble Make target does not generate them: `cd ensemble && make proto` runs the generator in check mode and fails when the canonical stubs are stale. To regenerate all language outputs, run `make proto` from the repository root; the Python portion invokes [protocol/python/scripts/generate_protos.py](../../protocol/python/scripts/generate_protos.py).
+Generated Python protobuf modules (`<package>_pb2.py` and `.pyi`, for example `eval/v1/eval_pb2.py`) are placed under [protocol/python/g8e/](../../protocol/python/g8e/) by the canonical protocol generator. The ensemble Make target does not generate them: `cd ensemble && make proto` runs the generator in check mode and fails when the canonical stubs are stale. To regenerate all language outputs, run `make proto-generate` from the repository root; the Python portion invokes [protocol/python/scripts/generate_protos.py](../../protocol/python/scripts/generate_protos.py).
 
 The application model hub is `app.models.base`. It re-exports the protocol `G8eBaseModel`, `UTCDatetime`, Pydantic helpers, and the ensemble lifecycle bases:
 
@@ -103,12 +103,12 @@ Use the repository-root targets when you need the supported split between local 
 
 ```bash
 make ensemble-test    # tests/unit and tests/integration, excluding external-service markers
-make test-external    # integration tests marked ai_integration, requires_web_search, requires_api, or requires_system_one
+make ensemble-test-external    # integration tests marked ai_integration, requires_web_search, requires_api, or requires_system_one
 make ensemble-lint    # Ruff and Pyright for ensemble/app
-make build-ensemble   # Build g8e-ensemble:<VERSION> from ensemble/Dockerfile
+make ensemble-build   # Build g8e-ensemble:<VERSION> from ensemble/Dockerfile
 ```
 
-The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one"`. The `make test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_system_one"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_system_one`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
+The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one"`. The `make ensemble-test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_system_one"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_system_one`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
 
 For a focused test, use the environment selected by the target or invoke the ensemble interpreter explicitly:
 
@@ -166,7 +166,7 @@ Tests can inject fakes via [ensemble/tests/fakes/](../../ensemble/tests/fakes/).
 
 ## Protobuf and generated artifacts
 
-Protocol definitions consumed by g8ee are maintained under [protocol/proto/g8e/](../../protocol/proto/g8e/). Generated Python protobuf modules live under [protocol/python/g8e/](../../protocol/python/g8e/) (one `<package>/v1/` directory per proto package) with protocol-package ownership. Do not hand-edit generated Python modules. The ensemble `make proto` target verifies that canonical stubs are current via [protocol/python/scripts/generate_protos.py](../../protocol/python/scripts/generate_protos.py) with `--check`. Run the protocol root's `make proto` to regenerate all language outputs, then run parity tests ([tests/test_constants_parity.py](../../ensemble/tests/test_constants_parity.py)) and relevant unit tests under [tests/unit/constants/](../../ensemble/tests/unit/constants/) and [tests/unit/clients/](../../ensemble/tests/unit/clients/).
+Protocol definitions consumed by g8ee are maintained under [protocol/proto/g8e/](../../protocol/proto/g8e/). Generated Python protobuf modules live under [protocol/python/g8e/](../../protocol/python/g8e/) (one `<package>/v1/` directory per proto package) with protocol-package ownership. Do not hand-edit generated Python modules. The ensemble `make proto` target verifies that canonical stubs are current via [protocol/python/scripts/generate_protos.py](../../protocol/python/scripts/generate_protos.py) with `--check`. Run the protocol root's `make proto-generate` to regenerate all language outputs, then run parity tests ([tests/test_constants_parity.py](../../ensemble/tests/test_constants_parity.py)) and relevant unit tests under [tests/unit/constants/](../../ensemble/tests/unit/constants/) and [tests/unit/clients/](../../ensemble/tests/unit/clients/).
 
 ## Related documentation
 

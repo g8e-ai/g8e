@@ -579,10 +579,17 @@ func (c *OperatorPlatformEnrollmentClient) writeCredentials(creds *models.Platfo
 		return fmt.Errorf("operator enrollment: write cli key: %w", err)
 	}
 
-	// Trust bundle.
+	// Preserve installed trust (including an explicitly authorized recovery CA).
+	// Enrollment over the bootstrap surface must not replace a pinned CA.
 	if creds.HubTrustBundle != "" {
-		if err := c.atomicWrite(ctx, c.trustBundlePath(), []byte(creds.HubTrustBundle), constants.PermFilePublic); err != nil {
-			return fmt.Errorf("operator enrollment: write trust bundle: %w", err)
+		exists, err := c.fileSvc.FileExists(ctx, c.trustBundlePath())
+		if err != nil {
+			return fmt.Errorf("operator enrollment: check pinned trust: %w", err)
+		}
+		if !exists {
+			if err := c.atomicWrite(ctx, c.trustBundlePath(), []byte(creds.HubTrustBundle), constants.PermFilePublic); err != nil {
+				return fmt.Errorf("operator enrollment: write trust bundle: %w", err)
+			}
 		}
 	}
 

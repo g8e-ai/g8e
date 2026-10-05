@@ -8,6 +8,8 @@
 // Package constants provides shell command execution constants.
 package constants
 
+import "time"
+
 // Terminal control character constants
 const (
 	// CtrlC is the ETX (End of Text) control character, sent by Ctrl+C.
@@ -36,6 +38,9 @@ const (
 
 	// ShutdownTimeout is the timeout for graceful shutdown in seconds
 	ShutdownTimeout = 15
+
+	// ExecutionWaitDelay is the duration Wait will delay after the process exits before canceling still-running I/O copies
+	ExecutionWaitDelay = 5 * time.Second
 
 	// LocalhostHostname is the hostname for local execution
 	LocalhostHostname = "localhost"

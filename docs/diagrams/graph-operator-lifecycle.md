@@ -134,7 +134,7 @@ Operators can be stopped remotely via stop event signals:
 - **Status transition**: The Operator transitions to `stopped` (`OperatorStatusStopped`) and the Gateway publishes `g8e.v1.operator.status.updated.stopped` to the owner's web sessions.
 - **Recovery**: A stopped Operator can be restarted (re-enroll or reconnect), transitioning back to `active`.
 
-`g8e operator stop` is a governed command sent only to the selected remote session. The Gateway marks a target stopped only after the exact session acknowledges shutdown. Revocation is different: it invalidates the workload identity, deactivates sessions, disconnects matching pub/sub channels, and is terminal for that enrollment.
+`g8e operator stop <operator-session-id>` requests governed shutdown for the selected remote session, with TERM/KILL escalation for a matched local Linux worker that does not exit promptly. Bare `g8e operator stop` stops all local workers owned by the current user, including unregistered workers. The Gateway marks a target stopped only after the exact session acknowledges shutdown. Revocation is different: it invalidates the workload identity, deactivates sessions, disconnects matching pub/sub channels, and is terminal for that enrollment.
 
 ### 7. Termination
 

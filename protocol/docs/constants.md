@@ -1,7 +1,7 @@
 # Constants System
 
-Last Updated: 2026-09-28
-Version: v2.3.0
+Last Updated: 2026-10-04
+Version: v2.3.1
 
 ## Overview
 
@@ -25,7 +25,7 @@ Canonical collection names for the operator embedded SQLite database, typed as `
 
 ### Event Types (`protocol/constants/events.json` → `events_gen.go`)
 
-Typed event identifiers for the pub/sub system, typed as `EventType`. `make constants` generates `internal/constants/events_gen.go` from the registry JSON. Each entry carries `kind`, `transport`, `producers`, `persistence`, and optional `governance` / `outcomes` metadata. Governed request events resolve their action class through `constants.Registry.ActionFor(event)` — there is no hand-maintained event→action map. The registry currently defines 339 events organized across the following categories:
+Typed event identifiers for the pub/sub system, typed as `EventType`. `make constants-generate` generates `internal/constants/events_gen.go` from the registry JSON. Each entry carries `kind`, `transport`, `producers`, `persistence`, and optional `governance` / `outcomes` metadata. Governed request events resolve their action class through `constants.Registry.ActionFor(event)` — there is no hand-maintained event→action map. The registry currently defines 339 events organized across the following categories:
 
 - App Case: `EventAppCaseCreated`, `EventAppCaseUpdated`, `EventAppCaseAssigned`, `EventAppCaseEscalated`, `EventAppCaseResolved`, `EventAppCaseClosed`, `EventAppCaseSelected`, `EventAppCaseCleared`, `EventAppCaseSwitched`, `EventAppCaseCreateRequested`, `EventAppCaseUpdateRequested`
 - App Task: `EventAppTaskCreated`, `EventAppTaskUpdated`, `EventAppTaskAssigned`, `EventAppTaskStarted`, `EventAppTaskCompleted`, `EventAppTaskFailed`
@@ -226,7 +226,7 @@ Additional constants in `auth.go`:
 
 ### Action Types (`protocol/constants/status.json` → `action_types_gen.go`)
 
-GovernanceEnvelope action types, typed as `ActionType`. `make constants` generates `internal/constants/action_types_gen.go` from `status.json`. The generated file defines `AllActionTypes`, `IsMutation()` (driven by `_mutation` flags in JSON), and `IsBootstrapAction()` (driven by `_bootstrap` flags) for platform enrollment actions exempt from L2/L3 enforcement gates:
+GovernanceEnvelope action types, typed as `ActionType`. `make constants-generate` generates `internal/constants/action_types_gen.go` from `status.json`. The generated file defines `AllActionTypes`, `IsMutation()` (driven by `_mutation` flags in JSON), and `IsBootstrapAction()` (driven by `_bootstrap` flags) for platform enrollment actions exempt from L2/L3 enforcement gates:
 
 - `ActionTypeA2aCall`, `ActionTypeCancel`, `ActionTypeDocumentDelete`, `ActionTypeDocumentUpdate`, `ActionTypeEvalAnswer`, `ActionTypeExecuteBash`, `ActionTypeFetchFileDiff`, `ActionTypeFetchFileHistory`, `ActionTypeFetchHistory`, `ActionTypeFetchLogs`, `ActionTypeFileEdit`, `ActionTypeFsGrep`, `ActionTypeFsList`, `ActionTypeFsRead`, `ActionTypeHeartbeat`, `ActionTypeMcpCall`, `ActionTypeMcpPromptGet`, `ActionTypeMcpPromptList`, `ActionTypeMcpResourceList`, `ActionTypeMcpResourceRead`, `ActionTypePortCheck`, `ActionTypeRestoreFile`, `ActionTypeShutdown`, `ActionTypePlatformEnrollmentCreate`, `ActionTypePlatformEnrollmentDecide`, `ActionTypePlatformEnrollmentIssue`, `ActionTypePlatformEnrollmentPersistPolicy`, `ActionTypePlatformEnrollmentCreateSession`
 
@@ -303,7 +303,7 @@ Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `
 - Lattice: `LatticeEndpoint` (`LATTICE_ENDPOINT`), `LatticeClientID` (`LATTICE_CLIENT_ID`), `LatticeClientSecret` (`LATTICE_CLIENT_SECRET`), `LatticeSandboxesToken` (`SANDBOXES_TOKEN`), `LatticeEntityName` (`LATTICE_ENTITY_NAME`), `LatticePostureFloor` (`LATTICE_POSTURE_FLOOR`)
 - Host facts: `Shell` (`SHELL`), `Lang` (`LANG`), `Term` (`TERM`), `TZ` (`TZ`), `Home` (`HOME`), `User` (`USER`), `SSHAuthSock` (`SSH_AUTH_SOCK`)
 - Secrets: `CloudflareAPIToken` (`CLOUDFLARE_API_TOKEN`), `CFAPIToken` (`CF_API_TOKEN`)
-- Other: `OllamaHost` (`OLLAMA_HOST`), `DemoRunID` (`G8E_DEMO_RUN_ID`), `DemoScenarioID` (`G8E_DEMO_SCENARIO_ID`), `HarnessPollTimeout`, `HarnessLLMProvider`, `HarnessLLMModel`, `HarnessLLMEndpoint` (`G8E_HARNESS_*`), `TestReexec` (`G8E_TEST_REEXEC`)
+- Other: `OllamaHost` (`OLLAMA_HOST`), `DemoRunID` (`G8E_DEMO_RUN_ID`), `DemoScenarioID` (`G8E_DEMO_SCENARIO_ID`), `HarnessPollTimeout`, `HarnessLLMProvider`, `HarnessLLMModel` (`G8E_HARNESS_*`), `TestReexec` (`G8E_TEST_REEXEC`)
 
 Every key is declared in [protocol/constants/env_vars.json](../constants/env_vars.json) with a `category` of `secret`, `user_endpoint`, `host`, or `violation` (INV-ENV-04 in [docs/devs/devs.md](../../docs/devs/devs.md)). A `violation` is platform configuration that still arrives through the environment; that set is held in a ratchet test (`internal/constants/env_vars_registry_test.go`) and may only shrink. Production Go code reads the environment only through these typed keys, never a raw string. There are no environment variables for MCP stdio credentials, CA bundle, gateway URL, or application selection; those are flags (`--app`, `--client-cert`, `--client-key`, `--ca-bundle`, `--gateway-url`).
 
@@ -467,7 +467,7 @@ JSON files: `agents.json`, `api_paths.json`, `auth.json`, `channels.json`, `coll
 ### Generate Protocol Artifacts
 
 ```bash
-make generate
+make proto-generate
 ```
 
 Generates Go, Python, and Node TypeScript Protobuf code from `.proto` files and refreshes downstream Python lockfiles. Go and Node generation use Buf; Python generation uses the canonical `grpcio-tools` generator.
@@ -477,7 +477,7 @@ Language-specific targets are available as `make proto-go`, `make proto-python`,
 ## Constants Generation and CI
 
 ```bash
-make constants        # regenerate events_gen.go, action_types_gen.go, console/src/generated/events.ts, protocol/python/g8e/_data/events.json
+make constants-generate        # regenerate events_gen.go, action_types_gen.go, console/src/generated/events.ts, protocol/python/g8e/_data/events.json
 make constants-check  # validate registry and fail on generated-file drift (runs in make test-unit)
 ```
 
@@ -490,12 +490,12 @@ make constants-check  # validate registry and fail on generated-file drift (runs
 - `outcomes` entries reference existing `kind: outcome` or `kind: fact` events
 - stream events use `ephemeral` persistence only
 
-CI also runs proto verification (`make _ci-verify-proto`), doctrine validation (`make validate-doctrines`), linting, and tests.
+CI also runs proto verification (`make _ci-verify-proto`), doctrine validation (`make doctrines-validate`), linting, and tests.
 
 ## Adding New Constants
 
 1. **Edit JSON** in `protocol/constants/` (events, status, or other SSOT files).
-2. **Run** `make constants` to regenerate the Go, console, and Python outputs.
+2. **Run** `make constants-generate` to regenerate the Go, console, and Python outputs.
 3. **Run** `make constants-check` and language tests.
 4. **Commit** JSON source and generated files together.
 

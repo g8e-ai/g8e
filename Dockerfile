@@ -21,7 +21,7 @@
 # FIPS 140-3 enforcement is a RUNTIME setting, off by default: non-approved
 # primitives (Ed25519 for consensus/receipts/PKI, ChaCha20-Poly1305 for SSH
 # streaming) still work. Operators who need strict enforcement set
-# GODEBUG=fips140=only in the container environment (see `make verify-fips`).
+# GODEBUG=fips140=only in the container environment (see `make fips-verify`).
 #
 # The FIPS 140-3 compliance claim is restricted to linux/amd64, which is the
 # tested operating environment for CMVP Cert #5247. Do not build linux/arm64 or

@@ -44,34 +44,38 @@ def _contents_to_messages(
 
     for content in contents:
         role = "assistant" if content.role == "model" else content.role
+        calls = [part.tool_call for part in content.parts if part.tool_call]
+        if calls:
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "".join(part.text for part in content.parts if part.text) or None,
+                    "tool_calls": [
+                        {
+                            "id": call.id or f"call_{call.name}",
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.args),
+                            },
+                        }
+                        for call in calls
+                    ],
+                }
+            )
 
         for part in content.parts:
             if part.tool_call:
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [
-                            {
-                                "id": f"call_{part.tool_call.name}",
-                                "type": "tool",
-                                "tool": {
-                                    "name": part.tool_call.name,
-                                    "arguments": json.dumps(part.tool_call.args),
-                                },
-                            }
-                        ],
-                    }
-                )
-            elif part.tool_response:
+                continue
+            if part.tool_response:
                 messages.append(
                     {
                         "role": "tool",
-                        "tool_call_id": f"call_{part.tool_response.name}",
+                        "tool_call_id": part.tool_response.id or f"call_{part.tool_response.name}",
                         "content": json.dumps(part.tool_response.response),
                     }
                 )
-            elif part.text:
+            elif part.text and not calls:
                 messages.append({"role": role, "content": part.text})
 
     return messages
@@ -247,6 +251,7 @@ class OpenAIProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
+        self._record_declared_tools(tool["function"]["name"] for tool in (openai_tools or []))
 
         effective_max_tokens = primary_llm_settings.max_output_tokens
 
@@ -265,6 +270,7 @@ class OpenAIProvider(LLMProvider):
             )
             self._record_model_boundary(kwargs)
             response = await self._client.chat.completions.create(**kwargs)
+            self._record_response(response, complete=True)
             choice = response.choices[0] if response.choices else None
             finish_reason = choice.finish_reason if choice else None
 
@@ -282,8 +288,12 @@ class OpenAIProvider(LLMProvider):
                     for tc in choice.message.tool_calls:
                         try:
                             args = json.loads(tc.function.arguments)
-                        except json.JSONDecodeError:
-                            args = {}
+                        except json.JSONDecodeError as exc:
+                            from app.errors import ValidationError
+                            raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+                        if not isinstance(args, dict):
+                            from app.errors import ValidationError
+                            raise ValidationError("Provider tool arguments must be a JSON object")
                         calls.append(
                             ToolCall(name=tc.function.name, args=args, id=getattr(tc, "id", None))
                         )
@@ -305,7 +315,7 @@ class OpenAIProvider(LLMProvider):
             self._record_model_boundary(kwargs)
             stream = await self._client.chat.completions.create(**kwargs)
 
-            async for chunk in stream:
+            for chunk in await self._receive_stream(stream):
                 delta = chunk.choices[0].delta if chunk.choices else None
                 finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
                 usage = _usage_from_sdk(getattr(chunk, "usage", None))
@@ -348,6 +358,7 @@ class OpenAIProvider(LLMProvider):
         try:
             self._record_model_boundary(kwargs)
             response = await self._client.chat.completions.create(**kwargs)
+            self._record_response(response, complete=True)
         except Exception as e:
             translate_capability_error(
                 e,
@@ -375,8 +386,12 @@ class OpenAIProvider(LLMProvider):
                 for tc in choice.message.tool_calls:
                     try:
                         args = json.loads(tc.function.arguments)
-                    except json.JSONDecodeError:
-                        args = {}
+                    except json.JSONDecodeError as exc:
+                        from app.errors import ValidationError
+                        raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+                    if not isinstance(args, dict):
+                        from app.errors import ValidationError
+                        raise ValidationError("Provider tool arguments must be a JSON object")
                     parts.append(
                         Part(
                             tool_call=ToolCall(
@@ -446,7 +461,7 @@ class OpenAIProvider(LLMProvider):
         self._record_model_boundary(kwargs)
         stream = await self._client.chat.completions.create(**kwargs)
 
-        async for chunk in stream:
+        for chunk in await self._receive_stream(stream):
             delta = chunk.choices[0].delta if chunk.choices else None
             finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
 
@@ -503,6 +518,7 @@ class OpenAIProvider(LLMProvider):
         )
         self._record_model_boundary(kwargs)
         response = await self._client.chat.completions.create(**kwargs)
+        self._record_response(response, complete=True)
 
         parts = []
         choice = response.choices[0] if response.choices else None
@@ -571,7 +587,7 @@ class OpenAIProvider(LLMProvider):
         self._record_model_boundary(kwargs)
         stream = await self._client.chat.completions.create(**kwargs)
 
-        async for chunk in stream:
+        for chunk in await self._receive_stream(stream):
             delta = chunk.choices[0].delta if chunk.choices else None
             finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
 
@@ -626,6 +642,7 @@ class OpenAIProvider(LLMProvider):
         )
         self._record_model_boundary(kwargs)
         response = await self._client.chat.completions.create(**kwargs)
+        self._record_response(response, complete=True)
 
         parts = []
         choice = response.choices[0] if response.choices else None

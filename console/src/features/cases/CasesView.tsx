@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Empty, StatusPill, relativeTime } from '../../components/ui';
-import { api } from '../../lib/api';
+import { api, isEnsembleUnavailable } from '../../lib/api';
 import { groupCases } from '../../lib/cases';
 import { Ev } from '../../lib/events';
 import { Paths } from '../../lib/paths';
@@ -125,15 +125,14 @@ export function CasesView({
       setCasesLoaded(true);
       casesRetryCount.current = 0;
     } catch (err) {
-      const msg = errorText(err);
-      if (msg.toLowerCase().includes('ensemble upstream unavailable')) {
+      if (isEnsembleUnavailable(err)) {
         setEnsembleStatus(pendingEnrollmentRef.current ? 'enrolling' : 'starting');
         if (!pendingEnrollmentRef.current && casesRetryCount.current < 3) {
           casesRetryCount.current += 1;
           scheduleCasesReload(casesRetryCount.current * 2000);
         }
       } else {
-        toast('error', `Could not load cases: ${msg}`);
+        toast('error', `Could not load cases: ${errorText(err)}`);
         setCasesLoaded(true);
       }
     }
@@ -183,11 +182,8 @@ export function CasesView({
         }
         if (current.investigationId !== target.id) setSel({ caseId, investigationId: target.id, draft: null });
       } catch (err) {
-        if (!cancelled) {
-          const msg = errorText(err);
-          if (!msg.toLowerCase().includes('ensemble upstream unavailable')) {
-            toast('error', `Could not load case: ${msg}`);
-          }
+        if (!cancelled && !isEnsembleUnavailable(err)) {
+          toast('error', `Could not load case: ${errorText(err)}`);
         }
       }
     })();

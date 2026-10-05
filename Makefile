@@ -185,92 +185,119 @@ PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf
 # =============================================================================
 # HELP
 # =============================================================================
-.PHONY: help
-help:
-	@echo "g8e Platform Root Makefile"
-	@echo ""
-	@echo "Note: On Windows, use build.ps1 instead of make"
-	@echo ""
-	@echo "Developer Setup (first run: scripts/linux-setup.sh or scripts/macos-setup.sh):"
-	@echo "  dev-setup     Install everything 'make ci' needs: dev-tools + dev-python + dev-node"
-	@echo "  dev-tools     Install pinned Go tools (buf, protoc plugins, golangci-lint, govulncheck, swag)"
-	@echo "  dev-python    Create .venv (Python $(PYTHON_VERSION)) with protocol + ensemble deps via uv"
-	@echo "  dev-node      npm ci for protocol/node, console, and g8e-adapter"
-	@echo "  dev-check     Verify every tool 'make ci' needs is installed (runs before ci targets)"
-	@echo ""
-	@echo "CI/CD (Local):"
-	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
-	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
-	@echo ""
-	@echo "Release:"
-	@echo "  release          Tag v<VERSION> + protocol/v<VERSION>, push, create GitHub release"
-	@echo ""
-	@echo "Protocol Generation:"
-	@echo "  generate      Generate all protocol artifacts (proto)"
-	@echo "  proto         Generate all Protobuf code (Go, Python, Node)"
-	@echo "  buf-install   Install Buf CLI locally if not found"
-	@echo "  protoc-install Install protoc compiler (optional; buf does not require it)"
-	@echo ""
-	@echo "Build:"
-	@echo "  build			Build g8e for current OS and architecture"
-	@echo "  build-all			Build g8e for all platforms (linux, windows, darwin)"
-	@echo "  build-target		Build g8e for one GOOS/GOARCH (used by Dockerfile)"
-	@echo "  build-linux		Build g8e for Linux (amd64, arm64, 386)"
-	@echo "  build-windows		Build g8e for Windows (amd64, arm64)"
-	@echo "  build-darwin		Build g8e for Darwin (amd64, arm64)"
-	@echo "  build-compressed	Build g8e then compress with UPX (requires upx installed)"
-	@echo "  build-fips		Build g8e with FIPS 140-3 approved mode (linux/amd64, GOFIPS140=v1.0.0)"
-	@echo "  verify-fips		Build the FIPS variant and run the g8e version --fips self-check"
-	@echo "  fmt			Format all Go source files (gofmt -w .)"
-	@echo ""
-	@echo "Test:"
-	@echo "  test                  Run all tests (unit + integration)"
-	@echo "  test-coverage         Run tests with coverage (enforces $(COVERAGE_THRESHOLD)% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
-	@echo "  test-integration      Run Tier 2 (In-Process Integration) tests - no external dependencies"
-	@echo "  test-docker           Run Tier 3 (Docker E2E) steady-state tests against an approved platform"
-	@echo "  test-cross-enrollment Run Tier 3 cross-enrollment E2E tests (gateway-as-operator). Requires --profile cross-enrollment"
-	@echo ""
-	@echo "Lint & Quality:"
-	@echo "  lint          Run all linting and quality checks"
-	@echo "  check-bsl-headers  Verify first-party source files carry BSL 1.1 headers"
-	@echo "  vulncheck     Run Operator vulnerability check"
-	@echo "  validate-doctrines Validate doctrine JSON schema"
-	@echo "  validate-cosais     Validate COSAiS overlay coverage (Phase 8 CI guard)"
-	@echo "  swagger-generate Generate Swagger/OpenAPI documentation from code annotations"
-	@echo "  website-build   Render g8e.ai from README.md"
-	@echo "  website-test    Test the g8e.ai generator and Worker"
-	@echo ""
-	@echo "Cleanup:"
-	@echo "  clean             Remove build artifacts (bin/, test/coverage outputs, Go caches)"
-	@echo "  clean-docker      Stop all containers and remove volumes (docker compose down -v --remove-orphans)"
-	@echo ""
-	@echo "Docker Compose:"
-	@echo "  up                Build and start the full stack (docker compose up -d --build)"
-	@echo "  down              Stop all containers, keep volumes (docker compose down --remove-orphans)"
-	@echo "  restart-operators Restart Data and Inference Operators to pick up newly built binary"
-	@echo "  docker-build      Build Docker images in container and export binary to ./g8e"
-	@echo ""
-	@echo "Demos:"
-	@echo "  demo-verify         Build and run all 5 demo environments (requires Docker)"
-	@echo ""
-	@echo "Python Protocol:"
-	@echo "  python-build  Copy constants and build the Python protocol package"
-	@echo ""
-	@echo "Ensemble (g8ee):"
-	@echo "  ensemble-test   Run the ensemble pytest unit + in-process integration suite (Tier 1 + Tier 2)"
-	@echo "  test-external   Run the ensemble external test suite (Tier 4: real LLM/API, gated on credentials)"
-	@echo "  ensemble-lint   Run ruff + pyright on the ensemble"
-	@echo "  build-ensemble  Build the ensemble Docker image"
-	@echo ""
-	@echo "Console (Gateway-embedded browser frontend, served at /console/):"
-	@echo "  console-build        Build the console SPA (requires npm ci in console/)"
-	@echo "  embed-console        Rebuild console SPA and copy into Gateway's embedded static directory"
-	@echo "  console-test         Run the console vitest suite"
-	@echo "  console-lint         Typecheck and ESLint the console"
-	@echo "  console-embed-check  Fail if the embedded console differs from a fresh build"
+.PHONY: help help-legacy
+help-legacy:
+	@printf '%s\\n' \\
+		'Compatibility aliases (prefer the canonical target on the right)' \\
+		'' \\
+		'  build-ensemble       -> ensemble-build' \\
+		'  build-fips           -> fips-build' \\
+		'  agent-tool-registry  -> agent-tool-registry-generate' \\
+		'  check-bsl-headers    -> bsl-headers-check' \\
+		'  clean-docker         -> docker-clean' \\
+		'  clean-harness        -> harness-clean' \\
+		'  constants            -> constants-generate' \\
+		'  docker               -> docker-up' \\
+		'  embed-console        -> console-embed' \\
+		'  embed-explorer       -> explorer-embed' \\
+		'  explorer-catalog     -> explorer-catalog-generate' \\
+		'  generate             -> proto-generate' \\
+		'  proto                -> proto-generate' \\
+		'  proto-force          -> proto-generate' \\
+		'  python-build         -> protocol-python-build' \\
+		'  test-external        -> ensemble-test-external' \\
+		'  validate-cosais      -> cosais-validate' \\
+		'  validate-doctrines   -> doctrines-validate' \\
+		'  verify-fips          -> fips-verify'
 
-.PHONY: python-build
-python-build:
+help:
+	@printf '%s\n' \
+		'g8e developer commands' \
+		'' \
+		'Usage: make <target> [VARIABLE=value]' \
+		'Windows: use build.ps1 instead of make.' \
+		'' \
+		'Setup' \
+		'  dev-setup                 Install everything required by make ci' \
+		'  dev-check                 Verify the local development toolchain' \
+		'  dev-tools                 Install pinned Go development tools' \
+		'  dev-python                Create .venv with protocol and ensemble dependencies' \
+		'  dev-node                  Install Node dependencies for all workspaces' \
+		'' \
+		'CI' \
+		'  ci                        Run the complete local CI pipeline' \
+		'  ci-platform               Run platform, protocol, and documentation CI' \
+		'  ci-ensemble               Run ensemble lint and tests' \
+		'  ci-console                Run console lint, tests, build, and embed' \
+		'' \
+		'Build and release' \
+		'  build                     Build g8e for the host platform' \
+		'  build-all                 Build g8e for every supported platform' \
+		'  build-target              Build one target (requires GOOS and GOARCH)' \
+		'  build-linux               Build every supported Linux architecture' \
+		'  build-darwin              Build every supported macOS architecture' \
+		'  build-windows             Build every supported Windows architecture' \
+		'  build-compressed          Build for the host and compress with UPX' \
+		'  fips-build                Build the Linux AMD64 FIPS variant' \
+		'  fips-verify               Build and verify the FIPS variant' \
+		'  release                   Tag and push the release in VERSION' \
+		'' \
+		'Test and quality' \
+		'  test                      Run unit and in-process integration tests' \
+		'  test-unit                 Run Tier 1 unit tests' \
+		'  test-integration          Run Tier 2 in-process integration tests' \
+		'  test-coverage             Run tests and enforce $(COVERAGE_THRESHOLD)% coverage (PKG=..., VERBOSE=true)' \
+		'  test-docker               Run Tier 3 Docker E2E tests' \
+		'  test-cross-enrollment     Run Tier 3 cross-enrollment E2E tests' \
+		'  test-airgap               Verify the vendored air-gap build' \
+		'  lint                      Run all lint and quality checks' \
+		'  fmt                       Format all Go source files' \
+		'  vulncheck                 Check Go dependencies for vulnerabilities' \
+		'  bsl-headers-check         Verify first-party BSL 1.1 headers' \
+		'  doctrines-validate        Validate doctrine JSON and references' \
+		'  cosais-validate           Validate COSAiS overlay coverage' \
+		'' \
+		'Generated artifacts' \
+		'  proto-generate            Generate Go, Python, and Node protobuf artifacts' \
+		'  protocol-python-build     Build the Python protocol package' \
+		'  constants-generate        Generate constants from the event registry' \
+		'  constants-check           Check generated constants for drift' \
+		'  swagger-generate          Generate the Gateway OpenAPI specification' \
+		'  website-build             Render g8e.ai from README.md' \
+		'  website-test              Test the website generator and Worker' \
+		'' \
+		'Components' \
+		'  console-build             Build the console SPA' \
+		'  console-embed             Build and embed the console SPA' \
+		'  console-embed-check       Check the committed console embed for drift' \
+		'  console-test              Run console tests' \
+		'  console-lint              Typecheck and lint the console' \
+		'  ensemble-build            Build the ensemble Docker image' \
+		'  ensemble-test             Run ensemble unit and integration tests' \
+		'  ensemble-test-external    Run tests that require real providers' \
+		'  ensemble-lint             Run ruff and pyright on the ensemble' \
+		'  demo-verify               Build and run all demo environments' \
+		'' \
+		'Run locally' \
+		'  up                        Build and start the Gateway on this host' \
+		'  full                      Start Gateway, prompt for operators, and launch local g8ee' \
+		'  down                      Stop the host Gateway' \
+		'  docker-up                 Build and start the Docker Compose stack' \
+		'  docker-down               Stop the stack and preserve volumes' \
+		'  docker-restart-operators  Restart the Data and Inference Operators' \
+		'  docker-build              Build images and export the g8e binary' \
+		'' \
+		'Maintenance' \
+		'  clean                     Remove build artifacts and Go caches' \
+		'  harness-clean             Remove stale test harness directories' \
+		'  docker-clean              Stop the stack and remove its volumes' \
+		'  buf-install               Install Buf when it is unavailable' \
+		'  protoc-install            Install protoc (optional)' \
+		'' \
+		'Run make help-legacy to list compatibility aliases.'
+
+.PHONY: protocol-python-build
+protocol-python-build:
 	@echo "Building Python protocol package..."
 	@mkdir -p protocol/python/g8e/_data
 	@cp protocol/constants/*.json protocol/python/g8e/_data/
@@ -279,8 +306,8 @@ python-build:
 	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
 
-.PHONY: constants constants-check
-constants:
+.PHONY: constants-generate constants-check
+constants-generate:
 	@echo "Regenerating protocol constants from protocol/constants/events.json..."
 	@go run ./internal/tools/constgen -write
 
@@ -292,8 +319,8 @@ constants-check:
 # vectors) is generated by g8ee from its real tool specs and handlers; the Go
 # evaluation catalog reads it. Never hand-edit
 # protocol/constants/agenttools/agent-tool-registry.json.
-.PHONY: agent-tool-registry agent-tool-registry-check
-agent-tool-registry:
+.PHONY: agent-tool-registry-generate agent-tool-registry-check
+agent-tool-registry-generate:
 	@echo "Regenerating protocol/constants/agenttools/agent-tool-registry.json from g8ee..."
 	@cd ensemble && $(PYTHON) -m app.services.evaluation.agent_tool_registry_export --write
 
@@ -303,8 +330,8 @@ agent-tool-registry-check:
 
 # The evaluation explorer's scenario catalog module is generated from the Go
 # scenario catalog. Never hand-edit scenario-catalog.generated.ts.
-.PHONY: explorer-catalog explorer-catalog-check
-explorer-catalog:
+.PHONY: explorer-catalog-generate explorer-catalog-check
+explorer-catalog-generate:
 	@echo "Regenerating the evaluation explorer scenario catalog from the Go catalog..."
 	@go run ./internal/tools/explorercatalog -write
 
@@ -325,14 +352,10 @@ website-test:
 # =============================================================================
 # PROTOCOL GENERATION
 # =============================================================================
-.PHONY: generate
-generate: proto
-
-
 # Note: buf has its own built-in compiler (protocompile) and invokes the
 # protoc-gen-* plugins directly, so the standalone protoc binary is NOT required.
-.PHONY: proto
-proto: proto-go proto-python proto-node proto-lockfiles
+.PHONY: proto-generate
+proto-generate: proto-go proto-python proto-node proto-lockfiles
 	@echo "Protobuf generation complete."
 
 .PHONY: proto-go
@@ -372,16 +395,14 @@ proto-lockfiles:
 	@cd ensemble && uv lock --quiet
 	@echo "Ensemble uv.lock regenerated."
 
-# proto-force is an alias of proto. It previously ran only `buf generate`
+# proto-force is a compatibility alias of proto-generate. It previously ran only `buf generate`
 # for Go, which left the Python stubs, TypeScript stubs, and ensemble
 # lockfiles stale.
-.PHONY: proto-force
-proto-force: proto
 
 # =============================================================================
 # TOOL INSTALLATION
 #
-# NOTE: protoc-install is OPTIONAL. `make proto` uses buf, which ships its own
+# NOTE: protoc-install is OPTIONAL. `make proto-generate` uses buf, which ships its own
 # compiler and does not require the standalone protoc binary. This target exists
 # only for manual use (e.g. invoking protoc directly for debugging).
 # =============================================================================
@@ -508,8 +529,8 @@ INSTALL_EXECUTABLE = \
 EXPLORER_DIST := evaluation-explorer/dist
 EXPLORER_EMBED := internal/services/gateway/explorer/static
 
-.PHONY: embed-explorer
-embed-explorer:
+.PHONY: explorer-embed
+explorer-embed:
 	@test -f $(EXPLORER_DIST)/index.html || { echo "ERROR: build evaluation explorer first: cd $(EXPLORER_DIST)/.. && npm run build"; exit 1; }
 	@rm -rf $(EXPLORER_EMBED)
 	@cp -a $(EXPLORER_DIST) $(EXPLORER_EMBED)
@@ -519,8 +540,8 @@ embed-explorer:
 CONSOLE_DIST := console/dist
 CONSOLE_EMBED := internal/services/gateway/console/static
 
-.PHONY: embed-console
-embed-console: console-build
+.PHONY: console-embed
+console-embed: console-build
 	@rm -rf $(CONSOLE_EMBED) && cp -a $(CONSOLE_DIST) $(CONSOLE_EMBED)
 	@echo "Embedded console updated from fresh console build."
 
@@ -529,11 +550,11 @@ _embed-console-if-built:
 	@if [ -f $(CONSOLE_DIST)/index.html ]; then \
 		rm -rf $(CONSOLE_EMBED) && cp -a $(CONSOLE_DIST) $(CONSOLE_EMBED); \
 	else \
-		echo "console/dist not built; using the committed console embed (run 'make embed-console' to refresh)"; \
+		echo "console/dist not built; using the committed console embed (run 'make console-embed' to refresh)"; \
 	fi
 
 .PHONY: build
-build: embed-explorer _embed-console-if-built
+build: explorer-embed _embed-console-if-built
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
 	@rm -f $(BIN_DIR)/g8e-binaries.json
@@ -670,8 +691,8 @@ build-windows:
 # mode on startup without any runtime env var. See:
 #   https://go.dev/doc/security/fips140
 # Verify the deployed binary with: ./g8e version --fips
-.PHONY: build-fips
-build-fips:
+.PHONY: fips-build
+fips-build:
 	@echo "Building g8e with FIPS 140-3 approved mode (GOFIPS140=$(GOFIPS140_VERSION), $(FIPS_GOOS)/$(FIPS_GOARCH))..."
 	@mkdir -p $(BIN_DIR)
 	@G8E_BINARY=$(BIN_DIR)/g8e-fips-$(FIPS_GOOS)-$(FIPS_GOARCH); \
@@ -691,8 +712,8 @@ build-fips:
 # the module into enforcement mode (rejecting non-approved primitives);
 # GOFIPS140 alone only enables approved mode (GODEBUG defaults to fips140=on).
 # Exits non-zero if the self-check fails. Intended for CI and release gates.
-.PHONY: verify-fips
-verify-fips: build-fips
+.PHONY: fips-verify
+fips-verify: fips-build
 	@echo "Verifying FIPS 140-3 approved mode and enforcement in the built binary..."
 	@GODEBUG=fips140=only ./g8e-fips version --fips
 	@echo "FIPS 140-3 self-check passed."
@@ -832,8 +853,8 @@ ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
 	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api"
 
-.PHONY: test-external
-test-external:
+.PHONY: ensemble-test-external
+ensemble-test-external:
 	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
 	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_system_one"
 
@@ -844,8 +865,8 @@ ensemble-lint:
 	@echo "Running pyright on ensemble..."
 	@cd ensemble && $(ENSEMBLE_PYRIGHT) app
 
-.PHONY: build-ensemble
-build-ensemble:
+.PHONY: ensemble-build
+ensemble-build:
 	@echo "Building ensemble (g8ee) Docker image..."
 	@DOCKER_BUILDKIT=1 docker build -f ensemble/Dockerfile -t g8e-ensemble:$(VERSION) .
 	@echo "Ensemble image built: g8e-ensemble:$(VERSION)"
@@ -874,7 +895,7 @@ console-test:
 # Rebuilds the console and fails if the committed embed is stale.
 .PHONY: console-embed-check
 console-embed-check: console-build
-	@diff -r $(CONSOLE_DIST) $(CONSOLE_EMBED) >/dev/null || { echo "ERROR: $(CONSOLE_EMBED) is stale; run 'make embed-console' and commit the result"; exit 1; }
+	@diff -r $(CONSOLE_DIST) $(CONSOLE_EMBED) >/dev/null || { echo "ERROR: $(CONSOLE_EMBED) is stale; run 'make console-embed' and commit the result"; exit 1; }
 	@echo "Embedded console is current."
 
 # Coverage tests
@@ -897,7 +918,7 @@ test-coverage:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: lint-no-embedded-newlines vulncheck validate-doctrines validate-cosais swagger-generate
+lint: lint-no-embedded-newlines vulncheck doctrines-validate cosais-validate swagger-generate
 	@golangci-lint run
 	@echo "All linting and quality checks complete."
 
@@ -911,8 +932,8 @@ lint-no-embedded-newlines:
 vulncheck:
 	@govulncheck ./...
 
-.PHONY: validate-doctrines
-validate-doctrines:
+.PHONY: doctrines-validate
+doctrines-validate:
 	@echo "Validating doctrine JSON schema..."
 	@for file in protocol/constants/doctrine/*.json; do \
 		if [ -f "$$file" ]; then \
@@ -923,8 +944,8 @@ validate-doctrines:
 	@go run ./internal/tools/doctrine_validator
 	@echo "All doctrine files and compliance references are valid."
 
-.PHONY: validate-cosais
-validate-cosais:
+.PHONY: cosais-validate
+cosais-validate:
 	@echo "Validating COSAiS overlay coverage..."
 	@go run ./internal/tools/cosais_validator
 
@@ -966,6 +987,12 @@ update-doctrines:
 # =============================================================================
 .PHONY: clean
 clean:
+	@set -e; read -r -p "This removes build artifacts and resets .g8e (a backup will be kept). Continue? [y/N] " answer; \
+	if [ "$$answer" != "y" ]; then echo "Clean cancelled."; exit 1; fi; \
+	if [ -d .g8e ]; then \
+		test -x ./g8e || { echo "ERROR: ./g8e is required to stop the Gateway and archive .g8e safely; run 'make build' first" >&2; exit 1; }; \
+		./g8e gw clean --yes --skip-backup; \
+	fi
 	@echo "Cleaning up build artifacts..."
 	@rm -rf .g8e-test-tmp/
 	@rm -rf bin/
@@ -975,39 +1002,65 @@ clean:
 	@GOTOOLCHAIN=local go clean -modcache
 	@echo "Clean complete."
 
-.PHONY: clean-harness
-clean-harness:
+.PHONY: harness-clean
+harness-clean:
 	@echo "Cleaning up stale harness directories..."
 	@rm -rf .g8e-harness-*/
 	@echo "Clean complete."
 
 # =============================================================================
-# DOCKER COMPOSE LIFECYCLE
+# HOST PLATFORM LIFECYCLE
 # =============================================================================
-# Convenience wrappers around docker compose. Docker-first: `docker compose
-# up -d --build` works standalone; these targets are not prerequisites.
+# These targets run the platform directly on the development host. They must
+# not call Docker or Docker Compose; the Docker lifecycle is defined separately
+# below under explicitly Docker-named targets.
 .PHONY: up
-up:
-	@echo "Building and starting the unified stack..."
-	@docker compose up -d --build
-	@echo "Stack started. Gateway is healthy; workloads await owner approval."
+up: build
+	@echo "Starting the g8e Gateway on this host..."
+	@./g8e gw start
+	@echo "Host platform started. Check it with: ./g8e gw status"
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
-	@echo "Then approve workloads: ./g8e auth enroll pending && ./g8e auth enroll approve <id> --yes"
+
+.PHONY: full
+full: build
+	@echo "Starting the host platform..."
+	@./g8e gw start --quiet
+	@$(PYTHON) scripts/full.py $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,)
 
 .PHONY: down
 down:
-	@echo "Stopping the unified stack (volumes preserved)..."
-	@docker compose down --remove-orphans
-	@echo "Stack stopped. Volumes preserved; rerun 'make up' to resume."
+	@test -x ./g8e || { echo "ERROR: ./g8e is missing; run 'make build' first" >&2; exit 1; }
+	@echo "Stopping the g8e Gateway running on this host..."
+	@./g8e gw stop
+	@echo "Host platform stopped. Runtime state in .g8e/ is preserved."
 
-.PHONY: clean-docker
-clean-docker:
+# =============================================================================
+# DOCKER COMPOSE LIFECYCLE
+# =============================================================================
+# Docker is deliberately isolated behind Docker-named targets. The host-native
+# `up` and `down` targets above never invoke these recipes.
+.PHONY: docker-up
+docker-up:
+	@echo "Building and starting the Docker Compose unified stack..."
+	@docker compose up -d --build
+	@echo "Docker stack started. Workloads await owner approval."
+	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
+	@echo "Then approve workloads: ./g8e auth enroll pending && ./g8e auth enroll approve <id> --yes"
+
+.PHONY: docker-down
+docker-down:
+	@echo "Stopping the Docker Compose unified stack (volumes preserved)..."
+	@docker compose down --remove-orphans
+	@echo "Docker stack stopped. Volumes preserved; rerun 'make docker-up' to resume."
+
+.PHONY: docker-clean
+docker-clean:
 	@echo "Stopping the unified stack and removing volumes..."
 	@docker compose down -v --remove-orphans
-	@echo "Stack stopped and volumes removed. The next 'make up' re-bootstraps the CA and requires re-enrollment."
+	@echo "Stack stopped and volumes removed. The next 'make docker-up' re-bootstraps the CA and requires re-enrollment."
 
-.PHONY: restart-operators
-restart-operators:
+.PHONY: docker-restart-operators
+docker-restart-operators:
 	@echo "Restarting Data and Inference Operators to align with current binary..."
 	@docker compose restart g8e-data-operator g8e-inference-operator
 	@echo "Operators restarted."
@@ -1024,8 +1077,35 @@ docker-build:
 
 
 # =============================================================================
-# HELPER FUNCTIONS
+# COMPATIBILITY ALIASES
 # =============================================================================
+# Keep established entry points working for scripts and downstream users. New
+# documentation and Makefile dependencies should use the canonical targets.
+.PHONY: \
+	agent-tool-registry build-ensemble build-fips check-bsl-headers clean-docker \
+	clean-harness constants docker embed-console embed-explorer \
+	explorer-catalog generate proto proto-force python-build test-external \
+	validate-cosais validate-doctrines verify-fips
+
+agent-tool-registry: agent-tool-registry-generate
+build-ensemble: ensemble-build
+build-fips: fips-build
+check-bsl-headers: bsl-headers-check
+clean-docker: docker-clean
+clean-harness: harness-clean
+constants: constants-generate
+docker: docker-up
+embed-console: console-embed
+embed-explorer: explorer-embed
+explorer-catalog: explorer-catalog-generate
+generate: proto-generate
+proto: proto-generate
+proto-force: proto-generate
+python-build: protocol-python-build
+test-external: ensemble-test-external
+validate-cosais: cosais-validate
+validate-doctrines: doctrines-validate
+verify-fips: fips-verify
 
 
 # =============================================================================
@@ -1036,7 +1116,7 @@ ci: ci-console ci-platform ci-ensemble
 	@echo "CI complete."
 
 .PHONY: ci-platform
-ci-platform: dev-check _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test check-bsl-headers
+ci-platform: dev-check _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test bsl-headers-check
 	@echo "Platform CI complete."
 
 .PHONY: ci-ensemble
@@ -1044,17 +1124,17 @@ ci-ensemble: dev-check ensemble-lint ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-console
-ci-console: dev-check console-lint console-test embed-console
+ci-console: dev-check console-lint console-test console-embed
 	@echo "Console CI complete."
 
-.PHONY: check-bsl-headers
-check-bsl-headers:
+.PHONY: bsl-headers-check
+bsl-headers-check:
 	@python3 scripts/check-bsl-headers.py
 
 .PHONY: _ci-verify-proto
 _ci-verify-proto:
 	@echo "=== verify-proto ==="
-	@$(MAKE) proto
+	@$(MAKE) proto-generate
 	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*\.proto$$" || true); \
 	if [ -n "$$CHANGES" ]; then \
 		echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"; \
@@ -1062,7 +1142,7 @@ _ci-verify-proto:
 		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
 		exit 1; \
 	fi
-	@$(MAKE) validate-doctrines
+	@$(MAKE) doctrines-validate
 
 .PHONY: _ci-swagger
 _ci-swagger:

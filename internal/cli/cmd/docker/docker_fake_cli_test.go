@@ -205,20 +205,20 @@ func TestRunDockerComposeOutput_ReturnsCombinedOutputAndWrapsFailure(t *testing.
 	})
 }
 
-func TestPrintDockerStackStatus_ReportsEachFailureModeInTheSection(t *testing.T) {
+func TestPrintDockerStackStatus_OnlyShowsSectionWhenContainersRunning(t *testing.T) {
 	const header = "Docker Compose Stack\n---------------------\n"
 
-	t.Run("no compose file", func(t *testing.T) {
+	t.Run("no compose file writes nothing", func(t *testing.T) {
 		cmdtest.ChdirTemp(t)
 		var buf bytes.Buffer
 
 		err := PrintDockerStackStatus(&buf, "")
 
 		require.ErrorIs(t, err, constants.ErrNotFound)
-		assert.Equal(t, header+"No docker-compose.yml found in current directory\n", buf.String())
+		assert.Empty(t, buf.String())
 	})
 
-	t.Run("docker unavailable", func(t *testing.T) {
+	t.Run("docker unavailable writes nothing", func(t *testing.T) {
 		writeRootCompose(t)
 		withoutDocker(t)
 		var buf bytes.Buffer
@@ -226,10 +226,10 @@ func TestPrintDockerStackStatus_ReportsEachFailureModeInTheSection(t *testing.T)
 		err := PrintDockerStackStatus(&buf, "")
 
 		require.ErrorIs(t, err, constants.ErrServiceUnavailable)
-		assert.Contains(t, buf.String(), "Docker not available")
+		assert.Empty(t, buf.String())
 	})
 
-	t.Run("compose ps fails", func(t *testing.T) {
+	t.Run("compose ps fails writes nothing", func(t *testing.T) {
 		writeRootCompose(t)
 		installFakeDocker(t, `case "$1" in compose) exit 2;; esac; exit 0`)
 		var buf bytes.Buffer
@@ -237,17 +237,27 @@ func TestPrintDockerStackStatus_ReportsEachFailureModeInTheSection(t *testing.T)
 		err := PrintDockerStackStatus(&buf, "")
 
 		require.Error(t, err)
-		assert.Contains(t, buf.String(), "Docker status unavailable")
+		assert.Empty(t, buf.String())
 	})
 
-	t.Run("no running containers", func(t *testing.T) {
+	t.Run("no running containers writes nothing", func(t *testing.T) {
 		writeRootCompose(t)
 		installFakeDocker(t, `case "$1" in compose) printf '  \n';; esac; exit 0`)
 		var buf bytes.Buffer
 
 		require.NoError(t, PrintDockerStackStatus(&buf, ""))
 
-		assert.Equal(t, header+"No running containers\n", buf.String())
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("header only ps output writes nothing", func(t *testing.T) {
+		writeRootCompose(t)
+		installFakeDocker(t, `case "$1" in compose) printf 'NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS\n';; esac; exit 0`)
+		var buf bytes.Buffer
+
+		require.NoError(t, PrintDockerStackStatus(&buf, ""))
+
+		assert.Empty(t, buf.String())
 	})
 
 	t.Run("running containers are listed for the requested profile", func(t *testing.T) {

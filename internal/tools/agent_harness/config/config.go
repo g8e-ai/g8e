@@ -81,6 +81,10 @@ type Config struct {
 	// executed the work. If empty, Agent Harness tries to discover it from /api/operators.
 	OperatorSessionID string `json:"operator_session_id"`
 
+	// OperatorID is the logical ID of the Operator (e.g. "embedded-operator").
+	// When empty, Agent Harness tries to discover it or load it from CLI credentials.
+	OperatorID string `json:"operator_id"`
+
 	// UserID is the host CLI user_id used to scope the SSE approval subscription.
 	// When set, WaitForHumanApproval subscribes with this user_id instead of the
 	// operator id, so the harness receives events for transactions tagged with
@@ -104,11 +108,12 @@ type Config struct {
 
 // CLIIdentity is the host CLI session identity loaded from the credentials
 // file by [LoadCLIIdentity]. It is the single source of truth for the
-// user_id, cli_session_id, and operator_session_id that the harness stamps
+// user_id, cli_session_id, operator_id, and operator_session_id that the harness stamps
 // on authenticated audit/operator requests.
 type CLIIdentity struct {
 	UserID            string
 	CLISessionID      string
+	OperatorID        string
 	OperatorSessionID string
 }
 
@@ -150,6 +155,7 @@ func LoadCLIIdentity(projectRoot string) (CLIIdentity, error) {
 	return CLIIdentity{
 		UserID:            creds.UserID,
 		CLISessionID:      creds.CLISessionID,
+		OperatorID:        creds.OperatorID,
 		OperatorSessionID: creds.OperatorSessionID,
 	}, nil
 }
@@ -189,6 +195,9 @@ func Default() Config {
 			}
 			if cfg.CLISessionID == "" {
 				cfg.CLISessionID = identity.CLISessionID
+			}
+			if cfg.OperatorID == "" {
+				cfg.OperatorID = identity.OperatorID
 			}
 			if cfg.OperatorSessionID == "" {
 				cfg.OperatorSessionID = identity.OperatorSessionID

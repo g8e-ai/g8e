@@ -58,13 +58,10 @@ type EnsembleChatRequest struct {
 	ResourceCreation     *EnsembleResourceCreation `json:"resource_creation,omitempty"`
 	LLMPrimaryProvider   string                    `json:"llm_primary_provider,omitempty"`
 	LLMPrimaryModel      string                    `json:"llm_primary_model,omitempty"`
-	LLMPrimaryEndpoint   string                    `json:"llm_primary_endpoint,omitempty"`
 	LLMAssistantProvider string                    `json:"llm_assistant_provider,omitempty"`
 	LLMAssistantModel    string                    `json:"llm_assistant_model,omitempty"`
-	LLMAssistantEndpoint string                    `json:"llm_assistant_endpoint,omitempty"`
 	LLMLiteProvider      string                    `json:"llm_lite_provider,omitempty"`
 	LLMLiteModel         string                    `json:"llm_lite_model,omitempty"`
-	LLMLiteEndpoint      string                    `json:"llm_lite_endpoint,omitempty"`
 }
 
 // EnsembleBoundOperator mirrors the bound operator shape in EnsembleRequestContext.

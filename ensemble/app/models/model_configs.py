@@ -559,6 +559,17 @@ class LLModelRegistry(G8eBaseModel):
         for config in self.configs:
             if config.name == model_name:
                 return config
+        # OpenAI-compatible catalogs can qualify native model IDs by vendor.
+        # Resolve known vendor/family pairs only; arbitrary namespaces and
+        # unregistered models retain the conservative unknown-model fallback.
+        vendor, separator, native_name = model_name.partition("/")
+        families = {
+            "google": ("gemini-",),
+            "openai": ("gpt-", "o1", "o3", "o4"),
+            "anthropic": ("claude-",),
+        }
+        if separator and native_name.startswith(families.get(vendor, ())):
+            return self.get(native_name)
         return UNKNOWN_MODEL_CONFIG
 
     @contextmanager

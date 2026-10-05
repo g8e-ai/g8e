@@ -2099,6 +2099,11 @@
         "_python_const": "COMPLETED",
         "value": "completed"
       },
+      "failed": {
+        "_go_const": "ToolCallStatusFailed",
+        "_python_const": "FAILED",
+        "value": "failed"
+      },
       "started": {
         "_go_const": "ToolCallStatusStarted",
         "_python_const": "STARTED",

@@ -128,7 +128,10 @@ func getDiskUsageForPath(path string, statFS statFSInterface) (FSDiskUsageResult
 	free := stat.Bfree * uint64(stat.Bsize)
 	available := stat.Bavail * uint64(stat.Bsize)
 	used := total - free
-	usedPercent := float64(used) / float64(total) * 100
+	var usedPercent float64
+	if total > 0 {
+		usedPercent = float64(used) / float64(total) * 100
+	}
 
 	return FSDiskUsageResult{
 		Path: path,

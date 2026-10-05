@@ -2000,7 +2000,8 @@
       "value": "g8e.v1.operator.command.completed",
       "kind": "outcome",
       "transport": [
-        "pubsub"
+        "pubsub",
+        "sse"
       ],
       "producers": [
         "cli",
@@ -2025,7 +2026,8 @@
       "value": "g8e.v1.operator.command.failed",
       "kind": "outcome",
       "transport": [
-        "pubsub"
+        "pubsub",
+        "sse"
       ],
       "producers": [
         "ensemble",
@@ -2089,7 +2091,8 @@
       "value": "g8e.v1.operator.command.started",
       "kind": "outcome",
       "transport": [
-        "pubsub"
+        "pubsub",
+        "sse"
       ],
       "producers": [
         "ensemble",

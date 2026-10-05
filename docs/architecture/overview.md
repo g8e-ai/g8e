@@ -131,7 +131,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | SSE event bridge and pub/sub broker | `internal/services/sse/`, `internal/services/pubsub/` | Unit and integration tests in `internal/services/sse/` |
 | Agentic Ensemble service (g8ee) | `ensemble/` | `cd ensemble && pytest` |
 | Console (Gateway-embedded browser frontend) | `console/`, `internal/services/gateway/console/` | `make console-test` |
-| Protocol definitions and bindings | `protocol/proto/g8e/`, `protocol/` | `make proto` and `make validate-doctrines` |
+| Protocol definitions and bindings | `protocol/proto/g8e/`, `protocol/` | `make proto-generate` and `make doctrines-validate` |
 | Compliance catalogs and KSI verification | `protocol/compliance/`, `internal/cli/cmd/compliance/` | `g8e compliance demo-run verify` |
 
 ## Procedures
@@ -345,8 +345,8 @@ The platform provides layered observation capabilities separated by strict trust
 ### Protocol Wire Contracts and Code Generation
 
 The g8e Protocol Library (`protocol/`) defines canonical wire contracts, schemas, and models:
-- **Protobuf Schemas**: Defined in `protocol/proto/g8e/` and generated via `make proto` using `buf`. Generated Go, Python, and TypeScript bindings provide typed message structures.
-- **Constants Registries**: JSON registries in `protocol/constants/` serve as single sources of truth for doctrines, COSAiS overlays, ports, and errors, validated via `make validate-doctrines` and `make validate-cosais`.
+- **Protobuf Schemas**: Defined in `protocol/proto/g8e/` and generated via `make proto-generate` using `buf`. Generated Go, Python, and TypeScript bindings provide typed message structures.
+- **Constants Registries**: JSON registries in `protocol/constants/` serve as single sources of truth for doctrines, COSAiS overlays, ports, and errors, validated via `make doctrines-validate` and `make cosais-validate`.
 - **JSON Model Schemas**: Canonical schemas in `protocol/models/` and `protocol/schemas/` define structures for consensus policies, audit events, and compliance records.
 - **Canonical Serialization**: Transactions use canonical protojson serialization for deterministic hashing and cryptographic signatures. See [Protocol Library](protocol.md).
 

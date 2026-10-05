@@ -41,12 +41,6 @@ class LLMOverrides(G8eBaseModel):
     llm_primary_model: str | None = Field(default=None)
     llm_assistant_model: str | None = Field(default=None)
     llm_lite_model: str | None = Field(default=None)
-    llm_primary_api_key: str | None = Field(default=None)
-    llm_primary_endpoint: str | None = Field(default=None)
-    llm_assistant_api_key: str | None = Field(default=None)
-    llm_assistant_endpoint: str | None = Field(default=None)
-    llm_lite_api_key: str | None = Field(default=None)
-    llm_lite_endpoint: str | None = Field(default=None)
 
 
 class InferenceModelVariant(G8eBaseModel):

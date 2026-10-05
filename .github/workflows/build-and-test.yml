@@ -85,12 +85,12 @@ jobs:
 
       - name: Verify Proto & Doctrines
         run: |
-          make proto
+          make proto-generate
           git diff --exit-code
-          make validate-doctrines
+          make doctrines-validate
 
       - name: Validate COSAiS Overlay Coverage
-        run: make validate-cosais
+        run: make cosais-validate
 
       - name: Generate & Validate Swagger Docs
         run: |
@@ -265,7 +265,7 @@ jobs:
           echo "License compliance OK"
 
       - name: Check BSL 1.1 source headers
-        run: python3 scripts/check-bsl-headers.py
+        run: make bsl-headers-check
 
   conformance:
     name: Protocol Conformance
@@ -374,7 +374,7 @@ jobs:
           npm run build --prefix console
           diff -r console/dist internal/services/gateway/console/static || {
             echo "ERROR: The embedded console (internal/services/gateway/console/static) is stale."
-            echo "Run 'make ci' (or 'make embed-console') locally and commit the refreshed embed."
+            echo "Run 'make ci' (or 'make console-embed') locally and commit the refreshed embed."
             exit 1
           }
 

@@ -6,7 +6,7 @@
 // with the ensemble's response.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api } from '../lib/api';
+import { api, isEnsembleUnavailable } from '../lib/api';
 import { Ev } from '../lib/events';
 import type { InferenceUpdateBody } from '../lib/inference';
 import { Paths } from '../lib/paths';
@@ -64,8 +64,7 @@ export function InferenceProvider({ children }: { children: ReactNode }) {
       setEnsembleStatus('ready');
       retryCount.current = 0;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.toLowerCase().includes('ensemble upstream unavailable')) {
+      if (isEnsembleUnavailable(err)) {
         setEnsembleStatus(pendingEnrollmentRef.current ? 'enrolling' : 'starting');
         setError(null);
         if (!pendingEnrollmentRef.current && retryCount.current < 3) {
@@ -73,7 +72,7 @@ export function InferenceProvider({ children }: { children: ReactNode }) {
           scheduleReload(retryCount.current * 2000);
         }
       } else {
-        setError(msg);
+        setError(err instanceof Error ? err.message : String(err));
       }
     } finally {
       setLoaded(true);

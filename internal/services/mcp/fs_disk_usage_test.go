@@ -529,6 +529,10 @@ func TestFSDiskUsageTool_UsedPercentCalculation(t *testing.T) {
 			bfree:       0,
 			expectedPct: 100.0,
 		},
+		{
+			name:        "zero capacity",
+			expectedPct: 0.0,
+		},
 	}
 
 	for _, tt := range tests {

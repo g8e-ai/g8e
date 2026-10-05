@@ -45,7 +45,6 @@ var EnvVar = struct {
 	HarnessPollTimeout    EnvVarKey
 	HarnessLLMProvider    EnvVarKey
 	HarnessLLMModel       EnvVarKey
-	HarnessLLMEndpoint    EnvVarKey
 	TestReexec            EnvVarKey
 }{
 	ConsensusID:           EnvVarKey("G8E_CONSENSUS_ID"),
@@ -81,6 +80,5 @@ var EnvVar = struct {
 	HarnessPollTimeout:    EnvVarKey("G8E_HARNESS_POLL_TIMEOUT"),
 	HarnessLLMProvider:    EnvVarKey("G8E_HARNESS_LLM_PROVIDER"),
 	HarnessLLMModel:       EnvVarKey("G8E_HARNESS_LLM_MODEL"),
-	HarnessLLMEndpoint:    EnvVarKey("G8E_HARNESS_LLM_ENDPOINT"),
 	TestReexec:            EnvVarKey("G8E_TEST_REEXEC"),
 }

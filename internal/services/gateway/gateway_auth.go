@@ -182,16 +182,18 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.GatewayReputationSign, RouteAuthMTLS)
 
 	// Ensemble browser proxy (Gateway → g8ee with signed identity stamp).
-	r.addPrefix(constants.APIPaths.EnsembleChatPrefix, RouteAuthWebSession)
+	// Promoted to RouteAuthDual so both web sessions (WebAuthn grounded) and CLI sessions (mTLS grounded) can access chat and operator approval endpoints.
+	r.addPrefix(constants.APIPaths.EnsembleChatPrefix, RouteAuthDual)
 	r.addPrefix(constants.APIPaths.EnsembleSettingsPrefix, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.EnsembleCasesPrefix, RouteAuthWebSession)
 	r.addExact(constants.APIPaths.EnsembleInvestigations, RouteAuthWebSession)
-	r.addPrefix(constants.APIPaths.EnsembleOperatorPrefix, RouteAuthWebSession)
+	r.addPrefix(constants.APIPaths.EnsembleOperatorPrefix, RouteAuthDual)
 
-	// Browser audit read routes (cookie auth). Write/ingest paths remain mTLS default.
-	r.addExact(constants.APIPaths.AuditEvents, RouteAuthWebSession)
-	r.addExact(constants.APIPaths.AuditSummary, RouteAuthWebSession)
-	r.addExact(constants.APIPaths.AuditVerify, RouteAuthWebSession)
+	// Owner audit read routes support the browser console's web session and
+	// the CLI's verified mTLS session. Write/ingest paths remain mTLS default.
+	r.addExact(constants.APIPaths.AuditEvents, RouteAuthDual)
+	r.addExact(constants.APIPaths.AuditSummary, RouteAuthDual)
+	r.addExact(constants.APIPaths.AuditVerify, RouteAuthDual)
 
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)

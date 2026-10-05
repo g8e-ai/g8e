@@ -13,7 +13,7 @@
 //
 // Adding new constants:
 // 1. Add to protocol/constants/prompts.json
-// 2. Run `make constants` to regenerate this file
+// 2. Run `make constants-generate` to regenerate this file
 // 3. Run `make constants-check` to verify
 package constants
 

@@ -141,7 +141,12 @@ func TestUserSettingsDocument_UnmarshalsProtocolShape(t *testing.T) {
 	raw := []byte(`{
 		"user_id": "user-1",
 		"settings": {
-			"llm": {"llm_primary_provider": "ollama", "llm_model": "qwen3"},
+			"llm": {
+				"llm_primary_provider": "ollama",
+				"llm_model": "qwen3",
+				"ollama_endpoint": "http://ollama:11434",
+				"ollama_api_key": "secret"
+			},
 			"search": {"enabled": true, "location": "global"},
 			"eval_judge": {"eval_judge_model": "judge"},
 			"command_validation": {"enable_whitelisting": false, "enable_blacklisting": true},
@@ -157,6 +162,8 @@ func TestUserSettingsDocument_UnmarshalsProtocolShape(t *testing.T) {
 	assert.Equal(t, "user-1", doc.UserID)
 	assert.Equal(t, "ollama", doc.Settings.LLM.PrimaryProvider)
 	assert.Equal(t, "qwen3", doc.Settings.LLM.Model)
+	assert.Equal(t, "http://ollama:11434", doc.Settings.LLM.OllamaEndpoint)
+	assert.Equal(t, "secret", doc.Settings.LLM.OllamaAPIKey)
 	assert.True(t, doc.Settings.Search.Enabled)
 	assert.Equal(t, "global", doc.Settings.Search.Location)
 	assert.Equal(t, "judge", doc.Settings.EvalJudge.Model)

@@ -37,7 +37,7 @@ Catalogs the executable automation under `scripts/`, the deploy-script templates
 - [Anti-patterns](#anti-patterns)
 - [Links out](#links-out)
 
-Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-setup.sh`, `windows-setup.ps1`), [Smoke tests](#procedures) (`smoke-test-go.sh`, `smoke-test-python.sh`), [Validation](#procedures) (`make validate-cosais`, `audit-dev-guidelines.py`), [Gateway deploy](#procedures) (`g8e-deploy.sh`, `g8e-deploy.ps1`), [Image transfer](#procedures) (`g8e demos pull/export/import/images`).
+Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-setup.sh`, `windows-setup.ps1`), [Smoke tests](#procedures) (`smoke-test-go.sh`, `smoke-test-python.sh`), [Validation](#procedures) (`make cosais-validate`, `audit-dev-guidelines.py`), [Gateway deploy](#procedures) (`g8e-deploy.sh`, `g8e-deploy.ps1`), [Image transfer](#procedures) (`g8e demos pull/export/import/images`).
 
 ## Invariants
 
@@ -63,7 +63,7 @@ Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-set
 | Contributor toolchain targets | `Makefile` (`dev-setup`, `dev-tools`, `dev-python`, `dev-node`, `dev-check`) | `make help` lists them; pins live in the `BUF_VERSION`, `GOLANGCI_LINT_VERSION`, `UV_VERSION`, and `PYTHON_VERSION` variables |
 | Go package smoke test | `scripts/smoke-test-go.sh` | Temporary module creation, `replace` directive, import verification |
 | Python package smoke test | `scripts/smoke-test-python.sh` | Virtual environment, editable install, import and example verification |
-| COSAiS validation | `internal/tools/cosais_validator` | Finalized overlay ID coverage check; invoked by `make validate-cosais` |
+| COSAiS validation | `internal/tools/cosais_validator` | Finalized overlay ID coverage check; invoked by `make cosais-validate` |
 | Developer-guideline audit | `scripts/audit-dev-guidelines.py` | Go/Python guideline checks, function clones, and protocol alignment |
 | Gateway-embedded deploy (Bash) | `internal/services/gateway/scripts/g8e-deploy.sh` | Embedded by `make build`; served at `/g8e-deploy.sh` |
 | Gateway-embedded deploy (PowerShell) | `internal/services/gateway/scripts/g8e-deploy.ps1` | Embedded by `make build`; served at `/g8e-deploy.ps1` |
@@ -112,7 +112,7 @@ make dev-check    # verify; also runs automatically before every ci target
 | `make dev-python` | Repo-root `.venv` created by `uv` with `PYTHON_VERSION` (uv downloads the interpreter when the system has none), the in-tree `protocol/python` package, and `ensemble[test]` (pytest, ruff, pyright). An existing `.venv` is reused. |
 | `make dev-node` | `npm ci` in `protocol/node`, `console`, and `g8e-adapter`, then builds the adapter. |
 
-The `Makefile` puts the Go install directory and `~/.local/bin` on `PATH` for its own recipes, so these tools resolve under `make` even in a shell that has not sourced the updated profile. `make proto` installs any missing protoc plugin itself through `make proto-tools-install`; buf runs them as `local:` plugins from `PATH`, so a missing plugin otherwise fails with `executable file not found in $PATH`. The CI workflow `.github/workflows/build-and-test.yml` pins the same versions separately and must change together with the `Makefile` pins.
+The `Makefile` puts the Go install directory and `~/.local/bin` on `PATH` for its own recipes, so these tools resolve under `make` even in a shell that has not sourced the updated profile. `make proto-generate` installs any missing protoc plugin itself through `make proto-tools-install`; buf runs them as `local:` plugins from `PATH`, so a missing plugin otherwise fails with `executable file not found in $PATH`. The CI workflow `.github/workflows/build-and-test.yml` pins the same versions separately and must change together with the `Makefile` pins.
 
 ### Smoke Tests
 
@@ -136,12 +136,12 @@ The primary CI workflow (`build-and-test.yml`) runs both scripts for pushes to `
 Run through its Make target:
 
 ```bash
-make validate-cosais
+make cosais-validate
 ```
 
 `go run ./internal/tools/cosais_validator` requires `docs/reference/cosais-overlays.json` and at least one `demos/*/doctrine/` directory. It reads overlays with `status` exactly matching `finalized`, collects `overlay_ids` from top-level `doctrines` arrays in every JSON file directly under each demo doctrine directory, and fails if a finalized overlay ID is absent from that collected set. When the catalog contains no finalized overlays, it exits successfully and reports that no coverage check is active. The validator does not query NIST or determine finalization independently.
 
-`make lint` includes `make validate-cosais`, and the primary CI workflow invokes it directly. Schema and broader doctrine-reference validation are owned by `make validate-doctrines`.
+`make lint` includes `make cosais-validate`, and the primary CI workflow invokes it directly. Schema and broader doctrine-reference validation are owned by `make doctrines-validate`.
 
 #### Developer-Guideline Audit
 

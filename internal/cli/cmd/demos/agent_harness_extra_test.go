@@ -180,7 +180,7 @@ func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
 		}()
 
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "test-user", cfg.UserID)
 		assert.Equal(t, "test-session", cfg.CLISessionID)
 	})
@@ -192,7 +192,7 @@ func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
 		cfg := config.Default()
 		beforeUserID := cfg.UserID
 		beforeCLISessionID := cfg.CLISessionID
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, beforeUserID, cfg.UserID,
 			"applyAgentHarnessFlags should not modify UserID when flag unset")
 		assert.Equal(t, beforeCLISessionID, cfg.CLISessionID,
@@ -204,7 +204,7 @@ func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
 		defer func() { harnessEnsembleURL = "" }()
 
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "http://localhost:8000", cfg.EnsembleBaseURL)
 	})
 }
@@ -246,7 +246,7 @@ func TestApplyAgentHarnessFlags_CLIAuth(t *testing.T) {
 		}()
 
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "/path/to/cli.crt", cfg.CLIAuth.ClientCert)
 		assert.Equal(t, "/path/to/cli.key", cfg.CLIAuth.ClientKey)
 		assert.Equal(t, "/path/to/ca-bundle.pem", cfg.CLIAuth.CABundle)
@@ -258,7 +258,7 @@ func TestApplyAgentHarnessFlags_CLIAuth(t *testing.T) {
 		harnessCLICA = ""
 
 		cfg := config.Config{}
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Empty(t, cfg.CLIAuth.ClientCert)
 		assert.Empty(t, cfg.CLIAuth.ClientKey)
 		assert.Empty(t, cfg.CLIAuth.CABundle)

@@ -9,6 +9,7 @@ package serve
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,26 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 )
+
+func TestNewOperatorRuntimeFileServiceUsesWorkingDir(t *testing.T) {
+	workingDir := t.TempDir()
+	fileSvc, effectiveWorkDir, err := newOperatorRuntimeFileService(ServeOperatorOptions{
+		WorkingDir: workingDir,
+		LaunchDir:  t.TempDir(),
+	}, testLogger())
+	require.NoError(t, err)
+	assert.Equal(t, workingDir, effectiveWorkDir)
+	assert.Equal(t, filepath.Join(workingDir, constants.RuntimeDirname), fileSvc.Resolve(""))
+}
+
+func TestResolveEnrolledOperatorCredentialPaths(t *testing.T) {
+	workingDir := t.TempDir()
+	fileSvc, _, err := newOperatorRuntimeFileService(ServeOperatorOptions{WorkingDir: workingDir}, testLogger())
+	require.NoError(t, err)
+	assert.Equal(t,
+		filepath.Join(workingDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiFileOperatorCert),
+		fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)))
+}
 
 func TestOperatorFingerprintOptions_ProvenanceIncludesRuntimePort(t *testing.T) {
 	opts := ServeOperatorOptions{ProvenanceOperatorEnabled: true}

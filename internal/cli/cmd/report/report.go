@@ -50,24 +50,38 @@ func (f *reportFlags) addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.outDir, "out", "", "Output directory (default: reports/<timestamp>)")
 	cmd.Flags().StringVar(&f.dataDir, "data-dir", "", "Data directory (default: "+paths.Infra.DataDir+")")
 	cmd.Flags().StringVar(&f.runtimeDir, "runtime-dir", "", "Runtime directory (default: "+paths.Infra.RuntimeDir+")")
-	cmd.Flags().StringVar(&f.ledgerDir, "ledger-dir", "", "Ledger base directory (default: <runtime-dir>/ledger)")
+	cmd.Flags().StringVar(&f.ledgerDir, "ledger-dir", "", "Ledger base directory (default: <runtime-dir>/data/ledger)")
 }
 
 func (f *reportFlags) resolveOptions() (reporting.Options, error) {
-	if err := paths.Init(); err != nil {
-		return reporting.Options{}, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+	runtimeDir := f.runtimeDir
+	if runtimeDir == "" {
+		runtimeDir = paths.Infra.RuntimeDir
 	}
-
-	dataDir := f.dataDir
-	if dataDir == "" {
-		dataDir = paths.Infra.DataDir
+	runtimeDir, err := filepath.Abs(runtimeDir)
+	if err != nil {
+		return reporting.Options{}, fmt.Errorf("%w: runtime dir: %w", constants.ErrPathValidation, err)
+	}
+	baseDir := filepath.Dir(runtimeDir)
+	expectedDataDir := filepath.Join(runtimeDir, constants.DataDirname)
+	if f.dataDir != "" {
+		dataDir, absErr := filepath.Abs(f.dataDir)
+		if absErr != nil || dataDir != expectedDataDir {
+			return reporting.Options{}, fmt.Errorf("%w: data dir must be %s for runtime %s", constants.ErrPathValidation, expectedDataDir, runtimeDir)
+		}
+	}
+	expectedLedgerDir := filepath.Join(expectedDataDir, constants.LedgerDirname)
+	if f.ledgerDir != "" {
+		ledgerDir, absErr := filepath.Abs(f.ledgerDir)
+		if absErr != nil || ledgerDir != expectedLedgerDir {
+			return reporting.Options{}, fmt.Errorf("%w: ledger dir must be %s for runtime %s", constants.ErrPathValidation, expectedLedgerDir, runtimeDir)
+		}
 	}
 	outDir := f.outDir
 	if outDir == "" {
 		outDir = filepath.Join(constants.ReportsDirname, time.Now().UTC().Format("2006-01-02T150405Z"))
 	}
 
-	baseDir := filepath.Dir(filepath.Dir(dataDir))
 	fileSvc, err := fs.NewRuntimeFileService(baseDir, slog.Default())
 	if err != nil {
 		return reporting.Options{}, fmt.Errorf("%w: %w", constants.ErrInternal, err)
@@ -75,7 +89,7 @@ func (f *reportFlags) resolveOptions() (reporting.Options, error) {
 
 	return reporting.Options{
 		FileSvc:      fileSvc,
-		VaultKeyPath: paths.Infra.VaultKeyPath,
+		VaultKeyPath: filepath.Join(runtimeDir, constants.VaultDirname, constants.VaultKeyFilename),
 		OutDir:       outDir,
 		Logger:       slog.Default(),
 	}, nil

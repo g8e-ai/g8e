@@ -41,7 +41,7 @@ def _json_value(value: Any) -> Any:
     raise TypeError(f"Unsupported model evidence value: {type(value).__name__}")
 
 
-def _canonical_model_boundary(value: Any) -> str:
+def model_boundary_json(value: Any) -> str:
     return json.dumps(
         value,
         default=_json_value,
@@ -52,13 +52,13 @@ def _canonical_model_boundary(value: Any) -> str:
 
 
 def model_boundary_hash(value: Any) -> str:
-    return hashlib.sha256(_canonical_model_boundary(value).encode()).hexdigest()
+    return hashlib.sha256(model_boundary_json(value).encode()).hexdigest()
 
 
 def model_boundary_privacy_attestation(value: Any) -> ModelBoundaryPrivacyAttestation:
     from app.security.sentinel_scrubber import inspect_sensitive_text
 
-    canonical = _canonical_model_boundary(value)
+    canonical = model_boundary_json(value)
     raw_sensitive_occurrences, raw_sensitive_types = inspect_sensitive_text(canonical)
     return ModelBoundaryPrivacyAttestation(
         scanner_version=_MODEL_BOUNDARY_SCANNER_VERSION,

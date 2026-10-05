@@ -10,6 +10,7 @@ package serve
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net"
@@ -264,6 +265,12 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 	}
 }
 
+func newOperatorRuntimeFileService(opts ServeOperatorOptions, logger *slog.Logger) (fs.RuntimeFileService, string, error) {
+	effectiveWorkDir := resolveWorkingDir(opts.WorkingDir, opts.LaunchDir)
+	fileSvc, err := fs.NewRuntimeFileService(effectiveWorkDir, logger)
+	return fileSvc, effectiveWorkDir, err
+}
+
 // RunOperator runs the operator in standalone mode with the given options.
 func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	logger, err := logging.NewStdoutLogger(opts.LogLevel)
@@ -277,8 +284,11 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	logger.Info("g8e", "version", vi.Version, "build", vi.BuildID)
 	logger.Info("Using Operator endpoint", "endpoint", operatorEndpoint)
 
-	// Construct RuntimeFileService early so all .g8e/ I/O goes through it
-	fileSvc, err := fs.NewRuntimeFileService("", logger)
+	// Resolve the worker root before constructing RuntimeFileService. The
+	// --working-dir flag scopes both command execution and the worker's local
+	// .g8e evidence stores; using the launch directory here silently split
+	// those two concerns and made reports inspect the wrong vault and ledger.
+	fileSvc, effectiveWorkDir, err := newOperatorRuntimeFileService(opts, logger)
 	if err != nil {
 		logger.Error("Failed to create file service", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))
@@ -318,8 +328,6 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	clientCert := resolveCertPath(opts.ClientCert, fileSvc, logger)
 	enrolled := false
 
-	effectiveWorkDir := resolveWorkingDir(opts.WorkingDir, opts.LaunchDir)
-
 	// If no installed operator credentials exist and an endpoint is
 	// provided, drive the owner-approved platform enrollment protocol
 	// to obtain them. This replaces the removed bypass
@@ -330,6 +338,21 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	// pki/pending-enrollment/g8eo.json so a kill-and-restart resumes
 	// the same request and key material.
 	if privateKey == "" && clientCert == "" && opts.Endpoint != "" {
+		// Persist an explicitly supplied CA before enrollment so the bootstrap
+		// response cannot replace the trust selected by the operator owner.
+		if opts.TrustBundlePath != "" {
+			pemData, err := os.ReadFile(opts.TrustBundlePath)
+			pool := x509.NewCertPool()
+			if err != nil || !pool.AppendCertsFromPEM(pemData) {
+				logger.Error("Invalid explicit trust bundle", "path", opts.TrustBundlePath)
+				os.Exit(constants.ExitConfigError)
+			}
+			path := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+			if err := fileSvc.WriteFile(context.Background(), path, pemData, constants.PermFilePublic); err != nil {
+				logger.Error("Failed to persist explicit trust bundle", "error", err)
+				os.Exit(constants.ExitConfigError)
+			}
+		}
 		logger.Info("No installed operator credentials found; starting platform enrollment", "endpoint", opts.Endpoint)
 		gatewayHTTPURL := buildGatewayHTTPBaseURL(opts.Endpoint)
 		hostname, err := os.Hostname()
@@ -406,6 +429,13 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(constants.ExitConfigError)
+	}
+	if enrolled {
+		// Enrollment returns runtime-relative paths for file-service writes.
+		// Background renewal uses os/x509 APIs and therefore needs the same
+		// files expressed as absolute paths.
+		clientCert = fileSvc.Resolve(clientCert)
+		privateKey = fileSvc.Resolve(privateKey)
 	}
 
 	clientIdentity.SetCertificate(cert)

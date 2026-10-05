@@ -161,7 +161,10 @@ def _parse_response_blocks(blocks: list) -> list[Part]:
                 )
             )
         elif block_type == "tool_use":
-            args = block.input if isinstance(block.input, dict) else {}
+            args = block.input
+            if not isinstance(args, dict):
+                from app.errors import ValidationError
+                raise ValidationError("Provider tool arguments must be a JSON object")
             parts.append(
                 Part(
                     tool_call=ToolCall(
@@ -346,7 +349,7 @@ class AnthropicProvider(LLMProvider):
         self._record_model_boundary(kwargs)
         async with self._client.messages.stream(**kwargs) as stream:
             try:
-                async for event in stream:
+                for event in await self._receive_stream(stream):
                     event_type = event.type
 
                     if event_type == "content_block_delta":
@@ -440,7 +443,7 @@ class AnthropicProvider(LLMProvider):
         self._record_model_boundary(payload)
         async with self._client.messages.stream(**payload) as stream:
             try:
-                async for event in stream:
+                for event in await self._receive_stream(stream):
                     event_type = event.type
 
                     if event_type == "content_block_start":
@@ -485,9 +488,13 @@ class AnthropicProvider(LLMProvider):
                         elif block_types.get(idx) == "tool_use":
                             raw_input = accumulated_tool_input.get(idx, "{}")
                             try:
-                                args = json.loads(raw_input) if raw_input else {}
-                            except json.JSONDecodeError:
-                                args = {}
+                                args = json.loads(raw_input)
+                            except json.JSONDecodeError as exc:
+                                from app.errors import ValidationError
+                                raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+                            if not isinstance(args, dict):
+                                from app.errors import ValidationError
+                                raise ValidationError("Provider tool arguments must be a JSON object")
                             yield StreamChunkFromModel(
                                 tool_calls=[
                                     ToolCall(
@@ -569,6 +576,7 @@ class AnthropicProvider(LLMProvider):
         try:
             self._record_model_boundary(payload)
             response = await self._client.messages.create(**payload)
+            self._record_response(response, complete=True)
         except Exception as e:
             translate_capability_error(
                 e,
@@ -657,6 +665,7 @@ class AnthropicProvider(LLMProvider):
         payload = request.model_dump(mode="json", exclude_none=True)
         self._record_model_boundary(payload)
         response = await self._client.messages.create(**payload)
+        self._record_response(response, complete=True)
         return self._build_response(response)
 
     async def generate_content_stream_lite(
@@ -733,4 +742,5 @@ class AnthropicProvider(LLMProvider):
         payload = request.model_dump(mode="json", exclude_none=True)
         self._record_model_boundary(payload)
         response = await self._client.messages.create(**payload)
+        self._record_response(response, complete=True)
         return self._build_response(response)

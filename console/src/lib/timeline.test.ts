@@ -105,6 +105,44 @@ describe('applyEvent', () => {
     expect(t.items[1]).toMatchObject({ kind: 'notice', level: 'error', text: 'model unavailable' });
   });
 
+  it('updates phase dynamically as tool starts and completes', () => {
+    let t = applyEvent(emptyTimeline, ev(Ev.CommandStarted, { execution_id: 'x', tool_name: 'file_create', display_label: 'Creating file', display_detail: 'index.html' }));
+    expect(t.busy).toBe(true);
+    expect(t.phase).toBe('Creating file');
+    t = applyEvent(t, ev(Ev.CommandCompleted, { execution_id: 'x', content: 'created' }));
+    expect(t.busy).toBe(true);
+    expect(t.phase).toBe('Working');
+  });
+
+  it('retains busy state on IterationCompleted during multi-turn tool loops', () => {
+    let t = appendUserMessage(emptyTimeline, 'build game');
+    t = applyEvent(t, ev(Ev.IterationStarted));
+    expect(t.busy).toBe(true);
+    t = applyEvent(t, ev(Ev.IterationCompleted, { turn: 1 }));
+    expect(t.busy).toBe(true);
+    expect(t.phase).toBe('Working');
+  });
+
+  it('handles universal tool events with lifecycle status and phase', () => {
+    let t = applyEvent(emptyTimeline, ev(Ev.ToolWebSearchRequested, { execution_id: 'ws-1', tool_name: 'search_web', display_label: 'Searching the web', display_detail: 'three.js tutorial' }));
+    expect(t.busy).toBe(true);
+    expect(t.phase).toBe('Searching the web');
+    expect(t.items).toEqual([
+      expect.objectContaining({ kind: 'tool', status: 'requested', detail: 'three.js tutorial', tool: 'search_web' }),
+    ]);
+    t = applyEvent(t, ev(Ev.ToolWebSearchCompleted, { execution_id: 'ws-1', content: 'results found' }));
+    expect(t.busy).toBe(true);
+    expect(t.phase).toBe('Working');
+    expect(t.items[0]).toMatchObject({ kind: 'tool', status: 'completed' });
+  });
+
+  it('handles ThinkingStarted with phase end by switching to Working', () => {
+    let t = applyEvent(emptyTimeline, ev(Ev.ThinkingStarted, { phase: 'start' }));
+    expect(t.phase).toBe('Thinking');
+    t = applyEvent(t, ev(Ev.ThinkingStarted, { phase: 'end' }));
+    expect(t.phase).toBe('Working');
+  });
+
   it('ignores unknown event types', () => {
     const t = applyEvent(emptyTimeline, ev('g8e.v1.something.new'));
     expect(t).toBe(emptyTimeline);

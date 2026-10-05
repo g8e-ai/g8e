@@ -75,7 +75,6 @@ func uniqueDocumentID(kind string) string {
 //
 //	G8E_HARNESS_LLM_PROVIDER=ollama
 //	G8E_HARNESS_LLM_MODEL=gemma4:12b
-//	G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
 
 // ensemblePollTimeout returns the maximum time to wait for an audit receipt
 // to appear after sending a chat request. The LLM + governance round-trip can
@@ -117,8 +116,9 @@ const ensembleSmokeContent = "g8e ensemble governed file write smoke test"
 // ensemble-created cases/investigations in the document store.
 const harnessDocIDPrefix = "harness"
 
-// ensembleLLMOverrides reads LLM provider config from env vars and returns
-// the override fields for the EnsembleChatRequest. Defaults to the "fake"
+// ensembleLLMOverrides reads LLM role selection from env vars and returns
+// the override fields for the EnsembleChatRequest. Provider connections are
+// configured on the ensemble, not carried by chat requests. Defaults to the "fake"
 // provider for CI determinism. Set G8E_HARNESS_LLM_PROVIDER to override
 // (e.g., "ollama" for local dev with a real LLM).
 //
@@ -129,13 +129,12 @@ const harnessDocIDPrefix = "harness"
 // used for routing). Without a model default, the ensemble rejects the
 // request with "No LLM model configured" even though the provider override
 // is present.
-func ensembleLLMOverrides() (provider, model, endpoint string) {
+func ensembleLLMOverrides() (provider, model string) {
 	provider = os.Getenv(string(constants.EnvVar.HarnessLLMProvider))
 	if provider == "" {
 		provider = "fake"
 	}
 	model = os.Getenv(string(constants.EnvVar.HarnessLLMModel))
-	endpoint = os.Getenv(string(constants.EnvVar.HarnessLLMEndpoint))
 	if model == "" && provider == "fake" {
 		model = "fake"
 	}
@@ -148,7 +147,7 @@ func ensembleLLMOverrides() (provider, model, endpoint string) {
 // title is per-run unique (C.4) so the ensemble creates a distinct case per
 // run rather than reusing a prior run's case.
 func ensembleChatRequest(persona clientpkg.Persona, message, caseTitle string) clientpkg.EnsembleChatRequest {
-	provider, model, endpoint := ensembleLLMOverrides()
+	provider, model := ensembleLLMOverrides()
 	ctx := clientpkg.EnsembleRequestContext{
 		CLISessionID:    persona.CLISessionID,
 		UserID:          persona.UserID,
@@ -170,13 +169,10 @@ func ensembleChatRequest(persona clientpkg.Persona, message, caseTitle string) c
 		ResourceCreation:     &clientpkg.EnsembleResourceCreation{CreateCase: true, CaseTitle: caseTitle},
 		LLMPrimaryProvider:   provider,
 		LLMPrimaryModel:      model,
-		LLMPrimaryEndpoint:   endpoint,
 		LLMAssistantProvider: provider,
 		LLMAssistantModel:    model,
-		LLMAssistantEndpoint: endpoint,
 		LLMLiteProvider:      provider,
 		LLMLiteModel:         model,
-		LLMLiteEndpoint:      endpoint,
 	}
 }
 
@@ -505,7 +501,7 @@ func governedDocumentReadBack(ctx context.Context, c *clientpkg.Client, r *Resul
 
 // submitDocumentUpdateAndCorrelate submits a governed DOCUMENT_UPDATE envelope
 // directly to the admission API (bypassing the AI/ensemble layer), captures
-// NotBefore before submission, polls for the correlated COMPLETED receipt, and
+// NotBefore before submission, verifies the synchronous COMPLETED receipt, and
 // verifies the receipt identity. This is the deterministic document-mutation
 // path for C.3: no reliance on the LLM choosing the right tool call. The
 // caller passes the current state root (fetched via StateRootFromMTLS just
@@ -523,21 +519,54 @@ func submitDocumentUpdateAndCorrelate(ctx context.Context, c *clientpkg.Client, 
 	}
 	r.note("DOCUMENT_UPDATE envelope admitted: tx=%s status=%d", short(txHash), status)
 
-	receipt, err := pollForReceiptWithCorrelation(ctx, c, r, ReceiptCorrelation{
-		NotBefore:         notBefore,
-		OperatorSessionID: req.OperatorSessionID,
-		ActionType:        string(constants.ActionTypeDocumentUpdate),
-		Persona:           persona,
-	})
-	if err != nil {
-		return nil, notBefore, err
+	var receipt clientpkg.Receipt
+	if err := json.Unmarshal(body, &receipt); err != nil {
+		return nil, notBefore, fmt.Errorf("decode document update receipt: %w", err)
+	}
+	if receipt.TransactionID != txHash && receipt.TransactionHash != txHash {
+		return nil, notBefore, fmt.Errorf("document update receipt transaction mismatch: submitted=%s receipt_id=%s receipt_hash=%s", txHash, receipt.TransactionID, receipt.TransactionHash)
+	}
+	if receipt.ActionType != string(constants.ActionTypeDocumentUpdate) ||
+		(receipt.TargetResource != "" && receipt.TargetResource != req.Collection+"/"+req.DocumentID) {
+		return nil, notBefore, fmt.Errorf("document update receipt identity mismatch: action=%s target=%s", receipt.ActionType, receipt.TargetResource)
+	}
+	if receipt.Signature == "" {
+		return nil, notBefore, fmt.Errorf("document update receipt is unsigned: tx=%s", txHash)
+	}
+	// The canonical ActionReceipt response carries requestor/app attribution
+	// in each deterministic stage rather than duplicating it at top level.
+	// Promote a verified stage identity into the harness view used by the
+	// common receipt assertions.
+	var receiptEvidence struct {
+		DeterministicStageEvidence []struct {
+			RequestorUserID string `json:"requestor_user_id"`
+			ActingAppID     string `json:"acting_app_id"`
+		} `json:"deterministic_stage_evidence"`
+	}
+	if err := json.Unmarshal(body, &receiptEvidence); err != nil {
+		return nil, notBefore, fmt.Errorf("decode document update receipt evidence: %w", err)
+	}
+	for _, stage := range receiptEvidence.DeterministicStageEvidence {
+		if stage.RequestorUserID == "" && stage.ActingAppID == "" {
+			continue
+		}
+		if stage.RequestorUserID != req.RequestorUserID || stage.ActingAppID != clientpkg.ActingAppG8ee {
+			return nil, notBefore, fmt.Errorf("document update stage identity mismatch: requestor=%s acting_app=%s", stage.RequestorUserID, stage.ActingAppID)
+		}
+		receipt.RequestorUserID = stage.RequestorUserID
+		receipt.ActingAppID = stage.ActingAppID
+		break
+	}
+	executionStatus, summary := receiptStatusSummary(receipt.Raw)
+	if executionStatus != int(operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED) {
+		return nil, notBefore, fmt.Errorf("document update receipt not completed: status=%d summary=%s", executionStatus, summary)
 	}
 	r.note("correlated DOCUMENT_UPDATE receipt: tx=%s signature_len=%d", short(receipt.TransactionID), len(receipt.Signature))
 
-	if err := verifyReceiptIdentity(r, receipt); err != nil {
+	if err := verifyReceiptIdentity(r, &receipt); err != nil {
 		return nil, notBefore, err
 	}
-	return receipt, notBefore, nil
+	return &receipt, notBefore, nil
 }
 
 // submitDocumentDeleteAndCorrelate submits a governed DOCUMENT_DELETE envelope
@@ -625,6 +654,9 @@ func ensembleScenarios() []Scenario {
 					Persona:           persona,
 				})
 				if err != nil {
+					if ap != nil && ap.Err() != nil {
+						return fmt.Errorf("%w; approval listener: %w", err, ap.Err())
+					}
 					return err
 				}
 				r.note("correlated FILE_EDIT receipt: tx=%s signature_len=%d", short(receipt.TransactionID), len(receipt.Signature))
@@ -693,6 +725,9 @@ func ensembleScenarios() []Scenario {
 					Persona:           persona,
 				})
 				if err != nil {
+					if ap != nil && ap.Err() != nil {
+						return fmt.Errorf("%w; approval listener: %w", err, ap.Err())
+					}
 					return err
 				}
 				r.note("correlated FILE_EDIT receipt: tx=%s signature_len=%d", short(receipt.TransactionID), len(receipt.Signature))
@@ -721,7 +756,7 @@ func ensembleScenarios() []Scenario {
 				if kit == nil {
 					return constants.ErrHarnessGovKitNotInit
 				}
-				persona := withCLIIdentity(ensembleProducer)
+				persona := ensembleProducer
 				collection := string(constants.CollectionInvestigations)
 				documentID := uniqueDocumentID("update")
 				r.note("per-run artifact: collection=%s document_id=%s", collection, documentID)
@@ -742,11 +777,9 @@ func ensembleScenarios() []Scenario {
 				statusOpen := "open"
 				sentinelMode := true
 				createReq := clientpkg.DocumentUpdateRequest{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					RequestorUserID:   kit.UserID,
-					Collection:        collection,
-					DocumentID:        documentID,
+					RequestorUserID: kit.UserID,
+					Collection:      collection,
+					DocumentID:      documentID,
 					Updates: clientpkg.InvestigationUpdate{
 						CaseTitle:    &initialTitle,
 						CaseID:       &caseID,
@@ -790,14 +823,12 @@ func ensembleScenarios() []Scenario {
 				}
 				refinedTitle := fmt.Sprintf("Refined investigation %s", uniqueRunID())
 				mergeReq := clientpkg.DocumentUpdateRequest{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					RequestorUserID:   kit.UserID,
-					Collection:        collection,
-					DocumentID:        documentID,
-					Updates:           clientpkg.InvestigationUpdate{CaseTitle: &refinedTitle},
-					Merge:             true,
-					StateRoot:         stateRoot,
+					RequestorUserID: kit.UserID,
+					Collection:      collection,
+					DocumentID:      documentID,
+					Updates:         clientpkg.InvestigationUpdate{CaseTitle: &refinedTitle},
+					Merge:           true,
+					StateRoot:       stateRoot,
 				}
 				if _, _, err := submitDocumentUpdateAndCorrelate(ctx, c, r, persona, mergeReq); err != nil {
 					return err

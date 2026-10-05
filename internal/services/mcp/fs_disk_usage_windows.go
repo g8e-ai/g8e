@@ -151,7 +151,10 @@ func getDiskUsageForPath(path string, api windowsDiskAPI) (FSDiskUsageResult, er
 	}
 
 	usedBytes := totalBytes - freeBytes
-	usedPercent := float64(usedBytes) / float64(totalBytes) * 100
+	var usedPercent float64
+	if totalBytes > 0 {
+		usedPercent = float64(usedBytes) / float64(totalBytes) * 100
+	}
 
 	return FSDiskUsageResult{
 		Path: absPath,

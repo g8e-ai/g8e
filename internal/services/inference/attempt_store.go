@@ -30,6 +30,10 @@ type AttemptStore interface {
 	Complete(ctx context.Context, providerAttemptID, resultDigest string) error
 	Fail(ctx context.Context, providerAttemptID, failureSummary string) error
 	Get(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceProviderAttemptRecord, error)
+	SaveRawResponse(ctx context.Context, providerAttemptID string, response []byte) error
+	RawResponse(ctx context.Context, providerAttemptID string) ([]byte, error)
+	SaveResult(ctx context.Context, providerAttemptID string, result *operatorv1.InferenceResult) error
+	Result(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceResult, error)
 }
 
 type fileAttemptStore struct {
@@ -47,6 +51,53 @@ func NewAttemptStore(fileSvc fs.RuntimeFileService) (AttemptStore, error) {
 
 func (s *fileAttemptStore) attemptsDir() string {
 	return filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname)
+}
+
+// Raw responses are opaque bytes: decoding or canonicalization must never
+// change this artifact. Failed attempts retain it alongside their failure record.
+func (s *fileAttemptStore) SaveRawResponse(ctx context.Context, providerAttemptID string, response []byte) error {
+	if _, err := s.loadRequired(ctx, providerAttemptID); err != nil {
+		return err
+	}
+	return s.fileSvc.WriteFile(ctx, filepath.Join(s.attemptsDir(), providerAttemptID+constants.InferenceRawResponseSuffix), response, constants.PermFilePrivate)
+}
+
+func (s *fileAttemptStore) RawResponse(ctx context.Context, providerAttemptID string) ([]byte, error) {
+	if _, err := s.recordPath(providerAttemptID); err != nil {
+		return nil, err
+	}
+	return s.fileSvc.ReadFile(ctx, filepath.Join(s.attemptsDir(), providerAttemptID+constants.InferenceRawResponseSuffix))
+}
+
+// SaveResult records the validated application result independently of the
+// original provider bytes. Complete binds its digest into the attempt record.
+func (s *fileAttemptStore) SaveResult(ctx context.Context, providerAttemptID string, result *operatorv1.InferenceResult) error {
+	if result == nil || result.GetProviderAttemptId() != providerAttemptID {
+		return fmt.Errorf("inference attempt store: result: %w", constants.ErrInferenceIdentityMismatch)
+	}
+	if _, err := s.loadRequired(ctx, providerAttemptID); err != nil {
+		return err
+	}
+	data, err := proto.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("inference attempt store: result marshal: %w", err)
+	}
+	return s.fileSvc.WriteFile(ctx, filepath.Join(s.attemptsDir(), providerAttemptID+constants.InferenceProcessedResultSuffix), data, constants.PermFilePrivate)
+}
+
+func (s *fileAttemptStore) Result(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceResult, error) {
+	if _, err := s.recordPath(providerAttemptID); err != nil {
+		return nil, err
+	}
+	data, err := s.fileSvc.ReadFile(ctx, filepath.Join(s.attemptsDir(), providerAttemptID+constants.InferenceProcessedResultSuffix))
+	if err != nil {
+		return nil, err
+	}
+	result := &operatorv1.InferenceResult{}
+	if err := proto.Unmarshal(data, result); err != nil {
+		return nil, fmt.Errorf("inference attempt store: result unmarshal: %w", err)
+	}
+	return result, nil
 }
 
 func (s *fileAttemptStore) recordPath(providerAttemptID string) (string, error) {

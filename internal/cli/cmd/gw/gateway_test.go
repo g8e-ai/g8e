@@ -281,6 +281,7 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 	// except for UI-only flags that are not re-executed.
 	skipReExec := map[string]bool{
 		"interactive": true, // --interactive is a one-time UI flow, not re-executed
+		"quiet":       true, // --quiet only controls parent CLI startup guidance
 	}
 	cobraFlags.VisitAll(func(f *pflag.Flag) {
 		if skipReExec[f.Name] {

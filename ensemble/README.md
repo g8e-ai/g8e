@@ -77,7 +77,7 @@ make ensemble-lint
 Tier 4 tests use live LLM providers or external APIs and run separately:
 
 ```bash
-make test-external
+make ensemble-test-external
 ```
 
 ## Project layout

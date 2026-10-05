@@ -19,6 +19,12 @@ const EvaluationAppName = "g8e-eval"
 // no models: each governed request carries the model the user chose.
 const InferenceDefaultKeepAlive = "-1"
 
+// Provider response artifacts are separate from the attempt lifecycle record.
+const (
+	InferenceRawResponseSuffix     = ".response.bin"
+	InferenceProcessedResultSuffix = ".result.pb"
+)
+
 // ModelProvenanceAttestationPreflightTimeout bounds the synchronous storage
 // attestation probe: the Gateway waits this long for the Provenance Operator
 // to hash the model's blobs, and the CLI client allows this plus

@@ -281,12 +281,12 @@ The `--ensemble-url` flag points the harness at the ensemble (g8ee) HTTP surface
 
 Ensemble scenarios default to the `fake` LLM provider for CI determinism (no external LLM dependency). The `FakeProvider` (`ensemble/app/llm/providers/fake.py`) returns deterministic tool-call responses by pattern-matching the user message — no network calls, no API keys required.
 
-For local dev with a real LLM (e.g., ollama), set env vars before running the harness:
+For local dev with a real LLM (e.g., Ollama), save the provider connection on
+the console's Inference page, then select its provider and model for the harness:
 
 ```bash
 export G8E_HARNESS_LLM_PROVIDER=ollama
 export G8E_HARNESS_LLM_MODEL=gemma4:12b
-export G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
 g8e demos scenarios run ensemble-chat-file-create --ensemble-url http://localhost:8000 ...
 ```
 

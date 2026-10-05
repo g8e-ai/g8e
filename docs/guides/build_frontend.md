@@ -170,9 +170,9 @@ The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (
 | `POST` | `/api/v1/chat/stop` | Stop the active turn for `context.investigation_id` |
 | `GET` | `/api/v1/investigations?case_id=&limit=` | Query the user's investigations, including conversation history |
 | `POST` | `/api/v1/operator/approval/respond` | Answer an ensemble approval request: `{ "approval_id", "approved", "context" }` |
-| `POST` | `/api/v1/settings/llm/get` | Read the caller's provider, model, and endpoint per role (`primary`, `assistant`, `lite`) and the selectable providers; API keys are reported only as `api_key_set` |
-| `POST` | `/api/v1/settings/llm` | Save the caller's per-role selection: `{ "primary": {provider, model, endpoint, api_key?}, "assistant": {…}, "lite": {…} }`. `provider: null` on assistant or lite inherits; an omitted `api_key` keeps the stored key unless the provider changed, and `""` clears it. The next chat request uses the saved selection |
-| `POST` | `/api/v1/settings/llm/models` | List the models a provider endpoint serves: `{ "role", "provider", "endpoint"?, "api_key"? }`; omitted values fall back to the role's stored ones |
+| `POST` | `/api/v1/settings/llm/get` | Read provider connection metadata and the caller's provider/model selection for `primary`, `assistant`, and `lite`; API keys are reported only as `api_key_set` on providers |
+| `POST` | `/api/v1/settings/llm` | Save provider connections with `{ "providers": [{provider, endpoint?, api_key?}] }` or role selections with `{ "primary": {provider, model} }` (likewise assistant/lite). `provider: null` on assistant or lite inherits; an omitted provider key keeps it and `""` clears it |
+| `POST` | `/api/v1/settings/llm/models` | List models using a saved provider connection: `{ "provider" }` |
 
 The ensemble proxy routes (`/api/v1/chat`, `/api/v1/investigations`, `/api/v1/operator/`, `/api/v1/settings/`) forward to g8ee with Gateway-stamped `context.user_id`, `context.web_session_id`, and `context.bound_operators`. Browser-supplied values for those fields are replaced, and investigation queries are always scoped to the session user.
 

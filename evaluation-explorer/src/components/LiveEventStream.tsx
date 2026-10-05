@@ -390,18 +390,35 @@ export function LiveEventStream({
   const models = useStoreState((state) => state.models);
   const assignments = useStoreState((state) => state.assignments);
 
+  // Terminal event time per assignment; a started row's timer resolves once present.
+  const terminalTimes = useMemo(() => {
+    const times = new Map<string, number>();
+    for (const e of events) {
+      if (e.assignment_id && isTerminalAssignmentEvent(e)) {
+        const t = new Date(e.observed_at).getTime();
+        if (!Number.isNaN(t)) times.set(`${e.run_id}:${e.assignment_id}`, t);
+      }
+    }
+    return times;
+  }, [events]);
+
+  const isPendingStart = (e: LiveEvent): boolean => {
+    if (e.kind !== 'assignment_started') return false;
+    if (e.lifecycle_status !== 'running' && e.lifecycle_status !== 'queued') return false;
+    if (!e.assignment_id) return true;
+    if (terminalTimes.has(`${e.run_id}:${e.assignment_id}`)) return false;
+    return !isTerminalAssignment(assignments.get(recordKey(e.dataset_id, e.assignment_id)));
+  };
+
   useEffect(() => {
-    const hasRunning = events.some(
-      (e) =>
-        e.kind === 'assignment_started' &&
-        (e.lifecycle_status === 'running' || e.lifecycle_status === 'queued'),
-    );
+    const hasRunning = events.some(isPendingStart);
     if (!hasRunning) return;
     const interval = setInterval(() => {
       setNowMs(Date.now());
     }, 1000);
     return () => clearInterval(interval);
-  }, [events]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events, terminalTimes, assignments]);
 
   const activeRunId = useMemo(() => {
     if (events.length === 0) return undefined;
@@ -742,20 +759,34 @@ export function LiveEventStream({
                         )}
                       </td>
                       {ASSIGNMENT_METRIC_COLUMNS.map(({ key }) => {
-                        const isRunningAssignment =
-                          event.kind === 'assignment_started' &&
-                          (event.lifecycle_status === 'running' || event.lifecycle_status === 'queued');
+                        const isRunningAssignment = isPendingStart(event);
                         let displayed = !event.assignment_id
                           ? { text: STREAM_EMPTY_METRIC, unavailable: true }
                           : streamMetricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key));
 
                         let isElapsed = false;
-                        if (key === 'latency_ms' && displayed.unavailable && isRunningAssignment) {
+                        if (key === 'latency_ms' && displayed.unavailable && event.kind === 'assignment_started' && event.assignment_id) {
                           const obsTime = new Date(event.observed_at).getTime();
                           if (!Number.isNaN(obsTime)) {
-                            const elapsedSec = Math.max(0, Math.floor((nowMs - obsTime) / 1000));
-                            displayed = { text: `${elapsedSec}s…`, unavailable: false };
-                            isElapsed = true;
+                            if (isRunningAssignment) {
+                              const elapsedSec = Math.max(0, Math.floor((nowMs - obsTime) / 1000));
+                              displayed = { text: `${elapsedSec}s…`, unavailable: false };
+                              isElapsed = true;
+                            } else {
+                              // Resolved: prefer the final scored latency, else freeze at the terminal event.
+                              const final = isTerminalAssignment(assignment)
+                                ? streamMetricDisplay(
+                                    applyAssignmentResourceSummary({ ...assignment.metric_values }, assignment).latency_ms,
+                                    assignmentMetricFormatter(key),
+                                  )
+                                : undefined;
+                              const endMs = terminalTimes.get(`${event.run_id}:${event.assignment_id}`);
+                              if (final && !final.unavailable) {
+                                displayed = final;
+                              } else if (endMs !== undefined) {
+                                displayed = { text: `${Math.max(0, Math.floor((endMs - obsTime) / 1000))}s`, unavailable: false };
+                              }
+                            }
                           }
                         }
 

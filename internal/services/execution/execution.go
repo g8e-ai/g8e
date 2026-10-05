@@ -547,6 +547,17 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	// Set process group so we can kill entire command tree on timeout/cancel
 	setProcessGroup(cmd)
 
+	// Ensure CommandContext cancels the entire process group, not just the leader process
+	cmd.Cancel = func() error {
+		if cmd.Process != nil {
+			return killProcessGroup(cmd.Process.Pid)
+		}
+		return nil
+	}
+
+	// Bound the time spent waiting on child processes that leave I/O pipes unclosed
+	cmd.WaitDelay = constants.ExecutionWaitDelay
+
 	// Start command
 	startTime := time.Now().UTC()
 	if err := cmd.Start(); err != nil {

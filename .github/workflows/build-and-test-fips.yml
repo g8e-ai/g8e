@@ -56,7 +56,7 @@ jobs:
           check-latest: true
 
       - name: Build FIPS variant and run self-check
-        run: make verify-fips
+        run: make fips-verify
 
       - name: Unit Tests (FIPS mode)
         env:

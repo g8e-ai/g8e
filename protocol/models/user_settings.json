@@ -17,19 +17,22 @@
 
     "settings": {
       "llm": {
-        "_description": "Maps to LLMSettings model. Uses generic provider fields instead of provider-specific keys. Aliases shown in brackets.",
+        "_description": "Maps to LLMSettings. Roles select provider/model pairs; provider connections store one endpoint and API key per provider.",
         "llm_primary_provider":   { "type": "string",  "required": false, "description": "Primary LLM provider (alias: primary_provider)" },
         "llm_assistant_provider": { "type": "string",  "required": false, "description": "Assistant LLM provider (alias: assistant_provider)" },
         "llm_lite_provider":      { "type": "string",  "required": false, "description": "Lite LLM provider (alias: lite_provider)" },
         "llm_model":              { "type": "string",  "required": false, "description": "Primary LLM model name (alias: primary_model)" },
         "llm_assistant_model":    { "type": "string",  "required": false, "description": "Assistant LLM model name (alias: assistant_model)" },
         "llm_lite_model":         { "type": "string",  "required": false, "description": "Lite LLM model name (alias: lite_model)" },
-        "primary_api_key":        { "type": "string",  "required": false, "description": "Primary provider API key" },
-        "primary_endpoint":       { "type": "string",  "required": false, "description": "Primary provider endpoint URL" },
-        "assistant_api_key":      { "type": "string",  "required": false, "description": "Assistant provider API key" },
-        "assistant_endpoint":     { "type": "string",  "required": false, "description": "Assistant provider endpoint URL" },
-        "lite_api_key":           { "type": "string",  "required": false, "description": "Lite provider API key" },
-        "lite_endpoint":          { "type": "string",  "required": false, "description": "Lite provider endpoint URL" }
+        "openai_endpoint":        { "type": "string",  "required": false, "description": "OpenAI-compatible endpoint URL" },
+        "openai_api_key":         { "type": "string",  "required": false, "description": "OpenAI-compatible API key" },
+        "ollama_endpoint":        { "type": "string",  "required": false, "description": "Ollama endpoint URL" },
+        "ollama_api_key":         { "type": "string",  "required": false, "description": "Ollama API key" },
+        "anthropic_endpoint":     { "type": "string",  "required": false, "description": "Anthropic endpoint URL" },
+        "anthropic_api_key":      { "type": "string",  "required": false, "description": "Anthropic API key" },
+        "gemini_api_key":         { "type": "string",  "required": false, "description": "Google Gemini API key" },
+        "llamacpp_endpoint":      { "type": "string",  "required": false, "description": "llama.cpp endpoint URL" },
+        "llamacpp_api_key":       { "type": "string",  "required": false, "description": "llama.cpp API key" }
       },
       "search": {
         "_description": "Maps to SearchSettings model.",

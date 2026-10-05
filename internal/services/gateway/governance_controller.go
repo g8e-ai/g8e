@@ -125,6 +125,22 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 			constants.ErrIdentityBindingFailed, actionType)
 	}
 
+	// The auth middleware has already verified the certificate and resolved
+	// replacement CLI sessions by certificate fingerprint. Prefer that
+	// authenticated context when present: a bind/refresh may replace the CLI
+	// session record without reissuing the still-valid certificate, so its URI
+	// SAN legitimately names the predecessor session. All claimed identities
+	// must agree with the server-derived context before this path admits the
+	// envelope; raw request headers are never authoritative here.
+	if authenticatedCLISessionID, ok := r.Context().Value(constants.ContextKeyCLISessionID).(string); ok &&
+		authenticatedCLISessionID != "" && cliSessionID == authenticatedCLISessionID {
+		authenticatedOperatorID, _ := r.Context().Value(constants.ContextKeyOperatorID).(string)
+		authenticatedOperatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
+		if operatorID == authenticatedOperatorID && operatorSessionID == authenticatedOperatorSessionID {
+			return nil
+		}
+	}
+
 	// Check if any certificate URI SAN matches the envelope's identity
 	for _, uri := range cert.URIs {
 		spiffeID := uri.String()
