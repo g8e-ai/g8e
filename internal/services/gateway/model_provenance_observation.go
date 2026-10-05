@@ -29,12 +29,18 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+// modelProvenanceOperatorLister resolves operators capable of storage-side model
+// provenance attestation. Provenance operators are enrolled under the gateway owner.
+type modelProvenanceOperatorLister interface {
+	ListOperatorsForProvenance() ([]models.OperatorDocumentGo, error)
+}
+
 // ModelProvenanceObservationCoordinator fans out BEGIN/FINALIZE provenance
 // commands to the remote storage-side Provenance Operator and ingests
 // completed attestation windows on the campaign Gateway host.
 type ModelProvenanceObservationCoordinator struct {
 	dispatch       *DispatchService
-	operatorLister providerBoundaryOperatorLister
+	operatorLister modelProvenanceOperatorLister
 	pubsub         *GatewayWebSocketHandler
 	windows        model_provenance.WindowStore
 	logger         *slog.Logger
@@ -53,7 +59,7 @@ type modelProvenanceOperatorTarget struct {
 // provenance observation coordinator.
 func NewModelProvenanceObservationCoordinator(
 	dispatch *DispatchService,
-	operatorLister providerBoundaryOperatorLister,
+	operatorLister modelProvenanceOperatorLister,
 	pubsubHandler *GatewayWebSocketHandler,
 	windows model_provenance.WindowStore,
 	logger *slog.Logger,
@@ -73,7 +79,7 @@ func (c *ModelProvenanceObservationCoordinator) synchronizeOperatorSubscription(
 	}
 	_ = ctx
 
-	operators, err := c.operatorLister.ListOperatorsForObservation()
+	operators, err := c.operatorLister.ListOperatorsForProvenance()
 	if err != nil {
 		c.logger.Warn("Model provenance observation: list operators failed", "error", err)
 		return err

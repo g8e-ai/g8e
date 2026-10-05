@@ -97,10 +97,12 @@ setup:
 # =============================================================================
 # PROTO
 # =============================================================================
-.PHONY: proto
+.PHONY: proto proto-generate
 proto:
 	@echo "Verifying canonical Python protobuf stubs..."
 	@cd ../protocol && $(PYTHON) python/scripts/generate_protos.py --check
+
+proto-generate: proto
 
 # =============================================================================
 # VENDOR

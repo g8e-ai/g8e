@@ -201,8 +201,8 @@ class TestLLMSettingsResolveLiteFallback:
         llm = LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
             primary_model="llama3:8b",
-            primary_api_key="secret-key",
-            primary_endpoint="http://ollama:11434",
+            ollama_api_key="secret-key",
+            ollama_endpoint="http://ollama:11434",
         )
         provider, api_key, endpoint, model = llm.resolve("lite")
         assert provider == LLMProvider.OLLAMA.value

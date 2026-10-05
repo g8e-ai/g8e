@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -24,19 +25,25 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
-// EnsembleBrowserProxyController forwards browser-authenticated requests to g8ee
-// with Gateway-stamped identity. Browsers never call g8ee directly. The stamped
-// identity includes the Operators bound to the caller's web session, read from
-// the Gateway registry; browser-supplied bound_operators are discarded.
+// EnsembleBrowserProxyController forwards browser- and CLI-authenticated requests
+// to g8ee with Gateway-stamped identity. Callers never call g8ee directly. The
+// stamped identity includes the Operators bound to the caller's session, read
+// from the Gateway registry; caller-supplied bound_operators are discarded.
 type EnsembleBrowserProxyController struct {
-	cfg       *config.Config
-	logger    *slog.Logger
-	responder *response.Writer
-	operators dispatch.OperatorLister
-	signer    *BrowserProxySigner
-	client    *http.Client
+	cfg            *config.Config
+	logger         *slog.Logger
+	responder      *response.Writer
+	operators      dispatch.OperatorLister
+	signer         *BrowserProxySigner
+	docStore       *DocumentStoreService
+	userSvc        *UserService
+	suspendedStore storage.SuspendedTransactionStore
+	orchestrator   *PasskeyOrchestrator
+	client         *http.Client
 }
 
 type EnsembleBrowserProxyControllerDeps struct {
@@ -46,16 +53,24 @@ type EnsembleBrowserProxyControllerDeps struct {
 	Operators dispatch.OperatorLister
 	// Signer signs every proxied request. A nil Signer makes the proxy refuse
 	// to forward anything: there is no unsigned mode.
-	Signer *BrowserProxySigner
+	Signer         *BrowserProxySigner
+	DocStore       *DocumentStoreService
+	UserSvc        *UserService
+	SuspendedStore storage.SuspendedTransactionStore
+	Orchestrator   *PasskeyOrchestrator
 }
 
 func newEnsembleBrowserProxyController(d EnsembleBrowserProxyControllerDeps) *EnsembleBrowserProxyController {
 	return &EnsembleBrowserProxyController{
-		cfg:       d.Cfg,
-		logger:    d.Logger,
-		responder: d.Responder,
-		operators: d.Operators,
-		signer:    d.Signer,
+		cfg:            d.Cfg,
+		logger:         d.Logger,
+		responder:      d.Responder,
+		operators:      d.Operators,
+		signer:         d.Signer,
+		docStore:       d.DocStore,
+		userSvc:        d.UserSvc,
+		suspendedStore: d.SuspendedStore,
+		orchestrator:   d.Orchestrator,
 		client: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -77,7 +92,8 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	}
 	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
-	if strings.TrimSpace(userID) == "" || strings.TrimSpace(webSessionID) == "" {
+	cliSessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
+	if strings.TrimSpace(userID) == "" || (strings.TrimSpace(webSessionID) == "" && strings.TrimSpace(cliSessionID) == "") {
 		c.responder.Error(w, http.StatusUnauthorized, constants.ErrProtocolAuthRequired.Error())
 		return
 	}
@@ -90,17 +106,28 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Direct handling of operator approval response when local suspended transaction exists
+	// or when posture requires L3 grounding.
+	if method == http.MethodPost && (upstreamPath == constants.APIPaths.EnsembleOperatorApprovalPrefix+"respond" || strings.HasSuffix(upstreamPath, "/operator/approval/respond")) {
+		if c.handleApprovalRespond(w, r, userID, webSessionID, cliSessionID, body) {
+			return
+		}
+	}
+
+	boundCLISessions, _ := r.Context().Value(constants.ContextKeyBoundOperatorSessionIDs).([]string)
+	bound := c.boundOperators(userID, webSessionID, boundCLISessions)
+
 	// Compatibility: browser GET /api/v1/investigations?... -> g8ee POST /api/v1/investigations/query
 	if method == http.MethodGet && upstreamPath == constants.APIPaths.EnsembleInvestigations {
 		method = http.MethodPost
 		upstreamPath = constants.APIPaths.EnsembleInvestigationsQuery
-		body, err = c.investigationsQueryBody(r, userID, webSessionID)
+		body, err = c.investigationsQueryBody(r, userID, webSessionID, cliSessionID)
 		if err != nil {
 			c.responder.Error(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	} else if len(body) > 0 && method != http.MethodGet && method != http.MethodHead {
-		body, err = injectBrowserContext(body, userID, webSessionID, c.boundOperators(userID, webSessionID))
+		body, err = injectBrowserContext(body, userID, webSessionID, bound, cliSessionID)
 		if err != nil {
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
@@ -126,6 +153,7 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 		UserID:       userID,
 		UserEmail:    userID + "@g8e.local",
 		WebSessionID: webSessionID,
+		CLISessionID: cliSessionID,
 	}); err != nil {
 		c.logger.Error("gateway: ensemble browser proxy could not sign request", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
@@ -145,6 +173,12 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 		return
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		c.logger.Warn("gateway: ensemble browser proxy rejected proxy stamp", "path", upstreamPath)
+		c.responder.Error(w, http.StatusBadGateway, "ensemble upstream authentication failed")
+		return
+	}
 
 	for k, vals := range resp.Header {
 		for _, v := range vals {
@@ -185,39 +219,175 @@ func (c *EnsembleBrowserProxyController) handleProxySigningKey(w http.ResponseWr
 	})
 }
 
+// handleApprovalRespond handles approval decisions directly when a local
+// suspended transaction exists, enforcing posture-specific security guarantees
+// (WebAuthn for web callers, mTLS for CLI callers under ratify or notary postures).
+func (c *EnsembleBrowserProxyController) handleApprovalRespond(w http.ResponseWriter, r *http.Request, userID, webSessionID, cliSessionID string, body []byte) bool {
+	var req struct {
+		ApprovalID string `json:"approval_id"`
+		Approved   bool   `json:"approved"`
+		Reason     string `json:"reason,omitempty"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil || strings.TrimSpace(req.ApprovalID) == "" {
+		return false
+	}
+
+	posture := ""
+	if c.cfg != nil {
+		posture = strings.ToLower(strings.TrimSpace(string(c.cfg.Gateway.Posture)))
+	}
+	requiresL3 := posture == constants.PostureRatify || posture == constants.PostureNotary
+
+	if requiresL3 {
+		if cliSessionID != "" {
+			if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+				c.responder.Error(w, http.StatusForbidden, fmt.Sprintf("approval requires mTLS grounded session under %s posture", posture))
+				return true
+			}
+		} else {
+			if c.userSvc != nil {
+				user, err := c.userSvc.GetByID(userID)
+				if err != nil || user == nil || len(user.PasskeyCredentials) == 0 {
+					c.responder.Error(w, http.StatusForbidden, fmt.Sprintf("approval requires WebAuthn grounded session under %s posture", posture))
+					return true
+				}
+			}
+		}
+	}
+
+	if c.suspendedStore == nil {
+		return false
+	}
+
+	tx, ok, err := c.suspendedStore.GetSuspendedTransaction(r.Context(), req.ApprovalID)
+	if err != nil || !ok || tx == nil {
+		// Not a local suspended transaction, let it proxy upstream to g8ee
+		return false
+	}
+
+	if tx.UserID != "" && tx.UserID != userID {
+		c.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
+		return true
+	}
+
+	if !req.Approved {
+		_ = c.suspendedStore.DeleteSuspendedTransaction(r.Context(), req.ApprovalID)
+		c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+			"success":     true,
+			"approval_id": req.ApprovalID,
+			"approved":    false,
+		})
+		return true
+	}
+
+	proof := models.ApprovalProof{}
+	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+		fp := sha256.Sum256(r.TLS.PeerCertificates[0].Raw)
+		proof.CertFingerprint = hex.EncodeToString(fp[:])
+		proof.CliSignature = "mtls-grounded"
+	} else {
+		proof.CredentialID = "webauthn-grounded"
+	}
+
+	if err := c.suspendedStore.ApproveSuspendedTransaction(r.Context(), req.ApprovalID, proof); err != nil {
+		c.logger.Error("gateway: failed to approve suspended transaction", "error", err, "approval_id", req.ApprovalID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to approve transaction")
+		return true
+	}
+
+	if c.orchestrator != nil {
+		l3Proof := &commonv1.L3Proof{
+			MtlsCertFingerprint: proof.CertFingerprint,
+			CliSignature:        proof.CliSignature,
+			CredentialId:        proof.CredentialID,
+		}
+		receipt, procErr := c.orchestrator.ResumeWithL3Proof(r.Context(), req.ApprovalID, userID, l3Proof)
+		if procErr != nil {
+			c.logger.Warn("gateway: resume with L3 proof failed", "error", procErr, "approval_id", req.ApprovalID)
+		} else if receipt != nil {
+			receiptRef, _ := approvalReceiptReference(tx, receipt)
+			targetCLI := tx.SubmitterCLISessionID
+			if targetCLI == "" {
+				targetCLI = cliSessionID
+			}
+			c.orchestrator.EmitApprovalCompletedSSE(userID, targetCLI, req.ApprovalID, receiptRef)
+		}
+	}
+
+	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"approval_id": req.ApprovalID,
+		"approved":    true,
+	})
+	return true
+}
+
 // browserBoundOperator is one entry of the Gateway-stamped bound_operators
 // list. It mirrors the protocol BoundOperator shape g8ee parses from the
 // request context. Field order matches encoding/json map key order.
 type browserBoundOperator struct {
-	BoundWebSessionID string `json:"bound_web_session_id"`
+	BoundWebSessionID string `json:"bound_web_session_id,omitempty"`
 	OperatorID        string `json:"operator_id"`
 	OperatorSessionID string `json:"operator_session_id,omitempty"`
 	Status            string `json:"status,omitempty"`
 }
 
 // boundOperators returns the caller's Operators that the registry shows bound
-// to webSessionID. A registry failure yields an empty list, so the request
+// to webSessionID or CLI sessions. A registry failure yields an empty list, so the request
 // proceeds with no Operator authority rather than with unverified bindings.
-func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID string) []browserBoundOperator {
+func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID string, boundCLIOptional ...[]string) []browserBoundOperator {
 	bound := []browserBoundOperator{}
 	if c.operators == nil {
 		return bound
+	}
+	var boundCLI []string
+	if len(boundCLIOptional) > 0 {
+		boundCLI = boundCLIOptional[0]
 	}
 	ops, err := c.operators.ListUserOperators(userID)
 	if err != nil {
 		c.logger.Warn("gateway: ensemble browser proxy could not list bound operators", "error", err)
 		return bound
 	}
+	cliSet := make(map[string]bool, len(boundCLI))
+	for _, id := range boundCLI {
+		cliSet[id] = true
+	}
 	for _, op := range ops {
-		if op.BoundWebSessionID != webSessionID {
+		isBoundWeb := webSessionID != "" && op.BoundWebSessionID == webSessionID
+		isBoundCLI := cliSet[op.OperatorSessionID] || cliSet[op.ID]
+		if !isBoundWeb && !isBoundCLI {
 			continue
+		}
+		// The registry tracks lifecycle separately from the web-session
+		// binding. Binding an active Operator leaves its document status
+		// active; g8ee's BoundOperator status describes the binding instead.
+		status := op.Status
+		if status == constants.OperatorStatusActive {
+			status = constants.OperatorStatusBound
 		}
 		bound = append(bound, browserBoundOperator{
 			BoundWebSessionID: op.BoundWebSessionID,
 			OperatorID:        op.ID,
 			OperatorSessionID: op.OperatorSessionID,
-			Status:            string(op.Status),
+			Status:            string(status),
 		})
+	}
+	if len(boundCLI) > 0 {
+		seen := make(map[string]bool)
+		for _, b := range bound {
+			seen[b.OperatorSessionID] = true
+			seen[b.OperatorID] = true
+		}
+		for _, id := range boundCLI {
+			if !seen[id] {
+				bound = append(bound, browserBoundOperator{
+					OperatorID:        id,
+					OperatorSessionID: id,
+					Status:            string(constants.OperatorStatusBound),
+				})
+			}
+		}
 	}
 	return bound
 }
@@ -226,7 +396,8 @@ func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID str
 // ensemble requests. Field order matches encoding/json map key order.
 type browserProxyContext struct {
 	UserID       string `json:"user_id"`
-	WebSessionID string `json:"web_session_id"`
+	WebSessionID string `json:"web_session_id,omitempty"`
+	CLISessionID string `json:"cli_session_id,omitempty"`
 }
 
 // browserInvestigationsQuery is the body of the GET investigations compatibility
@@ -244,16 +415,23 @@ type browserInvestigationsQuery struct {
 	Status            string              `json:"status,omitempty"`
 	UserID            string              `json:"user_id"`
 	WebSessionID      string              `json:"web_session_id,omitempty"`
+	CLISessionID      string              `json:"cli_session_id,omitempty"`
 }
 
-func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request, userID, webSessionID string) ([]byte, error) {
+func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request, userID, webSessionID string, cliSessionIDs ...string) ([]byte, error) {
+	var cliSessionID string
+	if len(cliSessionIDs) > 0 {
+		cliSessionID = cliSessionIDs[0]
+	}
 	payload := browserInvestigationsQuery{
 		Context: browserProxyContext{
 			UserID:       userID,
 			WebSessionID: webSessionID,
+			CLISessionID: cliSessionID,
 		},
-		Limit:  20,
-		UserID: userID,
+		Limit:        20,
+		UserID:       userID,
+		CLISessionID: cliSessionID,
 	}
 	for key, vals := range r.URL.Query() {
 		if len(vals) == 0 {
@@ -288,7 +466,11 @@ func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request
 // Operators onto a JSON object body, replacing any caller-supplied values.
 // The outer document and any extra context keys are caller-defined JSON with
 // no stable schema, so they stay map[string]interface{} and round-trip.
-func injectBrowserContext(body []byte, userID, webSessionID string, bound []browserBoundOperator) ([]byte, error) {
+func injectBrowserContext(body []byte, userID, webSessionID string, bound []browserBoundOperator, cliSessionIDs ...string) ([]byte, error) {
+	var cliSessionID string
+	if len(cliSessionIDs) > 0 {
+		cliSessionID = cliSessionIDs[0]
+	}
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return body, nil
@@ -298,7 +480,12 @@ func injectBrowserContext(body []byte, userID, webSessionID string, bound []brow
 		ctx = map[string]interface{}{}
 	}
 	ctx["user_id"] = userID
-	ctx["web_session_id"] = webSessionID
+	if webSessionID != "" {
+		ctx["web_session_id"] = webSessionID
+	}
+	if cliSessionID != "" {
+		ctx["cli_session_id"] = cliSessionID
+	}
 	ctx["bound_operators"] = bound
 	if caseID, ok := payload["case_id"].(string); ok && caseID != "" {
 		ctx["case_id"] = caseID

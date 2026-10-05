@@ -22,6 +22,7 @@ from app.constants import (
     CommandErrorType,
     EventType,
     OperatorToolName,
+    ToolCallStatus,
 )
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.constants.config import (
@@ -268,6 +269,82 @@ def tool_display_metadata(
     return label, icon, display_detail, category
 
 
+def extract_tool_display_detail(tool_name: str, args: dict[str, object]) -> str:
+    """Extract a concise display detail string from tool call arguments."""
+    if not args:
+        return ""
+    if tool_name == OperatorToolName.RUN_COMMANDS:
+        req = args.get("request")
+        if isinstance(req, str) and req.strip():
+            return req.strip()
+    if tool_name == OperatorToolName.RECURSIVE_GREP:
+        pattern = args.get("pattern")
+        path = args.get("path")
+        if pattern and path:
+            return f"{pattern} in {path}"
+        if pattern:
+            return str(pattern)
+    if tool_name == OperatorToolName.CHECK_PORT:
+        port = args.get("port")
+        host = args.get("host")
+        if host and port:
+            return f"{host}:{port}"
+        if port:
+            return f"port {port}"
+    if tool_name in (OperatorToolName.GRANT_INTENT, OperatorToolName.REVOKE_INTENT):
+        intent = args.get("intent") or args.get("action")
+        if intent:
+            return str(intent)
+
+    for key in ("file_path", "path", "query", "command", "directory"):
+        val = args.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+
+    for val in args.values():
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def create_initial_tool_call_info(
+    fc: ToolCall,
+) -> tuple[str, StreamChunkData]:
+    """Build early StreamChunkData and execution_id before tool execution begins."""
+    execution_id = generate_command_execution_id()
+    tool_name = fc.name or ""
+    raw_args = dict(fc.args) if fc.args else {}
+    is_operator_tool = tool_name in OPERATOR_TOOLS
+
+    command_display = ""
+    if tool_name == OperatorToolName.RUN_COMMANDS:
+        try:
+            sage_req = SageOperatorRequest.model_validate(raw_args)
+            command_display = (sage_req.request or "").strip()
+        except Exception:
+            command_display = ""
+    if not command_display:
+        command_display = extract_tool_display_detail(tool_name, raw_args)
+
+    display_label, display_icon, display_detail, category = tool_display_metadata(
+        tool_name, command_display or ""
+    )
+
+    call_info = StreamChunkData(
+        tool_name=tool_name,
+        execution_id=execution_id,
+        command=command_display,
+        arguments=raw_args,
+        is_operator_tool=is_operator_tool,
+        display_label=display_label,
+        display_icon=display_icon,
+        display_detail=display_detail or "",
+        category=category,
+        status=ToolCallStatus.STARTED,
+    )
+    return execution_id, call_info
+
+
 def merge_grounding(
     existing: GroundingMetadata | None,
     new: GroundingMetadata,
@@ -302,6 +379,7 @@ def _tribunal_error_result(
     arguments: dict[str, object],
     request: str,
     error_msg: str,
+    execution_id: str | None = None,
     player_steps: list[EvaluationPlayerStep] | None = None,
 ) -> ToolCallResult:
     """Build a failed ToolCallResult when the Tribunal cannot produce a command.
@@ -310,6 +388,8 @@ def _tribunal_error_result(
     (truncated if long) as the display detail so the UI and the LLM can see
     what Sage asked for.
     """
+    if execution_id is None:
+        execution_id = generate_command_execution_id()
     error_result = CommandExecutionResult(
         success=False,
         error=error_msg,
@@ -320,17 +400,19 @@ def _tribunal_error_result(
         tool_name=tool_name,
         call_info=StreamChunkData(
             tool_name=tool_name,
-            execution_id=None,
+            execution_id=execution_id,
             command=display_detail,
             arguments=arguments,
             is_operator_tool=True,
+            status=ToolCallStatus.STARTED,
         ),
         result_info=StreamChunkData(
             tool_name=tool_name,
-            execution_id=None,
+            execution_id=execution_id,
             command=display_detail,
             arguments=arguments,
             is_operator_tool=True,
+            status=ToolCallStatus.FAILED,
             success=False,
             result=error_result,
             error_type=CommandErrorType.EXECUTION_ERROR,
@@ -348,6 +430,8 @@ async def orchestrate_tool_execution(
     g8e_context: G8eHttpContext,
     event_service: EventService,
     request_settings: G8eeUserSettings,
+    execution_id: str | None = None,
+    call_info: StreamChunkData | None = None,
 ) -> ToolCallResult:
     """
     Dispatch a single tool call through the Tribunal refinement pipeline and
@@ -374,6 +458,13 @@ async def orchestrate_tool_execution(
     step_recorder = (
         PlayerStepRecorder() if g8e_context.evaluation_context is not None else None
     )
+
+    if execution_id is None:
+        execution_id = (
+            call_info.execution_id
+            if call_info and call_info.execution_id
+            else generate_command_execution_id()
+        )
 
     try:
         if tool_name == OperatorToolName.RUN_COMMANDS:
@@ -419,12 +510,11 @@ async def orchestrate_tool_execution(
                         arguments=model_args,
                         request=request,
                         error_msg=error_msg,
+                        execution_id=execution_id,
                         player_steps=step_recorder.steps if step_recorder else None,
                     )
 
                 raw_args = executor_args.model_dump(by_alias=True)
-
-        execution_id = generate_command_execution_id()
 
         result = await tool_executor.execute_tool_call(
             tool_name,
@@ -496,6 +586,10 @@ async def orchestrate_tool_execution(
     command_display = (
         gen_result.final_command if gen_result else (sage_request.request if sage_request else "")
     )
+    if not command_display:
+        command_display = extract_tool_display_detail(tool_name, raw_args)
+    if not command_display and call_info and call_info.display_detail:
+        command_display = call_info.display_detail
 
     display_label, display_icon, display_detail, category = tool_display_metadata(
         tool_name, command_display or ""
@@ -503,9 +597,22 @@ async def orchestrate_tool_execution(
 
     chain_steps = step_recorder.steps if step_recorder else []
 
+    resolved_call_info = call_info or StreamChunkData(
+        tool_name=tool_name,
+        execution_id=execution_id,
+        command=command_display,
+        arguments=model_args,
+        is_operator_tool=is_operator_tool,
+        display_label=display_label,
+        display_icon=display_icon,
+        display_detail=display_detail or "",
+        category=category,
+    )
+
     return ToolCallResult(
         tool_name=tool_name,
-        call_info=StreamChunkData(
+        call_info=resolved_call_info,
+        result_info=StreamChunkData(
             tool_name=tool_name,
             execution_id=execution_id,
             command=command_display,
@@ -515,18 +622,10 @@ async def orchestrate_tool_execution(
             display_icon=display_icon,
             display_detail=display_detail or "",
             category=category,
-        ),
-        result_info=StreamChunkData(
-            tool_name=tool_name,
-            execution_id=execution_id,
-            command=command_display,
-            arguments=model_args,
-            is_operator_tool=is_operator_tool,
+            status=ToolCallStatus.COMPLETED if result.success else ToolCallStatus.FAILED,
             success=result.success,
             result=result,
-            error_type=result.error_type
-            if not result.success and hasattr(result, "error_type")
-            else None,
+            error_type=result.error_type if not result.success else None,
             player_steps=chain_steps,
         ),
         result=result,
@@ -591,8 +690,12 @@ async def _process_single_tool_call(
     g8e_context: G8eHttpContext,
     request_settings: G8eeUserSettings,
     event_service: EventService,
+    execution_id: str | None = None,
+    call_info: StreamChunkData | None = None,
 ) -> ToolCallResult:
     """Helper to execute a single tool call with error handling."""
+    if execution_id is None:
+        execution_id = generate_command_execution_id()
     try:
         tool_result = await orchestrate_tool_execution(
             tool_call=fc,
@@ -601,31 +704,38 @@ async def _process_single_tool_call(
             g8e_context=g8e_context,
             event_service=event_service,
             request_settings=request_settings,
+            execution_id=execution_id,
+            call_info=call_info,
         )
     except asyncio.CancelledError:
         raise
     except Exception as exc:
         logger.error("[TOOL_EXEC] Function call %d (%s) failed: %s", idx, fc.name, exc)
-        execution_id = generate_command_execution_id()
         _exc_result = CommandExecutionResult(
             success=False,
             error=str(exc),
         )
+        c_info = call_info or StreamChunkData(
+            tool_name=fc.name,
+            execution_id=execution_id,
+            command="",
+            arguments=dict(fc.args) if fc.args else {},
+            is_operator_tool=False,
+        )
         tool_result = ToolCallResult(
             tool_name=fc.name or "",
-            call_info=StreamChunkData(
-                tool_name=fc.name,
-                execution_id=execution_id,
-                command="",
-                arguments=dict(fc.args) if fc.args else {},
-                is_operator_tool=False,
-            ),
+            call_info=c_info,
             result_info=StreamChunkData(
                 tool_name=fc.name,
                 execution_id=execution_id,
-                command="",
+                command=c_info.command or "",
                 arguments=dict(fc.args) if fc.args else {},
-                is_operator_tool=False,
+                is_operator_tool=c_info.is_operator_tool,
+                display_label=c_info.display_label,
+                display_icon=c_info.display_icon,
+                display_detail=c_info.display_detail,
+                category=c_info.category,
+                status=ToolCallStatus.FAILED,
                 success=False,
                 result=_exc_result,
                 error_type=CommandErrorType.EXECUTION_ERROR,
@@ -665,14 +775,25 @@ async def _execute_sequential(
     """Execute tool calls one by one."""
     responses: list[ToolCallResponse] = []
     for i, fc in enumerate(pending_tool_calls):
-        tool_result = await _process_single_tool_call(
-            i, fc, tool_executor, investigation, g8e_context, request_settings, event_service
-        )
+        execution_id, call_info = create_initial_tool_call_info(fc)
 
         yield StreamChunkFromModel(
             type=StreamChunkFromModelType.TOOL_CALL,
-            data=tool_result.call_info,
+            data=call_info,
         )
+
+        tool_result = await _process_single_tool_call(
+            i,
+            fc,
+            tool_executor,
+            investigation,
+            g8e_context,
+            request_settings,
+            event_service,
+            execution_id=execution_id,
+            call_info=call_info,
+        )
+
         yield StreamChunkFromModel(
             type=StreamChunkFromModelType.TOOL_RESULT,
             data=tool_result.result_info,
@@ -701,11 +822,29 @@ async def _execute_parallel(
     event_service: EventService,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Execute tool calls concurrently using asyncio.gather."""
+    prepared: list[tuple[str, StreamChunkData]] = [
+        create_initial_tool_call_info(fc) for fc in pending_tool_calls
+    ]
+
+    for _, call_info in prepared:
+        yield StreamChunkFromModel(
+            type=StreamChunkFromModelType.TOOL_CALL,
+            data=call_info,
+        )
+
     tasks = [
         _process_single_tool_call(
-            i, fc, tool_executor, investigation, g8e_context, request_settings, event_service
+            i,
+            fc,
+            tool_executor,
+            investigation,
+            g8e_context,
+            request_settings,
+            event_service,
+            execution_id=eid,
+            call_info=cinfo,
         )
-        for i, fc in enumerate(pending_tool_calls)
+        for i, (fc, (eid, cinfo)) in enumerate(zip(pending_tool_calls, prepared, strict=False))
     ]
 
     # Execute all tool calls in parallel
@@ -713,11 +852,6 @@ async def _execute_parallel(
 
     responses: list[ToolCallResponse] = []
     for fc, tool_result in zip(pending_tool_calls, results, strict=False):
-        # Yield status chunks for UI
-        yield StreamChunkFromModel(
-            type=StreamChunkFromModelType.TOOL_CALL,
-            data=tool_result.call_info,
-        )
         yield StreamChunkFromModel(
             type=StreamChunkFromModelType.TOOL_RESULT,
             data=tool_result.result_info,

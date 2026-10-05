@@ -137,12 +137,6 @@ class ChatPipelineService:
         primary_provider_override: str | None = None,
         assistant_provider_override: str | None = None,
         lite_provider_override: str | None = None,
-        primary_api_key_override: str | None = None,
-        primary_endpoint_override: str | None = None,
-        assistant_api_key_override: str | None = None,
-        assistant_endpoint_override: str | None = None,
-        lite_api_key_override: str | None = None,
-        lite_endpoint_override: str | None = None,
     ) -> None:
         """Synchronously validate that LLM models and their required credentials are configured.
 
@@ -156,10 +150,10 @@ class ChatPipelineService:
 
         if not any([primary, assistant, lite]):
             raise ConfigurationError(
-                "No LLM model configured. Set a primary_model and/or assistant_model in platform settings.",
+                "No LLM model configured. Select a provider and model for the primary role.",
                 remediation_steps=[
-                    "Check your platform settings in the dashboard or via API.",
-                    "Ensure G8E_PRIMARY_MODEL or G8E_ASSISTANT_MODEL env vars are set if using local config.",
+                    "Open Model Roles in the console and configure Primary.",
+                    "Configure the selected provider connection on the Inference page.",
                     "Run './g8e platform status' to verify component health.",
                 ],
             )
@@ -218,20 +212,15 @@ class ChatPipelineService:
             for error in provider_errors:
                 validation_errors.append(f"{tier_name.capitalize()} {error}")
 
-        # Resolve effective provider/key/endpoint per tier. When a request
-        # overrides the provider, credential and endpoint resolution must
-        # follow the override provider, not the stored one - otherwise the
-        # stored provider's (often None) credentials shadow the request and
-        # the request fails validation even though the user supplied a
-        # complete override.
+        # Provider connections are stored once per provider. A role override
+        # changes which saved connection is resolved, but never carries its
+        # own key or endpoint.
 
         # Check primary tier
         if primary:
             provider, api_key, endpoint, _ = llm.resolve(
                 "primary",
                 provider_override=primary_provider_override,
-                api_key_override=primary_api_key_override,
-                endpoint_override=primary_endpoint_override,
             )
             check_tier("primary", primary, provider, api_key, endpoint)
 
@@ -240,8 +229,6 @@ class ChatPipelineService:
             provider, api_key, endpoint, _ = llm.resolve(
                 "assistant",
                 provider_override=assistant_provider_override,
-                api_key_override=assistant_api_key_override,
-                endpoint_override=assistant_endpoint_override,
             )
             check_tier("assistant", assistant, provider, api_key, endpoint)
 
@@ -250,16 +237,12 @@ class ChatPipelineService:
             provider, api_key, endpoint, _ = llm.resolve(
                 "lite",
                 provider_override=lite_provider_override,
-                api_key_override=lite_api_key_override,
-                endpoint_override=lite_endpoint_override,
             )
             check_tier("lite", lite, provider, api_key, endpoint)
 
         lite_provider, _, _, _ = llm.resolve(
             "lite",
             provider_override=lite_provider_override,
-            api_key_override=lite_api_key_override,
-            endpoint_override=lite_endpoint_override,
             model_override=lite_model_override,
         )
         if lite_provider == LLMProvider.JEV.value:
@@ -269,8 +252,8 @@ class ChatPipelineService:
             raise ConfigurationError(
                 "LLM configuration is incomplete: " + " ".join(validation_errors),
                 remediation_steps=[
-                    "Configure API keys and endpoints in your user settings document in the operator database.",
-                    "Or provide per-request overrides via the chat API.",
+                    "Configure provider API keys and endpoints on the Inference page.",
+                    "Select a provider and model under Model Roles.",
                     "Verify your configuration with './g8e platform status'.",
                 ],
             )
@@ -960,12 +943,6 @@ class ChatPipelineService:
         llm_lite_model: str,
         _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
-        llm_primary_api_key: str | None = None,
-        llm_primary_endpoint: str | None = None,
-        llm_assistant_api_key: str | None = None,
-        llm_assistant_endpoint: str | None = None,
-        llm_lite_api_key: str | None = None,
-        llm_lite_endpoint: str | None = None,
         _track_task: bool = True,
         seed_application: EvaluationSeedApplication | None = None,
     ) -> None:
@@ -1020,12 +997,6 @@ class ChatPipelineService:
                 llm_primary_model=llm_primary_model,
                 llm_assistant_model=llm_assistant_model,
                 llm_lite_model=llm_lite_model,
-                llm_primary_api_key=llm_primary_api_key,
-                llm_primary_endpoint=llm_primary_endpoint,
-                llm_assistant_api_key=llm_assistant_api_key,
-                llm_assistant_endpoint=llm_assistant_endpoint,
-                llm_lite_api_key=llm_lite_api_key,
-                llm_lite_endpoint=llm_lite_endpoint,
                 user_settings=user_settings,
                 task_manager=_task_manager,
                 seed_application=seed_application,
@@ -1071,12 +1042,6 @@ class ChatPipelineService:
         llm_assistant_model: str,
         llm_lite_model: str,
         user_settings: G8eeUserSettings,
-        llm_primary_api_key: str | None = None,
-        llm_primary_endpoint: str | None = None,
-        llm_assistant_api_key: str | None = None,
-        llm_assistant_endpoint: str | None = None,
-        llm_lite_api_key: str | None = None,
-        llm_lite_endpoint: str | None = None,
         task_manager: BackgroundTaskManager | None = None,
         seed_application: EvaluationSeedApplication | None = None,
     ) -> None:
@@ -1091,12 +1056,10 @@ class ChatPipelineService:
         # Resolve effective provider/key/endpoint per tier.
         resolved_settings = user_settings
 
-        primary_provider, primary_api_key, primary_endpoint, primary_model = (
+        primary_provider, _, _, primary_model = (
             user_settings.llm.resolve(
                 "primary",
                 provider_override=llm_primary_provider,
-                api_key_override=llm_primary_api_key,
-                endpoint_override=llm_primary_endpoint,
                 model_override=llm_primary_model,
             )
         )
@@ -1108,22 +1071,6 @@ class ChatPipelineService:
                     )
                 }
             )
-        if primary_api_key:
-            resolved_settings = resolved_settings.model_copy(
-                update={
-                    "llm": resolved_settings.llm.model_copy(
-                        update={"primary_api_key": primary_api_key}
-                    )
-                }
-            )
-        if primary_endpoint:
-            resolved_settings = resolved_settings.model_copy(
-                update={
-                    "llm": resolved_settings.llm.model_copy(
-                        update={"primary_endpoint": primary_endpoint}
-                    )
-                }
-            )
         if primary_model:
             resolved_settings = resolved_settings.model_copy(
                 update={
@@ -1131,12 +1078,10 @@ class ChatPipelineService:
                 }
             )
 
-        assistant_provider, assistant_api_key, assistant_endpoint, assistant_model = (
+        assistant_provider, _, _, assistant_model = (
             resolved_settings.llm.resolve(
                 "assistant",
                 provider_override=llm_assistant_provider,
-                api_key_override=llm_assistant_api_key,
-                endpoint_override=llm_assistant_endpoint,
                 model_override=llm_assistant_model,
             )
         )
@@ -1145,22 +1090,6 @@ class ChatPipelineService:
                 update={
                     "llm": resolved_settings.llm.model_copy(
                         update={"assistant_provider": LLMProvider(assistant_provider)}
-                    )
-                }
-            )
-        if assistant_api_key:
-            resolved_settings = resolved_settings.model_copy(
-                update={
-                    "llm": resolved_settings.llm.model_copy(
-                        update={"assistant_api_key": assistant_api_key}
-                    )
-                }
-            )
-        if assistant_endpoint:
-            resolved_settings = resolved_settings.model_copy(
-                update={
-                    "llm": resolved_settings.llm.model_copy(
-                        update={"assistant_endpoint": assistant_endpoint}
                     )
                 }
             )
@@ -1173,11 +1102,9 @@ class ChatPipelineService:
                 }
             )
 
-        lite_provider, lite_api_key, lite_endpoint, lite_model = resolved_settings.llm.resolve(
+        lite_provider, _, _, lite_model = resolved_settings.llm.resolve(
             "lite",
             provider_override=llm_lite_provider,
-            api_key_override=llm_lite_api_key,
-            endpoint_override=llm_lite_endpoint,
             model_override=llm_lite_model,
         )
         if lite_provider:
@@ -1186,18 +1113,6 @@ class ChatPipelineService:
                     "llm": resolved_settings.llm.model_copy(
                         update={"lite_provider": LLMProvider(lite_provider)}
                     )
-                }
-            )
-        if lite_api_key:
-            resolved_settings = resolved_settings.model_copy(
-                update={
-                    "llm": resolved_settings.llm.model_copy(update={"lite_api_key": lite_api_key})
-                }
-            )
-        if lite_endpoint:
-            resolved_settings = resolved_settings.model_copy(
-                update={
-                    "llm": resolved_settings.llm.model_copy(update={"lite_endpoint": lite_endpoint})
                 }
             )
         if lite_model:

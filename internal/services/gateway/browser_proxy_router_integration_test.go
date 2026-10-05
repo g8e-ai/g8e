@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -116,4 +117,53 @@ func TestBrowserProxyRouter_MTLSKeyAndSignedBrowserRequests(t *testing.T) {
 			require.True(t, ed25519.Verify(publicKey, canonical, signature), "the mTLS-exported key must verify the exact forwarded request")
 		})
 	}
+}
+
+// An upstream 401 means g8ee rejected the Gateway's proxy stamp (for example,
+// before it has fetched the signing key). The browser's session is not at
+// fault, so it must never see a 401 that the console treats as a logout.
+func TestBrowserProxyRouter_UpstreamUnauthorizedMappedToBadGateway(t *testing.T) {
+	var trusted atomic.Bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !trusted.Load() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":{"message":"unknown key id"}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+	h, cfg, infra := setupTestHTTPHandler(t)
+	cfg.Gateway.EnsembleUpstreamURL = upstream.URL
+	_, key, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signer, err := NewBrowserProxySigner(key, "router-test-key")
+	require.NoError(t, err)
+	controller := h.ensembleBrowserProxyController
+	controller.cfg = cfg
+	controller.logger = infra.Logger
+	controller.responder = infra.Responder
+	controller.operators = &gatewayOperatorListerAdapter{svc: infra.Reg}
+	controller.signer = signer
+
+	userID := "proxy-router-untrusted-user"
+	seedActiveUser(t, infra, userID)
+	sessionID := seedWebSession(t, infra, userID)
+
+	send := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.EnsembleSettingsPrefix+"/llm/get", bytes.NewBufferString(`{}`))
+		req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: sessionID})
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w
+	}
+
+	w := send()
+	require.Equal(t, http.StatusBadGateway, w.Code, "upstream 401 must not reach the browser as a session failure")
+	require.Contains(t, w.Body.String(), "ensemble upstream authentication failed")
+	require.NotContains(t, w.Body.String(), "unknown key id", "g8ee's internal rejection reason must not leak to the browser")
+
+	trusted.Store(true)
+	require.Equal(t, http.StatusNoContent, send().Code, "the browser session must survive an upstream trust failure")
 }

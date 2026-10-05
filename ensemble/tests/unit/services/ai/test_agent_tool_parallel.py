@@ -7,9 +7,10 @@
 
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.models.agent import ToolCall, StreamChunkData
 from app.models.settings import G8eeUserSettings, LLMSettings
+from app.services.ai import agent_tool_loop
 from app.services.ai.agent_tool_loop import execute_turn_tool_calls, ToolCallResult
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -45,11 +46,11 @@ async def test_execute_turn_tool_calls_parallel():
             result=MagicMock(),
         )
 
-    with MagicMock():
-        import app.services.ai.agent_tool_loop
-
-        app.services.ai.agent_tool_loop.orchestrate_tool_execution = mock_orchestrate
-
+    with patch.object(
+        agent_tool_loop,
+        "orchestrate_tool_execution",
+        new=mock_orchestrate,
+    ):
         result_out = []
         chunks = []
         async for chunk in execute_turn_tool_calls(
@@ -107,13 +108,11 @@ async def test_execute_turn_tool_calls_sequential():
             result=MagicMock(),
         )
 
-    import app.services.ai.agent_tool_loop
-
-    # We need to patch it in the module
-    original_orchestrate = app.services.ai.agent_tool_loop.orchestrate_tool_execution
-    app.services.ai.agent_tool_loop.orchestrate_tool_execution = mock_orchestrate
-
-    try:
+    with patch.object(
+        agent_tool_loop,
+        "orchestrate_tool_execution",
+        new=mock_orchestrate,
+    ):
         result_out = []
         async for _ in execute_turn_tool_calls(
             pending_tool_calls=pending_tool_calls,
@@ -125,8 +124,6 @@ async def test_execute_turn_tool_calls_sequential():
             event_service=event_service,
         ):
             pass
-    finally:
-        app.services.ai.agent_tool_loop.orchestrate_tool_execution = original_orchestrate
 
     # Verify sequential execution: tool_1 must finish before tool_2 starts
     assert execution_order == ["start_tool_1", "end_tool_1", "start_tool_2", "end_tool_2"]

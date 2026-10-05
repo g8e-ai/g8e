@@ -459,15 +459,15 @@ func TestRouteAuthRegistry_BrowserOperatorAndEnsembleProxy(t *testing.T) {
 	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.OperatorsValidate))
 	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.OperatorsStop))
 
-	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleChatPrefix))
-	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleChatPrefix+"/stop"))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.EnsembleChatPrefix))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.EnsembleChatPrefix+"/stop"))
 	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleSettingsPrefix+"/user"))
 	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleInvestigations))
-	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleOperatorApprovalPrefix+"respond"))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.EnsembleOperatorApprovalPrefix+"respond"))
 
-	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.AuditEvents))
-	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.AuditSummary))
-	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.AuditVerify))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuditEvents))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuditSummary))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuditVerify))
 	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuditRecords))
 	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuditReceipts))
 }

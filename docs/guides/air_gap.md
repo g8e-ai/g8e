@@ -89,7 +89,7 @@ Ids are stable. Append the next free number in a group. Do not renumber.
 | Makefile air-gap target | `Makefile` | `make test-airgap` target at line ~1800 |
 | Go vendor build support | `go.mod`, `vendor/` | `go build -mod=vendor ./...` succeeds |
 | Container image build | `Dockerfile`, `docker-compose.yml` | `docker compose build` completes without external registry access on connected host |
-| Python wheel build | `protocol/python/pyproject.toml`, `Makefile` | `make python-build` produces `protocol/python/dist/g8e-2.2.6-py3-none-any.whl` |
+| Python wheel build | `protocol/python/pyproject.toml`, `Makefile` | `make protocol-python-build` produces `protocol/python/dist/g8e-2.2.6-py3-none-any.whl` |
 | Demo manifest and images | `demos/images.json`, `demos/*/compose.yml` | `./g8e demos pull`, `./g8e demos export` |
 | Gateway port defaults | `internal/constants/ports.go` | HTTP 8080, HTTPS 8443 |
 
@@ -274,7 +274,7 @@ The root `vendor/` directory makes the repository buildable with `-mod=vendor`. 
 Build the Python protocol wheel and collect its transitive dependencies on the connected host:
 
 ```bash
-make python-build
+make protocol-python-build
 pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.2.6-py3-none-any.whl
 ```
 
@@ -286,7 +286,7 @@ pip install --no-index --find-links /media/g8e-python-wheels g8e==2.2.6
 
 The Python package includes JSON constants at `g8e/_data`; there is no `G8E_PROTOCOL_DIR` runtime setting.
 
-Generated Go, Python, and Node protocol sources are already present in the repository. Protocol regeneration is not required at runtime. `make proto` is not inherently offline; its setup paths can install Buf, Python, and Node tooling and update lock files. To regenerate inside an isolated build environment, stage the pinned generator binaries and all Python and Node dependencies first.
+Generated Go, Python, and Node protocol sources are already present in the repository. Protocol regeneration is not required at runtime. `make proto-generate` is not inherently offline; its setup paths can install Buf, Python, and Node tooling and update lock files. To regenerate inside an isolated build environment, stage the pinned generator binaries and all Python and Node dependencies first.
 
 Cross-platform scripts under `scripts/` bootstrap developer workspaces and invoke operating-system package managers; they are not air-gap installers.
 

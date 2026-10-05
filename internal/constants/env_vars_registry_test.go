@@ -60,7 +60,6 @@ var allowedEnvViolations = map[string]bool{
 	"G8E_HARNESS_POLL_TIMEOUT": true,
 	"G8E_HARNESS_LLM_PROVIDER": true,
 	"G8E_HARNESS_LLM_MODEL":    true,
-	"G8E_HARNESS_LLM_ENDPOINT": true,
 	"G8E_TEST_REEXEC":          true,
 }
 

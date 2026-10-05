@@ -490,6 +490,51 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservat
 	assert.Equal(t, float64(16_000_000_000), *record.BenchmarkObservations.GPU.VRAMPeakBytes.Value)
 }
 
+func TestCampaignPublicationCoordinatorPublishAssignmentResultFailedAssignmentWithoutInferences(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	req := testCampaignInitRequest(t)
+	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	run, err := controller.InitializeCampaign(ctx, req)
+	require.NoError(t, err)
+	exporter := &recordingCampaignFeedExporter{}
+
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	assignment := &evalv1.EvaluationAssignment{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    "assign-failed-1",
+		RunId:           run.GetRunId(),
+		CampaignId:      run.GetCampaignBinding().GetCampaignId(),
+		ScenarioId:      req.Catalog.GetScenarios()[0].GetScenarioId(),
+		ScenarioRef:     &compliancev1.VersionedReference{Id: req.Catalog.GetScenarios()[0].GetScenarioId(), Version: req.Catalog.GetScenarios()[0].GetScenarioVersion()},
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED,
+		Target: &evalv1.EvaluationAssignment_Homogeneous{
+			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
+				DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+				CandidateVariant: &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			},
+		},
+	}
+	require.NoError(t, store.SaveAssignment(ctx, assignment))
+	result := &evalv1.EvaluationAssignmentResult{
+		AssignmentId:    "assign-failed-1",
+		RunId:           run.GetRunId(),
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED,
+		ModelInferences: nil,
+	}
+	require.NoError(t, coordinator.PublishAssignmentResult(
+		ctx,
+		assignment,
+		result,
+		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
+		"unverified",
+	))
+	require.Len(t, exporter.records, 1)
+}
+
 // completedTestCampaign runs one full stubbed campaign: init, schedule, and
 // every assignment executed to a terminal result.
 func completedTestCampaign(t *testing.T, store *Store) *evalv1.EvaluationRun {

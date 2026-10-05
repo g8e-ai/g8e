@@ -129,7 +129,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Claim | Path | Verify |
 | --- | --- | --- |
 | Governance posture definitions and factory | `internal/services/governance/posture.go` | Unit tests in `internal/services/governance/l4_warden_test.go` |
-| Envelope proto definition and schema | `protocol/proto/g8e/common/v1/common.proto`, `protocol/models/governance.json` | `make proto` and schema validation tests |
+| Envelope proto definition and schema | `protocol/proto/g8e/common/v1/common.proto`, `protocol/models/governance.json` | `make proto-generate` and schema validation tests |
 | Envelope hashing and canonicalization | `internal/governance/envelope.go` | Cross-language parity tests in `internal/governance/envelope_hash_parity_test.go` |
 | L1 Doctrine validation and threat detectors | `internal/services/governance/l1_doctrine.go` | Unit tests in `internal/services/governance/l1_doctrine_test.go` |
 | L2 Consensus verification | `internal/services/governance/l2_consensus.go` | Unit tests in `internal/services/governance/l4_warden_consensus_test.go` |
@@ -139,7 +139,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Just-in-time capability lifecycle | `internal/services/governance/capability.go` | Unit tests in `internal/services/governance/capability_test.go` |
 | Deterministic protocol chain verification | `internal/services/governance/protocol_chain.go` | Chain tests in `internal/services/governance/protocol_chain_test.go` |
 | Gateway dispatch envelope construction | `internal/services/gateway/dispatch_service.go` | Unit tests in `internal/services/gateway/dispatch_service_test.go` |
-| Operator execution receipts proto | `protocol/proto/g8e/operator/v1/operator.proto` | `make proto` and protocol reference tests |
+| Operator execution receipts proto | `protocol/proto/g8e/operator/v1/operator.proto` | `make proto-generate` and protocol reference tests |
 
 ## Procedures
 

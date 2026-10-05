@@ -63,8 +63,8 @@ class TestContentsToMessages:
                 "tool_calls": [
                     {
                         "id": "call_get_weather",
-                        "type": "tool",
-                        "tool": {
+                        "type": "function",
+                        "function": {
                             "name": "get_weather",
                             "arguments": '{"city": "London"}',
                         },
@@ -104,12 +104,15 @@ class TestContentsToMessages:
         messages = _contents_to_messages(contents, system_instructions="")
         assert messages == [
             {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "thinking"},
             {
                 "role": "assistant",
-                "content": None,
+                "content": "thinking",
                 "tool_calls": [
-                    {"id": "call_cmd", "type": "tool", "tool": {"name": "cmd", "arguments": "{}"}}
+                    {
+                        "id": "call_cmd",
+                        "type": "function",
+                        "function": {"name": "cmd", "arguments": "{}"},
+                    }
                 ],
             },
         ]

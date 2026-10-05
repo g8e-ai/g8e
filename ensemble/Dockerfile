@@ -26,7 +26,7 @@ COPY protocol/python /build/protocol/python
 # to the JSON files invalidate the Docker layer cache (the COPY protocol/python
 # layer only hashes protocol/python/ content). This also ensures the build
 # always uses fresh constants even if _data/ was not re-synced via make
-# python-build before the Docker build (E.9 staleness guard).
+# protocol-python-build before the Docker build (E.9 staleness guard).
 COPY protocol/constants /build/protocol/constants
 RUN cp /build/protocol/constants/*.json /build/protocol/python/g8e/_data/ \
  && rm -rf /build/protocol/python/g8e/_data/doctrine \

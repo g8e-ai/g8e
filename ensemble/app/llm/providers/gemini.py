@@ -648,6 +648,7 @@ class GeminiProvider(LLMProvider):
             with attempt:
                 response = await asyncio.to_thread(self._sync_generate, model, contents, config)
         assert response is not None
+        self._record_response(response, complete=True)
         return self._parse_response(response)
 
     async def _stream_with_retry(
@@ -667,10 +668,17 @@ class GeminiProvider(LLMProvider):
             with attempt:
                 stream_iter = await asyncio.to_thread(self._sync_stream, model, contents, config)
         assert stream_iter is not None
+        sdk_chunks = []
         while True:
             sdk_chunk = await asyncio.to_thread(next, stream_iter, _STREAM_END)
             if sdk_chunk is _STREAM_END:
                 break
+            self._record_response(sdk_chunk)
+            sdk_chunks.append(sdk_chunk)
+        artifact = self._response_artifact.get()
+        if artifact is not None:
+            artifact.received_complete = True
+        for sdk_chunk in sdk_chunks:
             for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
                 yield chunk
 

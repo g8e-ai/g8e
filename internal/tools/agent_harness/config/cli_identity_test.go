@@ -57,6 +57,7 @@ func TestLoadCLIIdentity_PopulatedCredentials(t *testing.T) {
 	want := &auth.Credentials{
 		UserID:            "user-123",
 		CLISessionID:      "cli-session-456",
+		OperatorID:        "embedded-operator",
 		OperatorSessionID: "op-session-789",
 	}
 	projectRoot := setupCLIIdentityEnv(t, want)
@@ -65,6 +66,7 @@ func TestLoadCLIIdentity_PopulatedCredentials(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, want.UserID, identity.UserID)
 	assert.Equal(t, want.CLISessionID, identity.CLISessionID)
+	assert.Equal(t, want.OperatorID, identity.OperatorID)
 	assert.Equal(t, want.OperatorSessionID, identity.OperatorSessionID)
 }
 
@@ -76,6 +78,7 @@ func TestLoadCLIIdentity_MissingCredentialsFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, identity.UserID)
 	assert.Empty(t, identity.CLISessionID)
+	assert.Empty(t, identity.OperatorID)
 	assert.Empty(t, identity.OperatorSessionID)
 }
 

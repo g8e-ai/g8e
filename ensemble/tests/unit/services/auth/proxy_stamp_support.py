@@ -9,6 +9,7 @@
 Gateway's key endpoint, a controllable clock, and a signer that produces the
 headers and request the Gateway would forward."""
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -49,15 +50,22 @@ def key_response(key: SigningKey, key_id: str = KEY_ID) -> ProxySigningKeyRespon
 
 
 class KeySource:
-    """Stands in for the Gateway's proxy-signing-key endpoint."""
+    """Stands in for the Gateway's proxy-signing-key endpoint.
 
-    def __init__(self, *responses: ProxySigningKeyResponse | Exception):
+    ``delay`` suspends each fetch so concurrent verifications overlap it, the
+    way browser requests do against a cold g8ee.
+    """
+
+    def __init__(self, *responses: ProxySigningKeyResponse | Exception, delay: float = 0.0):
         self.responses = list(responses)
         self.calls = 0
+        self.delay = delay
 
     async def __call__(self) -> ProxySigningKeyResponse:
         self.calls += 1
         item = self.responses[min(self.calls - 1, len(self.responses) - 1)]
+        if self.delay:
+            await asyncio.sleep(self.delay)
         if isinstance(item, Exception):
             raise item
         return item

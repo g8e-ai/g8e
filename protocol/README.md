@@ -26,7 +26,7 @@ The protocol has several source types with distinct responsibilities:
 - `schemas/oscal/` embeds the authenticated NIST OSCAL 1.1.2 assessment-results schema and its provenance for offline validation.
 - `vectors/` and `conformance/hash_vectors.json` define shared canonicalization and transaction-hash examples consumed by cross-language tests. Vectors are executable examples derived from another source of truth, not schemas or parallel message descriptors. Evaluation vectors with a `canonical_json` field exercise canonical protobuf JSON; `vectors/eval/chat_probe_trace.json` exercises the canonical JSON digest shared by g8e and g8ee for the application-owned evaluation trace contract, `vectors/eval/canonical_json_numbers.json` pins how that encoder writes numbers and escaped strings so Go and Python agree byte for byte (an integral float such as `0.0` is `0`), and `vectors/eval/player_steps.json` pins the wire shape of the trace's per-player `player_steps` chain, which g8ee tests it produces and the Go grader tests it decodes.
 
-The Python package loads its supported JSON registries from the bundled `g8e/_data/` directory. `make python-build` refreshes that bundle from `protocol/constants/` before building the package.
+The Python package loads its supported JSON registries from the bundled `g8e/_data/` directory. `make protocol-python-build` refreshes that bundle from `protocol/constants/` before building the package.
 
 ## Directory Map
 
@@ -95,11 +95,11 @@ The [MCP specification](docs/mcp.md) defines governed tool, resource, and prompt
 
 Run generation from the repository root:
 
-- `make proto` regenerates Go protobuf messages and gRPC stubs, Python protobuf modules and type stubs, TypeScript protobuf modules, generated Markdown API references, and downstream Python lockfiles.
+- `make proto-generate` regenerates Go protobuf messages and gRPC stubs, Python protobuf modules and type stubs, TypeScript protobuf modules, generated Markdown API references, and downstream Python lockfiles.
 - `make proto-go` regenerates Go protobuf outputs and Markdown API references.
 - `make proto-python` regenerates Python protobuf outputs.
 - `make proto-node` installs the Node generator when needed and regenerates TypeScript protobuf outputs.
-- `make python-build` refreshes the bundled JSON data and builds the Python distribution.
+- `make protocol-python-build` refreshes the bundled JSON data and builds the Python distribution.
 
 The root `buf.gen.yaml` configures Go and Markdown generation. `node/buf.gen.yaml` configures TypeScript generation. From `protocol/`, `make python-proto` regenerates Python protobuf outputs and `make proto-check` verifies that committed Python outputs match the schemas.
 

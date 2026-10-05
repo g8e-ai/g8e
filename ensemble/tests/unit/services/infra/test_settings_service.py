@@ -93,7 +93,7 @@ class TestSettingsService:
         assert isinstance(settings, G8eeUserSettings)
         assert settings.llm.primary_provider is None
         assert settings.llm.primary_model is None
-        assert settings.llm.primary_api_key is None
+        assert settings.llm.openai_api_key is None
 
         cache_mock.get_document_with_cache.assert_any_call(
             collection=DB_COLLECTION_SETTINGS, document_id=user_doc_id
@@ -216,9 +216,9 @@ class TestSettingsService:
 class TestLLMEnvVarBootstrapDefaults:
     """D.6: LLM env-var bootstrap defaults.
 
-    A fresh deployment can serve chat via LLM env vars alone, without
-    platform DB configuration or per-request overrides. Priority order:
-    platform DB settings > per-request overrides > env-var defaults.
+    A fresh deployment gets provider connections from LLM environment
+    variables without platform DB configuration. Priority order:
+    platform DB settings > env-var defaults.
     """
 
     @pytest.fixture(autouse=True)
@@ -232,16 +232,16 @@ class TestLLMEnvVarBootstrapDefaults:
     def _make_service(self) -> SettingsService:
         return SettingsService()
 
-    def test_env_vars_populate_local_settings(self, monkeypatch):
-        """Env vars set the primary endpoint and api_key (user endpoint + secret) on local settings."""
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_ENDPOINT, "http://192.168.1.2:11434")
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_API_KEY, "env-key")
+    def test_env_vars_populate_provider_connection(self, monkeypatch):
+        """Env vars set one endpoint and API key for their provider."""
+        monkeypatch.setenv(EnvVar.LLM_OLLAMA_ENDPOINT, "http://192.168.1.2:11434")
+        monkeypatch.setenv(EnvVar.LLM_OLLAMA_API_KEY, "env-key")
 
         service = self._make_service()
         settings = service.get_local_settings()
 
-        assert settings.llm.primary_endpoint == "http://192.168.1.2:11434"
-        assert settings.llm.primary_api_key == "env-key"
+        assert settings.llm.ollama_endpoint == "http://192.168.1.2:11434"
+        assert settings.llm.ollama_api_key == "env-key"
 
     def test_provider_and_model_env_vars_are_ignored(self, monkeypatch):
         """Provider and model selection is platform configuration, never read from the environment."""
@@ -266,8 +266,8 @@ class TestLLMEnvVarBootstrapDefaults:
 
         assert settings.llm.primary_provider is None
         assert settings.llm.primary_model is None
-        assert settings.llm.primary_endpoint is None
-        assert settings.llm.primary_api_key is None
+        assert settings.llm.openai_api_key is None
+        assert settings.llm.ollama_api_key is None
 
     def test_provider_specific_endpoint_env_vars(self, monkeypatch):
         """Provider-specific endpoint/api-key env vars populate the matching fields."""

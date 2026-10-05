@@ -12,7 +12,9 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"log/slog"
+	"net"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -288,11 +290,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("g8eo: failed to create state root HTTP client: %w", err)
 		}
-		hostname := vs.config.Endpoint
-		if vs.config.TLSServerName != "" {
-			hostname = vs.config.TLSServerName
-		}
-		baseURL := fmt.Sprintf("https://%s:%d", hostname, vs.config.HTTPSPort)
+		baseURL := "https://" + net.JoinHostPort(vs.config.Endpoint, strconv.Itoa(vs.config.HTTPSPort))
 		stateRootProvider = governance.NewRemoteStateRootProvider(httpClient, baseURL, vs.logger)
 		vs.logger.Info("Using remote (gateway) state root provider", "state_url", baseURL+constants.APIPaths.State)
 	} else {
@@ -609,7 +607,7 @@ func printOperatorStartupBanner(cfg *config.Config, logger *slog.Logger) {
 	logger.Info("[g8eo] Initializing Edge Execution Operator...")
 	logger.Info("Operator Integrity & Uplink",
 		"identity_attestation", "VERIFIED (mTLS Client Certificate Valid)",
-		"gateway_uplink", fmt.Sprintf("CONNECTED (WSS @ %s:%d)", cfg.Endpoint, cfg.HTTPPort),
+		"gateway_uplink", fmt.Sprintf("CONNECTED (WSS @ %s:%d)", cfg.Endpoint, cfg.HTTPSPort),
 		"heartbeat", "30s interval established",
 		"sovereign_boundary", "ACTIVE (Data egress scrubbing enabled)")
 	logger.Info("CAPABILITIES & EXPOSED TOOLING",

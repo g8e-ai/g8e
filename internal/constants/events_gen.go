@@ -1713,7 +1713,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorCommandCompleted: {
 		Key:         "OperatorCommandCompleted",
 		Kind:        EventKindOutcome,
-		Transport:   []string{"pubsub"},
+		Transport:   []string{"pubsub", "sse"},
 		Producers:   []string{"cli", "ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
@@ -1727,7 +1727,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorCommandFailed: {
 		Key:         "OperatorCommandFailed",
 		Kind:        EventKindOutcome,
-		Transport:   []string{"pubsub"},
+		Transport:   []string{"pubsub", "sse"},
 		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},
@@ -1758,7 +1758,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorCommandStarted: {
 		Key:         "OperatorCommandStarted",
 		Kind:        EventKindOutcome,
-		Transport:   []string{"pubsub"},
+		Transport:   []string{"pubsub", "sse"},
 		Producers:   []string{"ensemble", "operator"},
 		Persistence: "ephemeral",
 	},

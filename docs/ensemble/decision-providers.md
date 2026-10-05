@@ -249,7 +249,7 @@ Tier 4 live tests call the actual Ollama System One API and require Ollama 0.35+
 
 Run external tests from repository root:
 ```bash
-make test-external   # Runs all tests marked requires_system_one
+make ensemble-test-external   # Runs all tests marked requires_system_one
 ```
 
 For details on test markers and CI scope, see [Testing Guide](docs/devs/tests.md).

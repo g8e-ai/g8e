@@ -199,19 +199,22 @@ OPERATOR_SESSION_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.arg
 
 For a real local Ollama model:
 
+First save the Ollama endpoint on the console's Inference page. The harness
+selects only the provider and model; chat requests do not carry connections.
+
 ```bash
 export G8E_HARNESS_LLM_PROVIDER=ollama
 export G8E_HARNESS_LLM_MODEL='<tool-capable-model-tag>'
-export G8E_HARNESS_LLM_ENDPOINT='http://<ollama-host>:<port>'
-printf 'provider=%s\nmodel=%s\nendpoint=%s\nclassification=real-model\n' "${G8E_HARNESS_LLM_PROVIDER}" "${G8E_HARNESS_LLM_MODEL}" "${G8E_HARNESS_LLM_ENDPOINT}" | tee "${CAMPAIGN_DIR}/metadata/model.txt"
-curl -fsS "${G8E_HARNESS_LLM_ENDPOINT}/api/tags" > "${CAMPAIGN_DIR}/metadata/ollama-tags.json"
+OLLAMA_ENDPOINT='http://<ollama-host>:<port>'
+printf 'provider=%s\nmodel=%s\nendpoint=%s\nclassification=real-model\n' "${G8E_HARNESS_LLM_PROVIDER}" "${G8E_HARNESS_LLM_MODEL}" "${OLLAMA_ENDPOINT}" | tee "${CAMPAIGN_DIR}/metadata/model.txt"
+curl -fsS "${OLLAMA_ENDPOINT}/api/tags" > "${CAMPAIGN_DIR}/metadata/ollama-tags.json"
 ```
 
 For a deterministic rehearsal:
 
 ```bash
 export G8E_HARNESS_LLM_PROVIDER=fake
-unset G8E_HARNESS_LLM_MODEL G8E_HARNESS_LLM_ENDPOINT
+unset G8E_HARNESS_LLM_MODEL
 printf 'provider=fake\nclassification=deterministic-rehearsal\n' | tee "${CAMPAIGN_DIR}/metadata/model.txt"
 ```
 

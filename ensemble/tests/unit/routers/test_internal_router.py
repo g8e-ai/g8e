@@ -20,11 +20,11 @@ from app.models.cases import (
 )
 from app.models.http_context import BoundOperator, G8eHttpContext, RequestContext
 from app.models.investigations import InvestigationQueryRequest
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.internal_api import (
     ChatMessageRequest,
     DirectCommandRequest,
     LLMModelListRequest,
-    LLMModelListResponse,
     ResourceCreationRequest,
     OperatorApprovalResponse,
     OperatorBindRequest,
@@ -61,15 +61,12 @@ API_KEY_REGULAR_REGEX = re.compile(r"^g8e_[a-f0-9]{64}$")
 
 
 @pytest.mark.asyncio
-async def test_governed_model_list_ignores_browser_endpoint(request_context, g8e_context):
+async def test_governed_model_list_uses_bound_inference_operator(request_context, g8e_context):
     settings_service = MagicMock()
     gateway_operator_client = MagicMock()
     request = LLMModelListRequest(
         context=request_context,
-        role="primary",
         provider=LLMProvider.G8E,
-        endpoint="http://untrusted.example:11434",
-        api_key="untrusted-key",
     )
     with patch("app.routers.internal_router.list_governed_models", new_callable=AsyncMock) as listing:
         listing.return_value = ["qwen3:4b"]
@@ -77,6 +74,31 @@ async def test_governed_model_list_ignores_browser_endpoint(request_context, g8e
     assert result.models == ["qwen3:4b"]
     listing.assert_awaited_once_with(gateway_operator_client, g8e_context)
     settings_service.get_user_settings.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_model_list_uses_saved_provider_connection(request_context, g8e_context):
+    settings_service = MagicMock()
+    settings_service.get_user_settings = AsyncMock(
+        return_value=G8eeUserSettings(
+            llm=LLMSettings(
+                openai_endpoint="https://proxy.example/v1",
+                openai_api_key="saved-key",
+            )
+        )
+    )
+    request = LLMModelListRequest(context=request_context, provider=LLMProvider.OPENAI)
+
+    with patch("app.routers.internal_router.list_models", new_callable=AsyncMock) as listing:
+        listing.return_value = ["gpt-test"]
+        result = await list_llm_models(request, settings_service, g8e_context, MagicMock())
+
+    assert result.models == ["gpt-test"]
+    listing.assert_awaited_once_with(
+        LLMProvider.OPENAI,
+        "https://proxy.example/v1",
+        "saved-key",
+    )
 
 
 @pytest.fixture
@@ -778,13 +800,13 @@ def test_status_payload_from_gateway_doc_prefers_snapshot_hostname():
 
 
 @pytest.mark.asyncio
-async def test_internal_chat_with_llm_overrides(request_context, g8e_context, task_tracker):
+async def test_internal_chat_with_model_role_overrides(request_context, g8e_context, task_tracker):
     request = ChatMessageRequest(
         context=request_context,
         message="test message",
         sentinel_mode=True,
-        llm_primary_api_key="sk-test-key",
-        llm_primary_endpoint="https://test-endpoint.com",
+        llm_primary_provider="openai",
+        llm_primary_model="gpt-test",
     )
 
     # Mock dependencies
@@ -820,8 +842,8 @@ async def test_internal_chat_with_llm_overrides(request_context, g8e_context, ta
     # Verify chat_pipeline.run_chat was called with overrides
     mock_chat_pipeline.run_chat.assert_called_once()
     call_kwargs = mock_chat_pipeline.run_chat.call_args.kwargs
-    assert call_kwargs["llm_primary_api_key"] == "sk-test-key"
-    assert call_kwargs["llm_primary_endpoint"] == "https://test-endpoint.com"
+    assert call_kwargs["llm_primary_provider"] == "openai"
+    assert call_kwargs["llm_primary_model"] == "gpt-test"
 
 
 @pytest.mark.asyncio
@@ -866,5 +888,3 @@ async def test_internal_chat_settings_service_di_regression(
         )
 
     assert response.success is True
-
-

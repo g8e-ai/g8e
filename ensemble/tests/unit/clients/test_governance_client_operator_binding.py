@@ -26,10 +26,14 @@ import pytest
 
 from app.constants import EventType
 from app.constants.config import G8EE_COMPONENT as G8EE_COMPONENT_STR
-from app.models.command_request_payloads import DocumentUpdateRequestPayload
+from app.models.command_request_payloads import (
+    CommandRequestPayload,
+    DocumentUpdateRequestPayload,
+)
 from app.models.pubsub_messages import G8eMessage
 
 pytestmark = pytest.mark.unit
+
 
 
 def _generate_operator_cert_with_spiffe(
@@ -190,15 +194,10 @@ class TestGovernanceClientOperatorBinding:
         assert op_session_2 == "test-op-session"
 
     @pytest.mark.asyncio
-    async def test_submit_envelope_stamps_operator_identity_from_cert(
+    async def test_submit_envelope_stamps_operator_identity_for_host_actions(
         self, operator_cert_tmpdir
     ):
-        """submit_envelope stamps operator_id + operator_session_id from the cert when the message omits them.
-
-        This reproduces and verifies the fix for the 403 blocker: without
-        stamping, the gateway rejects mutation actions with
-        ErrIdentityBindingFailed.
-        """
+        """submit_envelope stamps operator_id + operator_session_id from cert for host actions."""
         from app.clients.governance_client import GovernanceClient
         from app.models.settings import TLSConfig
 
@@ -211,24 +210,20 @@ class TestGovernanceClientOperatorBinding:
             ),
         )
 
-        # Build a mutation message without operator_id/operator_session_id
         message = G8eMessage(
-            id="test-doc-id",
+            id="test-cmd-id",
             source_component=G8EE_COMPONENT_STR,
-            event_type=EventType.APP_CASE_CREATE_REQUESTED,
+            event_type=EventType.OPERATOR_COMMAND_REQUESTED,
             case_id="test-case-id",
             user_id="test-user-id",
-            payload=DocumentUpdateRequestPayload(
-                collection="cases",
-                document_id="test-doc-id",
-                updates={"field": "value"},
-                merge=False,
+            payload=CommandRequestPayload(
+                command="ls -la",
+                execution_id="exec-1",
             ),
         )
         assert message.operator_id is None
         assert message.operator_session_id is None
 
-        # Capture the envelope JSON submitted to the gateway
         captured_envelope: dict | None = None
 
         class FakeResponse:
@@ -260,20 +255,78 @@ class TestGovernanceClientOperatorBinding:
                 await client.submit_envelope(message)
 
         assert captured_envelope is not None, "envelope was not submitted"
-        assert captured_envelope.get("operator_id") == "test-op-id", (
-            "envelope must carry operator_id from the cert SPIFFE URI SAN; "
-            "without it the gateway rejects mutations with ErrIdentityBindingFailed"
-        )
-        assert captured_envelope.get("operator_session_id") == "test-op-session", (
-            "envelope must carry operator_session_id from the cert SPIFFE URI SAN; "
-            "without it the gateway rejects mutations with ErrIdentityBindingFailed"
-        )
+        assert captured_envelope.get("operator_id") == "test-op-id"
+        assert captured_envelope.get("operator_session_id") == "test-op-session"
 
     @pytest.mark.asyncio
-    async def test_submit_envelope_preserves_explicit_operator_identity(
+    async def test_submit_envelope_preserves_explicit_operator_identity_for_host_actions(
         self, operator_cert_tmpdir
     ):
-        """submit_envelope does not overwrite operator_id/operator_session_id when the message already carries them."""
+        """submit_envelope preserves explicit operator_id/operator_session_id for host actions."""
+        from app.clients.governance_client import GovernanceClient
+        from app.models.settings import TLSConfig
+
+        cert_path, key_path, _ = operator_cert_tmpdir
+        client = GovernanceClient(
+            tls_config=TLSConfig(
+                ca_cert_path=cert_path,
+                client_cert_path=cert_path,
+                client_key_path=key_path,
+            ),
+        )
+
+        message = G8eMessage(
+            id="test-cmd-id",
+            source_component=G8EE_COMPONENT_STR,
+            event_type=EventType.OPERATOR_COMMAND_REQUESTED,
+            case_id="test-case-id",
+            user_id="test-user-id",
+            operator_id="explicit-op-id",
+            operator_session_id="explicit-op-session",
+            payload=CommandRequestPayload(
+                command="ls -la",
+                execution_id="exec-1",
+            ),
+        )
+
+        captured_envelope: dict | None = None
+
+        class FakeResponse:
+            def __init__(self):
+                self.status = 200
+
+            async def text(self):
+                return '{"status": "COMPLETED"}'
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        class FakeSession:
+            def post(self, url, data=None):
+                nonlocal captured_envelope
+                captured_envelope = json.loads(data)
+                return FakeResponse()
+
+        with patch.object(
+            client, "_get_http_session", new=AsyncMock(return_value=FakeSession())
+        ):
+            with patch.object(
+                client, "fetch_state_root", new=AsyncMock(return_value="test-root")
+            ):
+                await client.submit_envelope(message)
+
+        assert captured_envelope is not None
+        assert captured_envelope.get("operator_id") == "explicit-op-id"
+        assert captured_envelope.get("operator_session_id") == "explicit-op-session"
+
+    @pytest.mark.asyncio
+    async def test_submit_envelope_keeps_app_document_writes_unbound(
+        self, operator_cert_tmpdir
+    ):
+        """Under INV-AUTH-ID-05 and INV-GOV-WARD-07, app document writes must remain unbound."""
         from app.clients.governance_client import GovernanceClient
         from app.models.settings import TLSConfig
 
@@ -292,8 +345,6 @@ class TestGovernanceClientOperatorBinding:
             event_type=EventType.APP_CASE_CREATE_REQUESTED,
             case_id="test-case-id",
             user_id="test-user-id",
-            operator_id="explicit-op-id",
-            operator_session_id="explicit-op-session",
             payload=DocumentUpdateRequestPayload(
                 collection="cases",
                 document_id="test-doc-id",
@@ -332,5 +383,72 @@ class TestGovernanceClientOperatorBinding:
                 await client.submit_envelope(message)
 
         assert captured_envelope is not None
-        assert captured_envelope.get("operator_id") == "explicit-op-id"
-        assert captured_envelope.get("operator_session_id") == "explicit-op-session"
+        assert captured_envelope.get("operator_id", "") == ""
+        assert captured_envelope.get("operator_session_id", "") == ""
+
+    @pytest.mark.asyncio
+    async def test_submit_envelope_clears_operator_identity_on_app_document_writes(
+        self, operator_cert_tmpdir
+    ):
+        """Explicit operator identity on app document writes is stripped so Gateway executes them."""
+        from app.clients.governance_client import GovernanceClient
+        from app.models.settings import TLSConfig
+
+        cert_path, key_path, _ = operator_cert_tmpdir
+        client = GovernanceClient(
+            tls_config=TLSConfig(
+                ca_cert_path=cert_path,
+                client_cert_path=cert_path,
+                client_key_path=key_path,
+            ),
+        )
+
+        message = G8eMessage(
+            id="test-doc-id",
+            source_component=G8EE_COMPONENT_STR,
+            event_type=EventType.APP_CASE_CREATE_REQUESTED,
+            case_id="test-case-id",
+            user_id="test-user-id",
+            operator_id="outbound-operator-id",
+            operator_session_id="outbound-operator-session",
+            payload=DocumentUpdateRequestPayload(
+                collection="cases",
+                document_id="test-doc-id",
+                updates={"field": "value"},
+                merge=False,
+            ),
+        )
+
+        captured_envelope: dict | None = None
+
+        class FakeResponse:
+            def __init__(self):
+                self.status = 200
+
+            async def text(self):
+                return '{"status": "COMPLETED"}'
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        class FakeSession:
+            def post(self, url, data=None):
+                nonlocal captured_envelope
+                captured_envelope = json.loads(data)
+                return FakeResponse()
+
+        with patch.object(
+            client, "_get_http_session", new=AsyncMock(return_value=FakeSession())
+        ):
+            with patch.object(
+                client, "fetch_state_root", new=AsyncMock(return_value="test-root")
+            ):
+                await client.submit_envelope(message)
+
+        assert captured_envelope is not None
+        assert captured_envelope.get("operator_id", "") == ""
+        assert captured_envelope.get("operator_session_id", "") == ""
+

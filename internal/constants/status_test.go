@@ -378,3 +378,17 @@ func TestAuthMethodConstants(t *testing.T) {
 		assert.Equal(t, tc.value, string(tc.goConst))
 	}
 }
+
+func TestToolCallStatusConstants(t *testing.T) {
+	cases := []struct {
+		goConst ToolCallStatus
+		value   string
+	}{
+		{ToolCallStatusCompleted, "completed"},
+		{ToolCallStatusFailed, "failed"},
+		{ToolCallStatusStarted, "started"},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.value, string(tc.goConst))
+	}
+}

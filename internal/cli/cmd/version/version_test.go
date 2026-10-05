@@ -80,7 +80,7 @@ func TestRunVersion_FIPSReportsModuleStatus(t *testing.T) {
 	// needs non-approved primitives); the command must warn but exit 0 so
 	// operators get a status report, not a false alarm. CI/release gates that
 	// require the strict posture run under GODEBUG=fips140=only (see `make
-	// verify-fips`).
+	// fips-verify`).
 	if !fips140.Enforced() {
 		require.NoError(t, err)
 		assert.Contains(t, out, "FIPS 140-3 mode:     enabled")

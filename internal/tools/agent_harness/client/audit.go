@@ -10,23 +10,18 @@ package client
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -89,7 +84,7 @@ func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona .
 		p = persona[0]
 	}
 	u := c.cfg.MTLSBaseURL + constants.APIPaths.AuditReceipts + "?tx_id=" + url.QueryEscape(transactionID)
-	status, body, err := c.do(ctx, p, http.MethodGet, u, nil)
+	status, body, err := c.doWithCLI(ctx, p, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, body, err
 	}
@@ -113,7 +108,7 @@ func (c *Client) GetActionReceipt(ctx context.Context, transactionID string, per
 		p = persona[0]
 	}
 	u := c.cfg.MTLSBaseURL + constants.APIPaths.AuditReceipts + "?tx_id=" + url.QueryEscape(transactionID)
-	status, body, err := c.do(ctx, p, http.MethodGet, u, nil)
+	status, body, err := c.doWithCLI(ctx, p, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, body, err
 	}
@@ -189,7 +184,7 @@ func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
-	_, body, err := c.do(ctx, c.auditorPersona(), http.MethodGet, u, nil)
+	_, body, err := c.doWithCLI(ctx, c.auditorPersona(), http.MethodGet, u, nil)
 	if err != nil {
 		return nil, body, err
 	}
@@ -202,7 +197,7 @@ func (c *Client) AuditReceiptRecords(ctx context.Context, operatorSessionID stri
 		return nil, nil, constants.ErrMissingRequiredField
 	}
 	u := c.cfg.MTLSBaseURL + constants.APIPaths.AuditReceipts + "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
-	status, body, err := c.do(ctx, c.auditorPersona(), http.MethodGet, u, nil)
+	status, body, err := c.doWithCLI(ctx, c.auditorPersona(), http.MethodGet, u, nil)
 	if err != nil {
 		return nil, body, err
 	}
@@ -225,100 +220,42 @@ func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) (
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
-	_, body, err := c.do(ctx, c.auditorPersona(), http.MethodGet, u, nil)
+	_, body, err := c.doWithCLI(ctx, c.auditorPersona(), http.MethodGet, u, nil)
 	return body, err
 }
 
-// DiscoverOperatorSession best-effort reads /api/operators to find a live
-// Operator session id when the user didn't pin one.
-func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
-	_, sid := c.DiscoverOperator(ctx)
-	return sid
-}
-
-// DiscoverOperator reads /api/operators to find a live Operator's ID and session ID.
-// Returns ("", "") if none found.
-func (c *Client) DiscoverOperator(ctx context.Context) (operatorID, operatorSessionID string) {
-	// If Operator session ID is already pinned in config, use it
-	if c.cfg.OperatorSessionID != "" {
-		return "", c.cfg.OperatorSessionID
+// DiscoverOperator resolves one active operator identity from the canonical registry.
+// Explicit ID/session constraints must match the same record. Without constraints,
+// only data workers qualify; an ambiguous target must be selected explicitly.
+func (c *Client) DiscoverOperator(ctx context.Context) (string, string, error) {
+	operators, _, err := c.ListOperators(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("discover operator: %w", err)
 	}
-
-	// Try to extract directly from the client cert SAN first
-	if c.cfg.Auth.ClientCert != "" {
-		if certBytes, err := os.ReadFile(c.cfg.Auth.ClientCert); err == nil {
-			if block, _ := pem.Decode(certBytes); block != nil && block.Type == "CERTIFICATE" {
-				if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
-					for _, u := range cert.URIs {
-						if u.Scheme == "spiffe" && strings.HasPrefix(u.Path, "/operator/") {
-							parts := strings.Split(strings.TrimPrefix(u.Path, "/operator/"), "/")
-							if len(parts) >= 3 {
-								return parts[1], parts[2]
-							}
-						}
-					}
-				}
-			}
+	var matches []models.OperatorDocumentGo
+	for _, op := range operators {
+		if op.ID == "" || op.OperatorSessionID == "" || op.Status != constants.OperatorStatusActive {
+			continue
 		}
-	}
-
-	// Try to load user_id and operator_session_id from CLI credentials via
-	// the shared helper so this path and config.Default() cannot drift on
-	// the identity source (E.5).
-	userID := ""
-	if c.cfg.UseCLIConfig {
-		identity, err := harnessconfig.LoadCLIIdentity("")
-		if err != nil {
-			slog.Warn("agent_harness: CLI identity load failed during operator discovery", "error", err)
-		} else {
-			userID = identity.UserID
-			operatorSessionID = identity.OperatorSessionID
+		if c.cfg.OperatorID != "" && op.ID != c.cfg.OperatorID {
+			continue
 		}
-	}
-
-	// If we already have the Operator session ID from credentials, return it directly
-	if operatorSessionID != "" {
-		return "", operatorSessionID
-	}
-
-	url := c.cfg.MTLSBaseURL + constants.APIPaths.Operators
-	// Prefer the user_id from explicit config flags (--user-id) over the
-	// CLI credentials lookup, since the harness may be pointed at a
-	// gateway whose CLI credentials differ from the local .g8e/ tree.
-	effectiveUserID := c.cfg.UserID
-	if effectiveUserID == "" {
-		effectiveUserID = userID
-	}
-	if effectiveUserID != "" {
-		url += "?user_id=" + effectiveUserID
-	}
-
-	_, body, err := c.do(ctx, Persona{
-		ID:           "agent-harness",
-		CLISessionID: c.cfg.CLISessionID,
-		UserID:       effectiveUserID,
-	}, http.MethodGet, url, nil)
-	if err != nil || !json.Valid(body) {
-		return "", ""
-	}
-	// Tolerate {"operators":[...]} or a bare array of operator documents.
-	var wrap models.OperatorSlotResponse
-	if json.Unmarshal(body, &wrap) == nil {
-		for _, o := range wrap.Operators {
-			if o.OperatorSessionID != "" {
-				return o.ID, o.OperatorSessionID
-			}
+		if c.cfg.OperatorSessionID != "" && op.OperatorSessionID != c.cfg.OperatorSessionID {
+			continue
 		}
-	}
-	var arr []models.OperatorDocumentGo
-	if json.Unmarshal(body, &arr) == nil {
-		for _, o := range arr {
-			if o.OperatorSessionID != "" {
-				return o.ID, o.OperatorSessionID
-			}
+		if c.cfg.OperatorID == "" && c.cfg.OperatorSessionID == "" && !operatorcapability.IsDataOperator(op) {
+			continue
 		}
+		matches = append(matches, op)
 	}
-	return "", ""
+	switch len(matches) {
+	case 0:
+		return "", "", fmt.Errorf("%w: operator id=%q session=%q", constants.ErrEvaluationTargetUnavailable, c.cfg.OperatorID, c.cfg.OperatorSessionID)
+	case 1:
+		return matches[0].ID, matches[0].OperatorSessionID, nil
+	default:
+		return "", "", fmt.Errorf("%w: %d active operators; specify --operator-id or --operator-session", constants.ErrEvaluationTargetAmbiguous, len(matches))
+	}
 }
 
 // parseReceipts tolerates {"receipts":[...]} or a bare array of receipts.

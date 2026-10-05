@@ -5,13 +5,11 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Browser-facing view and update rules for per-role LLM selection.
+"""Browser-facing view and update rules for LLM provider and role settings.
 
-The console assigns a provider, model, endpoint, and API key to each of the
-primary, assistant, and lite roles. Those land in the role-specific
-``LLMSettings`` fields, which ``LLMSettings.resolve()`` reads ahead of the
-provider-level defaults. API keys never leave g8ee: the view reports only
-whether one resolves for the role.
+The console saves one endpoint and API key per provider, then assigns a
+provider/model pair independently to primary, assistant, and lite roles.
+API keys never leave g8ee: the view reports only whether one is stored.
 
 Every provider, g8e included, stores the model the user chose for the role. The
 Inference Operator is a worker and never decides it; the console lists the
@@ -20,23 +18,26 @@ models the Operator's Ollama provider serves from /settings/llm/models.
 
 from __future__ import annotations
 
-from typing import get_args
 from urllib.parse import urlsplit
 
-from app.constants import LLMProvider
+from app.constants import (
+    ANTHROPIC_DEFAULT_ENDPOINT,
+    LLMProvider,
+    LLAMACPP_DEFAULT_ENDPOINT,
+    OLLAMA_DEFAULT_ENDPOINT,
+    OPENAI_DEFAULT_ENDPOINT,
+)
 from app.errors import ValidationError
 from app.models.internal_api import (
     FieldRequirement,
     LLMProviderOption,
+    LLMProviderUpdate,
     LLMRole,
     LLMRoleSettingsResponse,
     LLMRoleSettingsUpdateRequest,
-    LLMRoleUpdate,
     LLMRoleView,
 )
 from app.models.settings import LLMSettings
-
-ROLES: tuple[LLMRole, ...] = get_args(LLMRole)
 
 # Providers a user may assign from the console, in display order:
 # (label, endpoint, api_key, lists_models). Jev is a lite-only decision
@@ -52,39 +53,67 @@ _PROVIDER_FIELDS: dict[LLMProvider, tuple[str, FieldRequirement, FieldRequiremen
 }
 
 
-def _provider_default_endpoint(llm: LLMSettings, provider: LLMProvider) -> str | None:
+def _provider_default_endpoint(provider: LLMProvider) -> str | None:
     return {
-        LLMProvider.OLLAMA: llm.ollama_endpoint,
-        LLMProvider.OPENAI: llm.openai_endpoint,
-        LLMProvider.ANTHROPIC: llm.anthropic_endpoint,
-        LLMProvider.LLAMACPP: llm.llamacpp_endpoint,
+        LLMProvider.OLLAMA: OLLAMA_DEFAULT_ENDPOINT,
+        LLMProvider.OPENAI: OPENAI_DEFAULT_ENDPOINT,
+        LLMProvider.ANTHROPIC: ANTHROPIC_DEFAULT_ENDPOINT,
+        LLMProvider.LLAMACPP: LLAMACPP_DEFAULT_ENDPOINT,
     }.get(provider)
 
 
 def provider_options(llm: LLMSettings) -> list[LLMProviderOption]:
-    return [
-        LLMProviderOption(
-            provider=provider,
-            label=label,
-            endpoint=endpoint,
-            api_key=api_key,
-            default_endpoint=_provider_default_endpoint(llm, provider) if endpoint != "none" else None,
-            lists_models=lists_models,
+    options: list[LLMProviderOption] = []
+    for provider, (label, endpoint, api_key, lists_models) in _PROVIDER_FIELDS.items():
+        endpoint_value, provider_key = provider_connection(llm, provider)
+        options.append(
+            LLMProviderOption(
+                provider=provider,
+                label=label,
+                endpoint=endpoint,
+                api_key=api_key,
+                default_endpoint=_provider_default_endpoint(provider) if endpoint != "none" else None,
+                configured_endpoint=endpoint_value,
+                api_key_set=bool(provider_key),
+                lists_models=lists_models,
+            )
         )
-        for provider, (label, endpoint, api_key, lists_models) in _PROVIDER_FIELDS.items()
-    ]
+    return options
+
+
+_PROVIDER_CONNECTION_FIELDS: dict[LLMProvider, tuple[str | None, str | None]] = {
+    LLMProvider.OLLAMA: ("ollama_endpoint", "ollama_api_key"),
+    LLMProvider.OPENAI: ("openai_endpoint", "openai_api_key"),
+    LLMProvider.ANTHROPIC: ("anthropic_endpoint", "anthropic_api_key"),
+    LLMProvider.GEMINI: (None, "gemini_api_key"),
+    LLMProvider.LLAMACPP: ("llamacpp_endpoint", "llamacpp_api_key"),
+    LLMProvider.G8E: (None, None),
+}
+
+
+def provider_connection(
+    llm: LLMSettings, provider: LLMProvider
+) -> tuple[str | None, str | None]:
+    fields = _PROVIDER_CONNECTION_FIELDS.get(provider)
+    if fields is None:
+        raise ValidationError(
+            f"Provider '{provider.value}' cannot be selected here",
+            field="provider",
+            constraint="console_provider",
+        )
+    endpoint_field, key_field = fields
+    endpoint = getattr(llm, endpoint_field) if endpoint_field else None
+    api_key = getattr(llm, key_field) if key_field else None
+    return endpoint, api_key
 
 
 def role_view(llm: LLMSettings, role: LLMRole) -> LLMRoleView:
     provider: LLMProvider | None = getattr(llm, f"{role}_provider")
     if provider is None:
         return LLMRoleView()
-    _, api_key, _, _ = llm.resolve(role)
     return LLMRoleView(
         provider=provider,
         model=getattr(llm, f"{role}_model"),
-        endpoint=getattr(llm, f"{role}_endpoint"),
-        api_key_set=bool(api_key),
     )
 
 
@@ -95,22 +124,6 @@ def settings_view(llm: LLMSettings) -> LLMRoleSettingsResponse:
         assistant=role_view(llm, "assistant"),
         lite=role_view(llm, "lite"),
     )
-
-
-def stored_connection(
-    llm: LLMSettings, role: LLMRole, provider: LLMProvider
-) -> tuple[str | None, str | None]:
-    """Return the (endpoint, api_key) role would use with provider.
-
-    The role's own endpoint and key apply only while the role is stored with
-    that same provider; otherwise the provider-level defaults apply.
-    """
-    if getattr(llm, f"{role}_provider") is provider:
-        _, api_key, endpoint, _ = llm.resolve(role)
-        return endpoint, api_key
-    neutral = llm.model_copy(update={f"{role}_endpoint": None, f"{role}_api_key": None})
-    _, api_key, endpoint, _ = neutral.resolve(role, provider_override=provider.value)
-    return endpoint, api_key
 
 
 def normalize_endpoint(endpoint: str | None, field: str) -> str | None:
@@ -145,45 +158,59 @@ def _check_provider(provider: LLMProvider, field: str) -> FieldRequirement:
 
 
 def apply_role_updates(llm: LLMSettings, request: LLMRoleSettingsUpdateRequest) -> None:
-    """Validate every role first, then write the role-specific fields onto llm.
-
-    A role whose provider changes drops its stored key unless a new one is
-    given, so a key entered for one provider is never sent to another.
-    """
-    updates: dict[LLMRole, LLMRoleUpdate] = {
-        "primary": request.primary,
-        "assistant": request.assistant,
-        "lite": request.lite,
+    """Validate role selections, then replace each selected provider/model pair."""
+    updates = {
+        role: update
+        for role, update in (
+            ("primary", request.primary),
+            ("assistant", request.assistant),
+            ("lite", request.lite),
+        )
+        if update is not None
     }
-    normalized: dict[LLMRole, tuple[LLMProvider | None, str | None, str | None]] = {}
+    normalized: dict[LLMRole, tuple[LLMProvider | None, str | None]] = {}
     for role, update in updates.items():
         if update.provider is None:
             if role == "primary":
                 raise ValidationError(
                     "The primary role needs a provider", field="primary.provider", constraint="required"
                 )
-            normalized[role] = (None, None, None)
+            normalized[role] = (None, None)
             continue
-        endpoint_rule = _check_provider(update.provider, f"{role}.provider")
+        _check_provider(update.provider, f"{role}.provider")
         model = (update.model or "").strip()
         if not model:
             raise ValidationError(
                 f"Choose a model for the {role} role", field=f"{role}.model", constraint="required"
             )
-        endpoint = (
-            None
-            if endpoint_rule == "none"
-            else normalize_endpoint(update.endpoint, f"{role}.endpoint")
-        )
-        normalized[role] = (update.provider, model, endpoint)
+        normalized[role] = (update.provider, model)
 
-    for role, (provider, model, endpoint) in normalized.items():
-        update = updates[role]
-        provider_changed = getattr(llm, f"{role}_provider") != provider
+    for role, (provider, model) in normalized.items():
         setattr(llm, f"{role}_provider", provider)
         setattr(llm, f"{role}_model", model)
-        setattr(llm, f"{role}_endpoint", endpoint)
-        if provider is None or (provider_changed and update.api_key is None):
-            setattr(llm, f"{role}_api_key", None)
-        elif update.api_key is not None:
-            setattr(llm, f"{role}_api_key", update.api_key.strip() or None)
+
+
+def apply_provider_updates(llm: LLMSettings, updates: list[LLMProviderUpdate]) -> None:
+    """Validate then save caller-owned provider endpoints and credentials."""
+    normalized: list[tuple[LLMProviderUpdate, str | None, bool]] = []
+    for update in updates:
+        _check_provider(update.provider, f"providers.{update.provider.value}")
+        endpoint_rule = _PROVIDER_FIELDS[update.provider][1]
+        has_endpoint = "endpoint" in update.model_fields_set
+        if endpoint_rule == "none":
+            endpoint = None
+        elif has_endpoint:
+            endpoint = normalize_endpoint(
+                update.endpoint, f"providers.{update.provider.value}.endpoint"
+            ) or _provider_default_endpoint(update.provider)
+        else:
+            endpoint_field, _ = _PROVIDER_CONNECTION_FIELDS[update.provider]
+            endpoint = getattr(llm, endpoint_field) if endpoint_field else None
+        normalized.append((update, endpoint, has_endpoint))
+
+    for update, endpoint, has_endpoint in normalized:
+        endpoint_field, key_field = _PROVIDER_CONNECTION_FIELDS[update.provider]
+        if endpoint_field and has_endpoint:
+            setattr(llm, endpoint_field, endpoint)
+        if key_field and update.api_key is not None:
+            setattr(llm, key_field, update.api_key.strip() or None)

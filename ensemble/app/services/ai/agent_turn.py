@@ -227,7 +227,6 @@ async def process_provider_turn(
                 data=StreamChunkData(thinking=chunk.text),
             )
             handle_thought_chunk(chunk, state)
-            continue
 
         # 2. Tool calls
         if chunk.tool_calls:
@@ -251,7 +250,6 @@ async def process_provider_turn(
                     )
                 )
                 state.pending_tool_calls.append(fc)
-            continue
 
         # 3. Thought signatures (without text/tools)
         if chunk.thought_signature and not chunk.text and not chunk.tool_calls:
@@ -264,7 +262,7 @@ async def process_provider_turn(
             continue
 
         # 4. Normal text chunks
-        if chunk.text:
+        if chunk.text and not chunk.thought:
             if state.thinking_active:
                 state.flush_thinking_block()
                 yield StreamChunkFromModel(
@@ -362,11 +360,8 @@ async def process_turn_with_gate(
 
     response_text = ""
     if turn_result.model_response_parts:
-        consolidated = consolidate_model_parts(
-            turn_result.model_response_parts, model_name=model_name
-        )
         response_text = "".join(
-            part.text for part in consolidated if part.text and not part.thought
+            part.text for part in turn_result.model_response_parts if part.text and not part.thought
         )
 
     interrogation_detected = bool(extract_interrogation_questions(response_text))

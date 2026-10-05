@@ -84,6 +84,8 @@ type GatewayModeService struct {
 	embeddedOperator         *embedded.Service
 	webSessionSvc            *WebSessionService
 	suspendedTxService       *storage.SuspendedTransactionService
+	suspendedStore           storage.SuspendedTransactionStore
+	orchestrator             *PasskeyOrchestrator
 	mcpGateway               *mcp.GatewayService
 	cmdSvc                   *pubsub.OperatorPubSubService
 	envProc                  governance.EnvelopeProcessor
@@ -512,6 +514,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		embeddedOperator:         embeddedOperator,
 		webSessionSvc:            webSessionSvc,
 		suspendedTxService:       suspendedTxService,
+		suspendedStore:           newNotifyingSuspendedStore(suspendedTxService, approvalsPublisher),
+		orchestrator:             passkeyOrchestrator,
 		extraIPs:                 extraIPs,
 		mcpGateway:               mcpGateway,
 		cmdSvc:                   cmdSvc,
@@ -907,11 +911,15 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		ProviderObservationControllerDeps: providerObservationDeps,
 		ModelProvenanceControllerDeps:     modelProvenanceDeps,
 		EnsembleBrowserProxyControllerDeps: EnsembleBrowserProxyControllerDeps{
-			Cfg:       cfg,
-			Logger:    logger,
-			Responder: ls.responder,
-			Operators: &gatewayOperatorListerAdapter{svc: reg},
-			Signer:    proxySigner,
+			Cfg:            cfg,
+			Logger:         logger,
+			Responder:      ls.responder,
+			Operators:      &gatewayOperatorListerAdapter{svc: reg},
+			Signer:         proxySigner,
+			DocStore:       ls.docStore,
+			UserSvc:        userSvc,
+			SuspendedStore: ls.suspendedStore,
+			Orchestrator:   ls.orchestrator,
 		},
 	})
 	if err != nil {

@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // The console is served by the Gateway at /console/ (see
-// internal/services/gateway/console). `make embed-console` copies dist/ into
+// internal/services/gateway/console). `make console-embed` copies dist/ into
 // the Gateway's embedded static directory.
 export default defineConfig({
   base: '/console/',

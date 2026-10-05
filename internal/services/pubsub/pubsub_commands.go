@@ -885,10 +885,12 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 			rs.publishInferenceCompletion(rs.ctx, env, cmdMsg.InferenceResult, receipt)
 		}
 		if err != nil {
+			// Execute returns a nil receipt when it fails closed before the
+			// initial receipt is persisted; GetStatus is nil-safe.
 			rs.logger.Error("Actuator execution failed",
 				string(constants.ConnectionStateError), err,
 				"message_id", env.Id,
-				"receipt_status", receipt.Status.String())
+				"receipt_status", receipt.GetStatus().String())
 			return
 		}
 		if env.ActionType == string(constants.ActionTypeShutdown) {
@@ -1336,7 +1338,7 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 		if !recordAttempt {
 			return
 		}
-		if failErr := rs.inferenceAttemptStore.Fail(ctx, attemptID, cause.Error()); failErr != nil {
+		if failErr := rs.inferenceAttemptStore.Fail(context.WithoutCancel(ctx), attemptID, cause.Error()); failErr != nil {
 			rs.logger.Error("inference handler: record failed attempt", "error", failErr)
 		}
 	}
@@ -1349,6 +1351,7 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 		}); err != nil {
 			return "", fmt.Errorf("inference handler: begin attempt: %w", err)
 		}
+		ctx = inference.WithAttemptStore(ctx, rs.inferenceAttemptStore)
 	}
 
 	resp, err := rs.inference.ExecuteInference(ctx, msg)
@@ -1364,6 +1367,10 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 	}
 	result.ResultDigest = digest
 	if recordAttempt {
+		if err := rs.inferenceAttemptStore.SaveResult(ctx, attemptID, result); err != nil {
+			failAttempt(err)
+			return "", fmt.Errorf("inference handler: save result: %w", err)
+		}
 		if err := rs.inferenceAttemptStore.Complete(ctx, attemptID, digest); err != nil {
 			return "", fmt.Errorf("inference handler: complete attempt: %w", err)
 		}

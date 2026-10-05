@@ -56,7 +56,7 @@ func TestDemosScenariosRunCmd(t *testing.T) {
 		cmd := demosScenariosRunCmd()
 		require.NotNil(t, cmd)
 
-		flags := []string{"config", "mtls-url", "public-url", "approval-url", "cert", "key", "ca", "api-key", "operator-session", "out", "verbose", "phase"}
+		flags := []string{"config", "mtls-url", "public-url", "approval-url", "cert", "key", "ca", "api-key", "operator-id", "operator-session", "out", "verbose", "phase"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
@@ -79,7 +79,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets MTLS URL", func(t *testing.T) {
 		HarnessMTLSURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttp)
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttp), cfg.MTLSBaseURL)
 		HarnessMTLSURL = ""
 	})
@@ -87,7 +87,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets public URL", func(t *testing.T) {
 		HarnessPublicURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttps)
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttps), cfg.PublicBaseURL)
 		HarnessPublicURL = ""
 	})
@@ -95,7 +95,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets approval display URL", func(t *testing.T) {
 		harnessApprovalURL = "https://localhost:8450"
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "https://localhost:8450", cfg.ApprovalDisplayURL)
 		harnessApprovalURL = ""
 	})
@@ -103,7 +103,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets cert", func(t *testing.T) {
 		HarnessCert = "/path/to/cert.pem"
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "/path/to/cert.pem", cfg.Auth.ClientCert)
 		HarnessCert = ""
 	})
@@ -111,7 +111,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets key", func(t *testing.T) {
 		HarnessKey = "/path/to/key.pem"
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "/path/to/key.pem", cfg.Auth.ClientKey)
 		HarnessKey = ""
 	})
@@ -119,7 +119,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets CA bundle", func(t *testing.T) {
 		HarnessCA = "/path/to/ca.pem"
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "/path/to/ca.pem", cfg.Auth.CABundle)
 		HarnessCA = ""
 	})
@@ -127,7 +127,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets API key", func(t *testing.T) {
 		HarnessAPIKey = "test-api-key"
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "test-api-key", cfg.Auth.APIKey)
 		HarnessAPIKey = ""
 	})
@@ -135,7 +135,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets operator session ID", func(t *testing.T) {
 		HarnessSessionID = "session-123"
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, "session-123", cfg.OperatorSessionID)
 		HarnessSessionID = ""
 	})
@@ -144,7 +144,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 		testOutDir := testutil.TempDir(t)
 		HarnessOutDir = testOutDir
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.Equal(t, testOutDir, cfg.OutDir)
 		HarnessOutDir = ""
 	})
@@ -152,7 +152,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	t.Run("applyAgentHarnessFlags sets verbose flag", func(t *testing.T) {
 		HarnessVerbose = true
 		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
+		applyAgentHarnessFlags(&cfg, "")
 		assert.True(t, cfg.Verbose)
 		HarnessVerbose = false
 	})
@@ -211,4 +211,19 @@ func TestFailedScenariosError(t *testing.T) {
 		assert.Contains(t, err.Error(), "1/1 scenarios failed")
 		assert.Contains(t, err.Error(), "only-failed")
 	})
+}
+
+func TestOperatorFlagClearsInheritedIdentityCounterpart(t *testing.T) {
+	t.Cleanup(func() { HarnessSessionID = "" })
+	cfg := config.Config{OperatorID: "embedded-operator", OperatorSessionID: "embedded-session"}
+	operatorID := "data-worker"
+	applyAgentHarnessFlags(&cfg, operatorID)
+	assert.Equal(t, "data-worker", cfg.OperatorID)
+	assert.Empty(t, cfg.OperatorSessionID)
+	operatorID = ""
+	HarnessSessionID = "data-session"
+	cfg = config.Config{OperatorID: "embedded-operator", OperatorSessionID: "embedded-session"}
+	applyAgentHarnessFlags(&cfg, operatorID)
+	assert.Empty(t, cfg.OperatorID)
+	assert.Equal(t, "data-session", cfg.OperatorSessionID)
 }

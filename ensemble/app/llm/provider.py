@@ -14,9 +14,14 @@ All provider implementations must implement this interface.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncGenerator, AsyncIterable, Iterable
 from contextvars import ContextVar
-from typing import TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, TypeVar
+
+from google.protobuf import json_format
+from google.protobuf.message import Message
+from app.models.base import BaseModel
 
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -27,7 +32,9 @@ from app.llm.llm_types import (
     StreamChunkFromModel,
 )
 from app.llm.model_evidence import model_boundary_privacy_attestation
-from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
+from app.models.model_telemetry import ModelBoundaryPrivacyAttestation, ModelResponseArtifact
+
+TResponse = TypeVar("TResponse")
 
 if TYPE_CHECKING:
     from app.models.http_context import G8eHttpContext
@@ -47,6 +54,54 @@ class LLMProvider(ABC):
         self._declared_tool_names: ContextVar[tuple[str, ...] | None] = ContextVar(
             f"{type(self).__name__}_declared_tool_names_{id(self)}", default=None
         )
+        self._response_artifact: ContextVar[ModelResponseArtifact | None] = ContextVar(
+            f"{type(self).__name__}_response_artifact_{id(self)}", default=None
+        )
+        self._response_received_at: ContextVar[tuple[float, ...]] = ContextVar(
+            f"{type(self).__name__}_response_received_at_{id(self)}", default=()
+        )
+
+    @property
+    def response_artifact(self) -> ModelResponseArtifact | None:
+        artifact = self._response_artifact.get()
+        return artifact.model_copy(deep=True) if artifact is not None else None
+
+    def record_processed_response(self, response: str) -> None:
+        artifact = self._response_artifact.get()
+        if artifact is not None:
+            artifact.processed_response = response
+
+    def record_processing_error(self, error: Exception) -> None:
+        artifact = self._response_artifact.get()
+        if artifact is not None:
+            artifact.processing_error = type(error).__name__
+
+    def _record_response(self, response: object, *, complete: bool = False) -> None:
+        """Capture provider JSON once, before any application interpretation."""
+        artifact = self._response_artifact.get()
+        if artifact is None:
+            artifact = ModelResponseArtifact()
+            self._response_artifact.set(artifact)
+            self._response_received_at.set(())
+        self._response_received_at.set(
+            (*self._response_received_at.get(), time.monotonic())
+        )
+        if isinstance(response, BaseModel):
+            artifact.raw_frames.append(response.model_dump_json())
+        elif isinstance(response, Message):
+            artifact.raw_frames.append(json_format.MessageToJson(response))
+        artifact.received_complete = complete
+
+    async def _receive_stream(self, stream: AsyncIterable[TResponse]) -> list[TResponse]:
+        """Finish receipt before parsing; a parser cannot truncate the raw output."""
+        responses = []
+        async for response in stream:
+            self._record_response(response)
+            responses.append(response)
+        artifact = self._response_artifact.get()
+        if artifact is not None:
+            artifact.received_complete = True
+        return responses
 
     @property
     def input_artifact_hash(self) -> str:
@@ -70,6 +125,8 @@ class LLMProvider(ABC):
     def clear_input_artifact_hash(self) -> None:
         self._input_artifact_hash.set("")
         self._model_boundary_privacy.set(None)
+        self._response_artifact.set(None)
+        self._response_received_at.set(())
 
     def clear_declared_tools(self) -> None:
         self._declared_tool_names.set(None)
@@ -90,6 +147,8 @@ class LLMProvider(ABC):
         """Record the zero-based retry ordinal for the next provider call."""
 
     def _record_model_boundary(self, payload: object) -> str:
+        self._response_artifact.set(ModelResponseArtifact())
+        self._response_received_at.set(())
         attestation = model_boundary_privacy_attestation(payload)
         self._input_artifact_hash.set(attestation.input_artifact_hash)
         self._model_boundary_privacy.set(attestation)

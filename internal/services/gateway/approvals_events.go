@@ -9,12 +9,14 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
@@ -67,8 +69,8 @@ func (p *ApprovalsChangePublisher) EnrollmentsChanged() {
 	}
 }
 
-// publish emits the event to every unexpired web session of userID. Sessions
-// are delivered independently; the returned error joins every failure.
+// publish emits the event to every unexpired web session and active CLI session of userID.
+// Sessions are delivered independently; the returned error joins every failure.
 func (p *ApprovalsChangePublisher) publish(userID string, subject models.ApprovalsChangedSubject) error {
 	if userID == "" {
 		return nil
@@ -76,6 +78,10 @@ func (p *ApprovalsChangePublisher) publish(userID string, subject models.Approva
 	sessionIDs, err := ownerWebSessionIDs(p.docStore, userID)
 	if err != nil {
 		return fmt.Errorf("resolve web sessions of %s: %w", userID, err)
+	}
+	cliIDs, err := ownerCLISessionIDs(p.docStore, userID)
+	if err != nil {
+		p.logger.Warn("resolve cli sessions failed", "user_id", userID, "error", err)
 	}
 	payload := models.ApprovalsChangedPayload{Subject: subject, Timestamp: time.Now().UTC()}
 	var errs []error
@@ -85,7 +91,45 @@ func (p *ApprovalsChangePublisher) publish(userID string, subject models.Approva
 			errs = append(errs, fmt.Errorf("web session %s: %w", sessionID, err))
 		}
 	}
+	for _, cliID := range cliIDs {
+		route := SSERoute{UserID: userID, CLISessionID: cliID}
+		if err := p.publisher.PublishEphemeral(route, string(constants.EventPlatformApprovalsChanged), payload); err != nil {
+			errs = append(errs, fmt.Errorf("cli session %s: %w", cliID, err))
+		}
+	}
 	return errors.Join(errs...)
+}
+
+// ownerCLISessionIDs returns the ids of userID's CLI sessions that have not
+// expired and are not terminated.
+func ownerCLISessionIDs(docStore *DocumentStoreService, userID string) ([]string, error) {
+	if docStore == nil {
+		return nil, nil
+	}
+	docs, err := docStore.DocQuery(marshaler.CollectionName(constants.CollectionCLISessions), []models.DocFilter{
+		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
+	}, "", 0)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	ids := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		wire, err := json.Marshal(doc.ForWire())
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
+		}
+		var session models.CLISession
+		if err := json.Unmarshal(wire, &session); err != nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
+		}
+		if !session.IsActive || (!session.ExpiresAt.IsZero() && now.After(session.ExpiresAt)) {
+			continue
+		}
+		ids = append(ids, doc.ID)
+	}
+	return ids, nil
 }
 
 // notifyingSuspendedStore decorates the suspended-transaction store so every

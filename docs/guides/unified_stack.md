@@ -97,7 +97,7 @@ The platform leverages Docker volume mounts (`./bin:/opt/g8e/bin:ro`) so that a 
   ./g8e docker restart
 
   # make equivalent:
-  make restart-operators
+  make docker-restart-operators
   ```
 - **Docker-only build (no host Make required):** Build images via Docker and export `./g8e`:
   ```bash
@@ -292,7 +292,7 @@ until curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null; do sleep 2; done
 ./g8e docker start
 
 # make equivalent:
-make up
+make docker-up
 ```
 
 ### 2. Export host binary (optional for Docker-only hosts)
@@ -390,7 +390,7 @@ docker compose restart g8e-data-operator g8e-inference-operator
 ./g8e docker restart
 
 # make equivalent:
-make restart-operators
+make docker-restart-operators
 ```
 
 ### Stop or revoke an enrolled workload
@@ -695,18 +695,19 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 
 | Command | Pure Docker Equivalent | Make Equivalent | Behavior |
 | --- | --- | --- | --- |
-| `./g8e docker init` | `docker compose up -d` + exec enroll/approvals | `make up` (manual approvals) | Build images, enroll owner, start unified stack, auto-approve platform enrollments, and wait for readiness. |
-| `./g8e docker start` | `docker compose up -d` | `make up` | Starts default unified stack (all 5 core services) and offers enrollment walkthrough. |
-| `./g8e docker restart [service...]` | `docker compose restart g8e-data-operator g8e-inference-operator` | `make restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
-| `./g8e docker stop` | `docker compose down` | `make down` | Stops stack, preserves volumes. |
+| `./g8e docker init` | `docker compose up -d` + exec enroll/approvals | `make docker-up` (manual approvals) | Build images, enroll owner, start unified stack, auto-approve platform enrollments, and wait for readiness. |
+| `./g8e docker start` | `docker compose up -d` | `make docker-up` | Starts default unified stack (all 5 core services) and offers enrollment walkthrough. |
+| `./g8e docker restart [service...]` | `docker compose restart g8e-data-operator g8e-inference-operator` | `make docker-restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
+| `./g8e docker stop` | `docker compose down` | `make docker-down` | Stops stack, preserves volumes. |
 | `./g8e docker status` | `docker compose ps` | — | Shows running containers and health status. |
+| `./g8e ensemble start/stop/restart/status/logs` | Local Python process | — | Uses the active virtual environment, repository `.venv`, or `python3`, sharing the runtime started by `make full`. Run from the repository root. For containers, use `docker compose` directly. |
 | `./g8e docker build` | `docker compose build && docker compose cp g8e-gateway:/g8e bin/g8e && cp bin/g8e ./g8e` | `make docker-build` | Build stack images in container via Makefile, export binary to `bin/g8e` and `./g8e`. |
 | `./g8e docker rebuild` | `docker compose down && docker compose build && docker compose up -d` | — | Stop stack, rebuild images with in-container Makefile, and restart. |
-| `./g8e docker clean` | `docker compose down -v --remove-orphans` | `make clean-docker` | Destructive wipe of containers, volumes, networks. |
+| `./g8e docker clean` | `docker compose down -v --remove-orphans` | `make docker-clean` | Destructive wipe of containers, volumes, networks. |
 
 Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean` or `docker compose down -v`, repeat owner enrollment and platform approvals.
 
-`./g8e docker clean`, `docker reset`, and `docker init --clean` confirm before wiping volumes and offer to back up host evaluation evidence first. Pass `--yes` to skip the confirmation and `--skip-backup` to skip the backup. Raw `docker compose down -v` and `make clean-docker` have neither safeguard. Docker volumes are deleted outright; only host `.g8e/` wipes (`g8e gw clean`/`gw reset`) are renamed aside to `.g8e-<MMDDHHMM>` instead.
+`./g8e docker clean`, `docker reset`, and `docker init --clean` confirm before wiping volumes and offer to back up host evaluation evidence first. Pass `--yes` to skip the confirmation and `--skip-backup` to skip the backup. Raw `docker compose down -v` and `make docker-clean` have neither safeguard. Docker volumes are deleted outright; only host `.g8e/` wipes (`g8e gw clean`/`gw reset`) are renamed aside to `.g8e-<MMDDHHMM>` instead.
 
 Eval runs back up their evidence to `eval/backups/` automatically when they finish. Before a destructive wipe, take a fresh copy outside `.g8e/` with `./g8e eval backup` (or `--output-dir <dir>`), and put it back with `./g8e eval restore` (newest snapshot in `eval/backups/`, or pass `<dir>/eval-backup-<timestamp>`). See [Evaluation Programs](../architecture/evals.md#evidence-and-verification). This covers host evidence only, not the Gateway volume.
 
@@ -814,7 +815,7 @@ docker compose down                       # preserves volumes and credentials
 ./g8e docker stop
 
 # make equivalent:
-make down
+make docker-down
 
 # For a cold reset, choose one destructive command, not both:
 # Pure Docker:
@@ -824,7 +825,7 @@ docker compose down -v                    # removes standard stack containers, v
 ./g8e docker clean
 
 # make equivalent:
-make clean-docker
+make docker-clean
 ```
 
 Restarting the gateway with `docker compose up -d g8e-gateway` preserves the trust domain. A cold reset requires owner and workload re-enrollment.

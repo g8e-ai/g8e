@@ -481,3 +481,54 @@ func TestAdapterRun_EmitsConnConnectedOnFirstEvent(t *testing.T) {
 	assert.True(t, connecting, "expected ConnConnecting before ConnConnected")
 	assert.True(t, connected, "expected ConnConnected after first event")
 }
+
+func TestTranslateSSEEvents_ChatAndApprovals(t *testing.T) {
+	fixedTime := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
+	originalTimeNow := timeNow
+	t.Cleanup(func() { timeNow = originalTimeNow })
+	timeNow = func() time.Time { return fixedTime }
+
+	t.Run("chat iteration started", func(t *testing.T) {
+		msgs := translateSSEEvents(string(constants.EventAiLLMChatIterationStarted), `{"type":"g8e.v1.ai.llm.chat.iteration.started"}`)
+		require.Len(t, msgs, 2)
+		pm, ok := msgs[0].(PipelineMsg)
+		require.True(t, ok)
+		assert.Equal(t, StageL1, pm.Stage)
+		assert.Equal(t, StatusActive, pm.Status)
+		lm, ok := msgs[1].(LedgerMsg)
+		require.True(t, ok)
+		assert.Contains(t, lm.Message, "AI chat iteration started")
+	})
+
+	t.Run("chat text chunk received", func(t *testing.T) {
+		msgs := translateSSEEvents(string(constants.EventAiLLMChatIterationTextChunkReceived), `{"type":"g8e.v1.ai.llm.chat.iteration.text.chunk.received","payload":{"chunk":"hello world"}}`)
+		require.Len(t, msgs, 1)
+		lm, ok := msgs[0].(LedgerMsg)
+		require.True(t, ok)
+		assert.Equal(t, "hello world", lm.Message)
+	})
+
+	t.Run("command approval requested", func(t *testing.T) {
+		msgs := translateSSEEvents(string(constants.EventOperatorCommandApprovalRequested), `{"type":"g8e.v1.operator.command.approval.requested","payload":{"approval_id":"app-1","command":"rm -rf /tmp/test"}}`)
+		require.Len(t, msgs, 2)
+		pm, ok := msgs[0].(PipelineMsg)
+		require.True(t, ok)
+		assert.Equal(t, StageL3, pm.Stage)
+		assert.Equal(t, StatusWaiting, pm.Status)
+		assert.Equal(t, "app-1", pm.TxID)
+		assert.Contains(t, pm.Detail, "rm -rf /tmp/test")
+		lm, ok := msgs[1].(LedgerMsg)
+		require.True(t, ok)
+		assert.Contains(t, lm.Message, "APPROVAL REQUIRED")
+	})
+
+	t.Run("approval completed", func(t *testing.T) {
+		msgs := translateSSEEvents(constants.SSEEventTypeApprovalCompleted, `{"type":"approval.completed","payload":{"tx_hash":"tx-999"}}`)
+		require.Len(t, msgs, 2)
+		pm, ok := msgs[0].(PipelineMsg)
+		require.True(t, ok)
+		assert.Equal(t, StageL3, pm.Stage)
+		assert.Equal(t, StatusPassed, pm.Status)
+		assert.Equal(t, "tx-999", pm.TxID)
+	})
+}

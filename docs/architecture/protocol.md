@@ -74,7 +74,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-PROT-SCHEMA-01 | Protobuf schemas in `protocol/proto/g8e/` are the canonical source of truth for wire structures. Generated code in Go (`protocol/proto/`), Python (`protocol/python/g8e/`), and TypeScript (`protocol/node/src/gen/`) MUST NOT be hand-edited and MUST only be updated through `make proto`. |
+| INV-PROT-SCHEMA-01 | Protobuf schemas in `protocol/proto/g8e/` are the canonical source of truth for wire structures. Generated code in Go (`protocol/proto/`), Python (`protocol/python/g8e/`), and TypeScript (`protocol/node/src/gen/`) MUST NOT be hand-edited and MUST only be updated through `make proto-generate`. |
 | INV-PROT-SCHEMA-02 | Client-facing surfaces (HTTP API, WebSocket pub/sub, receipts, audit exports) MUST carry `GovernanceEnvelope` as canonical protojson. Raw binary protobuf is strictly restricted to internal node storage and private gRPC communications. |
 | INV-PROT-SCHEMA-03 | Protobuf code generation MUST use Buf configured via `protocol/proto/buf.yaml` and root `buf.gen.yaml`. The build must rely on `buf generate` rather than requiring a standalone `protoc` compiler binary for Go generation. |
 
@@ -109,14 +109,14 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- | --- |
 | Go protocol package | `protocol/go_package.go`, `protocol/workload_identity.go` | `make -C protocol test` |
 | Workload identity helpers | `protocol/workload_identity.go` | `go test -v ./protocol -run TestWorkloadIdentity` |
-| Protobuf schemas and specs | `protocol/proto/g8e/`, `buf.gen.yaml` | `make proto && git diff --exit-code` |
+| Protobuf schemas and specs | `protocol/proto/g8e/`, `buf.gen.yaml` | `make proto-generate && git diff --exit-code` |
 | Python protocol package | `protocol/python/` | `pytest protocol/python/tests -v` |
 | Python constants & enums | `protocol/python/g8e/constants.py`, `protocol/python/g8e/enums.py` | `pytest protocol/python/tests/test_constants.py -v` |
 | TypeScript protobuf package | `protocol/node/` | `npm --prefix protocol/node run typecheck` |
 | Observe contract generator | `g8e-adapter/generator/gen-contract-pack.mjs` | `node g8e-adapter/generator/gen-contract-pack.mjs --check` |
 | Cross-language test vectors | `protocol/vectors/` | `go test -v ./protocol` |
 | Conformance test suite | `protocol/conformance/` | `uv run --project protocol/python --extra dev pytest protocol/conformance -v` |
-| JSON constant registries | `protocol/constants/` | `make validate-doctrines && make validate-cosais` |
+| JSON constant registries | `protocol/constants/` | `make doctrines-validate && make cosais-validate` |
 | JSON model schemas | `protocol/models/` | `pytest protocol/conformance/test_models.py -v` |
 | Release orchestration | `Makefile`, `.github/workflows/` | `make release` check steps |
 
@@ -251,10 +251,10 @@ Protobuf compilation is managed via Buf using configurations in `protocol/proto/
 
 ```bash
 # Generate all protocol bindings (Go, Python, Node, and lockfiles)
-make proto
+make proto-generate
 ```
 
-The `make proto` pipeline executes four coordinated targets:
+The `make proto-generate` pipeline executes four coordinated targets:
 
 1. `make proto-go`: Installs Buf if absent and executes `buf generate protocol/proto` using `protoc-gen-go` (v1.36.11), `protoc-gen-go-grpc` (v1.6.2), and `protoc-gen-doc` (v1.5.1), producing Go code and API reference docs in `protocol/docs/reference/api`.
 2. `make proto-python`: Executes `python protocol/python/scripts/generate_protos.py` using `grpc_tools.protoc` to generate Python modules and `.pyi` type stubs.
@@ -339,7 +339,7 @@ The target executes the following steps:
 
 ## Anti-patterns
 
-- Hand-editing generated protobuf code or Swagger files instead of editing `.proto` schemas and running `make proto` (INV-PROT-SCHEMA-01).
+- Hand-editing generated protobuf code or Swagger files instead of editing `.proto` schemas and running `make proto-generate` (INV-PROT-SCHEMA-01).
 - Bumping `VERSION` or document headers without running the full audit workflow, synchronizing Python metadata, and verifying test vectors (INV-PROT-VER-01).
 - Introducing unvalidated directory probes or falling back to checkout source trees in the Python constants loader (INV-PROT-CONST-02).
 - Emitting raw binary protobuf over public or browser ingress endpoints instead of canonical protojson (INV-PROT-SCHEMA-02).

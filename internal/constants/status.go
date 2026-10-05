@@ -196,6 +196,15 @@ const (
 	ToolScopeUniversal     ToolScope = "universal"
 )
 
+// ToolCallStatus is a typed string for tool call status.
+type ToolCallStatus string
+
+const (
+	ToolCallStatusCompleted ToolCallStatus = "completed"
+	ToolCallStatusFailed    ToolCallStatus = "failed"
+	ToolCallStatusStarted   ToolCallStatus = "started"
+)
+
 // Platform is a typed string for platform.
 type Platform string
 

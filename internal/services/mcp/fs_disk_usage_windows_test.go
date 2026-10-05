@@ -300,8 +300,7 @@ func TestGetDiskUsageForPath_ZeroTotalBytes(t *testing.T) {
 	require.NotNil(t, result.Filesystem)
 	require.Equal(t, uint64(0), result.Filesystem.TotalBytes)
 	require.Equal(t, uint64(0), result.Filesystem.UsedBytes)
-	// UsedPercent should be NaN or handled gracefully
-	require.True(t, result.Filesystem.UsedPercent == 0 || result.Filesystem.UsedPercent != result.Filesystem.UsedPercent) // NaN check
+	require.Zero(t, result.Filesystem.UsedPercent)
 }
 
 func TestGetDiskUsageForPath_FullDisk(t *testing.T) {

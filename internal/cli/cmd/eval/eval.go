@@ -18,7 +18,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/buildinfo"
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
+	version "github.com/g8e-ai/g8e/v2/internal/cli/cmd/version"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -447,8 +449,8 @@ func writeNativeVerification(cmd *cobra.Command, report *compliancev1.Compliance
 func platformIdentity(cmd *cobra.Command) evaluation.PlatformIdentity {
 	vi := shared.VersionInfoFromCmd(cmd)
 	identity := evaluation.PlatformIdentity{Release: vi.Version}
-	if vi.SourceRevision != string(constants.SystemHealthUnknown) {
-		identity.SourceRevision = vi.SourceRevision
+	if rev := version.EffectiveSourceRevision(vi, buildinfo.ReadVCSStamp()); !version.IsUnstampedMetadata(rev) {
+		identity.SourceRevision = rev
 	}
 	return identity
 }

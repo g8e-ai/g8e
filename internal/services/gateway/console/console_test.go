@@ -94,10 +94,10 @@ func TestEmbeddedBuild_IndexReferencesEmbeddedAssets(t *testing.T) {
 
 	assert.NotRegexp(t, `<script>[^<]`, string(index), "index.html must not contain inline scripts (CSP script-src 'self')")
 	references := assetReference.FindAllStringSubmatch(string(index), -1)
-	require.NotEmpty(t, references, "index.html should load at least its script and stylesheet; run `make embed-console`")
+	require.NotEmpty(t, references, "index.html should load at least its script and stylesheet; run `make console-embed`")
 	for _, match := range references {
 		info, err := fs.Stat(static, match[1])
-		require.NoError(t, err, "index.html references %s which is not embedded; run `make embed-console`", match[1])
+		require.NoError(t, err, "index.html references %s which is not embedded; run `make console-embed`", match[1])
 		assert.NotZero(t, info.Size(), match[1])
 
 		rr := serve(t, "/"+match[1])

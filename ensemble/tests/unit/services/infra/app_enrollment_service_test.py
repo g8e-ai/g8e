@@ -314,9 +314,7 @@ class TestLoadIdentityMissingCert:
         with pytest.raises(ConfigurationError, match="app cert not found"):
             service.load_identity()
 
-    def test_raises_when_key_missing(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_raises_when_key_missing(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
 
         not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=90)
@@ -413,6 +411,17 @@ class TestEnrollPlatformEnrollment:
     """enroll drives the full platform enrollment protocol."""
 
     pytestmark = pytest.mark.asyncio
+
+    async def test_credential_install_preserves_recovery_ca(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+        ca_path = pki_dir / "trust" / "g8eg-ca-bundle.pem"
+        ca_path.parent.mkdir(parents=True, exist_ok=True)
+        ca_path.write_text("PINNED-LOCAL-CA")
+        service = AppEnrollmentService(instance_id="test", hostname="test.local")
+        service._write_credentials_atomic("CERT", "CHAIN", "KEY", "UNEXPECTED-CA")
+        assert ca_path.read_text() == "PINNED-LOCAL-CA"
 
     async def test_enrolls_and_writes_credentials(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -521,7 +530,9 @@ class TestEnrollPlatformEnrollment:
                         "component_name": "g8ee",
                         "fingerprints": {"app": "test-fp"},
                         "approval_url": "https://gateway.local/console#platform-enrollment=test-req-pending",
-                        "expires_at": (_dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)).isoformat(),
+                        "expires_at": (
+                            _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)
+                        ).isoformat(),
                     },
                 )
             if path == "/api/v1/auth/platform-enrollments/status":
@@ -535,7 +546,9 @@ class TestEnrollPlatformEnrollment:
                             "request_id": "test-req-pending",
                             "component_kind": "ensemble",
                             "state": "pending",
-                            "expires_at": (_dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)).isoformat(),
+                            "expires_at": (
+                                _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)
+                            ).isoformat(),
                         },
                     )
                 return httpx.Response(
@@ -544,7 +557,9 @@ class TestEnrollPlatformEnrollment:
                         "request_id": "test-req-pending",
                         "component_kind": "ensemble",
                         "state": "approved",
-                        "expires_at": (_dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)).isoformat(),
+                        "expires_at": (
+                            _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)
+                        ).isoformat(),
                     },
                 )
             if path == "/api/v1/auth/platform-enrollments/complete":
@@ -558,7 +573,9 @@ class TestEnrollPlatformEnrollment:
                             "app_cert": cert_pem,
                             "cert_chain": "",
                             "trust_bundle": "CA-BUNDLE-PEM",
-                            "expires_at": (_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365)).isoformat(),
+                            "expires_at": (
+                                _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365)
+                            ).isoformat(),
                             "policy_id": "test-policy-id",
                         },
                     },
@@ -633,7 +650,9 @@ class TestEnrollPlatformEnrollment:
                         "request_id": "resume-req-789",
                         "component_kind": "ensemble",
                         "state": "approved",
-                        "expires_at": (_dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)).isoformat(),
+                        "expires_at": (
+                            _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)
+                        ).isoformat(),
                     },
                 )
             if path == "/api/v1/auth/platform-enrollments/complete":
@@ -647,7 +666,9 @@ class TestEnrollPlatformEnrollment:
                             "app_cert": cert_pem,
                             "cert_chain": "",
                             "trust_bundle": "CA-BUNDLE",
-                            "expires_at": (_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365)).isoformat(),
+                            "expires_at": (
+                                _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365)
+                            ).isoformat(),
                             "policy_id": "test-policy-id",
                         },
                     },
@@ -697,9 +718,7 @@ class TestEnrollPlatformEnrollment:
             encoding="utf-8",
         )
 
-        cert_pem, _ = _self_signed_cert(
-            _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365)
-        )
+        cert_pem, _ = _self_signed_cert(_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365))
         handler, captured = _mock_platform_enrollment_handler(
             request_id="replacement-request", app_cert=cert_pem, state="approved"
         )

@@ -96,8 +96,8 @@ The Makefile provides several build targets:
 - `make build-windows` - Builds Windows binaries for amd64 and arm64.
 - `make build-darwin` - Builds macOS binaries for amd64 and arm64.
 - `make build-compressed` - Builds the current-platform binary and compresses the named `bin/` artifact with UPX (requires UPX installed).
-- `make build-fips` - Builds a FIPS 140-3 approved mode g8e binary for linux/amd64.
-- `make verify-fips` - Builds the FIPS variant and runs its self-check with FIPS enforcement enabled.
+- `make fips-build` - Builds a FIPS 140-3 approved mode g8e binary for linux/amd64.
+- `make fips-verify` - Builds the FIPS variant and runs its self-check with FIPS enforcement enabled.
 - `make clean` - Removes `bin/`, test and coverage artifacts, the local `.g8e/` runtime tree, and the local Go build and module caches. It does not remove the repository-root `g8e` binary.
 
 > **Warning:** `make clean` deletes the gateway state stored under the repository's `.g8e/` directory. Stop the gateway and preserve any required state before running it.
@@ -107,17 +107,17 @@ The Makefile provides several build targets:
 Docker Engine with the Docker Compose plugin can build the binaries without a local Go toolchain:
 
 ```bash
-make up
+make docker-up
 ```
 
-This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts the complete default Compose profile (gateway, operators, and ensemble). `make up` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
+This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts the complete default Compose profile (gateway, operators, and ensemble). `make docker-up` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
 
 ```bash
 docker cp g8e-gateway:/g8e ./g8e
 chmod +x ./g8e
 ```
 
-Owner and workload enrollment are separate from `make up`; complete them before starting profile-gated services. See [Docker Gateway](docker_gateway.md) for the bootstrap sequence and [Unified Stack](unified_stack.md) for the complete two-phase deployment.
+Owner and workload enrollment are separate from `make docker-up`; complete them before starting profile-gated services. See [Docker Gateway](docker_gateway.md) for the bootstrap sequence and [Unified Stack](unified_stack.md) for the complete two-phase deployment.
 
 The Dockerfile builder produces only the image target platform binary (`linux/amd64` or `linux/arm64`). Run `make build-all` on the host when you need the full Linux, Windows, and macOS deployment matrix. Linux builds link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the FIPS compliance claim is restricted to linux/amd64. Approved mode is enabled by the build, while strict runtime enforcement is separate and requires `GODEBUG=fips140=only`. Check the deployed binary with `g8e version --fips`; see [Docker Gateway](docker_gateway.md#fips-runtime-mode) for the enforcement caveat.
 

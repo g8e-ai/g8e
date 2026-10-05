@@ -38,7 +38,7 @@ from app.constants import (
     AITaskId,
     DEFAULT_FINISH_REASON,
 )
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, model_boundary_json
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.provider import LLMProvider
 from app.llm.providers.g8e import G8EProvider
@@ -122,6 +122,14 @@ def _agent_generation_stream(
             model_name,
             contents,
             generation_config,
+        )
+    if generation_config.tools:
+        # Assistant/lite settings cannot carry tools. Keep the selected model
+        # and telemetry role, but use the tool-capable provider entry point.
+        return llm_provider.generate_content_stream_primary(
+            model=model_name,
+            contents=contents,
+            primary_llm_settings=generation_config,
         )
     if model_role == "assistant":
         assistant_settings = types.AssistantLLMSettings(
@@ -389,6 +397,7 @@ class g8eEnsemble:
         tool_response_sizes: list[int] = []
 
         loop_turn = 0
+        malformed_call_retries = 0
         tool_turn_limit_reached = False
         try:
             while True:
@@ -481,6 +490,8 @@ class g8eEnsemble:
 
                     gated = gated_result_out[0]
                 except Exception as exc:
+                    if hasattr(llm_provider, "record_processing_error"):
+                        llm_provider.record_processing_error(exc)
                     model_calls.append(
                         build_model_call_telemetry(
                             provider=llm_provider,
@@ -496,6 +507,10 @@ class g8eEnsemble:
                     )
                     raise
                 turn_result = gated.turn_result
+                if hasattr(llm_provider, "record_processed_response"):
+                    llm_provider.record_processed_response(
+                        model_boundary_json(turn_result.model_response_parts)
+                    )
                 monotonic_end = time.monotonic()
                 model_calls.append(
                     build_model_call_telemetry(
@@ -520,6 +535,12 @@ class g8eEnsemble:
                         load_duration_seconds=turn_result.load_duration_seconds,
                         retry_count=retry_count,
                         output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
+                        succeeded=turn_result.finish_reason != "MALFORMED_FUNCTION_CALL",
+                        error_type=(
+                            "MalformedFunctionCall"
+                            if turn_result.finish_reason == "MALFORMED_FUNCTION_CALL"
+                            else None
+                        ),
                     )
                 )
 
@@ -528,6 +549,37 @@ class g8eEnsemble:
                 total_tokens += turn_result.total_tokens
                 if turn_result.finish_reason:
                     final_finish_reason = turn_result.finish_reason
+
+                if turn_result.finish_reason == "MALFORMED_FUNCTION_CALL":
+                    # A failed generation is not a completed answer. Retry only
+                    # this model turn, without executing its partial tool calls
+                    # or replaying any tools from earlier successful turns.
+                    if malformed_call_retries >= AGENT_MAX_RETRIES:
+                        raise RuntimeError(
+                            "The AI could not generate a valid operator tool call after retries. "
+                            "The requested check did not complete. Please retry the request."
+                        )
+                    malformed_call_retries += 1
+                    logger.warning(
+                        "[AGENT] Malformed function call at turn %d; retrying model turn (%d/%d)",
+                        loop_turn,
+                        malformed_call_retries,
+                        AGENT_MAX_RETRIES,
+                    )
+                    contents.append(
+                        types.Content(
+                            role=types.Role.USER,
+                            parts=[
+                                types.Part.from_text(
+                                    "Your previous tool call was malformed and was not executed. "
+                                    "Continue the request using the declared tools and arguments "
+                                    "that match their JSON schemas. Use {} for a tool with no arguments."
+                                )
+                            ],
+                        )
+                    )
+                    continue
+                malformed_call_retries = 0
 
                 if gated.interrogation_detected:
                     logger.info(

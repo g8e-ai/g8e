@@ -101,7 +101,7 @@ chmod +x g8e
 command -v go
 command -v buf || test -x ./buf
 command -v uv
-make proto
+make proto-generate
 ```
 
 ### Gateway Process Diagnosis

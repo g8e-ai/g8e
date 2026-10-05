@@ -180,6 +180,25 @@ h4 {
   font-weight: 600;
   text-align: center;
 }
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 6px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border);
+}
+.nav-section-label {
+  padding: 0 10px 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.nav-subitem {
+  padding-left: 20px;
+  font-size: 13px;
+}
 .sidebar-foot {
   margin-top: auto;
   display: flex;
@@ -940,6 +959,22 @@ h4 {
   }
   .nav-item {
     width: auto;
+    flex: 0 0 auto;
+  }
+  .nav-section {
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    padding: 0 0 0 6px;
+    border-left: 1px solid var(--border);
+    border-top: 0;
+  }
+  .nav-section-label {
+    display: none;
+  }
+  .nav-subitem {
+    padding-left: 10px;
   }
   .workspace {
     grid-template-columns: 1fr;
@@ -966,6 +1001,16 @@ h4 {
 }
 
 /* ---------- inference ---------- */
+.provider-list {
+  display: grid;
+  gap: 14px;
+}
+.provider-card .card-head {
+  align-items: flex-start;
+}
+.role-fallback {
+  margin-top: 14px;
+}
 .field-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

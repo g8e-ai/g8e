@@ -621,6 +621,7 @@ class G8EProvider(LLMProvider):
         except NetworkError as exc:
             self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
             raise
+        self._record_response(response, complete=True)
         _validate_response_identity(request, response)
         _response_parts(response)
         self._governed_dispatch_evidence.set(
@@ -713,17 +714,14 @@ class G8EProvider(LLMProvider):
 
         completion: InferenceDispatchResponse | None = None
         try:
-            async for frame in self._client.dispatch_inference_stream(request):
+            for frame in await self._receive_stream(self._client.dispatch_inference_stream(request)):
                 if frame.HasField("failure"):
                     failure = ValidationError(frame.failure.reason)
                     self._raise_if_tool_declaration_rejected(
                         failure, model=model, request=request
                     )
                     raise failure
-                if frame.HasField("progress"):
-                    for chunk in _progress_parts_to_stream_chunks(frame.progress):
-                        yield chunk
-                elif frame.HasField("completion"):
+                if frame.HasField("completion"):
                     completion = frame.completion
         except NetworkError as exc:
             self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
@@ -758,12 +756,8 @@ class G8EProvider(LLMProvider):
                 model_registry_digest=completion.result.model_registry_digest,
             )
         )
-        yield StreamChunkFromModel(
-            finish_reason=completion.result.finish_reason
-            if completion.HasField("result")
-            else "stop",
-            usage_metadata=_response_to_usage_metadata(completion),
-        )
+        for chunk in _response_to_stream_chunks(completion):
+            yield chunk
 
     async def generate_content_stream_primary(
         self,

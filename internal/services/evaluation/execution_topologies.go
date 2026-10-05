@@ -72,7 +72,7 @@ type FormationModel struct {
 	ModelDigest           string
 }
 
-// Formation binds the three roles that make up one benchmark topology.
+// Formation binds the three roles that make host-up one benchmark topology.
 type Formation struct {
 	ID          string
 	DisplayName string

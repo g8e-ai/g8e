@@ -70,6 +70,7 @@ func Cmd() *cobra.Command {
 		operatorBindCmd(),
 		operatorRunCmd(),
 		operatorStopCmd(),
+		operatorResetIdentityCmd(),
 		operatorStartCmd(),
 		operatorCpCmd(),
 		operatorScpCmd(),

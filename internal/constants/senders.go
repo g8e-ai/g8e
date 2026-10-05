@@ -9,7 +9,7 @@ package constants
 
 // Sender and message type constants.
 // Canonical values defined in protocol/constants/senders.json (the source of truth).
-// This file is generated from the JSON source via `make constants`.
+// This file is generated from the JSON source via `make constants-generate`.
 
 const (
 	SourceUserChat     = "g8e.v1.source.user.chat"

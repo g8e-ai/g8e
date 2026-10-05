@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 // The events the console reacts to, named from the generated registry
-// (src/generated/events.ts, produced by `make constants` from
+// (src/generated/events.ts, produced by `make constants-generate` from
 // protocol/constants/events.json). Unknown types are ignored, never guessed at.
 
 import { EventType as E } from '../generated/events';
@@ -24,6 +24,18 @@ export const Ev = {
   CommandStarted: E.OPERATOR_COMMAND_STARTED,
   CommandCompleted: E.OPERATOR_COMMAND_COMPLETED,
   CommandFailed: E.OPERATOR_COMMAND_FAILED,
+
+  ToolConstraintsRequested: E.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED,
+  ToolConstraintsCompleted: E.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED,
+  ToolConstraintsFailed: E.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_FAILED,
+
+  ToolInvestigationRequested: E.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED,
+  ToolInvestigationCompleted: E.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED,
+  ToolInvestigationFailed: E.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_FAILED,
+
+  ToolWebSearchRequested: E.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
+  ToolWebSearchCompleted: E.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
+  ToolWebSearchFailed: E.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED,
 
   CommandApprovalRequested: E.OPERATOR_COMMAND_APPROVAL_REQUESTED,
   FileEditApprovalRequested: E.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED,
