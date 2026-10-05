@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	runtimepaths "github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 func paths(component string) ([]string, error) {
@@ -35,7 +37,7 @@ func Reset(directory, component string) error {
 	if err != nil {
 		return err
 	}
-	runtime := filepath.Join(directory, ".g8e")
+	runtime := filepath.Join(directory, runtimepaths.RuntimeDirname)
 	info, err := os.Lstat(runtime)
 	if os.IsNotExist(err) {
 		return nil

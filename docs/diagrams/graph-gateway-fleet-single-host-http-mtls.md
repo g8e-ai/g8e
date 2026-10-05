@@ -10,7 +10,7 @@ graph TD
         Browser["Browser<br/>(Console SPA served by the Gateway)"]
     end
 
-    subgraph Apps ["Optional first-party apps — bootstrapped profile"]
+    subgraph Apps ["Optional first-party apps — default profile"]
         EE["Agentic Ensemble · g8ee<br/>(FastAPI · untrusted application)"]
     end
 
