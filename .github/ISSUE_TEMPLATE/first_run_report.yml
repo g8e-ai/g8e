@@ -1,0 +1,69 @@
+name: First Run Report
+description: Tried to install or run g8e and got stuck, confused, or bounced? This is the place.
+labels: ["first-run"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you — a clear first-run report is one of the most useful contributions right now.
+        No need to have a fix, or to have gotten it working. Tell us where it stopped making sense.
+  - type: dropdown
+    id: door
+    attributes:
+      label: Which door did you try?
+      options:
+        - "Look first — OpenDevOps.ai explorer (nothing installed)"
+        - "Protocol only — pip install g8e or go get"
+        - "Binary only — installer script / ./g8e --help"
+        - "Full stack — Docker Compose gateway + operator"
+        - "A demo (healthcare / finance / dhs / fedramp)"
+        - "Other / not sure"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `./g8e version`, or "couldn't get that far"
+      placeholder: "v2.3.0 — or: never got the binary running"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS and architecture, plus Docker version if you used it
+      placeholder: "macOS 15 arm64, Docker 27.x — or: Ubuntu 24.04 amd64, no Docker"
+    validations:
+      required: true
+  - type: textarea
+    id: step
+    attributes:
+      label: Exact step where you got stuck
+      description: Copy the command you ran and where in the guide/README you were.
+      placeholder: |
+        Following README Quick Start step 2.
+        Ran: ./g8e auth enroll user -e localhost
+        Then: ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: Paste the error or describe the confusion. Screenshots of terminal text are fine as pasted text.
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: Anything you already tried? (optional)
+      description: Totally fine to leave blank.
+    validations:
+      required: false
