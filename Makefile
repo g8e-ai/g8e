@@ -989,13 +989,9 @@ update-doctrines:
 # CLEANUP
 # =============================================================================
 .PHONY: clean
+# Build cleanup must preserve the Gateway CA, databases, and workload trust.
+# Use ./g8e gw clean explicitly to archive and reset the Gateway runtime.
 clean:
-	@set -e; read -r -p "This removes build artifacts and resets .g8e (a backup will be kept). Continue? [y/N] " answer; \
-	if [ "$$answer" != "y" ]; then echo "Clean cancelled."; exit 1; fi; \
-	if [ -d .g8e ]; then \
-		test -x ./g8e || { echo "ERROR: ./g8e is required to stop the Gateway and archive .g8e safely; run 'make build' first" >&2; exit 1; }; \
-		./g8e gw clean --yes --skip-backup; \
-	fi
 	@echo "Cleaning up build artifacts..."
 	@rm -rf .g8e-test-tmp/
 	@rm -rf bin/

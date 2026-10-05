@@ -98,9 +98,9 @@ The Makefile provides several build targets:
 - `make build-compressed` - Builds the current-platform binary and compresses the named `bin/` artifact with UPX (requires UPX installed).
 - `make fips-build` - Builds a FIPS 140-3 approved mode g8e binary for linux/amd64.
 - `make fips-verify` - Builds the FIPS variant and runs its self-check with FIPS enforcement enabled.
-- `make clean` - Removes `bin/`, test and coverage artifacts, the local `.g8e/` runtime tree, and the local Go build and module caches. It does not remove the repository-root `g8e` binary.
+- `make clean` - Removes `bin/`, test and coverage artifacts, and the local Go build and module caches. It preserves `.g8e/`, workload identities, and the repository-root `g8e` binary.
 
-> **Warning:** `make clean` deletes the gateway state stored under the repository's `.g8e/` directory. Stop the gateway and preserve any required state before running it.
+To intentionally reset Gateway state, use `./g8e gw clean`. This archives the runtime, replaces the CA on the next start, and requires fresh owner and workload enrollment. See [Gateway Clean](#gateway-clean).
 
 ### Build in Docker (no local Go required)
 

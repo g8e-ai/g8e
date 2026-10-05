@@ -4,6 +4,11 @@
 starts again it has a new identity. Existing workload credentials and trust still
 belong to the previous gateway.
 
+`make clean` only removes build artifacts and Go caches; it preserves Gateway
+state and workload identities. Older versions also called `gw clean`, which
+changed the Gateway CA on the next start and left local workloads trusting the
+archived Gateway. If that happened, use the recovery procedure below once.
+
 Run `make full-setup` and select the workload directories you intend to use. Before
 launching, the launcher compares their saved trust with the local gateway CA and
 asks once whether to reset stale identities. Declining launches no workloads.

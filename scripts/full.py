@@ -226,19 +226,32 @@ def workload_state(name, directory, offset=0):
     with log_path.open("rb") as log:
         log.seek(offset)
         recent = log.read().decode(errors="replace")
-    if "operator pub/sub WebSocket connected" in recent:
-        return "connected", ""
-    if "Application startup complete" in recent:
-        return "ready", ""
-    if (
-        "request submitted" in recent
-        or "approval url" in recent.lower()
-        or "resuming pending" in recent
-        or "polling for approval" in recent
-    ):
-        return "awaiting approval", "run ./g8e auth enroll pending"
-    if "gateway not yet bootstrapped" in recent:
-        return "awaiting enrollment", "run ./g8e auth enroll user -e g8e.local"
+    # Reused processes have append-only logs spanning earlier launches. The
+    # newest state marker must win over a previous connection or ready message.
+    states = (
+        ("operator pub/sub websocket connected", "connected", ""),
+        ("application startup complete", "ready", ""),
+        *(
+            (marker, "awaiting approval", "run ./g8e auth enroll pending")
+            for marker in (
+                "request submitted",
+                "approval url",
+                "resuming pending",
+                "polling for approval",
+            )
+        ),
+        (
+            "gateway not yet bootstrapped",
+            "awaiting enrollment",
+            "enroll the owner with ./g8e auth enroll user",
+        ),
+    )
+    recent = recent.lower()
+    position, state, detail = max(
+        (recent.rfind(marker), state, detail) for marker, state, detail in states
+    )
+    if position >= 0:
+        return state, detail
     return "starting", f"see {log_path}"
 
 

@@ -116,7 +116,7 @@ The binary is self-contained, but the running Operator is stateful. It creates a
 | `make fips-build` | Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`. |
 | `make fips-verify` | Builds the FIPS variant and runs `g8e version --fips` with FIPS-only enforcement enabled. |
 
-`make fmt`, the host-native `make host-up` / `make host-down` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` also removes `.g8e/` runtime state, so do not use it to clean only build artifacts on a host with state that must be retained.
+`make fmt`, the host-native `make host-up` / `make host-down` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` removes build artifacts and Go caches while preserving `.g8e/` runtime state and workload identities. Use `./g8e gw clean` explicitly to reset Gateway state.
 
 #### Cross-Compilation
 
@@ -377,7 +377,7 @@ The current Cobra wrapper for `operator stream` parses its public flags before c
 ## Anti-patterns
 
 - Treating the Lattice adapter path as implemented (INV-BUILD-OP-02: flags parse but do not affect runtime).
-- Using `make clean` on a host with operational state (INV-BUILD-OP-04: removes `.g8e/` runtime state).
+- Using `./g8e gw clean` to clean build artifacts on a host whose operational state must be retained (INV-BUILD-OP-04).
 - Assuming protocol package re-exports guarantee behavioral compatibility (INV-BUILD-OP-05: independent implementations require full L1-L5 stack).
 - Relying on `operator stream` for production rollout (its flags are not forwarded; use `operator deploy` or an external deployment system).
 

@@ -424,6 +424,21 @@ class FullTests(unittest.TestCase):
                     FULL.workload_state("observer", directory, len(old))[0],
                     "awaiting approval",
                 )
+                self.assertEqual(
+                    FULL.workload_state("observer", directory)[0],
+                    "awaiting approval",
+                )
+                log.write_text(
+                    old + "operator enrollment: gateway not yet bootstrapped\n"
+                )
+                self.assertEqual(
+                    FULL.workload_state("observer", directory)[0],
+                    "awaiting enrollment",
+                )
+                log.write_text(log.read_text() + old)
+                self.assertEqual(
+                    FULL.workload_state("observer", directory)[0], "connected"
+                )
             with patch.object(FULL, "ensemble_running", return_value=False):
                 self.assertEqual(
                     FULL.workload_state("observer", directory)[0], "failed"
