@@ -25,7 +25,8 @@ jobs:
 
       - name: Dogfood setup and native startup as a new contributor
         run: |
-          docker run --rm --volume "$PWD:/source:ro" ubuntu:24.04 bash -euc '
+          docker run --rm --init --volume "$PWD:/source:ro" ubuntu:24.04 bash -euc '
+            set -o pipefail
             apt-get update
             apt-get install -y --no-install-recommends ca-certificates git sudo
             useradd --create-home --shell /bin/bash contributor

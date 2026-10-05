@@ -47,6 +47,8 @@ Choose the smallest environment that fits your work:
   dependencies. Use `make dev-python` when you also need Ensemble test and lint
   dependencies.
 
+`make full` also needs an approved `G8E_OLLAMA_ENDPOINT` in `.env` or the process environment. For interactive configuration, use `make full-setup`. Linux and macOS contributors can install the complete development toolchain with their platform's setup script; use `--build-only` for Gateway evaluation. See the [setup instructions](../docs/guides/getting_started.md#clone-the-repository).
+
 For browser enrollment, run `./g8e auth enroll user -e localhost`; for a
 headless environment, add `--headless`. The [Getting Started guide](../docs/guides/getting_started.md)
 covers setup, enrollment, and runtime configuration.
@@ -61,6 +63,8 @@ suite when practical:
 | Go unit tests | `./g8e test unit` |
 | Ensemble tests | `make ensemble-test` |
 | Setup and CI helper scripts | `make ci-scripts` |
+
+`make ensemble-test` needs `make dev-python` first. `make ci-scripts` runs the complete `make dev-check` preflight; for isolated script checks with the Python dependencies installed, use `.venv/bin/python -m unittest discover -s scripts/tests`.
 
 Platform test suites go through `./g8e test ...` or their owning Make target,
 as required by [INV-TEST-01](../docs/devs/devs.md#testing-inv-test).

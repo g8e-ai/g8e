@@ -977,6 +977,40 @@ func TestPlatformEnrollmentService_DeduplicatesLiveRequest(t *testing.T) {
 	assert.Empty(t, second.Token, "deduplicated response must not return the token")
 }
 
+// TestPlatformEnrollmentService_FullPlatformOperatorsAwaitApproval proves that
+// all four host-platform roles can enroll before the owner approves any of them.
+func TestPlatformEnrollmentService_FullPlatformOperatorsAwaitApproval(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	for _, role := range []string{"provenance", "observer", "inference", "data"} {
+		operatorCSR, _, cliCSR, _ := generateOperatorCSRsAndKeys(t)
+		req := models.PlatformEnrollmentCreateRequest{
+			ComponentKind:     models.PlatformComponentOperator,
+			InstanceID:        "operator-" + role,
+			Hostname:          "operator.local",
+			SystemFingerprint: "host-fingerprint",
+			Operator: &models.PlatformOperatorCSRPayload{
+				OperatorCSRPEM: operatorCSR,
+				CLICSRPEM:      cliCSR,
+			},
+		}
+		response, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+		require.NoError(t, err, "role %s must be able to await owner approval", role)
+		require.NotEmpty(t, response.RequestID)
+	}
+	operatorCSR, _, cliCSR, _ := generateOperatorCSRsAndKeys(t)
+	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+		ComponentKind:     models.PlatformComponentOperator,
+		InstanceID:        "operator-overflow",
+		Hostname:          "operator.local",
+		SystemFingerprint: "host-fingerprint",
+		Operator: &models.PlatformOperatorCSRPayload{
+			OperatorCSRPEM: operatorCSR,
+			CLICSRPEM:      cliCSR,
+		},
+	}, "https://gateway.local/console")
+	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentQuotaExceeded)
+}
+
 // TestPlatformEnrollmentService_QuotaExceeded proves that creating more than
 // the configured maximum live requests for the same component kind is rejected.
 func TestPlatformEnrollmentService_QuotaExceeded(t *testing.T) {

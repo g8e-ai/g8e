@@ -25,6 +25,31 @@ SPEC.loader.exec_module(FULL)
 
 
 class FullTests(unittest.TestCase):
+    def test_missing_dotenv_points_to_runtime_setup(self):
+        with (
+            patch.dict(sys.modules, {"dotenv": None}),
+            self.assertRaisesRegex(RuntimeError, "make ensemble-env"),
+        ):
+            FULL.load_environment(Path("missing.env"))
+
+    def test_missing_ensemble_dependencies_fail_before_gateway_start(self):
+        with (
+            patch.object(sys, "argv", ["full.py", "--start-gateway"]),
+            patch.object(FULL, "model_root", return_value="/models"),
+            patch.object(
+                FULL, "load_environment",
+                return_value={"OllamaEndpoint": "http://localhost:11434"},
+            ),
+            patch.object(
+                FULL.subprocess, "run",
+                side_effect=subprocess.CalledProcessError(1, [sys.executable]),
+            ) as run,
+            self.assertRaisesRegex(RuntimeError, "make ensemble-env"),
+        ):
+            FULL.main()
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0], [sys.executable, "-c", "import app.serve"])
+
     def test_dotenv_reads_only_registered_launcher_keys_without_execution(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / ".env"

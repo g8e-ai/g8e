@@ -47,6 +47,11 @@ const (
 	// malicious requester.
 	PlatformEnrollmentMaxLiveRequestsPerComponent = 3
 
+	// The native full platform launches four distinct Operator roles before
+	// owner approval. Bound Operator requests separately so all four can wait
+	// for approval without increasing the quota for other component kinds.
+	PlatformEnrollmentMaxLiveOperatorRequests = 4
+
 	// PlatformEnrollmentCleanupInterval is how often the managed cleanup
 	// goroutine runs reconciliation of expired leases and removal of
 	// terminal requests past the retention window.

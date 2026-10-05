@@ -44,7 +44,7 @@ def load_environment(path):
     try:
         from dotenv import dotenv_values
     except ImportError as exc:
-        raise RuntimeError("python-dotenv is missing; run make dev-python") from exc
+        raise RuntimeError("python-dotenv is missing; run make ensemble-env") from exc
     registry = json.loads(ENV_REGISTRY.read_text())["env_vars"]
     values = dotenv_values(path, interpolate=False) if path.exists() else {}
     result = {}
@@ -637,7 +637,7 @@ def main():
             )
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(
-                "g8ee dependencies are missing; run make dev-python and retry"
+                "g8ee dependencies are missing; run make ensemble-env and retry"
             ) from exc
     if args.start_gateway:
         gateway_command = [str(ROOT / "g8e"), "gw", "start", "--quiet"]

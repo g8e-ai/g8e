@@ -17,7 +17,7 @@ fi
 cleanup() {
     local status=$?
     if [[ $status -ne 0 ]]; then
-        find .local.dev/full .g8e -name '*.log' -type f -exec tail -n 80 {} \; 2>/dev/null || true
+        find .local.dev/full .g8e "$HOME/.ollama/g8e" -name '*.log' -type f -print -exec tail -n 80 {} \; 2>/dev/null || true
     fi
     if [[ -x ./g8e ]]; then
         make down || true

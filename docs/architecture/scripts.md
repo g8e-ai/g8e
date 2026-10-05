@@ -59,10 +59,12 @@ Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-set
 | macOS development bootstrap | `scripts/macos-setup.sh` | Dependency checks, Homebrew and uv installs, contributor toolchain, shell profile updates |
 | Windows development bootstrap | `scripts/windows-setup.ps1` | PowerShell 7+, build-toolchain checks (git, make, go, node), user PATH updates; no contributor toolchain |
 | Shared setup helpers | `scripts/lib/dev-setup-common.sh` | Version comparison, prerequisite checks, uv install, profile PATH edits, `Makefile` pin lookup |
+| Ensemble runtime bootstrap | `scripts/bootstrap-uv.sh`, `Makefile` (`ensemble-env`, `dev-python`) | Reuses available uv or installs the pinned version; provisions Python and runtime dependencies, with test and lint dependencies added by `dev-python` |
 | Toolchain preflight | `scripts/dev-check.sh` | Run by `make dev-check`; lists every missing or mismatched tool and exits non-zero |
 | Contributor toolchain targets | `Makefile` (`dev-setup`, `dev-tools`, `dev-python`, `dev-node`, `dev-check`) | `make help` lists them; pins live in the `BUF_VERSION`, `GOLANGCI_LINT_VERSION`, `UV_VERSION`, and `PYTHON_VERSION` variables |
 | Go package smoke test | `scripts/smoke-test-go.sh` | Temporary module creation, `replace` directive, import verification |
 | Python package smoke test | `scripts/smoke-test-python.sh` | Virtual environment, editable install, import and example verification |
+| Fresh onboarding smoke test | `scripts/ci/onboarding-smoke.sh` | Disposable Linux checkout only: installs build prerequisites, builds and starts Gateway, enrolls owner, installs Ensemble runtime, then starts and approves four Operators and Ensemble |
 | COSAiS validation | `internal/tools/cosais_validator` | Finalized overlay ID coverage check; invoked by `make cosais-validate` |
 | Developer-guideline audit | `scripts/audit-dev-guidelines.py` | Go/Python guideline checks, function clones, and protocol alignment |
 | Gateway-embedded deploy (Bash) | `internal/services/gateway/scripts/g8e-deploy.sh` | Embedded by `make build`; served at `/g8e-deploy.sh` |
@@ -110,6 +112,7 @@ make dev-check    # verify; also runs automatically before every ci target
 | --- | --- |
 | `make dev-tools` | `buf`, `protoc-gen-go`, `protoc-gen-go-grpc`, `protoc-gen-doc`, `golangci-lint`, `govulncheck`, and `swag` through `go install` into `GOBIN` or `GOPATH/bin`. Pinned tools reinstall at the `Makefile` versions on every run; `govulncheck` and `swag` track `@latest`, matching CI. |
 | `make dev-python` | Repo-root `.venv` created by `uv` with `PYTHON_VERSION` (uv downloads the interpreter when the system has none), the in-tree `protocol/python` package, and `ensemble[test]` (pytest, ruff, pyright). An existing `.venv` is reused. |
+| `make ensemble-env` | Bootstraps the pinned uv when absent, provisions Python `PYTHON_VERSION`, and installs the in-tree protocol package and Ensemble runtime into the repo-root `.venv`. No contributor Go tools or Python test/lint extras are installed. |
 | `make dev-node` | `npm ci` in `protocol/node`, `console`, and `g8e-adapter`, then builds the adapter. |
 
 The `Makefile` puts the Go install directory and `~/.local/bin` on `PATH` for its own recipes, so these tools resolve under `make` even in a shell that has not sourced the updated profile. `make proto-generate` installs any missing protoc plugin itself through `make proto-tools-install`; buf runs them as `local:` plugins from `PATH`, so a missing plugin otherwise fails with `executable file not found in $PATH`. The CI workflow `.github/workflows/build-and-test.yml` pins the same versions separately and must change together with the `Makefile` pins.
@@ -128,6 +131,8 @@ bash scripts/smoke-test-python.sh
 `smoke-test-python.sh` creates `protocol/python/.smoke-env`, upgrades `pip`, installs `protocol/python` in editable mode, checks public constants and models imports, runs `constants_example.py` and `models_example.py`, then removes the virtual environment on success. Failed commands can leave `.smoke-env` behind for manual cleanup. The test uses package indexes while upgrading `pip` and resolving dependencies.
 
 The primary CI workflow (`build-and-test.yml`) runs both scripts for pushes to `main`, pull requests targeting `main`, and manual workflow dispatches. These tests validate the local working tree rather than published distributions.
+
+The same workflow runs `scripts/ci/onboarding-smoke.sh` as an unprivileged contributor with sudo in a fresh Ubuntu container. It checks native startup and enrollment without Ollama or live model API keys. Run it only in a disposable checkout/container: it installs tools, creates identities, and starts local processes. CI archives the checked-out commit; local validation of uncommitted changes must snapshot the working files instead of using `git archive HEAD`. The container uses `--init` to reap child processes, and the script prints Gateway, Ensemble, and Operator logs on failure before stopping the platform.
 
 ### Validation and Audit
 

@@ -50,21 +50,20 @@ Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcomm
 - Node.js 22+ with npm (for the evaluation explorer)
 - A modern browser with WebAuthn support (or use headless enrollment)
 
-If you don't have these tools, run the setup script for your platform:
-
-- **Linux:** `bash scripts/linux-setup.sh`
-- **macOS:** `bash scripts/macos-setup.sh`
-- **Windows:** `pwsh scripts/windows-setup.ps1`
-
-Pass `-y` to accept every install without prompting (required when stdin is not a
-terminal, e.g. CI runners or containers): `bash scripts/linux-setup.sh -y`.
-
-### 1. Clone the repository
+### Clone the repository
 
 ```bash
 git clone --depth 1 https://github.com/g8e-ai/g8e.git
 cd g8e
 ```
+
+If build tools are missing, run the setup script from this checkout:
+
+- **Linux:** `bash scripts/linux-setup.sh --build-only`
+- **macOS:** `bash scripts/macos-setup.sh --build-only`
+- **Windows:** `pwsh scripts/windows-setup.ps1`
+
+Linux and macOS setup without `--build-only` also installs the contributor toolchain, including Python test and lint dependencies. Pass `-y` to accept installs without prompting, for example `bash scripts/linux-setup.sh --build-only -y`. After setup, open a new terminal or source the shell profile printed by the script, then return to the repository root.
 
 ### Gateway-only track
 
@@ -111,7 +110,7 @@ Then it:
 - Launches four Operators (Provenance, Observer, Inference, Data) and the Ensemble
 - Prints commands to enroll and approve workloads
 
-### 4. Enroll the first owner
+### Enroll the first owner
 
 From another terminal, authenticate with the Gateway:
 
@@ -131,7 +130,7 @@ This creates an mTLS-only CLI identity with no passkey ceremony and no OS
 trust-store changes. It cannot sign in to the browser console, but it fully
 drives the CLI.
 
-### 5. Approve workload enrollments
+### Approve workload enrollments
 
 List pending enrollment requests and approve them:
 
@@ -146,7 +145,7 @@ Or approve all at once:
 ./g8e auth enroll approve --all --yes
 ```
 
-### 6. Verify the stack is healthy
+### Verify the stack is healthy
 
 ```bash
 ./g8e gw status
@@ -272,6 +271,7 @@ make up
 **Start the Gateway + Operators + Ensemble:**
 
 ```bash
+make ensemble-env # one-time runtime setup
 make full
 ```
 

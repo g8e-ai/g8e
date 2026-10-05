@@ -83,7 +83,7 @@ make full-setup
 ```
 
 The full platform adds four Operators and the Python Ensemble. It requires
-Python 3.12+; `make ensemble-env` installs only the runtime dependencies needed
+Python 3.12+ (provisioned by `uv` as needed); `make ensemble-env` installs only the runtime dependencies needed
 by `make full`, while `make dev-python` also installs Ensemble test and lint
 dependencies. Both targets bootstrap `uv` when it is not already installed.
 

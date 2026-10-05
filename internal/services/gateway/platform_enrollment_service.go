@@ -929,7 +929,11 @@ func (s *PlatformEnrollmentService) checkQuota(kind models.PlatformComponentKind
 		}
 		live++
 	}
-	if live >= constants.PlatformEnrollmentMaxLiveRequestsPerComponent {
+	limit := constants.PlatformEnrollmentMaxLiveRequestsPerComponent
+	if kind == models.PlatformComponentOperator {
+		limit = constants.PlatformEnrollmentMaxLiveOperatorRequests
+	}
+	if live >= limit {
 		return constants.ErrPlatformEnrollmentQuotaExceeded
 	}
 	return nil

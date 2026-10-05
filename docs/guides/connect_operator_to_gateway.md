@@ -232,7 +232,7 @@ ssh user@192.0.2.10 /opt/g8e operator start --endpoint <gateway-host>
 
 ### Connect Many Operators
 
-The Gateway allows at most three live (non-terminal) Operator enrollment requests at once, platform-wide; further `operator start` processes are rejected with HTTP 429. `operator deploy` handles that pacing itself:
+The Gateway allows at most four live (non-terminal, unexpired) Operator enrollment requests at once, platform-wide, so all four native platform roles can await owner approval together. Other component kinds allow three live requests each. Further `operator start` processes are rejected with HTTP 429. `operator deploy` handles that pacing itself:
 
 ```bash
 ./g8e operator deploy --hosts localhost --endpoint <gateway-host> \
