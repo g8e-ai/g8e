@@ -12,6 +12,12 @@ type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
 var EnvVar = struct {
+	Hostname              EnvVarKey
+	OllamaEndpoint        EnvVarKey
+	ProvenanceHost        EnvVarKey
+	ObserverHost          EnvVarKey
+	InferenceHost         EnvVarKey
+	DataHost              EnvVarKey
 	ConsensusID           EnvVarKey
 	ConsensusURL          EnvVarKey
 	ConsensusBootstrap    EnvVarKey
@@ -47,6 +53,12 @@ var EnvVar = struct {
 	HarnessLLMModel       EnvVarKey
 	TestReexec            EnvVarKey
 }{
+	Hostname:              EnvVarKey("G8E_HOSTNAME"),
+	OllamaEndpoint:        EnvVarKey("G8E_OLLAMA_ENDPOINT"),
+	ProvenanceHost:        EnvVarKey("G8E_PROVENANCE_HOST"),
+	ObserverHost:          EnvVarKey("G8E_OBSERVER_HOST"),
+	InferenceHost:         EnvVarKey("G8E_INFERENCE_HOST"),
+	DataHost:              EnvVarKey("G8E_DATA_HOST"),
 	ConsensusID:           EnvVarKey("G8E_CONSENSUS_ID"),
 	ConsensusURL:          EnvVarKey("G8E_CONSENSUS_URL"),
 	ConsensusBootstrap:    EnvVarKey("G8E_CONSENSUS_BOOTSTRAP"),

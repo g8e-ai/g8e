@@ -71,11 +71,13 @@ make up
 
 This builds the binary and starts the Gateway on localhost.
 
-For the full local setup with the Operator roles and the first-party ensemble, use:
+For interactive setup with the Operator roles and the first-party ensemble, use:
 
 ```bash
-make full
+make full-setup
 ```
+
+For unattended startup, set `G8E_OLLAMA_ENDPOINT` in `.env` and run `make full`. It also reuses `G8E_HOSTNAME`; see [native startup settings](docs/guides/getting_started.md#run-natively-on-localhost).
 
 Then enroll the first owner and approve workloads:
 

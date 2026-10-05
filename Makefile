@@ -281,7 +281,8 @@ help:
 		'' \
 		'Run locally' \
 		'  up                        Build and start the Gateway on this host' \
-		'  full                      Start Gateway, prompt for operators, and launch local g8ee' \
+		'  full                      Start host stack unattended using .env endpoints' \
+		'  full-setup                Start host stack with interactive operator setup' \
 		'  down                      Stop the host Gateway' \
 		'  stop                      Stop the host Gateway and local workloads (alias for down)' \
 		'  docker-up                 Build and start the Docker Compose stack' \
@@ -1023,11 +1024,14 @@ up: build
 	@echo "Host platform started. Check it with: ./g8e gw status"
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
 
-.PHONY: full
+.PHONY: full full-setup
+# FULL_ARGS carries explicit path flags or --dry-run; .env is parsed as data by
+# the launcher, never included by Make or sourced as executable shell code.
 full: build
-	@echo "Starting the host platform..."
-	@./g8e gw start --quiet
-	@$(PYTHON) scripts/full.py $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,)
+	@$(PYTHON) scripts/full.py --start-gateway $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,) $(FULL_ARGS)
+
+full-setup: build
+	@$(PYTHON) scripts/full.py --setup --start-gateway $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,) $(FULL_ARGS)
 
 .PHONY: down stop
 down:

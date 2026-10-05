@@ -87,7 +87,7 @@ The Gateway starts on:
 For the complete platform with local Operators and the agentic Ensemble (g8ee):
 
 ```bash
-make full
+make full-setup
 ```
 
 This interactively prompts you for:
@@ -97,7 +97,7 @@ This interactively prompts you for:
 
 Then it:
 - Starts the Gateway in the background
-- Launches three Operators (Data, Provenance, Observer) and the Ensemble
+- Launches four Operators (Provenance, Observer, Inference, Data) and the Ensemble
 - Prints commands to enroll and approve workloads
 
 ### 4. Enroll the first owner
@@ -254,7 +254,22 @@ make up
 make full
 ```
 
-`make full` prompts interactively for operator configuration, then launches everything in the background.
+`make full` reads the repository-root `.env` and starts without launcher prompts. Set `G8E_OLLAMA_ENDPOINT` to the approved HTTP(S) provider URL. `G8E_HOSTNAME` selects the Gateway hostname for Operators, Ensemble, browser approval links, CORS, and passkey origins; if omitted, the host launcher retains `g8e.local`. Exported process variables take precedence, including empty values. Missing or empty Ollama endpoints and invalid hostnames fail before Gateway startup. The launcher parses quoted values and comments as data, without shell execution or variable interpolation, and leaves `.env` unchanged.
+
+The four roles run locally by default. Optional `G8E_PROVENANCE_HOST`, `G8E_OBSERVER_HOST`, `G8E_INFERENCE_HOST`, and `G8E_DATA_HOST` select remote hosts. Remote roles print commands to run on those hosts; the launcher does not connect to them. The Gateway and Ensemble always run locally. The hostname must resolve to this Gateway, be reachable by the selected hosts, and match its existing TLS certificate.
+
+Operator working directories default to `~/.ollama/g8e/<role>`, and the local Ollama model store is detected from host storage. Paths, ports, and model roles are not read from `.env`, following [INV-ENV-04](../devs/devs.md#environment-inv-env). Override paths with explicit launcher flags:
+
+```bash
+make full FULL_ARGS='--model-storage-root /srv/ollama/models --data-working-dir /srv/g8e/data'
+make full FULL_ARGS='--dry-run'
+```
+
+`--dry-run` previews the Gateway and workloads without launching services or writing runtime state; Make still builds the binary. Use `--<role>-working-dir` for any role and `--env-file` for another dotenv file. Each Operator requires a separate directory. The Ensemble uses `.local.dev/full/ensemble`.
+
+Use `make full-setup` for the previous interactive flow, which prompts for Operator hosts, working directories, model storage, and the Ollama endpoint. It does not read `.env`.
+
+Workloads may still await owner enrollment and approval. Stale local identities fail unattended startup with instructions to use `make full RESET_IDENTITIES=1`; see [workload identity recovery](reset_workload_identity.md).
 
 ### Gateway configuration
 

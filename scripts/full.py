@@ -5,10 +5,11 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Interactive host stack launcher for `make full`."""
+"""Host stack launcher: unattended `make full`, interactive `make full-setup`."""
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -19,6 +20,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 ROLES = ("provenance", "observer", "inference", "data")
@@ -26,6 +28,66 @@ TRUST_PATH = Path(".g8e/pki/trust/g8eg-ca-bundle.pem")
 WORKLOADS_PATH = Path(".local.dev/full/workloads.json")
 LAUNCHES = {}
 GATEWAY_HOST = "g8e.local"
+
+
+# Names come from the canonical registry; unrelated .env settings never reach
+# the launcher or get exported to its subprocesses.
+ENV_REGISTRY = ROOT / "protocol/constants/env_vars.json"
+LAUNCHER_ENV_FIELDS = (
+    "Hostname",
+    "OllamaEndpoint",
+    *(role.title() + "Host" for role in ROLES),
+)
+
+
+def load_environment(path):
+    try:
+        from dotenv import dotenv_values
+    except ImportError as exc:
+        raise RuntimeError("python-dotenv is missing; run make dev-python") from exc
+    registry = json.loads(ENV_REGISTRY.read_text())["env_vars"]
+    values = dotenv_values(path, interpolate=False) if path.exists() else {}
+    result = {}
+    for field in LAUNCHER_ENV_FIELDS:
+        entry = registry[field]
+        if entry["category"] != "user_endpoint":
+            raise ValueError(f"Invalid launcher env category for {field}")
+        key = entry["value"]
+        if key in os.environ:
+            result[field] = os.environ[key].strip()
+        elif key in values:
+            result[field] = (values[key] or "").strip()
+    return result
+
+
+def validate_host(host):
+    # A host identity, never a URL, port, shell expression, or arbitrary option.
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?", host):
+            raise ValueError(f"Expected a hostname or IP address, got {host!r}")
+    return host
+
+
+def url_host(host):
+    return f"[{host}]" if ":" in host else host
+
+
+def validate_ollama(endpoint):
+    url = urlsplit(endpoint)
+    if (
+        url.scheme not in ("http", "https")
+        or not url.hostname
+        or url.username
+        or url.password
+        or url.query
+        or url.fragment
+    ):
+        raise ValueError("G8E_OLLAMA_ENDPOINT must be an HTTP(S) provider URL")
+    # Accessing port also validates its syntax and range.
+    _ = url.port
+    return endpoint
 
 
 def certificate_fingerprints(pem):
@@ -45,7 +107,7 @@ def local_workloads(plan):
     ] + [("g8ee", ROOT / ".local.dev/full/ensemble")]
 
 
-def prepare_identities(plan, reset=False, dry_run=False):
+def prepare_identities(plan, reset=False, dry_run=False, interactive=True):
     """Trust changes are authorized from local disk, never from a TLS failure."""
     workloads = local_workloads(plan)
     root_path = ROOT / ".g8e/pki/root/root_ca.crt"
@@ -99,6 +161,11 @@ def prepare_identities(plan, reset=False, dry_run=False):
         print(
             "Working data, model files, vault keys, configuration, and logs will be preserved."
         )
+        if not reset and not interactive:
+            raise RuntimeError(
+                "Stale workload identities require an explicit reset; "
+                "retry with make full RESET_IDENTITIES=1 or use make full-setup"
+            )
         if not reset and prompt(
             "Reset their identities and request fresh enrollment? (y/N)", "n"
         ).lower() not in ("y", "yes"):
@@ -196,9 +263,6 @@ def report_workloads(timeout=20):
 
 def model_root():
     """Consult configuration/storage only; never start or probe Ollama."""
-    configured = os.environ.get("OLLAMA_MODELS")
-    if configured:
-        return str(Path(configured).expanduser())
     # Consider Snap configuration first, but verify storage before choosing it.
     snap_models = None
     if Path("/snap/ollama/current").exists():
@@ -251,7 +315,7 @@ def prompt(label, default):
         return input(f"{label} [{default}]: ").strip() or default
     except EOFError as exc:
         raise ValueError(
-            "make full requires interactive input; use --dry-run to preview commands"
+            "make full-setup requires interactive input; use --dry-run to preview commands"
         ) from exc
 
 
@@ -363,8 +427,9 @@ def start_local(name, directory, command, dry_run=False):
     print(f"  {name:<12} started; checking startup")
 
 
-def start_ensemble(dry_run=False):
+def start_ensemble(dry_run=False, gateway=GATEWAY_HOST):
     ensemble_dir = ROOT / ".local.dev/full/ensemble"
+    gateway = url_host(gateway)
     start_local(
         "g8ee",
         ensemble_dir,
@@ -377,13 +442,13 @@ def start_ensemble(dry_run=False):
             "--runtime-dir",
             str(ensemble_dir / ".g8e"),
             "--gateway-http-url",
-            f"http://{GATEWAY_HOST}:8080",
+            f"http://{gateway}:8080",
             "--gateway-url",
-            f"https://{GATEWAY_HOST}:8443",
+            f"https://{gateway}:8443",
             "--gateway-https-url",
-            f"https://{GATEWAY_HOST}:8443",
+            f"https://{gateway}:8443",
             "--gateway-pubsub-url",
-            f"wss://{GATEWAY_HOST}:8443",
+            f"wss://{gateway}:8443",
         ],
         dry_run,
     )
@@ -434,8 +499,18 @@ def main():
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Prompt and print without starting processes",
+        help="Print without starting processes or writing runtime state",
     )
+    parser.add_argument(
+        "--setup", action="store_true", help="Prompt for operator settings"
+    )
+    parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
+    parser.add_argument("--start-gateway", action="store_true")
+    parser.add_argument("--model-storage-root", help="Explicit model store path")
+    for role in ROLES:
+        parser.add_argument(
+            f"--{role}-working-dir", help=f"Explicit {role} runtime directory"
+        )
     parser.add_argument("--ensemble-action", choices=("start", "stop", "restart"))
     parser.add_argument(
         "--reset-identities",
@@ -444,21 +519,39 @@ def main():
     )
     args = parser.parse_args()
     if args.ensemble_action:
+        gateway = GATEWAY_HOST
+        if args.ensemble_action in ("start", "restart"):
+            gateway = validate_host(
+                load_environment(args.env_file).get("Hostname", GATEWAY_HOST)
+            )
         if args.dry_run and args.ensemble_action in ("stop", "restart"):
             print("g8ee: stop the local Python process")
             if args.ensemble_action == "restart":
-                start_ensemble(True)
+                start_ensemble(True, gateway)
             return
         if args.ensemble_action in ("stop", "restart"):
             stop_ensemble()
         if args.ensemble_action in ("start", "restart"):
             prepare_identities([], args.reset_identities, args.dry_run)
-            start_ensemble(args.dry_run)
+            start_ensemble(args.dry_run, gateway)
             if not args.dry_run and report_workloads():
                 raise RuntimeError("g8ee failed during startup; see its log")
         return
-    print("\nSet up operators · press Enter to use the defaults.")
-    print("Choose localhost or a remote host for each role.")
+    environment = {} if args.setup else load_environment(args.env_file)
+    gateway_host = validate_host(environment.get("Hostname", GATEWAY_HOST))
+    if not args.setup:
+        if not environment.get("OllamaEndpoint"):
+            raise ValueError(
+                "Set G8E_OLLAMA_ENDPOINT in .env or the process environment"
+            )
+        validate_ollama(environment["OllamaEndpoint"])
+        systems = {
+            role: validate_host(environment.get(role.title() + "Host", "localhost"))
+            for role in ROLES
+        }
+    if args.setup:
+        print("\nSet up operators · press Enter to use the defaults.")
+        print("Choose localhost or a remote host for each role.")
     plan = []
     storage = ollama = None
     descriptions = {
@@ -468,40 +561,54 @@ def main():
         "data": "executes governed tools and file operations; place it on the target host",
     }
     for role in ROLES:
-        print(f"\n{role.title()} · {descriptions[role]}")
-        system = prompt(
-            f"{role.title()} system (localhost or remote host)", "localhost"
-        )
+        if args.setup:
+            print(f"\n{role.title()} · {descriptions[role]}")
+            system = prompt(
+                f"{role.title()} system (localhost or remote host)", "localhost"
+            )
+        else:
+            system = systems[role]
         default_dir = (
             str(Path.home() / ".ollama/g8e" / role)
             if is_local(system)
             else f"~/.ollama/g8e/{role}"
         )
-        directory = prompt(
-            f"{role.title()} working directory (on {system})", default_dir
-        )
+        directory = getattr(args, role + "_working_dir") or default_dir
+        if args.setup:
+            directory = prompt(
+                f"{role.title()} working directory (on {system})", directory
+            )
+        if not directory.strip():
+            raise ValueError(f"{role} working directory must not be empty")
         if is_local(system):
             directory = str(Path(directory).expanduser().resolve())
         plan.append((role, system, directory))
         if role == "provenance":
             storage_default = model_root() if is_local(system) else "~/.ollama/models"
-            storage = prompt(
-                f"Provenance Ollama models directory (on {system})", storage_default
-            )
+            storage = args.model_storage_root or storage_default
+            if args.setup:
+                storage = prompt(
+                    f"Provenance Ollama models directory (on {system})", storage
+                )
             if is_local(system):
                 storage = str(Path(storage).expanduser().resolve())
         elif role == "inference":
-            ollama = prompt(
-                "Inference Ollama URL (Windows provider example: http://192.168.1.2:11434)",
-                "http://localhost:11434",
+            ollama = (
+                prompt(
+                    "Inference Ollama URL (Windows provider example: http://192.168.1.2:11434)",
+                    "http://localhost:11434",
+                )
+                if args.setup
+                else environment["OllamaEndpoint"]
             )
+            validate_ollama(ollama)
     # Sharing a cwd would share the operator's .g8e runtime and credentials.
     locations = [(system.lower(), directory) for _, system, directory in plan]
     local_dirs = [directory for _, system, directory in plan if is_local(system)]
     if len(set(locations)) != len(locations) or len(set(local_dirs)) != len(local_dirs):
         raise ValueError("Each operator needs a separate working directory")
-    remote_gateway = GATEWAY_HOST
-    if any(not is_local(system) for _, system, _ in plan):
+    remote_gateway = gateway_host
+    if args.setup and any(not is_local(system) for _, system, _ in plan):
         remote_gateway = prompt(
             "Gateway hostname reachable from remote operators (TLS certificate name)",
             GATEWAY_HOST,
@@ -519,10 +626,29 @@ def main():
             raise RuntimeError(
                 "g8ee dependencies are missing; run make dev-python and retry"
             ) from exc
-    prepare_identities(plan, args.reset_identities, args.dry_run)
+    if args.start_gateway:
+        gateway_command = [str(ROOT / "g8e"), "gw", "start", "--quiet"]
+        if not args.setup:
+            gateway_command += [
+                "--public-base-url",
+                f"https://{url_host(gateway_host)}:8443",
+                "--passkey-rp-id",
+                gateway_host,
+                "--passkey-rp-origin",
+                f"https://{url_host(gateway_host)}:8443",
+                "--cors-origin",
+                f"https://{url_host(gateway_host)}:8443",
+            ]
+        if args.dry_run:
+            print("Gateway: " + shlex.join(gateway_command))
+        else:
+            subprocess.run(gateway_command, cwd=ROOT, check=True)
+    prepare_identities(
+        plan, args.reset_identities, args.dry_run, interactive=args.setup
+    )
     print("\nLaunching workloads" if not args.dry_run else "\nLaunch preview")
     for role, system, directory in plan:
-        gateway = GATEWAY_HOST if is_local(system) else remote_gateway
+        gateway = gateway_host if is_local(system) else remote_gateway
         command_args = operator_args(role, gateway, directory, storage, ollama)
         if is_local(system):
             start_local(
@@ -530,16 +656,18 @@ def main():
             )
         else:
             remote_commands(system, directory, command_args)
-    start_ensemble(args.dry_run)
+    start_ensemble(args.dry_run, gateway_host)
     failed = report_workloads() if not args.dry_run else False
-    print_summary(args.dry_run, any(not is_local(system) for _, system, _ in plan))
+    print_summary(
+        args.dry_run, any(not is_local(system) for _, system, _ in plan), gateway_host
+    )
     if failed:
         raise RuntimeError(
             "One or more workloads failed during startup; see the logs listed above"
         )
 
 
-def print_summary(dry_run=False, has_remote=False):
+def print_summary(dry_run=False, has_remote=False, gateway=GATEWAY_HOST):
     print(
         "\nPlatform status"
         if not dry_run
@@ -578,10 +706,10 @@ def print_summary(dry_run=False, has_remote=False):
     print("  ./g8e operator show <id>         Operator details")
     print("  ./g8e ensemble logs              g8ee startup issues")
     print("\nIf workloads need approval")
-    print("  ./g8e auth enroll user -e g8e.local   Enroll your CLI identity first")
+    print(f"  ./g8e auth enroll user -e {gateway}   Enroll your CLI identity first")
     print("  ./g8e auth enroll pending             Review requests")
     print("  ./g8e auth enroll approve <id> --yes   Approve an intended request")
-    print("\nConsole: https://g8e.local:8443/console/")
+    print(f"\nConsole: https://{url_host(gateway)}:8443/console/")
 
 
 if __name__ == "__main__":

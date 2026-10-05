@@ -25,6 +25,72 @@ SPEC.loader.exec_module(FULL)
 
 
 class FullTests(unittest.TestCase):
+    def test_dotenv_reads_only_registered_launcher_keys_without_execution(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / ".env"
+            path.write_text(
+                "export G8E_HOSTNAME='dev.example' # browser host\n"
+                'G8E_OLLAMA_ENDPOINT="http://provider:11434"\n'
+                "G8E_DATA_HOST=remote.example\n"
+                "G8E_HTTP_PORT=9999\n"
+                "UNRELATED_SECRET=keep-private\n"
+            )
+            with patch.dict(FULL.os.environ, {}, clear=True):
+                values = FULL.load_environment(path)
+            self.assertEqual(
+                values,
+                {
+                    "Hostname": "dev.example",
+                    "OllamaEndpoint": "http://provider:11434",
+                    "DataHost": "remote.example",
+                },
+            )
+
+    def test_exported_endpoint_wins_even_when_empty(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / ".env"
+            path.write_text("G8E_OLLAMA_ENDPOINT=http://file:11434\n")
+            with patch.dict(FULL.os.environ, {"G8E_OLLAMA_ENDPOINT": ""}, clear=True):
+                self.assertEqual(FULL.load_environment(path)["OllamaEndpoint"], "")
+
+    def test_unattended_missing_endpoint_fails_before_starting_gateway(self):
+        with (
+            patch.object(sys, "argv", ["full.py", "--start-gateway"]),
+            patch.object(FULL, "load_environment", return_value={}),
+            patch.object(FULL.subprocess, "run") as run,
+            patch("builtins.input") as prompt,
+            self.assertRaisesRegex(ValueError, "G8E_OLLAMA_ENDPOINT"),
+        ):
+            FULL.main()
+        prompt.assert_not_called()
+        run.assert_not_called()
+
+    def test_unattended_preview_uses_environment_and_never_prompts(self):
+        output = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["full.py", "--dry-run", "--start-gateway"]),
+            patch.object(
+                FULL,
+                "load_environment",
+                return_value={
+                    "Hostname": "dev.example",
+                    "OllamaEndpoint": "http://gpu:11434",
+                    "ObserverHost": "remote.example",
+                },
+            ),
+            patch.object(FULL, "model_root", return_value="/models"),
+            patch("builtins.input", side_effect=AssertionError("unexpected prompt")),
+            patch.object(FULL.subprocess, "run") as run,
+            contextlib.redirect_stdout(output),
+        ):
+            FULL.main()
+        run.assert_not_called()
+        text = output.getvalue()
+        self.assertIn("http://gpu:11434", text)
+        self.assertIn("https://dev.example:8443", text)
+        self.assertIn("Run on remote.example", text)
+        self.assertIn("--public-base-url", text)
+
     def test_model_root_prefers_populated_wsl_store_over_empty_snap_directory(self):
         store = Path("/mnt/d/ai/Ollama/models")
         directories = {
@@ -84,9 +150,95 @@ class FullTests(unittest.TestCase):
             ):
                 self.assertEqual(FULL.model_root(), str(populated))
 
-    def test_model_root_honors_explicit_environment(self):
-        with patch.dict(FULL.os.environ, {"OLLAMA_MODELS": "/explicit/models"}):
-            self.assertEqual(FULL.model_root(), "/explicit/models")
+    def test_unattended_directory_flags_override_defaults(self):
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "full.py",
+                    "--dry-run",
+                    "--provenance-working-dir",
+                    "/operator with spaces",
+                    "--model-storage-root",
+                    "/models with spaces",
+                ],
+            ),
+            patch.object(
+                FULL,
+                "load_environment",
+                return_value={"OllamaEndpoint": "http://gpu:11434"},
+            ),
+            patch("builtins.input", side_effect=AssertionError("unexpected prompt")),
+            patch.object(FULL, "start_local") as launch,
+            patch.object(FULL, "print_summary"),
+        ):
+            FULL.main()
+        provenance = launch.call_args_list[0]
+        self.assertEqual(provenance.args[1], "/operator with spaces")
+        self.assertIn("/models with spaces", provenance.args[2])
+
+    def test_unattended_stale_identity_fails_without_prompt_or_mutation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            directory, saved, _ = self.setup_identities(root)
+            before = saved.read_bytes()
+            with (
+                patch.object(FULL, "ROOT", root),
+                patch.object(FULL.subprocess, "run") as run,
+                patch("builtins.input") as prompt,
+                self.assertRaisesRegex(RuntimeError, "RESET_IDENTITIES=1"),
+            ):
+                FULL.prepare_identities(
+                    [("observer", "localhost", str(directory))], interactive=False
+                )
+            run.assert_not_called()
+            prompt.assert_not_called()
+            self.assertEqual(saved.read_bytes(), before)
+
+    def test_unattended_invalid_endpoints_fail_before_side_effects(self):
+        for values in (
+            {"OllamaEndpoint": "file:///private"},
+            {"OllamaEndpoint": "http://gpu:invalid"},
+            {
+                "OllamaEndpoint": "http://gpu:11434",
+                "Hostname": "$(touch /tmp/sentinel)",
+            },
+            {"OllamaEndpoint": "http://gpu:11434", "DataHost": ""},
+        ):
+            with (
+                self.subTest(values=values),
+                patch.object(sys, "argv", ["full.py", "--start-gateway"]),
+                patch.object(FULL, "load_environment", return_value=values),
+                patch.object(FULL.subprocess, "run") as run,
+                self.assertRaises(ValueError),
+            ):
+                FULL.main()
+            run.assert_not_called()
+
+    def test_unattended_start_passes_explicit_gateway_flags_and_disables_prompts(self):
+        with (
+            patch.object(sys, "argv", ["full.py", "--start-gateway"]),
+            patch.object(
+                FULL,
+                "load_environment",
+                return_value={
+                    "Hostname": "dev.example",
+                    "OllamaEndpoint": "http://gpu:11434",
+                },
+            ),
+            patch.object(FULL.subprocess, "run") as run,
+            patch.object(FULL, "prepare_identities") as identities,
+            patch.object(FULL, "start_local"),
+            patch.object(FULL, "report_workloads", return_value=False),
+            patch.object(FULL, "print_summary"),
+            patch("builtins.input", side_effect=AssertionError("unexpected prompt")),
+        ):
+            FULL.main()
+        gateway = run.call_args_list[-1].args[0]
+        self.assertEqual(gateway[1:4], ["gw", "start", "--quiet"])
+        self.assertIn("https://dev.example:8443", gateway)
+        self.assertFalse(identities.call_args.kwargs["interactive"])
 
     def test_ensemble_start_uses_this_python_and_shared_runtime(self):
         with patch.object(FULL, "start_local") as launch:
@@ -135,16 +287,22 @@ class FullTests(unittest.TestCase):
             patch.object(
                 sys, "argv", ["full.py", "--ensemble-action", "restart", "--dry-run"]
             ),
+            patch.object(
+                FULL, "load_environment", return_value={"Hostname": "dev.example"}
+            ),
             patch.object(FULL, "stop_ensemble") as stop,
             patch.object(FULL, "start_ensemble") as start,
         ):
             FULL.main()
         stop.assert_not_called()
-        start.assert_called_once_with(True)
+        start.assert_called_once_with(True, "dev.example")
 
     def test_ensemble_action_skips_operator_prompts(self):
         with (
             patch.object(sys, "argv", ["full.py", "--ensemble-action", "restart"]),
+            patch.object(
+                FULL, "load_environment", return_value={"Hostname": "dev.example"}
+            ),
             patch.object(FULL, "stop_ensemble") as stop,
             patch.object(FULL, "start_ensemble") as start,
             patch.object(FULL, "prepare_identities") as prepare,
@@ -153,7 +311,7 @@ class FullTests(unittest.TestCase):
         ):
             FULL.main()
         stop.assert_called_once()
-        start.assert_called_once_with(False)
+        start.assert_called_once_with(False, "dev.example")
         prompt.assert_not_called()
         prepare.assert_called_once_with([], False, False)
 
@@ -335,7 +493,7 @@ class FullTests(unittest.TestCase):
             "/tmp/data",
         ]
         with (
-            patch.object(sys, "argv", ["full.py", "--dry-run"]),
+            patch.object(sys, "argv", ["full.py", "--setup", "--dry-run"]),
             patch("builtins.input", side_effect=answers),
             self.assertRaisesRegex(ValueError, "separate working directory"),
         ):
@@ -357,7 +515,7 @@ class FullTests(unittest.TestCase):
         ]
         output = io.StringIO()
         with (
-            patch.object(sys, "argv", ["full.py", "--dry-run"]),
+            patch.object(sys, "argv", ["full.py", "--setup", "--dry-run"]),
             patch("builtins.input", side_effect=answers),
             patch.object(FULL, "start_local") as launch,
             contextlib.redirect_stdout(output),

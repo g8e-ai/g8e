@@ -4,10 +4,10 @@
 starts again it has a new identity. Existing workload credentials and trust still
 belong to the previous gateway.
 
-Run `make full` and select the workload directories you intend to use. Before
+Run `make full-setup` and select the workload directories you intend to use. Before
 launching, the launcher compares their saved trust with the local gateway CA and
 asks once whether to reset stale identities. Declining launches no workloads.
-To confirm this recovery in a script, use `make full RESET_IDENTITIES=1`.
+Unattended `make full` refuses stale identities without prompting. To confirm this recovery in a script, use `make full RESET_IDENTITIES=1` with your `.env` endpoints and any explicit directory flags.
 This option only resets stale identities in the selected local directories.
 
 You can also reset one workload explicitly:
