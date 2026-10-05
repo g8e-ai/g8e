@@ -691,6 +691,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
 	modelProvenanceDeps.ProvenanceCoordinator = ls.modelProvenanceCoord
+	modelProvenanceDeps.ProgressPublisher = NewSSEEventPublisher(ls.sseStore, ls.pubsub)
 
 	proxySigner, err := ls.newBrowserProxySigner()
 	if err != nil {

@@ -31,6 +31,8 @@ const (
 // ModelProvenanceAttestationPreflightClientMargin. Hashing a multi-gigabyte
 // model over a mounted filesystem takes well over 30 seconds.
 const (
+	// BEGIN does no hashing; a silent operator must fail quickly.
+	ModelProvenanceCommandAcknowledgementTimeout    = 10 * time.Second
 	ModelProvenanceAttestationPreflightTimeout      = 5 * time.Minute
 	ModelProvenanceAttestationPreflightClientMargin = 15 * time.Second
 )

@@ -9,6 +9,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/sse"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
@@ -98,6 +100,10 @@ func newClient(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string
 }
 
 func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error) {
+	return c.DoRequestContext(context.Background(), method, path, body)
+}
+
+func (c *Client) DoRequestContext(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		bodyBytes, err := json.Marshal(body)
@@ -112,7 +118,7 @@ func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error
 		baseURL = c.cfg.OperatorHTTPURL()
 	}
 	url := baseURL + path
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
@@ -163,4 +169,19 @@ func (c *Client) Put(path string, body interface{}) ([]byte, error) {
 
 func (c *Client) Delete(path string) ([]byte, error) {
 	return c.DoRequest("DELETE", path, nil)
+}
+
+// NewSSEClient uses the same mTLS identity and CLI session as API requests.
+// The caller must bound its lifetime with a context and await SetOnConnect
+// before starting work whose ephemeral events it needs to receive.
+func (c *Client) NewSSEClient() *sse.Client {
+	streamHTTP := *c.httpClient
+	streamHTTP.Timeout = 0
+	baseURL := c.baseURL
+	if baseURL == "" {
+		baseURL = c.cfg.OperatorHTTPURL()
+	}
+	stream := sse.NewClient(baseURL+constants.APIPaths.SSEStream+"?since_id=0", &streamHTTP)
+	stream.SetHeader(constants.HeaderCLISessionID, c.creds.CLISessionID)
+	return stream
 }

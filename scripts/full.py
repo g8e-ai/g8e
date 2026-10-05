@@ -25,6 +25,7 @@ ROLES = ("provenance", "observer", "inference", "data")
 TRUST_PATH = Path(".g8e/pki/trust/g8eg-ca-bundle.pem")
 WORKLOADS_PATH = Path(".local.dev/full/workloads.json")
 LAUNCHES = {}
+GATEWAY_HOST = "g8e.local"
 
 
 def certificate_fingerprints(pem):
@@ -170,7 +171,7 @@ def workload_state(name, directory, offset=0):
     ):
         return "awaiting approval", "run ./g8e auth enroll pending"
     if "gateway not yet bootstrapped" in recent:
-        return "awaiting enrollment", "run ./g8e auth enroll user -e localhost"
+        return "awaiting enrollment", "run ./g8e auth enroll user -e g8e.local"
     return "starting", f"see {log_path}"
 
 
@@ -198,7 +199,8 @@ def model_root():
     configured = os.environ.get("OLLAMA_MODELS")
     if configured:
         return str(Path(configured).expanduser())
-    # Snap's configured model location takes precedence over its default.
+    # Consider Snap configuration first, but verify storage before choosing it.
+    snap_models = None
     if Path("/snap/ollama/current").exists():
         try:
             result = subprocess.run(
@@ -209,15 +211,36 @@ def model_root():
                 check=False,
             )
             if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
+                snap_models = Path(result.stdout.strip()).expanduser()
         except (OSError, subprocess.TimeoutExpired):
             # Snap query is best-effort; if unavailable or slow, continue with fallback paths.
             pass
-    for path in (
+    candidates = [
         Path("/var/snap/ollama/common/models"),
         Path("/usr/share/ollama/.ollama/models"),
         Path.home() / ".ollama/models",
-    ):
+    ]
+    if snap_models is not None:
+        candidates.insert(0, snap_models)
+    # Windows Ollama storage may be exposed through WSL drive mounts.
+    drives = sorted(
+        drive
+        for drive in Path("/mnt").glob("*")
+        if len(drive.name) == 1 and drive.name in "abcdefghijklmnopqrstuvwxyz"
+    )
+    candidates.extend(drive / "ai/Ollama/models" for drive in drives)
+    for drive in drives:
+        candidates.extend(sorted(drive.glob("Users/*/.ollama/models")))
+    # Empty Snap manifests/blobs directories should not hide a populated store.
+    for path in candidates:
+        if (path / "blobs").is_dir() and any(
+            manifest.is_file() for manifest in (path / "manifests").rglob("*")
+        ):
+            return str(path)
+    for path in candidates:
+        if (path / "manifests").is_dir() and (path / "blobs").is_dir():
+            return str(path)
+    for path in candidates:
         if path.is_dir():
             return str(path)
     return str(Path.home() / ".ollama/models")
@@ -354,13 +377,13 @@ def start_ensemble(dry_run=False):
             "--runtime-dir",
             str(ensemble_dir / ".g8e"),
             "--gateway-http-url",
-            "http://localhost:8080",
+            f"http://{GATEWAY_HOST}:8080",
             "--gateway-url",
-            "https://localhost:8443",
+            f"https://{GATEWAY_HOST}:8443",
             "--gateway-https-url",
-            "https://localhost:8443",
+            f"https://{GATEWAY_HOST}:8443",
             "--gateway-pubsub-url",
-            "wss://localhost:8443",
+            f"wss://{GATEWAY_HOST}:8443",
         ],
         dry_run,
     )
@@ -441,7 +464,7 @@ def main():
     descriptions = {
         "provenance": "tracks model files; place it where models are stored",
         "observer": "observes provider activity; place it on the Ollama/GPU host",
-        "inference": "runs inference through your Ollama endpoint",
+        "inference": "runs inference",
         "data": "executes governed tools and file operations; place it on the target host",
     }
     for role in ROLES:
@@ -477,11 +500,11 @@ def main():
     local_dirs = [directory for _, system, directory in plan if is_local(system)]
     if len(set(locations)) != len(locations) or len(set(local_dirs)) != len(local_dirs):
         raise ValueError("Each operator needs a separate working directory")
-    remote_gateway = "localhost"
+    remote_gateway = GATEWAY_HOST
     if any(not is_local(system) for _, system, _ in plan):
         remote_gateway = prompt(
             "Gateway hostname reachable from remote operators (TLS certificate name)",
-            "g8e.local",
+            GATEWAY_HOST,
         )
     if not args.dry_run:
         try:
@@ -499,7 +522,7 @@ def main():
     prepare_identities(plan, args.reset_identities, args.dry_run)
     print("\nLaunching workloads" if not args.dry_run else "\nLaunch preview")
     for role, system, directory in plan:
-        gateway = "localhost" if is_local(system) else remote_gateway
+        gateway = GATEWAY_HOST if is_local(system) else remote_gateway
         command_args = operator_args(role, gateway, directory, storage, ollama)
         if is_local(system):
             start_local(
@@ -555,10 +578,10 @@ def print_summary(dry_run=False, has_remote=False):
     print("  ./g8e operator show <id>         Operator details")
     print("  ./g8e ensemble logs              g8ee startup issues")
     print("\nIf workloads need approval")
-    print("  ./g8e auth enroll user -e localhost   Enroll your CLI identity first")
+    print("  ./g8e auth enroll user -e g8e.local   Enroll your CLI identity first")
     print("  ./g8e auth enroll pending             Review requests")
     print("  ./g8e auth enroll approve <id> --yes   Approve an intended request")
-    print("\nConsole: https://localhost:8443/console/")
+    print("\nConsole: https://g8e.local:8443/console/")
 
 
 if __name__ == "__main__":

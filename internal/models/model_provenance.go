@@ -23,3 +23,12 @@ type ModelProvenanceAttestResponse struct {
 	ExpectedModelDigest string          `json:"expected_model_digest"`
 	Window              json.RawMessage `json:"window"`
 }
+
+// ModelProvenancePreflightProgress is session-scoped telemetry. The attestation
+// endpoint and persisted window remain the authoritative outcome and evidence.
+type ModelProvenancePreflightProgress struct {
+	RequestID      string `json:"request_id"`
+	ServedModelTag string `json:"served_model_tag"`
+	Phase          string `json:"phase"`
+	Error          string `json:"error,omitempty"`
+}

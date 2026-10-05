@@ -8,12 +8,15 @@
 package gwremote
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -403,4 +406,49 @@ func TestPreflightCampaignModelProvenance(t *testing.T) {
 		assert.Contains(t, err.Error(), `unexpected status "offline"`)
 		assert.Empty(t, gateway.attestQueries())
 	})
+}
+
+func TestPreflightModelProvenanceContext_SSEReadyBeforeDispatch(t *testing.T) {
+	events := make(chan string, 2)
+	connected := make(chan struct{})
+	_, fileSvc, cfg := startProvenanceGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.APIPaths.SSEStream:
+			w.Header().Set("Content-Type", "text/event-stream")
+			require.NotEmpty(t, r.Header.Get(constants.HeaderCLISessionID))
+			w.(http.Flusher).Flush()
+			close(connected)
+			for {
+				select {
+				case data := <-events:
+					fmt.Fprintf(w, "data: %s\n\n", data)
+					w.(http.Flusher).Flush()
+				case <-r.Context().Done():
+					return
+				}
+			}
+		case provenanceAttestPath:
+			select {
+			case <-connected:
+			default:
+				t.Error("attestation dispatched before SSE was ready")
+			}
+			requestID := r.URL.Query().Get("request_id")
+			require.NotEmpty(t, requestID)
+			events <- fmt.Sprintf(`{"event":{"type":%q,"data":{"request_id":"unrelated","phase":"failed"}}}`, constants.EventModelProvenancePreflightProgress)
+			events <- fmt.Sprintf(`{"event":{"type":%q,"data":{"request_id":%q,"served_model_tag":"probe-model:7b","phase":"attesting_storage"}}}`, constants.EventModelProvenancePreflightProgress, requestID)
+			<-r.Context().Done()
+		default:
+			writeJSONBody(t, w, `{"status":"ready"}`)
+		}
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var phases []string
+	err := preflightModelProvenanceAttestationContext(ctx, fileSvc, cfg, "probe-model:7b", strings.Repeat("a", 64), func(event models.ModelProvenancePreflightProgress) {
+		phases = append(phases, event.Phase)
+		cancel()
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, []string{"attesting_storage"}, phases)
 }

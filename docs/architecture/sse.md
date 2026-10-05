@@ -84,6 +84,23 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 `g8e.v1.platform.approvals.changed` is an ephemeral, Gateway-produced invalidation: its payload names only the changed list (`transactions` or `enrollments`) and a timestamp. The Gateway publishes it to the owning user's unexpired web sessions whenever a suspended L3 transaction is stored, approved, deleted, or swept as expired, and whenever a platform enrollment request is created, decided, or expires. Transaction events go to the transaction's user; enrollment events go to the platform owner (the first user), the only reviewer. It is published through `SSEEventPublisher.PublishEphemeral`, which appends no row, so it carries no `id:` and cannot be replayed; consumers re-list on receipt and on every stream (re)open. A failed push is logged and never fails the mutation. Owners: `internal/services/gateway/approvals_events.go`.
 
+### Model provenance preflight progress
+
+`g8e.v1.inference.model.provenance.preflight.updated` is ephemeral Gateway telemetry
+for the authenticated requesting CLI session. Its payload carries `request_id`,
+`served_model_tag`, and `phase` (`awaiting_operator`, `attesting_storage`, `ready`,
+or `failed`), plus the failure message when applicable. The CLI opens the existing
+`/api/v1/sse/stream` and waits for connection readiness before requesting `_attest`;
+it filters progress by its unique request ID. The HTTP attestation response and
+persisted provenance window remain authoritative. Progress does not create or
+replace evidence, and disconnecting a progress stream never triggers a second probe.
+
+The Gateway subscribes before dispatch and waits on the operator's signed BEGIN
+receipt and completed attestation event, without polling the window store. BEGIN
+must acknowledge within 10 seconds; the whole probe is bounded to five minutes
+for model blob hashing. FAILED receipts abort immediately with the operator's
+reason, and request cancellation releases the probe and receipt subscription.
+
 ## Owned surfaces
 
 | Claim | Path | Verify |

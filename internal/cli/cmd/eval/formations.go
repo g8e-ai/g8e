@@ -700,7 +700,7 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	if err := gwremote.PreflightCampaignModelProvenance(fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation)); err != nil {
+	if err := gwremote.PreflightCampaignModelProvenanceContext(cmd.Context(), fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation), nil); err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
 	chatDeps := deps.chatDeps()

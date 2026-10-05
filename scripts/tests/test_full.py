@@ -25,12 +25,77 @@ SPEC.loader.exec_module(FULL)
 
 
 class FullTests(unittest.TestCase):
+    def test_model_root_prefers_populated_wsl_store_over_empty_snap_directory(self):
+        store = Path("/mnt/d/ai/Ollama/models")
+        directories = {
+            Path("/var/snap/ollama/common/models"),
+            store,
+            store / "manifests",
+            store / "blobs",
+        }
+        with (
+            patch.dict(FULL.os.environ, {}, clear=True),
+            patch.object(Path, "exists", return_value=False),
+            patch.object(
+                Path,
+                "rglob",
+                autospec=True,
+                side_effect=lambda path, pattern: (
+                    [store / "manifests/model"] if path == store / "manifests" else []
+                ),
+            ),
+            patch.object(Path, "is_file", return_value=True),
+            patch.object(
+                Path,
+                "glob",
+                side_effect=lambda pattern: [Path("/mnt/d")] if pattern == "*" else [],
+            ),
+            patch.object(
+                Path,
+                "is_dir",
+                autospec=True,
+                side_effect=lambda path: path in directories,
+            ),
+        ):
+            self.assertEqual(FULL.model_root(), str(store))
+
+    def test_model_root_skips_empty_snap_configured_store(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            empty = root / "snap-models"
+            populated = root / "d/ai/Ollama/models"
+            for directory in (empty, populated):
+                (directory / "manifests").mkdir(parents=True)
+                (directory / "blobs").mkdir()
+            (populated / "manifests/model").write_text("manifest")
+            with (
+                patch.dict(FULL.os.environ, {}, clear=True),
+                patch.object(Path, "exists", return_value=True),
+                patch.object(
+                    FULL.subprocess,
+                    "run",
+                    return_value=subprocess.CompletedProcess([], 0, str(empty)),
+                ),
+                patch.object(
+                    Path,
+                    "glob",
+                    side_effect=lambda pattern: [root / "d"] if pattern == "*" else [],
+                ),
+            ):
+                self.assertEqual(FULL.model_root(), str(populated))
+
+    def test_model_root_honors_explicit_environment(self):
+        with patch.dict(FULL.os.environ, {"OLLAMA_MODELS": "/explicit/models"}):
+            self.assertEqual(FULL.model_root(), "/explicit/models")
+
     def test_ensemble_start_uses_this_python_and_shared_runtime(self):
         with patch.object(FULL, "start_local") as launch:
             FULL.start_ensemble()
         call = launch.call_args
         self.assertEqual(call.args[1], FULL.ROOT / ".local.dev/full/ensemble")
         self.assertEqual(call.args[2][:3], [sys.executable, "-m", "app.serve"])
+        self.assertIn("https://g8e.local:8443", call.args[2])
+        self.assertIn("wss://g8e.local:8443", call.args[2])
 
     def test_stop_cleans_stale_pid_without_signalling(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -299,9 +364,13 @@ class FullTests(unittest.TestCase):
         ):
             FULL.main()
         self.assertEqual(
-            [call.args[0] for call in launch.call_args_list], ["inference", "data", "g8ee"]
+            [call.args[0] for call in launch.call_args_list],
+            ["inference", "data", "g8ee"],
         )
         self.assertIn("http://192.168.1.2:11434", launch.call_args_list[0].args[2])
+        self.assertEqual(
+            launch.call_args_list[0].args[2][3:5], ["--endpoint", "g8e.local"]
+        )
         self.assertIn("Windows PowerShell", output.getvalue())
         self.assertIn("--model-storage-root", output.getvalue())
         self.assertNotIn("--inference-enabled", output.getvalue())
@@ -346,11 +415,15 @@ class FullTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_operator_args_roles(self):
-        prov = FULL.operator_args("provenance", "localhost:8443", "/dir/prov", "/dir/models", "")
+        prov = FULL.operator_args(
+            "provenance", "localhost:8443", "/dir/prov", "/dir/models", ""
+        )
         self.assertIn("--provenance-operator-enabled", prov)
         self.assertIn("--model-storage-root", prov)
 
-        infer = FULL.operator_args("inference", "localhost:8443", "/dir/infer", "", "http://localhost:11434")
+        infer = FULL.operator_args(
+            "inference", "localhost:8443", "/dir/infer", "", "http://localhost:11434"
+        )
         self.assertIn("--inference-enabled", infer)
         self.assertIn("--inference-ollama-endpoint", infer)
 
@@ -361,7 +434,17 @@ class FullTests(unittest.TestCase):
         self.assertNotIn("--provenance-operator-enabled", data)
         self.assertNotIn("--inference-enabled", data)
         self.assertNotIn("--provider-boundary-observer-enabled", data)
-        self.assertEqual(data, ["operator", "start", "--endpoint", "localhost:8443", "--working-dir", "/dir/data"])
+        self.assertEqual(
+            data,
+            [
+                "operator",
+                "start",
+                "--endpoint",
+                "localhost:8443",
+                "--working-dir",
+                "/dir/data",
+            ],
+        )
 
 
 if __name__ == "__main__":

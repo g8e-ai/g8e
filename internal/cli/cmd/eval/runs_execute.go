@@ -310,7 +310,25 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	if err != nil {
 		return executed, fmt.Errorf("evaluation: run execute: %w", err)
 	}
-	if err := gwremote.PreflightCampaignModelProvenance(fileSvc, cfg, modelBindings); err != nil {
+	var preflightProgress func(models.ModelProvenancePreflightProgress)
+	if !opts.JSONOutput {
+		fmt.Fprintf(cmd.OutOrStdout(), "Preflight: model storage attestation (operator acknowledgement: %s; maximum per model: %s)\n", constants.ModelProvenanceCommandAcknowledgementTimeout, constants.ModelProvenanceAttestationPreflightTimeout)
+		preflightProgress = func(event models.ModelProvenancePreflightProgress) {
+			phase := event.Phase
+			switch phase {
+			case "awaiting_operator":
+				phase = "waiting for operator acknowledgement"
+			case "attesting_storage":
+				phase = "hashing model storage"
+			case "ready":
+				phase = "storage attestation ready"
+			case "failed":
+				phase = "storage attestation failed"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", event.ServedModelTag, phase)
+		}
+	}
+	if err := gwremote.PreflightCampaignModelProvenanceContext(cmd.Context(), fileSvc, cfg, modelBindings, preflightProgress); err != nil {
 		return executed, fmt.Errorf("evaluation: run execute: %w", err)
 	}
 	iterations := int64(opts.Limit)
