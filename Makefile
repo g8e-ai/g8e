@@ -539,9 +539,21 @@ EXPLORER_EMBED := internal/services/gateway/explorer/static
 
 .PHONY: explorer-embed
 explorer-embed:
-	@test -f $(EXPLORER_DIST)/index.html || { echo "ERROR: build evaluation explorer first: cd $(EXPLORER_DIST)/.. && npm run build"; exit 1; }
+	@test -f $(EXPLORER_DIST)/index.html || { echo "ERROR: build evaluation explorer first: cd evaluation-explorer && npm run build"; exit 1; }
 	@rm -rf $(EXPLORER_EMBED)
 	@cp -a $(EXPLORER_DIST) $(EXPLORER_EMBED)
+
+# `make build` must work on a fresh clone. evaluation-explorer/dist is
+# gitignored, but the explorer embed is committed, so fall back to it (same
+# contract as _embed-console-if-built). `make explorer-embed` stays strict for
+# release preparation (INV-REL-VER-06).
+.PHONY: _embed-explorer-if-built
+_embed-explorer-if-built:
+	@if [ -f $(EXPLORER_DIST)/index.html ]; then \
+		rm -rf $(EXPLORER_EMBED) && cp -a $(EXPLORER_DIST) $(EXPLORER_EMBED); \
+	else \
+		echo "evaluation-explorer/dist not built; using the committed explorer embed (run 'cd evaluation-explorer && npm run build && make explorer-embed' to refresh)"; \
+	fi
 
 # The console embed is committed, like the explorer's. When console/dist has
 # not been built (Go-only checkouts), the committed embed is used as-is.
@@ -562,7 +574,7 @@ _embed-console-if-built:
 	fi
 
 .PHONY: build
-build: explorer-embed _embed-console-if-built
+build: _embed-explorer-if-built _embed-console-if-built
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
 	@rm -f $(BIN_DIR)/g8e-binaries.json
