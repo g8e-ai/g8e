@@ -373,22 +373,6 @@ func TestShortDigest(t *testing.T) {
 	assert.Equal(t, "0123456789ab", shortDigest("0123456789abcdef"))
 }
 
-func TestModelsDiff_RejectsSeveralInferenceOperators(t *testing.T) {
-	root := testutil.TempDir(t)
-	seedModelScopes(t, root)
-
-	// A second inference session makes the provider ambiguous.
-	deps := newGatewayTestDeps(t, root, append(campaignOrchestrateOperators(), inferenceOperatorFixture("infer-op-2", "infer-session-2")))
-
-	command := evalCmdWithConfig(deps)
-	var out bytes.Buffer
-	command.SetOut(&out)
-	command.SetErr(&out)
-	command.SetArgs([]string{"models", "diff", "--project-root", root})
-	err := command.Execute()
-	require.ErrorIs(t, err, constants.ErrInferenceOperatorAmbiguous)
-}
-
 func TestModelsPull_SelectorAndFormationsAreExclusive(t *testing.T) {
 	root := testutil.TempDir(t)
 	_, err := runModelsCmd(t, root, "pull", "qwen3:4b", "--formations")

@@ -10,9 +10,6 @@ package ensemble
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,31 +17,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
-
-func TestHostStatusReadiness(t *testing.T) {
-	for _, tc := range []struct {
-		name, body, want string
-		status           int
-	}{
-		{"ready", `{"status":"ok"}`, "ready ·", 200},
-		{"starting", `{"status":"ok"}`, "running; not ready", 503},
-		{"invalid health", `not JSON`, "running; not ready", 200},
-		{"unhealthy", `{"status":"error"}`, "running; not ready", 200},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tc.status); fmt.Fprint(w, tc.body) }))
-			defer server.Close()
-			dir := t.TempDir()
-			require.NoError(t, os.WriteFile(filepath.Join(dir, "full.pid"), []byte(fmt.Sprint(os.Getpid())), 0600))
-			cmd := &cobra.Command{}
-			cmd.SetContext(context.Background())
-			var buf bytes.Buffer
-			cmd.SetOut(&buf)
-			require.NoError(t, printHostStatus(cmd, dir, server.URL))
-			require.Contains(t, buf.String(), tc.want)
-		})
-	}
-}
 
 func TestHostStatusMissingAndInvalidPID(t *testing.T) {
 	dir := t.TempDir()

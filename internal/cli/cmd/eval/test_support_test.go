@@ -11,8 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -96,25 +94,6 @@ func TestWriteModelInventoryFreezeFile_WritesJSON(t *testing.T) {
 	payload, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(payload), "eval-init-qwen3-4b")
-}
-
-func TestCheckHTTPReachable_AcceptsHealthyEndpoint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(server.Close)
-
-	require.NoError(t, checkHTTPReachable(context.Background(), server.URL))
-}
-
-func TestCheckHTTPReachable_RejectsMissingURLAndNon2xx(t *testing.T) {
-	require.Error(t, checkHTTPReachable(context.Background(), ""))
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(server.Close)
-	require.Error(t, checkHTTPReachable(context.Background(), server.URL))
 }
 
 func assertTestRuntimeFileExists(t *testing.T, root string, relPath string) {

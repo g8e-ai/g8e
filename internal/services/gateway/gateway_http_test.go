@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -39,100 +38,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/protocol"
 )
-
-func TestIsPrivateIP(t *testing.T) {
-
-	cases := []struct {
-		ip       string
-		expected bool
-	}{
-		// 10.0.0.0/8
-		{"10.0.0.1", true},
-		{"10.255.255.255", true},
-		{"10.128.0.1", true},
-		// 172.16.0.0/12
-		{"172.16.0.1", true},
-		{"172.31.255.255", true},
-		{"172.20.0.1", true},
-		{"172.17.0.1", true},
-		{"172.30.255.255", true},
-		// 192.168.0.0/16
-		{"192.168.0.1", true},
-		{"192.168.255.255", true},
-		{"192.168.1.1", true},
-		{"192.168.100.50", true},
-		// Public IPs should be false
-		{"8.8.8.8", false},
-		{"1.1.1.1", false},
-		{"172.32.0.1", false},      // Outside 172.16.0.0/12
-		{"172.15.255.255", false},  // Outside 172.16.0.0/12
-		{"192.169.0.1", false},     // Outside 192.168.0.0/16
-		{"11.0.0.1", false},        // Outside 10.0.0.0/8
-		{"172.15.0.1", false},      // Just outside 172.16.0.0/12
-		{"172.32.0.1", false},      // Just outside 172.16.0.0/12
-		{"192.167.255.255", false}, // Just outside 192.168.0.0/16
-		{"192.169.0.0", false},     // Just outside 192.168.0.0/16
-		{"9.255.255.255", false},   // Just outside 10.0.0.0/8
-		{"11.0.0.0", false},        // Just outside 10.0.0.0/8
-		// IPv6 addresses (not handled by this function, should return false)
-		{"::1", false},
-		{"2001:db8::1", false},
-		{"fe80::1", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.ip, func(t *testing.T) {
-			ip := net.ParseIP(tc.ip)
-			require.NotNil(t, ip, "Failed to parse IP: %s", tc.ip)
-			result := isPrivateIP(ip)
-			assert.Equal(t, tc.expected, result, "IP %s should return %v", tc.ip, tc.expected)
-		})
-	}
-}
-
-func TestIsSafeHost(t *testing.T) {
-
-	cfg := &config.Config{
-		Endpoint: "g8e.local",
-		Gateway: config.GatewayConfig{
-			PublicBaseURL: "https://g8e-public.com:8443",
-		},
-	}
-
-	cases := []struct {
-		host     string
-		expected bool
-	}{
-		// Local / Loopback
-		{"localhost", true},
-		{"127.0.0.1", true},
-		{"::1", true},
-		// RFC 1918 Private IPs
-		{"192.168.1.1", true},
-		{"10.0.0.1", true},
-		{"172.16.0.1", true},
-		// Configured Endpoint
-		{"g8e.local", true},
-		// Configured PublicBaseURL
-		{"g8e-public.com", true},
-		// Case insensitivity
-		{"G8E.LOCAL", true},
-		// Invalid / Malicious Characters
-		{"evil.com;sh", false},
-		{"evil.com/path", false},
-		{"evil.com?param=value", false},
-		{"evil.com", false},
-		{"google.com", false},
-		{"", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.host, func(t *testing.T) {
-			result := isSafeHost(tc.host, cfg)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
 
 func TestCatchAllRedirect(t *testing.T) {
 
@@ -370,108 +275,6 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 	return ls, infra.Cfg
 }
 
-func TestPathTraversalGuard(t *testing.T) {
-	h := setupTestHTTPHandlerLightweight(t)
-
-	tests := []struct {
-		name       string
-		path       string
-		wantStatus int
-	}{
-		{"Valid path", "/db/users/u1", http.StatusOK},
-		{"Traversal in path", "/db/users/../u1", http.StatusBadRequest},
-		{"Encoded traversal in path", "/db/users/%2e%2e/u1", http.StatusBadRequest},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			handler := h.pathTraversalGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			}))
-
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			rr := httptest.NewRecorder()
-
-			handler.ServeHTTP(rr, req)
-			assert.Equal(t, tt.wantStatus, rr.Code)
-		})
-	}
-}
-
-func TestAuthMiddleware(t *testing.T) {
-	h, _, _ := setupTestHTTPHandler(t)
-
-	// Seed platform settings
-	settings := models.SettingsDocument{
-		Settings: &models.PlatformSettings{
-			ActuatorKeyID: "test-key-id",
-		},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	settingsBytes, err := json.Marshal(settings)
-	require.NoError(t, err)
-	err = h.dataController.docStore.DocSet("settings", "platform_settings", settingsBytes)
-	require.NoError(t, err)
-
-	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	t.Run("Health bypass", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
-}
-
-func TestAuthWebSocket(t *testing.T) {
-	h, _, _ := setupTestHTTPHandler(t)
-
-	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	t.Run("Unauthorized", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/ws/pubsub", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	})
-}
-
-func TestAuthMiddlewareDeep(t *testing.T) {
-	h, _, _ := setupTestHTTPHandler(t)
-
-	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
-		h.dataController.docStore.DocDelete("settings", "platform_settings")
-
-		paths := []string{
-			"/db/settings/platform_settings",
-			"/kv/some-key",
-			"/ws/pubsub",
-		}
-
-		for _, path := range paths {
-			method := http.MethodGet
-			if path == "/db/settings/platform_settings" {
-				method = http.MethodPut
-			}
-			req := httptest.NewRequest(method, path, nil)
-			rr := httptest.NewRecorder()
-			handler.ServeHTTP(rr, req)
-			assert.Equal(t, http.StatusUnauthorized, rr.Code, "Path %s should be denied without token", path)
-
-			assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String(), "Path %s should require mTLS", path)
-		}
-	})
-}
-
 func TestHandleHealth(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
@@ -567,47 +370,6 @@ func TestHandleBootstrapHealth(t *testing.T) {
 		// Bootstrap health does not include governance_ready or state_merkle_root
 		assert.Empty(t, resp.StateMerkleRoot)
 	})
-}
-
-func TestContainsTraversal(t *testing.T) {
-	h := &HTTPHandler{}
-	assert.True(t, h.containsTraversal("/a/../b"))
-	assert.True(t, h.containsTraversal("../etc/passwd"))
-	assert.False(t, h.containsTraversal("/a/b/c"))
-}
-
-func TestBlobSegmentValid(t *testing.T) {
-	assert.True(t, blobSegmentValid("valid-segment"))
-	assert.False(t, blobSegmentValid(""))
-	assert.False(t, blobSegmentValid(".."))
-	assert.False(t, blobSegmentValid("path/traversal"))
-	assert.False(t, blobSegmentValid("back\\slash"))
-	assert.False(t, blobSegmentValid("null\x00byte"))
-}
-
-func TestIsMutationPubSubChannelAllowed(t *testing.T) {
-
-	tests := []struct {
-		name    string
-		channel string
-		allowed bool
-	}{
-		{"Heartbeat channel allowed", "heartbeat:operator-1", true},
-		{"Results channel allowed", "results:cli-session-1", true},
-		{"SSE channel allowed", "sse:sessions-1", true},
-		{"WebSocket session channel allowed", "ws_session:conn-1", true},
-		{"Internal channel allowed", "internal:system", true},
-		{"Command channel not allowed", "cmd:execute", false},
-		{"Governance channel not allowed", "governance:envelope", false},
-		{"Empty channel not allowed", "", false},
-		{"Random channel not allowed", "random:channel", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.allowed, isMutationPubSubChannelAllowed(tt.channel))
-		})
-	}
 }
 
 func TestNewHTTPHandler(t *testing.T) {
@@ -923,17 +685,6 @@ func TestHTTPHandler_GetGatewayWebSocketHandler(t *testing.T) {
 
 	pubsub := h.GetGatewayWebSocketHandler()
 	assert.NotNil(t, pubsub, "GetGatewayWebSocketHandler should return non-nil service")
-}
-
-func TestHTTPHandler_handleLandingPage(t *testing.T) {
-	h, _, _ := setupTestHTTPHandler(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rr := httptest.NewRecorder()
-
-	h.healthController.handleLandingPage(rr, req)
-	assert.Equal(t, http.StatusFound, rr.Code)
-	assert.Equal(t, "/console/", rr.Header().Get("Location"))
 }
 
 // makeTestAppWorkloadCert returns a self-signed cert with a SPIFFE URI SAN for an app workload identity.

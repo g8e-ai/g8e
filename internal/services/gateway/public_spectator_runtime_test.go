@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -21,77 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
-
-func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
-	privatePort := mustFreePort(t)
-	publicPort := mustFreePort(t)
-	fileSvc := newProducerFileSvc(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
-		Enabled:               true,
-		PrivateListenAddress:  "127.0.0.1:" + privatePort,
-		PublicListenAddress:   "127.0.0.1:" + publicPort,
-		ExplorerListenAddress: "",
-		TrustedProxyCIDRs:     []string{"172.28.0.1/32"},
-	}, fileSvc, testutil.NewTestLogger())
-	require.NoError(t, err)
-	require.NoError(t, runtime.Start(ctx))
-
-	waitForBootstrap(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
-	require.Len(t, runtime.mirror.trustedProxyNetworks, 1)
-
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stopCancel()
-	require.NoError(t, runtime.Stop(stopCtx))
-}
-
-func TestPublicSpectatorRuntime_StartsDedicatedExplorerListener(t *testing.T) {
-	privatePort := mustFreePort(t)
-	publicPort := mustFreePort(t)
-	explorerPort := mustFreePort(t)
-	fileSvc := newProducerFileSvc(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
-		Enabled:               true,
-		PrivateListenAddress:  "127.0.0.1:" + privatePort,
-		PublicListenAddress:   "127.0.0.1:" + publicPort,
-		ExplorerListenAddress: "127.0.0.1:" + explorerPort,
-	}, fileSvc, testutil.NewTestLogger())
-	require.NoError(t, err)
-	require.NoError(t, runtime.Start(ctx))
-
-	waitForBootstrap(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
-	waitForExplorerRuntime(t, "http://127.0.0.1:"+explorerPort+"/runtime.json", "http://127.0.0.1:"+publicPort)
-
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stopCancel()
-	require.NoError(t, runtime.Stop(stopCtx))
-}
-
-func TestNewPublicSpectatorRuntime_ContainerBindRequiresExplicitConfig(t *testing.T) {
-	// The retired env switch must not relax the network-exposure check.
-	t.Setenv("G8E_DOCKER_COMPOSE", "1")
-
-	cfg := PublicSpectatorConfig{
-		Enabled:               true,
-		PrivateListenAddress:  "0.0.0.0:" + mustFreePort(t),
-		PublicListenAddress:   "0.0.0.0:" + mustFreePort(t),
-		ExplorerListenAddress: "",
-	}
-
-	_, err := NewPublicSpectatorRuntime(cfg, newProducerFileSvc(t), testutil.NewTestLogger())
-	require.ErrorIs(t, err, constants.ErrPublicFeedListenAddress)
-
-	cfg.AllowContainerBind = true
-	_, err = NewPublicSpectatorRuntime(cfg, newProducerFileSvc(t), testutil.NewTestLogger())
-	require.NoError(t, err)
-}
 
 func TestValidatePublicFeedSourceID_RejectsPathComponents(t *testing.T) {
 	for _, sourceID := range []string{"../source", "source/id", ".", "source id"} {
@@ -220,15 +149,6 @@ func TestValidatePublicMirrorListenAddresses_AllowsContainerBind(t *testing.T) {
 	assert.NoError(t, err)
 	err = ValidatePublicMirrorListenAddresses("0.0.0.0:8081", "0.0.0.0:8082", false)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedListenAddress)
-}
-
-func mustFreePort(t *testing.T) string {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer listener.Close()
-	_, port, err := net.SplitHostPort(listener.Addr().String())
-	require.NoError(t, err)
-	return port
 }
 
 func waitForBootstrap(t *testing.T, url string) {

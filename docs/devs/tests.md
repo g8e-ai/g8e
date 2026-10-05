@@ -79,6 +79,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Makefile test targets | `Makefile` | `make test`, `make test-unit`, `make test-integration`, `make test-coverage` |
 | Integration Gateway fixture | `test/fixtures/gateway_fixture.go` | `NewGatewayFixture` |
 | File service test isolation | `internal/testutil/paths.go`, `internal/services/fs/file_service.go` | `testutil.TempDir` |
+| Socket test tags and serial boundary tests | `internal/testutil/test_tiers_test.go` | `TestTestTiers_ListenersRequireIntegrationAndBoundaryTestsStaySerial` |
 | Live E2E suite | `test/e2e/` | `./g8e test e2e` |
 | Completion transcript wire contract (Go side) | `internal/services/gateway/platform_enrollment_validation_test.go` | `TestPlatformEnrollmentCompletionTranscriptGoldenVector` |
 
@@ -152,6 +153,8 @@ and a minimal handler for middleware unit tests. Reserve SQLite/PKI/Gateway
 fixtures for real integration boundaries, and keep one authoritative test for
 each behavior instead of repeating a unit assertion inside a full fixture.
 Keep race detection and per-test isolation when optimizing fixture cost.
+
+Tests that open localhost listeners, including `httptest.NewServer`, `httptest.NewTLSServer`, and `httptest.NewUnstartedServer`, belong behind the `integration` build tag. Split mixed files so pure parsing and validation tests remain in Tier 1; move callers of listener-opening helpers with those helpers. Remove `t.Parallel()` from the moved tests. The Tier 1 source check in `internal/testutil/test_tiers_test.go` catches direct listener/dial calls without tier tags and parallel calls in files restricted to Integration/E2E, including files for other operating systems. It does not trace production calls; review those dependencies when choosing a tier.
 
 ## Anti-patterns
 

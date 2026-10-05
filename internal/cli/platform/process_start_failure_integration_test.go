@@ -11,7 +11,7 @@
 // require real process management (copyBinaryToBinDir, cmd.Start, Kill, Wait,
 // PID file I/O) and therefore belong in Tier 2 (integration). The test binary
 // is re-executed by StartOperator as a subprocess; TestMain (in
-// testmain_helper_test.go) detects the re-execution via os.Args[1] == "gw"
+// testmain_helper_integration_test.go) detects the re-execution via os.Args[1] == "gw"
 // and exits immediately, so the subprocess never becomes healthy. This lets
 // the tests exercise the PID-write-failure and process-death-during-health-
 // check cleanup paths without a real Gateway binary.
