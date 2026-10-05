@@ -111,10 +111,12 @@ func TestSelectDataOperator_IgnoresOtherRolesOnTheStackHostname(t *testing.T) {
 	require.ErrorIs(t, err, constants.ErrDataOperatorNotFound)
 }
 
-func TestSelectDataOperator_NotFoundWithoutStackDataOperator(t *testing.T) {
+func TestSelectDataOperator_ResolvesHostNativeWithoutStackDataOperator(t *testing.T) {
 	t.Parallel()
-	_, err := SelectDataOperator([]models.OperatorDocumentGo{stackDataOperatorDoc("load-1", "sess-load-1", "load-host-1")})
-	require.ErrorIs(t, err, constants.ErrDataOperatorNotFound)
+	selected, err := SelectDataOperator([]models.OperatorDocumentGo{stackDataOperatorDoc("load-1", "sess-load-1", "load-host-1")})
+	require.NoError(t, err)
+	assert.Equal(t, "load-1", selected.OperatorID)
+	assert.Equal(t, "sess-load-1", selected.OperatorSessionID)
 
 	_, err = SelectDataOperator(nil)
 	require.ErrorIs(t, err, constants.ErrDataOperatorNotFound)
@@ -125,6 +127,12 @@ func TestSelectDataOperator_AmbiguousWhenTwoStackDataOperatorsAreActive(t *testi
 	_, err := SelectDataOperator([]models.OperatorDocumentGo{
 		stackDataOperatorDoc("a", "sess-a", constants.DataOperatorHostname),
 		stackDataOperatorDoc("b", "sess-b", constants.DataOperatorHostname),
+	})
+	require.ErrorIs(t, err, constants.ErrDataOperatorAmbiguous)
+
+	_, err = SelectDataOperator([]models.OperatorDocumentGo{
+		stackDataOperatorDoc("a", "sess-a", "host-a"),
+		stackDataOperatorDoc("b", "sess-b", "host-b"),
 	})
 	require.ErrorIs(t, err, constants.ErrDataOperatorAmbiguous)
 }

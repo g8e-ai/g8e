@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ROLES = ("provenance", "observer", "inference")
+ROLES = ("provenance", "observer", "inference", "data")
 TRUST_PATH = Path(".g8e/pki/trust/g8eg-ca-bundle.pem")
 WORKLOADS_PATH = Path(".local.dev/full/workloads.json")
 LAUNCHES = {}
@@ -248,12 +248,14 @@ def operator_args(role, gateway, directory, storage, ollama):
         ]
     elif role == "inference":
         args += ["--inference-enabled", "--inference-ollama-endpoint", ollama]
-    else:
+    elif role == "observer":
         args += [
             "--provider-boundary-observer-enabled",
             "--provider-boundary-observer-id",
             "g8e-provider-boundary-observer",
         ]
+    elif role == "data":
+        pass
     return args
 
 
@@ -440,6 +442,7 @@ def main():
         "provenance": "tracks model files; place it where models are stored",
         "observer": "observes provider activity; place it on the Ollama/GPU host",
         "inference": "runs inference through your Ollama endpoint",
+        "data": "executes governed tools and file operations; place it on the target host",
     }
     for role in ROLES:
         print(f"\n{role.title()} · {descriptions[role]}")

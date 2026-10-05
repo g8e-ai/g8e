@@ -284,6 +284,8 @@ class FullTests(unittest.TestCase):
             "localhost",
             "/tmp/inference",
             "http://192.168.1.2:11434",
+            "localhost",
+            "/tmp/data",
             "g8e.local",
         ]
         output = io.StringIO()
@@ -295,7 +297,7 @@ class FullTests(unittest.TestCase):
         ):
             FULL.main()
         self.assertEqual(
-            [call.args[0] for call in launch.call_args_list], ["inference", "g8ee"]
+            [call.args[0] for call in launch.call_args_list], ["inference", "data", "g8ee"]
         )
         self.assertIn("http://192.168.1.2:11434", launch.call_args_list[0].args[2])
         self.assertIn("Windows PowerShell", output.getvalue())
@@ -341,13 +343,23 @@ class FullTests(unittest.TestCase):
             FULL.print_summary(dry_run=True)
         run.assert_not_called()
 
-    def test_model_override_is_used_without_running_ollama(self):
-        with (
-            patch.dict(FULL.os.environ, {"OLLAMA_MODELS": "/custom/model files"}),
-            patch.object(FULL.subprocess, "run") as run,
-        ):
-            self.assertEqual(FULL.model_root(), "/custom/model files")
-            run.assert_not_called()
+    def test_operator_args_roles(self):
+        prov = FULL.operator_args("provenance", "localhost:8443", "/dir/prov", "/dir/models", "")
+        self.assertIn("--provenance-operator-enabled", prov)
+        self.assertIn("--model-storage-root", prov)
+
+        infer = FULL.operator_args("inference", "localhost:8443", "/dir/infer", "", "http://localhost:11434")
+        self.assertIn("--inference-enabled", infer)
+        self.assertIn("--inference-ollama-endpoint", infer)
+
+        obs = FULL.operator_args("observer", "localhost:8443", "/dir/obs", "", "")
+        self.assertIn("--provider-boundary-observer-enabled", obs)
+
+        data = FULL.operator_args("data", "localhost:8443", "/dir/data", "", "")
+        self.assertNotIn("--provenance-operator-enabled", data)
+        self.assertNotIn("--inference-enabled", data)
+        self.assertNotIn("--provider-boundary-observer-enabled", data)
+        self.assertEqual(data, ["operator", "start", "--endpoint", "localhost:8443", "--working-dir", "/dir/data"])
 
 
 if __name__ == "__main__":

@@ -91,9 +91,14 @@ func TestResolveOperatorSessionsFrom(t *testing.T) {
 			wantErr: constants.ErrInferenceOperatorNotFound,
 		},
 		{
-			name: "no data-operator among other data operators", operators: []models.OperatorDocumentGo{otherDataOperatorFixture("x1", "other-1")},
+			name: "resolves host-native data operator when stack data-operator absent", operators: []models.OperatorDocumentGo{otherDataOperatorFixture("x1", "other-1")},
+			roles: []operatorRole{operatorRoleData},
+			want:  operatorSessions{DataSessionID: "other-1", DataOperatorID: "x1"},
+		},
+		{
+			name: "multiple host-native data operators are ambiguous", operators: []models.OperatorDocumentGo{otherDataOperatorFixture("x1", "other-1"), otherDataOperatorFixture("x2", "other-2")},
 			roles:   []operatorRole{operatorRoleData},
-			wantErr: constants.ErrDataOperatorNotFound,
+			wantErr: constants.ErrDataOperatorAmbiguous,
 		},
 		{
 			name: "observers are not data-operators", operators: []models.OperatorDocumentGo{observer},

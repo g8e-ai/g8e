@@ -65,6 +65,28 @@ func TestDiscoverRemoteOperator_SelectsTheStackDataOperator(t *testing.T) {
 	require.Len(t, exchanges, 1)
 }
 
+func TestDiscoverRemoteOperator_SelectsHostNativeDataOperator(t *testing.T) {
+	operators := []models.OperatorDocumentGo{
+		{ID: "op-local", OperatorSessionID: "sess-local", CurrentHostname: "beepboop", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
+	}
+	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: operators})
+	require.NoError(t, err)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write(body)
+		require.NoError(t, writeErr)
+	}))
+	t.Cleanup(server.Close)
+	client, err := New(config.Config{MTLSBaseURL: server.URL, CLISessionID: "cli-1", UserID: "user-1"})
+	require.NoError(t, err)
+
+	doc, raw, err := client.DiscoverRemoteOperator(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "op-local", doc.ID)
+	assert.Equal(t, "sess-local", doc.OperatorSessionID)
+	assert.Equal(t, body, raw)
+}
+
 func TestDiscoverRemoteOperator_RequiresAuthenticatedUser(t *testing.T) {
 	client, err := New(config.Config{MTLSBaseURL: "https://gateway.invalid"})
 	require.NoError(t, err)
@@ -93,9 +115,9 @@ func TestDiscoverRemoteOperator_RejectsZeroOrAmbiguousMatches(t *testing.T) {
 			wantErr: constants.ErrEvaluationTargetUnavailable,
 		},
 		{
-			name: "data operators that are not the data-operator",
+			name: "inference operators are not data operators",
 			operators: []models.OperatorDocumentGo{
-				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: "elsewhere", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
+				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: "elsewhere", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{InferenceEnabled: true}},
 			},
 			wantErr: constants.ErrEvaluationTargetUnavailable,
 		},
@@ -104,6 +126,14 @@ func TestDiscoverRemoteOperator_RejectsZeroOrAmbiguousMatches(t *testing.T) {
 			operators: []models.OperatorDocumentGo{
 				stackDataOperator("op-1", "sess-1"),
 				stackDataOperator("op-2", "sess-2"),
+			},
+			wantErr: constants.ErrEvaluationTargetAmbiguous,
+		},
+		{
+			name: "ambiguous host-native data-operator sessions without stack",
+			operators: []models.OperatorDocumentGo{
+				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: "elsewhere-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
+				{ID: "op-2", OperatorSessionID: "sess-2", CurrentHostname: "elsewhere-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
 			},
 			wantErr: constants.ErrEvaluationTargetAmbiguous,
 		},
