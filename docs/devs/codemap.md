@@ -410,7 +410,7 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 
 | Target | Owns |
 | --- | --- |
-| `make build` | Host binary. Writes `bin/g8e-<os>-<arch>` and a repo-root copy. Depends on `explorer-embed`. |
+| `make build` | Host binary. Writes `bin/g8e-<os>-<arch>` and a repo-root copy. Refreshes the explorer and console embeds from `dist/` when built, else uses the committed embeds. |
 | `make proto-generate` | Go, Python, TypeScript, and Ensemble lockfile refresh (INV-PROTO-01). |
 | `make constants-generate`, `make constants-check` | `internal/tools/constgen` write and verify. |
 | `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `doctrines-validate`, `cosais-validate`, `swagger-generate`, then `golangci-lint run`. |

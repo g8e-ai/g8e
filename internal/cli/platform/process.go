@@ -119,7 +119,7 @@ func (pm *ProcessManager) WriteNetworkIdentityFile(identityData []byte) (string,
 }
 
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
-	addr := fmt.Sprintf("%s:%d", constants.LocalhostIP, port)
+	addr := fmt.Sprintf(":%d", port) // wildcard, matching the gateway bind
 	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
 	if err != nil {
 		return fmt.Errorf("%w: port %d (%s): %v", constants.ErrPortUnavailable, port, name, err)
@@ -142,8 +142,18 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 
 	for attempt := 0; attempt < MaxPortAttempts; attempt++ {
 		port := startPort + attempt
-		addr := fmt.Sprintf("%s:%d", constants.LocalhostIP, port)
-		listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
+		// The gateway child binds these itself after start; probing them now
+		// would succeed and then collide (e.g. 8080 busy -> 8081, which is the
+		// public spectator ingest listener) and the health check would hit
+		// the wrong listener.
+		if _, reserved := constants.GatewayReservedLoopbackPorts[port]; reserved {
+			continue
+		}
+		// Probe the wildcard address the gateway binds (config.ResolveGatewayPorts
+		// does the same). A loopback-only probe succeeds next to a wildcard
+		// listener, so the CLI and child would pick different ports and the
+		// health check would hit the foreign listener.
+		listener, err := net.Listen(string(constants.NetworkProtocolTCP), fmt.Sprintf(":%d", port))
 		if err == nil {
 			listener.Close()
 			return port, nil
@@ -509,8 +519,21 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- cmd.Wait() }()
 
+	// The goroutine above owns cmd.Wait, so cleanup must not call Wait again
+	// (a second wait fails with ECHILD and masks the real start failure).
+	stopChild := func(exited bool) error {
+		if exited {
+			return nil
+		}
+		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return fmt.Errorf("kill process: %w", err)
+		}
+		<-waitCh
+		return nil
+	}
+
 	failStart := func() error {
-		cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+		cleanupErr := errors.Join(stopChild(true), pm.deletePID(constants.OperatorPIDFilename))
 		if cleanupErr != nil {
 			return fmt.Errorf("%w: check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
 		}
@@ -550,7 +573,7 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 		}
 	}
 
-	cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+	cleanupErr := errors.Join(stopChild(false), pm.deletePID(constants.OperatorPIDFilename))
 	if cleanupErr != nil {
 		return fmt.Errorf("%w: gateway did not become healthy, check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
 	}

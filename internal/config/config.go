@@ -382,6 +382,12 @@ func ResolveGatewayPorts(httpPort, httpsPort int) (int, int) {
 	for offset := 0; offset < 100; offset++ {
 		h := httpPort + offset
 		s := httpsPort + offset
+		if _, r := constants.GatewayReservedLoopbackPorts[h]; r {
+			continue
+		}
+		if _, r := constants.GatewayReservedLoopbackPorts[s]; r {
+			continue
+		}
 
 		if isPortAvailable(h) && isPortAvailable(s) {
 			return h, s
