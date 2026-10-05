@@ -83,7 +83,7 @@ cp .env.example .env
 ./g8e docker start
 ```
 
-`docker start` starts the Gateway and the `bootstrapped` workloads, enrolls the first CLI owner, and walks through platform enrollment approvals. It does not start the evaluation-profile inference Operator. Use `./g8e docker init` when you need the complete evaluation topology, automatic approvals, readiness checks, and the `evaluation` profile; `docker init` requires the same `.env` setting and can use `--headless` for mTLS-only owner enrollment.
+`docker start` brings up the full unified stack — gateway, data operator, inference operator, and ensemble — enrolls the first CLI owner, and walks through platform enrollment approvals. Use `./g8e docker init` when you need the complete evaluation topology in one flow (image builds, automatic approvals, readiness checks, and the `g8e-eval` application identity); `docker init` requires the same `.env` setting and can use `--headless` for mTLS-only owner enrollment.
 
 #### Enrollment
 
