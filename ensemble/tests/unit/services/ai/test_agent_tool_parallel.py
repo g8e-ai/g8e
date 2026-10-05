@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.models.agent import ToolCall, StreamChunkData
 from app.models.settings import G8eeUserSettings, LLMSettings
-import app.services.ai.agent_tool_loop
+from app.services.ai import agent_tool_loop
 from app.services.ai.agent_tool_loop import execute_turn_tool_calls, ToolCallResult
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -47,7 +47,7 @@ async def test_execute_turn_tool_calls_parallel():
         )
 
     with patch.object(
-        app.services.ai.agent_tool_loop,
+        agent_tool_loop,
         "orchestrate_tool_execution",
         new=mock_orchestrate,
     ):
@@ -109,7 +109,7 @@ async def test_execute_turn_tool_calls_sequential():
         )
 
     with patch.object(
-        app.services.ai.agent_tool_loop,
+        agent_tool_loop,
         "orchestrate_tool_execution",
         new=mock_orchestrate,
     ):

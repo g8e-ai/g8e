@@ -211,6 +211,7 @@ def model_root():
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
         except (OSError, subprocess.TimeoutExpired):
+            # Snap query is best-effort; if unavailable or slow, continue with fallback paths.
             pass
     for path in (
         Path("/var/snap/ollama/common/models"),
@@ -370,6 +371,7 @@ def ensemble_running(pid):
         if stat.read_text().rsplit(")", 1)[1].split()[0] == "Z":
             return False
     except FileNotFoundError:
+        # Process may have exited between checks; defer to os.kill(pid, 0) below.
         pass
     try:
         os.kill(pid, 0)
