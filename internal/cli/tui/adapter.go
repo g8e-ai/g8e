@@ -131,16 +131,6 @@ func (a *Adapter) Run(ctx context.Context) {
 	}
 }
 
-// translateSSEEvent maps an SSE event_type + data payload to the primary tea.Msg.
-// Deprecated: use translateSSEEvents for full multi-message routing.
-func translateSSEEvent(eventType, data string) tea.Msg {
-	msgs := translateSSEEvents(eventType, data)
-	if len(msgs) > 0 {
-		return msgs[0]
-	}
-	return nil
-}
-
 // translateSSEEvents maps an SSE event_type + data payload to tea.Msg values.
 // Supports pipeline, ledger, consensus, chat, and operator approval events.
 func translateSSEEvents(eventType, data string) []tea.Msg {

@@ -435,10 +435,10 @@ After the gateway is running (locally or in Docker), authenticate to bootstrap t
 
 This installs the gateway Root CA into your OS trust store and opens the browser for the WebAuthn passkey ceremony.
 
-For Docker deployments with different HTTP and HTTPS ports:
+For Docker deployments where the Gateway serves HTTPS on a different port than the default:
 
 ```bash
-./g8e auth enroll user -e localhost:8080 --port 8443
+./g8e auth enroll user -e localhost:8443
 ```
 
 ---

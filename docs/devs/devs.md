@@ -182,7 +182,7 @@ Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing 
 | Output | Source | Update |
 | --- | --- | --- |
 | Root `README.md` | Handwritten product overview | Re-read the changed sections, check links, and run every command whose behavior the prose states |
-| Go, Python, TypeScript, and Markdown protobuf output | `protocol/proto/g8e/` | `make proto-generate` (`make proto-generate` depends on `proto`) plus the affected conformance tests |
+| Go, Python, TypeScript, and Markdown protobuf output | `protocol/proto/g8e/` | `make proto-generate` (runs `proto-go`, `proto-python`, `proto-node`, `proto-lockfiles`; bare `make proto` is a legacy alias of `proto-generate`) plus the affected conformance tests |
 | Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
 | Website | Root `README.md` | `make website-test` and `make website-build` when rendering changes |
 | Doctrine references | `protocol/constants/doctrine/` and demo doctrine inputs | `make doctrines-validate` |

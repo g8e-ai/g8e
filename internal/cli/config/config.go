@@ -188,10 +188,6 @@ func (c *Config) OperatorKeyFile() string {
 	return filepath.Join(c.RuntimeDir, constants.PkiFileOperatorKey)
 }
 
-func (c *Config) TrustBundleFile() string {
-	return filepath.Join(c.RuntimeDir, constants.PkiFileGatewayBundle)
-}
-
 func (c *Config) OperatorHTTPSPort() int {
 	return constants.Ports.OperatorHttps
 }

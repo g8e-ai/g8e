@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // Only explicitly recorded workloads and fixed launcher defaults are inspected.
@@ -50,7 +52,7 @@ func reportWorkloadIdentities(cmd *cobra.Command) {
 			continue
 		}
 		seen[workload.Directory] = true
-		if _, err := os.Stat(filepath.Join(workload.Directory, ".g8e/pki/trust/g8eg-ca-bundle.pem")); err != nil {
+		if _, err := os.Stat(filepath.Join(workload.Directory, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)); err != nil {
 			continue
 		}
 		if !printed {
