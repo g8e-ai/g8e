@@ -41,8 +41,8 @@ func PanickingClientFactory() APIClientFactory {
 
 // PanickingEnrollerFactory returns an enroller factory whose enroller panics if called.
 func PanickingEnrollerFactory() EnrollerFactory {
-	return func(_ auth.OutputFunc, _ fs.RuntimeFileService, _ *config.Config) Enroller {
-		return panickingEnroller{}
+	return func(_ auth.OutputFunc, _ fs.RuntimeFileService, _ *config.Config) (Enroller, error) {
+		return panickingEnroller{}, nil
 	}
 }
 

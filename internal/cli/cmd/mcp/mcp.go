@@ -1104,9 +1104,12 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 	// is idempotent for an existing passkey); if no passkey exists, the
 	// browser ceremony runs after system trust is installed.
 	fmt.Fprintf(os.Stderr, "[g8e] Ensuring CLI credentials and passkey...\n")
-	coordinator := enrollerFactory(func(format string, args ...any) {
+	coordinator, err := enrollerFactory(func(format string, args ...any) {
 		fmt.Fprintf(os.Stderr, format+"\n", args...)
 	}, fileSvc, cfg)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+	}
 	enrollResult, err := coordinator.Enroll(context.Background(), auth.EnrollmentOptions{})
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)

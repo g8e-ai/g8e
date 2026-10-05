@@ -402,9 +402,12 @@ already-enrolled CLI.`,
 				if err := checkOperatorRunning(cfg); err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrDockerInitEnrollmentFailed, err)
 				}
-				coordinator := enrollerFactory(func(format string, a ...any) {
+				coordinator, err := enrollerFactory(func(format string, a ...any) {
 					cmd.Printf(format+"\n", a...)
 				}, fileSvc, cfg)
+				if err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrDockerInitEnrollmentFailed, err)
+				}
 				result, err := coordinator.Enroll(shared.CommandContext(cmd), dockerOwnerEnrollmentOptions(headlessEnroll))
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrDockerInitEnrollmentFailed, err)
@@ -709,9 +712,13 @@ func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 		return fmt.Errorf("%w: %w", constants.ErrDockerStartEnrollmentFailed, err)
 	}
 
-	coordinator := deps.enrollerFactory(func(format string, a ...any) {
+	coordinator, err := deps.enrollerFactory(func(format string, a ...any) {
 		cmd.Printf(format+"\n", a...)
 	}, fileSvc, cfg)
+	if err != nil {
+		cmd.Printf("  Owner enrollment failed: %v\n", err)
+		return fmt.Errorf("%w: %w", constants.ErrDockerStartEnrollmentFailed, err)
+	}
 	result, err := coordinator.Enroll(ctx, auth.EnrollmentOptions{})
 	if err != nil {
 		cmd.Printf("  Owner enrollment failed: %v\n", err)

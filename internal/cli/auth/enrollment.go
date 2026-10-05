@@ -194,7 +194,9 @@ type EnrollmentCoordinatorDeps struct {
 }
 
 // NewEnrollmentCoordinator constructs a coordinator from the given deps.
-// Nil fields get production defaults:
+// It returns an error wrapping constants.ErrInternal when a required
+// dependency (FileSvc, Cfg) is nil; all other nil fields get production
+// defaults (INV-CODE-06, INV-CODE-16):
 //   - Gateway: a new *EnrollmentClient (plain HTTP, no mTLS).
 //   - Store: a new *CredentialStore over FileSvc/Cfg.
 //   - Keys: a FileKeyProvider (file-backed EC P-256 on all platforms).
@@ -208,12 +210,12 @@ type EnrollmentCoordinatorDeps struct {
 //   - Clock: time.Now.
 //   - Logger: slog.Default().
 //   - Out: a no-op writer (the command layer should always supply this).
-func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordinator {
+func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) (*EnrollmentCoordinator, error) {
 	if deps.FileSvc == nil {
-		panic("EnrollmentCoordinator: FileSvc is required")
+		return nil, fmt.Errorf("%w: EnrollmentCoordinator FileSvc is required", constants.ErrInternal)
 	}
 	if deps.Cfg == nil {
-		panic("EnrollmentCoordinator: Cfg is required")
+		return nil, fmt.Errorf("%w: EnrollmentCoordinator Cfg is required", constants.ErrInternal)
 	}
 	store := deps.Store
 	if store == nil {
@@ -283,7 +285,7 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 		clock:      clock,
 		logger:     logger,
 		out:        out,
-	}
+	}, nil
 }
 
 // EnrollmentResult is the return value of Enroll. It carries the identity

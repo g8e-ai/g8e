@@ -175,7 +175,8 @@ func TestParseGovernancePosture_Invalid(t *testing.T) {
 	t.Parallel()
 	_, err := ParseGovernancePosture("invalid")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid governance posture")
+	assert.ErrorIs(t, err, constants.ErrInvalidPosture)
+	assert.Contains(t, err.Error(), "invalid posture")
 }
 
 func TestL4Warden_Doctrine(t *testing.T) {

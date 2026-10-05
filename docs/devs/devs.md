@@ -91,7 +91,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-CODE-03 | A function MUST do one job: reads read, writes write, validation validates, and orchestration composes explicit dependencies. |
 | INV-CODE-04 | A security check MUST fail closed and MUST propagate its error. |
 | INV-CODE-05 | MUST pass explicit dependencies and state transitions. MUST NOT add package globals, lazy adapters, reflection, or hidden side effects for control flow. |
-| INV-CODE-06 | A production path MUST return errors. MUST NOT panic for a recoverable production failure. |
+| INV-CODE-06 | A production path MUST return errors. MUST NOT panic for a recoverable production failure. A `panic` in non-test code is permitted ONLY for an unrecoverable runtime failure (the process cannot safely continue), and the panic site MUST carry a comment citing INV-CODE-06 so deterministic linters can allowlist it. |
 | INV-CODE-07 | MUST use `context.Context` for cancellation. Every goroutine MUST have an owner, cancellation, and completion via channels or `sync.WaitGroup`. |
 | INV-CODE-08 | Go MUST be formatted with `gofmt`. Imports MUST be grouped as standard library, external modules, then internal packages. |
 | INV-CODE-09 | MUST pass a pointer for a mutable or large struct and a value for a small read-only struct. |
@@ -101,6 +101,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-CODE-13 | MUST reproduce a bug with a failing regression test before changing production code, then show that the test passes with the fix. |
 | INV-CODE-14 | MUST update the documentation and generated artifacts in the same change as the behavior they describe. |
 | INV-CODE-15 | A change SHOULD stay on one coherent behavior and SHOULD leave the affected code easier to follow. |
+| INV-CODE-16 | A constructor (any `New*` function) MUST return an error for invalid input or missing required dependencies. MUST NOT panic. A factory that wraps a constructor MUST itself return `(T, error)` and propagate the construction error. |
 
 ### Errors (`INV-ERR`)
 

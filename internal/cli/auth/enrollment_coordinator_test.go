@@ -16,6 +16,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"strings"
 	"sync"
@@ -459,7 +460,7 @@ func setupCoordinatorTest(t *testing.T) (*EnrollmentCoordinator, *mockGateway, *
 	passkey := &mockPasskeyRegistrar{}
 	recorder := &outputRecorder{}
 
-	coord := NewEnrollmentCoordinator(EnrollmentCoordinatorDeps{
+	coord, err := NewEnrollmentCoordinator(EnrollmentCoordinatorDeps{
 		Gateway: gw,
 		Store:   NewCredentialStore(fileSvc, cfg),
 		Keys:    keys,
@@ -472,7 +473,35 @@ func setupCoordinatorTest(t *testing.T) (*EnrollmentCoordinator, *mockGateway, *
 		Clock:   time.Now,
 		Out:     recorder.out,
 	})
+	require.NoError(t, err)
 	return coord, gw, keys, trust, browser, passkey, recorder, fileSvc, cfg
+}
+
+// TestNewEnrollmentCoordinator_NilRequiredDeps verifies that missing required
+// dependencies return a typed error (constants.ErrInternal) instead of
+// panicking (INV-CODE-06, INV-CODE-16).
+func TestNewEnrollmentCoordinator_NilRequiredDeps(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewEnrollmentCoordinator(EnrollmentCoordinatorDeps{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInternal)
+	assert.Contains(t, err.Error(), "FileSvc is required")
+
+	fileSvc, err := fs.NewRuntimeFileService(t.TempDir(), slog.Default())
+	require.NoError(t, err)
+
+	_, err = NewEnrollmentCoordinator(EnrollmentCoordinatorDeps{FileSvc: fileSvc})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInternal)
+	assert.Contains(t, err.Error(), "Cfg is required")
+
+	coord, err := NewEnrollmentCoordinator(EnrollmentCoordinatorDeps{
+		FileSvc: fileSvc,
+		Cfg:     &config.Config{},
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, coord)
 }
 
 // --- State classification tests ---

@@ -15,7 +15,9 @@ import (
 
 // NewString returns a randomly generated RFC 4122 version 4 UUID string
 // in canonical 36-character form (8-4-4-4-12) with hyphens.
-// It panics if the system's cryptographic random source fails.
+// It panics if the system's cryptographic random source fails (INV-CODE-06
+// exception: unrecoverable — without OS randomness no secure UUID can be
+// minted and the process cannot safely continue).
 func NewString() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {

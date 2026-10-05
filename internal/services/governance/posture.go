@@ -78,14 +78,11 @@ func (p *NotaryPosture) RequiresL2Signature() bool { return true }
 func (p *NotaryPosture) RequiresL3Proof() bool     { return true }
 
 // NewGovernancePosture returns the GovernancePosture for the given name.
-// Panics on an unrecognized name so that misconfigured deployments fail at
-// startup rather than silently running under a weaker posture.
-func NewGovernancePosture(posture string) GovernancePosture {
-	p, err := ParseGovernancePosture(posture)
-	if err != nil {
-		panic(err.Error())
-	}
-	return p
+// An unrecognized name returns an error wrapping constants.ErrInvalidPosture;
+// callers MUST propagate the error so misconfigured deployments fail fast
+// rather than silently running under a weaker posture (INV-CODE-06).
+func NewGovernancePosture(posture string) (GovernancePosture, error) {
+	return ParseGovernancePosture(posture)
 }
 
 // ParseGovernancePosture returns the GovernancePosture for the given name,
@@ -102,6 +99,6 @@ func ParseGovernancePosture(posture string) (GovernancePosture, error) {
 	case constants.PostureNotary:
 		return &NotaryPosture{}, nil
 	default:
-		return nil, fmt.Errorf("invalid governance posture %q (must be one of: doctrine, consensus, ratify, notary)", posture)
+		return nil, fmt.Errorf("%w: %q (must be one of: doctrine, consensus, ratify, notary)", constants.ErrInvalidPosture, posture)
 	}
 }

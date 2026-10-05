@@ -217,8 +217,8 @@ func (m *mockEnroller) lastOptions() auth.EnrollmentOptions {
 // given mock. Used to inject a mock coordinator into *WithConfig constructors
 // without mutating package-level state.
 func mockEnrollerFactory(mock *mockEnroller) EnrollerFactory {
-	return func(_ auth.OutputFunc, _ fs.RuntimeFileService, _ *config.Config) Enroller {
-		return mock
+	return func(_ auth.OutputFunc, _ fs.RuntimeFileService, _ *config.Config) (Enroller, error) {
+		return mock, nil
 	}
 }
 
@@ -442,11 +442,12 @@ func TestEnrollCmd_StdinContinueInjected(t *testing.T) {
 
 	// The production factory builds a real coordinator. We cannot inspect
 	// its private continueFn field directly, but we can assert the factory
-	// does not panic and returns a non-nil Enroller — the Continue default
+	// returns no error and a non-nil Enroller — the Continue default
 	// is set inside NewEnrollmentCoordinator. The deeper assertion (that
 	// stdinContinue is the injected function) is covered by the coordinator-
 	// level tests that inject a ContinueFunc stub and assert it is called.
-	coordinator := NewDefaultEnrollmentCoordinator(func(string, ...any) {}, fileSvc, cfg)
+	coordinator, err := NewDefaultEnrollmentCoordinator(func(string, ...any) {}, fileSvc, cfg)
+	require.NoError(t, err)
 	require.NotNil(t, coordinator, "newDefaultEnrollmentCoordinator must return a non-nil Enroller")
 }
 

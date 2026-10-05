@@ -270,8 +270,8 @@ func TestRunDockerStartWalkthrough_EnrollmentFailureWrapsEnrollmentFailed(t *tes
 	deps := dockerStartDeps{
 		clientFactory:        authcmd.PanickingClientFactory(),
 		checkOperatorRunning: func(*config.Config) error { return nil },
-		enrollerFactory: func(auth.OutputFunc, fs.RuntimeFileService, *config.Config) authcmd.Enroller {
-			return failingEnroller
+		enrollerFactory: func(auth.OutputFunc, fs.RuntimeFileService, *config.Config) (authcmd.Enroller, error) {
+			return failingEnroller, nil
 		},
 		waitGatewayHealthy: func(*cobra.Command) error { return nil },
 		cfg:                cfg,

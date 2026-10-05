@@ -163,6 +163,7 @@ Tests that open localhost listeners, including `httptest.NewServer`, `httptest.N
 - Mocking databases or internal services in integration suites (INV-TEST-RUN-03).
 - Calling `os.Chdir` without restoring the original directory in `t.Cleanup` (INV-TEST-ISO-03).
 - Double-closing resources managed by `NewGatewayFixture` (INV-TEST-FIX-01).
+- Asserting a panic on a production code path (e.g. `assert.Panics`) instead of asserting the returned typed error with `assert.ErrorIs` against the sentinel in `internal/constants/errors.go` (INV-CODE-06, INV-ERR-01).
 
 ## Links out
 
