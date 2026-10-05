@@ -148,6 +148,7 @@ Or approve all at once:
 ### Verify the stack is healthy
 
 ```bash
+make status
 ./g8e gw status
 ./g8e operator list
 ./g8e tui

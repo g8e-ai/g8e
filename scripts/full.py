@@ -19,6 +19,8 @@ import ssl
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -109,6 +111,7 @@ def local_workloads(plan):
 
 def prepare_identities(plan, reset=False, dry_run=False, interactive=True):
     """Trust changes are authorized from local disk, never from a TLS failure."""
+    reset = reset or (os.environ.get("RESET_IDENTITIES") == "1")
     workloads = local_workloads(plan)
     root_path = ROOT / ".g8e/pki/root/root_ca.crt"
     if dry_run:
@@ -164,14 +167,14 @@ def prepare_identities(plan, reset=False, dry_run=False, interactive=True):
         if not reset and not interactive:
             raise RuntimeError(
                 "Stale workload identities require an explicit reset; "
-                "retry with make full RESET_IDENTITIES=1 or use make full-setup"
+                "retry with make full RESET_IDENTITIES=1, make full-reset, or use make full-setup"
             )
         if not reset and prompt(
             "Reset their identities and request fresh enrollment? (y/N)", "n"
         ).lower() not in ("y", "yes"):
             raise RuntimeError("Identity reset declined; no workloads launched")
         for role, directory in stale:
-            command = [str(ROOT / "g8e")]
+            command = [resolve_g8e_binary()]
             if role == "g8ee":
                 command += ["ensemble", "reset-identity", "--yes"]
             else:
@@ -223,6 +226,10 @@ def workload_state(name, directory, offset=0):
     log_path = directory / "full.log"
     if not running:
         return "failed", f"see {log_path}"
+    if name == "g8ee" and check_g8ee_health():
+        return "ready", ""
+    if not log_path.exists():
+        return "starting", ""
     with log_path.open("rb") as log:
         log.seek(offset)
         recent = log.read().decode(errors="replace")
@@ -483,7 +490,69 @@ def ensemble_running(pid):
     return True
 
 
-def stop_ensemble():
+def resolve_g8e_binary():
+    for candidate in (ROOT / "g8e", ROOT / "bin" / "g8e"):
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    bin_dir = ROOT / "bin"
+    if bin_dir.exists():
+        matches = [
+            p
+            for p in bin_dir.glob("g8e-*")
+            if os.access(p, os.X_OK)
+            and not p.name.endswith(".sha256")
+            and not p.name.endswith(".json")
+        ]
+        if matches:
+            return str(matches[0])
+    return str(ROOT / "g8e")
+
+
+def get_recorded_workloads():
+    """Load recorded local workloads, or fallback to default locations."""
+    registry = ROOT / WORKLOADS_PATH
+    if registry.exists():
+        try:
+            entries = json.loads(registry.read_text())
+            if isinstance(entries, list) and entries:
+                return [
+                    (item["role"], Path(item["directory"]))
+                    for item in entries
+                    if "role" in item and "directory" in item
+                ]
+        except (ValueError, KeyError):
+            pass
+    results = [(role, Path.home() / ".ollama/g8e" / role) for role in ROLES]
+    results.append(("g8ee", ROOT / ".local.dev/full/ensemble"))
+    return results
+
+
+def check_g8ee_health(url="http://127.0.0.1:8000/health", timeout=1.0):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "g8e-launcher/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                return data.get("status") == "ok"
+    except Exception:
+        pass
+    return False
+
+
+def check_gateway_health(url="http://127.0.0.1:8080/api/v1/health", timeout=1.0):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "g8e-launcher/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except Exception:
+        pass
+    return False
+
+
+def stop_ensemble(dry_run=False):
+    if dry_run:
+        print("g8ee: stop the local Python process")
+        return
     pid_file = ROOT / ".local.dev/full/ensemble/full.pid"
     if not pid_file.exists():
         print("  g8ee       stopped (host)")
@@ -507,6 +576,231 @@ def stop_ensemble():
     print("  g8ee       stopped (host)")
 
 
+def stop_operator(role, directory, dry_run=False):
+    directory = Path(directory).expanduser().resolve()
+    pid_file = directory / "full.pid"
+    if dry_run:
+        print(f"{role}: stop the local operator process in {directory}")
+        return
+    if not pid_file.exists():
+        print(f"  {role:<12} stopped (host)")
+        return
+    try:
+        pid = int(pid_file.read_text().strip())
+    except (ValueError, FileNotFoundError):
+        pid_file.unlink(missing_ok=True)
+        print(f"  {role:<12} stopped (host)")
+        return
+    if pid <= 0:
+        pid_file.unlink(missing_ok=True)
+        print(f"  {role:<12} stopped (host)")
+        return
+    if ensemble_running(pid):
+        try:
+            cmdline = Path(f"/proc/{pid}/cmdline")
+            if cmdline.exists():
+                tokens = cmdline.read_bytes().split(b"\0")
+                if not any(b"g8e" in t for t in tokens if t):
+                    raise RuntimeError(
+                        f"PID {pid} in {pid_file} is not a g8e process; refusing to stop it"
+                    )
+        except OSError:
+            pass
+        os.kill(pid, signal.SIGTERM)
+        deadline = time.monotonic() + 5
+        while ensemble_running(pid):
+            if time.monotonic() >= deadline:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                break
+            time.sleep(0.1)
+    pid_file.unlink(missing_ok=True)
+    print(f"  {role:<12} stopped (host)")
+
+
+def stop_operators(dry_run=False):
+    workloads = get_recorded_workloads()
+    for role, directory in workloads:
+        if role != "g8ee":
+            stop_operator(role, directory, dry_run)
+    if not dry_run:
+        binary = resolve_g8e_binary()
+        if Path(binary).exists() and os.access(binary, os.X_OK):
+            try:
+                subprocess.run(
+                    [binary, "operator", "stop"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    check=False,
+                )
+            except OSError:
+                pass
+
+
+def stop_gateway(dry_run=False):
+    if dry_run:
+        print("Gateway: stop running Gateway service")
+        return
+    binary = resolve_g8e_binary()
+    if Path(binary).exists() and os.access(binary, os.X_OK):
+        try:
+            subprocess.run(
+                [binary, "gw", "stop"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            print("  g8e-gw       stopped (host)")
+        except OSError:
+            print("  g8e-gw       stopped (host)")
+    else:
+        print("  g8e-gw       stopped (host)")
+
+
+def stop_all(dry_run=False, stop_gw=True):
+    if dry_run:
+        print("\nStop preview")
+    else:
+        print("\nStopping workloads")
+    stop_ensemble(dry_run)
+    stop_operators(dry_run)
+    if stop_gw:
+        stop_gateway(dry_run)
+    if not dry_run:
+        print("\nHost platform stopped. Runtime state in .g8e/ is preserved.")
+
+
+def show_status(dry_run=False):
+    print("\nPlatform status")
+    if dry_run:
+        print("  Status preview (no network probes)")
+        return
+
+    gw_reported = False
+    binary = resolve_g8e_binary()
+    if Path(binary).exists() and os.access(binary, os.X_OK):
+        try:
+            result = subprocess.run(
+                [binary, "gw", "status", "--brief"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                print(result.stdout.rstrip())
+                gw_reported = True
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    if not gw_reported:
+        if check_gateway_health():
+            print("  g8e-gw       online")
+        else:
+            print("  g8e-gw       stopped (host)")
+
+    print("\nLocal workloads")
+    workloads = get_recorded_workloads()
+    for role, directory in workloads:
+        pid_file = directory / "full.pid"
+        pid = None
+        if pid_file.exists():
+            try:
+                p = int(pid_file.read_text().strip())
+                if p > 0 and ensemble_running(p):
+                    pid = p
+            except (ValueError, FileNotFoundError):
+                pass
+
+        if role == "g8ee":
+            if pid is None:
+                print("  g8ee         stopped (host)")
+            elif check_g8ee_health():
+                print(f"  g8ee         ready (PID {pid}) · http://127.0.0.1:8000")
+            else:
+                state, detail = workload_state("g8ee", directory)
+                msg = f"  g8ee         {state} (PID {pid})"
+                if detail:
+                    msg += f"; {detail}"
+                print(msg)
+        else:
+            if pid is None:
+                print(f"  {role:<12} stopped (host)")
+            else:
+                state, detail = workload_state(role, directory)
+                msg = f"  {role:<12} {state} (PID {pid})"
+                if detail:
+                    msg += f"; {detail}"
+                print(msg)
+
+    print("\nManage with g8e (from this repository)")
+    print("  make full                        Bring up the full host stack")
+    print("  make down                        Bring down the full host stack")
+    print("  make status                      Show platform and workload status")
+    print("  ./g8e gw status                  Gateway and connected operators")
+    print("  ./g8e ensemble status            g8ee readiness")
+    print("  ./g8e operator list              Operator IDs and sessions")
+
+
+def ensemble_status(dry_run=False):
+    if dry_run:
+        print("  g8ee       status preview")
+        return
+    ensemble_dir = ROOT / ".local.dev/full/ensemble"
+    pid_file = ensemble_dir / "full.pid"
+    pid = None
+    if pid_file.exists():
+        try:
+            p = int(pid_file.read_text().strip())
+            if p > 0 and ensemble_running(p):
+                pid = p
+        except (ValueError, FileNotFoundError):
+            pass
+
+    if pid is None:
+        print("  g8ee       stopped (host)")
+    elif check_g8ee_health():
+        print(f"  g8ee       ready (PID {pid}) · http://127.0.0.1:8000")
+    else:
+        state, detail = workload_state("g8ee", ensemble_dir)
+        msg = f"  g8ee       {state} (PID {pid})"
+        if detail:
+            msg += f"; {detail}"
+        print(msg)
+
+
+def operator_status(dry_run=False):
+    if dry_run:
+        print("  operators  status preview")
+        return
+    workloads = get_recorded_workloads()
+    for role, directory in workloads:
+        if role == "g8ee":
+            continue
+        pid_file = directory / "full.pid"
+        pid = None
+        if pid_file.exists():
+            try:
+                p = int(pid_file.read_text().strip())
+                if p > 0 and ensemble_running(p):
+                    pid = p
+            except (ValueError, FileNotFoundError):
+                pass
+
+        if pid is None:
+            print(f"  {role:<12} stopped (host)")
+        else:
+            state, detail = workload_state(role, directory)
+            msg = f"  {role:<12} {state} (PID {pid})"
+            if detail:
+                msg += f"; {detail}"
+            print(msg)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -524,14 +818,72 @@ def main():
         parser.add_argument(
             f"--{role}-working-dir", help=f"Explicit {role} runtime directory"
         )
-    parser.add_argument("--ensemble-action", choices=("start", "stop", "restart"))
+    parser.add_argument(
+        "--ensemble-action",
+        choices=("start", "stop", "restart", "status"),
+        help="Lifecycle action for g8ee ensemble",
+    )
+    parser.add_argument(
+        "--operator-action",
+        choices=("start", "stop", "restart", "status"),
+        help="Lifecycle action for local operators",
+    )
+    parser.add_argument(
+        "--action",
+        choices=("up", "down", "stop", "status", "restart"),
+        help="Orchestration action for the full platform stack",
+    )
+    parser.add_argument(
+        "--down",
+        action="store_true",
+        help="Stop all running local workloads (g8ee and operators) and the Gateway",
+    )
+    parser.add_argument(
+        "--stop",
+        action="store_true",
+        help="Stop all running local workloads (g8ee and operators) and the Gateway",
+    )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show status of the Gateway, local operators, and g8ee",
+    )
+    parser.add_argument(
+        "--keep-gateway",
+        action="store_true",
+        help="When stopping workloads with --down/--stop, leave the Gateway running",
+    )
     parser.add_argument(
         "--reset-identities",
         action="store_true",
         help="Confirm reset of stale identities in the selected local workload directories",
     )
     args = parser.parse_args()
+
+    if args.down or args.stop or args.action in ("down", "stop"):
+        stop_all(args.dry_run, stop_gw=not args.keep_gateway)
+        return
+
+    if args.status or args.action == "status":
+        show_status(args.dry_run)
+        return
+
+    if args.operator_action:
+        if args.operator_action == "status":
+            operator_status(args.dry_run)
+            return
+        if args.operator_action == "stop":
+            print("\nStopping local operators" if not args.dry_run else "\nStop preview")
+            stop_operators(args.dry_run)
+            return
+        if args.operator_action == "restart":
+            print("\nRestarting local operators" if not args.dry_run else "\nRestart preview")
+            stop_operators(args.dry_run)
+
     if args.ensemble_action:
+        if args.ensemble_action == "status":
+            ensemble_status(args.dry_run)
+            return
         gateway = GATEWAY_HOST
         if args.ensemble_action in ("start", "restart"):
             gateway = validate_host(
@@ -640,7 +992,8 @@ def main():
                 "g8ee dependencies are missing; run make ensemble-env and retry"
             ) from exc
     if args.start_gateway:
-        gateway_command = [str(ROOT / "g8e"), "gw", "start", "--quiet"]
+        binary = resolve_g8e_binary()
+        gateway_command = [binary, "gw", "start", "--quiet"]
         if not args.setup:
             gateway_command += [
                 "--public-base-url",
@@ -660,16 +1013,18 @@ def main():
         plan, args.reset_identities, args.dry_run, interactive=args.setup
     )
     print("\nLaunching workloads" if not args.dry_run else "\nLaunch preview")
+    binary = resolve_g8e_binary()
     for role, system, directory in plan:
         gateway = gateway_host if is_local(system) else remote_gateway
         command_args = operator_args(role, gateway, directory, storage, ollama)
         if is_local(system):
             start_local(
-                role, directory, [str(ROOT / "g8e"), *command_args], args.dry_run
+                role, directory, [binary, *command_args], args.dry_run
             )
         else:
             remote_commands(system, directory, command_args)
-    start_ensemble(args.dry_run, gateway_host)
+    if not (args.operator_action in ("start", "restart")):
+        start_ensemble(args.dry_run, gateway_host)
     failed = report_workloads() if not args.dry_run else False
     print_summary(
         args.dry_run, any(not is_local(system) for _, system, _ in plan), gateway_host
@@ -687,13 +1042,14 @@ def print_summary(dry_run=False, has_remote=False, gateway=GATEWAY_HOST):
         else "\nPreview complete · no workloads started"
     )
     if not dry_run:
+        binary = resolve_g8e_binary()
         for command, label in (
             (["gw", "status", "--brief"], "Gateway / operators"),
             (["ensemble", "status"], "g8ee"),
         ):
             try:
                 result = subprocess.run(
-                    [str(ROOT / "g8e"), *command],
+                    [binary, *command],
                     cwd=ROOT,
                     capture_output=True,
                     text=True,

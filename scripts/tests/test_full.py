@@ -654,6 +654,128 @@ class FullTests(unittest.TestCase):
             ],
         )
 
+    def test_down_stops_ensemble_operators_and_gateway(self):
+        with (
+            patch.object(sys, "argv", ["full.py", "--down"]),
+            patch.object(FULL, "stop_ensemble") as stop_ens,
+            patch.object(FULL, "stop_operators") as stop_ops,
+            patch.object(FULL, "stop_gateway") as stop_gw,
+        ):
+            FULL.main()
+        stop_ens.assert_called_once_with(False)
+        stop_ops.assert_called_once_with(False)
+        stop_gw.assert_called_once_with(False)
+
+    def test_down_dry_run_does_not_stop_processes(self):
+        with (
+            patch.object(sys, "argv", ["full.py", "--down", "--dry-run"]),
+            patch.object(FULL, "stop_ensemble") as stop_ens,
+            patch.object(FULL, "stop_operators") as stop_ops,
+            patch.object(FULL, "stop_gateway") as stop_gw,
+        ):
+            FULL.main()
+        stop_ens.assert_called_once_with(True)
+        stop_ops.assert_called_once_with(True)
+        stop_gw.assert_called_once_with(True)
+
+    def test_status_shows_platform_and_workloads(self):
+        output = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["full.py", "--status"]),
+            patch.object(FULL, "check_gateway_health", return_value=True),
+            patch.object(FULL, "check_g8ee_health", return_value=True),
+            patch.object(
+                FULL,
+                "get_recorded_workloads",
+                return_value=[
+                    ("observer", Path("/fake/observer")),
+                    ("g8ee", Path("/fake/ensemble")),
+                ],
+            ),
+            patch.object(FULL, "ensemble_running", return_value=False),
+            contextlib.redirect_stdout(output),
+        ):
+            FULL.main()
+        text = output.getvalue()
+        self.assertIn("Platform status", text)
+        self.assertIn("Local workloads", text)
+        self.assertIn("g8ee", text)
+        self.assertIn("observer", text)
+
+    def test_operator_action_stop(self):
+        with (
+            patch.object(sys, "argv", ["full.py", "--operator-action", "stop"]),
+            patch.object(FULL, "stop_operators") as stop_ops,
+        ):
+            FULL.main()
+        stop_ops.assert_called_once_with(False)
+
+    def test_operator_action_status(self):
+        output = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["full.py", "--operator-action", "status"]),
+            patch.object(
+                FULL,
+                "get_recorded_workloads",
+                return_value=[
+                    ("observer", Path("/fake/observer")),
+                    ("g8ee", Path("/fake/ensemble")),
+                ],
+            ),
+            contextlib.redirect_stdout(output),
+        ):
+            FULL.main()
+        text = output.getvalue()
+        self.assertIn("observer", text)
+        self.assertNotIn("g8ee", text)
+
+    def test_ensemble_action_status(self):
+        output = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["full.py", "--ensemble-action", "status"]),
+            contextlib.redirect_stdout(output),
+        ):
+            FULL.main()
+        text = output.getvalue()
+        self.assertIn("g8ee", text)
+
+    def test_stop_operator_cleans_stale_pid_without_signalling(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            pid_file = directory / "full.pid"
+            pid_file.write_text("99999999")
+            with (
+                patch.object(FULL, "ensemble_running", return_value=False),
+                patch.object(FULL.os, "kill") as kill,
+            ):
+                FULL.stop_operator("data", directory)
+            kill.assert_not_called()
+            self.assertFalse(pid_file.exists())
+
+    def test_stop_operator_terminates_process(self):
+        with tempfile.TemporaryDirectory() as temp:
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    "import time; print('ready', flush=True); time.sleep(30)",
+                ],
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            self.addCleanup(process.wait)
+            self.addCleanup(
+                lambda: process.terminate() if process.poll() is None else None
+            )
+            self.addCleanup(process.stdout.close)
+            self.assertEqual(process.stdout.readline().strip(), "ready")
+            directory = Path(temp)
+            pid_file = directory / "full.pid"
+            pid_file.write_text(str(process.pid))
+            FULL.stop_operator("data", directory)
+            self.assertIsNotNone(process.poll())
+            self.assertFalse(pid_file.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

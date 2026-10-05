@@ -202,6 +202,10 @@ help-legacy:
 		'  embed-console        -> console-embed' \\
 		'  embed-explorer       -> explorer-embed' \\
 		'  explorer-catalog     -> explorer-catalog-generate' \\
+		'  full-down            -> down' \\
+		'  full-status          -> status' \\
+		'  full-stop            -> down' \\
+		'  g8ee-status          -> ensemble-status' \\
 		'  generate             -> proto-generate' \\
 		'  proto                -> proto-generate' \\
 		'  proto-force          -> proto-generate' \\
@@ -288,8 +292,13 @@ help:
 		'  up                        Build and start the Gateway on this host' \
 		'  full                      Start host stack unattended using .env endpoints' \
 		'  full-setup                Start host stack with interactive operator setup' \
-		'  down                      Stop the host Gateway' \
-		'  stop                      Stop the host Gateway and local workloads (alias for down)' \
+		'  full-reset                Start host stack and reset stale identities' \
+		'  status                    Show status of host Gateway, operators, and g8ee' \
+		'  down                      Stop the host Gateway, operators, and g8ee' \
+		'  stop                      Stop host stack and local workloads (alias for down)' \
+		'  ensemble-status           Show g8ee readiness and status' \
+		'  operators-status          Show status of local operators' \
+		'  operators-stop            Stop all local operators' \
 		'  docker-up                 Build and start the Docker Compose stack' \
 		'  docker-down               Stop the stack and preserve volumes' \
 		'  docker-restart-operators  Restart the Data and Inference Operators' \
@@ -1044,7 +1053,7 @@ up: build
 	@echo "Host platform started. Check it with: ./g8e gw status"
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
 
-.PHONY: full full-setup
+.PHONY: full full-setup full-reset
 # FULL_ARGS carries explicit path flags or --dry-run; .env is parsed as data by
 # the launcher, never included by Make or sourced as executable shell code.
 full: build
@@ -1053,16 +1062,48 @@ full: build
 full-setup: build
 	@$(PYTHON) scripts/full.py --setup --start-gateway $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,) $(FULL_ARGS)
 
-.PHONY: down stop
+full-reset: build
+	@$(PYTHON) scripts/full.py --start-gateway --reset-identities $(FULL_ARGS)
+
+.PHONY: status full-status
+status:
+	@$(PYTHON) scripts/full.py --status
+
+full-status: status
+
+.PHONY: ensemble-status g8ee-status
+ensemble-status:
+	@$(PYTHON) scripts/full.py --ensemble-action status
+
+g8ee-status: ensemble-status
+
+.PHONY: ensemble-start ensemble-stop ensemble-restart
+ensemble-start:
+	@$(PYTHON) scripts/full.py --ensemble-action start
+
+ensemble-stop:
+	@$(PYTHON) scripts/full.py --ensemble-action stop
+
+ensemble-restart:
+	@$(PYTHON) scripts/full.py --ensemble-action restart
+
+.PHONY: operators-status operators-stop operators-restart
+operators-status:
+	@$(PYTHON) scripts/full.py --operator-action status
+
+operators-stop:
+	@$(PYTHON) scripts/full.py --operator-action stop
+
+operators-restart:
+	@$(PYTHON) scripts/full.py --operator-action restart
+
+.PHONY: down stop full-down full-stop
 down:
-	@test -x ./g8e || { echo "ERROR: ./g8e is missing; run 'make build' first" >&2; exit 1; }
-	@./g8e ensemble stop 2>/dev/null || true
-	@./g8e operator stop 2>/dev/null || true
-	@echo "Stopping the g8e Gateway running on this host..."
-	@./g8e gw stop
-	@echo "Host platform stopped. Runtime state in .g8e/ is preserved."
+	@$(PYTHON) scripts/full.py --down
 
 stop: down
+full-down: down
+full-stop: down
 
 # =============================================================================
 # DOCKER COMPOSE LIFECYCLE
