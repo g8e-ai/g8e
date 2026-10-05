@@ -34,7 +34,7 @@ from app.decision.types import (
     ScoreQuestion,
 )
 from app.errors import ExternalServiceError, RateLimitError
-from app.llm.providers.ollama import _normalize_ollama_host
+from app.llm.endpoints import normalize_ollama_host
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class JevProvider(DecisionProvider):
     ) -> None:
         super().__init__()
         self._api_key = api_key
-        self._endpoint = _normalize_ollama_host(endpoint or OLLAMA_DEFAULT_ENDPOINT) + OLLAMA_SYSTEM_ONE_PATH
+        self._endpoint = normalize_ollama_host(endpoint or OLLAMA_DEFAULT_ENDPOINT) + OLLAMA_SYSTEM_ONE_PATH
         self._default_model = default_model
         self._client = client
         self._owns_client = client is None

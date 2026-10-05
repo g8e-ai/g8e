@@ -62,13 +62,15 @@ terminal, e.g. CI runners or containers): `bash scripts/linux-setup.sh -y`.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/g8e-ai/g8e.git
+git clone --depth 1 https://github.com/g8e-ai/g8e.git
 cd g8e
 ```
 
-### 2. Start the Gateway only
+### Gateway-only track
 
-The simplest path: build and start the Gateway on localhost.
+The Gateway-only track has no Python, Ollama, or model SDK requirement. It
+requires Git, Go 1.26.6, Make, and Node.js 22+ to build the embedded explorer.
+Build and start the Gateway on localhost:
 
 ```bash
 make up
@@ -85,14 +87,19 @@ The Gateway starts on:
 - **HTTP (discovery):** `http://localhost:8080`
 - **HTTPS/mTLS (API):** `https://localhost:8443`
 
-### 3. Or: Start the full stack (Gateway + Operators + Ensemble)
+### Full platform track: Gateway + Operators + Ensemble
 
-For the complete platform with local Operators and the agentic Ensemble (g8ee):
+For the complete platform with local Operators and the agentic Ensemble
+(g8ee), install Python 3.12+ dependencies once, then start the workloads:
 
 ```bash
-make dev-python   # one-time: builds the ensemble Python venv (requires uv)
+make ensemble-env # runtime only; bootstraps uv and installs Python 3.12+ as needed
 make full-setup
 ```
+
+Use `make dev-python` instead when you also need the Ensemble test and lint
+dependencies. The Gateway and Operator build alone does not need either Python
+target.
 
 This interactively prompts you for:
 - Operator working directories
@@ -171,7 +178,7 @@ There are two ways to run g8e: **natively on your host** (compile and run direct
 | Make | Any recent | Required to run Makefile targets |
 | Git | Any recent | Required to clone the repository |
 | Node.js and npm | 22+ | Required to build the evaluation explorer (once, at build time) |
-| Python | 3.10+ | Required for `make full` / `make full-setup` (ensemble); install via `make dev-python` (needs `uv`). Also used for protocol library development |
+| Python | 3.12+ | Required for `make full` / `make full-setup` (Ensemble); `make ensemble-env` installs runtime dependencies, and `make dev-python` adds test and lint dependencies. Also used for protocol library development |
 
 ### Docker path (no local toolchain required)
 
@@ -189,7 +196,7 @@ The Docker build compiles inside the builder stage. No local Go installation nee
 Clone the repository:
 
 ```bash
-git clone https://github.com/g8e-ai/g8e.git
+git clone --depth 1 https://github.com/g8e-ai/g8e.git
 cd g8e
 ```
 

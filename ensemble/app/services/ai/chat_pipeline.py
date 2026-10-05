@@ -39,13 +39,7 @@ from app.constants import (
 from app.models.model_telemetry import ModelCallTelemetry
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider
-from app.llm.providers.open_ai import OpenAIProvider
-from app.llm.providers.anthropic import AnthropicProvider
-from app.llm.providers.gemini import GeminiProvider
-from app.llm.providers.ollama import OllamaProvider
-from app.llm.providers.llama_cpp import LlamaCppProvider
-from app.llm.providers.fake import FakeProvider
-from app.llm.providers.g8e import G8EProvider
+from app.llm.factory import get_llm_provider_class
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.evaluation_trace import EvaluationSeedApplication
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
@@ -161,19 +155,7 @@ class ChatPipelineService:
         # Validate credentials for each configured tier
         validation_errors = []
 
-        from app.decision.providers.jev import JevProvider
         from app.decision.validation import validate_jev_lite_coexistence
-
-        # Provider class mapping for validation
-        provider_classes = {
-            LLMProvider.OPENAI.value: OpenAIProvider,
-            LLMProvider.ANTHROPIC.value: AnthropicProvider,
-            LLMProvider.GEMINI.value: GeminiProvider,
-            LLMProvider.OLLAMA.value: OllamaProvider,
-            LLMProvider.LLAMACPP.value: LlamaCppProvider,
-            LLMProvider.FAKE.value: FakeProvider,
-            LLMProvider.G8E.value: G8EProvider,
-        }
 
         def check_tier(
             tier_name: str,
@@ -198,16 +180,20 @@ class ChatPipelineService:
                 return
 
             if provider == LLMProvider.JEV.value:
+                from app.decision.providers.jev import JevProvider
+
                 provider_errors = JevProvider.validate_config(api_key, endpoint)
                 for error in provider_errors:
                     validation_errors.append(f"{tier_name.capitalize()} {error}")
                 return
 
-            provider_class = provider_classes.get(provider)
-            if not provider_class:
+            try:
+                provider_type = LLMProvider(provider)
+            except ValueError:
                 validation_errors.append(f"Unsupported {tier_name} provider '{provider}'.")
                 return
 
+            provider_class = get_llm_provider_class(provider_type)
             provider_errors = provider_class.validate_config(api_key, endpoint)
             for error in provider_errors:
                 validation_errors.append(f"{tier_name.capitalize()} {error}")

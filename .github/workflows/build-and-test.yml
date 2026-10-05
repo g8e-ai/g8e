@@ -15,6 +15,27 @@ permissions:
   contents: read
 
 jobs:
+  onboarding:
+    name: Fresh container onboarding
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Dogfood setup and native startup as a new contributor
+        run: |
+          docker run --rm --volume "$PWD:/source:ro" ubuntu:24.04 bash -euc '
+            apt-get update
+            apt-get install -y --no-install-recommends ca-certificates git sudo
+            useradd --create-home --shell /bin/bash contributor
+            echo "contributor ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/contributor
+            mkdir /workspace
+            git -c safe.directory=/source -C /source archive HEAD | tar -x -C /workspace
+            chown -R contributor:contributor /workspace
+            su - contributor -c "cd /workspace && bash scripts/ci/onboarding-smoke.sh"
+          '
+
   ci:
     name: Build & Test
     runs-on: ubuntu-latest

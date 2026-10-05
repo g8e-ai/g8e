@@ -224,6 +224,7 @@ help:
 		'  dev-check                 Verify the local development toolchain' \
 		'  dev-tools                 Install pinned Go development tools' \
 		'  dev-python                Create .venv with protocol and ensemble dependencies' \
+		'  ensemble-env              Install only the Python runtime for make full' \
 		'  dev-node                  Install Node dependencies for all workspaces' \
 		'' \
 		'CI' \
@@ -497,14 +498,20 @@ dev-tools:
 # Repo-root .venv (the interpreter the ensemble and proto targets prefer, see
 # PYTHON below) with the in-tree protocol package and ensemble test/lint deps.
 # uv provisions Python $(PYTHON_VERSION) itself when the system has none.
-.PHONY: dev-python
-dev-python:
-	@command -v uv &> /dev/null || { echo "Error: uv not found. Run the setup script for your platform in scripts/ or see https://docs.astral.sh/uv/" >&2; exit 1; }
+.PHONY: dev-uv ensemble-env dev-python
+dev-uv:
+	@bash scripts/bootstrap-uv.sh
+
+ensemble-env: dev-uv
 	@echo "Preparing .venv (Python $(PYTHON_VERSION)) with protocol and ensemble dependencies..."
 	@uv venv --python $(PYTHON_VERSION) --seed --allow-existing .venv
 	@# --no-sources: ensemble's [tool.uv.sources] pins g8e to a non-editable path, which
 	@# conflicts with the editable protocol/python install that lets protocol edits show up live.
-	@uv pip install --python .venv/bin/python --no-sources -e protocol/python -e "ensemble[test]"
+	@uv pip install --python .venv/bin/python --no-sources -e protocol/python -e ensemble
+
+dev-python: ensemble-env
+	@echo "Installing ensemble test and lint dependencies..."
+	@uv pip install --python .venv/bin/python --no-sources -e "ensemble[test]"
 
 .PHONY: dev-node
 dev-node:

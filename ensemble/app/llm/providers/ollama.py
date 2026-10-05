@@ -14,7 +14,6 @@ from ollama import AsyncClient, Message as OllamaMessage
 
 from app.constants import (
     LLM_OLLAMA_DEFAULT_NUM_CTX,
-    OLLAMA_DEFAULT_PROTOCOL,
     ThinkingLevel,
 )
 from app.llm.thinking import translate_for_ollama
@@ -33,6 +32,7 @@ from app.llm.llm_types import (
     ToolGroup,
 )
 
+from app.llm.endpoints import normalize_ollama_host
 from app.llm.provider import LLMProvider
 from app.llm.providers._capability import translate_capability_error
 
@@ -225,34 +225,11 @@ def _raise_on_empty_content(
     )
 
 
-def _normalize_ollama_host(endpoint: str) -> str:
-    """Normalize a user-supplied Ollama host into a base URL.
-
-    Accepts:
-      - "host:port"              -> "http://host:port"
-      - "http://host:port"       -> "http://host:port"
-
-    The Ollama native API lives at /api/chat. Endpoints containing a `/v1`
-    path segment are rejected with a clear error so misconfigured settings
-    fail fast instead of silently producing the wrong outbound URL.
-    """
-    cleaned = (endpoint or "").strip().rstrip("/")
-    if "/v1" in cleaned:
-        raise ValueError(
-            f"Invalid Ollama endpoint {endpoint!r}: must not contain '/v1'. "
-            "Ollama uses its native /api/chat surface; configure 'host:port' "
-            "or 'http(s)://host:port' only."
-        )
-    if cleaned and not cleaned.startswith(("http://", "https://")):
-        cleaned = OLLAMA_DEFAULT_PROTOCOL + cleaned
-    return cleaned
-
-
 class OllamaProvider(LLMProvider):
     def __init__(self, endpoint: str, api_key: str):
         super().__init__()
 
-        host = _normalize_ollama_host(endpoint)
+        host = normalize_ollama_host(endpoint)
         self._client = AsyncClient(host=host)
         # CodeQL: Don't log full host strings to avoid accidental leakage
         logger.info("Ollama provider initialized")

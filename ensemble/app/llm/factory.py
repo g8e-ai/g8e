@@ -37,13 +37,7 @@ from app.models.settings import LLMSettings, G8eeAppSettings, SearchSettings
 from app.constants import LLMProvider
 
 from .provider import LLMProvider as LLMProviderBase
-from .providers.open_ai import OpenAIProvider
-from .providers.gemini import GeminiProvider
-from .providers.anthropic import AnthropicProvider
-from .providers.llama_cpp import LlamaCppProvider
-from .providers.ollama import OllamaProvider, _normalize_ollama_host
-from .providers.g8e import G8EProvider
-from .providers.fake import FakeProvider
+from .endpoints import normalize_ollama_host
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +114,7 @@ def _get_provider_cache_key(
         key_parts.append(endpoint or "")
         key_parts.append(api_key or "")
     elif provider_value in (LLMProvider.OLLAMA.value, LLMProvider.LLAMACPP.value):
-        key_parts.append(_normalize_ollama_host(endpoint or ""))
+        key_parts.append(normalize_ollama_host(endpoint or ""))
         key_parts.append(api_key or "")
 
     return "|".join(key_parts)
@@ -192,34 +186,8 @@ def get_llm_provider(
 
     provider_type = LLMProvider(provider_str)
 
-    if provider_type == LLMProvider.OLLAMA:
-        provider = OllamaProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.OPENAI:
-        provider = OpenAIProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.GEMINI:
-        provider = GeminiProvider(api_key=api_key)
-    elif provider_type == LLMProvider.ANTHROPIC:
-        provider = AnthropicProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.LLAMACPP:
-        provider = LlamaCppProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.FAKE:
-        provider = FakeProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.G8E:
+    provider_class = get_llm_provider_class(provider_type)
+    if provider_type == LLMProvider.G8E:
         if _internal_http_client is None:
             from app.errors import ConfigurationError
 
@@ -227,19 +195,57 @@ def get_llm_provider(
                 "G8E provider requires the InternalHttpClient to be injected "
                 "at startup via set_internal_http_client()"
             )
-        provider = G8EProvider(internal_http_client=_internal_http_client)
-    elif provider_type == LLMProvider.JEV:
-        from app.errors import ConfigurationError
-
-        raise ConfigurationError(
-            "Provider 'jev' does not support lite text generation; use jev only "
-            "for triage/eval_judge or select a generative lite provider."
-        )
+        provider = provider_class(internal_http_client=_internal_http_client)
+    elif provider_type == LLMProvider.GEMINI:
+        provider = provider_class(api_key=api_key)
     else:
-        from app.errors import ConfigurationError
-
-        raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")
+        provider = provider_class(endpoint=endpoint, api_key=api_key)
 
     provider._is_cached_singleton = True
     _provider_cache[cache_key] = provider
     return provider
+
+
+def get_llm_provider_class(provider_type: LLMProvider) -> type[LLMProviderBase]:
+    """Load only the selected provider, including during config validation.
+
+    Import failures propagate for the selected provider. We never silently
+    switch providers or weaken validation when its SDK cannot load.
+    """
+    if provider_type == LLMProvider.OLLAMA:
+        from .providers.ollama import OllamaProvider
+
+        return OllamaProvider
+    if provider_type == LLMProvider.OPENAI:
+        from .providers.open_ai import OpenAIProvider
+
+        return OpenAIProvider
+    if provider_type == LLMProvider.GEMINI:
+        from .providers.gemini import GeminiProvider
+
+        return GeminiProvider
+    if provider_type == LLMProvider.ANTHROPIC:
+        from .providers.anthropic import AnthropicProvider
+
+        return AnthropicProvider
+    if provider_type == LLMProvider.LLAMACPP:
+        from .providers.llama_cpp import LlamaCppProvider
+
+        return LlamaCppProvider
+    if provider_type == LLMProvider.FAKE:
+        from .providers.fake import FakeProvider
+
+        return FakeProvider
+    if provider_type == LLMProvider.G8E:
+        from .providers.g8e import G8EProvider
+
+        return G8EProvider
+
+    from app.errors import ConfigurationError
+
+    if provider_type == LLMProvider.JEV:
+        raise ConfigurationError(
+            "Provider 'jev' does not support lite text generation; use jev only "
+            "for triage/eval_judge or select a generative lite provider."
+        )
+    raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")
