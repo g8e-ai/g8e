@@ -46,7 +46,7 @@ No inbound port is required on the Operator host.
 
 Use a bare hostname with `g8e operator start --endpoint`, without an `http://` or `https://` scheme and without a port suffix. The worker uses Gateway port 8080 for discovery and enrollment bootstrap and port 8443 for mTLS authentication, state queries, receipt publication, and pub/sub channel subscription. The global `--port` flag does not affect `operator start`; non-default Gateway ports are not supported by this command path.
 
-The hostname must resolve on the Operator host and must match the Gateway certificate identity. For a remote Gateway without DNS, map the Gateway IP to the built-in `g8e.local` identity on the Operator host and use `g8e.local` as the endpoint:
+The hostname must resolve on the Operator host and must match the Gateway certificate identity. A raw IP endpoint remains the network dial target while g8e verifies the Gateway as its built-in `g8e.local` TLS identity. This keeps certificate verification enabled without requiring a hosts-file entry or `InsecureSkipVerify`. You may still map a stable address to `g8e.local` and use that hostname explicitly:
 
 ```text
 192.0.2.10 g8e.local
@@ -229,6 +229,48 @@ ssh user@192.0.2.10 /opt/g8e operator start --endpoint <gateway-host>
 `g8e operator deploy --hosts user@192.0.2.10 --remote-dir /opt/g8e-operator --background --endpoint <gateway-host>` performs the same copy and start in one step (see [Build Operator](build_operator.md#deployment-commands)). Approve the resulting enrollment request as described above.
 
 `operator deploy` installs one binary per host in `<dest-dir>/.deploy-bin/g8e`, then hard-links it into each Operator directory. Replacing a binary uses an atomic rename, so running workers remain safe. Each directory has independent runtime state, credentials, logs, and process identity.
+
+### Deploy to a Docker Context
+
+`operator deploy` can create one isolated container and one persistent named volume per Operator on an explicit Docker context. Prepare an image first; deployment never guesses a registry, builds source, changes the current Docker context, publishes ports, or removes an Operator volume.
+
+Build a runtime-only image from an existing Linux amd64 binary. The helper sends an allowlisted temporary context containing only the binary, entrypoint, protocol constants, reference data, and Dockerfile:
+
+```bash
+make build-all
+./scripts/build-operator-image.sh livingroom-node g8e-operator:local bin/g8e-linux-amd64
+```
+
+Then deploy a small batch. Here the owner CLI talks to its local Gateway while containers dial the Gateway through the machine's LAN address:
+
+```bash
+./g8e operator deploy \
+  --docker-context livingroom-node \
+  --docker-image g8e-operator:local \
+  --dest-dir /operators/livingroom-data \
+  --count 10 --role data \
+  --endpoint localhost --operator-endpoint 192.168.1.2 \
+  --background --approve
+```
+
+Every Docker command names the selected context explicitly. Deployment resolves the image to one immutable image ID for the batch, checks daemon/image platform compatibility, and checks HTTP discovery reachability from a temporary container before creating fleet resources. Stable ownership labels protect containers and volumes from accidental adoption. A redeploy recreates only a matching owned container and retains its volume and enrollment identity. After enrollment and command-channel readiness, its restart policy becomes `unless-stopped`; failed initial enrollment does not enter an unlimited restart loop.
+
+`--dest-dir` is an absolute path inside each container. The private volume is mounted there and is also the container working directory. A repeatable `--docker-mount type=bind,source=/remote/path,target=/container/path,readonly` can expose a remote-host model store to a provenance Operator. Bind source paths belong to the remote Docker host. Mounts must be read-only and cannot cover the private runtime root or `/g8e`. Observer hardware access is host-specific and is not granted automatically; deployment never adds `--privileged`.
+
+Without `--background`, Docker deployment prepares stopped containers. With `--background` but without `--approve`, containers start with restart policy `no` while awaiting manual enrollment. No Operator container has a published port because all Gateway traffic is outbound.
+
+#### Expose a WSL Gateway on the Windows LAN
+
+For WSL in NAT mode, run the checked-in helper from an elevated Windows PowerShell. Inspect first, then apply rules scoped to the Docker machine (or a deliberately selected LAN subnet):
+
+```powershell
+.\scripts\configure-gateway-lan.ps1 -Action Inspect
+.\scripts\configure-gateway-lan.ps1 -Action Apply -RemoteScope 192.168.1.53
+```
+
+The helper discovers the current Windows LAN and WSL addresses unless they are passed as `-LanAddress` and `-WslAddress`, checks WSL listeners and Gateway health, displays existing matching rules, and manages only `192.168.1.2:8080`/`:8443`-style forwards and its two named firewall rules. Use `-WhatIf` for a dry run and `-Action Remove` to remove those rules. WSL addresses can change after restart, so inspect and reapply the helper when that happens. It does not create a scheduled task or change WSL networking mode. With WSL mirrored networking, inspect the current listeners/routing first and do not add redundant NAT forwarding.
+
+Before a fleet rollout, verify both ports from the remote Docker host and deploy one Operator through full mTLS enrollment and WebSocket readiness. A successful HTTP health check alone is not an acceptance test. Increase to ten only after the one-container redeploy preserves its named volume and identity. Measure memory, CPU, file descriptors, startup time, Gateway load, and heartbeat delays before attempting 100 or 1000 containers.
 
 ### Connect Many Operators
 

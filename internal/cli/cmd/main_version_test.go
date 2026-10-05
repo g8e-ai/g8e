@@ -162,4 +162,20 @@ func TestNewRootCmd_PersistentPreRunE_SetsEndpointOverride(t *testing.T) {
 		assert.Contains(t, cfg.OperatorPublicURL(), "localhost")
 		assert.Contains(t, cfg.OperatorPublicURL(), "9090")
 	})
+
+	t.Run("operator deploy SSH port does not override Gateway HTTPS port", func(t *testing.T) {
+		config.SetEndpointOverride("")
+		t.Cleanup(func() { config.SetEndpointOverride("") })
+
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
+		rootCmd.SetArgs([]string{"operator", "deploy", "--hosts", "example", "--port", "2222", "--endpoint", "localhost"})
+		rootCmd.SetOut(&bytes.Buffer{})
+		rootCmd.SetErr(&bytes.Buffer{})
+		_ = rootCmd.Execute()
+
+		cfg, err := config.Load("")
+		require.NoError(t, err)
+		assert.Contains(t, cfg.OperatorPublicURL(), "localhost")
+		assert.NotContains(t, cfg.OperatorPublicURL(), "2222")
+	})
 }

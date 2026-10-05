@@ -283,6 +283,54 @@ func TestOperatorDeployRoleIdentities(t *testing.T) {
 	assert.Len(t, explicit, 3)
 }
 
+func TestOperatorDeploySeparatesOwnerAndWorkerEndpoints(t *testing.T) {
+	useFakeSSH(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\n"+fakeWorkerAlreadyEnrolled[10:])
+	root := filepath.Join(t.TempDir(), "fleet")
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+	var ownerURL string
+	cmd := operatorDeployCmdWithConfig(
+		func(string) (*config.Config, error) { return cfg, nil },
+		func(_ fs.RuntimeFileService, got *config.Config) (authcmd.APIClient, error) {
+			ownerURL = got.OperatorPublicURL()
+			return &cmdtest.MockAPIClient{}, nil
+		},
+		cmdtest.FileSvcFactoryFor(fileSvc),
+	)
+	cmd.Flags().StringP("endpoint", "e", "", "")
+	cmd.SetArgs([]string{"--hosts", "host", "--dest-dir", root, "--background", "--approve", "--endpoint", "localhost", "--operator-endpoint", "192.168.1.2"})
+	// The fake session is not in the API response, so final online verification
+	// fails after proving both independently resolved addresses.
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_ = cmd.ExecuteContext(ctx)
+	data, err := os.ReadFile(filepath.Join(root, "args.txt"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "--endpoint\n192.168.1.2\n")
+	assert.NotContains(t, string(data), "--endpoint\nlocalhost\n")
+	assert.Contains(t, ownerURL, "localhost")
+}
+
+func TestOperatorDeployRejectsInvalidWorkerEndpoints(t *testing.T) {
+	for _, endpoint := range []string{"http://gateway", "gateway:8080", "", "gateway name"} {
+		args := []string{"--hosts", "host", "--background", "--operator-endpoint", endpoint}
+		_, err := runOperatorDeploy(t, &cmdtest.MockAPIClient{}, args...)
+		require.Error(t, err, endpoint)
+	}
+}
+
+func TestOperatorDeployRejectsConflictingDockerTransportBeforeExecution(t *testing.T) {
+	for _, args := range [][]string{
+		{"--local", "--dest-dir", "/operators", "--docker-context", "remote", "--docker-image", "image"},
+		{"--hosts", "host", "--docker-context", "remote", "--docker-image", "image", "--dest-dir", "/operators"},
+		{"--docker-context", "remote", "--dest-dir", "/operators"},
+		{"--docker-context", "remote", "--docker-image", "image", "--dest-dir", "relative"},
+	} {
+		_, err := runOperatorDeploy(t, &cmdtest.MockAPIClient{}, args...)
+		require.Error(t, err, args)
+	}
+}
+
 func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 	useFakeSSH(t, fakeWorkerEnrolls)
 	root := filepath.Join(t.TempDir(), "fleet")

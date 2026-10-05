@@ -81,9 +81,22 @@ type deploySSH struct {
 	binaryDir    string
 }
 
+// deployTarget is the lifecycle surface shared by process/SSH and Docker
+// deployments. Enrollment deliberately lives above this boundary so every
+// transport retains the same request-specific approval and readiness checks.
+type deployTarget interface {
+	name() string
+	startOperator(context.Context, string, string, ...string) error
+	readStartLog(context.Context, string) ([]byte, error)
+	awaitRequestID(context.Context, string) (string, error)
+	awaitSessionID(context.Context, string) (string, error)
+	awaitReady(context.Context, string) error
+	markReady(context.Context, string) error
+}
+
 // deployedOperator is one Operator working directory that deploy set up.
 type deployedOperator struct {
-	ssh       deploySSH
+	target    deployTarget
 	Dir       string
 	RequestID string
 	SessionID string
@@ -119,12 +132,16 @@ func operatorDeployCmdWithConfig(
 	var role string
 	var parallel int
 	var operatorEndpoint string
+	var dockerContext string
+	var dockerImage string
+	var dockerMounts []string
 	start := operatorStartCmd()
 
 	cmd := &cobra.Command{
 		Use:   "deploy",
-		Short: "Deploy the operator binary locally or over SSH into isolated directories",
-		Long: `Deploy up to 5000 Operators locally (--local) or to each SSH host (--hosts).
+		Short: "Deploy the operator binary locally, over SSH, or to a Docker context",
+		Long: `Deploy up to 5000 Operators locally (--local), to each SSH host (--hosts),
+or as one container per Operator on --docker-context using --docker-image.
 Use --dest-dir for the binary and isolated runtime state; --remote-dir remains an alias.
 With --count N, directories are op-00001 through op-N. --start-index adds later batches
 without replacing earlier Operators. An explicit --start-index always uses numbered directories.
@@ -156,8 +173,18 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
 			}
 
-			if local && hosts != "" {
-				return fmt.Errorf("%w: --local and --hosts are mutually exclusive", constants.ErrMissingRequiredField)
+			selectedTransports := 0
+			if local {
+				selectedTransports++
+			}
+			if hosts != "" {
+				selectedTransports++
+			}
+			if dockerContext != "" {
+				selectedTransports++
+			}
+			if selectedTransports != 1 {
+				return fmt.Errorf("%w: exactly one of --local, --hosts, or --docker-context is required", constants.ErrMissingRequiredField)
 			}
 			if local && !cmd.Flags().Changed("dest-dir") && !cmd.Flags().Changed("remote-dir") {
 				return fmt.Errorf("%w: --local requires --dest-dir", constants.ErrMissingRequiredField)
@@ -165,11 +192,14 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 			if local {
 				hosts = "local"
 			}
-			if hosts == "" {
-				return fmt.Errorf("%w: --hosts flag is required (comma-separated list of hosts)", constants.ErrMissingRequiredField)
+			if dockerContext != "" && strings.TrimSpace(dockerImage) == "" {
+				return fmt.Errorf("%w: --docker-image is required with --docker-context", constants.ErrMissingRequiredField)
 			}
-			if remoteDir == "" || strings.ContainsAny(remoteDir, "\x00\r\n") || (!local && (!operatorDeployRemoteDirPattern.MatchString(remoteDir) || strings.HasPrefix(remoteDir, "-"))) {
+			if remoteDir == "" || strings.ContainsAny(remoteDir, "\x00\r\n") || (dockerContext == "" && !local && (!operatorDeployRemoteDirPattern.MatchString(remoteDir) || strings.HasPrefix(remoteDir, "-"))) {
 				return fmt.Errorf("%w: --dest-dir %q must match %s", constants.ErrPathValidation, remoteDir, operatorDeployRemoteDirPattern)
+			}
+			if dockerContext != "" && (!filepath.IsAbs(remoteDir) || filepath.Clean(remoteDir) == "/") {
+				return fmt.Errorf("%w: Docker --dest-dir must be an absolute non-root container path", constants.ErrPathValidation)
 			}
 			if parallel < 1 || parallel > constants.PlatformEnrollmentMaxLiveOperatorRequests {
 				return fmt.Errorf("%w: --parallel must be between 1 and %d", constants.ErrMissingRequiredField, constants.PlatformEnrollmentMaxLiveOperatorRequests)
@@ -209,12 +239,15 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 				}
 			}
 
-			sourceBinary, err := os.Executable()
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
-			}
-			if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
-				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, sourceBinary)
+			var sourceBinary string
+			if dockerContext == "" {
+				sourceBinary, err = os.Executable()
+				if err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+				}
+				if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
+					return fmt.Errorf("%w: %s", constants.ErrPathNotFound, sourceBinary)
+				}
 			}
 
 			hostList := strings.Split(hosts, ",")
@@ -225,6 +258,9 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 					dirs[i] = fmt.Sprintf("%s/op-%05d", strings.TrimSuffix(remoteDir, "/"), startIndex+i)
 				}
 			}
+			if dockerContext != "" {
+				hostList = []string{dockerContext}
+			}
 			seen := make(map[string]bool)
 			for i, host := range hostList {
 				host = strings.TrimSpace(host)
@@ -234,34 +270,55 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 				seen[host] = true
 				hostList[i] = host
 			}
-			cmd.Printf("Deploying %d operator(s) to %d host(s): %s\n", len(dirs), len(hostList), hosts)
+			cmd.Printf("Deploying %d operator(s) to %d target(s): %s\n", len(dirs), len(hostList), strings.Join(hostList, ","))
 
 			ctx := cmd.Context()
 			var deployed []deployedOperator
 			var failed []string
-			for _, host := range hostList {
-				s := deploySSH{host: strings.TrimSpace(host), port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr(), local: local}
-				// Upload once per host. Per-directory links share executable pages and disk space.
-				cache, err := s.prepareDir(ctx, strings.TrimSuffix(remoteDir, "/")+"/.deploy-bin")
-				if err != nil {
+			if dockerContext != "" {
+				d := newDeployDocker(dockerContext, dockerImage, remoteDir, dockerMounts, cmd.ErrOrStderr())
+				preflightEndpoint := ""
+				if background {
+					preflightEndpoint = opts.endpoint
+				}
+				if err := d.prepare(ctx, preflightEndpoint); err != nil {
 					return err
 				}
-				if err := s.installBinary(ctx, sourceBinary, cache); err != nil {
-					return err
-				}
-				s.binaryDir = cache
-				results := deployOperatorBatch(ctx, s, sourceBinary, dirs, opts, parallel)
+				results := deployDockerBatch(ctx, d, dirs, opts, parallel)
 				for result := range results {
 					cmd.Print(result.output)
 					if result.err != nil {
-						cmd.Printf("Failed to deploy %s:%s: %v\n", s.host, result.dir, result.err)
-						failed = append(failed, s.host+":"+result.dir)
+						cmd.Printf("Failed to deploy %s:%s: %v\n", dockerContext, result.dir, result.err)
+						failed = append(failed, dockerContext+":"+result.dir)
 						continue
 					}
 					deployed = append(deployed, result.op)
 				}
-				if err := ctx.Err(); err != nil {
-					return err
+			} else {
+				for _, host := range hostList {
+					s := deploySSH{host: strings.TrimSpace(host), port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr(), local: local}
+					// Upload once per host. Per-directory links share executable pages and disk space.
+					cache, err := s.prepareDir(ctx, strings.TrimSuffix(remoteDir, "/")+"/.deploy-bin")
+					if err != nil {
+						return err
+					}
+					if err := s.installBinary(ctx, sourceBinary, cache); err != nil {
+						return err
+					}
+					s.binaryDir = cache
+					results := deployOperatorBatch(ctx, s, sourceBinary, dirs, opts, parallel)
+					for result := range results {
+						cmd.Print(result.output)
+						if result.err != nil {
+							cmd.Printf("Failed to deploy %s:%s: %v\n", s.host, result.dir, result.err)
+							failed = append(failed, s.host+":"+result.dir)
+							continue
+						}
+						deployed = append(deployed, result.op)
+					}
+					if err := ctx.Err(); err != nil {
+						return err
+					}
 				}
 			}
 
@@ -271,7 +328,7 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 					return fmt.Errorf("%w: %w", constants.ErrOperatorDeployFailed, err)
 				}
 				for _, op := range deployed {
-					cmd.Printf("  %s:%s  session %s\n", op.ssh.host, op.Dir, op.SessionID)
+					cmd.Printf("  %s:%s  session %s\n", op.target.name(), op.Dir, op.SessionID)
 				}
 			}
 
@@ -284,6 +341,9 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 	}
 
 	cmd.Flags().StringVar(&hosts, "hosts", "", "Comma-separated SSH hosts (required unless --local)")
+	cmd.Flags().StringVar(&dockerContext, "docker-context", "", "Docker context on which to create one container per Operator")
+	cmd.Flags().StringVar(&dockerImage, "docker-image", "", "Existing Operator image on the selected Docker daemon")
+	cmd.Flags().StringSliceVar(&dockerMounts, "docker-mount", nil, "Additional Docker mount spec (repeatable; source=,target=,readonly)")
 	cmd.Flags().StringVar(&operatorEndpoint, "operator-endpoint", "", "Gateway address used by deployed Operators (defaults to --endpoint)")
 	cmd.Flags().IntVar(&parallel, "parallel", 4, "Maximum concurrent deployments/enrollments (1..4)")
 	cmd.Flags().IntVarP(&port, "port", "P", 0, "SSH port to connect to on remote hosts")
@@ -328,7 +388,7 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 		return deployedOperator{}, err
 	}
 	opts.startArgs = operatorDeployArgsForDir(opts.startArgs, s.host, absDir)
-	op := deployedOperator{ssh: s, Dir: absDir}
+	op := deployedOperator{target: s, Dir: absDir}
 	if !opts.background {
 		cmd.Printf("Operator deployed to %s:%s (use --background to auto-start)\n", s.host, absDir)
 		return op, nil
@@ -351,6 +411,9 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 	if err := s.awaitReady(ctx, absDir); err != nil {
 		return deployedOperator{}, err
 	}
+	if err := s.markReady(ctx, absDir); err != nil {
+		return deployedOperator{}, err
+	}
 	if op.RequestID == "" {
 		cmd.Printf("Started operator on %s (working dir %s, already enrolled)\n", s.host, absDir)
 		return op, nil
@@ -362,7 +425,7 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 // enrollOperator starts the worker in dir and approves the enrollment request
 // it submits, restarting the worker up to operatorDeployEnrollAttempts times.
 // The returned request ID is empty when the worker was already enrolled.
-func enrollOperator(ctx context.Context, s deploySSH, opts operatorDeployOptions, dir string) (string, error) {
+func enrollOperator(ctx context.Context, s deployTarget, opts operatorDeployOptions, dir string) (string, error) {
 	var lastErr error
 	for attempt := 1; attempt <= operatorDeployEnrollAttempts; attempt++ {
 		if attempt > 1 {
@@ -381,7 +444,7 @@ func enrollOperator(ctx context.Context, s deploySSH, opts operatorDeployOptions
 	return "", fmt.Errorf("enrollment failed after %d attempts: %w", operatorDeployEnrollAttempts, lastErr)
 }
 
-func startAndApprove(ctx context.Context, s deploySSH, opts operatorDeployOptions, dir string) (string, error) {
+func startAndApprove(ctx context.Context, s deployTarget, opts operatorDeployOptions, dir string) (string, error) {
 	if err := s.startOperator(ctx, dir, opts.endpoint, opts.startArgs...); err != nil {
 		return "", err
 	}
@@ -419,9 +482,9 @@ func awaitOperatorsOnline(ctx context.Context, client authcmd.APIClient, userID 
 		if ops[i].SessionID != "" {
 			continue
 		}
-		sessionID, err := ops[i].ssh.awaitSessionID(ctx, ops[i].Dir)
+		sessionID, err := ops[i].target.awaitSessionID(ctx, ops[i].Dir)
 		if err != nil {
-			return fmt.Errorf("%s:%s: %w", ops[i].ssh.host, ops[i].Dir, err)
+			return fmt.Errorf("%s:%s: %w", ops[i].target.name(), ops[i].Dir, err)
 		}
 		ops[i].SessionID = sessionID
 	}
@@ -475,6 +538,10 @@ func (s deploySSH) sshOptions(portFlag string) []string {
 	}
 	return args
 }
+
+func (s deploySSH) name() string { return s.host }
+
+func (s deploySSH) markReady(context.Context, string) error { return nil }
 
 func (s deploySSH) run(ctx context.Context, remoteCommand string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "ssh", append(s.sshOptions("-p"), s.host, remoteCommand)...)
@@ -767,8 +834,11 @@ func deployOperatorBatch(ctx context.Context, host deploySSH, source string, dir
 				s := host
 				s.stderr = &output
 				op, err := deployOperator(ctx, cmd, s, source, dir, opts)
-				// Do not retain the job's buffer through the stored transport.
-				op.ssh.stderr = host.stderr
+				// Do not retain the per-job output buffer through the stored transport.
+				if target, ok := op.target.(deploySSH); ok {
+					target.stderr = host.stderr
+					op.target = target
+				}
 				results <- operatorDeployResult{op: op, dir: dir, output: output.String(), err: err}
 			}
 		}()
