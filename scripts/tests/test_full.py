@@ -267,12 +267,22 @@ class FullTests(unittest.TestCase):
     def test_stop_terminates_local_ensemble_process(self):
         with tempfile.TemporaryDirectory() as temp:
             process = subprocess.Popen(
-                [sys.executable, "-c", "import time; time.sleep(30)", "app.serve"]
+                [
+                    sys.executable,
+                    "-c",
+                    "import time; print('ready', flush=True); time.sleep(30)",
+                    "app.serve",
+                ],
+                stdout=subprocess.PIPE,
+                text=True,
             )
             self.addCleanup(process.wait)
             self.addCleanup(
                 lambda: process.terminate() if process.poll() is None else None
             )
+            self.addCleanup(process.stdout.close)
+            # Wait for exec/startup before checking the command line in stop_ensemble.
+            self.assertEqual(process.stdout.readline().strip(), "ready")
             root = Path(temp)
             pid_file = root / ".local.dev/full/ensemble/full.pid"
             pid_file.parent.mkdir(parents=True)

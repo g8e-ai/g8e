@@ -56,6 +56,9 @@ If you don't have these tools, run the setup script for your platform:
 - **macOS:** `bash scripts/macos-setup.sh`
 - **Windows:** `pwsh scripts/windows-setup.ps1`
 
+Pass `-y` to accept every install without prompting (required when stdin is not a
+terminal, e.g. CI runners or containers): `bash scripts/linux-setup.sh -y`.
+
 ### 1. Clone the repository
 
 ```bash
@@ -87,6 +90,7 @@ The Gateway starts on:
 For the complete platform with local Operators and the agentic Ensemble (g8ee):
 
 ```bash
+make dev-python   # one-time: builds the ensemble Python venv (requires uv)
 make full-setup
 ```
 
@@ -109,6 +113,16 @@ From another terminal, authenticate with the Gateway:
 ```
 
 This opens your browser for the WebAuthn passkey ceremony and installs the Gateway Root CA in your OS trust store.
+
+No browser on this machine (SSH session, container, CI)? Enroll headless instead:
+
+```bash
+./g8e auth enroll user -e localhost --headless
+```
+
+This creates an mTLS-only CLI identity with no passkey ceremony and no OS
+trust-store changes. It cannot sign in to the browser console, but it fully
+drives the CLI.
 
 ### 5. Approve workload enrollments
 
@@ -157,7 +171,7 @@ There are two ways to run g8e: **natively on your host** (compile and run direct
 | Make | Any recent | Required to run Makefile targets |
 | Git | Any recent | Required to clone the repository |
 | Node.js and npm | 22+ | Required to build the evaluation explorer (once, at build time) |
-| Python | 3.10+ | Optional, only for protocol library development |
+| Python | 3.10+ | Required for `make full` / `make full-setup` (ensemble); install via `make dev-python` (needs `uv`). Also used for protocol library development |
 
 ### Docker path (no local toolchain required)
 
@@ -373,7 +387,7 @@ Service endpoints:
 docker compose down
 ```
 
-Preserve volumes:
+Remove volumes (deletes persisted runtime data):
 
 ```bash
 docker compose down -v
@@ -388,7 +402,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 ### Go module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.3
+go get github.com/g8e-ai/g8e/v2@v2.3.1
 ```
 
 Import in your Go code:
@@ -403,7 +417,7 @@ import (
 ### Python package
 
 ```bash
-pip install g8e==2.2.3
+pip install g8e==2.3.1
 ```
 
 Or pinned to latest:
@@ -438,8 +452,10 @@ This installs the gateway Root CA into your OS trust store and opens the browser
 For Docker deployments where the Gateway serves HTTPS on a different port than the default:
 
 ```bash
-./g8e auth enroll user -e localhost:8443
+./g8e auth enroll user -e localhost --port 9443
 ```
+
+Replace `9443` with the published HTTPS port. `--endpoint` (`-e`) selects the HTTP discovery endpoint, not the HTTPS API port; when discovery is also remapped, use `-e localhost:<http-port>`.
 
 ---
 

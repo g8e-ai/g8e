@@ -80,6 +80,12 @@ g8e_setup_confirm() {
     if [[ "$AUTO_YES" == true ]]; then
         return 0
     fi
+    if [[ ! -t 0 ]]; then
+        echo "ERROR: cannot prompt for confirmation: stdin is not a terminal." >&2
+        echo "Re-run with -y/--yes (or G8E_SETUP_YES=1) to accept all installs non-interactively," >&2
+        echo "or run in an interactive terminal to answer each prompt." >&2
+        exit 2
+    fi
     read -r -p "$prompt" response
     [[ "$response" =~ ^[Yy]$ ]]
 }

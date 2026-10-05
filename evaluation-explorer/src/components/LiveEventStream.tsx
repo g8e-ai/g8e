@@ -417,7 +417,6 @@ export function LiveEventStream({
       setNowMs(Date.now());
     }, 1000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, terminalTimes, assignments]);
 
   const activeRunId = useMemo(() => {

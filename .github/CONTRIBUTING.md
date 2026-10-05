@@ -26,7 +26,7 @@ New here? Start with [Early testers](../EARLY_TESTERS.md) — small cohorts, asy
 3. **README cold read.** Read the README as a stranger and report the first sentence that made you want to stop. One sentence is a complete contribution.
 
 **For Python folks (protocol only, ~30 min)**
-4. **Run the protocol examples.** `pip install g8e==2.3.0`, run `protocol/python/examples/`, and report Python version, OS, and anything surprising.
+4. **Run the protocol examples.** `pip install g8e==2.3.1`, run `protocol/python/examples/`, and report Python version, OS, and anything surprising.
 5. **Conformance test report.** Run `protocol/conformance/` tests and file the result. A green run on a new environment is useful signal.
 
 **For careful readers (~1 hr)**

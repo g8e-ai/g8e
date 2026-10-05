@@ -87,6 +87,8 @@ Then enroll the first owner and approve workloads:
 ./g8e auth enroll approve <request-id> --yes
 ```
 
+On a headless machine, use `./g8e auth enroll user -e localhost --headless`. This creates a CLI-only mTLS identity; it does not register a passkey, install OS trust, or enable browser console sign-in.
+
 If you want the Docker Compose stack instead, that's still supported, but it is not the primary path for local development or evaluation.
 
 ### 2. Explore the protocol and evidence model
