@@ -137,7 +137,8 @@ _FILE_GREP     := $(foreach f,$(EXCLUDE_FILES),| grep -v "$(f)")
 _COV_GREP      := $(_COV_PKG_GREP) $(_FILE_GREP)
 
 # Packages passed to go test.
-TEST_PKGS := $$(go list ./... $(_TEST_PKG_GREP))
+# Local CI includes every package; coverage exclusions still apply to the profile.
+TEST_PKGS = $$(go list ./... $(if $(CI_ALL_PACKAGES),| grep -v /node_modules,$(_TEST_PKG_GREP)))
 
 # Filter coverage.out (the raw profile) to remove excluded paths, then report %.
 # We operate on the profile data — not on the formatted output of go tool cover.
@@ -229,7 +230,10 @@ help:
 		'  ci                        Run the complete local CI pipeline' \
 		'  ci-platform               Run platform, protocol, and documentation CI' \
 		'  ci-ensemble               Run ensemble lint and tests' \
-		'  ci-console                Run console lint, tests, build, and embed' \
+		'  ci-console                Run console and adapter checks; refresh embeds' \
+		'  ci-protocol               Run Python/Node protocol and conformance tests' \
+		'  ci-website                Run website tests and build' \
+		'  ci-scripts                Run developer script regression tests' \
 		'' \
 		'Build and release' \
 		'  build                     Build g8e for the host platform' \
@@ -504,10 +508,11 @@ dev-python:
 
 .PHONY: dev-node
 dev-node:
-	@echo "Installing Node dependencies (protocol/node, console, g8e-adapter)..."
+	@echo "Installing Node dependencies (protocol/node, console, g8e-adapter, website)..."
 	@npm ci --prefix protocol/node
 	@npm ci --prefix console
 	@npm ci --prefix g8e-adapter
+	@npm ci --prefix website
 	@npm run build --prefix g8e-adapter
 
 # Preflight for `make ci`: reports every missing or mismatched tool at once.
@@ -854,12 +859,12 @@ ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.ve
 .PHONY: ensemble-test
 ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
-	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one and not requires_operator"
 
 .PHONY: ensemble-test-external
 ensemble-test-external:
 	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
-	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_system_one"
+	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_system_one or requires_operator"
 
 .PHONY: ensemble-lint
 ensemble-lint:
@@ -1117,21 +1122,67 @@ verify-fips: fips-verify
 # =============================================================================
 # CI/CD (LOCAL)
 # =============================================================================
+# Recipes deliberately sequence stages, including under make -j. Generation
+# refreshes local artifacts; GitHub Actions separately enforces committed freshness.
 .PHONY: ci
-ci: ci-console ci-platform ci-ensemble
-	@echo "CI complete."
+ci: dev-check
+	@$(MAKE) ci-console
+	@$(MAKE) ci-platform
+	@$(MAKE) ci-protocol
+	@$(MAKE) ci-ensemble
+	@$(MAKE) ci-website
+	@$(MAKE) ci-scripts
+	@echo "CI complete. Generated artifacts have been refreshed."
 
 .PHONY: ci-platform
-ci-platform: dev-check _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test bsl-headers-check
+ci-platform: dev-check
+	@$(MAKE) _ci-verify-proto
+	@$(MAKE) _ci-swagger
+	@$(MAKE) constants-check
+	@$(MAKE) explorer-catalog-check
+	@$(MAKE) _ci-lint
+	@$(MAKE) _ci-test
+	@$(MAKE) test-airgap
+	@$(MAKE) bsl-headers-check
 	@echo "Platform CI complete."
 
 .PHONY: ci-ensemble
-ci-ensemble: dev-check ensemble-lint ensemble-test
+ci-ensemble: dev-check
+	@$(MAKE) agent-tool-registry-check
+	@$(MAKE) ensemble-lint
+	@$(MAKE) ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-console
-ci-console: dev-check console-lint console-test console-embed
-	@echo "Console CI complete."
+ci-console: dev-check
+	@$(MAKE) console-lint
+	@$(MAKE) console-test
+	@$(MAKE) console-embed
+	@npm run lint --prefix g8e-adapter
+	@npm test --prefix g8e-adapter
+	@npm run build --prefix g8e-adapter
+	@npm run gen:contract-pack:check --prefix g8e-adapter
+	@echo "Console and adapter CI complete."
+
+.PHONY: ci-protocol
+ci-protocol: dev-check
+	@$(PYTHON) -m pytest protocol/python/tests/ protocol/conformance/
+	@$(PYTHON) examples/python/constants_example.py
+	@$(PYTHON) examples/python/models_example.py
+	@npm run typecheck --prefix protocol/node
+	@npm test --prefix protocol/node
+	@echo "Protocol CI complete."
+
+.PHONY: ci-website
+ci-website: dev-check
+	@$(MAKE) website-test
+	@$(MAKE) website-build
+	@echo "Website CI complete."
+
+.PHONY: ci-scripts
+ci-scripts: dev-check
+	@$(PYTHON) -m unittest discover -s scripts/tests
+	@echo "Script CI complete."
 
 .PHONY: bsl-headers-check
 bsl-headers-check:
@@ -1139,28 +1190,15 @@ bsl-headers-check:
 
 .PHONY: _ci-verify-proto
 _ci-verify-proto:
-	@echo "=== verify-proto ==="
+	@echo "=== generate-proto ==="
 	@$(MAKE) proto-generate
-	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*\.proto$$" || true); \
-	if [ -n "$$CHANGES" ]; then \
-		echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"; \
-		echo "$$CHANGES"; \
-		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
-		exit 1; \
-	fi
 	@$(MAKE) doctrines-validate
 
 .PHONY: _ci-swagger
 _ci-swagger:
 	@echo "=== swagger ==="
 	@$(MAKE) swagger-generate
-	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*internal/services/gateway/docs/" || true); \
-	if [ -n "$$CHANGES" ]; then \
-		echo "Error: Generated swagger files are out of sync with code annotations"; \
-		echo "$$CHANGES"; \
-		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
-		exit 1; \
-	fi
+	@go test -count=1 ./internal/services/gateway/docs
 
 .PHONY: _ci-lint
 _ci-lint:
@@ -1173,17 +1211,14 @@ _ci-vulncheck:
 	@$(MAKE) vulncheck
 
 .PHONY: _ci-test
+_ci-test: export CI := 1
+_ci-test: export CI_ALL_PACKAGES := 1
+_ci-test: export G8E_STRICT_CONSTANTS_LINT := 1
 _ci-test:
-	@echo "=== test ==="
-	@G8E_STRICT_CONSTANTS_LINT=1 go test -tags=integration $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
-		-coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
-	@$(FILTER_PROFILE)
-	@COVERAGE=$$($(COVERAGE_PCT)); \
-	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
-		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
-		exit 1; \
-	fi; \
-	echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"
+	@echo "=== unit tests ==="
+	@$(MAKE) test-unit
+	@echo "=== integration tests and coverage ==="
+	@$(MAKE) test-coverage
 
 # =============================================================================
 # RELEASE

@@ -350,7 +350,7 @@ g8e_check_python_env() {
 
 g8e_check_node_deps() {
     local failed=0 dir
-    for dir in console protocol/node g8e-adapter; do
+    for dir in console protocol/node g8e-adapter website; do
         if [[ -d "$dir/node_modules" ]]; then
             echo "  $dir/node_modules: present"
         else
@@ -526,7 +526,7 @@ EOF
   make dev-check        # confirms every tool 'make ci' needs is installed
 
 Contributor workflow:
-  make ci               # full local CI (platform, ensemble, console)
+  make ci               # full local CI (platform, protocol, ensemble, console, website, scripts)
   make help             # all targets
 EOF
     fi

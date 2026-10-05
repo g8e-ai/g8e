@@ -11,12 +11,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"

@@ -713,4 +713,3 @@ func NormalizeCaseStatus(s string) CaseStatus {
 		return CaseStatus(s)
 	}
 }
-

@@ -405,12 +405,12 @@ type browserProxyContext struct {
 // caller; a query-string user_id is never honored. Field order matches
 // encoding/json map key order.
 type browserInvestigationsQuery struct {
-	CaseID            string              `json:"case_id,omitempty"`
-	Context           browserProxyContext `json:"context"`
-	InvestigationType string              `json:"investigation_type,omitempty"`
-	Limit             int                 `json:"limit"`
-	OrderBy           string              `json:"order_by,omitempty"`
-	OrderDirection    string              `json:"order_direction,omitempty"`
+	CaseID            string                        `json:"case_id,omitempty"`
+	Context           browserProxyContext           `json:"context"`
+	InvestigationType string                        `json:"investigation_type,omitempty"`
+	Limit             int                           `json:"limit"`
+	OrderBy           string                        `json:"order_by,omitempty"`
+	OrderDirection    string                        `json:"order_direction,omitempty"`
 	Priority          string                        `json:"priority,omitempty"`
 	Status            constants.InvestigationStatus `json:"status,omitempty"`
 	UserID            string                        `json:"user_id"`

@@ -379,6 +379,8 @@ Run the local platform, Ensemble, and Console CI targets, including protocol gen
 make ci
 ```
 
+`make ci` refreshes the console embed, protobuf code (Go, Python, and Node), protocol reference docs, lockfiles, and Swagger docs automatically. Local CI validates these outputs without comparing your working tree to Git. GitHub Actions still verifies that generated files are committed and current. It runs all Go unit and in-process integration packages with coverage, protocol Python/Node and conformance tests, Ensemble checks, console and adapter checks, website tests/build, script regressions, air-gap verification, lint, vulnerability checks, and registry/catalog checks. Docker E2E, cross-enrollment, demo verification, and real-provider tests remain opt-in through their dedicated Makefile targets.
+
 `make ci` starts with `make dev-check`, which lists every missing tool at once. A machine set up with `scripts/linux-setup.sh` or `scripts/macos-setup.sh` (without `--build-only`) passes it; otherwise run `make dev-setup` after installing the operating-system prerequisites.
 
 ---

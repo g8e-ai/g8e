@@ -215,6 +215,7 @@ definitions:
     - g8e.v1.app.task.failed
     - g8e.v1.app.task.started
     - g8e.v1.app.task.updated
+    - g8e.v1.inference.model.provenance.preflight.updated
     - g8e.v1.operator.a2a.call.requested
     - g8e.v1.operator.audit.ai.record.requested
     - g8e.v1.operator.audit.ai.recorded
@@ -560,6 +561,7 @@ definitions:
     - EventAppTaskFailed
     - EventAppTaskStarted
     - EventAppTaskUpdated
+    - EventModelProvenancePreflightProgress
     - EventOperatorA2aCallRequested
     - EventOperatorAuditAiRecordRequested
     - EventOperatorAuditAiRecorded
