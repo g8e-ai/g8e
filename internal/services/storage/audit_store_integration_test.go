@@ -18,6 +18,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -25,9 +29,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 )
 
 func newIntegrationAuditStore(t *testing.T) *SQLAuditStore {
@@ -132,7 +133,7 @@ func TestSQLAuditStore_IntegrationLifecycle(t *testing.T) {
 		},
 	}))
 
-	events, err := ass.GetEvents("session-1", 10, 0)
+	events, err := ass.GetEvents(models.AuditScope{OperatorSessionID: "session-1"}, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 
@@ -177,7 +178,7 @@ func TestSQLAuditStore_IntegrationLifecycle(t *testing.T) {
 	require.NotNil(t, correlated)
 	assert.Equal(t, record.TransactionID, correlated.TransactionID)
 
-	receipts, err := ass.ListActionReceipts("session-1", 10, 0)
+	receipts, err := ass.ListActionReceipts(models.AuditScope{OperatorSessionID: "session-1"}, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, receipts, 1)
 

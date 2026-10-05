@@ -964,7 +964,7 @@ func (ass *SQLAuditStore) GetActionReceiptByInvestigationID(
 }
 
 // ListActionReceipts retrieves action receipts with optional filtering and pagination.
-func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
+func (ass *SQLAuditStore) ListActionReceipts(scope models.AuditScope, limit, offset int) ([]*models.ActionReceiptRecord, error) {
 	if ass == nil || ass.db == nil {
 		return nil, constants.ErrAuditStoreDisabled
 	}
@@ -984,11 +984,19 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 	`)
 
 	args := []interface{}{}
-	if operatorSessionID != "" {
-		query.WriteString(" WHERE operator_session_id = ?")
-		args = append(args, operatorSessionID)
+	predicates := []string{}
+	if scope.OperatorSessionID != "" {
+		predicates = append(predicates, "operator_session_id = ?")
+		args = append(args, scope.OperatorSessionID)
 	}
 
+	if scope.ActingAppID != "" {
+		predicates = append(predicates, "acting_app_id = ?")
+		args = append(args, scope.ActingAppID)
+	}
+	if len(predicates) > 0 {
+		query.WriteString(" WHERE " + strings.Join(predicates, " AND "))
+	}
 	query.WriteString(" ORDER BY timestamp DESC LIMIT ? OFFSET ?")
 	args = append(args, limit, offset)
 
@@ -1114,9 +1122,11 @@ func (ass *SQLAuditStore) truncateOutput(output string) (string, bool) {
 	return truncated, true
 }
 
-// GetEvents retrieves events for a session with pagination
+// GetEvents retrieves newest events for the explicit audit scope with pagination.
+// An empty scope includes records without an Operator session. App identity is
+// resolved through the transaction receipt, never inferred from a session.
 // Content fields are decrypted if they were stored encrypted and the vault is unlocked
-func (ass *SQLAuditStore) GetEvents(operatorSessionID string, limit, offset int) ([]*Event, error) {
+func (ass *SQLAuditStore) GetEvents(scope models.AuditScope, limit, offset int) ([]*Event, error) {
 	if ass == nil || ass.db == nil {
 		return nil, constants.ErrAuditStoreDisabled
 	}
@@ -1129,15 +1139,28 @@ func (ass *SQLAuditStore) GetEvents(operatorSessionID string, limit, offset int)
 	SELECT id, operator_session_id, timestamp, type, content_text,
 		command_raw, command_exit_code, command_stdout, command_stderr,
 		execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated,
-		COALESCE(encrypted, 0) as encrypted
+		COALESCE(encrypted, 0) as encrypted, COALESCE(transaction_id, '')
 	FROM events
-	WHERE operator_session_id = ?
-	ORDER BY timestamp DESC
-	LIMIT ? OFFSET ?
 	`
+	args := []interface{}{}
+	predicates := []string{}
+	if scope.OperatorSessionID != "" {
+		predicates = append(predicates, "operator_session_id = ?")
+		args = append(args, scope.OperatorSessionID)
+	}
+	if scope.ActingAppID != "" {
+		predicates = append(predicates, "EXISTS (SELECT 1 FROM receipts WHERE receipts.transaction_id = events.transaction_id AND receipts.acting_app_id = ?)")
+		args = append(args, scope.ActingAppID)
+	}
+	if len(predicates) > 0 {
+		query += " WHERE " + strings.Join(predicates, " AND ")
+	}
+	query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	type eventRow struct {
 		event              Event
+		sessionID          sql.NullString
 		timestampStr       string
 		contentTextBytes   []byte
 		commandStdoutBytes []byte
@@ -1150,11 +1173,11 @@ func (ass *SQLAuditStore) GetEvents(operatorSessionID string, limit, offset int)
 		encryptedFlag      int
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{operatorSessionID, limit, offset}, func(r *sql.Rows) (eventRow, error) {
+	rows, err := sqliteutil.MaterializeRows(ass.db, query, args, func(r *sql.Rows) (eventRow, error) {
 		var row eventRow
 		err := r.Scan(
 			&row.event.ID,
-			&row.event.OperatorSessionID,
+			&row.sessionID,
 			&row.timestampStr,
 			&row.event.Type,
 			&row.contentTextBytes,
@@ -1167,7 +1190,9 @@ func (ass *SQLAuditStore) GetEvents(operatorSessionID string, limit, offset int)
 			&row.stdoutTruncated,
 			&row.stderrTruncated,
 			&row.encryptedFlag,
+			&row.event.TransactionID,
 		)
+		row.event.OperatorSessionID = row.sessionID.String
 		return row, err
 	})
 	if err != nil {
@@ -1401,6 +1426,7 @@ func (ass *SQLAuditStore) ListEvents(sessionID string, limit, offset int) ([]*Ev
 
 	type eventRow struct {
 		event              Event
+		sessionID          sql.NullString
 		timestampStr       string
 		contentTextBytes   []byte
 		commandStdoutBytes []byte
@@ -1416,11 +1442,12 @@ func (ass *SQLAuditStore) ListEvents(sessionID string, limit, offset int) ([]*Ev
 	rows, err := sqliteutil.MaterializeRows(ass.db, query.String(), args, func(r *sql.Rows) (eventRow, error) {
 		var row eventRow
 		err := r.Scan(
-			&row.event.ID, &row.event.OperatorSessionID, &row.timestampStr, &row.event.Type,
+			&row.event.ID, &row.sessionID, &row.timestampStr, &row.event.Type,
 			&row.contentTextBytes, &row.commandRaw, &row.commandExitCode,
 			&row.commandStdoutBytes, &row.commandStderrBytes, &row.event.ExecutionDurationMs,
 			&row.storedLocally, &row.stdoutTruncated, &row.stderrTruncated, &row.encryptedFlag,
 		)
+		row.event.OperatorSessionID = row.sessionID.String
 		return row, err
 	})
 	if err != nil {

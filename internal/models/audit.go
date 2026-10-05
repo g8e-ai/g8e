@@ -9,6 +9,13 @@ package models
 
 import "encoding/json"
 
+// AuditScope selects evidence by ingress identity. Empty fields leave that
+// dimension unrestricted; app records need not have an Operator session.
+type AuditScope struct {
+	OperatorSessionID string
+	ActingAppID       string
+}
+
 // AuditReceiptsResponse is the typed response for GET /api/audit/receipts.
 type AuditReceiptsResponse struct {
 	Success  bool                   `json:"success"`
@@ -18,6 +25,7 @@ type AuditReceiptsResponse struct {
 // AuditEventRow is a single audit event row in the events response.
 type AuditEventRow struct {
 	ID                int64  `json:"id"`
+	TransactionID     string `json:"transaction_id,omitempty"`
 	OperatorSessionID string `json:"operator_session_id"`
 	Timestamp         string `json:"timestamp"`
 	Type              string `json:"type"`
@@ -36,6 +44,7 @@ type AuditEventsResponse struct {
 type AuditReportData struct {
 	GeneratedAt       string            `json:"generated_at"`
 	OperatorSessionID string            `json:"operator_session_id"`
+	ActingAppID       string            `json:"acting_app_id,omitempty"`
 	Events            []json.RawMessage `json:"events"`
 	EventsCount       int               `json:"events_count"`
 	Receipts          []json.RawMessage `json:"receipts"`

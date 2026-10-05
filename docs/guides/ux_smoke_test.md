@@ -157,7 +157,17 @@ OPERATOR_SESSION_ID='<data-worker-session-id>'
 ./g8e audit export --session "$OPERATOR_SESSION_ID" --out ./reports/localhost-smoke/audit-export.json
 ```
 
-`audit receipts` has no `--limit` flag and returns the newest 50 matching records. The export contains the newest 100 matching receipts. Inspect document-update receipts in their executing session as well; the Gateway can execute document storage updates in its own process. These bounded queries supplement the scenarios' per-run receipt correlation.
+The document scenario's app-authenticated envelopes have no Operator binding or Operator session. Query their exact `acting_app_id` explicitly:
+
+```bash
+./g8e audit receipts --app g8ee --json
+./g8e audit events --app g8ee --limit 10 --json
+./g8e audit export --app g8ee --out ./reports/localhost-smoke/document-audit-export.json
+```
+
+Do not query document evidence with the data worker, embedded Operator, or CLI session. The `g8ee` selector matches the document harness's envelope identity exactly; other producers can use a full SPIFFE app identity. Omitting identity selectors queries all Gateway audit records, including sessionless app records; the CLI does not infer a filter from its saved worker binding. Authentication still uses the current CLI credentials.
+
+`audit receipts` has no `--limit` flag and returns the newest 50 matching records. The export contains the newest 100 matching receipts. The document scenario checks that each synchronous receipt matches the canonical persisted receipt queried by transaction ID. Event rows expose `transaction_id` so receipt-stage events can be correlated with those receipts. These bounded queries supplement the scenarios' per-run receipt correlation.
 
 ### 6. Generate the data worker's evidence report
 
@@ -198,6 +208,7 @@ Stop only services owned by this run. A targeted worker stop avoids stopping oth
 - Target discovery rejects a missing, inactive, or ambiguous target: inspect `operator list` and select an active worker explicitly. The harness does not silently substitute a different worker for conflicting constraints.
 - Enrollment is pending: approve the exact workload request and wait for enrollment and worker connection to finish before running scenarios.
 - Approval POST fails: inspect the approval-listener error attached to the scenario failure, along with Ensemble logs. Only 2xx responses increment the approval count; requests honor scenario cancellation.
+- Document audit queries are empty: select `--app g8ee`; these app-authenticated writes have no Operator session. Query `audit receipts --tx-id <transaction-id> --json` for a specific persisted receipt. Rebuild and restart the Gateway if event queries still omit sessionless records.
 - Report lacks `FILE_EDIT` or has skipped verification: check the worker runtime path and completed mutation evidence. Do not call the run complete until the missing evidence is resolved.
 - A worker started with an older binary may have written evidence under the shell's launch directory instead of `<working-dir>/.g8e`. Restart it with a current build and rerun the mutation; do not combine stores from different runtime roots.
 

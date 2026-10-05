@@ -22,6 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
@@ -34,9 +38,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type fakeEnvelopeProcessor struct {
@@ -488,7 +489,7 @@ func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify expiry event was recorded in audit store
-	events, err := auditStore.GetEvents(operatorSessionID, 10, 0)
+	events, err := auditStore.GetEvents(models.AuditScope{OperatorSessionID: operatorSessionID}, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 
@@ -1202,7 +1203,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		g.StoreSuspendedTransaction(context.Background(), txHash, []byte(`{"id":"123"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", operatorSessionID, "cert-fp-abc123")
 
 		// Verify approval requested event was recorded in audit store
-		events, err := auditStore.GetEvents(operatorSessionID, 10, 0)
+		events, err := auditStore.GetEvents(models.AuditScope{OperatorSessionID: operatorSessionID}, 10, 0)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 

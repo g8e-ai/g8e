@@ -10,17 +10,19 @@ package storage
 import (
 	"fmt"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
 )
 
 // auditStoreInterface defines the methods HistoryHandler needs from the audit store.
 // This allows for dependency injection and unit testing with mocks.
 type auditStoreInterface interface {
 	GetOperatorSession(sessionID string) (*OperatorSession, error)
-	GetEvents(sessionID string, limit, offset int) ([]*Event, error)
+	GetEvents(scope models.AuditScope, limit, offset int) ([]*Event, error)
 	GetFileMutations(eventID int64) ([]*FileMutationLog, error)
 }
 
@@ -84,7 +86,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		return hh.fetchHistoryError(fmt.Errorf("failed to get session: %w", err).Error()), nil
 	}
 
-	events, err := hh.auditStore.GetEvents(request.OperatorSessionId, limit, offset)
+	events, err := hh.auditStore.GetEvents(models.AuditScope{OperatorSessionID: request.OperatorSessionId}, limit, offset)
 	if err != nil {
 		return hh.fetchHistoryError(fmt.Errorf("failed to get events: %w", err).Error()), nil
 	}

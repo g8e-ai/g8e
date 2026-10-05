@@ -29,7 +29,7 @@ import (
 // AuditEvidenceReader provides read-only access to audit store evidence
 // for KSI evaluation. SQLAuditStore satisfies this interface.
 type AuditEvidenceReader interface {
-	ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error)
+	ListActionReceipts(scope models.AuditScope, limit, offset int) ([]*models.ActionReceiptRecord, error)
 	ListEvents(sessionID string, limit, offset int) ([]*storage.Event, error)
 	ListFileMutations(limit, offset int) ([]*storage.FileMutationLog, error)
 }
@@ -415,7 +415,7 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
-		receipts, err := deps.Audit.ListActionReceipts("", 1, 0)
+		receipts, err := deps.Audit.ListActionReceipts(models.AuditScope{OperatorSessionID: ""}, 1, 0)
 		if err != nil {
 			return false, nil, err
 		}
@@ -429,7 +429,7 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
-		receipts, err := deps.Audit.ListActionReceipts("", 10, 0)
+		receipts, err := deps.Audit.ListActionReceipts(models.AuditScope{OperatorSessionID: ""}, 10, 0)
 		if err != nil {
 			return false, nil, err
 		}
@@ -646,7 +646,7 @@ func newIndependentStateObservedMethod(reader AuditEvidenceReader) KSIMethod {
 		if reader == nil {
 			return false, nil, nil
 		}
-		receipts, err := reader.ListActionReceipts("", 10, 0)
+		receipts, err := reader.ListActionReceipts(models.AuditScope{OperatorSessionID: ""}, 10, 0)
 		if err != nil {
 			return false, nil, err
 		}

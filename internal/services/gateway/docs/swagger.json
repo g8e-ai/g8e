@@ -276,6 +276,12 @@
                     },
                     {
                         "type": "string",
+                        "description": "Acting app identity filter",
+                        "name": "acting_app_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "description": "Operator session filter for list results",
                         "name": "operator_session_id",
                         "in": "query"
@@ -348,6 +354,12 @@
                         "type": "string",
                         "description": "Inclusive receipt timestamp in RFC3339 format",
                         "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Acting app identity filter",
+                        "name": "acting_app_id",
                         "in": "query"
                     },
                     {

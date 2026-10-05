@@ -3081,6 +3081,10 @@ paths:
         in: query
         name: action_type
         type: string
+      - description: Acting app identity filter
+        in: query
+        name: acting_app_id
+        type: string
       - description: Operator session filter for list results
         in: query
         name: operator_session_id
@@ -3131,6 +3135,10 @@ paths:
       - description: Inclusive receipt timestamp in RFC3339 format
         in: query
         name: since
+        type: string
+      - description: Acting app identity filter
+        in: query
+        name: acting_app_id
         type: string
       - description: Operator session filter
         in: query

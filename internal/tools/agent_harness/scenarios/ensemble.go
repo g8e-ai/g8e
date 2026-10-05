@@ -15,6 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -560,6 +563,17 @@ func submitDocumentUpdateAndCorrelate(ctx context.Context, c *clientpkg.Client, 
 	executionStatus, summary := receiptStatusSummary(receipt.Raw)
 	if executionStatus != int(operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED) {
 		return nil, notBefore, fmt.Errorf("document update receipt not completed: status=%d summary=%s", executionStatus, summary)
+	}
+	returned := &operatorv1.ActionReceipt{}
+	if err := protojson.Unmarshal(body, returned); err != nil {
+		return nil, notBefore, fmt.Errorf("decode synchronous document receipt: %w", err)
+	}
+	persisted, _, err := c.GetActionReceipt(ctx, txHash, persona)
+	if err != nil {
+		return nil, notBefore, fmt.Errorf("query persisted document receipt: %w", err)
+	}
+	if persisted == nil || !proto.Equal(returned, persisted) {
+		return nil, notBefore, fmt.Errorf("persisted document receipt differs from synchronous receipt: tx=%s", txHash)
 	}
 	r.note("correlated DOCUMENT_UPDATE receipt: tx=%s signature_len=%d", short(receipt.TransactionID), len(receipt.Signature))
 

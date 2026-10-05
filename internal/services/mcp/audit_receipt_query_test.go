@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // stubAuditReceiptQuery is a Tier 1 stub implementation of AuditReceiptQuery
@@ -40,8 +41,8 @@ type stubAuditReceiptQuery struct {
 	lastGetID       string
 }
 
-func (s *stubAuditReceiptQuery) ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
-	s.lastListSession = operatorSessionID
+func (s *stubAuditReceiptQuery) ListActionReceipts(scope models.AuditScope, limit, offset int) ([]*models.ActionReceiptRecord, error) {
+	s.lastListSession = scope.OperatorSessionID
 	s.lastListLimit = limit
 	s.lastListOffset = offset
 	if s.listErr != nil {

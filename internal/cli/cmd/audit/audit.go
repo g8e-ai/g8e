@@ -11,21 +11,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
+	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	"github.com/spf13/cobra"
 )
 
 func Cmd() *cobra.Command {
@@ -53,14 +53,17 @@ func auditReceiptsCmd() *cobra.Command {
 
 func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory authcmd.APIClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
+	var actingAppID string
 	var txID string
 
 	cmd := &cobra.Command{
 		Use:   "receipts",
 		Short: "List signed receipts from the running Gateway",
 		Long: `List signed transaction receipts from the running Gateway over mTLS. Use
---session to filter by operator session ID, --tx-id to look up a specific
-transaction hash, and --json to output raw JSON instead of a table.`,
+--session to filter by operator session ID or --app to select an acting app, --tx-id to look up a specific
+transaction hash (returns the canonical receipt as JSON), and --json to output
+list results as raw JSON instead of a table. Without either identity selector, includes
+Gateway-local app records that have no Operator session.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -77,34 +80,18 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
-			// Auto-discover session ID if not provided
-			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(fileSvc, cfg)
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-				}
-				if creds == nil {
-					return constants.ErrNotAuthenticated
-				}
-				operatorSessionID = creds.OperatorSessionID
-			}
-
-			// Build query path
-			path := constants.APIPaths.AuditReceipts
-			query := ""
+			query := url.Values{}
 			if txID != "" {
-				query = "?tx_id=" + txID
-			} else if operatorSessionID != "" {
-				query = "?operator_session_id=" + operatorSessionID
+				query.Set("tx_id", txID)
 			}
-			path += query
+			path := auditQueryPath(constants.APIPaths.AuditReceipts, models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: actingAppID}, query)
 
 			resp, err := client.Get(path)
 			if err != nil {
 				return fmt.Errorf("audit: fetch receipts: %w", err)
 			}
 
-			if output.JSONEnabled(cmd) {
+			if output.JSONEnabled(cmd) || txID != "" {
 				return output.WriteRawJSON(cmd.OutOrStdout(), resp)
 			}
 
@@ -122,8 +109,11 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 			sessionDisplay := operatorSessionID
 			if sessionDisplay == "" {
 				sessionDisplay = "(all)"
+				if actingAppID != "" {
+					sessionDisplay = "app=" + actingAppID
+				}
 			}
-			cmd.Printf("Signed receipts — Operator session: %s\n", sessionDisplay)
+			cmd.Printf("Signed receipts — scope: %s\n", sessionDisplay)
 			cmd.Println(strings.Repeat("=", 110))
 			cmd.Printf("%-16s %-16s %-40s %-8s %s\n", "TX HASH", "ACTION TYPE", "RESOURCE", "STATUS", "AT")
 			cmd.Println(strings.Repeat("-", 110))
@@ -161,9 +151,11 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID (auto-discovers if omitted)")
+	cmd.Flags().StringVar(&actingAppID, "app", "", "Filter by acting app identity (exact envelope acting_app_id)")
+	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Filter by operator session ID (shows all if omitted)")
 	cmd.Flags().StringVar(&txID, "tx-id", "", "Get a single receipt by transaction ID")
 
+	cmd.MarkFlagsMutuallyExclusive("tx-id", "session", "app")
 	return cmd
 }
 
@@ -173,13 +165,14 @@ func auditExportCmd() *cobra.Command {
 
 func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory authcmd.APIClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
+	var actingAppID string
 	var outPath string
 
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export the full receipts bundle for archival",
 		Long: `Export the full signed receipts bundle from the running Gateway over mTLS.
-Use --session to filter by operator session ID and --out to specify the output
+Use --session to filter by operator session ID or --app to filter by acting app identity and --out to specify the output
 file path (defaults to stdout).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
@@ -197,23 +190,8 @@ file path (defaults to stdout).`,
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
-			// Auto-discover session ID if not provided
-			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(fileSvc, cfg)
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-				}
-				if creds == nil {
-					return constants.ErrNotAuthenticated
-				}
-				operatorSessionID = creds.OperatorSessionID
-			}
-
-			// Build query path
-			path := constants.APIPaths.AuditReceiptsExport
-			if operatorSessionID != "" {
-				path += "?operator_session_id=" + operatorSessionID
-			}
+			query := url.Values{}
+			path := auditQueryPath(constants.APIPaths.AuditReceiptsExport, models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: actingAppID}, query)
 
 			resp, err := client.Get(path)
 			if err != nil {
@@ -233,9 +211,11 @@ file path (defaults to stdout).`,
 		},
 	}
 
+	cmd.Flags().StringVar(&actingAppID, "app", "", "Filter by acting app identity (exact envelope acting_app_id)")
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID")
 	cmd.Flags().StringVar(&outPath, "out", constants.ReceiptsExportFilename, "Output file path")
 
+	cmd.MarkFlagsMutuallyExclusive("session", "app")
 	return cmd
 }
 
@@ -245,13 +225,14 @@ func auditReportCmd() *cobra.Command {
 
 func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory authcmd.APIClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
+	var actingAppID string
 	var outDir string
 
 	cmd := &cobra.Command{
 		Use:   "report",
 		Short: "Generate a compliance report (JSON + Markdown)",
 		Long: `Generate a compliance report from the running Gateway's audit data over mTLS.
-Use --session to filter by operator session ID and --out to specify the output
+Use --session to filter by operator session ID or --app to filter by acting app identity and --out to specify the output
 directory for the report file.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
@@ -269,23 +250,8 @@ directory for the report file.`,
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
-			// Auto-discover session ID if not provided
-			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(fileSvc, cfg)
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-				}
-				if creds == nil {
-					return constants.ErrNotAuthenticated
-				}
-				operatorSessionID = creds.OperatorSessionID
-			}
-
-			// Fetch comprehensive report from Gateway
-			path := constants.APIPaths.AuditReport
-			if operatorSessionID != "" {
-				path += "?operator_session_id=" + operatorSessionID
-			}
+			query := url.Values{}
+			path := auditQueryPath(constants.APIPaths.AuditReport, models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: actingAppID}, query)
 
 			resp, err := client.Get(path)
 			if err != nil {
@@ -317,9 +283,11 @@ directory for the report file.`,
 		},
 	}
 
+	cmd.Flags().StringVar(&actingAppID, "app", "", "Filter by acting app identity (exact envelope acting_app_id)")
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID")
 	cmd.Flags().StringVar(&outDir, "out", constants.ReportsDirname, "Output directory")
 
+	cmd.MarkFlagsMutuallyExclusive("session", "app")
 	return cmd
 }
 
@@ -329,14 +297,17 @@ func auditEventsCmd() *cobra.Command {
 
 func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory authcmd.APIClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
+	var actingAppID string
 	var limit int
 
 	cmd := &cobra.Command{
 		Use:   "events",
 		Short: "Query raw audit events from the Gateway audit store",
 		Long: `Query raw audit events from the running Gateway over mTLS. Use --session to
-filter by operator session ID, --limit to control the number of results, and
---json to output raw JSON instead of a table.`,
+filter by operator session ID or --app to select an acting app, --limit to control
+the number of results, and
+--json to output raw JSON instead of a table. Without either identity selector, includes
+Gateway-local app records that have no Operator session.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -358,25 +329,9 @@ filter by operator session ID, --limit to control the number of results, and
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
-			// Auto-discover session ID if not provided
-			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(fileSvc, cfg)
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-				}
-				if creds == nil {
-					return constants.ErrNotAuthenticated
-				}
-				operatorSessionID = creds.OperatorSessionID
-			}
-
-			// Build query path
-			path := constants.APIPaths.AuditEvents
-			query := "?limit=" + fmt.Sprintf("%d", limit)
-			if operatorSessionID != "" {
-				query += "&operator_session_id=" + operatorSessionID
-			}
-			path += query
+			query := url.Values{}
+			query.Set("limit", fmt.Sprint(limit))
+			path := auditQueryPath(constants.APIPaths.AuditEvents, models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: actingAppID}, query)
 
 			resp, err := client.Get(path)
 			if err != nil {
@@ -400,8 +355,11 @@ filter by operator session ID, --limit to control the number of results, and
 			sessionDisplay := operatorSessionID
 			if sessionDisplay == "" {
 				sessionDisplay = "(all)"
+				if actingAppID != "" {
+					sessionDisplay = "app=" + actingAppID
+				}
 			}
-			cmd.Printf("Audit events for session %s:\n", sessionDisplay)
+			cmd.Printf("Audit events for scope %s:\n", sessionDisplay)
 			cmd.Println(strings.Repeat("=", 110))
 			cmd.Printf("%-8s %-20s %-30s %-10s %s\n", "ID", "TIMESTAMP", "TYPE", "EXIT CODE", "COMMAND")
 			cmd.Println(strings.Repeat("-", 110))
@@ -433,9 +391,11 @@ filter by operator session ID, --limit to control the number of results, and
 		},
 	}
 
+	cmd.Flags().StringVar(&actingAppID, "app", "", "Filter by acting app identity (exact envelope acting_app_id)")
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Filter by operator session ID (shows all if omitted)")
 	cmd.Flags().IntVar(&limit, "limit", 100, "Max rows")
 
+	cmd.MarkFlagsMutuallyExclusive("session", "app")
 	return cmd
 }
 
@@ -445,12 +405,13 @@ func auditSummaryCmd() *cobra.Command {
 
 func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory authcmd.APIClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
+	var actingAppID string
 
 	cmd := &cobra.Command{
 		Use:   "summary",
 		Short: "Aggregate audit events and receipts by type",
 		Long: `Show an aggregated summary of audit events grouped by type from the running
-Gateway over mTLS. Use --session to filter by operator session ID.`,
+Gateway over mTLS. Use --session to filter by operator session ID or --app to filter by acting app identity.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -467,23 +428,8 @@ Gateway over mTLS. Use --session to filter by operator session ID.`,
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
-			// Auto-discover session ID if not provided
-			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(fileSvc, cfg)
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-				}
-				if creds == nil {
-					return constants.ErrNotAuthenticated
-				}
-				operatorSessionID = creds.OperatorSessionID
-			}
-
-			// Build query path
-			path := constants.APIPaths.AuditSummary
-			if operatorSessionID != "" {
-				path += "?operator_session_id=" + operatorSessionID
-			}
+			query := url.Values{}
+			path := auditQueryPath(constants.APIPaths.AuditSummary, models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: actingAppID}, query)
 
 			resp, err := client.Get(path)
 			if err != nil {
@@ -523,8 +469,10 @@ Gateway over mTLS. Use --session to filter by operator session ID.`,
 		},
 	}
 
+	cmd.Flags().StringVar(&actingAppID, "app", "", "Filter by acting app identity (exact envelope acting_app_id)")
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Filter by Operator session ID")
 
+	cmd.MarkFlagsMutuallyExclusive("session", "app")
 	return cmd
 }
 
@@ -588,4 +536,18 @@ Use --from-seq to verify from a specific sequence number (defaults to the latest
 	cmd.Flags().Int64Var(&fromSeq, "from-seq", 0, "Verify from this sequence number (0 = latest checkpoint)")
 
 	return cmd
+}
+
+// auditQueryPath encodes explicit selectors without deriving query scope from credentials.
+func auditQueryPath(path string, scope models.AuditScope, query url.Values) string {
+	if scope.OperatorSessionID != "" {
+		query.Set("operator_session_id", scope.OperatorSessionID)
+	}
+	if scope.ActingAppID != "" {
+		query.Set("acting_app_id", scope.ActingAppID)
+	}
+	if len(query) == 0 {
+		return path
+	}
+	return path + "?" + query.Encode()
 }
