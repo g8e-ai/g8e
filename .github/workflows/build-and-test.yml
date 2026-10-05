@@ -381,6 +381,7 @@ jobs:
           cache-dependency-path: |
             console/package-lock.json
             g8e-adapter/package-lock.json
+            evaluation-explorer/package-lock.json
 
       - name: Install dependencies
         working-directory: console
@@ -400,6 +401,16 @@ jobs:
           diff -r console/dist internal/services/gateway/console/static || {
             echo "ERROR: The embedded console (internal/services/gateway/console/static) is stale."
             echo "Run 'make ci' (or 'make console-embed') locally and commit the refreshed embed."
+            exit 1
+          }
+
+      - name: Verify the embedded explorer is current
+        run: |
+          npm ci --prefix evaluation-explorer
+          npm run build --prefix evaluation-explorer
+          diff -r evaluation-explorer/dist internal/services/gateway/explorer/static || {
+            echo "ERROR: The embedded explorer (internal/services/gateway/explorer/static) is stale."
+            echo "Run 'make ci' (or 'make explorer-embed') locally and commit the refreshed embed."
             exit 1
           }
 
