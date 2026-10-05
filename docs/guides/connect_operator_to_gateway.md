@@ -228,18 +228,37 @@ ssh user@192.0.2.10 /opt/g8e operator start --endpoint <gateway-host>
 
 `g8e operator deploy --hosts user@192.0.2.10 --remote-dir /opt/g8e-operator --background --endpoint <gateway-host>` performs the same copy and start in one step (see [Build Operator](build_operator.md#deployment-commands)). Approve the resulting enrollment request as described above.
 
-`operator deploy` uploads the binary as `<remote-dir>/g8e.new` and renames it over `<remote-dir>/g8e`, so redeploying into a directory whose Operator is still running does not fail with "text file busy". With `--background` it also stops any Operator previously started from that directory before starting the new one. Each distinct `--remote-dir` is a distinct Operator identity.
+`operator deploy` installs one binary per host in `<dest-dir>/.deploy-bin/g8e`, then hard-links it into each Operator directory. Replacing a binary uses an atomic rename, so running workers remain safe. Each directory has independent runtime state, credentials, logs, and process identity.
 
 ### Connect Many Operators
 
-The Gateway allows at most four live (non-terminal, unexpired) Operator enrollment requests at once, platform-wide, so all four native platform roles can await owner approval together. Other component kinds allow three live requests each. Further `operator start` processes are rejected with HTTP 429. `operator deploy` handles that pacing itself:
+Deploy up to 5000 Operators per host. Use `--local` to run on this system without SSH, or `--hosts host1,host2` for remote hosts. `--dest-dir` selects the destination; `--remote-dir` remains an alias.
 
 ```bash
-./g8e operator deploy --hosts localhost --endpoint <gateway-host> \
-  --remote-dir ~/fleet --count 10 --background --approve
+./g8e operator deploy --local --endpoint localhost \
+  --dest-dir .local.local/tmp/operator-fleet --count 10 \
+  --role data --background --approve
+
+# Add another 100 without replacing the first 10.
+./g8e operator deploy --local --endpoint localhost \
+  --dest-dir .local.local/tmp/operator-fleet --start-index 11 --count 100 \
+  --role data --background --approve
+
+# A separate provenance batch; role flags are forwarded to operator start.
+./g8e operator deploy --hosts storage-host --endpoint gateway-host \
+  --dest-dir /opt/provenance --count 20 --role provenance \
+  --model-storage-root /srv/models --background --approve
 ```
 
-`--count` puts each Operator in its own `<remote-dir>/op-NNNNN` directory. `--approve` starts them one at a time, reads each worker's enrollment request ID from that directory's `start.log`, approves exactly that request as the owner, restarts a worker the Gateway rejected (up to three attempts), and then waits until every approved Operator is active. It prints each Operator's session ID; pass them to `operator bind` and `operator run` as described in [Bind the CLI to Operators and Run Commands](#bind-the-cli-to-operators-and-run-commands). Redeploying over a directory whose Operator is already enrolled replaces the running worker and needs no new approval. To tear a fleet down, `operator stop <operator-session-id>` each Operator, `auth enroll revoke <request-id>` each printed request ID, and remove the directories.
+`--count N` creates `op-00001` through `op-NNNNN`. A single Operator uses the destination itself, unless `--start-index` is explicitly supplied. The selected numbered range must fit within 1..5000. Repeating the same range replaces only those workers, retaining their enrollment credentials. Use different destinations or non-overlapping ranges for different roles.
+
+`--role` accepts `data` (default), `provenance`, `inference`, or `observer`. The corresponding `operator start` enable flags and settings are also supported, including `--inference-ollama-endpoint`, `--inference-keep-alive`, `--model-storage-root`, and the provenance/observer ID flags. Conflicting roles are rejected. Provenance and observer IDs default to stable values unique to the deployment host and directory. Explicit flag values may include `{host}`, `{name}` (directory basename), and `{dir}` (absolute working directory), for example `--provenance-operator-id '{host}-{name}'`.
+
+`--parallel` controls concurrent deployments (default 4, range 1..4). With `--approve`, each worker reads its own request ID from `start.log`, approves that exact request as the authenticated owner, and waits for enrollment completion before starting another. This respects the Gateway's four-live-request limit. Transient enrollment failures receive up to three attempts. Other deployments share that Gateway quota; use fewer parallel workers when sharing capacity. Without `--approve`, deployment only launches workers; owner approval and the Gateway's pending-request limit still apply.
+
+After approval, deployment waits for each new process to establish its command subscription and verifies that every session is active and prints the session IDs for [binding and running commands](#bind-the-cli-to-operators-and-run-commands). Any failed deployment or failed online verification produces a nonzero exit. `--approve` requires info or debug logging to observe startup. A completed enrollment is retained on retry. `start.log` and `operator.pid` are stored in each directory. Stop workers with `operator stop <operator-session-id>` and revoke enrollment with `auth enroll revoke <request-id>` when retiring them.
+
+The 5000 limit is a deployment range, not a promise that every host can sustain 5000 processes. Size host memory, process/file limits, and Gateway capacity for the intended fleet.
 
 ---
 

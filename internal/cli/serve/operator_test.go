@@ -685,3 +685,11 @@ func TestClassifyConfigLoadError_NilError_ReturnsConfigError(t *testing.T) {
 	assert.Equal(t, constants.ExitConfigError, exitCode)
 	assert.Empty(t, actionable)
 }
+
+func TestOperatorInstanceIDSeparatesSameHostAndRole(t *testing.T) {
+	first := operatorInstanceID("host", constants.OperatorRoleData, "/fleet/op-00001")
+	assert.Equal(t, first, operatorInstanceID("host", constants.OperatorRoleData, "/fleet/./op-00001"))
+	assert.NotEqual(t, first, operatorInstanceID("host", constants.OperatorRoleData, "/fleet/op-00002"))
+	assert.NotEqual(t, first, operatorInstanceID("host", constants.OperatorRoleInference, "/fleet/op-00001"))
+	assert.LessOrEqual(t, len(operatorInstanceID(strings.Repeat("h", 253), constants.OperatorRoleProvenance, "/fleet")), constants.PlatformEnrollmentMaxInstanceIDBytes)
+}

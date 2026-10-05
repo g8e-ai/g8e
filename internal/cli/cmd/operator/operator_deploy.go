@@ -8,14 +8,18 @@
 package operatorcmd
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -36,12 +40,12 @@ const (
 
 	// operatorDeployEnrollAttempts bounds restarts of one Operator whose
 	// enrollment request was rejected or never appeared. The Gateway allows
-	// only constants.PlatformEnrollmentMaxLiveRequestsPerComponent live
+	// only constants.PlatformEnrollmentMaxLiveOperatorRequests live
 	// Operator requests platform-wide, so a busy Gateway answers 429 and the
 	// worker exits; a later attempt succeeds once earlier requests complete.
 	operatorDeployEnrollAttempts = 3
 
-	operatorDeployPollInterval      = 500 * time.Millisecond
+	operatorDeployPollInterval      = 100 * time.Millisecond
 	operatorDeployEnrollTimeout     = 30 * time.Second
 	operatorDeployOnlineBaseTimeout = time.Minute
 	operatorDeployOnlinePerOperator = time.Second
@@ -71,6 +75,8 @@ type deploySSH struct {
 	port         int
 	identityFile string
 	stderr       io.Writer
+	local        bool
+	binaryDir    string
 }
 
 // deployedOperator is one Operator working directory that deploy set up.
@@ -84,8 +90,10 @@ type deployedOperator struct {
 type operatorDeployOptions struct {
 	endpoint   string
 	background bool
+	startArgs  []string
 	// client is set only with --approve; it approves each enrollment request.
-	client authcmd.APIClient
+	client     authcmd.APIClient
+	approvalMu *sync.Mutex
 }
 
 func operatorDeployCmd() *cobra.Command {
@@ -104,25 +112,29 @@ func operatorDeployCmdWithConfig(
 	var remoteDir string
 	var count int
 	var approve bool
+	var local bool
+	var startIndex int
+	var role string
+	var parallel int
+	start := operatorStartCmd()
 
 	cmd := &cobra.Command{
 		Use:   "deploy",
-		Short: "Deploy the operator binary to remote hosts and start it",
-		Long: `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll user' first.
+		Short: "Deploy the operator binary locally or over SSH into isolated directories",
+		Long: `Deploy up to 5000 Operators locally (--local) or to each SSH host (--hosts).
+Use --dest-dir for the binary and isolated runtime state; --remote-dir remains an alias.
+With --count N, directories are op-00001 through op-N. --start-index adds later batches
+without replacing earlier Operators. An explicit --start-index always uses numbered directories.
+The binary is installed once per host and hard-linked into each directory.
+--parallel bounds concurrent deployments (default 4, maximum 4).
 
-The binary is installed at <remote-dir>/g8e (uploaded as g8e.new, then renamed into place, so redeploying over a running Operator is safe). With --background the worker is started as
-'g8e operator start --endpoint <endpoint> --working-dir <remote-dir>' from inside <remote-dir>
-(the .g8e/ runtime tree is rooted at the process's current directory), so its runtime state
-lives under --remote-dir. Distinct --remote-dir values give distinct Operator identities
-on the same host. --endpoint is required with --background. Starting replaces any Operator
-previously started from the same directory.
-
---count N deploys N Operators per host into <remote-dir>/op-00001 .. op-N.
-
---approve approves each Operator's enrollment request as the owner, one Operator at a time
-(the Gateway caps live Operator enrollment requests), then waits until every approved
-Operator is active and prints its operator session ID for 'operator bind' and 'operator run'.
-It requires --background.`,
+--role selects data (default), provenance, inference, or observer. Role-specific settings
+use the same flags as operator start. Use separate batches for different roles.
+Role IDs default to unique, stable values per host/directory. Flag values support
+{name} (directory basename), {dir} (absolute directory), and {host} substitutions.
+--background starts workers; --endpoint is required. --approve approves enrollment as
+the authenticated owner and verifies all deployed sessions are active. Enrollment is
+paced to respect Gateway limits. Repeating a deployment replaces only its own workers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -139,14 +151,26 @@ It requires --background.`,
 				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
 			}
 
+			if local && hosts != "" {
+				return fmt.Errorf("%w: --local and --hosts are mutually exclusive", constants.ErrMissingRequiredField)
+			}
+			if local && !cmd.Flags().Changed("dest-dir") && !cmd.Flags().Changed("remote-dir") {
+				return fmt.Errorf("%w: --local requires --dest-dir", constants.ErrMissingRequiredField)
+			}
+			if local {
+				hosts = "local"
+			}
 			if hosts == "" {
 				return fmt.Errorf("%w: --hosts flag is required (comma-separated list of hosts)", constants.ErrMissingRequiredField)
 			}
-			if !operatorDeployRemoteDirPattern.MatchString(remoteDir) {
-				return fmt.Errorf("%w: --remote-dir %q must match %s", constants.ErrPathValidation, remoteDir, operatorDeployRemoteDirPattern)
+			if remoteDir == "" || strings.ContainsAny(remoteDir, "\x00\r\n") || (!local && (!operatorDeployRemoteDirPattern.MatchString(remoteDir) || strings.HasPrefix(remoteDir, "-"))) {
+				return fmt.Errorf("%w: --dest-dir %q must match %s", constants.ErrPathValidation, remoteDir, operatorDeployRemoteDirPattern)
 			}
-			if count < 1 {
-				return fmt.Errorf("%w: --count must be at least 1", constants.ErrMissingRequiredField)
+			if parallel < 1 || parallel > constants.PlatformEnrollmentMaxLiveOperatorRequests {
+				return fmt.Errorf("%w: --parallel must be between 1 and %d", constants.ErrMissingRequiredField, constants.PlatformEnrollmentMaxLiveOperatorRequests)
+			}
+			if count < 1 || count > 5000 || startIndex < 1 || startIndex > 5000 || count > 5001-startIndex {
+				return fmt.Errorf("%w: --count and --start-index must select operators within 1..5000", constants.ErrMissingRequiredField)
 			}
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			endpoint = strings.TrimSpace(endpoint)
@@ -159,8 +183,16 @@ It requires --background.`,
 			if approve && !background {
 				return fmt.Errorf("%w: --approve requires --background", constants.ErrMissingRequiredField)
 			}
+			logLevel, _ := cmd.Flags().GetString("log")
+			if approve && logLevel != "info" && logLevel != "debug" {
+				return fmt.Errorf("%w: --approve requires --log info or debug to observe worker readiness", constants.ErrMissingRequiredField)
+			}
 
-			opts := operatorDeployOptions{endpoint: endpoint, background: background}
+			startArgs, err := operatorDeployStartArgs(cmd, role)
+			if err != nil {
+				return err
+			}
+			opts := operatorDeployOptions{endpoint: endpoint, background: background, startArgs: startArgs, approvalMu: &sync.Mutex{}}
 			if approve {
 				opts.client, err = clientFactory(fileSvc, cfg)
 				if err != nil {
@@ -178,21 +210,49 @@ It requires --background.`,
 
 			hostList := strings.Split(hosts, ",")
 			dirs := operatorDeployDirs(remoteDir, count)
+			if cmd.Flags().Changed("start-index") || startIndex != 1 {
+				dirs = make([]string, count)
+				for i := range dirs {
+					dirs[i] = fmt.Sprintf("%s/op-%05d", strings.TrimSuffix(remoteDir, "/"), startIndex+i)
+				}
+			}
+			seen := make(map[string]bool)
+			for i, host := range hostList {
+				host = strings.TrimSpace(host)
+				if host == "" || strings.HasPrefix(host, "-") || strings.ContainsAny(host, " \t\r\n") || seen[host] {
+					return fmt.Errorf("%w: invalid or duplicate host %q", constants.ErrMissingRequiredField, host)
+				}
+				seen[host] = true
+				hostList[i] = host
+			}
 			cmd.Printf("Deploying %d operator(s) to %d host(s): %s\n", len(dirs), len(hostList), hosts)
 
 			ctx := cmd.Context()
 			var deployed []deployedOperator
 			var failed []string
 			for _, host := range hostList {
-				s := deploySSH{host: strings.TrimSpace(host), port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr()}
-				for _, dir := range dirs {
-					op, err := deployOperator(ctx, cmd, s, sourceBinary, dir, opts)
-					if err != nil {
-						cmd.Printf("Failed to deploy %s:%s: %v\n", s.host, dir, err)
-						failed = append(failed, s.host+":"+dir)
+				s := deploySSH{host: strings.TrimSpace(host), port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr(), local: local}
+				// Upload once per host. Per-directory links share executable pages and disk space.
+				cache, err := s.prepareDir(ctx, strings.TrimSuffix(remoteDir, "/")+"/.deploy-bin")
+				if err != nil {
+					return err
+				}
+				if err := s.installBinary(ctx, sourceBinary, cache); err != nil {
+					return err
+				}
+				s.binaryDir = cache
+				results := deployOperatorBatch(ctx, s, sourceBinary, dirs, opts, parallel)
+				for result := range results {
+					cmd.Print(result.output)
+					if result.err != nil {
+						cmd.Printf("Failed to deploy %s:%s: %v\n", s.host, result.dir, result.err)
+						failed = append(failed, s.host+":"+result.dir)
 						continue
 					}
-					deployed = append(deployed, op)
+					deployed = append(deployed, result.op)
+				}
+				if err := ctx.Err(); err != nil {
+					return err
 				}
 			}
 
@@ -214,12 +274,21 @@ It requires --background.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&hosts, "hosts", "", "Comma-separated list of hosts to deploy to (required)")
+	cmd.Flags().StringVar(&hosts, "hosts", "", "Comma-separated SSH hosts (required unless --local)")
+	cmd.Flags().IntVar(&parallel, "parallel", 4, "Maximum concurrent deployments/enrollments (1..4)")
 	cmd.Flags().IntVarP(&port, "port", "P", 0, "SSH port to connect to on remote hosts")
 	cmd.Flags().StringVarP(&identityFile, "identity", "i", "", "SSH identity file (private key)")
 	cmd.Flags().BoolVar(&background, "background", false, "Start operator in background after deployment (requires --endpoint)")
-	cmd.Flags().StringVar(&remoteDir, "remote-dir", "~", "Remote directory for the binary and the Operator working directory")
-	cmd.Flags().IntVar(&count, "count", 1, "Operators to deploy per host, each in its own directory under --remote-dir when greater than 1")
+	cmd.Flags().StringVar(&remoteDir, "dest-dir", "~", "Destination directory for binary and isolated Operator runtimes")
+	cmd.Flags().StringVar(&remoteDir, "remote-dir", "~", "Alias for --dest-dir")
+	cmd.MarkFlagsMutuallyExclusive("dest-dir", "remote-dir")
+	cmd.Flags().BoolVar(&local, "local", false, "Deploy on this system without SSH (requires --dest-dir)")
+	cmd.Flags().IntVar(&startIndex, "start-index", 1, "First numbered operator directory (1..5000)")
+	cmd.Flags().StringVar(&role, "role", "", "Operator role: data, provenance, inference, observer (default data)")
+	for _, name := range operatorDeployForwardFlags {
+		cmd.Flags().AddFlag(start.Flags().Lookup(name))
+	}
+	cmd.Flags().IntVar(&count, "count", 1, "Operators to deploy per host, each in its own directory under --dest-dir when greater than 1")
 	cmd.Flags().BoolVar(&approve, "approve", false, "Approve each Operator's enrollment request as the owner and wait until it is online (requires --background)")
 
 	return cmd
@@ -248,13 +317,14 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 	if err := s.installBinary(ctx, sourceBinary, absDir); err != nil {
 		return deployedOperator{}, err
 	}
+	opts.startArgs = operatorDeployArgsForDir(opts.startArgs, s.host, absDir)
 	op := deployedOperator{ssh: s, Dir: absDir}
 	if !opts.background {
 		cmd.Printf("Operator deployed to %s:%s (use --background to auto-start)\n", s.host, absDir)
 		return op, nil
 	}
 	if opts.client == nil {
-		if err := s.startOperator(ctx, absDir, opts.endpoint); err != nil {
+		if err := s.startOperator(ctx, absDir, opts.endpoint, opts.startArgs...); err != nil {
 			return deployedOperator{}, err
 		}
 		cmd.Printf("Started operator in background on %s (working dir %s)\n", s.host, absDir)
@@ -262,6 +332,13 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 	}
 	op.RequestID, err = enrollOperator(ctx, s, opts, absDir)
 	if err != nil {
+		return deployedOperator{}, err
+	}
+	op.SessionID, err = s.awaitSessionID(ctx, absDir)
+	if err != nil {
+		return deployedOperator{}, err
+	}
+	if err := s.awaitReady(ctx, absDir); err != nil {
 		return deployedOperator{}, err
 	}
 	if op.RequestID == "" {
@@ -295,19 +372,29 @@ func enrollOperator(ctx context.Context, s deploySSH, opts operatorDeployOptions
 }
 
 func startAndApprove(ctx context.Context, s deploySSH, opts operatorDeployOptions, dir string) (string, error) {
-	if err := s.startOperator(ctx, dir, opts.endpoint); err != nil {
+	if err := s.startOperator(ctx, dir, opts.endpoint, opts.startArgs...); err != nil {
 		return "", err
 	}
 	requestID, err := s.awaitRequestID(ctx, dir)
 	if err != nil || requestID == "" {
 		return "", err
 	}
+	if opts.approvalMu != nil {
+		opts.approvalMu.Lock()
+	}
 	_, err = authcmd.PostPlatformEnrollmentDecision(opts.client, models.PlatformEnrollmentDecisionRequest{
 		RequestID: requestID,
 		Decision:  models.PlatformEnrollmentDecisionApprove,
 	})
+	if opts.approvalMu != nil {
+		opts.approvalMu.Unlock()
+	}
 	if err != nil {
 		return "", fmt.Errorf("approve %s: %w", requestID, err)
+	}
+	// Wait for completion before opening another enrollment slot.
+	if _, err := s.awaitSessionID(ctx, dir); err != nil {
+		return "", err
 	}
 	return requestID, nil
 }
@@ -319,6 +406,9 @@ func awaitOperatorsOnline(ctx context.Context, client authcmd.APIClient, userID 
 	defer cancel()
 
 	for i := range ops {
+		if ops[i].SessionID != "" {
+			continue
+		}
 		sessionID, err := ops[i].ssh.awaitSessionID(ctx, ops[i].Dir)
 		if err != nil {
 			return fmt.Errorf("%s:%s: %w", ops[i].ssh.host, ops[i].Dir, err)
@@ -378,6 +468,9 @@ func (s deploySSH) sshOptions(portFlag string) []string {
 
 func (s deploySSH) run(ctx context.Context, remoteCommand string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "ssh", append(s.sshOptions("-p"), s.host, remoteCommand)...)
+	if s.local {
+		cmd = exec.CommandContext(ctx, "sh", "-c", remoteCommand)
+	}
 	cmd.Stderr = s.stderr
 	out, err := cmd.Output()
 	if err != nil {
@@ -389,6 +482,27 @@ func (s deploySSH) run(ctx context.Context, remoteCommand string) ([]byte, error
 // prepareDir creates dir on the host and returns its absolute path, which is
 // the value the worker's --working-dir carries.
 func (s deploySSH) prepareDir(ctx context.Context, dir string) (string, error) {
+	if s.local {
+		if dir == "~" || strings.HasPrefix(dir, "~/") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "", err
+			}
+			if dir == "~" {
+				dir = home
+			} else {
+				dir = filepath.Join(home, strings.TrimPrefix(dir, "~/"))
+			}
+		}
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return "", err
+		}
+		dir, err := filepath.Abs(dir)
+		if err != nil {
+			return "", err
+		}
+		return filepath.EvalSymlinks(dir)
+	}
 	out, err := s.run(ctx, fmt.Sprintf("mkdir -p %[1]s && cd %[1]s && pwd", dir))
 	if err != nil {
 		return "", fmt.Errorf("create %s: %w", dir, err)
@@ -404,7 +518,45 @@ func (s deploySSH) prepareDir(ctx context.Context, dir string) (string, error) {
 // open a running (or hard-linked, shared) g8e for writing (ETXTBSY), but a
 // rename replaces the directory entry and leaves the old inode alone.
 func (s deploySSH) installBinary(ctx context.Context, sourceBinary, dir string) error {
+	if s.binaryDir != "" {
+		if s.local {
+			tmp, err := os.CreateTemp(dir, ".g8e-link-*")
+			if err != nil {
+				return err
+			}
+			staging := tmp.Name()
+			if err := tmp.Close(); err != nil {
+				return err
+			}
+			defer os.Remove(staging)
+			if err := os.Remove(staging); err != nil {
+				return err
+			}
+			if err := os.Link(filepath.Join(s.binaryDir, "g8e"), staging); err != nil {
+				return err
+			}
+			return os.Rename(staging, filepath.Join(dir, "g8e"))
+		}
+		_, err := s.run(ctx, fmt.Sprintf("ln -f %s/g8e %s/g8e.new && mv -f %s/g8e.new %s/g8e", s.binaryDir, dir, dir, dir))
+		return err
+	}
 	staging := dir + "/g8e.new"
+	if s.local {
+		// Copy once, then hard-link into each runtime directory. The source may be rebuilt.
+		tmp, err := os.CreateTemp(dir, ".g8e-copy-*")
+		if err != nil {
+			return err
+		}
+		staging = tmp.Name()
+		if err := tmp.Close(); err != nil {
+			return err
+		}
+		defer os.Remove(staging)
+		if err := CopyFile(sourceBinary, staging); err != nil {
+			return err
+		}
+		return os.Rename(staging, filepath.Join(dir, "g8e"))
+	}
 	scp := exec.CommandContext(ctx, "scp", append(s.sshOptions("-P"), sourceBinary, fmt.Sprintf("%s:%s", s.host, staging))...)
 	scp.Stderr = s.stderr
 	if err := scp.Run(); err != nil {
@@ -420,11 +572,47 @@ func (s deploySSH) installBinary(ctx context.Context, sourceBinary, dir string) 
 // log so stale enrollment output cannot be read back, and starts a new worker.
 // The stop pattern is anchored to the worker's own command line so it cannot
 // match the shell running this command.
-func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string) error {
-	running := fmt.Sprintf(`'^\./g8e operator start .*--working-dir %s$'`, dir)
+func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, startArgs ...string) error {
+	quotedArgs := make([]string, len(startArgs))
+	for i, arg := range startArgs {
+		quotedArgs[i] = operatorDeployShellQuote(arg)
+	}
+	running := operatorDeployShellQuote(`^\./g8e operator start .*--working-dir ` + regexp.QuoteMeta(dir) + `$`)
+	stop := fmt.Sprintf(`cd %[1]s && for i in $(seq 1 50); do pkill -f %[2]s || break; sleep 0.1; done && ! pgrep -f %[2]s >/dev/null`, operatorDeployShellQuote(dir), running)
+	if _, err := s.run(ctx, stop); err != nil {
+		return fmt.Errorf("stop previous operator: %w", err)
+	}
+	if s.local {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		log, err := os.OpenFile(filepath.Join(dir, operatorDeployStartLog), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+		if err != nil {
+			return err
+		}
+		defer log.Close()
+		args := append([]string{"operator", "start", "--endpoint", endpoint}, startArgs...)
+		args = append(args, "--working-dir", dir)
+		worker := exec.Command(filepath.Join(dir, "g8e"), args...)
+		// Preserve the exact argv prefix used by directory-scoped replacement.
+		worker.Args[0] = "./g8e"
+		worker.Dir = dir
+		worker.Stdout, worker.Stderr = log, log
+		detachDeployedOperator(worker)
+		if err := worker.Start(); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, "operator.pid"), []byte(fmt.Sprintf("%d\n", worker.Process.Pid)), 0o600); err != nil {
+			_ = worker.Process.Kill()
+			_ = worker.Wait()
+			return err
+		}
+		go func() { _ = worker.Wait() }()
+		return nil
+	}
 	script := fmt.Sprintf(
-		`cd %[1]s && for i in $(seq 1 50); do pkill -f %[2]s || break; sleep 0.1; done && ! pgrep -f %[2]s >/dev/null && rm -f %[3]s && { nohup ./g8e operator start --endpoint %[4]s --working-dir %[1]s > %[3]s 2>&1 < /dev/null & }`,
-		dir, running, operatorDeployStartLog, endpoint)
+		`umask 077; cd %[1]s && rm -f %[3]s && { nohup ./g8e operator start --endpoint %[2]s %[4]s --working-dir %[1]s > %[3]s 2>&1 < /dev/null & echo $! > operator.pid; }`,
+		operatorDeployShellQuote(dir), endpoint, operatorDeployStartLog, strings.Join(quotedArgs, " "))
 	if _, err := s.run(ctx, script); err != nil {
 		return fmt.Errorf("start operator: %w", err)
 	}
@@ -432,6 +620,13 @@ func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string) erro
 }
 
 func (s deploySSH) readStartLog(ctx context.Context, dir string) ([]byte, error) {
+	if s.local {
+		data, err := os.ReadFile(filepath.Join(dir, operatorDeployStartLog))
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return data, err
+	}
 	return s.run(ctx, fmt.Sprintf("cat %s/%s 2>/dev/null || true", dir, operatorDeployStartLog))
 }
 
@@ -467,11 +662,16 @@ func (s deploySSH) awaitRequestID(ctx context.Context, dir string) (string, erro
 // awaitSessionID returns the operator session ID the worker in dir logged when
 // its enrollment completed.
 func (s deploySSH) awaitSessionID(ctx context.Context, dir string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, operatorDeployEnrollTimeout)
+	defer cancel()
 	var sessionID string
 	err := pollUntil(ctx, func() (bool, error) {
 		log, err := s.readStartLog(ctx, dir)
 		if err != nil {
 			return false, err
+		}
+		if m := operatorDeployEnrollFailedPattern.Find(log); m != nil {
+			return false, fmt.Errorf("%w: %s", constants.ErrOperatorDeployFailed, m)
 		}
 		if m := operatorDeploySessionIDPattern.FindSubmatch(log); m != nil {
 			sessionID = string(m[1])
@@ -483,4 +683,139 @@ func (s deploySSH) awaitSessionID(ctx context.Context, dir string) (string, erro
 		return "", fmt.Errorf("await operator session: %w", err)
 	}
 	return sessionID, nil
+}
+
+// Reuse start's flag definitions so deploy and start cannot drift in types/defaults.
+var operatorDeployForwardFlags = []string{
+	"inference-enabled", "inference-ollama-endpoint", "inference-keep-alive",
+	"provider-boundary-observer-enabled", "provider-boundary-observer-id",
+	"provenance-operator-enabled", "provenance-operator-id", "model-storage-root",
+	"heartbeat-interval", "no-git", "execution-vault", "log", "trust-bundle",
+}
+
+func operatorDeployStartArgs(cmd *cobra.Command, role string) ([]string, error) {
+	roleFlags := map[string]string{
+		"inference": "inference-enabled", "provenance": "provenance-operator-enabled",
+		"observer": "provider-boundary-observer-enabled",
+	}
+	if role != "" && role != "data" && roleFlags[role] == "" {
+		return nil, fmt.Errorf("%w: unknown role %q", constants.ErrMissingRequiredField, role)
+	}
+	enabled := 0
+	var args []string
+	for _, name := range operatorDeployForwardFlags {
+		flag := cmd.Flags().Lookup(name)
+		value := flag.Value.String()
+		isRole := name == "inference-enabled" || name == "provenance-operator-enabled" || name == "provider-boundary-observer-enabled"
+		if isRole {
+			if role != "" {
+				expected := name == roleFlags[role]
+				if flag.Changed && (value == "true") != expected {
+					return nil, fmt.Errorf("%w: --role conflicts with --%s", constants.ErrMissingRequiredField, name)
+				}
+				value = fmt.Sprint(expected)
+			}
+			if value == "true" {
+				enabled++
+			}
+		}
+		if flag.Changed || isRole {
+			args = append(args, "--"+name+"="+value)
+		}
+	}
+	if enabled > 1 {
+		return nil, fmt.Errorf("%w: choose one Operator role per batch", constants.ErrMissingRequiredField)
+	}
+	heartbeat, _ := cmd.Flags().GetInt("heartbeat-interval")
+	if err := validateHeartbeatInterval(heartbeat); err != nil {
+		return nil, err
+	}
+	return args, nil
+}
+
+// Output is buffered per job and emitted by the caller, never concurrently to Cobra's writer.
+type operatorDeployResult struct {
+	op     deployedOperator
+	dir    string
+	output string
+	err    error
+}
+
+func deployOperatorBatch(ctx context.Context, host deploySSH, source string, dirs []string, opts operatorDeployOptions, parallel int) <-chan operatorDeployResult {
+	jobs := make(chan string)
+	results := make(chan operatorDeployResult)
+	var workers sync.WaitGroup
+	for i := 0; i < min(parallel, len(dirs)); i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for dir := range jobs {
+				var output bytes.Buffer
+				cmd := &cobra.Command{}
+				cmd.SetOut(&output)
+				cmd.SetErr(&output)
+				s := host
+				s.stderr = &output
+				op, err := deployOperator(ctx, cmd, s, source, dir, opts)
+				// Do not retain the job's buffer through the stored transport.
+				op.ssh.stderr = host.stderr
+				results <- operatorDeployResult{op: op, dir: dir, output: output.String(), err: err}
+			}
+		}()
+	}
+	go func() {
+		defer close(jobs)
+		for _, dir := range dirs {
+			select {
+			case jobs <- dir:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	go func() { workers.Wait(); close(results) }()
+	return results
+}
+
+func operatorDeployShellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func operatorDeployArgsForDir(args []string, host, dir string) []string {
+	replace := strings.NewReplacer("{host}", host, "{dir}", dir, "{name}", filepath.Base(dir))
+	result := make([]string, 0, len(args)+2)
+	flags := make(map[string]string)
+	for _, arg := range args {
+		arg = replace.Replace(arg)
+		result = append(result, arg)
+		key, value, _ := strings.Cut(arg, "=")
+		flags[key] = value
+	}
+	digest := sha256.Sum256([]byte(host + "\x00" + dir))
+	for enabled, id := range map[string]string{
+		"--provenance-operator-enabled":        "--provenance-operator-id",
+		"--provider-boundary-observer-enabled": "--provider-boundary-observer-id",
+	} {
+		if flags[enabled] == "true" && flags[id] == "" {
+			result = append(result, fmt.Sprintf("%s=operator-%x", id, digest[:16]))
+		}
+	}
+	return result
+}
+
+// A retained registry session may still be marked active from the old process.
+// Require this launch to establish its command subscription before trusting it.
+func (s deploySSH) awaitReady(ctx context.Context, dir string) error {
+	ctx, cancel := context.WithTimeout(ctx, operatorDeployEnrollTimeout)
+	defer cancel()
+	return pollUntil(ctx, func() (bool, error) {
+		log, err := s.readStartLog(ctx, dir)
+		if err != nil {
+			return false, err
+		}
+		if bytes.Contains(log, []byte("Failed to start g8e")) || bytes.Contains(log, []byte("Enrollment failed:")) {
+			return false, fmt.Errorf("operator startup failed; see %s/%s", dir, operatorDeployStartLog)
+		}
+		return bytes.Contains(log, []byte("Channel established - Ready to receive")), nil
+	})
 }

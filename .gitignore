@@ -28,6 +28,7 @@ Desktop.ini
 .devin/
 .devin/*
 .local.dev/
+.local.local/
 .local.dev/*
 
 # --- Logs & Performance ---

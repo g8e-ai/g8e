@@ -44,10 +44,11 @@ import (
 // component that submits two CSRs (operator + CLI) and signs the
 // completion transcript with both private keys.
 const (
-	operatorEnrollHTTPTimeout     = 10 * time.Second
-	operatorEnrollPollInitial     = 2 * time.Second
+	operatorEnrollHTTPTimeout = 10 * time.Second
+	// Catch automated owner approval promptly, then back off for interactive enrollment.
+	operatorEnrollPollInitial     = 500 * time.Millisecond
 	operatorEnrollPollMax         = 30 * time.Second
-	operatorEnrollPollJitter      = 500 * time.Millisecond
+	operatorEnrollPollJitter      = 100 * time.Millisecond
 	operatorEnrollDefaultDeadline = 30 * time.Minute
 
 	// Request submission retry. The gateway starts with zero users; workloads

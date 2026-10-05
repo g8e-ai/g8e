@@ -9,6 +9,7 @@ package serve
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -363,7 +364,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		}
 		role := operatorRole(opts)
 		account := auth.ResolveCurrentAccount()
-		instanceID := fmt.Sprintf("operator-%s-%s", hostname, role)
+		instanceID := operatorInstanceID(hostname, role, effectiveWorkDir)
 		enrollClient, err := NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname, fileSvc, logger)
 		if err != nil {
 			logger.Error("Failed to create enrollment client", string(constants.ConnectionStateError), err)
@@ -542,4 +543,16 @@ func operatorFingerprintOptions(opts ServeOperatorOptions, localDir, account str
 		Port:     constants.Ports.OperatorHttp,
 		Role:     string(operatorRole(opts)),
 	}
+}
+
+// Include the canonical runtime directory so same-host, same-role workers enroll independently.
+func operatorInstanceID(hostname string, role constants.OperatorRole, dir string) string {
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	if absolute, err := filepath.Abs(dir); err == nil {
+		dir = absolute
+	}
+	digest := sha256.Sum256([]byte(dir))
+	return fmt.Sprintf("operator-%.64s-%s-%x", hostname, role, digest[:16])
 }

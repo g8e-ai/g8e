@@ -32,11 +32,11 @@ import (
 // reports an unknown remote outcome rather than a clean timeout.
 const ProviderRequestTimeout = 5 * time.Minute
 
-// ProviderStatusTimeout bounds the read-only startup readiness check against
+// ProviderStatusTimeout bounds an explicit read-only readiness check against
 // the remote provider. It is deliberately shorter than
 // ProviderRequestTimeout: a /api/tags round trip is cheap, and an
-// unreachable provider must fail operator startup promptly rather than
-// after the generation deadline.
+// status request should finish before the generation deadline. Provider
+// availability does not gate Operator startup.
 const ProviderStatusTimeout = 30 * time.Second
 
 // defaultMaxResponseBytes bounds every response body read from the remote

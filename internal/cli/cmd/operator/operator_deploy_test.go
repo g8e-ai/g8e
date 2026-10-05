@@ -35,14 +35,14 @@ import (
 const fakeWorkerEnrolls = `#!/bin/sh
 id=$(printf %s "$PWD" | md5sum | cut -c1-32)
 printf 'Approve with: g8e auth enroll approve %s-000\n' "$id"
-printf 'operator enrollment: completed\n  - operator_session_id: %s-111\n' "$id"
+printf 'operator enrollment: completed\n  - operator_session_id: %s-111\nChannel established - Ready to receive\n' "$id"
 `
 
 // fakeWorkerAlreadyEnrolled is a redeploy over an Operator that already holds
 // issued credentials: no request is submitted, the session is logged directly.
 const fakeWorkerAlreadyEnrolled = `#!/bin/sh
 id=$(printf %s "$PWD" | md5sum | cut -c1-32)
-printf 'OperatorSession created\n  - operator_session_id: %s-111\n' "$id"
+printf 'OperatorSession created\n  - operator_session_id: %s-111\nChannel established - Ready to receive\n' "$id"
 `
 
 const fakeWorkerRejected = `#!/bin/sh
@@ -82,7 +82,7 @@ func runOperatorDeploy(t *testing.T, client authcmd.APIClient, args ...string) (
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs(args)
+	cmd.SetArgs(append([]string{"--parallel", "1"}, args...))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	t.Cleanup(cancel)
@@ -207,4 +207,106 @@ func TestOperatorDeployGivesUpWhenEnrollmentKeepsBeingRejected(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrOperatorDeployFailed)
 	assert.Contains(t, out, "HTTP 429", "the worker's own failure line is surfaced")
 	assert.Empty(t, client.PostCalls, "nothing is approved without a request ID")
+}
+
+func TestOperatorDeployLocalBatchSharesBinaryAndPreservesEarlierBatch(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "fleet")
+	client := &cmdtest.MockAPIClient{}
+	out, err := runOperatorDeploy(t, client, "--local", "--dest-dir", root, "--count", "10", "--parallel", "4")
+	require.NoError(t, err, out)
+	first, err := os.Stat(filepath.Join(root, "op-00001", "g8e"))
+	require.NoError(t, err)
+	for _, dir := range operatorDeployDirs(root, 10) {
+		info, err := os.Stat(filepath.Join(dir, "g8e"))
+		require.NoError(t, err)
+		assert.True(t, os.SameFile(first, info), "binaries must share one inode")
+	}
+	out, err = runOperatorDeploy(t, client, "--local", "--dest-dir", root, "--count", "2", "--start-index", "11", "--parallel", "2")
+	require.NoError(t, err, out)
+	unchanged, err := os.Stat(filepath.Join(root, "op-00001", "g8e"))
+	require.NoError(t, err)
+	assert.True(t, os.SameFile(first, unchanged), "appending a batch must preserve existing deployments")
+	require.FileExists(t, filepath.Join(root, "op-00012", "g8e"))
+	// Explicit start-index with count=1 must still use a numbered directory.
+	out, err = runOperatorDeploy(t, client, "--local", "--dest-dir", root, "--start-index", "5000")
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(root, "op-05000", "g8e"))
+	dirs := operatorDeployDirs(root, 5000)
+	require.Len(t, dirs, 5000)
+	assert.Equal(t, filepath.Join(root, "op-05000"), dirs[4999])
+}
+
+func TestOperatorDeployRejectsUnsafeBatchesAndRoles(t *testing.T) {
+	for _, flags := range [][]string{
+		{"--count", "5001"}, {"--count", "2", "--start-index", "5000"},
+		{"--start-index", "0"}, {"--parallel", "0"}, {"--parallel", "5"},
+		{"--role", "unknown"}, {"--role", "data", "--inference-enabled"},
+		{"--role", "observer", "--provider-boundary-observer-enabled=false"},
+		{"--inference-enabled", "--provenance-operator-enabled"},
+		{"--local"}, {"--hosts", "a,,b"}, {"--hosts", "a,a"}, {"--hosts", "-oProxyCommand=bad"},
+	} {
+		_, err := runOperatorDeploy(t, &cmdtest.MockAPIClient{}, append([]string{"--hosts", "host"}, flags...)...)
+		require.Error(t, err, flags)
+	}
+}
+
+func TestOperatorDeployRoleFlagsReachWorkerWithoutShellExpansion(t *testing.T) {
+	useFakeSSH(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\n"+fakeWorkerAlreadyEnrolled[10:])
+	root := filepath.Join(t.TempDir(), "fleet")
+	payload := "http://provider:11434/path?q='$(touch INJECTED)'"
+	client := &cmdtest.MockAPIClient{}
+	out, err := runOperatorDeploy(t, client, "--hosts", "host", "--dest-dir", root,
+		"--role", "inference", "--inference-ollama-endpoint", payload, "--background", "--endpoint", "localhost")
+	require.NoError(t, err, out)
+	require.Eventually(t, func() bool {
+		data, err := os.ReadFile(filepath.Join(root, "args.txt"))
+		return err == nil && bytes.Contains(data, []byte("--working-dir"))
+	}, time.Second, 10*time.Millisecond)
+	data, err := os.ReadFile(filepath.Join(root, "args.txt"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "--inference-enabled=true\n")
+	assert.Contains(t, string(data), "--inference-ollama-endpoint="+payload+"\n")
+	assert.Contains(t, string(data), "--provenance-operator-enabled=false\n")
+	assert.NoFileExists(t, filepath.Join(root, "INJECTED"))
+}
+
+func TestOperatorDeployRoleIdentities(t *testing.T) {
+	args := []string{"--provenance-operator-enabled=true", "--model-storage-root={dir}/models"}
+	first := operatorDeployArgsForDir(args, "host", "/fleet/op-00001")
+	again := operatorDeployArgsForDir(args, "host", "/fleet/op-00001")
+	other := operatorDeployArgsForDir(args, "host", "/fleet/op-00002")
+	assert.Equal(t, first, again)
+	assert.NotEqual(t, first[len(first)-1], other[len(other)-1])
+	assert.Contains(t, first, "--model-storage-root=/fleet/op-00001/models")
+	explicit := operatorDeployArgsForDir(append(args, "--provenance-operator-id={host}-{name}"), "host", "/fleet/op-00001")
+	assert.Contains(t, explicit, "--provenance-operator-id=host-op-00001")
+	assert.Len(t, explicit, 3)
+}
+
+func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
+	useFakeSSH(t, fakeWorkerEnrolls)
+	root := filepath.Join(t.TempDir(), "fleet")
+	dirs := operatorDeployDirs(root, 12)
+	sessions := make([]models.OperatorDocumentGo, len(dirs))
+	expected := make(map[string]bool, len(dirs))
+	for i, dir := range dirs {
+		sessions[i] = models.OperatorDocumentGo{OperatorSessionID: deployedDirID(dir) + "-111", Status: constants.OperatorStatusActive}
+		expected[deployedDirID(dir)+"-000"] = true
+	}
+	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: sessions})
+	require.NoError(t, err)
+	client := &cmdtest.MockAPIClient{GetResp: body, PostResp: []byte(`{"state":"approved"}`)}
+	out, err := runOperatorDeploy(t, client, "--hosts", "host", "--dest-dir", root,
+		"--count", "12", "--parallel", "4", "--background", "--approve", "--endpoint", "localhost")
+	require.NoError(t, err, out)
+	require.Len(t, client.PostCalls, 12)
+	for _, call := range client.PostCalls {
+		decision := call.Body.(models.PlatformEnrollmentDecisionRequest)
+		require.True(t, expected[decision.RequestID], "only this batch's requests may be approved, exactly once")
+		delete(expected, decision.RequestID)
+	}
+	assert.Empty(t, expected)
+	for _, op := range sessions {
+		assert.Contains(t, out, op.OperatorSessionID)
+	}
 }
