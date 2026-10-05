@@ -414,18 +414,6 @@ func TestConfig_AppKeyFile(t *testing.T) {
 	})
 }
 
-func TestConfig_TrustBundleFile(t *testing.T) {
-	t.Run("returns trust bundle file path", func(t *testing.T) {
-		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
-		config := &Config{
-			RuntimeDir: credentialsDir,
-		}
-
-		result := config.TrustBundleFile()
-		assert.Equal(t, filepath.Join(credentialsDir, "g8eg-ca-bundle.pem"), result)
-	})
-}
-
 func TestConfig_OperatorHTTPURL_Override(t *testing.T) {
 	t.Run("returns custom URL when Host contains protocol", func(t *testing.T) {
 		customURL := "https://custom-test-server:8443"

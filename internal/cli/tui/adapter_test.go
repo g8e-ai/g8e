@@ -81,7 +81,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("pipeline.advance maps to PipelineMsg active", func(t *testing.T) {
 		data := `{"type":"pipeline.advance","payload":{"stage":"L1","status":"active","tx_id":"tx-001","detail":"doctrine check"}}`
-		msg := translateSSEEvent("pipeline.advance", data)
+		msgs := translateSSEEvents("pipeline.advance", data)
+		msg := msgs[0]
 		pm, ok := msg.(PipelineMsg)
 		require.True(t, ok, "expected PipelineMsg, got %T", msg)
 		assert.Equal(t, StageL1, pm.Stage)
@@ -92,7 +93,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("pipeline.waiting maps to PipelineMsg waiting", func(t *testing.T) {
 		data := `{"type":"pipeline.waiting","payload":{"stage":"L3","status":"waiting","detail":"FIDO2 touch required"}}`
-		msg := translateSSEEvent("pipeline.waiting", data)
+		msgs := translateSSEEvents("pipeline.waiting", data)
+		msg := msgs[0]
 		pm, ok := msg.(PipelineMsg)
 		require.True(t, ok)
 		assert.Equal(t, StageL3, pm.Stage)
@@ -102,7 +104,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("pipeline.failed maps to PipelineMsg failed", func(t *testing.T) {
 		data := `{"type":"pipeline.failed","payload":{"stage":"L1","status":"failed","detail":"PII EGRESS BLOCKED"}}`
-		msg := translateSSEEvent("pipeline.failed", data)
+		msgs := translateSSEEvents("pipeline.failed", data)
+		msg := msgs[0]
 		pm, ok := msg.(PipelineMsg)
 		require.True(t, ok)
 		assert.Equal(t, StageL1, pm.Stage)
@@ -112,7 +115,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("ledger.entry maps to LedgerMsg with level", func(t *testing.T) {
 		data := `{"type":"ledger.entry","payload":{"level":"critical","message":"PII EGRESS BLOCKED"}}`
-		msg := translateSSEEvent("ledger.entry", data)
+		msgs := translateSSEEvents("ledger.entry", data)
+		msg := msgs[0]
 		lm, ok := msg.(LedgerMsg)
 		require.True(t, ok)
 		assert.Equal(t, LevelCritical, lm.Level)
@@ -122,7 +126,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("ledger.entry maps warn level", func(t *testing.T) {
 		data := `{"type":"ledger.entry","payload":{"level":"warn","message":"approaching threshold"}}`
-		msg := translateSSEEvent("ledger.entry", data)
+		msgs := translateSSEEvents("ledger.entry", data)
+		msg := msgs[0]
 		lm, ok := msg.(LedgerMsg)
 		require.True(t, ok)
 		assert.Equal(t, LevelWarn, lm.Level)
@@ -130,7 +135,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("consensus.vote maps to ConsensusMsg", func(t *testing.T) {
 		data := `{"type":"consensus.vote","payload":{"member":"axiom","decision":true,"signed":true,"quorum":3,"total":5}}`
-		msg := translateSSEEvent("consensus.vote", data)
+		msgs := translateSSEEvents("consensus.vote", data)
+		msg := msgs[0]
 		cm, ok := msg.(ConsensusMsg)
 		require.True(t, ok)
 		assert.Equal(t, constants.ConsensusMemberAxiom, cm.Member)
@@ -143,7 +149,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("consensus.result maps to ConsensusMsg with result", func(t *testing.T) {
 		data := `{"type":"consensus.result","payload":{"result":"rejected","hash":"abcdef1234567890"}}`
-		msg := translateSSEEvent("consensus.result", data)
+		msgs := translateSSEEvents("consensus.result", data)
+		msg := msgs[0]
 		cm, ok := msg.(ConsensusMsg)
 		require.True(t, ok)
 		assert.Equal(t, ConsensusRejected, cm.Result)
@@ -152,7 +159,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("consensus.result reached", func(t *testing.T) {
 		data := `{"type":"consensus.result","payload":{"result":"reached","hash":"abc123"}}`
-		msg := translateSSEEvent("consensus.result", data)
+		msgs := translateSSEEvents("consensus.result", data)
+		msg := msgs[0]
 		cm, ok := msg.(ConsensusMsg)
 		require.True(t, ok)
 		assert.Equal(t, ConsensusReached, cm.Result)
@@ -160,14 +168,16 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("unknown event type falls back to LedgerMsg", func(t *testing.T) {
 		data := `{"type":"system.heartbeat","payload":{"status":"ok"}}`
-		msg := translateSSEEvent("system.heartbeat", data)
+		msgs := translateSSEEvents("system.heartbeat", data)
+		msg := msgs[0]
 		lm, ok := msg.(LedgerMsg)
 		require.True(t, ok)
 		assert.Contains(t, lm.Message, "system.heartbeat")
 	})
 
 	t.Run("non-JSON data falls back to LedgerMsg with raw text", func(t *testing.T) {
-		msg := translateSSEEvent("unknown", "plain text message")
+		msgs := translateSSEEvents("unknown", "plain text message")
+		msg := msgs[0]
 		lm, ok := msg.(LedgerMsg)
 		require.True(t, ok)
 		assert.Equal(t, "plain text message", lm.Message)
@@ -176,7 +186,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 
 	t.Run("uses event type from SSE header when payload type is empty", func(t *testing.T) {
 		data := `{"type":"","payload":{"stage":"L2","status":"active"}}`
-		msg := translateSSEEvent("pipeline.advance", data)
+		msgs := translateSSEEvents("pipeline.advance", data)
+		msg := msgs[0]
 		pm, ok := msg.(PipelineMsg)
 		require.True(t, ok)
 		assert.Equal(t, StageL2, pm.Stage)
@@ -196,7 +207,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 		envelopeJSON, err := json.Marshal(envelope)
 		require.NoError(t, err)
 
-		msg := translateSSEEvent("", string(envelopeJSON))
+		msgs := translateSSEEvents("", string(envelopeJSON))
+		msg := msgs[0]
 		pm, ok := msg.(PipelineMsg)
 		require.True(t, ok, "expected PipelineMsg from SSEPushPayload envelope, got %T", msg)
 		assert.Equal(t, StageL3, pm.Stage)
@@ -213,7 +225,8 @@ func TestTranslateSSEEvent(t *testing.T) {
 		envelopeJSON, err := json.Marshal(envelope)
 		require.NoError(t, err)
 
-		msg := translateSSEEvent("", string(envelopeJSON))
+		msgs := translateSSEEvents("", string(envelopeJSON))
+		msg := msgs[0]
 		cm, ok := msg.(ConsensusMsg)
 		require.True(t, ok, "expected ConsensusMsg from SSEPushPayload envelope, got %T", msg)
 		assert.Equal(t, constants.ConsensusMemberAxiom, cm.Member)

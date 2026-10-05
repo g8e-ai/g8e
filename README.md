@@ -92,13 +92,13 @@ If you want the Docker Compose stack instead, that's still supported, but it is 
 The repo includes a protocol layer and example integrations with Python and Go.
 
 ```bash
-pip install g8e==2.3.0
+pip install g8e==2.3.1
 ```
 
 Go:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.3.0
+go get github.com/g8e-ai/g8e/v2@v2.3.1
 ```
 
 ### 3. Docker fallback
