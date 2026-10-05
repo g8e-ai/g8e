@@ -186,16 +186,24 @@ func (env *capacityMirrorEnv) openStream(ctx context.Context, source string, cur
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
 		return false, response.StatusCode, "stream"
 	}
-	deadline := time.Now().Add(hold)
+	// Scanner.Scan blocks until the next SSE line. The mirror only emits a
+	// keepalive every 15 seconds, so checking a deadline after Scan returns
+	// makes short hold tests wait for that keepalive. Cancel the request at the
+	// end of the hold to wake the blocked read immediately.
+	held := make(chan struct{}, 1)
+	holdTimer := time.AfterFunc(hold, func() {
+		held <- struct{}{}
+		cancel()
+	})
+	defer holdTimer.Stop()
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
-		if !time.Now().Before(deadline) {
-			return true, response.StatusCode, "complete"
-		}
 	}
-	if !time.Now().Before(deadline) {
+	select {
+	case <-held:
 		return true, response.StatusCode, "complete"
+	default:
 	}
 	return false, response.StatusCode, "stream_disconnected"
 }
