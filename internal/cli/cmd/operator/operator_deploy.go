@@ -62,7 +62,9 @@ const (
 // remote shell expands it.
 var (
 	operatorDeployRemoteDirPattern = regexp.MustCompile(`^(~|~?/?[A-Za-z0-9_.-]+)(/[A-Za-z0-9_.-]+)*/?$`)
-	operatorDeployEndpointPattern  = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
+	// Worker configuration adds the standard HTTP and HTTPS ports itself, so
+	// this value must be a host/IP without a scheme or explicit port.
+	operatorDeployEndpointPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 	operatorDeployRequestIDPattern    = regexp.MustCompile(`auth enroll approve ([0-9a-f-]{36})`)
 	operatorDeploySessionIDPattern    = regexp.MustCompile(`operator_session_id:\s+([0-9a-f-]{36})`)
@@ -116,6 +118,7 @@ func operatorDeployCmdWithConfig(
 	var startIndex int
 	var role string
 	var parallel int
+	var operatorEndpoint string
 	start := operatorStartCmd()
 
 	cmd := &cobra.Command{
@@ -132,7 +135,9 @@ The binary is installed once per host and hard-linked into each directory.
 use the same flags as operator start. Use separate batches for different roles.
 Role IDs default to unique, stable values per host/directory. Flag values support
 {name} (directory basename), {dir} (absolute directory), and {host} substitutions.
---background starts workers; --endpoint is required. --approve approves enrollment as
+--background starts workers; --endpoint or --operator-endpoint is required.
+--operator-endpoint selects the worker-facing Gateway host and defaults to --endpoint.
+--approve approves enrollment as
 the authenticated owner and verifies all deployed sessions are active. Enrollment is
 paced to respect Gateway limits. Repeating a deployment replaces only its own workers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -174,11 +179,15 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 			}
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			endpoint = strings.TrimSpace(endpoint)
-			if background && endpoint == "" {
-				return fmt.Errorf("%w: --endpoint is required with --background", constants.ErrMissingRequiredField)
+			workerEndpoint := strings.TrimSpace(operatorEndpoint)
+			if workerEndpoint == "" {
+				workerEndpoint = endpoint
 			}
-			if background && !operatorDeployEndpointPattern.MatchString(endpoint) {
-				return fmt.Errorf("%w: --endpoint %q must match %s", constants.ErrPathValidation, endpoint, operatorDeployEndpointPattern)
+			if background && workerEndpoint == "" {
+				return fmt.Errorf("%w: --operator-endpoint or --endpoint is required with --background", constants.ErrMissingRequiredField)
+			}
+			if background && !operatorDeployEndpointPattern.MatchString(workerEndpoint) {
+				return fmt.Errorf("%w: worker endpoint %q must match %s", constants.ErrPathValidation, workerEndpoint, operatorDeployEndpointPattern)
 			}
 			if approve && !background {
 				return fmt.Errorf("%w: --approve requires --background", constants.ErrMissingRequiredField)
@@ -192,7 +201,7 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 			if err != nil {
 				return err
 			}
-			opts := operatorDeployOptions{endpoint: endpoint, background: background, startArgs: startArgs, approvalMu: &sync.Mutex{}}
+			opts := operatorDeployOptions{endpoint: workerEndpoint, background: background, startArgs: startArgs, approvalMu: &sync.Mutex{}}
 			if approve {
 				opts.client, err = clientFactory(fileSvc, cfg)
 				if err != nil {
@@ -275,6 +284,7 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 	}
 
 	cmd.Flags().StringVar(&hosts, "hosts", "", "Comma-separated SSH hosts (required unless --local)")
+	cmd.Flags().StringVar(&operatorEndpoint, "operator-endpoint", "", "Gateway address used by deployed Operators (defaults to --endpoint)")
 	cmd.Flags().IntVar(&parallel, "parallel", 4, "Maximum concurrent deployments/enrollments (1..4)")
 	cmd.Flags().IntVarP(&port, "port", "P", 0, "SSH port to connect to on remote hosts")
 	cmd.Flags().StringVarP(&identityFile, "identity", "i", "", "SSH identity file (private key)")
