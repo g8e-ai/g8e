@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { Ev } from '../src/lib/events';
+import { InvestigationStatus } from '../src/lib/types';
 import { SessionProvider } from '../src/state/session';
 import { ToastProvider } from '../src/state/toast';
 
@@ -138,7 +139,7 @@ describe('cases and investigations', () => {
       'POST /api/v1/chat': () => [200, { success: true, case_id: 'c1', investigation_id: 'i1' }],
       'GET /api/v1/investigations': (_b, url) =>
         url.searchParams.get('case_id') === 'c1'
-          ? [200, [{ id: 'i1', case_id: 'c1', case_title: 'Disk alert', user_id: 'u1', status: 'open', created_at: '2026-01-01T00:00:00Z', conversation_history: [] }]]
+          ? [200, [{ id: 'i1', case_id: 'c1', case_title: 'Disk alert', user_id: 'u1', status: InvestigationStatus.Open, created_at: '2026-01-01T00:00:00Z', conversation_history: [] }]]
           : [200, []],
     });
     const user = userEvent.setup();
@@ -166,7 +167,7 @@ describe('cases and investigations', () => {
     routes = signedInRoutes({
       'GET /api/v1/investigations': () => [
         200,
-        [{ id: 'i1', case_id: 'c1', case_title: 'Disk alert', user_id: 'u1', status: 'open', created_at: '2026-01-01T00:00:00Z', conversation_history: [] }],
+        [{ id: 'i1', case_id: 'c1', case_title: 'Disk alert', user_id: 'u1', status: InvestigationStatus.Open, created_at: '2026-01-01T00:00:00Z', conversation_history: [] }],
       ],
       'POST /api/v1/chat': () => [200, { success: true, case_id: 'c1', investigation_id: 'i2' }],
     });
@@ -192,7 +193,7 @@ describe('cases and investigations', () => {
     routes = signedInRoutes({
       'GET /api/v1/investigations': () => [
         200,
-        [{ id: 'i1', case_id: 'c1', case_title: 'Disk alert', user_id: 'u1', status: 'open', created_at: '2026-01-01T00:00:00Z', conversation_history: [] }],
+        [{ id: 'i1', case_id: 'c1', case_title: 'Disk alert', user_id: 'u1', status: InvestigationStatus.Open, created_at: '2026-01-01T00:00:00Z', conversation_history: [] }],
       ],
       'POST /api/v1/operator/approval/respond': () => [200, { success: true }],
     });
@@ -263,25 +264,26 @@ describe('inference', () => {
     let saved: Record<string, unknown> | null = null;
     routes = signedInRoutes({
       'POST /api/v1/settings/llm/get': () => [200, llmSettings({ provider: 'g8e', model: null })],
-      'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b', 'qwen3:1.7b'] }],
+      'POST /api/v1/settings/llm/models': (body) => [
+        200,
+        (body as { provider?: string })?.provider === 'g8e' ? { models: ['qwen3:4b', 'qwen3:1.7b'] } : { models: [] },
+      ],
       'POST /api/v1/settings/llm': (body) => {
         saved = body as Record<string, unknown>;
         return [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b' })];
       },
     });
-    window.history.replaceState(null, '', '/console/?view=inference&role=primary');
+    window.history.replaceState(null, '', '/console/?view=cases');
     const user = userEvent.setup();
     renderApp();
 
-    const primary = await screen.findByRole('region', { name: 'Primary' });
+    const primary = await screen.findByLabelText('Primary');
     expect(await within(primary).findByRole('option', { name: 'qwen3:4b' })).toBeInTheDocument();
-    expect(calls.find((c) => c.path === '/api/v1/settings/llm/models')?.body).toEqual({
-      context: {}, provider: 'g8e',
-    });
-    await user.selectOptions(within(primary).getByLabelText('Model'), 'qwen3:4b');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(calls.filter((c) => c.path === '/api/v1/settings/llm/models').map((c) => (c.body as { provider: string })?.provider)).toContain('g8e');
+    await user.selectOptions(primary, 'g8e::qwen3:4b');
     await waitFor(() => expect(saved).not.toBeNull());
     expect(saved!.primary).toEqual({ provider: 'g8e', model: 'qwen3:4b' });
+    expect(await screen.findByText('Model selection saved. The next message uses it.')).toBeInTheDocument();
   });
 
   it('saves provider connections separately from model role selections', async () => {
@@ -318,14 +320,8 @@ describe('inference', () => {
       providers: [{ provider: 'ollama', endpoint: '192.168.1.2:11434', api_key: 'local-secret' }],
     });
 
-    await user.click(screen.getByRole('button', { name: 'Primary' }));
-    const primary = await screen.findByRole('region', { name: 'Primary' });
-    await user.selectOptions(within(primary).getByLabelText('Provider'), 'ollama');
-    await waitFor(() => expect(calls.filter((c) => c.path === '/api/v1/settings/llm/models').at(-1)?.body).toEqual({
-      context: {}, provider: 'ollama',
-    }));
-    await user.selectOptions(await within(primary).findByLabelText('Model'), 'gemma4:e4b');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    const primary = await screen.findByLabelText('Primary');
+    await user.selectOptions(primary, 'ollama::gemma4:e4b');
 
     await waitFor(() => expect(saved).toHaveLength(2));
     expect(saved[1]).toEqual({
@@ -333,7 +329,6 @@ describe('inference', () => {
       primary: { provider: 'ollama', model: 'gemma4:e4b' },
     });
     expect(await screen.findByText('Model selection saved. The next message uses it.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
   it('keeps provider keys write-only and sends only a replacement', async () => {
@@ -374,11 +369,10 @@ describe('inference', () => {
     const user = userEvent.setup();
     renderApp();
 
-    await user.click(await screen.findByRole('button', { name: 'gemma4:e4b' }));
-    expect(await screen.findByRole('heading', { name: 'Primary model' })).toBeInTheDocument();
-    const primary = screen.getByRole('region', { name: 'Primary' });
-    expect(within(primary).getByLabelText('Model')).toHaveValue('gemma4:e4b');
-    expect(within(primary).queryByLabelText('Endpoint')).toBeNull();
+    const chip = await screen.findByRole('button', { name: 'gemma4:e4b' });
+    expect(chip).toBeInTheDocument();
+    await user.click(chip);
+    expect(screen.getByLabelText('Primary')).toHaveFocus();
   });
 
   it('prompts for a model when none is configured and surfaces ensemble errors', async () => {
@@ -402,7 +396,7 @@ describe('inference', () => {
           : [502, { error: 'ensemble upstream unavailable' }],
       'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b'] }],
     });
-    window.history.replaceState(null, '', '/console/?view=inference&role=primary');
+    window.history.replaceState(null, '', '/console/?view=inference');
     renderApp();
 
     expect(await screen.findByText('Connecting to ensemble…')).toBeInTheDocument();
@@ -414,9 +408,8 @@ describe('inference', () => {
       FakeEventSource.last?.push(1, Ev.ApprovalsChanged, { subject: 'enrollments' });
     });
 
-    const primary = await screen.findByRole('region', { name: 'Primary' });
-    expect(primary).toBeInTheDocument();
-    expect(within(primary).getByLabelText('Model')).toHaveValue('qwen3:4b');
+    const primary = await screen.findByLabelText('Primary');
+    await waitFor(() => expect(primary).toHaveValue('g8e::qwen3:4b'));
   });
 
   it('keeps the session when g8ee has not yet trusted the Gateway proxy key', async () => {
@@ -428,7 +421,7 @@ describe('inference', () => {
         upstreamTrusted ? [200, llmSettings({ provider: 'g8e', model: 'qwen3:4b' })] : untrusted,
       'POST /api/v1/settings/llm/models': () => [200, { models: ['qwen3:4b'] }],
     });
-    window.history.replaceState(null, '', '/console/?view=inference&role=primary');
+    window.history.replaceState(null, '', '/console/?view=inference');
     renderApp();
 
     expect(await screen.findByText('Connecting to ensemble…')).toBeInTheDocument();
@@ -440,8 +433,8 @@ describe('inference', () => {
       FakeEventSource.last?.push(1, Ev.ApprovalsChanged, { subject: 'enrollments' });
     });
 
-    const primary = await screen.findByRole('region', { name: 'Primary' });
-    expect(within(primary).getByLabelText('Model')).toHaveValue('qwen3:4b');
+    const primary = await screen.findByLabelText('Primary');
+    await waitFor(() => expect(primary).toHaveValue('g8e::qwen3:4b'));
     expect(screen.queryByLabelText('User ID')).toBeNull();
   });
 

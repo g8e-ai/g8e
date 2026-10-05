@@ -10,7 +10,7 @@ import { api, isEnsembleUnavailable } from '../lib/api';
 import { Ev } from '../lib/events';
 import type { InferenceUpdateBody } from '../lib/inference';
 import { Paths } from '../lib/paths';
-import type { LlmSettings } from '../lib/types';
+import type { LlmModelList, LlmProviderOption, LlmSettings } from '../lib/types';
 import { useApprovals } from './approvals';
 import { useStream, useStreamEvents } from './stream';
 
@@ -21,6 +21,8 @@ interface InferenceValue {
   loaded: boolean;
   error: string | null;
   ensembleStatus: EnsembleStatus;
+  modelsByProvider: Record<string, string[]>;
+  modelsLoading: boolean;
   reload: () => Promise<void>;
   save: (body: InferenceUpdateBody) => Promise<LlmSettings>;
 }
@@ -34,6 +36,8 @@ export function InferenceProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ensembleStatus, setEnsembleStatus] = useState<EnsembleStatus>('ready');
+  const [modelsByProvider, setModelsByProvider] = useState<Record<string, string[]>>({});
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   const pendingEnrollment = useMemo(
     () =>
@@ -51,6 +55,36 @@ export function InferenceProvider({ children }: { children: ReactNode }) {
   const retryCount = useRef(0);
   const reloadRef = useRef<() => Promise<void>>();
 
+  const loadModels = useCallback(async (providers: LlmProviderOption[]) => {
+    setModelsLoading(true);
+    try {
+      const listable = providers.filter((p) => {
+        if (!p.lists_models) return false;
+        if (p.api_key === 'required' && !p.api_key_set) return false;
+        if (p.endpoint === 'required' && !p.configured_endpoint) return false;
+        if (p.provider === 'llamacpp' && !p.configured_endpoint) return false;
+        return true;
+      });
+      const results = await Promise.allSettled(
+        listable.map(async (p) => {
+          const res = await api.post<LlmModelList>(Paths.llmModels, { context: {}, provider: p.provider });
+          return { provider: p.provider, models: res.models ?? [] };
+        }),
+      );
+      const next: Record<string, string[]> = {};
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          next[r.value.provider] = r.value.models;
+        }
+      }
+      setModelsByProvider((prev) => ({ ...prev, ...next }));
+    } catch {
+      // Upstream errors are ignored; individual provider listings may be unconfigured
+    } finally {
+      setModelsLoading(false);
+    }
+  }, []);
+
   const scheduleReload = useCallback((delay = 500) => {
     if (retryTimer.current) clearTimeout(retryTimer.current);
     retryTimer.current = setTimeout(() => void reloadRef.current?.(), delay);
@@ -63,6 +97,7 @@ export function InferenceProvider({ children }: { children: ReactNode }) {
       setError(null);
       setEnsembleStatus('ready');
       retryCount.current = 0;
+      void loadModels(res.providers);
     } catch (err) {
       if (isEnsembleUnavailable(err)) {
         setEnsembleStatus(pendingEnrollmentRef.current ? 'enrolling' : 'starting');
@@ -77,7 +112,7 @@ export function InferenceProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoaded(true);
     }
-  }, [scheduleReload]);
+  }, [loadModels, scheduleReload]);
 
   reloadRef.current = reload;
 
@@ -121,12 +156,15 @@ export function InferenceProvider({ children }: { children: ReactNode }) {
     setSettings(next);
     setError(null);
     setEnsembleStatus('ready');
+    if (body.providers && body.providers.length > 0) {
+      void loadModels(next.providers);
+    }
     return next;
-  }, []);
+  }, [loadModels]);
 
   const value = useMemo(
-    () => ({ settings, loaded, error, ensembleStatus, reload, save }),
-    [settings, loaded, error, ensembleStatus, reload, save],
+    () => ({ settings, loaded, error, ensembleStatus, modelsByProvider, modelsLoading, reload, save }),
+    [settings, loaded, error, ensembleStatus, modelsByProvider, modelsLoading, reload, save],
   );
   return <InferenceContext.Provider value={value}>{children}</InferenceContext.Provider>;
 }

@@ -94,15 +94,51 @@ export interface ConversationMessage {
   };
 }
 
+export const InvestigationStatus = {
+  Open: 'Open',
+  Closed: 'Closed',
+  Escalated: 'Escalated',
+  Resolved: 'Resolved',
+} as const;
+export type InvestigationStatusValue = (typeof InvestigationStatus)[keyof typeof InvestigationStatus];
+
+export const CaseStatus = {
+  New: 'New',
+  Triage: 'Triage',
+  InProgress: 'InProgress',
+  HumanReview: 'HumanReview',
+  WaitingForCustomer: 'WaitingForCustomer',
+  Escalated: 'Escalated',
+  Resolved: 'Resolved',
+  Closed: 'Closed',
+} as const;
+export type CaseStatusValue = (typeof CaseStatus)[keyof typeof CaseStatus];
+
+export const Priority = {
+  Critical: 'CRITICAL',
+  High: 'HIGH',
+  Medium: 'MEDIUM',
+  Low: 'LOW',
+} as const;
+export type PriorityValue = (typeof Priority)[keyof typeof Priority];
+
+export const Severity = {
+  Critical: 'CRITICAL',
+  High: 'HIGH',
+  Medium: 'MEDIUM',
+  Low: 'LOW',
+} as const;
+export type SeverityValue = (typeof Severity)[keyof typeof Severity];
+
 export interface Investigation {
   id: string;
   case_id: string;
   case_title: string;
   case_description?: string;
   user_id: string;
-  status: string;
-  priority?: string;
-  severity?: string;
+  status: InvestigationStatusValue | string;
+  priority?: PriorityValue | string;
+  severity?: SeverityValue | string;
   sentinel_mode?: boolean;
   created_with_case?: boolean;
   conversation_history?: ConversationMessage[];
@@ -128,8 +164,8 @@ export interface ChatStopResponse {
 export interface CaseSummary {
   id: string;
   title: string;
-  status: string;
-  priority?: string;
+  status: InvestigationStatusValue | CaseStatusValue | string;
+  priority?: PriorityValue | string;
   updatedAt: string;
   investigations: Investigation[];
 }

@@ -411,11 +411,11 @@ type browserInvestigationsQuery struct {
 	Limit             int                 `json:"limit"`
 	OrderBy           string              `json:"order_by,omitempty"`
 	OrderDirection    string              `json:"order_direction,omitempty"`
-	Priority          string              `json:"priority,omitempty"`
-	Status            string              `json:"status,omitempty"`
-	UserID            string              `json:"user_id"`
-	WebSessionID      string              `json:"web_session_id,omitempty"`
-	CLISessionID      string              `json:"cli_session_id,omitempty"`
+	Priority          string                        `json:"priority,omitempty"`
+	Status            constants.InvestigationStatus `json:"status,omitempty"`
+	UserID            string                        `json:"user_id"`
+	WebSessionID      string                        `json:"web_session_id,omitempty"`
+	CLISessionID      string                        `json:"cli_session_id,omitempty"`
 }
 
 func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request, userID, webSessionID string, cliSessionIDs ...string) ([]byte, error) {
@@ -443,7 +443,7 @@ func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request
 		case "web_session_id":
 			payload.WebSessionID = vals[0]
 		case "status":
-			payload.Status = vals[0]
+			payload.Status = constants.NormalizeInvestigationStatus(vals[0])
 		case "investigation_type":
 			payload.InvestigationType = vals[0]
 		case "priority":

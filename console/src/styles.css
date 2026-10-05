@@ -199,6 +199,53 @@ h4 {
   padding-left: 20px;
   font-size: 13px;
 }
+.nav-role {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px 8px;
+}
+.nav-role-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+.nav-role-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.nav-role-saving {
+  font-size: 11px;
+  color: var(--accent);
+}
+.nav-role-select {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  text-overflow: ellipsis;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.nav-role-select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.nav-role-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.nav-role-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .sidebar-foot {
   margin-top: auto;
   display: flex;

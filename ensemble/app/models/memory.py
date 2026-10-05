@@ -7,7 +7,7 @@
 
 from app.constants import InvestigationStatus
 
-from .base import Field, G8eBaseModel, G8eIdentifiableModel
+from .base import Field, G8eBaseModel, G8eIdentifiableModel, field_validator
 
 
 class InvestigationMemory(G8eIdentifiableModel):
@@ -15,6 +15,18 @@ class InvestigationMemory(G8eIdentifiableModel):
     investigation_id: str = Field(..., description="Investigation this memory represents")
     user_id: str = Field(..., description="User ID who owns this investigation")
     status: InvestigationStatus = Field(..., description="Current investigation status")
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        if isinstance(v, InvestigationStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return InvestigationStatus(v)
+            except ValueError as err:
+                raise ValueError(f"Invalid investigation status: {v}") from err
+        return v
     case_title: str = Field(..., description="Title of the case")
     investigation_summary: str = Field(
         default="",

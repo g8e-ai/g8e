@@ -70,6 +70,29 @@ def _pascal_to_screaming_snake(name: str) -> str:
     return s.upper()
 
 
+class CaseInsensitiveStrEnum(StrEnum):
+    """StrEnum that accepts case-insensitive string lookups.
+
+    Matches exact wire value first, then case-insensitively, allowing
+    e.g. "open" or "OPEN" to resolve cleanly to InvestigationStatus.OPEN ("Open").
+    """
+
+    @classmethod
+    def _missing_(cls, value: object) -> Any:
+        if isinstance(value, str):
+            val_lower = value.strip().lower()
+            val_norm = val_lower.replace("_", "").replace("-", "")
+            for member in cls:
+                if isinstance(member.value, str):
+                    if member.value.lower() == val_lower:
+                        return member
+                    if member.value.lower().replace("_", "").replace("-", "") == val_norm:
+                        return member
+                if member.name.lower().replace("_", "") == val_norm:
+                    return member
+        return None
+
+
 def _build_enum_from_dict(
     data: dict[str, dict[str, Any]],
     cls_name: str,
@@ -78,7 +101,7 @@ def _build_enum_from_dict(
 
     Works with any top-level constant dict structure (STATUS categories,
     CHANNELS, INTENTS, etc.).  Integer-like values produce ``IntEnum``;
-    all others produce ``StrEnum``.
+    all others produce ``CaseInsensitiveStrEnum``.
     """
     if not data:
         raise ValueError(f"Cannot build enum {cls_name!r} from empty dict")
@@ -87,7 +110,7 @@ def _build_enum_from_dict(
     is_int = isinstance(sample_val, (int,)) or (
         isinstance(sample_val, str) and sample_val.lstrip("-").isdigit()
     )
-    base = IntEnum if is_int else StrEnum
+    base = IntEnum if is_int else CaseInsensitiveStrEnum
 
     members: dict[str, str | int] = {}
     for _key, meta in data.items():
@@ -146,7 +169,7 @@ def _build_event_type_enum() -> type:
         member_name = _pascal_to_screaming_snake(key)
         members[member_name] = meta["value"]
 
-    return StrEnum("EventType", members)  # type: ignore[arg-type]
+    return CaseInsensitiveStrEnum("EventType", members)  # type: ignore[arg-type]
 
 
 def _to_snake(pascal: str) -> str:

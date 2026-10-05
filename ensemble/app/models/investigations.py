@@ -530,6 +530,20 @@ class InvestigationModel(G8eIdentifiableModel):
             return v.strip()
         return v
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return InvestigationStatus.OPEN
+        if isinstance(v, InvestigationStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return InvestigationStatus(v)
+            except ValueError as err:
+                raise ValueError(f"Invalid investigation status: {v}") from err
+        return v
+
     @field_validator("priority", mode="before")
     @classmethod
     def validate_priority(cls, v):
@@ -691,6 +705,20 @@ class InvestigationUpdateRequest(G8eBaseModel):
         description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data.",
     )
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, InvestigationStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return InvestigationStatus(v)
+            except ValueError as err:
+                raise ValueError(f"Invalid investigation status: {v}") from err
+        return v
+
 
 class InvestigationQueryRequest(G8eBaseModel):
     """Request model for querying investigations."""
@@ -710,6 +738,20 @@ class InvestigationQueryRequest(G8eBaseModel):
     order_direction: str = Field(
         default="desc", pattern="^(asc|desc)$", description="Order direction"
     )
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, InvestigationStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return InvestigationStatus(v)
+            except ValueError as err:
+                raise ValueError(f"Invalid investigation status: {v}") from err
+        return v
 
 
 class InvestigationGetRequest(G8eBaseModel):
