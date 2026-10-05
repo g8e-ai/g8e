@@ -45,6 +45,7 @@ var EnvVar = struct {
 	Home                  EnvVarKey
 	User                  EnvVarKey
 	SSHAuthSock           EnvVarKey
+	VirtualEnv            EnvVarKey
 	CloudflareAPIToken    EnvVarKey
 	CFAPIToken            EnvVarKey
 	OllamaHost            EnvVarKey
@@ -86,6 +87,7 @@ var EnvVar = struct {
 	Home:                  EnvVarKey("HOME"),
 	User:                  EnvVarKey("USER"),
 	SSHAuthSock:           EnvVarKey("SSH_AUTH_SOCK"),
+	VirtualEnv:            EnvVarKey("VIRTUAL_ENV"),
 	CloudflareAPIToken:    EnvVarKey("CLOUDFLARE_API_TOKEN"),
 	CFAPIToken:            EnvVarKey("CF_API_TOKEN"),
 	OllamaHost:            EnvVarKey("OLLAMA_HOST"),

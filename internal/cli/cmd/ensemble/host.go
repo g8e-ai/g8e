@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/identityreset"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
@@ -132,7 +133,7 @@ func hostLifecycleCmd(name, short string) *cobra.Command {
 }
 
 func localPython() (string, error) {
-	if venv := os.Getenv("VIRTUAL_ENV"); venv != "" {
+	if venv := os.Getenv(string(constants.EnvVar.VirtualEnv)); venv != "" {
 		return exec.LookPath(filepath.Join(venv, "bin", "python"))
 	}
 	if _, err := os.Stat(".venv/bin/python"); err == nil {

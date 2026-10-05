@@ -121,6 +121,12 @@
       "category": "host",
       "description": "SSH agent socket provided by the host session"
     },
+    "VirtualEnv": {
+      "_go_const": "EnvVar.VirtualEnv",
+      "value": "VIRTUAL_ENV",
+      "category": "host",
+      "description": "Active Python virtual environment reported by the shell"
+    },
     "LatticeEndpoint": {
       "_go_const": "EnvVar.LatticeEndpoint",
       "value": "LATTICE_ENDPOINT",
