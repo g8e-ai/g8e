@@ -294,6 +294,11 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 					}
 					deployed = append(deployed, result.op)
 				}
+				if err := ctx.Err(); err != nil {
+					total := len(hostList) * len(dirs)
+					notStarted := total - len(deployed) - len(failed)
+					return fmt.Errorf("%w: Docker deployment canceled (completed=%d failed=%d not-started=%d)", err, len(deployed), len(failed), notStarted)
+				}
 			} else {
 				for _, host := range hostList {
 					s := deploySSH{host: strings.TrimSpace(host), port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr(), local: local}

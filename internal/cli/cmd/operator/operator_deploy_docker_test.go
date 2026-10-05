@@ -195,3 +195,20 @@ func TestDockerDeploymentReadsOnlyCurrentLaunchLogs(t *testing.T) {
 	assert.Contains(t, fake.calls[0], "200")
 	assert.Contains(t, fake.calls[0], "--since")
 }
+
+func TestDockerDeploymentRestartsContainerForEnrollmentRetry(t *testing.T) {
+	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil, nil)
+	dir := "/operators/fleet/op-00001"
+	op := d.spec(dir, nil)
+	d.operators[dir] = op
+	fake := &fakeDockerRunner{run: func([]string) ([]byte, error) { return nil, nil }}
+	d.runner = fake
+
+	require.NoError(t, d.startOperator(context.Background(), dir, "gateway"))
+	require.NoError(t, d.startOperator(context.Background(), dir, "gateway"))
+
+	require.Len(t, fake.calls, 3)
+	assert.Contains(t, strings.Join(fake.calls[0], " "), "container start "+op.container)
+	assert.Contains(t, strings.Join(fake.calls[1], " "), "container stop --time 10 "+op.container)
+	assert.Contains(t, strings.Join(fake.calls[2], " "), "container start "+op.container)
+}

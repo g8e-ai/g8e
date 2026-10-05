@@ -36,15 +36,12 @@ type dockerCommandRunner interface {
 	Run(context.Context, ...string) ([]byte, error)
 }
 
-type execDockerRunner struct{ stderr io.Writer }
+type execDockerRunner struct{}
 
 func (r execDockerRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if r.stderr != nil && len(out) != 0 {
-			_, _ = r.stderr.Write(out)
-		}
 		return nil, fmt.Errorf("docker %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return out, nil
@@ -54,13 +51,13 @@ type dockerOperatorSpec struct {
 	dir, container, volume, hostname string
 	startArgs                        []string
 	launchTime                       time.Time
+	launched                         bool
 }
 
 type deployDocker struct {
 	context, image, imageID, root, deployment string
 	mounts                                    []string
 	runner                                    dockerCommandRunner
-	stderr                                    io.Writer
 	mu                                        sync.RWMutex
 	operators                                 map[string]*dockerOperatorSpec
 }
@@ -69,8 +66,8 @@ func newDeployDocker(contextName, image, root string, mounts []string, stderr io
 	sum := sha256.Sum256([]byte(contextName + "\x00" + filepath.Clean(root)))
 	return &deployDocker{
 		context: contextName, image: image, root: filepath.Clean(root),
-		deployment: hex.EncodeToString(sum[:8]), mounts: mounts, stderr: stderr,
-		runner: execDockerRunner{stderr: stderr}, operators: make(map[string]*dockerOperatorSpec),
+		deployment: hex.EncodeToString(sum[:8]), mounts: mounts,
+		runner: execDockerRunner{}, operators: make(map[string]*dockerOperatorSpec),
 	}
 }
 
@@ -254,9 +251,21 @@ func (d *deployDocker) startOperator(ctx context.Context, dir, _ string, _ ...st
 	if err != nil {
 		return err
 	}
+	// Enrollment is retried when a request is rejected, times out, or its
+	// approval result is uncertain. The previous attempt may still be running,
+	// so give it a bounded stop before starting the next launch. A stopped
+	// container also accepts this operation, which keeps the retry path simple.
+	if op.launched {
+		if _, err := d.docker(ctx, "container", "stop", "--time", "10", op.container); err != nil {
+			return err
+		}
+	}
 	op.launchTime = time.Now().UTC().Add(-time.Second)
-	_, err = d.docker(ctx, "container", "start", op.container)
-	return err
+	if _, err := d.docker(ctx, "container", "start", op.container); err != nil {
+		return err
+	}
+	op.launched = true
+	return nil
 }
 
 func (d *deployDocker) readStartLog(ctx context.Context, dir string) ([]byte, error) {

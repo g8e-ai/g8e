@@ -74,13 +74,18 @@ if (-not (Test-Administrator)) { throw "$Action requires an elevated PowerShell 
 
 if ($Action -eq 'Apply') {
     if (-not $RemoteScope) { throw 'Apply requires -RemoteScope (for example 192.168.1.53 or 192.168.1.0/24).' }
+    $escapedLanAddress = [regex]::Escape($LanAddress)
     foreach ($port in $ports) {
         $existing = (& netsh interface portproxy show v4tov4 listenaddress=$LanAddress listenport=$port | Out-String)
+        # Some netsh versions ignore the show command's listenport filter and
+        # return every v4tov4 row. Match the requested address and port rather
+        # than treating any numeric row as a conflict.
+        $hasExactForward = $existing -match "(?m)^\s*$escapedLanAddress\s+$port\s+"
         $listener = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue |
             Where-Object { $_.LocalAddress -in @($LanAddress, '0.0.0.0', '::') }
         $ruleName = "$rulePrefix $port"
         $ownedRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-        if (($listener -or $existing -match '\d') -and -not $ownedRule) {
+        if (($listener -or $hasExactForward) -and -not $ownedRule) {
             $processes = ($listener | Select-Object -ExpandProperty OwningProcess -Unique) -join ', '
             throw "${LanAddress}:$port already has a listener/forward (process ID(s) $processes) without this helper's ownership rule."
         }
