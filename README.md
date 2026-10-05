@@ -57,27 +57,24 @@ This is not a sandbox. It is a governance boundary.
 
 ## Try it
 
-You can try the project in a few ways:
+You can try the project in a few ways.
 
-### 1. Explore the live evidence and protocol
+### 1. Run the platform locally (recommended)
 
-The repo includes a protocol layer and example integrations with Python and Go.
-
-### 2. Run the platform locally
-
-Requirements:
-
-- Docker + Docker Compose v2
-- modern browser for WebAuthn enrollment (or headless mode)
-- ports 8080, 8443, 8000, 3000, 5173, 8081, 8082 available
-
-Quick start:
+The default workflow is native on your machine with the repo's Makefile targets:
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git
 cd g8e
-cp .env.example .env
-docker compose up -d --build
+make up
+```
+
+This builds the binary and starts the Gateway on localhost.
+
+For the full local setup with the Operator roles and the first-party ensemble, use:
+
+```bash
+make full
 ```
 
 Then enroll the first owner and approve workloads:
@@ -88,9 +85,11 @@ Then enroll the first owner and approve workloads:
 ./g8e auth enroll approve <request-id> --yes
 ```
 
-For a deeper walkthrough, see the docs in the repository.
+If you want the Docker Compose stack instead, that's still supported, but it is not the primary path for local development or evaluation.
 
-### 3. Use the protocol directly
+### 2. Explore the protocol and evidence model
+
+The repo includes a protocol layer and example integrations with Python and Go.
 
 ```bash
 pip install g8e==2.3.0
@@ -101,6 +100,25 @@ Go:
 ```bash
 go get github.com/g8e-ai/g8e/v2@v2.3.0
 ```
+
+### 3. Docker fallback
+
+If you specifically want the containerized stack:
+
+```bash
+git clone https://github.com/g8e-ai/g8e.git
+cd g8e
+cp .env.example .env
+make docker-up
+```
+
+or
+
+```bash
+docker compose up -d --build
+```
+
+Then enroll the first owner and approve workloads through the same CLI flow.
 
 ## What is in the repo
 
