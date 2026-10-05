@@ -145,5 +145,3 @@ func TestToSlash(t *testing.T) {
 		})
 	}
 }
-
-// Made with Bob

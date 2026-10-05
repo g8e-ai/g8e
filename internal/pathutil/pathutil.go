@@ -58,5 +58,3 @@ func ResolveDBPath(dataDir, dbPath string) string {
 func ToSlash(path string) string {
 	return filepath.ToSlash(path)
 }
-
-// Made with Bob
