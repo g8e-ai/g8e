@@ -126,6 +126,7 @@ Check Gateway status:
 This reports:
 - Gateway process status (running or stopped)
 - Listening ports and endpoint URLs
+- An Enrollments section with Pending requests, connected Operators, Applications (completed application and ensemble enrollments), and Dashboard, followed by Users
 
 The Gateway provides a unified health endpoint across all services for consistent health checking.
 

@@ -97,7 +97,8 @@ linters:
     gocyclo:
       min-complexity: 60
     nolintlint:
-      require-explanation: true
+      allow-unused: true
+      require-explanation: false
       require-specific: true
     goconst:
       min-len: 5

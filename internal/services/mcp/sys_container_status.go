@@ -140,7 +140,6 @@ func getContainerStatus(ctx context.Context, containerName string, executor comm
 
 	var inspectData []containerInspectData
 	if err := json.Unmarshal(output, &inspectData); err != nil {
-		//nolint:nilerr // intentional fallback: unmarshal error recorded in containerStatusResult
 		return containerStatusResult{
 			ContainerName: containerName,
 			Error:         fmt.Sprintf("failed to parse inspect output: %v", err),

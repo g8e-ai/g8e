@@ -511,7 +511,7 @@ g8e integrates with popular AI agent binaries to provide governed MCP tool acces
 After the Gateway is running and the CLI is authenticated:
 
 ```bash
-./g8e gw status           # Gateway health and endpoint info
+./g8e gw status           # Gateway health, endpoints, enrollments
 ./g8e gw data operators   # List enrolled operators
 ./g8e gw data users       # List users
 ./g8e gw data audit list  # Inspect the audit vault
