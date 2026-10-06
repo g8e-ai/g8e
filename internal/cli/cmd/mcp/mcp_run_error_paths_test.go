@@ -32,8 +32,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 
-	// ─── buildGatewayConn error paths ────────────────────────────────────────────
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
 )
 
 func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
@@ -167,36 +165,6 @@ func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 		_, err := proxySessionToGateway(session, req)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mcp: execute request")
-	})
-}
-
-// ─── agent_harness.go error paths ────────────────────────────────────────────
-
-func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
-	t.Run("returns error when config file does not exist", func(t *testing.T) {
-		cmdtest.ChdirTemp(t)
-
-		// Reset harness flags to known state
-		demos.HarnessConfigPath = filepath.Join(testutil.TempDir(t), "nonexistent-config.json")
-		demos.HarnessMTLSURL = ""
-		demos.HarnessPublicURL = ""
-		demos.HarnessCert = ""
-		demos.HarnessKey = ""
-		demos.HarnessCA = ""
-		demos.HarnessAPIKey = ""
-		demos.HarnessSessionID = ""
-		demos.HarnessOutDir = ""
-		demos.HarnessVerbose = false
-		demos.HarnessPhase = "all"
-
-		cmd := &cobra.Command{}
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := demos.RunAgentHarness(cmd, []string{})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "scenarios run: load config")
 	})
 }
 

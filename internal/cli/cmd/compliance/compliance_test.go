@@ -162,9 +162,9 @@ func TestComplianceCmd_Structure(t *testing.T) {
 	assert.Equal(t, "compliance", cmd.Use)
 
 	subcommands := cmd.Commands()
-	assert.Len(t, subcommands, 9)
+	assert.Len(t, subcommands, 8)
 
-	names := make(map[string]bool, 9)
+	names := make(map[string]bool, 8)
 	for _, sub := range subcommands {
 		names[sub.Name()] = true
 	}
@@ -172,7 +172,6 @@ func TestComplianceCmd_Structure(t *testing.T) {
 	assert.True(t, names["ksi"], "compliance should have 'ksi' subcommand")
 	assert.True(t, names["ksi-history"], "compliance should have 'ksi-history' subcommand")
 	assert.True(t, names["overlay"], "compliance should have 'overlay' subcommand")
-	assert.True(t, names["demo-run"], "compliance should have 'demo-run' subcommand")
 	assert.True(t, names["evidence"], "compliance should have 'evidence' subcommand")
 	assert.True(t, names["evidence-graph"], "compliance should have 'evidence-graph' subcommand")
 	assert.True(t, names["report"], "compliance should have 'report' subcommand")

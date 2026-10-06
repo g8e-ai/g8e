@@ -40,8 +40,6 @@ var EnvVar = struct {
 	LatticeSandboxesToken EnvVarKey
 	LatticeEntityName     EnvVarKey
 	LatticePostureFloor   EnvVarKey
-	DemoRunID             EnvVarKey
-	DemoScenarioID        EnvVarKey
 	Home                  EnvVarKey
 	User                  EnvVarKey
 	SSHAuthSock           EnvVarKey
@@ -82,8 +80,6 @@ var EnvVar = struct {
 	LatticeSandboxesToken: EnvVarKey("SANDBOXES_TOKEN"),
 	LatticeEntityName:     EnvVarKey("LATTICE_ENTITY_NAME"),
 	LatticePostureFloor:   EnvVarKey("LATTICE_POSTURE_FLOOR"),
-	DemoRunID:             EnvVarKey("G8E_DEMO_RUN_ID"),
-	DemoScenarioID:        EnvVarKey("G8E_DEMO_SCENARIO_ID"),
 	Home:                  EnvVarKey("HOME"),
 	User:                  EnvVarKey("USER"),
 	SSHAuthSock:           EnvVarKey("SSH_AUTH_SOCK"),

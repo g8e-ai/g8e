@@ -28,14 +28,9 @@ import (
 type ArtifactType string
 
 const (
-	ArtifactTypeDemoManifest                     ArtifactType = "demo-manifest"
-	ArtifactTypeDemoResult                       ArtifactType = "demo-result"
-	ArtifactTypeDemoStepResult                   ArtifactType = "demo-step-result"
-	ArtifactTypeDemoDefinition                   ArtifactType = "demo-definition"
 	ArtifactTypeActionReceipt                    ArtifactType = "action-receipt"
 	ArtifactTypeReceiptPersistence               ArtifactType = "receipt-persistence"
 	ArtifactTypeStateObservation                 ArtifactType = "state-observation"
-	ArtifactTypeDemoMetric                       ArtifactType = "demo-metric"
 	ArtifactTypeProtocolChain                    ArtifactType = "protocol-chain"
 	ArtifactTypeEvalManifest                     ArtifactType = "eval-manifest"
 	ArtifactTypeEvalTask                         ArtifactType = "eval-task"
@@ -67,14 +62,9 @@ func EvalScopeID(suiteID string) string {
 
 func SupportedArtifactTypes() []ArtifactType {
 	return []ArtifactType{
-		ArtifactTypeDemoManifest,
-		ArtifactTypeDemoResult,
-		ArtifactTypeDemoStepResult,
-		ArtifactTypeDemoDefinition,
 		ArtifactTypeActionReceipt,
 		ArtifactTypeReceiptPersistence,
 		ArtifactTypeStateObservation,
-		ArtifactTypeDemoMetric,
 		ArtifactTypeProtocolChain,
 		ArtifactTypeEvalManifest,
 		ArtifactTypeEvalTask,

@@ -1264,7 +1264,6 @@ var (
 	ErrEvidenceArtifactTooLarge       = errors.New("compliance: evidence artifact exceeds size limit")
 	ErrEvidenceArtifactPersistFailed  = errors.New("compliance: evidence artifact persistence failed")
 	ErrEvidenceDirectoryLimitExceeded = errors.New("compliance: evidence directory resource limit exceeded")
-	ErrDemoRunVerificationFailed      = errors.New("compliance: demo run verification failed")
 	ErrEvalRunVerificationFailed      = errors.New("compliance: eval run verification failed")
 	ErrComplianceReleaseEvidence      = errors.New("compliance: release evidence generation failed")
 
@@ -1311,14 +1310,6 @@ var (
 
 	// Host runtime directory errors
 	ErrRuntimeDirNotWritable = errors.New("runtime directory is not writable by the current user")
-
-	// Demo scenario execution errors
-	ErrDemoScenarioFailed        = errors.New("demo: one or more scenarios failed")
-	ErrDemoScenarioCancelled     = errors.New("demo: scenario cancelled")
-	ErrDemoDatalinkDisconnect    = errors.New("demo: coalition datalink disconnect failed")
-	ErrDemoDatalinkRestoration   = errors.New("demo: coalition datalink restoration failed")
-	ErrDemoEvidencePersistFailed = errors.New("demo: typed evidence persistence failed")
-	ErrDemoRunIDMissing          = errors.New("demo: run ID is required")
 
 	// OSCAL validator errors
 	ErrOSCALSchemaDigestMismatch     = errors.New("oscal: embedded schema digest mismatch")

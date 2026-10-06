@@ -55,8 +55,6 @@ var allowedEnvViolations = map[string]bool{
 	"G8E_DOCTRINE_DIR":         true,
 	"LATTICE_POSTURE_FLOOR":    true,
 	"OLLAMA_HOST":              true,
-	"G8E_DEMO_RUN_ID":          true,
-	"G8E_DEMO_SCENARIO_ID":     true,
 	"G8E_HARNESS_POLL_TIMEOUT": true,
 	"G8E_HARNESS_LLM_PROVIDER": true,
 	"G8E_HARNESS_LLM_MODEL":    true,

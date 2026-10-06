@@ -77,13 +77,13 @@ func validGenerationScope(windowStart, windowEnd time.Time) *compliancev1.Assess
 
 func validGenerationNode(scopeID string, producedAt, verifiedAt time.Time) evidence.EvidenceNode {
 	body := []byte(`{"schema_version":"1.0.0"}`)
-	artifactID := evidence.ContentAddress(evidence.ArtifactTypeDemoManifest, body)
+	artifactID := evidence.ContentAddress(evidence.ArtifactTypeEvalManifest, body)
 	return evidence.EvidenceNode{
 		ArtifactID:         artifactID,
-		ArtifactType:       evidence.ArtifactTypeDemoManifest,
+		ArtifactType:       evidence.ArtifactTypeEvalManifest,
 		SHA256:             artifactID[len(artifactID)-64:],
 		MediaType:          constants.MediaTypeJSON,
-		SchemaRef:          "g8e.compliance.v1.DemoRunManifest",
+		SchemaRef:          "g8e.eval.v1.EvaluationReport",
 		ProducerIdentity:   "generation-test@1.0.0",
 		ProducedAt:         producedAt,
 		ScopeID:            scopeID,
