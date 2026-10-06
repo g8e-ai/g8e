@@ -44,7 +44,7 @@ func newAuditRecordFixture(t *testing.T) *auditRecordFixture {
 		StoredLocally:       true,
 		FileMutations: []*operatorv1.AuditFileMutation{{
 			Id:               7,
-			Filepath:         constants.DemosTargetDataDir,
+			Filepath:         "target-data",
 			Operation:        "WRITE",
 			LedgerHashBefore: strings.Repeat("a", 64),
 			LedgerHashAfter:  strings.Repeat("b", 64),
@@ -199,7 +199,7 @@ func TestAuditRecordImporter_Import_ProducesValidGraph(t *testing.T) {
 	fixture := newAuditRecordFixture(t)
 	nodes, err := NewAuditRecordImporter(fixture.reader, fixture.binding).Import(context.Background())
 	require.NoError(t, err)
-	graph := NewEvidenceGraph(constants.DemoRunMaxArtifactBytes, []string{constants.MediaTypeJSON})
+	graph := NewEvidenceGraph(maxArtifactBytes, []string{constants.MediaTypeJSON})
 	for _, node := range nodes {
 		require.NoError(t, graph.AddNode(node))
 	}

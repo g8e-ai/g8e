@@ -50,7 +50,7 @@ func newCommitmentFixture(t *testing.T) *commitmentFixture {
 		WardenIntentSignatureDigest: strings.Repeat("5", 64),
 		HumanSignatureDigest:        strings.Repeat("6", 64),
 		ActionType:                  "FILE_EDIT",
-		TargetResource:              constants.DemosTargetDataDir,
+		TargetResource:              "target-data",
 		CommittedAtUnixMs:           1_700_000_000_000,
 		AuditorKeyId:                keyID,
 	}
@@ -238,7 +238,7 @@ func TestCommitmentImporter_Import_ProducesValidGraph(t *testing.T) {
 	fixture := newCommitmentFixture(t)
 	nodes, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt).Import(context.Background())
 	require.NoError(t, err)
-	graph := NewEvidenceGraph(constants.DemoRunMaxArtifactBytes, []string{constants.MediaTypeJSON})
+	graph := NewEvidenceGraph(maxArtifactBytes, []string{constants.MediaTypeJSON})
 	for _, node := range nodes {
 		require.NoError(t, graph.AddNode(node))
 	}

@@ -181,18 +181,6 @@
       "category": "violation",
       "description": "Ollama endpoint for hidden model-maintenance commands; duplicates --inference-ollama-endpoint"
     },
-    "DemoRunID": {
-      "_go_const": "EnvVar.DemoRunID",
-      "value": "G8E_DEMO_RUN_ID",
-      "category": "violation",
-      "description": "Demo run identifier injected by the demo runner"
-    },
-    "DemoScenarioID": {
-      "_go_const": "EnvVar.DemoScenarioID",
-      "value": "G8E_DEMO_SCENARIO_ID",
-      "category": "violation",
-      "description": "Demo scenario identifier injected by the demo runner"
-    },
     "HarnessPollTimeout": {
       "_go_const": "EnvVar.HarnessPollTimeout",
       "value": "G8E_HARNESS_POLL_TIMEOUT",

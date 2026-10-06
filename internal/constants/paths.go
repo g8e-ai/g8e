@@ -269,44 +269,7 @@ const (
 	EvaluationWorkspacePrefix = "ws-"
 )
 
-// Demos constants for organization names, doctrine files, and compose config.
-const (
-	DemosDirname                        = "demos"
-	DemosComposeFile                    = "compose.yml"
-	DemosTargetDataDir                  = "target-data"
-	DemosDoctrineDir                    = "doctrine"
-	DemosPARequestsFile                 = "pa_requests.json"
-	DemosHIPAADoctrineFile              = "phi_hipaa_doctrine.json"
-	DemosDHSDoctrineFile                = "dhs_sovereign_doctrine.json"
-	DemosFedRAMPDoctrineFile            = "fedramp_doctrine.json"
-	DemosFinanceStateCollectorFile      = "verify_trade_absence.sh"
-	DemosHealthcareNetCollectorFile     = "collect_network_isolation.sh"
-	DemosDHSNetworkCollectorFile        = "collect_network_membership.sh"
-	DemosDHSGatewayHealthCollectorFile  = "collect_gateway_health.sh"
-	DemosDHSLedgerCollectorFile         = "collect_ledger_persistence.sh"
-	DemosDHSAuditVaultCollectorFile     = "collect_audit_vault_persistence.sh"
-	DemosFedRAMPCloudCollectorFile      = "collect_cloud_service_state.py"
-	DemosFedRAMPAuditVaultCollectorFile = "collect_audit_vault_persistence.sh"
-	DemosImagesManifestFile             = "images.json"
-	DemosOrgHealthcare                  = "healthcare"
-	DemosOrgFinance                     = "finance"
-	DemosOrgDHS                         = "dhs"
-	DemosOrgFedRAMP                     = "fedramp"
-
-	// DHS demo docker resource names. The compose project is named "dhs-demo"
-	// (see demos/dhs/compose.yml), so the perimeter network is prefixed with
-	// the project name. The coalition-datalink container is the synthetic
-	// Mission Partner link severed in Scenario 2.
-	DemosDHSPerimeterNetwork      = "dhs-demo_net_perimeter"
-	DemosDHSCoalitionDatalinkCtnr = "dhs-coalition-datalink"
-
-	// DHS gateway health endpoint used by the local gateway availability
-	// collector in dhs-disconnected-operations. The compose file maps
-	// container port 8080 to host port 8087.
-	DemosDHSGatewayHealthEndpoint = "http://localhost:8087/api/v1/health"
-)
-
-// Container paths for Docker exec commands in demo environments.
+// Container paths for Docker exec commands in container environments.
 // These are paths inside the g8e Docker containers, not local filesystem paths.
 const (
 	ContainerBinaryPath               = "/g8e"
@@ -323,17 +286,13 @@ const (
 	ContainerFinanceUnauthorizedTrade = ContainerFinanceTargetDir + "/unauthorized_trade_execution.log"
 	ContainerHealthcarePAOperations   = "/var/pa_operations.log"
 
-	ContainerDoctrineDir                = "/etc/g8e/" + DemosDoctrineDir
-	ContainerFinanceStateCollectorFile  = ContainerFinanceTargetDir + "/" + DemosFinanceStateCollectorFile
-	ContainerHealthcareNetCollectorFile = "/app/" + DemosHealthcareNetCollectorFile
-	ContainerFedRAMPCloudCollectorFile  = "/app/" + DemosFedRAMPCloudCollectorFile
-	ContainerEnsembleSeed               = "/etc/g8e/ensemble-seed.hex"
-	ContainerVerifyOpsPy                = "/app/verify_ops.py"
-	ContainerVerifyPAPy                 = "/app/verify_pa.py"
-	ContainerInspectRFPy                = "/app/inspect_rf.py"
-	ContainerInspectPNTPy               = "/app/inspect_pnt.py"
-	ContainerVerifySlewsPy              = "/app/verify_slews.py"
-	ContainerKSICatalog                 = "/docs/reference/" + KSICatalogFilename
+	ContainerEnsembleSeed  = "/etc/g8e/ensemble-seed.hex"
+	ContainerVerifyOpsPy   = "/app/verify_ops.py"
+	ContainerVerifyPAPy    = "/app/verify_pa.py"
+	ContainerInspectRFPy   = "/app/inspect_rf.py"
+	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
+	ContainerVerifySlewsPy = "/app/verify_slews.py"
+	ContainerKSICatalog    = "/docs/reference/" + KSICatalogFilename
 
 	// FedRAMP cloudsvc operations log path inside the cloudsvc container.
 	// Used for independent prohibited-side-effect verification after blocked
@@ -679,11 +638,6 @@ const (
 	ComplianceBundleEvalStagesFilename           = "stages.jsonl"
 	ComplianceBundleEvalMetricsFilename          = "metrics.jsonl"
 	ComplianceBundleEvalStateFilename            = "state-observations.jsonl"
-	ComplianceBundleDemoEvidenceDirname          = "demos"
-	ComplianceBundleDemoManifestsFilename        = "manifests.jsonl"
-	ComplianceBundleDemoDefinitionsFilename      = "scenario-definitions.jsonl"
-	ComplianceBundleDemoStepsFilename            = "step-results.jsonl"
-	ComplianceBundleDemoResultsFilename          = "scenario-results.jsonl"
 	ComplianceBundlePlatformEvidenceDirname      = "platform"
 	ComplianceBundleKSIResultsFilename           = "ksi-results.json"
 	ComplianceBundleKSIHistoryFilename           = "ksi-history.jsonl"
@@ -715,23 +669,11 @@ const (
 	ReleaseEvidenceCSVSuffix      = "-compliance-evidence.csv"
 )
 
-// Per-run demo evidence path constants. Typed demo evidence is persisted under
-// the runtime compliance tree at data/compliance/demo-evidence/<run-id>/ before
-// bundle generation. These are runtime evidence store paths, distinct from the
-// ComplianceBundle* constants which describe the generated report bundle layout.
+// Evidence verifier identities, reference prefixes, collection limits, and
+// attestation metadata. These describe runtime evidence handling, distinct
+// from the ComplianceBundle* constants which describe the generated report
+// bundle layout.
 const (
-	DemoEvidenceDirname                           = "demo-evidence"
-	DemoRunManifestFilename                       = "manifest.json"
-	DemoRunResultsFilename                        = "scenario-results.jsonl"
-	DemoRunStepsFilename                          = "step-results.jsonl"
-	DemoRunDefinitionsFilename                    = "scenario-definitions.jsonl"
-	DemoRunReceiptsDirname                        = "receipts"
-	DemoRunPersistenceDirname                     = "persistence"
-	DemoRunStateObservationsDirname               = "state-observations"
-	DemoRunMetricsDirname                         = "metrics"
-	DemoRunVerifierID                             = "g8e-demo-run-verifier"
-	DemoRunVerifierVersion                        = "1.0.0"
-	DemoRunVerificationCheck                      = "demo_run"
 	EvalRunVerificationCheck                      = "eval_evidence_graph"
 	AssertionGraderID                             = "assertion_assessment"
 	AssertionGraderVersion                        = "2.2.0"
@@ -773,13 +715,7 @@ const (
 	AttestationMaxRecords                         = 4096
 	AttestationEvidenceVerifierID                 = "g8e-attestation-evidence-importer"
 	AttestationEvidenceVerifierVersion            = "1.0.0"
-	DemoMetricEvidenceVersion                     = "1.0.0"
-	DemoMetricGraderID                            = "healthcare-threshold"
-	DemoMetricGraderVersion                       = "1.0.0"
-	DemoMetricComparisonGreaterThanOrEqual        = "greater_than_or_equal"
-	DemoRunMaxArtifactBytes                       = 16 << 20
-	DemoRunMaxResults                             = 1024
-	DemoRunMaxArtifactsPerDirectory               = 4096
+	EvidenceMaxArtifactsPerDirectory              = 4096
 	EvaluationDirname                             = "eval"
 	EvaluationInventoriesDirname                  = "inventories"
 	EvaluationCampaignsDirname                    = "campaigns"
@@ -890,7 +826,6 @@ const (
 	ComplianceBundleChecksumsPath                 = "checksums.json"
 	ComplianceBundleManifestPath                  = "manifest.json"
 	ComplianceBundleSourcesDirname                = "sources"
-	ComplianceBundleSourceDemosDirname            = "demos"
 	ComplianceBundleSourceEvalsDirname            = "evals"
 	ComplianceBundleSourceRuntimeDirname          = "runtime"
 	ComplianceBundleSourceProvenanceDirname       = "provenance"
@@ -936,25 +871,6 @@ const (
 	OSCALValidatorMaxItems         = 4096
 	OSCALValidatorMaxRefDepth      = 64
 	OSCALValidatorMaxFailures      = 256
-)
-
-// Demo scope identifiers. Each demo org binds its typed scenario results to a
-// stable scope ID so manifest and result records share the same assessment
-// scope binding.
-const (
-	DemoScopeFedRAMP    = "fedramp-demo-scope"
-	DemoScopeDHS        = "dhs-demo-scope"
-	DemoScopeFinance    = "finance-demo-scope"
-	DemoScopeHealthcare = "healthcare-demo-scope"
-)
-
-// DemoVersion is the version of the demo environment topology and scenario
-// catalog binding. It is distinct from individual scenario definition versions.
-const DemoVersion = "1.0.0"
-
-// Demo provenance subdirectory names hashed by buildDemoManifest.
-const (
-	DemoConfigDirname = "config"
 )
 
 // Cloudflare Tunnel configuration path constants.

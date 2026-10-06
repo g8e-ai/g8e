@@ -37,6 +37,12 @@ import (
 // limit.
 const maxArtifactBytes = 16 << 20
 
+// ArtifactReader is the read-only runtime-file capability used by importers and verifiers.
+type ArtifactReader interface {
+	ReadFile(context.Context, string) ([]byte, error)
+	ReadDir(context.Context, string) ([]os.DirEntry, error)
+}
+
 // ReadResult holds the bytes and digest of a read artifact.
 type ReadResult struct {
 	Bytes  []byte
@@ -59,6 +65,12 @@ func ReadAndDigest(reader ArtifactReader, ctx context.Context, path string, maxB
 	digest := sha256.Sum256(body)
 	return ReadResult{Bytes: body, SHA256: hex.EncodeToString(digest[:])}, nil
 }
+
+func digestHex(body []byte) string {
+	d := sha256.Sum256(body)
+	return hex.EncodeToString(d[:])
+}
+
 
 // UnmarshalCanonicalProto unmarshals canonical JSON bytes into a proto
 // message using the compliance canonical decoder.

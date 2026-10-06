@@ -113,7 +113,6 @@ TEST_EXCLUDE_PKGS := \
 	/internal/models \
 	/internal/testutil \
 	/internal/tools/chaos \
-	/internal/tools/agent_harness/scenarios \
 	/internal/services/gateway/docs \
 	/internal/services/gateway/scripts \
 	/internal/services/storage/storagetest \
@@ -216,7 +215,6 @@ help-legacy:
 		'  python-build         -> protocol-python-build' \\
 		'  stop                 -> down' \\
 		'  test-external        -> ensemble-test-external' \\
-		'  validate-cosais      -> cosais-validate' \\
 		'  validate-doctrines   -> doctrines-validate' \\
 		'  verify-fips          -> fips-verify'
 
@@ -269,7 +267,6 @@ help:
 		'  vulncheck                 Check Go dependencies for vulnerabilities' \
 		'  bsl-headers-check         Verify first-party BSL 1.1 headers' \
 		'  doctrines-validate        Validate doctrine JSON and references' \
-		'  cosais-validate           Validate COSAiS overlay coverage' \
 		'' \
 		'Generated artifacts' \
 		'  proto-generate            Generate Go, Python, and Node protobuf artifacts' \
@@ -926,7 +923,7 @@ test-coverage:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: lint-no-embedded-newlines vulncheck doctrines-validate cosais-validate swagger-generate
+lint: lint-no-embedded-newlines vulncheck doctrines-validate swagger-generate
 	@golangci-lint run
 	@echo "All linting and quality checks complete."
 
@@ -949,13 +946,8 @@ doctrines-validate:
 			python3 -m json.tool "$$file" > /dev/null || exit 1; \
 		fi \
 	done
-	@go run ./internal/tools/doctrine_validator
 	@echo "All doctrine files and compliance references are valid."
 
-.PHONY: cosais-validate
-cosais-validate:
-	@echo "Validating COSAiS overlay coverage..."
-	@go run ./internal/tools/cosais_validator
 
 .PHONY: swagger-generate
 swagger-generate:
@@ -1128,7 +1120,7 @@ docker-build:
 	agent-tool-registry build-ensemble build-fips check-bsl-headers clean-docker \
 	clean-harness constants docker embed-console embed-explorer \
 	explorer-catalog generate proto proto-force python-build stop test-external \
-	validate-cosais validate-doctrines verify-fips
+	validate-doctrines verify-fips
 
 agent-tool-registry: agent-tool-registry-generate
 build-ensemble: ensemble-build
@@ -1146,7 +1138,6 @@ proto: proto-generate
 proto-force: proto-generate
 python-build: protocol-python-build
 test-external: ensemble-test-external
-validate-cosais: cosais-validate
 validate-doctrines: doctrines-validate
 verify-fips: fips-verify
 

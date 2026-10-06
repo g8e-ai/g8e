@@ -59,6 +59,25 @@ func (s *assessedEvidenceSignerStub) GetTrustedSignerPublicKey(_ context.Context
 	return key, nil
 }
 
+// combineAssessedSignerTrust merges stub signer keys so a single
+// EvidenceTrust covers every source in bundles that mix the base
+// operational source with an added commitment or attestation source.
+func combineAssessedSignerTrust(t *testing.T, sources ...evidence.AssessedSignerSource) evidence.AssessedSignerSource {
+	t.Helper()
+	merged := &assessedEvidenceSignerStub{keys: make(map[string]ed25519.PublicKey)}
+	for _, source := range sources {
+		if source == nil {
+			continue
+		}
+		stub, ok := source.(*assessedEvidenceSignerStub)
+		require.True(t, ok, "combineAssessedSignerTrust requires *assessedEvidenceSignerStub sources")
+		for keyID, key := range stub.keys {
+			merged.keys[keyID] = key
+		}
+	}
+	return merged
+}
+
 type authorizedPlaintextReaderStub struct {
 	plaintext []byte
 	err       error
@@ -401,117 +420,101 @@ func TestBundleVerifier_VerifyOperationalSourcesReplaysProtectedInventory(t *tes
 	assert.True(t, verification.GetValid(), verification.GetFailures())
 }
 
-func demoReplaySourceFixture(t *testing.T, runID string, generatedAt time.Time) []SourceArtifact {
+func operationalReplaySourceFixture(t *testing.T, admission *compliancev1.AssessmentSourceAdmission, scope *compliancev1.AssessmentScope, assessmentAsOf time.Time) (evidence.AssessedSignerSource, []SourceArtifact, evidence.EvidenceImporter) {
 	t.Helper()
-	assertions, frameworks, _, err := catalog.LoadCanonicalCatalogs()
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	scenarios, err := catalog.LoadDemoScenarioCatalog(assertions, frameworks)
+	signerKeyID := hex.EncodeToString(publicKey)
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:    "transaction-1",
+		TransactionHash:  "hash-1",
+		SignerKeyId:      signerKeyID,
+		ExecutedAtUnixMs: assessmentAsOf.Add(-time.Minute).UnixMilli(),
+	}
+	payload, err := governance.CanonicalizeActionReceipt(receipt)
 	require.NoError(t, err)
-	definitions := make([]*compliancev1.DemoScenarioDefinition, 0)
-	definitionRefs := make([]*compliancev1.VersionedReference, 0)
-	frameworkRefs := make(map[string]*compliancev1.FrameworkControlReference)
-	for _, definition := range scenarios.GetDefinitions() {
-		if !strings.HasPrefix(definition.GetScenarioId(), constants.DemosOrgFedRAMP+"-") {
-			continue
-		}
-		definitions = append(definitions, definition)
-		definitionRefs = append(definitionRefs, &compliancev1.VersionedReference{Id: definition.GetScenarioId(), Version: definition.GetScenarioVersion()})
-		for _, reference := range definition.GetFrameworkControlRefs() {
-			key := reference.GetFrameworkRef().GetId() + ":" + reference.GetFrameworkRef().GetVersion() + ":" + reference.GetControlId()
-			frameworkRefs[key] = reference
-		}
-	}
-	require.NotEmpty(t, definitions)
-	sort.Slice(definitions, func(i, j int) bool { return definitions[i].GetScenarioId() < definitions[j].GetScenarioId() })
-	sort.Slice(definitionRefs, func(i, j int) bool { return definitionRefs[i].GetId() < definitionRefs[j].GetId() })
-	frameworkKeys := make([]string, 0, len(frameworkRefs))
-	for key := range frameworkRefs {
-		frameworkKeys = append(frameworkKeys, key)
-	}
-	sort.Strings(frameworkKeys)
-	manifestFrameworkRefs := make([]*compliancev1.FrameworkControlReference, 0, len(frameworkKeys))
-	for _, key := range frameworkKeys {
-		manifestFrameworkRefs = append(manifestFrameworkRefs, frameworkRefs[key])
-	}
-	provenanceBody := []byte("services: {}")
-	provenanceDigest := sha256.Sum256(provenanceBody)
-	manifest := &compliancev1.DemoManifest{
-		DemoId:                 constants.DemosOrgFedRAMP,
-		DemoVersion:            constants.DemoVersion,
-		RunId:                  runID,
-		ScopeId:                constants.DemoScopeFedRAMP,
-		GeneratedAt:            timestamppb.New(generatedAt),
-		ScenarioDefinitionRefs: definitionRefs,
-		ProvenanceHashes:       []*compliancev1.NamedDigest{{Name: constants.DemosComposeFile, Sha256: hex.EncodeToString(provenanceDigest[:])}},
-		RequiredEnvironment:    []string{"docker", "g8e-binary"},
-		FrameworkControlRefs:   manifestFrameworkRefs,
-		SupportedLanes:         []string{"automated", "manual-notary"},
-	}
-	definition := definitions[0]
-	result := &compliancev1.DemoScenarioResult{
-		ResultId:             runID + ":" + definition.GetScenarioId(),
-		ScenarioRef:          &compliancev1.VersionedReference{Id: definition.GetScenarioId(), Version: definition.GetScenarioVersion()},
-		DemoId:               constants.DemosOrgFedRAMP,
-		ScopeId:              constants.DemoScopeFedRAMP,
-		RunId:                runID,
-		StartedAt:            timestamppb.New(generatedAt.Add(time.Second)),
-		CompletedAt:          timestamppb.New(generatedAt.Add(2 * time.Second)),
-		Status:               "failed",
-		Failure:              "expected fixture failure",
-		VerificationStatus:   "unverifiable",
-		DisplayNumber:        definition.GetDisplayNumber(),
-		Title:                definition.GetTitle(),
-		AssertionRefs:        definition.GetAssertionRefs(),
-		FrameworkControlRefs: definition.GetFrameworkControlRefs(),
-		StepResults: []*compliancev1.DemoStepResult{{
-			StepId: "step-1", Operation: "fixture", StartedAt: timestamppb.New(generatedAt.Add(time.Second)), CompletedAt: timestamppb.New(generatedAt.Add(2 * time.Second)), Status: "failed", Failure: "expected fixture failure", Required: true,
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	receiptBody, err := compliancev1.MarshalCanonical(receipt)
+	require.NoError(t, err)
+
+	sourceDir := t.TempDir()
+	_, err = evidence.ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{
+		Receipts: []storage.OperationalReceiptSource{{
+			TransactionID: receipt.GetTransactionId(),
+			ExecutedAt:    time.UnixMilli(receipt.GetExecutedAtUnixMs()),
+			Body:          receiptBody,
 		}},
-	}
-	manifestBody, err := compliancev1.MarshalCanonical(manifest)
+	}, evidence.OperationalExportRequest{
+		ScopeID:              scope.GetScopeId(),
+		AdmissionID:          admission.GetAdmissionId(),
+		SourceKind:           admission.GetSourceKind(),
+		SourceVersion:        admission.GetSourceVersion(),
+		SourceScopeID:        admission.GetSourceScopeId(),
+		OwnerRuntimeBoundary: admission.GetOwnerRuntimeBoundary(),
+		AcquisitionBoundary:  admission.GetAcquisitionBoundary(),
+		RunID:                admission.GetRunId(),
+		VerifierID:           admission.GetVerifierRef().GetId(),
+		VerifierVersion:      admission.GetVerifierRef().GetVersion(),
+		WindowStart:          scope.GetAssessmentWindowStart().AsTime(),
+		WindowEnd:            scope.GetAssessmentWindowEnd().AsTime(),
+		MaxRows:              10,
+		OutputDir:            sourceDir,
+	})
 	require.NoError(t, err)
-	resultBody, err := compliancev1.MarshalCanonical(result)
+
+	sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, admission.GetAdmissionId())
+	inventoryPath := path.Join(sourceRoot, constants.ComplianceOperationalInventoryFilename)
+	inventoryBody, err := os.ReadFile(filepath.Join(sourceDir, constants.ComplianceOperationalInventoryFilename))
 	require.NoError(t, err)
-	definitionBodies := make([]string, 0, len(definitions))
-	for _, value := range definitions {
-		body, err := compliancev1.MarshalCanonical(value)
-		require.NoError(t, err)
-		definitionBodies = append(definitionBodies, string(body))
+	var inventory evidence.OperationalSourceInventory
+	require.NoError(t, json.Unmarshal(inventoryBody, &inventory))
+
+	bodies := map[string][]byte{inventoryPath: inventoryBody}
+	sourceArtifacts := []SourceArtifact{{BundlePath: inventoryPath, Body: inventoryBody, MediaType: constants.MediaTypeJSON}}
+	for _, artifact := range inventory.Artifacts {
+		body, readErr := os.ReadFile(filepath.Join(sourceDir, artifact.RelativePath))
+		require.NoError(t, readErr)
+		bundlePath := path.Join(sourceRoot, artifact.RelativePath)
+		bodies[bundlePath] = body
+		sourceArtifacts = append(sourceArtifacts, SourceArtifact{BundlePath: bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
 	}
-	base := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID)
-	return []SourceArtifact{
-		{BundlePath: path.Join(base, constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunManifestFilename), Body: manifestBody, MediaType: constants.MediaTypeJSON},
-		{BundlePath: path.Join(base, constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunResultsFilename), Body: resultBody, MediaType: constants.MediaTypeJSON},
-		{BundlePath: path.Join(base, constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname, constants.DemosComposeFile), Body: provenanceBody, MediaType: constants.MediaTypeText},
-		{BundlePath: path.Join(base, constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename), Body: []byte(strings.Join(definitionBodies, "\n")), MediaType: constants.MediaTypeJSON},
-	}
+
+	trust := &assessedEvidenceSignerStub{keys: map[string]ed25519.PublicKey{signerKeyID: publicKey}}
+	importer := evidence.NewOperationalExportImporter(&bundledSourceArtifactReader{bodies: bodies}, trust, inventoryPath, sourceRoot, scope.GetScopeId(), admission, assessmentAsOf, func() time.Time { return assessmentAsOf })
+	return trust, sourceArtifacts, importer
 }
 
-func signedBundleVerificationFixture(t *testing.T) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
+func signedBundleVerificationFixture(t *testing.T) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, evidence.AssessedSignerSource, time.Time) {
 	t.Helper()
 	return signedBundleVerificationFixtureWithRequest(t, nil)
 }
 
-func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*BundleAssemblyRequest)) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
+func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*BundleAssemblyRequest)) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, evidence.AssessedSignerSource, time.Time) {
 	t.Helper()
 	request, _ := bundleAssemblyFixture(t)
 	bundleGeneratedAt := request.GeneratedAt
 	scope := validGenerationScope(bundleGeneratedAt.Add(-time.Hour), bundleGeneratedAt.Add(2*time.Second))
-	scope.ScopeId = constants.DemoScopeFedRAMP
 	scope.AssessmentAsOf = timestamppb.New(bundleGeneratedAt)
-	request.ScopeRef = constants.DemoScopeFedRAMP
-	scope.SourceAdmissions[0].SourceScopeId = constants.DemoScopeFedRAMP
-	scope.SourceAdmissions[0].RunId = "demo-run-1"
-	demoSourceArtifacts := demoReplaySourceFixture(t, "demo-run-1", bundleGeneratedAt)
-	demoBodies := make(map[string][]byte, len(demoSourceArtifacts))
-	for _, artifact := range demoSourceArtifacts {
-		demoBodies[artifact.BundlePath] = artifact.Body
-	}
-	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, "demo-run-1")
-	demoReader := &bundledRuntimeArtifactReader{bodies: demoBodies, runID: "demo-run-1", sourceDir: constants.ComplianceBundleSourceDemosDirname, runtimeRoot: runtimeRoot}
-	demoSource := &bundledDemoProvenanceSource{bodies: demoBodies, runID: "demo-run-1"}
+
+	admission := scope.SourceAdmissions[0]
+	admission.SourceKind = "operator-audit"
+	admission.SourceVersion = "1.0.0"
+	admission.SourceScopeId = "operator-scope-1"
+	admission.OwnerRuntimeBoundary = "operator-1"
+	admission.AcquisitionBoundary = "operator-local-export"
+	admission.RunId = "run-1"
+
+	evidenceTrust, sourceArtifacts, importer := operationalReplaySourceFixture(t, admission, scope, bundleGeneratedAt)
+
 	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)
-	generation := GenerationRequest{Scope: scope, Sources: []GenerationSource{{AdmissionID: "source-1", Importer: evidence.NewDemoRunImporterAt(demoReader, "demo-run-1", demoSource, func() time.Time { return scope.GetAssessmentAsOf().AsTime() })}}, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks}
+	generation := GenerationRequest{
+		Scope:      scope,
+		Sources:    []GenerationSource{{AdmissionID: admission.GetAdmissionId(), Importer: importer}},
+		Assertions: assertions,
+		Frameworks: frameworks,
+		Crosswalks: crosswalks,
+	}
 	generated, err := GenerateComplianceAnalysis(context.Background(), generation)
 	require.NoError(t, err)
 	require.NotNil(t, generated)
@@ -527,24 +530,8 @@ func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*Bundl
 	request.AssessmentRefs = append(request.AssessmentRefs, controlAssessmentRef)
 	request.SourceArtifacts, err = canonicalReportSourceArtifacts(generation, generated)
 	require.NoError(t, err)
-	sourceReportBody, err := compliancev1.MarshalCanonical(&compliancev1.ComplianceVerificationReport{
-		ReportId:        "demo-run-1",
-		Valid:           true,
-		VerifiedAt:      timestamppb.New(scope.GetAssessmentAsOf().AsTime()),
-		VerifierId:      constants.DemoRunVerifierID,
-		VerifierVersion: constants.DemoRunVerifierVersion,
-		Checks: []*compliancev1.VerificationCheckResult{evidence.NewVerificationCheckResult(
-			constants.DemoRunVerificationCheck,
-			constants.DemoRunVerifierID,
-			constants.DemoRunVerifierVersion,
-			[]string{"demo-run-1"},
-			nil,
-		)},
-	})
-	require.NoError(t, err)
-	demoSourceBase := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1")
-	request.SourceArtifacts = append(request.SourceArtifacts, demoSourceArtifacts...)
-	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: path.Join(demoSourceBase, constants.ComplianceBundleSourceVerificationFilename), Body: sourceReportBody, MediaType: constants.MediaTypeJSON})
+	request.SourceArtifacts = append(request.SourceArtifacts, sourceArtifacts...)
+
 	if mutate != nil {
 		mutate(&request)
 	}
@@ -571,7 +558,7 @@ func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*Bundl
 			AllowedScopeRefs: []string{request.ScopeRef},
 		}},
 	}
-	return result.Bundle, reader, policy, request.GeneratedAt.Add(time.Hour)
+	return result.Bundle, reader, policy, evidenceTrust, request.GeneratedAt.Add(time.Hour)
 }
 
 func finalizeProtectedScopeFixture(t *testing.T, request *BundleAssemblyRequest) {
@@ -584,7 +571,7 @@ func finalizeProtectedScopeFixture(t *testing.T, request *BundleAssemblyRequest)
 	}
 	changed := false
 	for _, resource := range request.Analysis.GetEvidenceResources() {
-		if resource.GetSourceAdmissionId() != "" || resource.GetArtifactType() == string(evidence.ArtifactTypeDemoDefinition) {
+		if resource.GetSourceAdmissionId() != "" {
 			continue
 		}
 		admission := admissionsByRun[resource.GetRunId()]
@@ -782,7 +769,7 @@ func addCommitmentSourceFixture(t *testing.T, request *BundleAssemblyRequest) co
 		WardenIntentSignatureDigest: strings.Repeat("5", 64),
 		HumanSignatureDigest:        strings.Repeat("6", 64),
 		ActionType:                  "FILE_EDIT",
-		TargetResource:              constants.DemosTargetDataDir,
+		TargetResource:              "target-data",
 		CommittedAtUnixMs:           request.GeneratedAt.Add(-time.Second).UnixMilli(),
 		AuditorKeyId:                keyID,
 	}
@@ -985,13 +972,14 @@ func addAuditSourceFixture(t *testing.T, request *BundleAssemblyRequest) auditSo
 }
 
 func TestVerifyComplianceReportBundle_AcceptsCompleteSignedBundleOffline(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixture(t)
 
 	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{
-		Bundle:      bundle,
-		Reader:      reader,
-		TrustPolicy: policy,
-		VerifiedAt:  verifiedAt,
+		Bundle:        bundle,
+		Reader:        reader,
+		TrustPolicy:   policy,
+		EvidenceTrust: trust,
+		VerifiedAt:    verifiedAt,
 	})
 
 	require.NoError(t, err)
@@ -1013,7 +1001,7 @@ func TestVerifyComplianceReportBundle_AcceptsCompleteSignedBundleOffline(t *test
 }
 
 func TestVerifyComplianceReportBundle_RejectsResignedInventedAssertionAssessment(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		require.NotEmpty(t, request.Analysis.GetAssertionAssessments())
 		request.Analysis.AssertionAssessments[0].EvidenceLevel = "L1"
 		request.Analysis.AnalysisId = ""
@@ -1032,7 +1020,7 @@ func TestVerifyComplianceReportBundle_RejectsResignedInventedAssertionAssessment
 		require.NoError(t, err)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
@@ -1046,7 +1034,7 @@ func TestVerifyComplianceReportBundle_RejectsResignedInventedAssertionAssessment
 
 func TestVerifyComplianceReportBundle_RejectsSignedCommitmentThatDiffersFromAnalysis(t *testing.T) {
 	var fixture commitmentSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addCommitmentSourceFixture(t, request)
 		fixture.attestation.TargetResource += "-substituted"
 		signCommitmentFixture(t, fixture.attestation, fixture.privateKey)
@@ -1055,7 +1043,7 @@ func TestVerifyComplianceReportBundle_RejectsSignedCommitmentThatDiffersFromAnal
 		replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.bundlePath, body)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
@@ -1064,11 +1052,11 @@ func TestVerifyComplianceReportBundle_RejectsSignedCommitmentThatDiffersFromAnal
 
 func TestVerifyComplianceReportBundle_AcceptsCompleteCommitmentSource(t *testing.T) {
 	var fixture commitmentSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addCommitmentSourceFixture(t, request)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.True(t, report.GetValid())
@@ -1077,12 +1065,12 @@ func TestVerifyComplianceReportBundle_AcceptsCompleteCommitmentSource(t *testing
 
 func TestVerifyComplianceReportBundle_RejectsMissingCommitmentSource(t *testing.T) {
 	var fixture commitmentSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addCommitmentSourceFixture(t, request)
 		request.SourceArtifacts = removeSourceArtifact(request.SourceArtifacts, fixture.bundlePath)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1091,7 +1079,7 @@ func TestVerifyComplianceReportBundle_RejectsMissingCommitmentSource(t *testing.
 
 func TestVerifyComplianceReportBundle_RejectsCommitmentWithoutAssessedEvidenceTrust(t *testing.T) {
 	var fixture commitmentSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, _, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addCommitmentSourceFixture(t, request)
 	})
 
@@ -1104,12 +1092,12 @@ func TestVerifyComplianceReportBundle_RejectsCommitmentWithoutAssessedEvidenceTr
 
 func TestVerifyComplianceReportBundle_RejectsCommitmentWithUnassessedSigner(t *testing.T) {
 	var fixture commitmentSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addCommitmentSourceFixture(t, request)
 		fixture.trust.keys = map[string]ed25519.PublicKey{}
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1127,7 +1115,7 @@ func TestVerifyComplianceReportBundle_RejectsCommitmentAnalysisBindingMutations(
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var fixture commitmentSourceFixture
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 				fixture = addCommitmentSourceFixture(t, request)
 				for _, resource := range request.Analysis.GetEvidenceResources() {
 					if resource.GetArtifactType() == string(evidence.ArtifactTypeCommitment) {
@@ -1143,7 +1131,7 @@ func TestVerifyComplianceReportBundle_RejectsCommitmentAnalysisBindingMutations(
 				require.NoError(t, err)
 			})
 
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
@@ -1154,14 +1142,14 @@ func TestVerifyComplianceReportBundle_RejectsCommitmentAnalysisBindingMutations(
 
 func TestVerifyComplianceReportBundle_RejectsSignedAttestationThatDiffersFromAnalysis(t *testing.T) {
 	var fixture attestationSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAttestationSourceFixture(t, request)
 		fixture.record.Statement += " Substituted after analysis."
 		signAttestationSourceFixture(t, &fixture.record, fixture.privateKey)
 		replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.bundlePath, marshalAttestationSourceFixture(t, fixture.record))
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1170,11 +1158,11 @@ func TestVerifyComplianceReportBundle_RejectsSignedAttestationThatDiffersFromAna
 
 func TestVerifyComplianceReportBundle_AcceptsCompleteAttestationSource(t *testing.T) {
 	var fixture attestationSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAttestationSourceFixture(t, request)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.True(t, report.GetValid())
@@ -1183,12 +1171,12 @@ func TestVerifyComplianceReportBundle_AcceptsCompleteAttestationSource(t *testin
 
 func TestVerifyComplianceReportBundle_RejectsMissingAttestationSource(t *testing.T) {
 	var fixture attestationSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAttestationSourceFixture(t, request)
 		request.SourceArtifacts = removeSourceArtifact(request.SourceArtifacts, fixture.bundlePath)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1197,7 +1185,7 @@ func TestVerifyComplianceReportBundle_RejectsMissingAttestationSource(t *testing
 
 func TestVerifyComplianceReportBundle_RejectsAttestationWithoutAssessedEvidenceTrust(t *testing.T) {
 	var fixture attestationSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, _, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAttestationSourceFixture(t, request)
 	})
 
@@ -1210,12 +1198,12 @@ func TestVerifyComplianceReportBundle_RejectsAttestationWithoutAssessedEvidenceT
 
 func TestVerifyComplianceReportBundle_RejectsAttestationWithUnassessedSigner(t *testing.T) {
 	var fixture attestationSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAttestationSourceFixture(t, request)
 		fixture.trust.keys = map[string]ed25519.PublicKey{}
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1233,7 +1221,7 @@ func TestVerifyComplianceReportBundle_RejectsAttestationAnalysisBindingMutations
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var fixture attestationSourceFixture
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 				fixture = addAttestationSourceFixture(t, request)
 				for _, resource := range request.Analysis.GetEvidenceResources() {
 					if resource.GetArtifactType() == string(evidence.ArtifactTypeCustomerAttestation) {
@@ -1249,7 +1237,7 @@ func TestVerifyComplianceReportBundle_RejectsAttestationAnalysisBindingMutations
 				require.NoError(t, err)
 			})
 
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
@@ -1260,7 +1248,7 @@ func TestVerifyComplianceReportBundle_RejectsAttestationAnalysisBindingMutations
 
 func TestVerifyComplianceReportBundle_RejectsOrphanedAttestationSource(t *testing.T) {
 	var fixture attestationSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAttestationSourceFixture(t, request)
 		resources := request.Analysis.EvidenceResources[:0]
 		for _, resource := range request.Analysis.GetEvidenceResources() {
@@ -1277,7 +1265,7 @@ func TestVerifyComplianceReportBundle_RejectsOrphanedAttestationSource(t *testin
 		require.NoError(t, err)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: combineAssessedSignerTrust(t, trust, fixture.trust), VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1286,7 +1274,7 @@ func TestVerifyComplianceReportBundle_RejectsOrphanedAttestationSource(t *testin
 
 func TestVerifyComplianceReportBundle_RejectsSignedAuditRecordThatDiffersFromAnalysis(t *testing.T) {
 	var fixture auditSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAuditSourceFixture(t, request)
 		fixture.event.CommandRaw = "printf substituted"
 		body, err := compliancev1.MarshalCanonical(fixture.event)
@@ -1294,7 +1282,7 @@ func TestVerifyComplianceReportBundle_RejectsSignedAuditRecordThatDiffersFromAna
 		replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.bundlePath, body)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1302,11 +1290,11 @@ func TestVerifyComplianceReportBundle_RejectsSignedAuditRecordThatDiffersFromAna
 }
 
 func TestVerifyComplianceReportBundle_AcceptsCompleteAuditRecordSource(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		addAuditSourceFixture(t, request)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.True(t, report.GetValid())
@@ -1315,12 +1303,12 @@ func TestVerifyComplianceReportBundle_AcceptsCompleteAuditRecordSource(t *testin
 
 func TestVerifyComplianceReportBundle_RejectsMissingAuditRecordSource(t *testing.T) {
 	var fixture auditSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAuditSourceFixture(t, request)
 		request.SourceArtifacts = removeSourceArtifact(request.SourceArtifacts, fixture.bundlePath)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1338,7 +1326,7 @@ func TestVerifyComplianceReportBundle_RejectsAuditRecordAnalysisBindingMutations
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var fixture auditSourceFixture
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 				fixture = addAuditSourceFixture(t, request)
 				for _, resource := range request.Analysis.GetEvidenceResources() {
 					if resource.GetArtifactType() == string(evidence.ArtifactTypeAuditRecord) {
@@ -1354,7 +1342,7 @@ func TestVerifyComplianceReportBundle_RejectsAuditRecordAnalysisBindingMutations
 				require.NoError(t, err)
 			})
 
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
@@ -1365,7 +1353,7 @@ func TestVerifyComplianceReportBundle_RejectsAuditRecordAnalysisBindingMutations
 
 func TestVerifyComplianceReportBundle_RejectsOrphanedAuditRecordSource(t *testing.T) {
 	var fixture auditSourceFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addAuditSourceFixture(t, request)
 		resources := request.Analysis.EvidenceResources[:0]
 		for _, resource := range request.Analysis.GetEvidenceResources() {
@@ -1382,7 +1370,7 @@ func TestVerifyComplianceReportBundle_RejectsOrphanedAuditRecordSource(t *testin
 		require.NoError(t, err)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1390,11 +1378,11 @@ func TestVerifyComplianceReportBundle_RejectsOrphanedAuditRecordSource(t *testin
 }
 
 func TestVerifyComplianceReportBundle_AcceptsCompleteKSIResultAndHistorySources(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		addKSIHistorySourceFixture(t, request)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.True(t, report.GetValid())
@@ -1412,7 +1400,7 @@ func TestVerifyComplianceReportBundle_RejectsSignedKSISourceMutations(t *testing
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var targetPath string
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 				paths := addKSIHistorySourceFixture(t, request)
 				targetPath = paths.history
 				if test.resultsSource {
@@ -1429,7 +1417,7 @@ func TestVerifyComplianceReportBundle_RejectsSignedKSISourceMutations(t *testing
 				}
 			})
 
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
@@ -1449,7 +1437,7 @@ func TestVerifyComplianceReportBundle_RejectsIncompleteKSISourceInventories(t *t
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var missingPath string
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 				paths := addKSIHistorySourceFixture(t, request)
 				missingPath = paths.history
 				if test.removeResults {
@@ -1458,7 +1446,7 @@ func TestVerifyComplianceReportBundle_RejectsIncompleteKSISourceInventories(t *t
 				request.SourceArtifacts = removeSourceArtifact(request.SourceArtifacts, missingPath)
 			})
 
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
@@ -1467,7 +1455,7 @@ func TestVerifyComplianceReportBundle_RejectsIncompleteKSISourceInventories(t *t
 	}
 }
 
-func signedRestrictedBundleVerificationFixture(t *testing.T, plaintext []byte) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
+func signedRestrictedBundleVerificationFixture(t *testing.T, plaintext []byte) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, evidence.AssessedSignerSource, time.Time) {
 	t.Helper()
 	plaintextDigest := sha256.Sum256(plaintext)
 	return signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
@@ -1550,11 +1538,11 @@ func TestVerifyComplianceReportBundle_RejectsSignedCanonicalReportSourceMutation
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 				replaceSourceArtifactBody(t, request.SourceArtifacts, test.bundlePath, test.mutate(request))
 			})
 
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
@@ -1620,9 +1608,9 @@ func cloneEvidenceReferences(values []*compliancev1.ComplianceEvidenceReference)
 }
 
 func TestVerifyComplianceReportBundle_AcceptsRestrictedBundleWithoutPlaintextAccess(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
+	bundle, reader, policy, trust, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.True(t, report.GetValid())
@@ -1631,10 +1619,10 @@ func TestVerifyComplianceReportBundle_AcceptsRestrictedBundleWithoutPlaintextAcc
 
 func TestVerifyComplianceReportBundle_VerifiesRestrictedPlaintextDigestWhenAuthorizedReaderProvided(t *testing.T) {
 	plaintext := []byte(`{"secret":"value"}`)
-	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, plaintext)
+	bundle, reader, policy, trust, verifiedAt := signedRestrictedBundleVerificationFixture(t, plaintext)
 	plaintextReader := &authorizedPlaintextReaderStub{plaintext: plaintext}
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
 
 	require.NoError(t, err)
 	assert.True(t, report.GetValid())
@@ -1643,10 +1631,10 @@ func TestVerifyComplianceReportBundle_VerifiesRestrictedPlaintextDigestWhenAutho
 }
 
 func TestVerifyComplianceReportBundle_RejectsAuthorizedPlaintextDigestMismatch(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"expected"}`))
+	bundle, reader, policy, trust, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"expected"}`))
 	plaintextReader := &authorizedPlaintextReaderStub{plaintext: []byte(`{"secret":"mutated"}`)}
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1655,14 +1643,14 @@ func TestVerifyComplianceReportBundle_RejectsAuthorizedPlaintextDigestMismatch(t
 }
 
 func TestVerifyComplianceReportBundle_RejectsRestrictedEncryptionMetadataMutation(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
+	bundle, reader, policy, trust, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
 	for _, artifact := range bundle.GetArtifacts() {
 		if artifact.GetBundlePath() == constants.ComplianceBundleRestrictedEvidenceTestPath {
 			artifact.Encryption.AuthenticatedMetadataSha256 = strings.Repeat("c", 64)
 		}
 	}
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1670,10 +1658,10 @@ func TestVerifyComplianceReportBundle_RejectsRestrictedEncryptionMetadataMutatio
 }
 
 func TestVerifyComplianceReportBundle_RejectsAuthorizedPlaintextReaderFailure(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
+	bundle, reader, policy, trust, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
 	plaintextReader := &authorizedPlaintextReaderStub{err: constants.ErrEvidenceTrustNotAssessed}
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid())
@@ -1929,14 +1917,6 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			failureSubject: constants.ComplianceBundleManifestPath,
 		},
 		{
-			name: "demo source inventory run binding mismatch",
-			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundle.Analysis.EvidenceResources[0].RunId = "other-demo-run"
-			},
-			failureCode:    constants.ErrInvalidEvidenceGraph,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
-		},
-		{
 			name: "missing eval source inventory",
 			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
 				bundle.Analysis.EvidenceResources = append(bundle.Analysis.EvidenceResources, &compliancev1.ComplianceEvidenceReference{ArtifactId: string(evidence.ArtifactTypeEvalManifest) + ":eval-run-1", ArtifactType: string(evidence.ArtifactTypeEvalManifest), RunId: "eval-run-1"})
@@ -1944,90 +1924,10 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			failureCode:    constants.ErrEvalRunVerificationFailed,
 			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, "eval-run-1"),
 		},
-		{
-			name: "missing demo source verification",
-			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
-				delete(reader.bodies, bundlePath)
-			},
-			failureCode:    constants.ErrDemoRunVerificationFailed,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
-		},
-		{
-			name: "demo source verification lacks typed check",
-			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
-				report := &compliancev1.ComplianceVerificationReport{}
-				require.NoError(t, compliancev1.UnmarshalCanonical(reader.bodies[bundlePath], report))
-				report.Checks = nil
-				body, err := compliancev1.MarshalCanonical(report)
-				require.NoError(t, err)
-				reader.bodies[bundlePath] = body
-			},
-			failureCode:    constants.ErrDemoRunVerificationFailed,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
-		},
-		{
-			name: "invalid demo source verification",
-			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
-				report := &compliancev1.ComplianceVerificationReport{ReportId: "demo-run-1", VerifiedAt: timestamppb.Now(), VerifierId: constants.DemoRunVerifierID, VerifierVersion: constants.DemoRunVerifierVersion}
-				body, err := compliancev1.MarshalCanonical(report)
-				require.NoError(t, err)
-				reader.bodies[bundlePath] = body
-			},
-			failureCode:    constants.ErrDemoRunVerificationFailed,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
-		},
-		{
-			name: "malformed demo source verification timestamp",
-			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
-				reader.bodies[bundlePath] = bytes.Replace(reader.bodies[bundlePath], []byte(`"verified_at":"2023-11-14T22:13:20Z"`), []byte(`"verified_at":"10000-01-01T00:00:00Z"`), 1)
-			},
-			failureCode:    constants.ErrEvidenceArtifactMalformed,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
-		},
-		{
-			name: "missing demo runtime manifest source",
-			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunManifestFilename)
-				delete(reader.bodies, bundlePath)
-			},
-			failureCode:    constants.ErrDemoRunVerificationFailed,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1"),
-		},
-		{
-			name: "tampered demo runtime results source",
-			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunResultsFilename)
-				reader.bodies[bundlePath] = append(reader.bodies[bundlePath], '\n')
-			},
-			failureCode:    constants.ErrDemoRunVerificationFailed,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
-		},
-		{
-			name: "tampered demo provenance source",
-			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname, constants.DemosComposeFile)
-				reader.bodies[bundlePath] = append(reader.bodies[bundlePath], '\n')
-			},
-			failureCode:    constants.ErrDemoRunVerificationFailed,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
-		},
-		{
-			name: "tampered demo scenario definitions source",
-			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename)
-				reader.bodies[bundlePath] = append(reader.bodies[bundlePath], '\n')
-			},
-			failureCode:    constants.ErrDemoRunVerificationFailed,
-			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
-		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixture(t)
 			failureSubject := test.failureSubject
 			if failureSubject == constants.ComplianceBundleFrameworkProfileTestPath {
 				failureSubject = frameworkProfileBundlePath(bundle.GetProfiles()[0].GetProfileId())
@@ -2035,10 +1935,11 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			test.mutate(bundle, reader, policy)
 
 			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{
-				Bundle:      bundle,
-				Reader:      reader,
-				TrustPolicy: policy,
-				VerifiedAt:  verifiedAt,
+				Bundle:        bundle,
+				Reader:        reader,
+				TrustPolicy:   policy,
+				EvidenceTrust: trust,
+				VerifiedAt:    verifiedAt,
 			})
 
 			require.NoError(t, err)
@@ -2073,11 +1974,11 @@ func TestVerifyComplianceReportBundle_RejectsEveryProtectedReportBodyMutation(t 
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixture(t)
 			require.Contains(t, reader.bodies, test.bundlePath)
 			reader.bodies[test.bundlePath] = append(reader.bodies[test.bundlePath], '\n')
 
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
@@ -2095,7 +1996,6 @@ func TestBundleVerifier_SourceVerificationRejectsMalformedTimestamps(t *testing.
 		verificationErr error
 		source          string
 	}{
-		{name: "demo source verification timestamp", sourceDir: constants.ComplianceBundleSourceDemosDirname, verifierID: constants.DemoRunVerifierID, verifierVersion: constants.DemoRunVerifierVersion, verificationErr: constants.ErrDemoRunVerificationFailed, source: "demo"},
 		{name: "eval source verification timestamp", sourceDir: constants.ComplianceBundleSourceEvalsDirname, verifierID: constants.EvalRunVerifierID, verifierVersion: constants.EvalRunVerifierVersion, verificationErr: constants.ErrEvalRunVerificationFailed, source: "eval"},
 	}
 	for _, test := range tests {
@@ -2130,7 +2030,6 @@ func TestBundleVerifier_SourceVerificationRejectsReportsWithoutAnalysisEvidenceR
 		verifierID      string
 		verifierVersion string
 	}{
-		{name: "demo source", sourceDir: constants.ComplianceBundleSourceDemosDirname, verifierID: constants.DemoRunVerifierID, verifierVersion: constants.DemoRunVerifierVersion},
 		{name: "eval source", sourceDir: constants.ComplianceBundleSourceEvalsDirname, verifierID: constants.EvalRunVerifierID, verifierVersion: constants.EvalRunVerifierVersion},
 	}
 	for _, test := range tests {
@@ -2162,14 +2061,15 @@ func TestBundleVerifier_SourceVerificationRejectsReportsWithoutAnalysisEvidenceR
 }
 
 func TestVerifyComplianceReportBundle_RejectsUnexpectedDirectoryArtifacts(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixture(t)
 	reader.bodies[constants.ComplianceBundleUnexpectedTestPath] = []byte("unexpected")
 
 	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{
-		Bundle:      bundle,
-		Reader:      reader,
-		TrustPolicy: policy,
-		VerifiedAt:  verifiedAt,
+		Bundle:        bundle,
+		Reader:        reader,
+		TrustPolicy:   policy,
+		EvidenceTrust: trust,
+		VerifiedAt:    verifiedAt,
 	})
 
 	require.NoError(t, err)
@@ -2178,13 +2078,13 @@ func TestVerifyComplianceReportBundle_RejectsUnexpectedDirectoryArtifacts(t *tes
 }
 
 func TestVerifyComplianceReportBundle_OrdersFailuresDeterministically(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixture(t)
 	reader.bodies[constants.ComplianceBundleAnalysisPath] = []byte(`{"tampered":true}`)
 	bundle.ChecksumRoot = strings.Repeat("0", 64)
 
-	first, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	first, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 	require.NoError(t, err)
-	second, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	second, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 	require.NoError(t, err)
 
 	assert.Equal(t, first.GetFailures(), second.GetFailures())
@@ -2210,11 +2110,11 @@ func TestVerifyComplianceReportBundle_ReportsArtifactReaderFailuresWithStableCod
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixture(t)
 			reader.listErr = test.listErr
 			reader.readErr = test.readErr
 
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
@@ -2224,13 +2124,13 @@ func TestVerifyComplianceReportBundle_ReportsArtifactReaderFailuresWithStableCod
 }
 
 func TestVerifyComplianceReportBundle_RejectsInvalidVerifierConfiguration(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixture(t)
 	tests := []struct {
 		name    string
 		request BundleVerificationRequest
 	}{
-		{name: "missing bundle", request: BundleVerificationRequest{Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt}},
-		{name: "missing reader", request: BundleVerificationRequest{Bundle: bundle, TrustPolicy: policy, VerifiedAt: verifiedAt}},
+		{name: "missing bundle", request: BundleVerificationRequest{Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt}},
+		{name: "missing reader", request: BundleVerificationRequest{Bundle: bundle, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt}},
 		{name: "missing trust policy", request: BundleVerificationRequest{Bundle: bundle, Reader: reader, VerifiedAt: verifiedAt}},
 		{name: "missing verification time", request: BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy}},
 	}
@@ -2260,11 +2160,11 @@ func TestEvidenceVerificationRoutes_ClassifyEverySupportedArtifactType(t *testin
 }
 
 func TestVerifyComplianceReportBundle_PreservesCancellation(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	report, err := VerifyComplianceReportBundle(ctx, BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(ctx, BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, report)
@@ -2419,11 +2319,11 @@ func refreshBundleAnalysisArtifacts(t *testing.T, request *BundleAssemblyRequest
 
 func TestVerifyComplianceReportBundle_ReplaysLedgerSources(t *testing.T) {
 	var fixture ledgerReplayFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addLedgerReplayFixture(t, request)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.True(t, report.GetValid(), report.GetFailures())
@@ -2432,13 +2332,13 @@ func TestVerifyComplianceReportBundle_ReplaysLedgerSources(t *testing.T) {
 
 func TestVerifyComplianceReportBundle_RejectsSignedLedgerSemanticSubstitution(t *testing.T) {
 	var fixture ledgerReplayFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addLedgerReplayFixture(t, request)
 		fixture.commits[1].Message = "semantically substituted"
 		replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.commitsPath, marshalJSONLines(t, fixture.commits))
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
@@ -2447,11 +2347,11 @@ func TestVerifyComplianceReportBundle_RejectsSignedLedgerSemanticSubstitution(t 
 
 func TestVerifyComplianceReportBundle_ReplaysBuildConfigurationSources(t *testing.T) {
 	var fixture buildConfigReplayFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addBuildConfigReplayFixture(t, request)
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.True(t, report.GetValid(), report.GetFailures())
@@ -2460,13 +2360,13 @@ func TestVerifyComplianceReportBundle_ReplaysBuildConfigurationSources(t *testin
 
 func TestVerifyComplianceReportBundle_RejectsSignedBuildConfigurationSemanticSubstitution(t *testing.T) {
 	var fixture buildConfigReplayFixture
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+	bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		fixture = addBuildConfigReplayFixture(t, request)
 		fixture.records[0].ImageDigests[0].SHA256 = strings.Repeat("9", 64)
 		replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.bundlePath, marshalJSONLines(t, fixture.records))
 	})
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 
 	require.NoError(t, err)
 	assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
@@ -2564,11 +2464,11 @@ func TestVerifyComplianceReportBundle_RejectsLedgerInventoryAndBindingMutations(
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 				fixture := addLedgerReplayFixture(t, request)
 				test.mutate(t, request, &fixture)
 			})
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
 			require.NotEmpty(t, report.GetFailures())
@@ -2659,11 +2559,11 @@ func TestVerifyComplianceReportBundle_RejectsBuildConfigurationInventoryAndBindi
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+			bundle, reader, policy, trust, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 				fixture := addBuildConfigReplayFixture(t, request)
 				test.mutate(t, request, &fixture)
 			})
-			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: trust, VerifiedAt: verifiedAt})
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
 			require.NotEmpty(t, report.GetFailures())

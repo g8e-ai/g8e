@@ -94,16 +94,6 @@ var Infra struct {
 	ReplayStoreDBPath    string
 	LedgerDir            string
 	LedgerFilesDir       string
-
-	// Demo paths
-	DemosDir                         string
-	DemosHealthcareDir               string
-	DemosFinanceDir                  string
-	DemosHealthcareTargetDataDir     string
-	DemosHealthcareDoctrineDir       string
-	DemosHealthcarePARequestsPath    string
-	DemosHealthcareComposePath       string
-	DemosHealthcareDoctrineHIPAAPath string
 } = struct {
 	DbPath                      string
 	PkiDir                      string
@@ -167,15 +157,6 @@ var Infra struct {
 	ReplayStoreDBPath    string
 	LedgerDir            string
 	LedgerFilesDir       string
-
-	DemosDir                         string
-	DemosHealthcareDir               string
-	DemosFinanceDir                  string
-	DemosHealthcareTargetDataDir     string
-	DemosHealthcareDoctrineDir       string
-	DemosHealthcarePARequestsPath    string
-	DemosHealthcareComposePath       string
-	DemosHealthcareDoctrineHIPAAPath string
 }{
 	DbPath:                  constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.DbFilename,
 	PkiDir:                  constants.RuntimeDirname + "/" + constants.PkiDirname,
@@ -233,15 +214,6 @@ var Infra struct {
 	ExecutionVaultDBPath: constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.ExecutionVaultDBFilename,
 	ReplayStoreDBPath:    constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.ReplayStoreDBFilename,
 	LedgerDir:            constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.LedgerDirname,
-
-	DemosDir:                         constants.DemosDirname,
-	DemosHealthcareDir:               constants.DemosDirname + "/" + constants.DemosOrgHealthcare,
-	DemosFinanceDir:                  constants.DemosDirname + "/" + constants.DemosOrgFinance,
-	DemosHealthcareTargetDataDir:     constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosTargetDataDir,
-	DemosHealthcareDoctrineDir:       constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosDoctrineDir,
-	DemosHealthcarePARequestsPath:    constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosTargetDataDir + "/" + constants.DemosPARequestsFile,
-	DemosHealthcareComposePath:       constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosComposeFile,
-	DemosHealthcareDoctrineHIPAAPath: constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosDoctrineDir + "/" + constants.DemosHIPAADoctrineFile,
 }
 
 // Mutable path vars that are derived from the base directory at init time.
@@ -335,15 +307,6 @@ func InitWithBase(baseDir string) error {
 	Infra.ReplayStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)
 	Infra.LedgerDir = pathutil.SafeJoin(Infra.DataDir, constants.LedgerDirname)
 	Infra.LedgerFilesDir = pathutil.SafeJoin(Infra.LedgerDir, constants.FilesDirname)
-
-	Infra.DemosDir = pathutil.SafeJoin(baseDir, constants.DemosDirname)
-	Infra.DemosHealthcareDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgHealthcare)
-	Infra.DemosFinanceDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgFinance)
-	Infra.DemosHealthcareTargetDataDir = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosTargetDataDir)
-	Infra.DemosHealthcareDoctrineDir = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosDoctrineDir)
-	Infra.DemosHealthcarePARequestsPath = pathutil.SafeJoin(Infra.DemosHealthcareTargetDataDir, constants.DemosPARequestsFile)
-	Infra.DemosHealthcareComposePath = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosComposeFile)
-	Infra.DemosHealthcareDoctrineHIPAAPath = pathutil.SafeJoin(Infra.DemosHealthcareDoctrineDir, constants.DemosHIPAADoctrineFile)
 
 	GatewayIDPath = pathutil.SafeJoin(Infra.DataDir, constants.GatewayIDFilename)
 	NetworkIdentityPath = pathutil.SafeJoin(Infra.PkiDir, constants.NetworkIdentityFilename)

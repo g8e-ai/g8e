@@ -48,7 +48,7 @@ func complianceReportCmd() *cobra.Command {
 		Short: "Generate and verify canonical compliance reports",
 	}
 	cmd.AddCommand(
-		complianceReportGenerateCmdWithConfig(shared.NewFileSvc, defaultProvenanceSourceFactory, loadComplianceReportSigningIdentity, time.Now),
+		complianceReportGenerateCmdWithConfig(shared.NewFileSvc, loadComplianceReportSigningIdentity, time.Now),
 		complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, time.Now),
 	)
 	return cmd
@@ -486,87 +486,6 @@ func loadComplianceReportSigningIdentity(ctx context.Context, metadataPath, priv
 	return compliancereport.NewComplianceReportSigningIdentity(metadata, ed25519.PrivateKey(privateKey))
 }
 
-func buildDemoVerificationArtifacts(ctx context.Context, reader evidence.ArtifactReader, source evidence.ProvenanceSource, runIDs []string, verifiedAt time.Time) ([]compliancereport.SourceArtifact, error) {
-	artifacts := make([]compliancereport.SourceArtifact, 0, len(runIDs))
-	for _, runID := range runIDs {
-		report, err := evidence.VerifyDemoRun(ctx, reader, runID, source, verifiedAt)
-		if err != nil {
-			return nil, fmt.Errorf("%w: verify demo run %s: %w", constants.ErrDemoRunVerificationFailed, runID, err)
-		}
-		if !report.GetValid() {
-			return nil, fmt.Errorf("%w: demo run %s has %d verification failures", constants.ErrDemoRunVerificationFailed, runID, len(report.GetFailures()))
-		}
-		rawArtifacts, err := buildDemoRawSourceArtifacts(ctx, reader, source, runID)
-		if err != nil {
-			return nil, err
-		}
-		artifacts = append(artifacts, rawArtifacts...)
-		body, err := compliancev1.MarshalCanonical(report)
-		if err != nil {
-			return nil, fmt.Errorf("%w: canonicalize demo verification report %s: %w", constants.ErrDemoRunVerificationFailed, runID, err)
-		}
-		artifacts = append(artifacts, compliancereport.SourceArtifact{
-			BundlePath: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename),
-			Body:       body,
-			MediaType:  constants.MediaTypeJSON,
-		})
-	}
-	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].BundlePath < artifacts[j].BundlePath })
-	return artifacts, nil
-}
-
-func buildDemoRawSourceArtifacts(ctx context.Context, reader evidence.ArtifactReader, source evidence.ProvenanceSource, runID string) ([]compliancereport.SourceArtifact, error) {
-	runtimeRoot := path.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID)
-	bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID)
-	artifacts, err := collectRuntimeSourceArtifacts(ctx, reader, runtimeRoot, runtimeRoot, bundleRoot, false)
-	if err != nil {
-		return nil, fmt.Errorf("%w: collect demo runtime %s: %w", constants.ErrDemoRunVerificationFailed, runID, err)
-	}
-	manifestBody, err := reader.ReadFile(ctx, path.Join(runtimeRoot, constants.DemoRunManifestFilename))
-	if err != nil {
-		return nil, fmt.Errorf("%w: read demo manifest %s: %w", constants.ErrDemoRunVerificationFailed, runID, err)
-	}
-	manifest := &compliancev1.DemoManifest{}
-	if err := compliancev1.UnmarshalCanonical(manifestBody, manifest); err != nil {
-		return nil, fmt.Errorf("%w: decode demo manifest %s: %w", constants.ErrDemoRunVerificationFailed, runID, err)
-	}
-	provenanceArtifacts, err := source.Artifacts(ctx, manifest.GetDemoId())
-	if err != nil {
-		return nil, fmt.Errorf("%w: load demo provenance %s: %w", constants.ErrDemoRunVerificationFailed, runID, err)
-	}
-	for _, artifact := range provenanceArtifacts {
-		name := path.Clean(filepath.ToSlash(artifact.Name))
-		if !validDemoSourceRelativePath(name) || len(artifact.Body) == 0 || int64(len(artifact.Body)) > constants.ComplianceBundleMaxArtifactBytes {
-			return nil, fmt.Errorf("%w: invalid demo provenance artifact %s", constants.ErrDemoRunVerificationFailed, artifact.Name)
-		}
-		artifacts = append(artifacts, compliancereport.SourceArtifact{
-			BundlePath: path.Join(bundleRoot, constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname, name),
-			Body:       append([]byte(nil), artifact.Body...),
-			MediaType:  constants.MediaTypeText,
-		})
-	}
-	definitions, err := source.Definitions(ctx, manifest.GetDemoId())
-	if err != nil {
-		return nil, fmt.Errorf("%w: load demo definitions %s: %w", constants.ErrDemoRunVerificationFailed, runID, err)
-	}
-	definitionBodies := make([][]byte, 0, len(definitions))
-	for _, definition := range definitions {
-		if len(definition.Body) == 0 {
-			return nil, fmt.Errorf("%w: empty demo definition for %s", constants.ErrDemoRunVerificationFailed, runID)
-		}
-		definitionBodies = append(definitionBodies, definition.Body)
-	}
-	if len(definitionBodies) == 0 {
-		return nil, fmt.Errorf("%w: demo definitions are missing for %s", constants.ErrDemoRunVerificationFailed, runID)
-	}
-	artifacts = append(artifacts, compliancereport.SourceArtifact{
-		BundlePath: path.Join(bundleRoot, constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename),
-		Body:       bytes.Join(definitionBodies, []byte{'\n'}),
-		MediaType:  constants.MediaTypeJSON,
-	})
-	return artifacts, nil
-}
-
 func buildEvaluationReportSources(ctx context.Context, fileSvc fs.RuntimeFileService, scope *compliancev1.AssessmentScope, runIDs []string, verifiedAt time.Time) ([]compliancereport.GenerationSource, []compliancereport.SourceArtifact, error) {
 	sources := make([]compliancereport.GenerationSource, 0, len(runIDs))
 	artifacts := make([]compliancereport.SourceArtifact, 0, len(runIDs))
@@ -929,7 +848,7 @@ func collectRuntimeSourceArtifactsRecursive(ctx context.Context, reader evidence
 	if err != nil {
 		return nil, err
 	}
-	if len(entries) > constants.DemoRunMaxArtifactsPerDirectory {
+	if len(entries) > constants.EvidenceMaxArtifactsPerDirectory {
 		return nil, constants.ErrEvidenceArtifactTooLarge
 	}
 	if err := budget.consume(depth, len(entries)); err != nil {
@@ -956,7 +875,7 @@ func collectRuntimeSourceArtifactsRecursive(ctx context.Context, reader evidence
 			return nil, constants.ErrUnexpectedEvidenceArtifact
 		}
 		relativePath, err := filepath.Rel(runtimeRoot, sourcePath)
-		if err != nil || !validDemoSourceRelativePath(filepath.ToSlash(relativePath)) {
+		if err != nil || !validSourceRelativePath(filepath.ToSlash(relativePath)) {
 			return nil, constants.ErrUnexpectedEvidenceArtifact
 		}
 		body, err := reader.ReadFile(ctx, sourcePath)
@@ -975,7 +894,7 @@ func collectRuntimeSourceArtifactsRecursive(ctx context.Context, reader evidence
 	return artifacts, nil
 }
 
-func validDemoSourceRelativePath(value string) bool {
+func validSourceRelativePath(value string) bool {
 	return value != "" && value != "." && value != constants.PathParentDir && !path.IsAbs(value) && !strings.HasPrefix(value, constants.PathParentDir+"/") && path.Clean(value) == value
 }
 
@@ -1359,14 +1278,12 @@ func inspectKSIHistorySource(body []byte) (*compliance.KSIResultSet, []byte, err
 
 func complianceReportGenerateCmdWithConfig(
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
-	provenanceSourceFactory func(string) evidence.ProvenanceSource,
 	signingIdentityLoader complianceReportSigningIdentityLoader,
 	nowFunc func() time.Time,
 ) *cobra.Command {
 	var (
 		projectRoot          string
 		scopePath            string
-		demoRuns             []string
 		evalRuns             []string
 		discoverEvalRuns     bool
 		operationalSources   []string
@@ -1405,8 +1322,8 @@ func complianceReportGenerateCmdWithConfig(
 			if scopePath == "" {
 				return fmt.Errorf("%w: --scope is required", constants.ErrValidationFailed)
 			}
-			if len(demoRuns) == 0 && len(evalRuns) == 0 && len(operationalSources) == 0 && ksiRunID == "" && ksiHistory == "" && ksiResults == "" && commitmentRunID == "" && commitment == "" && attestationRunID == "" && attestations == "" && auditRunID == "" && len(auditRecords) == 0 && ledgerRunID == "" && ledgerCommits == "" && ledgerState == "" && buildRunID == "" && buildConfig == "" {
-				return fmt.Errorf("%w: at least one demo, eval, or standalone platform source is required", constants.ErrValidationFailed)
+			if len(evalRuns) == 0 && len(operationalSources) == 0 && ksiRunID == "" && ksiHistory == "" && ksiResults == "" && commitmentRunID == "" && commitment == "" && attestationRunID == "" && attestations == "" && auditRunID == "" && len(auditRecords) == 0 && ledgerRunID == "" && ledgerCommits == "" && ledgerState == "" && buildRunID == "" && buildConfig == "" {
+				return fmt.Errorf("%w: at least one eval or standalone platform source is required", constants.ErrValidationFailed)
 			}
 			if reportID == "" || signingMetadata == "" || signingPrivateKey == "" {
 				return fmt.Errorf("%w: --report-id, --signing-metadata, and --signing-private-key are required", constants.ErrValidationFailed)
@@ -1444,11 +1361,7 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return err
 			}
-			source := provenanceSourceFactory(projectRoot)
-			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, nil, func() time.Time { return assessmentAsOf })
-			if err != nil {
-				return err
-			}
+			var importers []evidence.EvidenceImporter
 			evaluationSources, evalSourceArtifacts, err := buildEvaluationReportSources(ctx, fileSvc, scope, evalRuns, assessmentAsOf)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrReportVerificationFailed, err)
@@ -1495,11 +1408,7 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return fmt.Errorf("compliance report: load canonical catalogs: %w", err)
 			}
-			sourceArtifacts, err := buildDemoVerificationArtifacts(ctx, fileSvc, source, demoRuns, assessmentAsOf)
-			if err != nil {
-				return err
-			}
-			sourceArtifacts = append(sourceArtifacts, evalSourceArtifacts...)
+			sourceArtifacts := append([]compliancereport.SourceArtifact{}, evalSourceArtifacts...)
 			sourceArtifacts = append(sourceArtifacts, operationalSourceArtifacts...)
 			sourceArtifacts = append(sourceArtifacts, standaloneSourceArtifacts...)
 			sort.Slice(sourceArtifacts, func(i, j int) bool { return sourceArtifacts[i].BundlePath < sourceArtifacts[j].BundlePath })
@@ -1556,7 +1465,6 @@ func complianceReportGenerateCmdWithConfig(
 	}
 
 	cmd.Flags().StringVar(&scopePath, "scope", "", "Path to canonical protected assessment scope")
-	cmd.Flags().StringSliceVar(&demoRuns, "demo-run", nil, "Demo evidence run ID (repeatable)")
 	cmd.Flags().StringSliceVar(&evalRuns, "eval-run", nil, "Eval bundle run ID (repeatable)")
 	cmd.Flags().BoolVar(&discoverEvalRuns, "discover-eval-runs", false, "Freeze all local eval run candidate dispositions into report diagnostics")
 	cmd.Flags().StringSliceVar(&operationalSources, "source", nil, "Operational evidence source package directory (repeatable)")

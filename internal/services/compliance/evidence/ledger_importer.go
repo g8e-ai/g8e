@@ -103,7 +103,7 @@ func (i *LedgerImporter) Import(ctx context.Context) ([]EvidenceNode, error) {
 
 func (i *LedgerImporter) readSource(ctx context.Context, path, reference, prefix string) ([]byte, error) {
 	_, digest, _ := ParseExpectedContentReference(reference, prefix)
-	result, err := ReadAndDigest(i.reader, ctx, path, constants.DemoRunMaxArtifactBytes)
+	result, err := ReadAndDigest(i.reader, ctx, path, maxArtifactBytes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %w", constants.ErrEvidenceImporterFailed, path, err)
 	}

@@ -272,7 +272,7 @@ func TestLedgerImporter_Import_ProducesValidGraph(t *testing.T) {
 	fixture := newLedgerImporterFixture(t)
 	nodes, err := NewLedgerImporter(fixture.reader, fixture.binding).Import(context.Background())
 	require.NoError(t, err)
-	graph := NewEvidenceGraph(constants.DemoRunMaxArtifactBytes, []string{constants.MediaTypeJSON})
+	graph := NewEvidenceGraph(maxArtifactBytes, []string{constants.MediaTypeJSON})
 	for _, node := range nodes {
 		require.NoError(t, graph.AddNode(node))
 	}
