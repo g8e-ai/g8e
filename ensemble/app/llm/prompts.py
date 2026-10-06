@@ -129,23 +129,26 @@ def build_learned_context_section(
     if user_memories:
         latest = user_memories[0]
         prefs = []
-        if latest.communication_preferences:
-            prefs.append(f"Communication: {latest.communication_preferences}")
-        if latest.technical_background:
-            prefs.append(f"Technical background: {latest.technical_background}")
-        if latest.response_style:
-            prefs.append(f"Response style: {latest.response_style}")
-        if latest.problem_solving_approach:
-            prefs.append(f"Problem-solving: {latest.problem_solving_approach}")
-        if latest.interaction_style:
-            prefs.append(f"Interaction style: {latest.interaction_style}")
+        prefs.extend(
+            value
+            for value in (
+                f"Communication: {latest.communication_preferences}" if latest.communication_preferences else None,
+                f"Technical background: {latest.technical_background}" if latest.technical_background else None,
+                f"Response style: {latest.response_style}" if latest.response_style else None,
+                f"Problem-solving: {latest.problem_solving_approach}" if latest.problem_solving_approach else None,
+                f"Interaction style: {latest.interaction_style}" if latest.interaction_style else None,
+            )
+            if value
+        )
         if prefs:
             context_parts.extend(prefs)
 
     if case_memories:
-        for mem in case_memories:
-            if mem.investigation_summary:
-                context_parts.append(f"Previous investigation: {mem.investigation_summary}")
+        context_parts.extend(
+            f"Previous investigation: {mem.investigation_summary}"
+            for mem in case_memories
+            if mem.investigation_summary
+        )
 
     if not context_parts:
         return ""
@@ -245,16 +248,20 @@ def build_tribunal_operator_context_string(operator_context: OperatorContext | N
         parts.append(f"Operator Type: {operator_context.operator_type}")
     if operator_context.granted_intents:
         parts.append(f"Granted Intents: {operator_context.granted_intents}")
-    if operator_context.is_container:
-        parts.append("Container Environment: Yes")
-        if operator_context.container_runtime:
-            parts.append(f"Container Runtime: {operator_context.container_runtime}")
-        if operator_context.init_system:
-            parts.append(f"Init System: {operator_context.init_system}")
-    elif operator_context.init_system:
-        parts.append(f"Init System: {operator_context.init_system}")
+    _append_tribunal_runtime_context(parts, operator_context)
 
     return "\n".join(parts) if parts else "No operator details available"
+
+
+def _append_tribunal_runtime_context(parts: list[str], context: OperatorContext) -> None:
+    if context.is_container:
+        parts.append("Container Environment: Yes")
+        if context.container_runtime:
+            parts.append(f"Container Runtime: {context.container_runtime}")
+        if context.init_system:
+            parts.append(f"Init System: {context.init_system}")
+    elif context.init_system:
+        parts.append(f"Init System: {context.init_system}")
 
 
 def build_tribunal_prompt_fields(
@@ -322,8 +329,10 @@ def build_tribunal_auditor_context(
 
     elif mode == "majority":
         parts.append("<candidates_by_cluster>")
-        for c in clusters:
-            parts.append(f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}")
+        parts.extend(
+            f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}"
+            for c in clusters
+        )
         parts.append("</candidates_by_cluster>")
         parts.append(f"\nMAJORITY WINNER: [{clusters[0]['cluster_id']}]")
         parts.append(
@@ -336,8 +345,10 @@ def build_tribunal_auditor_context(
 
     elif mode == "tied":
         parts.append("<tied_candidates>")
-        for c in clusters:
-            parts.append(f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}")
+        parts.extend(
+            f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}"
+            for c in clusters
+        )
         parts.append("</tied_candidates>")
         parts.append("\nVOTING TIED: The tie-break ladder could not resolve a single winner.")
         parts.append(
@@ -451,32 +462,7 @@ def _build_system_context_section(
         if len(contexts_to_render) > 1:
             system_parts.append(f'<operator index="{idx}">')
 
-        if ctx.operator_type:
-            system_parts.append(f"Operator Type: {ctx.operator_type}")
-        if ctx.granted_intents:
-            system_parts.append(f"granted_intents: {ctx.granted_intents}")
-
-        if ctx.os:
-            system_parts.append(f"OS: {ctx.os}")
-        if ctx.hostname:
-            system_parts.append(f"Hostname: {ctx.hostname}")
-        if ctx.username:
-            uid_suffix = f" (uid={ctx.uid})" if ctx.uid is not None else ""
-            system_parts.append(f"User: {ctx.username}{uid_suffix}")
-        if ctx.working_directory:
-            system_parts.append(f"Working Directory: {ctx.working_directory}")
-
-        if ctx.is_container:
-            container_runtime = ctx.container_runtime or ""
-            init_system = ctx.init_system or ""
-            system_parts.append(f"Container Environment: YES (runtime: {container_runtime})")
-            system_parts.append(f"Init System (PID 1): {init_system}")
-            if init_system != "systemd":
-                system_parts.append(
-                    "WARNING: systemd is NOT available - do NOT use systemctl, journalctl, or other systemd commands"
-                )
-        elif ctx.init_system:
-            system_parts.append(f"Init System: {ctx.init_system}")
+        _append_system_operator_details(system_parts, ctx)
 
         excluded_keys = {
             "operator_id",
@@ -503,6 +489,33 @@ def _build_system_context_section(
 
     system_parts.append("</system_context>")
     return "\n".join(system_parts) + "\n"
+
+
+def _append_system_operator_details(parts: list[str], ctx: OperatorContext) -> None:
+    if ctx.operator_type:
+        parts.append(f"Operator Type: {ctx.operator_type}")
+    if ctx.granted_intents:
+        parts.append(f"granted_intents: {ctx.granted_intents}")
+    if ctx.os:
+        parts.append(f"OS: {ctx.os}")
+    if ctx.hostname:
+        parts.append(f"Hostname: {ctx.hostname}")
+    if ctx.username:
+        uid_suffix = f" (uid={ctx.uid})" if ctx.uid is not None else ""
+        parts.append(f"User: {ctx.username}{uid_suffix}")
+    if ctx.working_directory:
+        parts.append(f"Working Directory: {ctx.working_directory}")
+    if ctx.is_container:
+        container_runtime = ctx.container_runtime or ""
+        init_system = ctx.init_system or ""
+        parts.append(f"Container Environment: YES (runtime: {container_runtime})")
+        parts.append(f"Init System (PID 1): {init_system}")
+        if init_system != "systemd":
+            parts.append(
+                "WARNING: systemd is NOT available - do NOT use systemctl, journalctl, or other systemd commands"
+            )
+    elif ctx.init_system:
+        parts.append(f"Init System: {ctx.init_system}")
 
 
 def build_modular_system_prompt(

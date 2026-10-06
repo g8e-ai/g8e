@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -19,8 +19,6 @@ from app.services.operator.filesystem_service import OperatorFilesystemService
 
 @pytest.mark.asyncio
 async def test_filesystem_service_grep_import_fix():
-    from unittest.mock import AsyncMock
-
     # This test primarily verifies that the imports in filesystem_service.py are correct
     # and don't raise NameError when the methods are called/referenced.
     execution_service = MagicMock()

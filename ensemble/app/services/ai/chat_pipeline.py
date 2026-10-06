@@ -183,8 +183,9 @@ class ChatPipelineService:
 
             if provider == LLMProvider.JEV.value:
                 provider_errors = JevProvider.validate_config(api_key, endpoint)
-                for error in provider_errors:
-                    validation_errors.append(f"{tier_name.capitalize()} {error}")
+                validation_errors.extend(
+                    f"{tier_name.capitalize()} {error}" for error in provider_errors
+                )
                 return
 
             try:
@@ -195,8 +196,9 @@ class ChatPipelineService:
 
             provider_class = get_llm_provider_class(provider_type)
             provider_errors = provider_class.validate_config(api_key, endpoint)
-            for error in provider_errors:
-                validation_errors.append(f"{tier_name.capitalize()} {error}")
+            validation_errors.extend(
+                f"{tier_name.capitalize()} {error}" for error in provider_errors
+            )
 
         # Provider connections are stored once per provider. A role override
         # changes which saved connection is resolved, but never carries its

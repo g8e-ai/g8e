@@ -37,8 +37,11 @@ def convert_args_to_payload[T](
     payload_dict = {**args_dict, "execution_id": execution_id, **extra_fields}
 
     # Inject ["all"] for single-operator ergonomics when target_operators is not provided
-    if investigation and len(investigation.bound_operators) == 1:
-        if "target_operators" not in payload_dict or payload_dict["target_operators"] is None:
-            payload_dict["target_operators"] = ["all"]
+    if (
+        investigation
+        and len(investigation.bound_operators) == 1
+        and ("target_operators" not in payload_dict or payload_dict["target_operators"] is None)
+    ):
+        payload_dict["target_operators"] = ["all"]
 
     return payload_cls.model_validate(payload_dict)

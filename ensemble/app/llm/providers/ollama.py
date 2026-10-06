@@ -143,18 +143,18 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
         return None
 
     ollama_tools = []
-    for tool in tools:
-        for decl in tool.tools:
-            ollama_tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": decl.name,
-                        "description": decl.description,
-                        "parameters": decl.parameters.to_json_schema(),
-                    },
-                }
-            )
+    ollama_tools.extend(
+        {
+            "type": "function",
+            "function": {
+                "name": decl.name,
+                "description": decl.description,
+                "parameters": decl.parameters.to_json_schema(),
+            },
+        }
+        for tool in tools
+        for decl in tool.tools
+    )
 
     return ollama_tools if ollama_tools else None
 
@@ -263,6 +263,7 @@ def _raise_on_unusable_response(
 class OllamaProvider(LLMProvider):
     def __init__(self, endpoint: str, api_key: str):
         super().__init__()
+        _ = api_key
 
         host = normalize_ollama_host(endpoint)
         self._client = AsyncClient(host=host)
@@ -288,6 +289,7 @@ class OllamaProvider(LLMProvider):
             List of validation error messages. Empty if configuration is valid.
         """
         errors = []
+        _ = api_key
         if not endpoint:
             errors.append("Provider 'ollama' requires an endpoint URL.")
         return errors
@@ -464,14 +466,14 @@ class OllamaProvider(LLMProvider):
         if getattr(response.message, "content", None):
             parts.append(Part(text=response.message.content))
         if getattr(response.message, "tool_calls", None):
-            for tc in response.message.tool_calls:
-                parts.append(
-                    Part(
-                        tool_call=ToolCall(
-                            name=tc.function.name, args=tc.function.arguments, id=None
-                        )
+            parts.extend(
+                Part(
+                    tool_call=ToolCall(
+                        name=tc.function.name, args=tc.function.arguments, id=None
                     )
                 )
+                for tc in response.message.tool_calls
+            )
 
         usage = _ollama_usage_metadata(response)
 

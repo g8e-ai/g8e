@@ -26,7 +26,7 @@ class AxiomPersona(AgentPersonaModel):
             role="tribunal_member",
             model_tier="lite",
             tools=[],
-            capabilities={PersonaCapability.LOCAL_SYNTAX_CHECK},
+            capabilities=frozenset({PersonaCapability.LOCAL_SYNTAX_CHECK}),
             identity=self._get_identity(),
             purpose="Emit one command string fulfilling Sage's intent in the most coherent composed form. Your candidate is one of five evaluated by ranked vote and judged by Auditor.\\n\\nOutput is exactly the command string. No explanation. No markdown fences. No commentary. No alternatives. No comments, no shebangs, no trailing semicolons.\\nIf the intent cannot be fulfilled in one command: emit exactly `ERROR:` followed by a one-line explanation.",
             autonomy="One candidate per invocation. No iteration. No negotiation. No communication with other members; amnesia is structural. No forbidden patterns. Your seat is exactly the authority to produce the compositional candidate.",

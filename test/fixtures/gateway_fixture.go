@@ -156,7 +156,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 					resp := mcp.JSONRPCResponse{
 						JSONRPC: "2.0",
 						ID:      1,
-						Result:  mustMarshal(mcp.ToolsListResult{Tools: []mcp.Tool{{Name: "echo", Description: "echoes input"}}}),
+						Result:  mustMarshal(t, mcp.ToolsListResult{Tools: []mcp.Tool{{Name: "echo", Description: "echoes input"}}}),
 					}
 					if err := json.NewEncoder(w).Encode(resp); err != nil {
 						t.Logf("Failed to encode response: %v", err)
@@ -165,7 +165,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 					resp := mcp.JSONRPCResponse{
 						JSONRPC: "2.0",
 						ID:      1,
-						Result:  mustMarshal(mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
+						Result:  mustMarshal(t, mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
 					}
 					if err := json.NewEncoder(w).Encode(resp); err != nil {
 						t.Logf("Failed to encode response: %v", err)
@@ -174,7 +174,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 					resp := mcp.JSONRPCResponse{
 						JSONRPC: "2.0",
 						ID:      1,
-						Result:  mustMarshal(mcp.ResourcesListResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
+						Result:  mustMarshal(t, mcp.ResourcesListResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
 					}
 					if err := json.NewEncoder(w).Encode(resp); err != nil {
 						t.Logf("Failed to encode response: %v", err)
@@ -183,7 +183,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 					resp := mcp.JSONRPCResponse{
 						JSONRPC: "2.0",
 						ID:      1,
-						Result:  mustMarshal(mcp.PromptsListResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
+						Result:  mustMarshal(t, mcp.PromptsListResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
 					}
 					if err := json.NewEncoder(w).Encode(resp); err != nil {
 						t.Logf("Failed to encode response: %v", err)
@@ -359,10 +359,11 @@ func (f *GatewayFixture) WaitForReady(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "HTTP server did not become ready")
 }
 
-func mustMarshal(v interface{}) json.RawMessage {
+func mustMarshal(t *testing.T, v interface{}) json.RawMessage {
+	t.Helper()
 	b, err := json.Marshal(v)
 	if err != nil {
-		panic(fmt.Sprintf("failed to marshal: %v", err))
+		t.Fatalf("failed to marshal fixture value: %v", err)
 	}
 	return b
 }

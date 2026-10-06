@@ -256,9 +256,12 @@ class OperatorFileService:
 
             # Extract content for READ operations from envelope payload
             content = None
-            if operation == FileOperation.READ and envelope:
-                if isinstance(envelope.payload, FileEditResultPayload):
-                    content = envelope.payload.content
+            if (
+                operation == FileOperation.READ
+                and envelope
+                and isinstance(envelope.payload, FileEditResultPayload)
+            ):
+                content = envelope.payload.content
 
             return FileEditResult(
                 success=internal_result.status == ExecutionStatus.COMPLETED

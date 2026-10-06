@@ -108,6 +108,7 @@ from .attachments import (
     AttachmentMetadata,
     ProcessedAttachment,
 )
+from .auth import AuthenticatedUser
 from .base import G8eAuditableModel, G8eBaseModel, G8eIdentifiableModel, G8eTimestampedModel
 from .cache import (
     BatchOperationResult,

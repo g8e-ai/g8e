@@ -31,8 +31,6 @@ from app.services.investigation.investigation_service import InvestigationServic
 
 def _make_investigation_data_service(mock_cache):
     """Helper to create InvestigationDataService with required governance_client."""
-    from unittest.mock import MagicMock
-
     mock_governance_client = MagicMock()
     return InvestigationDataService(cache=mock_cache, governance_client=mock_governance_client)
 

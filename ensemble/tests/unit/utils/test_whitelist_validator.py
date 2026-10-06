@@ -617,6 +617,7 @@ class TestEnabledField:
         assert validator.get_available_commands() == []
         result = validator.validate_command("ping google.com", platform=Platform.LINUX)
         assert result.is_valid is False
+        assert result.reason is not None
         assert "not in whitelist" in result.reason
 
     def test_enabled_true_loads_commands(self, tmp_path):

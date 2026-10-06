@@ -10,7 +10,7 @@
 This provider routes inference through the gateway's platform-internal
 ``/api/v1/inference/dispatch`` endpoint instead of calling an LLM backend
 directly. The gateway constructs a governed envelope, resolves the Inference
-Node's operator session, dispatches the request through the full L1–L5
+Node's operator session, dispatches the request through the full L1-L5
 gauntlet on the Inference Node, and returns the signed receipt and
 ``InferenceResult``. This is the transport layer underneath the ensemble
 chat pipeline's tiered routing logic; the governed dispatch wraps the
@@ -157,72 +157,68 @@ def _contents_to_messages(
     for content in contents:
         if content.role not in roles:
             raise ValidationError(f"Unsupported governed inference message role: {content.role}")
-        parts: list[InferenceMessagePart] = []
-        for part in content.parts:
-            kinds = sum(
-                value is not None
-                for value in (part.text, part.tool_call, part.tool_response, part.inline_data)
-            )
-            if kinds != 1:
-                raise ValidationError(
-                    "Governed inference message parts must contain exactly one value"
-                )
-            if part.inline_data is not None:
-                raise ModelCapabilityError(
-                    "G8E governed dispatch does not support inline data content parts",
-                    model=model,
-                    capability="multimodal",
-                    service_name="g8e",
-                )
-            if part.tool_call is not None:
-                if content.role not in ("model", "assistant") or not part.tool_call.name:
-                    raise ValidationError(
-                        "Governed inference tool calls require an assistant role and name"
-                    )
-                parts.append(
-                    InferenceMessagePart(
-                        tool_call=InferenceToolCall(
-                            call_id=part.tool_call.id or "",
-                            name=part.tool_call.name,
-                            arguments_json=_canonical_json(part.tool_call.args),
-                        )
-                    )
-                )
-            elif part.tool_response is not None:
-                if content.role != "tool" or not part.tool_response.name:
-                    raise ValidationError(
-                        "Governed inference tool results require a tool role and name"
-                    )
-                parts.append(
-                    InferenceMessagePart(
-                        tool_result=InferenceToolResult(
-                            call_id=part.tool_response.id or "",
-                            name=part.tool_response.name,
-                            result_json=_canonical_json(part.tool_response.response),
-                        )
-                    )
-                )
-            elif part.text is not None:
-                if content.role == "tool":
-                    raise ValidationError("Governed inference tool messages require a tool result")
-                parts.append(InferenceMessagePart(text=part.text))
+        parts = [
+            _content_part_to_message_part(part, content.role, model)
+            for part in content.parts
+        ]
         if not parts:
             raise ValidationError("Governed inference messages require at least one part")
         messages.append(InferenceMessage(role=roles[content.role], parts=parts))
     return messages
 
 
+def _content_part_to_message_part(part, role: str, model: str) -> InferenceMessagePart:
+    kinds = sum(
+        value is not None
+        for value in (part.text, part.tool_call, part.tool_response, part.inline_data)
+    )
+    if kinds != 1:
+        raise ValidationError("Governed inference message parts must contain exactly one value")
+    if part.inline_data is not None:
+        raise ModelCapabilityError(
+            "G8E governed dispatch does not support inline data content parts",
+            model=model,
+            capability="multimodal",
+            service_name="g8e",
+        )
+    if part.tool_call is not None:
+        if role not in ("model", "assistant") or not part.tool_call.name:
+            raise ValidationError("Governed inference tool calls require an assistant role and name")
+        return InferenceMessagePart(
+            tool_call=InferenceToolCall(
+                call_id=part.tool_call.id or "",
+                name=part.tool_call.name,
+                arguments_json=_canonical_json(part.tool_call.args),
+            )
+        )
+    if part.tool_response is not None:
+        if role != "tool" or not part.tool_response.name:
+            raise ValidationError("Governed inference tool results require a tool role and name")
+        return InferenceMessagePart(
+            tool_result=InferenceToolResult(
+                call_id=part.tool_response.id or "",
+                name=part.tool_response.name,
+                result_json=_canonical_json(part.tool_response.response),
+            )
+        )
+    if part.text is not None:
+        if role == "tool":
+            raise ValidationError("Governed inference tool messages require a tool result")
+        return InferenceMessagePart(text=part.text)
+    raise ValidationError("Governed inference message part is empty")
+
+
 def _tools_to_declarations(tools: list[ToolGroup] | None) -> list[InferenceToolDeclaration]:
     declarations: list[InferenceToolDeclaration] = []
-    for group in tools or []:
-        for tool in group.tools:
-            declarations.append(
-                InferenceToolDeclaration(
-                    name=tool.name,
-                    description=tool.description,
-                    json_schema=_canonical_json(tool.parameters.to_json_schema()),
-                )
-            )
+    declarations.extend(
+        InferenceToolDeclaration(
+            name=tool.name,
+            description=tool.description,
+            json_schema=_canonical_json(tool.parameters.to_json_schema()),
+        )
+        for group in tools or []
+        for tool in group.tools
+    )
     return declarations
 
 
@@ -475,8 +471,7 @@ def _response_to_stream_chunks(
     result: InferenceDispatchResponse,
 ) -> list[StreamChunkFromModel]:
     chunks: list[StreamChunkFromModel] = []
-    for part in _response_parts(result):
-        chunks.append(_part_to_stream_chunk(part))
+    chunks.extend(_part_to_stream_chunk(part) for part in _response_parts(result))
     chunks.append(
         StreamChunkFromModel(
             finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
@@ -492,7 +487,7 @@ class G8EProvider(LLMProvider):
     Uses the ``InternalHttpClient`` to call the gateway's
     ``/api/v1/inference/dispatch`` endpoint. The gateway resolves the
     Inference Node, constructs the governed envelope, dispatches through
-    the L1–L5 gauntlet, and returns the signed receipt and InferenceResult.
+    the L1-L5 gauntlet, and returns the signed receipt and InferenceResult.
     """
 
     def __init__(self, internal_http_client):
@@ -565,6 +560,7 @@ class G8EProvider(LLMProvider):
         The G8E provider uses the InternalHttpClient for transport (mTLS
         to the gateway), so no endpoint or API key is configured directly.
         """
+        _ = api_key, endpoint
         return []
 
     async def _dispatch(

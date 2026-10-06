@@ -9,6 +9,7 @@ import logging
 
 from app.clients.governance_client import GovernanceClient
 from app.constants import (
+    AITaskId,
     DB_COLLECTION_INVESTIGATIONS,
     G8EE_COMPONENT,
     ComponentStatus,
@@ -22,6 +23,7 @@ from app.constants.message_sender import MessageSender
 from app.errors import ResourceNotFoundError
 from app.models.base import TypeAdapter
 from app.models.cache import FieldFilter
+from app.models.command_request_payloads import DocumentUpdateRequestPayload
 from app.models.http_context import RequestContext
 from app.models.investigations import (
     ConversationHistoryMessage,
@@ -33,6 +35,7 @@ from app.models.investigations import (
     InvestigationQueryRequest,
 )
 from app.models.operators import CommandInternalResult
+from app.models.pubsub_messages import G8eMessage
 from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
@@ -54,10 +57,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
         """Low-level persistence for a new investigation document via governance envelope."""
-        from app.constants import AITaskId
-        from app.models.command_request_payloads import DocumentUpdateRequestPayload
-        from app.models.pubsub_messages import G8eMessage
-
         investigation = InvestigationModel(
             case_id=request.case_id,
             case_title=request.case_title,
@@ -134,8 +133,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         merge: bool = True,
     ):
         """Authoritative low-level update for the investigations collection via governance envelope."""
-        from app.constants import EventType
-
         await self._governance_client.update_governed_doc(
             collection=self.collection,
             document_id=investigation_id,
@@ -195,8 +192,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def delete_investigation(self, investigation_id: str, context: RequestContext) -> None:
         """Hard-delete an investigation document via governance envelope."""
-        from app.constants import EventType
-
         await self._governance_client.delete_governed_doc(
             collection=self.collection,
             document_id=investigation_id,

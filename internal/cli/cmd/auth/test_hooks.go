@@ -9,6 +9,7 @@ package authcmd
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 
@@ -32,14 +33,14 @@ func FailingClientFactory(err error) APIClientFactory {
 	}
 }
 
-// PanickingClientFactory returns an API client factory that panics if called.
+// PanickingClientFactory returns an API client factory that reports an error if called.
 func PanickingClientFactory() APIClientFactory {
 	return func(fs.RuntimeFileService, *config.Config) (APIClient, error) {
-		panic("clientFactory should not be called when fileSvcFactory fails")
+		return nil, errors.New("clientFactory should not be called when fileSvcFactory fails")
 	}
 }
 
-// PanickingEnrollerFactory returns an enroller factory whose enroller panics if called.
+// PanickingEnrollerFactory returns an enroller factory whose enroller reports an error if called.
 func PanickingEnrollerFactory() EnrollerFactory {
 	return func(_ auth.OutputFunc, _ fs.RuntimeFileService, _ *config.Config) (Enroller, error) {
 		return panickingEnroller{}, nil
@@ -49,10 +50,10 @@ func PanickingEnrollerFactory() EnrollerFactory {
 type panickingEnroller struct{}
 
 func (panickingEnroller) Enroll(context.Context, auth.EnrollmentOptions) (*auth.EnrollmentResult, error) {
-	panic("enrollerFactory should not be called on this code path")
+	return nil, errors.New("enrollerFactory should not be called on this code path")
 }
 
-// PanickingAppEnrollerFactory returns an app enroller factory whose enroller panics if called.
+// PanickingAppEnrollerFactory returns an app enroller factory whose enroller reports an error if called.
 func PanickingAppEnrollerFactory() AppEnrollerFactory {
 	return func(string, fs.RuntimeFileService, *config.Config, *slog.Logger) (AppEnroller, error) {
 		return panickingAppEnroller{}, nil
@@ -62,5 +63,5 @@ func PanickingAppEnrollerFactory() AppEnrollerFactory {
 type panickingAppEnroller struct{}
 
 func (panickingAppEnroller) Enroll(context.Context, io.Writer) (*models.PlatformEnrollmentCompleteResponse, error) {
-	panic("appEnrollerFactory should not be called on this code path")
+	return nil, errors.New("appEnrollerFactory should not be called on this code path")
 }

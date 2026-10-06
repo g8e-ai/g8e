@@ -110,18 +110,18 @@ def _tools_to_openai(tools: list[ToolGroup] | None) -> list[dict] | None:
         return None
 
     openai_tools = []
-    for tool in tools:
-        for decl in tool.tools:
-            openai_tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": decl.name,
-                        "description": decl.description,
-                        "parameters": decl.parameters.to_json_schema(),
-                    },
-                }
-            )
+    openai_tools.extend(
+        {
+            "type": "function",
+            "function": {
+                "name": decl.name,
+                "description": decl.description,
+                "parameters": decl.parameters.to_json_schema(),
+            },
+        }
+        for tool in tools
+        for decl in tool.tools
+    )
 
     return openai_tools if openai_tools else None
 

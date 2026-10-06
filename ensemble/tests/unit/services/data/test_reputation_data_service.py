@@ -13,6 +13,7 @@ auditor commitment flow lives in `test_auditor_commitment.py`.
 """
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -23,6 +24,7 @@ from app.constants import (
     EventType,
 )
 from app.errors import DatabaseError, ValidationError
+from app.models.http_context import RequestContext
 from app.models.reputation import (
     GENESIS_PREV_ROOT,
     ReputationCommitment,
@@ -62,8 +64,6 @@ def _make_commitment(
 class TestReputationStateCrud:
     @pytest.fixture
     def service(self, mock_cache_aside_service):
-        from unittest.mock import AsyncMock, MagicMock
-
         mock_governance_client = MagicMock()
         mock_governance_client.update_governed_doc = AsyncMock(return_value={"status": "accepted"})
         return ReputationDataService(
@@ -117,8 +117,6 @@ class TestReputationStateCrud:
         assert [s.agent_id for s in results] == ["axiom", "concord", "variance"]
 
     async def test_upsert_state_creates_when_absent(self, service, mock_cache):
-        from app.models.http_context import RequestContext
-
         mock_cache.get_document_with_cache.return_value = None
         context = RequestContext(
             web_session_id="test-sess",
@@ -134,8 +132,6 @@ class TestReputationStateCrud:
         assert kwargs["merge"] is False
 
     async def test_upsert_state_updates_when_present(self, service, mock_cache):
-        from app.models.http_context import RequestContext
-
         mock_cache.get_document_with_cache.return_value = {
             "agent_id": "axiom",
             "scalar": 0.5,
@@ -157,8 +153,6 @@ class TestReputationStateCrud:
 class TestReputationCommitmentCrud:
     @pytest.fixture
     def service(self, mock_cache_aside_service):
-        from unittest.mock import AsyncMock, MagicMock
-
         mock_governance_client = MagicMock()
         mock_governance_client.update_governed_doc = AsyncMock(return_value={"status": "accepted"})
         return ReputationDataService(
@@ -170,8 +164,6 @@ class TestReputationCommitmentCrud:
         return mock_cache_aside_service
 
     async def test_create_commitment_writes_to_collection(self, service, mock_cache):
-        from app.models.http_context import RequestContext
-
         c = _make_commitment()
         context = RequestContext(
             web_session_id="test-sess",

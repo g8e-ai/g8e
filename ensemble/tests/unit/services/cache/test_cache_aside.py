@@ -7,6 +7,7 @@
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -23,8 +24,12 @@ from app.constants import (
     KVKey,
     OperatorStatus,
 )
+from app.db.db_service import DBService
+from app.db.kv_service import KVService
 from app.errors import DatabaseError
 from app.models.cache import (
+    BatchCreateDocumentOperation,
+    BatchOperationResult,
     BatchWriteOperation,
     CacheOperationResult,
     DocumentResult,
@@ -47,9 +52,6 @@ class TestCacheAsideService:
 
     @pytest.fixture
     def service(self, mock_kv_cache_client, mock_db_client):
-        from app.db.db_service import DBService
-        from app.db.kv_service import KVService
-
         return CacheAsideService(
             kv=KVService(mock_kv_cache_client),
             db=DBService(mock_db_client),
@@ -241,8 +243,6 @@ class TestCacheAsideService:
     async def test_get_document_serializes_datetime_fields_before_kv_write(
         self, service, mock_kv_cache_client, mock_db_client
     ):
-        from datetime import UTC, datetime
-
         ts = datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC)
         mock_db_client.get_document.side_effect = None
         mock_db_client.get_document.return_value = DocumentResult(
@@ -344,8 +344,6 @@ class TestCacheAsideService:
     async def test_batch_create_documents_success(
         self, service, mock_kv_cache_client, mock_db_client
     ):
-        from app.models.cache import BatchCreateDocumentOperation
-
         operations = [
             BatchCreateDocumentOperation(
                 collection=DB_COLLECTION_USERS, document_id="u1", data={"id": "u1"}
@@ -363,8 +361,6 @@ class TestCacheAsideService:
     async def test_batch_create_documents_db_failure_raises_database_error(
         self, service, mock_db_client
     ):
-        from app.models.cache import BatchCreateDocumentOperation, BatchOperationResult
-
         mock_db_client.batch_write.side_effect = None
         mock_db_client.batch_write.return_value = BatchOperationResult(
             success=False, error="batch write failed"
@@ -378,8 +374,6 @@ class TestCacheAsideService:
             await service.batch_create_documents(operations)
 
     async def test_batch_create_documents_db_exception_propagates(self, service, mock_db_client):
-        from app.models.cache import BatchCreateDocumentOperation
-
         mock_db_client.batch_write.side_effect = Exception("batch error")
         operations = [
             BatchCreateDocumentOperation(
@@ -392,8 +386,6 @@ class TestCacheAsideService:
     async def test_batch_create_documents_formats_db_operations_correctly(
         self, service, mock_db_client
     ):
-        from app.models.cache import BatchCreateDocumentOperation
-
         operations = [
             BatchCreateDocumentOperation(
                 collection=DB_COLLECTION_USERS, document_id="u3", data={"id": "u3"}
@@ -410,16 +402,10 @@ class TestCacheAsideService:
         assert op.merge is False
 
     def test_component_name_defaults_to_g8ee_enum(self, mock_kv_cache_client, mock_db_client):
-        from app.db.db_service import DBService
-        from app.db.kv_service import KVService
-
         svc = CacheAsideService(kv=KVService(mock_kv_cache_client), db=DBService(mock_db_client))
         assert svc.component_name == G8EE_COMPONENT
 
     def test_component_name_accepts_enum(self, mock_kv_cache_client, mock_db_client):
-        from app.db.db_service import DBService
-        from app.db.kv_service import KVService
-
         svc = CacheAsideService(
             kv=KVService(mock_kv_cache_client),
             db=DBService(mock_db_client),
@@ -456,7 +442,7 @@ class TestCacheAsideService:
         cached_data = {"id": "user-99", "name": "Cached"}
         mock_kv_cache_client.seed_json(key, cached_data)
 
-        db_data = {"id": "user-99", "name": "From DB"}
+        db_data: dict[str, object] = {"id": "user-99", "name": "From DB"}
         mock_db_client.get_document.side_effect = None
         mock_db_client.get_document.return_value = DocumentResult(success=True, data=db_data)
 
@@ -477,7 +463,7 @@ class TestCacheAsideService:
         query_key = KVKey.query(DB_COLLECTION_USERS, filter_hash)
         mock_kv_cache_client.seed_json(query_key, [{"id": "cached"}])
 
-        db_results = [{"id": "db-1"}, {"id": "db-2"}]
+        db_results: list[dict[str, object]] = [{"id": "db-1"}, {"id": "db-2"}]
         mock_db_client.query_collection.side_effect = None
         mock_db_client.query_collection.return_value = QueryResult(success=True, data=db_results)
 

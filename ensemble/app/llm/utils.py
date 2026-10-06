@@ -143,25 +143,26 @@ def resolve_model(
     Returns:
         The resolved model name, or None if no model is configured for the tier
     """
-    if tier == "primary":
-        return primary_override or settings_primary_model
-    if tier == "assistant":
-        return (
-            assistant_override
-            or settings_assistant_model
-            or primary_override
-            or settings_primary_model
-        )
-    if tier == "lite":
-        return (
-            lite_override
-            or settings_lite_model
-            or assistant_override
-            or settings_assistant_model
-            or primary_override
-            or settings_primary_model
-        )
-    raise ValueError(f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'.")
+    fallback_chains = {
+        "primary": (primary_override, settings_primary_model),
+        "assistant": (
+            assistant_override,
+            settings_assistant_model,
+            primary_override,
+            settings_primary_model,
+        ),
+        "lite": (
+            lite_override,
+            settings_lite_model,
+            assistant_override,
+            settings_assistant_model,
+            primary_override,
+            settings_primary_model,
+        ),
+    }
+    if tier not in fallback_chains:
+        raise ValueError(f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'.")
+    return next((model for model in fallback_chains[tier] if model), None)
 
 
 def resolve_model_for_designated_role(

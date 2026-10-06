@@ -256,7 +256,7 @@ class SessionEventWire(_G8eSessionEventWire):
     """
 
     @classmethod
-    def from_session_event(cls, se: SessionEvent) -> SessionEventWire:
+    def from_routed_session_event(cls, se: SessionEvent) -> SessionEventWire:
         data = se.payload.model_dump(mode="json")
         if se.web_session_id:
             data["web_session_id"] = se.web_session_id
@@ -286,7 +286,7 @@ class BackgroundEventWire(_G8eBackgroundEventWire):
     """
 
     @classmethod
-    def from_background_event(cls, be: BackgroundEvent) -> BackgroundEventWire:
+    def from_routed_background_event(cls, be: BackgroundEvent) -> BackgroundEventWire:
         data = be.payload.model_dump(mode="json")
         data["user_id"] = be.user_id
         if be.investigation_id is not None:

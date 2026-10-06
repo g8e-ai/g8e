@@ -16,15 +16,44 @@ tests/fixtures/operators.py.
 E2E fixtures are in tests/e2e/conftest.py.
 """
 
+import asyncio
 import contextlib
 import logging
 import os
+import shutil
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 import pytest_asyncio
 
-from app.constants import G8EE_COMPONENT, OLLAMA_DEFAULT_ENDPOINT
+from app.clients.db_client import DBClient
+from app.clients.kv_cache_client import KVCacheClient
+from app.constants import (
+    G8EE_COMPONENT,
+    OLLAMA_DEFAULT_ENDPOINT,
+    InvestigationStatus,
+    LLMProvider,
+    LogLevel,
+    OperatorType,
+)
+from app.constants.bootstrap import reset_bootstrap
+from app.constants.env_vars import EnvVar
+from app.db.db_service import DBService
+from app.db.kv_service import KVService
+from app.llm.factory import (
+    get_llm_settings,
+    get_search_settings,
+    get_settings,
+    set_llm_settings,
+    set_search_settings,
+    set_settings,
+)
+from app.models.settings import TLSConfig
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.infra.settings_service import SettingsService
+from app.utils.path import resolve_project_root
 
 # Lazy imports for protocol-dependent modules to prevent pytest collection crashes
 # when protocol JSON files are missing or malformed.
@@ -36,8 +65,6 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(autouse=True)
 def _reset_paths_cache():
     """Reset bootstrap settings (and the PATHS cache they feed) before and after every test."""
-    from app.constants.bootstrap import reset_bootstrap
-
     reset_bootstrap()
     yield
     reset_bootstrap()
@@ -46,11 +73,6 @@ def _reset_paths_cache():
 @pytest.fixture
 def test_runtime_dir():
     """Isolated test directory under project root .g8e-test-tmp (avoiding system /tmp)."""
-    import shutil
-    import uuid
-
-    from app.utils.path import resolve_project_root
-
     root = resolve_project_root()
     base = root / ".g8e-test-tmp"
     base.mkdir(parents=True, exist_ok=True)
@@ -64,8 +86,6 @@ def test_runtime_dir():
 
 def _has_llm_credentials(llm) -> bool:
     """Return True if the given LLMSettings has the credentials it needs."""
-    from app.constants import LLMProvider
-
     if llm is None:
         return False
     provider = llm.primary_provider
@@ -88,13 +108,11 @@ def _llm_settings_from_env():
     Returns None when no --llm-provider flag was supplied, which means
     ai_integration tests should be skipped.
     """
-    from app.constants import LLMProvider
-    from app.constants.env_vars import EnvVar
-    from app.models.settings import LLMSettings
-
     provider_str = os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip()
     if not provider_str:
         return None
+
+    from app.models.settings import LLMSettings
 
     try:
         provider = LLMProvider(provider_str)
@@ -242,17 +260,6 @@ async def _load_settings_from_operator(probe_timeout: float = 5.0):
     during the probe so the caller can emit a single concise status line
     instead of three stacked error traces.
     """
-    import asyncio
-    import logging as _logging
-
-    from app.clients.db_client import DBClient
-    from app.clients.kv_cache_client import KVCacheClient
-    from app.db.db_service import DBService
-    from app.db.kv_service import KVService
-    from app.models.settings import TLSConfig
-    from app.services.cache.cache_aside import CacheAsideService
-    from app.services.infra.settings_service import SettingsService
-
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
@@ -267,9 +274,9 @@ async def _load_settings_from_operator(probe_timeout: float = 5.0):
     )
     saved_levels = {}
     for name in noisy_loggers:
-        noisy_logger = _logging.getLogger(name)
+        noisy_logger = logging.getLogger(name)
         saved_levels[name] = noisy_logger.level
-        noisy_logger.setLevel(_logging.CRITICAL)
+        noisy_logger.setLevel(logging.CRITICAL)
 
     try:
         async with asyncio.timeout(probe_timeout):
@@ -304,19 +311,15 @@ async def _load_settings_from_operator(probe_timeout: float = 5.0):
         return bootstrap_settings, "down"
     finally:
         for name, level in saved_levels.items():
-            _logging.getLogger(name).setLevel(level)
+            logging.getLogger(name).setLevel(level)
 
 
 def pytest_configure(config):
-    import asyncio
-
-    from app.llm.factory import set_llm_settings, set_search_settings, set_settings
-
     # Probe the operator for platform settings. Prints a single concise
     # status line (operator: ok | down) so the test runner output starts
     # with a readable signal instead of three stacked connection errors.
     try:
-        settings, status = asyncio.run(_load_settings_from_operator())
+        settings, _status = asyncio.run(_load_settings_from_operator())
     except Exception:
         from app.services.infra.settings_service import SettingsService
 
@@ -347,9 +350,6 @@ def _ollama_has_model(endpoint: str, model: str) -> bool:
 
 
 def pytest_collection_modifyitems(config, items):
-    from app.constants.env_vars import EnvVar
-    from app.llm.factory import get_llm_settings, get_search_settings, get_settings
-
     get_settings()
     llm = get_llm_settings()
     search_settings = get_search_settings()
@@ -437,8 +437,6 @@ class TaskTracker:
     """
 
     def __init__(self):
-        import asyncio
-
         self._captured_coros = []
         self._captured_tasks = []
         # Store original create_task so we can still use it even if patched globally
@@ -446,8 +444,6 @@ class TaskTracker:
 
     def track(self, coro_or_task):
         """Track a coroutine or task for automatic cleanup."""
-        import asyncio
-
         if asyncio.iscoroutine(coro_or_task):
             self._captured_coros.append(coro_or_task)
         elif isinstance(coro_or_task, asyncio.Task):
@@ -455,13 +451,9 @@ class TaskTracker:
         return coro_or_task
 
     def _fake_create_task(self, coro):
-        import asyncio
-
         if not asyncio.iscoroutine(coro):
             # If it's not a real coroutine (e.g. it's a mock),
             # we just return a new mock to represent the task.
-            from unittest.mock import MagicMock
-
             return MagicMock()
 
         task = self._original_create_task(coro)
@@ -474,8 +466,6 @@ class TaskTracker:
         The patch will create REAL tasks (so they actually run) but they will be
         automatically cancelled and awaited during cleanup.
         """
-        from unittest.mock import patch
-
         class _TaskPatchContext:
             def __init__(self, tracker):
                 self._tracker = tracker
@@ -490,14 +480,14 @@ class TaskTracker:
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
-                self._patch.__exit__(exc_type, exc_val, exc_tb)
+                patcher = self._patch
+                if patcher is not None:
+                    patcher.__exit__(exc_type, exc_val, exc_tb)
 
         return _TaskPatchContext(self)
 
     async def cleanup(self):
         """Close coroutines and cancel tasks."""
-        import asyncio
-
         # 1. Close plain coroutines
         for coro in self._captured_coros:
             with contextlib.suppress(Exception):
@@ -526,56 +516,42 @@ async def task_tracker():
 @pytest.fixture
 def unique_investigation_id():
     """Generate unique investigation ID for test isolation."""
-    import uuid
-
     return f"test-inv-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_user_id():
     """Generate unique user ID for test isolation."""
-    import uuid
-
     return f"test-user-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_case_id():
     """Generate unique case ID for test isolation."""
-    import uuid
-
     return f"test-case-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_operator_id():
     """Generate unique operator ID for test isolation."""
-    import uuid
-
     return f"test-op-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_session_id():
     """Generate unique session ID for test isolation."""
-    import uuid
-
     return f"test-sess-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_web_session_id():
     """Generate unique web session ID for test isolation."""
-    import uuid
-
     return f"test-ws-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def mock_governance_client():
     """Mock GovernanceClient for service tests."""
-    from unittest.mock import AsyncMock, MagicMock
-
     mock = MagicMock()
     mock.submit_envelope = AsyncMock(return_value={"status": "accepted"})
     mock.update_governed_doc = AsyncMock(return_value={"status": "accepted"})
@@ -603,11 +579,22 @@ def test_settings():
     If settings are not properly configured, returns a default G8eeAppSettings.
     """
     from app.llm.factory import get_settings
-    from app.models.settings import AuthSettings, G8eeAppSettings, GatewaySettings
+    from app.models.settings import AuthSettings, G8eeAppSettings
 
     settings = get_settings()
     if settings is None or not hasattr(settings, "auth"):
-        return G8eeAppSettings(auth=AuthSettings(), listen=GatewaySettings())
+        return G8eeAppSettings(
+            port=8443,
+            host="0.0.0.0",
+            log_level=LogLevel.INFO,
+            enable_logging=True,
+            auth=AuthSettings(
+                operator_session_id=None, operator_api_key=None, internal_api_key=None
+            ),
+            session_ttl=28800,
+            absolute_session_timeout=86400,
+            docs_dir="docs",
+        )
     return settings
 
 
@@ -630,8 +617,6 @@ def fake_cache_aside_service():
 @pytest.fixture
 def mock_blob_service():
     """Pure MagicMock spec'd to BlobService for unit tests."""
-    from unittest.mock import MagicMock
-
     from app.db.blob_service import BlobService
 
     return MagicMock(spec=BlobService)
@@ -646,9 +631,18 @@ def mock_event_service():
 
 @pytest.fixture
 def mock_settings():
-    from app.models.settings import AuthSettings, G8eeAppSettings, GatewaySettings
+    from app.models.settings import AuthSettings, G8eeAppSettings
 
-    return G8eeAppSettings(auth=AuthSettings(), listen=GatewaySettings())
+    return G8eeAppSettings(
+        port=8443,
+        host="0.0.0.0",
+        log_level=LogLevel.INFO,
+        enable_logging=True,
+        auth=AuthSettings(operator_session_id=None, operator_api_key=None, internal_api_key=None),
+        session_ttl=28800,
+        absolute_session_timeout=86400,
+        docs_dir="docs",
+    )
 
 
 @pytest.fixture
@@ -686,7 +680,6 @@ def enriched_investigation():
 
 @pytest.fixture
 def remote_operator_doc():
-    from app.constants import OperatorType
     from app.models.operators import (
         HeartbeatDiskDetails,
         HeartbeatEnvironment,
@@ -713,7 +706,7 @@ def remote_operator_doc():
                 cpu_count=4,
                 memory_mb=8192,
             ),
-            network=HeartbeatNetworkInfo(
+            network_info=HeartbeatNetworkInfo(
                 public_ip="54.123.45.67",
             ),
             os_details=HeartbeatOSDetails(distro="Amazon Linux", kernel="6.1.0", version="2023"),
@@ -729,7 +722,6 @@ def remote_operator_doc():
 
 @pytest.fixture
 def binary_operator_doc():
-    from app.constants import OperatorType
     from app.models.operators import (
         HeartbeatDiskDetails,
         HeartbeatEnvironment,
@@ -755,7 +747,7 @@ def binary_operator_doc():
                 cpu_count=8,
                 memory_mb=16384,
             ),
-            network=HeartbeatNetworkInfo(),
+            network_info=HeartbeatNetworkInfo(),
             os_details=HeartbeatOSDetails(distro="Ubuntu", kernel="5.15.0", version="22.04"),
             user_details=HeartbeatUserDetails(username="root", home="/root", shell="/bin/bash"),
             disk_details=HeartbeatDiskDetails(percent=10.0, total_gb=500, free_gb=450),
@@ -767,7 +759,6 @@ def binary_operator_doc():
 
 @pytest.fixture
 def multi_operator_investigation(remote_operator_doc, binary_operator_doc):
-    from app.constants import InvestigationStatus
     from tests.fakes.factories import build_enriched_context
 
     return build_enriched_context(
@@ -871,10 +862,10 @@ async def llm_provider():
 
 
 @pytest.fixture(scope="session")
-def memory_crud(cache_aside_service):
-    from app.services.data.memory_service import MemoryCRUDService
+def memory_crud():
+    from tests.fakes.fake_memory_data_service import FakeMemoryDataService
 
-    return MemoryCRUDService(cache_aside_service=cache_aside_service)
+    return FakeMemoryDataService()
 
 
 @pytest.fixture(scope="session")

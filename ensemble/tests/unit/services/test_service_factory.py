@@ -16,6 +16,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.constants import LogLevel
+from app.db.blob_service import BlobService
 from app.models.settings import G8eeAppSettings
 from app.services.auth.certificate_data_service import CertificateDataService
 from app.services.cache.cache_aside import CacheAsideService
@@ -27,7 +29,15 @@ pytestmark = [pytest.mark.unit]
 @pytest.fixture
 def mock_settings():
     """Create a minimal G8eeAppSettings for smoke testing."""
-    settings = G8eeAppSettings()
+    settings = G8eeAppSettings(
+        port=8443,
+        host="0.0.0.0",
+        log_level=LogLevel.INFO,
+        enable_logging=True,
+        session_ttl=28800,
+        absolute_session_timeout=86400,
+        docs_dir="docs",
+    )
     settings.search.enabled = False
     return settings
 
@@ -57,7 +67,7 @@ class TestServiceFactorySmoke:
             cache_aside_service=mock_cache_aside,
             db_service=MagicMock(),
             kv_service=MagicMock(),
-            blob_service=None,
+            blob_service=MagicMock(spec=BlobService),
             web_search_provider=None,
             governance_client=MagicMock(),
         )
@@ -77,7 +87,7 @@ class TestServiceFactorySmoke:
             cache_aside_service=mock_cache_aside,
             db_service=MagicMock(),
             kv_service=MagicMock(),
-            blob_service=None,
+            blob_service=MagicMock(spec=BlobService),
             web_search_provider=web_search_provider,
             governance_client=MagicMock(),
         )

@@ -95,6 +95,7 @@ class FakeProvider(LLMProvider):
     @staticmethod
     def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
         """Fake provider validation - always valid (no external dependencies)."""
+        _ = api_key, endpoint
         return []
 
     @staticmethod

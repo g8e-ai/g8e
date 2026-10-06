@@ -323,7 +323,6 @@ class TestBuildResponse:
         mock_block.type = "tool_use"
         mock_block.name = "run_command"
         mock_block.input = {"command": "ls"}
-        assert tc is not None
         mock_block.id = "tool_123"
         mock_response = MagicMock()
         mock_response.content = [mock_block]
@@ -332,6 +331,7 @@ class TestBuildResponse:
 
         result = provider._build_response(mock_response)
         tc = result.candidates[0].content.parts[0].tool_call
+        assert tc is not None
         assert tc.name == "run_command"
         assert tc.args == {"command": "ls"}
         assert tc.id == "tool_123"

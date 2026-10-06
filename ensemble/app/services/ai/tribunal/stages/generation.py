@@ -170,9 +170,9 @@ async def _run_generation_pass(
 
     cluster_context = None
     if round_num == 2 and r1_clusters:
-        cluster_lines = []
-        for c in r1_clusters:
-            cluster_lines.append(f"[{c.cluster_id}] (support: {c.support_count})\n{c.command}")
+        cluster_lines = [
+            f"[{c.cluster_id}] (support: {c.support_count})\n{c.command}" for c in r1_clusters
+        ]
         cluster_context = "\n".join(cluster_lines)
 
     prompt = build_tribunal_generator_prompt(
@@ -419,15 +419,13 @@ def _anonymize_clusters(
     cluster_to_cmd: dict[str, str] = {}
     cluster_to_members: dict[str, list[str]] = {}
 
-    idx = 0
-    for cmd, members in candidates_by_command.items():
+    for idx, (cmd, members) in enumerate(candidates_by_command.items()):
         c_id = f"cluster_{chr(ord('a') + idx)}"
         cluster_to_cmd[c_id] = cmd
         cluster_to_members[c_id] = members
         clusters.append(
             AuditorClusterInfo(cluster_id=c_id, command=cmd, support_count=len(members))
         )
-        idx += 1
 
     return clusters, cluster_to_cmd, cluster_to_members
 

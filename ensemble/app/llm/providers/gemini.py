@@ -204,14 +204,14 @@ def _tool_group_to_genai(tool_group: ToolGroup) -> list:
     """Convert ToolGroup to google.genai Tool format for LLM boundary."""
     genai_tools = []
     funcs = []
-    for tool in tool_group.tools:
-        funcs.append(
+    funcs.extend(
             {
                 "name": tool.name,
                 "description": tool.description,
                 "parameters_json_schema": tool.parameters.to_json_schema(),
             }
-        )
+            for tool in tool_group.tools
+    )
     if funcs:
         genai_tools.append(genai_types.Tool(function_declarations=funcs))
 
@@ -400,6 +400,7 @@ class GeminiProvider(LLMProvider):
             List of validation error messages. Empty if configuration is valid.
         """
         errors = []
+        _ = endpoint
         if not api_key:
             errors.append("Provider 'gemini' requires an API key.")
         return errors

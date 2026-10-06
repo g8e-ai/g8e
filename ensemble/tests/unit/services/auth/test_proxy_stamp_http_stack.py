@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from proxy_stamp_support import KeySource, key_response, make_key, stamped_headers, verifier
 
@@ -27,7 +28,7 @@ BODY = b'{"message":"hi","context":{"user_id":"user-1","web_session_id":"web-1",
 
 
 @pytest.fixture
-def stack():
+def stack(mock_settings):
     key = make_key()
     service = AuthService(AsyncMock(), proxy_stamp_verifier=verifier(KeySource(key_response(key))))
     app = FastAPI()
@@ -35,12 +36,10 @@ def stack():
 
     @app.exception_handler(AuthenticationError)
     async def _auth_error(_request, _exc):
-        from fastapi.responses import JSONResponse
-
         return JSONResponse({"error": "unauthenticated"}, status_code=401)
 
     async def authenticated(request: Request) -> AuthenticatedUser:
-        return await service.authenticate_request(request, None)
+        return await service.authenticate_request(request, mock_settings)
 
     @app.post("/api/v1/chat/send")
     async def send(user: AuthenticatedUser = Depends(authenticated)):

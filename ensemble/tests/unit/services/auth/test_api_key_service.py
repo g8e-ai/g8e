@@ -5,6 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,6 +15,7 @@ from app.models.api_keys import APIKeyDocument
 from app.services.auth.api_key_service import (
     APIKeyService,
 )
+from app.utils.time_ids.timestamp import now
 
 
 @pytest.fixture
@@ -237,10 +239,6 @@ class TestAPIKeyService:
 
     async def test_validate_key_expired(self, api_key_service, mock_cache_aside):
         """Test validating an expired API key."""
-        from datetime import timedelta
-
-        from app.utils.time_ids.timestamp import now
-
         expired_time = now() - timedelta(days=1)
         doc = APIKeyDocument(
             user_id="user-123",

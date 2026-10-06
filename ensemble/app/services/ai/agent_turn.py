@@ -476,9 +476,10 @@ def should_retry_error(error: Exception) -> bool:
 def extract_status_code(error: Exception) -> int | None:
     """Extract an HTTP status code from an exception, if present."""
     # Handle known library exceptions explicitly
-    if isinstance(error, HttpxHTTPStatusError):
-        if hasattr(error, "response") and hasattr(error.response, "status_code"):
-            return error.response.status_code
+    if isinstance(error, HttpxHTTPStatusError) and hasattr(error, "response") and hasattr(
+        error.response, "status_code"
+    ):
+        return error.response.status_code
 
     # For other exceptions with status_code attribute
     status_code = getattr(error, "status_code", None)

@@ -180,9 +180,9 @@ class InternalHttpClient:
         into the empty-fan-out success shape.
         """
         wire_model = (
-            SessionEventWire.from_session_event(event)
+            SessionEventWire.from_routed_session_event(event)
             if isinstance(event, SessionEvent)
-            else BackgroundEventWire.from_background_event(event)
+            else BackgroundEventWire.from_routed_background_event(event)
         )
         wire = wire_model.model_dump(mode="json")
         web_session_id: str | None = wire.get("web_session_id")

@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from app.clients.governance_client import GovernanceClient
 from app.constants import (
+    AITaskId,
     DB_COLLECTION_CASES,
     DB_COLLECTION_TASKS,
     G8EE_COMPONENT,
@@ -34,10 +35,12 @@ from app.models import (
     CaseUpdateRequest,
 )
 from app.models.cache import FieldFilter
+from app.models.command_request_payloads import DocumentUpdateRequestPayload
 from app.models.cases import CaseModel, HistoryEntry
 from app.models.db_queries import CaseHistoryQuery
 from app.models.events import SessionEvent
 from app.models.http_context import RequestContext
+from app.models.pubsub_messages import G8eMessage
 from app.models.settings import G8eeAppSettings
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.event_service import EventService
@@ -136,10 +139,6 @@ class CaseDataService:
         )
 
         async def _create():
-            from app.constants import AITaskId, EventType
-            from app.models.command_request_payloads import DocumentUpdateRequestPayload
-            from app.models.pubsub_messages import G8eMessage
-
             payload = DocumentUpdateRequestPayload(
                 collection=self.cases_collection,
                 document_id=case_id,
@@ -337,8 +336,6 @@ class CaseDataService:
             return
 
         try:
-            from app.models.http_context import RequestContext
-
             ctx = RequestContext(
                 web_session_id=web_session_id,
                 cli_session_id=cli_session_id,

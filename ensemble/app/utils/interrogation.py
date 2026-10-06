@@ -39,13 +39,10 @@ def extract_interrogation_questions(text: str) -> list[str]:
     if not interrogation_content:
         return []
 
-    # Split into lines and extract numbered questions
     questions = []
-    # Match lines starting with optional whitespace, a number, a dot, and then the question
-    # Example: "1. What is the error?" or " 2. Is this correct?"
     lines = interrogation_content.splitlines()
-    for line in lines:
-        line = line.strip()
+    for raw_line in lines:
+        line = raw_line.strip()
         if not line:
             continue
 

@@ -9,6 +9,7 @@
 
 import uuid
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 
 from app.constants import (
     G8EE_COMPONENT,
@@ -25,6 +26,7 @@ from app.constants import (
     Priority,
     Severity,
 )
+from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.agents.tribunal import (
     CandidateCommand,
 )
@@ -322,8 +324,6 @@ def build_production_operator_document(
     Linux host.  This ensures accuracy tests exercise the agent's reasoning
     without colliding with the security layer that blocks ``sudo``.
     """
-    import uuid
-
     if operator_id is None:
         operator_id = f"test-op-{uuid.uuid4().hex[:8]}"
     operator_session_id = f"test-sess-{uuid.uuid4().hex[:8]}"
@@ -427,10 +427,6 @@ def create_mock_llm_provider(text: str):
 
     If text is provided, generate_content returns a mock response with that text.
     """
-    from unittest.mock import AsyncMock, MagicMock
-
-    from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
-
     provider = MagicMock()
     provider.generate_content_stream = AsyncMock()
 

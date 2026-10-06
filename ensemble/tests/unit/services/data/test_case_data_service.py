@@ -7,6 +7,7 @@
 
 """Unit tests for CaseDataService."""
 
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,6 +16,7 @@ from app.constants import (
     G8EE_COMPONENT,
     CaseStatus,
     ComponentName,
+    ErrorCategory,
     ErrorCode,
     EventType,
     Priority,
@@ -24,6 +26,7 @@ from app.constants import (
 from app.errors import (
     BusinessLogicError,
     DatabaseError,
+    G8eError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -49,12 +52,12 @@ async def mock_awaitable_exception(exc):
 
 def _make_awaitable_side_effect(result):
     """Returns a side_effect function that returns an awaitable with the given result."""
-    return lambda *args, **kwargs: mock_awaitable(result)
+    return lambda *_args, **_kwargs: mock_awaitable(result)
 
 
 def _make_awaitable_exception_side_effect(exc):
     """Returns a side_effect function that raises an awaitable exception."""
-    return lambda *args, **kwargs: mock_awaitable_exception(exc)
+    return lambda *_args, **_kwargs: mock_awaitable_exception(exc)
 
 
 class TestCaseDataService:
@@ -161,9 +164,6 @@ class TestCaseDataService:
             await service.create_case(request, "Title")
 
     async def test_create_case_g8e_error(self, service, mock_cache, mock_governance_client):
-        from app.constants import ErrorCategory
-        from app.errors import G8eError
-
         request = CaseCreateRequest(
             user_id="user-123", web_session_id="ws-123", initial_message="Hello"
         )
@@ -261,9 +261,6 @@ class TestCaseDataService:
             )
 
     async def test_update_case_g8e_error(self, service, mock_cache, mock_governance_client):
-        from app.constants import ErrorCategory
-        from app.errors import G8eError
-
         case_id = "case-123"
         mock_cache.get_document_with_cache.return_value = {
             "title": "Test Case",
@@ -347,7 +344,8 @@ class TestCaseDataService:
 
     async def test_publish_case_update_sse_success(self, service, mock_event):
         payload = CaseEventPayload(
-            updated_at="2026-01-01T01:00:00Z", case_id="case-123", status=CaseStatus.NEW
+            updated_at=datetime.fromisoformat("2026-01-01T01:00:00+00:00"),
+            status=CaseStatus.NEW,
         )
         await service.publish_case_update_sse(
             case_id="case-123", web_session_id="ws-123", payload=payload, user_id="user-123"
@@ -375,7 +373,11 @@ class TestCaseDataService:
     # --- get_case_history tests ---
 
     async def test_get_case_history_success(self, service, mock_cache):
-        query = CaseHistoryQuery(case_id="case-123", start_time="2026-01-01T00:00:00Z", limit=10)
+        query = CaseHistoryQuery(
+            case_id="case-123",
+            start_time=datetime.fromisoformat("2026-01-01T00:00:00+00:00"),
+            limit=10,
+        )
         mock_cache.query_documents.return_value = [
             {
                 "timestamp": "2026-05-06T10:33:31Z",
@@ -392,13 +394,11 @@ class TestCaseDataService:
         mock_cache.query_documents.assert_called_once()
 
     async def test_get_case_history_filters(self, service, mock_cache):
-        from app.models.db_queries import CaseHistoryQuery
-
         # Lines 326, 330, 333: query.start_time, query.end_time, query.event_type
         query = CaseHistoryQuery(
             case_id="case-123",
-            start_time="2026-01-01T00:00:00Z",
-            end_time="2026-01-02T00:00:00Z",
+            start_time=datetime.fromisoformat("2026-01-01T00:00:00+00:00"),
+            end_time=datetime.fromisoformat("2026-01-02T00:00:00+00:00"),
             event_type=EventType.APP_CASE_UPDATED,
             limit=5,
         )

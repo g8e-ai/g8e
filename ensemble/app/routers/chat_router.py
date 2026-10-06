@@ -14,7 +14,7 @@ LLM-based analysis system.
 
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from app.constants import ChatSessionStatus, EventType, InvestigationStatus, MessageSender
 from app.dependencies import (
@@ -182,6 +182,8 @@ async def timeout_triage_questions(
     """
     Record that triage clarifying questions timed out.
     """
+    # Keep the typed request body in the route contract; validation happens in FastAPI.
+    _ = request
     investigation_id = g8e_context.investigation_id
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != g8e_context.user_id:
@@ -204,7 +206,6 @@ async def timeout_triage_questions(
 @router.get("/chat/sessions/{web_session_id}")
 async def get_chat_session(
     web_session_id: str,
-    request: Request,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ) -> ChatSessionResponse:
@@ -257,7 +258,6 @@ async def get_chat_session(
 @router.get("/chat/cases/{case_id}/latest-session")
 async def get_latest_chat_session_for_case(
     case_id: str,
-    request: Request,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),

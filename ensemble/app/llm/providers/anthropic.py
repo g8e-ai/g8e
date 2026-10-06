@@ -134,15 +134,15 @@ def _tools_to_anthropic(tools: list[ToolGroup] | None) -> list[dict] | None:
         return None
 
     anthropic_tools = []
-    for tool in tools:
-        for decl in tool.tools:
-            anthropic_tools.append(
-                {
-                    "name": decl.name,
-                    "description": decl.description,
-                    "input_schema": decl.parameters.to_json_schema(),
-                }
-            )
+    anthropic_tools.extend(
+        {
+            "name": decl.name,
+            "description": decl.description,
+            "input_schema": decl.parameters.to_json_schema(),
+        }
+        for tool in tools
+        for decl in tool.tools
+    )
 
     return anthropic_tools if anthropic_tools else None
 

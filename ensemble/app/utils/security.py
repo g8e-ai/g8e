@@ -82,11 +82,11 @@ def validate_safe_path(path: str | Path, root: str | Path) -> Path:
             target_path.relative_to(root_path)
         except ValueError as exc:
             raise ValueError(f"Path traversal detected: {path} is outside of {root}") from exc
-        return target_path
-
-    if any(part in {"", ".."} for part in path_obj.parts):
-        raise ValueError(f"Path traversal detected: {path} is outside of {root}")
-    return resolve_safe_path_segments(root_path, *path_obj.parts)
+    else:
+        if any(part in {"", ".."} for part in path_obj.parts):
+            raise ValueError(f"Path traversal detected: {path} is outside of {root}")
+        target_path = resolve_safe_path_segments(root_path, *path_obj.parts)
+    return target_path
 
 
 def is_shell_required(command: str) -> bool:
@@ -122,21 +122,19 @@ def hash_password(
 
 def verify_password(password: str, hashed_password: str) -> bool:
     """Verify a password against a PBKDF2-HMAC-SHA256 formatted hash using constant-time comparison."""
-    if not password or not hashed_password:
-        return False
-
-    if not hashed_password.startswith(PASSWORD_HASH_PREFIX):
+    if (
+        not password
+        or not hashed_password
+        or not hashed_password.startswith(PASSWORD_HASH_PREFIX)
+    ):
         return False
 
     try:
         parts = hashed_password[len(PASSWORD_HASH_PREFIX) :].split("$")
-        if len(parts) != 3:
+        if len(parts) != 3 or not parts[0].startswith("i="):
             return False
 
         iter_part, salt_hex, hash_hex = parts
-        if not iter_part.startswith("i="):
-            return False
-
         iterations = int(iter_part[2:])
         if iterations < 1:
             return False

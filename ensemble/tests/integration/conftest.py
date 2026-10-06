@@ -27,10 +27,14 @@ import asyncio
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
+
+from app.utils.time_ids.timestamp import now
 
 # Lazy imports for protocol-dependent modules to prevent pytest collection crashes
 # when protocol JSON files are missing or malformed.
@@ -45,9 +49,6 @@ def make_write_through_governance_client(cache_aside_service):
     Data services route creates/updates/deletes through governance envelopes;
     integration tests that read documents back need this write-through behavior.
     """
-    from datetime import UTC, datetime
-    from unittest.mock import AsyncMock, MagicMock
-
     governance_client = MagicMock()
 
     async def _submit_write_through(message):
@@ -93,8 +94,6 @@ async def auto_approve_pending(approval_service) -> None:
     hitting ``AGENT_MAX_TOOL_TURNS`` and requesting an ``AGENT_CONTINUE``
     approval), use ``auto_approve_inline_callback`` instead.
     """
-    from app.utils.time_ids.timestamp import now
-
     pending = approval_service.get_pending_approvals()
     for approval_id, pending_approval in pending.items():
         pending_approval.resolve(
@@ -153,8 +152,6 @@ def auto_approve_inline_callback(
     previous = getattr(approval_service, "_on_approval_requested", None)
 
     def _callback(approval_id: str, pending) -> None:
-        from app.utils.time_ids.timestamp import now
-
         tracker.record(pending.approval_type)
         pending.resolve(
             approved=tracker.approved,
@@ -190,9 +187,16 @@ async def approve_via_http(
 
     Returns a simple dict with the approval result.
     """
+    from app.models.http_context import RequestContext
     from app.models.internal_api import OperatorApprovalResponse
 
     response = OperatorApprovalResponse(
+        context=RequestContext(
+            web_session_id=operator_session_id or None,
+            user_id="integration-test-user",
+            operator_session_id=operator_session_id or None,
+            operator_id=operator_id or None,
+        ),
         approval_id=approval_id,
         approved=approved,
         reason=reason,
@@ -227,8 +231,6 @@ async def all_services(cache_aside_service, test_settings):
     Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
-    from unittest.mock import MagicMock
-
     from app.clients.db_client import DBClient
     from app.constants.paths import get_paths
     from app.llm.factory import get_search_settings

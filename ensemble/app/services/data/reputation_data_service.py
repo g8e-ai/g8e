@@ -28,6 +28,7 @@ from app.clients.governance_client import GovernanceClient
 from app.constants import (
     DB_COLLECTION_REPUTATION_COMMITMENTS,
     DB_COLLECTION_REPUTATION_STATE,
+    EventType,
     G8EE_COMPONENT,
     ErrorCode,
 )
@@ -125,8 +126,6 @@ class ReputationDataService:
                 document_id=state.agent_id,
             )
 
-            from app.constants import EventType
-
             await self._governance_client.update_governed_doc(
                 collection=self.state_collection,
                 document_id=state.agent_id,
@@ -169,8 +168,6 @@ class ReputationDataService:
         if not commitment.id:
             raise ValidationError("ReputationCommitment.id is required")
         try:
-            from app.constants import EventType
-
             await self._governance_client.update_governed_doc(
                 collection=self.commitments_collection,
                 document_id=commitment.id,

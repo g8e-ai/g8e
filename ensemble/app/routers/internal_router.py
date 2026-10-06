@@ -49,7 +49,13 @@ from app.dependencies import (
     get_request_context,
     require_authenticated_context,
 )
-from app.errors import NetworkError, ResourceNotFoundError, ServiceUnavailableError, ValidationError
+from app.errors import (
+    AuthenticationError,
+    NetworkError,
+    ResourceNotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from app.llm.model_catalog import list_governed_models, list_models
 from app.models import CaseCreateRequest
 from app.models.cache import FieldFilter
@@ -108,6 +114,7 @@ from app.models.internal_api import (
     StopAIResponse,
     StopOperatorRequest,
 )
+from app.models.investigations import InvestigationCreateRequest
 from app.models.investigations import (
     ConversationMessageMetadata,
     InvestigationGetRequest,
@@ -286,8 +293,6 @@ async def _create_investigation_for_case(
             component="g8ee",
         )
 
-    from app.models.investigations import InvestigationCreateRequest
-
     investigation = await investigation_service.create_investigation(
         InvestigationCreateRequest(
             case_id=case.id,
@@ -422,8 +427,6 @@ async def internal_chat(
         )
         case = await case_service.create_case(case_create_data, generated_title=None)
 
-        from app.models.investigations import InvestigationCreateRequest
-
         investigation_request = InvestigationCreateRequest(
             case_id=case.id,
             case_title=case.title,
@@ -459,8 +462,6 @@ async def internal_chat(
                     tool_gate=resolve_tool_gate(g8e_context.evaluation_context),
                 )
                 raise
-
-        from app.models.events import SessionEvent
 
         # Publish CASE_CREATED event immediately after inline creation.
         try:
@@ -1523,7 +1524,10 @@ async def get_llm_role_settings(
 
     API keys are reported only as set or unset.
     """
-    return await settings_service.get_llm_role_settings(g8e_context.user_id)
+    user_id = g8e_context.user_id
+    if user_id is None:
+        raise AuthenticationError("Authenticated user identity is required for model settings")
+    return await settings_service.get_llm_role_settings(user_id)
 
 
 @router.post(InternalAPIPaths.G8EE_SETTINGS_LLM, response_model=LLMRoleSettingsResponse)
@@ -1533,7 +1537,10 @@ async def update_llm_role_settings(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Save caller-owned provider connections or role selections to user settings."""
-    return await settings_service.update_llm_role_settings(g8e_context.user_id, request)
+    user_id = g8e_context.user_id
+    if user_id is None:
+        raise AuthenticationError("Authenticated user identity is required for model settings")
+    return await settings_service.update_llm_role_settings(user_id, request)
 
 
 @router.post(InternalAPIPaths.G8EE_SETTINGS_LLM_MODELS, response_model=LLMModelListResponse)
@@ -1553,7 +1560,10 @@ async def list_llm_models(
         return LLMModelListResponse(
             models=await list_governed_models(gateway_operator_client, g8e_context)
         )
-    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
+    user_id = g8e_context.user_id
+    if user_id is None:
+        raise AuthenticationError("Authenticated user identity is required to list saved models")
+    user_settings = await settings_service.get_user_settings(user_id)
     endpoint, api_key = provider_connection(user_settings.llm, request.provider)
     models = await list_models(request.provider, endpoint, api_key)
     return LLMModelListResponse(models=models)

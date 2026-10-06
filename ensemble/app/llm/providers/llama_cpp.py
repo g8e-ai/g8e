@@ -39,6 +39,7 @@ class LlamaCppProvider(OpenAIProvider):
             List of validation error messages. Empty if configuration is valid.
         """
         errors = []
+        _ = api_key
         if not endpoint:
             errors.append("Provider 'llamacpp' requires an endpoint URL.")
         return errors

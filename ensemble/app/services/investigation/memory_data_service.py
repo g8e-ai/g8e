@@ -8,12 +8,14 @@
 import logging
 
 from app.clients.governance_client import GovernanceClient
-from app.constants import DB_COLLECTION_MEMORIES, G8EE_COMPONENT
+from app.constants import AITaskId, DB_COLLECTION_MEMORIES, EventType, G8EE_COMPONENT
 from app.errors import DatabaseError
 from app.models.cache import FieldFilter
+from app.models.command_request_payloads import DocumentUpdateRequestPayload
 from app.models.http_context import RequestContext
 from app.models.investigations import InvestigationModel
 from app.models.memory import InvestigationMemory
+from app.models.pubsub_messages import G8eMessage
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import MemoryDataServiceProtocol
 
@@ -43,10 +45,6 @@ class MemoryDataService(MemoryDataServiceProtocol):
             status=investigation.status,
             case_title=investigation.case_title,
         )
-
-        from app.constants import AITaskId, EventType
-        from app.models.command_request_payloads import DocumentUpdateRequestPayload
-        from app.models.pubsub_messages import G8eMessage
 
         payload = DocumentUpdateRequestPayload(
             collection=self.memories_collection,
@@ -87,13 +85,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
     ) -> None:
         data = memory.model_dump(mode="json")
 
-        from app.constants import EventType
-
         if is_new:
-            from app.constants import AITaskId
-            from app.models.command_request_payloads import DocumentUpdateRequestPayload
-            from app.models.pubsub_messages import G8eMessage
-
             payload = DocumentUpdateRequestPayload(
                 collection=self.memories_collection,
                 document_id=memory.investigation_id,

@@ -81,7 +81,7 @@ def _sum_optional_usage_counts(values: list[int | None]) -> int | None:
         return None
     if any(value is None for value in values):
         return None
-    return sum(values)
+    return sum(value for value in values if value is not None)
 
 
 def _resolve_agent_model_role(inputs: AgentInputs) -> str:

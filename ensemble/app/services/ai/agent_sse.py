@@ -121,15 +121,8 @@ async def deliver_via_sse(
     # state.response_text but skip EventService publishing.
     has_sse = web_session_id is not None or cli_session_id is not None
 
-    if has_sse:
-        if not inputs.case_id:
-            # For some test/eval flows we might not have a case_id but still want events.
-            # However, for production flows it is required.
-            case_id = inputs.case_id or ""
-        else:
-            case_id = inputs.case_id
-    else:
-        case_id = ""
+    # For test/eval flows without a case ID, still allow event delivery.
+    case_id = (inputs.case_id or "") if has_sse else ""
 
     async def _publish(event_type: EventType, payload: G8eBaseModel) -> None:
         """Publish an investigation event with the stream's fixed routing tuple.

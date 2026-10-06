@@ -17,7 +17,8 @@ from app.models.agents.tribunal import CandidateCommand, TribunalObserver, VoteB
 from .base import Field, G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
 if TYPE_CHECKING:
-    from app.models.http_context import G8eHttpContext, OperatorContext
+    from app.models.agent import OperatorContext
+    from app.models.http_context import G8eHttpContext
     from app.models.settings import G8eeUserSettings
     from app.models.whitelist import WhitelistedCommand
     from app.services.data.reputation_data_service import ReputationDataService

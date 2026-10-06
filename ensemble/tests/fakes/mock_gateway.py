@@ -47,6 +47,7 @@ import asyncio
 import datetime
 import fnmatch
 import logging
+import shutil
 import ssl
 import tempfile
 from pathlib import Path
@@ -55,9 +56,13 @@ from urllib.parse import unquote
 
 import aiohttp
 from aiohttp import web
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent, PubSubMessage
 
-from app.constants import GatewayAPIPaths, PubSubAction, PubSubWireEventType
+from app.constants import CACHE_TTL_DEFAULT, GatewayAPIPaths, PubSubAction, PubSubWireEventType
 from app.models.settings import GatewaySettings, TLSConfig
 
 logger = logging.getLogger(__name__)
@@ -73,11 +78,6 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
 
     Returns (ca_cert_path, server_cert_path, server_key_path).
     """
-    from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.x509.oid import NameOID
-
     now = datetime.datetime.now(datetime.UTC)
 
     # --- CA ---
@@ -222,6 +222,8 @@ class _DocStore:
         docs = list(self._col(collection).values())
         for f in filters or []:
             field = f.get("field")
+            if not isinstance(field, str):
+                continue
             op = f.get("op", "==")
             value = f.get("value")
             if op == "==":
@@ -396,7 +398,11 @@ class MockGateway:
 
     @property
     def tls_config(self) -> TLSConfig:
-        return TLSConfig(ca_cert_path=self._ca_cert_path)
+        return TLSConfig(
+            ca_cert_path=self._ca_cert_path,
+            client_cert_path=None,
+            client_key_path=None,
+        )
 
     @property
     def gateway_settings(self) -> GatewaySettings:
@@ -405,6 +411,8 @@ class MockGateway:
             http_url=base,
             pubsub_url=f"wss://localhost:{self._port}",
             blob_url=base,
+            default_ttl=CACHE_TTL_DEFAULT,
+            enable_cache_read=False,
         )
 
     @property
@@ -437,8 +445,9 @@ class MockGateway:
         await self._site.start()
 
         # Discover the actual port
-        sockets = self._site._server.sockets
-        self._port = sockets[0].getsockname()[1]
+        if self._runner is None or not self._runner.addresses:
+            raise RuntimeError("Mock gateway server did not expose a listening socket")
+        self._port = self._runner.addresses[0][1]
         logger.info("[MOCK-GATEWAY] Listening on https://localhost:%d", self._port)
 
     async def stop(self) -> None:
@@ -447,8 +456,6 @@ class MockGateway:
             self._runner = None
             self._site = None
         # Clean up temp dir
-        import shutil
-
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     # ------------------------------------------------------------------

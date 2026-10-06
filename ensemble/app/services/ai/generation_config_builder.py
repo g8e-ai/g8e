@@ -71,9 +71,11 @@ class AIGenerationConfigBuilder:
     def _extract_tool_names(tools: list[types.ToolGroup]) -> list[str]:
         """Extract tool names from tool groups for logging."""
         tool_names: list[str] = []
-        for t in tools or []:
-            for fd in t.tools or []:
-                tool_names.append(getattr(fd, "name", "?"))
+        tool_names.extend(
+            getattr(fd, "name", "?")
+            for tool_group in tools
+            for fd in tool_group.tools
+        )
         return tool_names
 
     @staticmethod

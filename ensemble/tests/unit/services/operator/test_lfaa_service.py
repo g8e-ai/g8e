@@ -11,6 +11,7 @@ import pytest
 
 from app.constants import G8EE_COMPONENT
 from app.constants.generated_status import AITaskId, EventType
+from app.errors import NetworkError
 from app.models.command_request_payloads import DirectCommandAuditRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.pubsub_messages import G8eMessage
@@ -66,8 +67,6 @@ class TestOperatorLFAAService:
     async def test_send_audit_event_ingest_failure(
         self, lfaa_service, mock_gateway_client, valid_g8e_message
     ):
-        from app.errors import NetworkError
-
         mock_gateway_client.ingest_audit_record.side_effect = NetworkError("gateway down")
 
         result = await lfaa_service.send_audit_event(valid_g8e_message)

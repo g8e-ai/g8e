@@ -12,11 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from app.constants import CommandCategory, Platform
+from app.constants.paths import resolve_config_path
 from app.errors import ConfigurationError
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.utils.config_loader import load_json_config
 from app.utils.csv_commands import parse_command_csv
-from app.constants.paths import resolve_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -178,10 +178,11 @@ class CommandWhitelistValidator:
                     command=base_command,
                     reason=f"Command '{base_command}' not in whitelist",
                 )
-            violations: list[str] = []
-            for arg in command_args:
-                if not self._is_safe_value(arg):
-                    violations.append(f"Argument '{arg}' contains unsafe characters or format")
+            violations = [
+                f"Argument '{arg}' contains unsafe characters or format"
+                for arg in command_args
+                if not self._is_safe_value(arg)
+            ]
             if violations:
                 return CommandValidationResult(
                     is_valid=False,

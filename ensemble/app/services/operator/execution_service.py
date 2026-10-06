@@ -20,7 +20,7 @@ from app.constants.config import ExecutionStatus
 from app.constants.generated_status import (
     CommandErrorType,
 )
-from app.errors import BusinessLogicError, NetworkError, ValidationError
+from app.errors import BusinessLogicError, NetworkError, ServiceUnavailableError, ValidationError
 from app.models.command_request_payloads import CommandCancelRequestPayload, CommandRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import DirectCommandRequest
@@ -460,7 +460,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         request_payload = CommandRequestPayload(command=command, execution_id=execution_id)
 
         if self._gateway_operator_client is None:
-            raise ExternalServiceUnavailableError("Gateway operator client is not configured")
+            raise ServiceUnavailableError("Gateway operator client is not configured")
 
         try:
             dispatch_result = await asyncio.wait_for(

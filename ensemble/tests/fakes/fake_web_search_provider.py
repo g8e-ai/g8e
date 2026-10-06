@@ -9,6 +9,7 @@
 
 from app.constants.config import GroundingSource
 from app.models.grounding import GroundingChunk, GroundingMetadata, GroundingSourceInfo
+from app.models.tool_results import SearchWebResult
 
 
 class FakeWebSearchProvider:

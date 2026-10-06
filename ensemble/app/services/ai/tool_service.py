@@ -313,20 +313,21 @@ class AIToolService:
                         )
                         return forbidden_command_violation(pattern)
 
-            if tool_name in OPERATOR_TOOLS:
-                if not g8e_context or not g8e_context.has_bound_operator():
-                    error_msg = (
-                        "No operators are currently BOUND to this session. "
-                        "Operator commands can only be executed when an operator is explicitly bound in the g8e UI."
-                    )
-                    logger.error(
-                        "[TOOL_CALL] Execution blocked: No bound operators in G8eHttpContext"
-                    )
-                    return CommandExecutionResult(
-                        success=False,
-                        error=error_msg,
-                        error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
-                    )
+            if tool_name in OPERATOR_TOOLS and (
+                not g8e_context or not g8e_context.has_bound_operator()
+            ):
+                error_msg = (
+                    "No operators are currently BOUND to this session. "
+                    "Operator commands can only be executed when an operator is explicitly bound in the g8e UI."
+                )
+                logger.error(
+                    "[TOOL_CALL] Execution blocked: No bound operators in G8eHttpContext"
+                )
+                return CommandExecutionResult(
+                    success=False,
+                    error=error_msg,
+                    error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
+                )
 
             if tool_name == OperatorToolName.G8E_SEARCH_WEB and self.web_search_provider is None:
                 raise ExternalServiceError(

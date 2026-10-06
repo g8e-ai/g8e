@@ -28,6 +28,7 @@ so create_pubsub_ws_session does not wire SSL - the caller resolves it via
 resolve_pubsub_ssl_context(ssl_settings) and passes it to ws_connect().
 """
 
+import logging
 import ssl
 from pathlib import Path
 
@@ -46,8 +47,6 @@ def _resolve_ssl_context(
     for path in ca_cert_paths:
         if path:
             try:
-                import logging
-
                 logger = logging.getLogger(__name__)
                 if not Path(path).exists():
                     logger.warning("[SSL] CA cert path does not exist: %s", path)
@@ -65,8 +64,6 @@ def _resolve_ssl_context(
                         logger.warning("Failed to load client cert chain: %s", e)
                 return ctx
             except OSError as e:
-                import logging
-
                 logging.getLogger(__name__).warning(
                     "[SSL] Failed to open CA cert path %s: %s", path, e
                 )

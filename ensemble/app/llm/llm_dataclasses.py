@@ -195,9 +195,11 @@ class GenerateContentResponse:
         """Convenience: extract all tool calls from first candidate."""
         calls = []
         if self.candidates:
-            for part in self.candidates[0].content.parts:
-                if part.tool_call:
-                    calls.append(part.tool_call)
+            calls.extend(
+                part.tool_call
+                for part in self.candidates[0].content.parts
+                if part.tool_call
+            )
         return calls
 
 

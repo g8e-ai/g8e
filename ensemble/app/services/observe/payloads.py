@@ -22,6 +22,7 @@ from app.models.internal_api import (
     ObserveProducerAgentStateRequest,
     ObserveProducerRunStateRequest,
 )
+from app.models.personas import PERSONA_REGISTRY
 from app.utils.time_ids.timestamp import now
 
 from .identity import (
@@ -43,12 +44,7 @@ def resolve_chat_persona_id(active_agent: ReasoningAgent | None) -> str | None:
     if active_agent is None:
         return None
     persona_id = active_agent.value if hasattr(active_agent, "value") else str(active_agent)
-    try:
-        from app.models.personas import PERSONA_REGISTRY
-
-        if persona_id not in PERSONA_REGISTRY:
-            return None
-    except Exception:
+    if persona_id not in PERSONA_REGISTRY:
         return None
     return persona_id
 
