@@ -10,7 +10,6 @@ package tui
 import (
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
@@ -92,28 +91,6 @@ func (l LedgerLevel) Tag() string {
 	}
 }
 
-// ConsensusResult represents the outcome of a consensus deliberation.
-type ConsensusResult int
-
-const (
-	ConsensusPending ConsensusResult = iota
-	ConsensusReached
-	ConsensusRejected
-)
-
-func (c ConsensusResult) String() string {
-	switch c {
-	case ConsensusPending:
-		return "PENDING"
-	case ConsensusReached:
-		return "CONSENSUS REACHED"
-	case ConsensusRejected:
-		return "CONSENSUS REJECTED"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 // PipelineMsg advances or updates a pipeline stage in the TUI.
 type PipelineMsg struct {
 	Stage  PipelineStage
@@ -127,17 +104,6 @@ type LedgerMsg struct {
 	Level   LedgerLevel
 	Message string
 	Time    time.Time
-}
-
-// ConsensusMsg updates the consensus voting status.
-type ConsensusMsg struct {
-	Member   constants.ConsensusMember
-	Decision bool
-	Signed   bool
-	Quorum   int
-	Total    int
-	Result   ConsensusResult
-	Hash     string
 }
 
 // ConnStatus represents the SSE adapter connection state.
@@ -172,6 +138,44 @@ func (c ConnStatus) String() string {
 type ConnStatusMsg struct {
 	Status ConnStatus
 	Detail string
+}
+
+// ApprovalCompletedMsg reports an approval.completed event for a suspended
+// L3 transaction. The event alone is not proof: the model verifies the
+// transaction's status over mTLS before reporting it approved.
+type ApprovalCompletedMsg struct {
+	TxHash string
+}
+
+// ApprovalOpenedMsg reports that the browser WebAuthn approval page for a
+// pending transaction was opened (or could not be, in which case the user is
+// pointed at URL).
+type ApprovalOpenedMsg struct {
+	TxHash string
+	URL    string
+	Err    error
+}
+
+// ApprovalVerifiedMsg carries the mTLS-verified status of a transaction after
+// approval.completed, or the error that prevented or failed verification.
+type ApprovalVerifiedMsg struct {
+	TxHash string
+	Status models.ApprovalStatusResponse
+	Err    error
+}
+
+// OperatorsMsg carries the session user's Operators as listed by the Gateway,
+// or the error that prevented listing them.
+type OperatorsMsg struct {
+	Operators []models.OperatorDocumentGo
+	Err       error
+}
+
+// HealthMsg carries the Gateway's health report, including its immutable
+// governance posture, or the error that prevented fetching it.
+type HealthMsg struct {
+	Health models.HealthResponse
+	Err    error
 }
 
 // PendingApprovalsMsg carries the session user's pending L3 transactions as
@@ -214,11 +218,4 @@ type ledgerEntry struct {
 	level   LedgerLevel
 	message string
 	time    time.Time
-}
-
-// consensusMemberState is the per-member state in the consensus pane.
-type consensusMemberState struct {
-	name     constants.ConsensusMember
-	decision bool
-	signed   bool
 }

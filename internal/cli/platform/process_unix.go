@@ -180,11 +180,12 @@ func (pm *ProcessManager) findOperatorProcessWithExecutor(executor CommandExecut
 // stopProcess stops a process with the given PID on Unix systems.
 // It sends SIGTERM first, then SIGKILL if the process doesn't exit within the timeout.
 func (pm *ProcessManager) stopProcess(pid int, name string) error {
-	return pm.stopProcessWithDeps(pid, name, osProcessFinder{}, timeSleeper{}, timeTickerFactory{}, ShutdownTimeout)
+	_ = name
+	return pm.stopProcessWithDeps(pid, osProcessFinder{}, timeSleeper{}, timeTickerFactory{}, ShutdownTimeout)
 }
 
 // stopProcessWithDeps stops a process using injected dependencies (for testing)
-func (pm *ProcessManager) stopProcessWithDeps(pid int, name string, finder processFinder, sleep sleeper, tickerFactory tickerFactory, timeoutDur time.Duration) error {
+func (pm *ProcessManager) stopProcessWithDeps(pid int, finder processFinder, sleep sleeper, tickerFactory tickerFactory, timeoutDur time.Duration) error {
 	if pid == 0 {
 		return nil
 	}

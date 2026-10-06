@@ -16,6 +16,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -291,4 +292,16 @@ func TestNewClient_TLSConfig(t *testing.T) {
 	assert.Len(t, tlsConfig.Certificates, 1)
 	assert.NotNil(t, tlsConfig.RootCAs)
 	assert.False(t, tlsConfig.InsecureSkipVerify)
+}
+
+func TestStatusError(t *testing.T) {
+	err := fmt.Errorf("list approvals: %w", &StatusError{StatusCode: http.StatusUnauthorized, Body: "expired"})
+	assert.ErrorIs(t, err, constants.ErrHTTPStatusError)
+	assert.True(t, IsUnauthorized(err))
+	assert.Equal(t, "list approvals: HTTP status error: status 401: expired", err.Error())
+
+	forbidden := &StatusError{StatusCode: http.StatusForbidden}
+	assert.ErrorIs(t, forbidden, constants.ErrHTTPStatusError)
+	assert.False(t, IsUnauthorized(forbidden))
+	assert.False(t, IsUnauthorized(constants.ErrHTTPStatusError))
 }

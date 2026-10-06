@@ -10,7 +10,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os/exec"
 	"path"
 	"regexp"
@@ -62,7 +61,7 @@ type deployDocker struct {
 	operators                                 map[string]*dockerOperatorSpec
 }
 
-func newDeployDocker(contextName, image, root string, mounts []string, stderr io.Writer) *deployDocker {
+func newDeployDocker(contextName, image, root string, mounts []string) *deployDocker {
 	sum := sha256.Sum256([]byte(contextName + "\x00" + path.Clean(root)))
 	return &deployDocker{
 		context: contextName, image: image, root: path.Clean(root),

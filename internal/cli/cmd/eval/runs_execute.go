@@ -191,7 +191,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: run execute: %w", err)
 	}
-	ensembleClient, err := chatEvalEnsembleClient(cfg, authContext, resolveChatEvalEnsembleURL(opts.EnsembleURL), chatDeps)
+	ensembleClient, err := chatEvalEnsembleClient(authContext, resolveChatEvalEnsembleURL(opts.EnsembleURL), chatDeps)
 	if err != nil {
 		return 0, err
 	}
@@ -226,12 +226,10 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	)
 	formationExecutor := evaluation.NewLazyCampaignFormationExecutor(func() (evaluation.CampaignAssignmentExecutor, error) {
 		productionDeps, err := buildCampaignFormationProductionDeps(
-			cmd,
 			deps,
 			cfg,
 			fileSvc,
 			authContext,
-			dataOperator,
 			operators,
 			spec.GetModelRegistry(),
 			spec.GetModelRegistryDigest(),
@@ -292,7 +290,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 			if runErr == nil {
 				return
 			}
-			cleanupErr := releaseRunModels(cmd, deps, opts, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec)
+			cleanupErr := releaseRunModels(cmd, deps, opts, cfg, authContext, operators, selected.OperatorSessionID, spec)
 			if cleanupErr == nil {
 				return
 			}
@@ -302,7 +300,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		if err != nil {
 			return executed, fmt.Errorf("evaluation: run execute: %w", err)
 		}
-		if err := releaseResidentProviderModels(cmd, deps, opts, cfg, authContext, dataOperator, selected.OperatorSessionID, endpoint); err != nil {
+		if err := releaseResidentProviderModels(cmd, deps, opts, cfg, authContext, selected.OperatorSessionID, endpoint); err != nil {
 			return executed, fmt.Errorf("evaluation: run execute: %w", err)
 		}
 	}
@@ -368,7 +366,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		return executed, fmt.Errorf("evaluation: run execute: %w", err)
 	}
 	if summary.QueuedCount == 0 && summary.RunningCount == 0 {
-		if err := releaseRunModels(cmd, deps, opts, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec); err != nil {
+		if err := releaseRunModels(cmd, deps, opts, cfg, authContext, operators, selected.OperatorSessionID, spec); err != nil {
 			return executed, fmt.Errorf("evaluation: run execute: %w", err)
 		}
 		if publication != nil {
@@ -390,11 +388,10 @@ func releaseResidentProviderModels(
 	opts runExecuteOptions,
 	cfg *config.Config,
 	authContext *auth.ClientAuthContext,
-	dataOperator *operatorcapability.DataOperatorStatus,
 	inferenceSessionID string,
 	endpoint string,
 ) error {
-	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, deps.chatDeps())
+	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, deps.chatDeps())
 	if err != nil {
 		return err
 	}
@@ -435,7 +432,6 @@ func releaseRunModels(
 	opts runExecuteOptions,
 	cfg *config.Config,
 	authContext *auth.ClientAuthContext,
-	dataOperator *operatorcapability.DataOperatorStatus,
 	operators []models.OperatorDocumentGo,
 	inferenceSessionID string,
 	spec *evalv1.EvaluationCampaignSpec,
@@ -453,7 +449,7 @@ func releaseRunModels(
 			modelTags = append(modelTags, variant.GetServedModelTag())
 		}
 	}
-	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, deps.chatDeps())
+	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, deps.chatDeps())
 	if err != nil {
 		return err
 	}

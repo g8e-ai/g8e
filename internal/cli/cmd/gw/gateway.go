@@ -30,6 +30,7 @@ import (
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/cli/wizard"
@@ -882,7 +883,7 @@ func printConnectedOperators(w io.Writer, client authcmd.APIClient, fileSvc fs.R
 
 	var connected []models.OperatorDocumentGo
 	for _, op := range slotResp.Operators {
-		if isOperatorConnected(op) {
+		if clioperator.IsConnected(op) {
 			connected = append(connected, op)
 		}
 	}
@@ -951,18 +952,6 @@ func printEnrolledKinds(w io.Writer, title, empty string, enrolled []models.Plat
 	for _, e := range rows {
 		fmt.Fprintf(w, "  %-24s  %-12s  %-30s  %-24s  %-36s\n",
 			e.ComponentName, string(e.ComponentKind), e.InstanceID, e.Hostname, e.RequestID)
-	}
-}
-
-func isOperatorConnected(op models.OperatorDocumentGo) bool {
-	if op.IsSlot && !op.Claimed {
-		return false
-	}
-	switch op.Status {
-	case constants.OperatorStatusActive, constants.OperatorStatusBound, constants.OperatorStatusStale:
-		return true
-	default:
-		return false
 	}
 }
 

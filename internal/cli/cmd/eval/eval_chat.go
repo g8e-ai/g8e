@@ -153,7 +153,7 @@ The model must be in the frozen inventory (g8e eval models).`,
 				return fmt.Errorf("evaluation: chat accept: %w", err)
 			}
 			resolvedEnsembleURL := resolveChatEvalEnsembleURL(ensembleURL)
-			ensembleClient, err := chatEvalEnsembleClient(cfg, authContext, resolvedEnsembleURL, deps.chatDeps())
+			ensembleClient, err := chatEvalEnsembleClient(authContext, resolvedEnsembleURL, deps.chatDeps())
 			if err != nil {
 				return fmt.Errorf("evaluation: chat accept: %w", err)
 			}
@@ -582,7 +582,7 @@ func (w *campaignChatHarnessClient) GetEvaluationTrace(ctx context.Context, pers
 	return evaluation.DecodeEvaluationTrace(raw)
 }
 
-func chatEvalEnsembleClient(cfg *config.Config, authContext *auth.ClientAuthContext, ensembleURL string, deps chatEvalDeps) (*harnessclient.Client, error) {
+func chatEvalEnsembleClient(authContext *auth.ClientAuthContext, ensembleURL string, deps chatEvalDeps) (*harnessclient.Client, error) {
 	clientConfig := harnessconfig.Config{
 		EnsembleBaseURL: ensembleURL,
 		UserID:          authContext.UserID,

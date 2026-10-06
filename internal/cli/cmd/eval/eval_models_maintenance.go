@@ -46,7 +46,7 @@ func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (g
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, nil, chatDeps)
+	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, chatDeps)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}

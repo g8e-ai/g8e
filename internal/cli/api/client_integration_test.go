@@ -135,6 +135,27 @@ func TestDoRequest_APIError(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
+func TestDoRequest_UnauthorizedIsTypedStatus(t *testing.T) {
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
+
+	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"CLI session expired"}`))
+	}))
+	defer server.Close()
+
+	client := setupTLSClient(t, fileSvc, cfg, server)
+
+	_, err := client.DoRequest("GET", "/api/test", nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrHTTPStatusError)
+	assert.True(t, IsUnauthorized(err))
+	var statusErr *StatusError
+	require.ErrorAs(t, err, &statusErr)
+	assert.Equal(t, http.StatusUnauthorized, statusErr.StatusCode)
+}
+
 func TestDoRequest_InvalidJSONResponse(t *testing.T) {
 	cfg, fileSvc, _ := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)

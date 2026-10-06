@@ -13,6 +13,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -99,6 +100,30 @@ func newClient(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string
 	}, nil
 }
 
+// StatusError is a Gateway response with an HTTP error status. It matches
+// constants.ErrHTTPStatusError with errors.Is; use errors.As (or
+// IsUnauthorized) to branch on the status code instead of the rendered text.
+type StatusError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("%s: status %d: %s", constants.ErrHTTPStatusError, e.StatusCode, e.Body)
+}
+
+// Is reports whether target is constants.ErrHTTPStatusError.
+func (e *StatusError) Is(target error) bool {
+	return target == constants.ErrHTTPStatusError
+}
+
+// IsUnauthorized reports whether err carries a Gateway 401: the CLI session
+// is expired or invalid and 'g8e auth refresh' is the recovery path.
+func IsUnauthorized(err error) bool {
+	var statusErr *StatusError
+	return errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusUnauthorized
+}
+
 func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error) {
 	return c.DoRequestContext(context.Background(), method, path, body)
 }
@@ -144,7 +169,7 @@ func (c *Client) DoRequestContext(ctx context.Context, method, path string, body
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
+		return nil, &StatusError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 
 	// Validate response is valid JSON

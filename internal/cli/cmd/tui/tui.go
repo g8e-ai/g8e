@@ -142,15 +142,15 @@ Controls:
   g            Jump to ledger top (oldest)`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTUI(cmd, args, deps)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runTUI(cmd, deps)
 		},
 	}
 
 	return cmd
 }
 
-func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
+func runTUI(cmd *cobra.Command, deps tuiDeps) error {
 	cfg, err := deps.configLoader("")
 	if err != nil {
 		return fmt.Errorf("tui: load config: %w", err)

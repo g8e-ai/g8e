@@ -24,7 +24,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -110,7 +109,7 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 			}
 
 			// Build the browser approval URL (public endpoint, redirects to console SPA)
-			approvalURL := cfg.OperatorPublicURL() + constants.APIPaths.ApprovePagePrefix + txHash
+			approvalURL := auth.ApprovalPageURL(cfg, txHash)
 
 			cmd.Printf("Opening browser for WebAuthn approval...\n")
 			cmd.Printf("  Transaction: %s\n", txHash)
@@ -157,27 +156,18 @@ func waitForApprovalAndVerify(ctx context.Context, cmd *cobra.Command, fileSvc f
 		return fmt.Errorf("approve: %w", err)
 	}
 
-	statusPath := constants.APIPaths.ApprovalsCLIStatus + txHash
-	resp, err := client.Get(statusPath)
+	resp, err := client.Get(auth.ApprovalStatusPath(txHash))
 	if err != nil {
 		return fmt.Errorf("approve: verify status: %w", err)
 	}
 
-	var status models.ApprovalStatusResponse
-	if err := json.Unmarshal(resp, &status); err != nil {
-		return fmt.Errorf("approve: parse status response: %w", err)
+	status, err := auth.VerifyApprovalStatus(txHash, resp)
+	if err != nil {
+		return fmt.Errorf("approve: %w", err)
 	}
-
-	switch status.Status {
-	case string(constants.SuspendedTxStatusApproved):
-		cmd.Printf("\n✓ Transaction %s approved successfully\n", txHash)
-		if status.ToolName != "" {
-			cmd.Printf("  Tool: %s\n", status.ToolName)
-		}
-		return nil
-	case string(constants.SuspendedTxStatusExpiredOrNotFound):
-		return fmt.Errorf("approve: transaction %s expired or not found", txHash)
-	default:
-		return fmt.Errorf("approve: unexpected status %q for transaction %s", status.Status, txHash)
+	cmd.Printf("\n✓ Transaction %s approved successfully\n", txHash)
+	if status.ToolName != "" {
+		cmd.Printf("  Tool: %s\n", status.ToolName)
 	}
+	return nil
 }

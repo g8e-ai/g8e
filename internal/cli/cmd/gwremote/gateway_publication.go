@@ -52,11 +52,11 @@ func (e *remoteGatewayCampaignFeedExporter) HighWaterSequence(ctx context.Contex
 	if cached > 0 {
 		return cached, nil
 	}
-	return e.fetchGatewayHighWater(ctx)
+	return e.fetchGatewayHighWater()
 }
 
 func (e *remoteGatewayCampaignFeedExporter) ExportBatch(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {
-	err := e.exportBatchOnce(ctx, records)
+	err := e.exportBatchOnce(records)
 	if err == nil || !isPublicFeedPublicationRetryable(err) {
 		return err
 	}
@@ -69,7 +69,7 @@ func (e *remoteGatewayCampaignFeedExporter) ExportBatch(ctx context.Context, rec
 	for index := range records {
 		records[index].Sequence = nextSequence + int64(index)
 	}
-	return e.exportBatchOnce(ctx, records)
+	return e.exportBatchOnce(records)
 }
 
 func isPublicFeedPublicationRetryable(err error) bool {
@@ -86,7 +86,7 @@ func isPublicFeedOutboxPublicationError(err error) bool {
 		strings.Contains(message, constants.ErrPublicFeedHashChainMismatch.Error())
 }
 
-func (e *remoteGatewayCampaignFeedExporter) exportBatchOnce(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {
+func (e *remoteGatewayCampaignFeedExporter) exportBatchOnce(records []evaluation.CampaignPublicFeedRecord) error {
 	batch := make([]models.PublicFeedRecord, len(records))
 	for index, record := range records {
 		recordType := record.RecordType
@@ -114,7 +114,7 @@ func (e *remoteGatewayCampaignFeedExporter) exportBatchOnce(ctx context.Context,
 	return nil
 }
 
-func (e *remoteGatewayCampaignFeedExporter) fetchGatewayHighWater(ctx context.Context) (int64, error) {
+func (e *remoteGatewayCampaignFeedExporter) fetchGatewayHighWater() (int64, error) {
 	body, err := e.client.Get(constants.APIPaths.PublicFeedSnapshot)
 	if err != nil {
 		if isPublicFeedSnapshotNotFound(err) {

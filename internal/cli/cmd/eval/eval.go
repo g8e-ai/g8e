@@ -170,10 +170,10 @@ func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Heterogeneous model sets",
 	}
 	cmd.AddCommand(
-		formationsListEvalCmd(deps),
-		formationsShowEvalCmd(deps),
-		formationsAddEvalCmd(deps),
-		formationsRemoveEvalCmd(deps),
+		formationsListEvalCmd(),
+		formationsShowEvalCmd(),
+		formationsAddEvalCmd(),
+		formationsRemoveEvalCmd(),
 		formationsSmokeEvalCmd(deps),
 	)
 	return cmd

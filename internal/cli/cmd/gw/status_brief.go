@@ -14,6 +14,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -68,7 +69,7 @@ func printBriefStatus(cmd *cobra.Command, cfg *config.Config, clientFactory auth
 	}
 	connected := make([]models.OperatorDocumentGo, 0)
 	for _, op := range response.Operators {
-		if isOperatorConnected(op) {
+		if clioperator.IsConnected(op) {
 			connected = append(connected, op)
 		}
 	}

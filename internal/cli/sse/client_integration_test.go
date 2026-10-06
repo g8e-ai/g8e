@@ -20,6 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 func TestConnectOnce(t *testing.T) {
@@ -54,6 +56,19 @@ func TestConnectOnce(t *testing.T) {
 		err := c.ConnectOnce(context.Background(), func(string, string) {})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "401")
+		assert.ErrorIs(t, err, constants.ErrCLISessionRefreshRequired)
+	})
+
+	t.Run("non-401 error status is not a session error", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer srv.Close()
+
+		c := NewClient(srv.URL, nil)
+		err := c.ConnectOnce(context.Background(), func(string, string) {})
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, constants.ErrCLISessionRefreshRequired)
 	})
 
 	t.Run("sends custom headers", func(t *testing.T) {
@@ -149,6 +164,93 @@ func TestRun(t *testing.T) {
 			}
 		})
 		assert.True(t, gotEvent.Load(), "should receive event after reconnect")
+	})
+}
+
+func TestRun_OnDisconnect(t *testing.T) {
+	t.Run("reports each failed attempt before backing off", func(t *testing.T) {
+		var attempt atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if attempt.Add(1) < 2 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprintf(w, "event: ready\ndata: ok\n\n")
+		}))
+		defer srv.Close()
+
+		c := NewClient(srv.URL, nil)
+		var disconnects []error
+		c.SetOnDisconnect(func(err error) { disconnects = append(disconnects, err) })
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		c.Run(ctx, func(eventType, _ string) {
+			if eventType == "ready" {
+				cancel()
+			}
+		})
+		require.Len(t, disconnects, 1)
+		assert.Contains(t, disconnects[0].Error(), "500")
+	})
+
+	t.Run("stops retrying when the CLI session is rejected", func(t *testing.T) {
+		var attempt atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempt.Add(1)
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer srv.Close()
+
+		c := NewClient(srv.URL, nil)
+		var disconnects []error
+		c.SetOnDisconnect(func(err error) { disconnects = append(disconnects, err) })
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		c.Run(ctx, func(string, string) {})
+
+		require.NoError(t, ctx.Err(), "Run should return on 401 without waiting for the context")
+		assert.Equal(t, int32(1), attempt.Load())
+		require.Len(t, disconnects, 1)
+		assert.ErrorIs(t, disconnects[0], constants.ErrCLISessionRefreshRequired)
+	})
+
+	t.Run("reconnects after a clean close when enabled", func(t *testing.T) {
+		var attempt atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			n := attempt.Add(1)
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprintf(w, "event: n%d\ndata: ok\n\n", n)
+		}))
+		defer srv.Close()
+
+		c := NewClient(srv.URL, nil)
+		c.SetReconnectOnClose(true)
+		var disconnects []error
+		c.SetOnDisconnect(func(err error) { disconnects = append(disconnects, err) })
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		c.Run(ctx, func(eventType, _ string) {
+			if eventType == "n2" {
+				cancel()
+			}
+		})
+		assert.Equal(t, int32(2), attempt.Load())
+		require.Len(t, disconnects, 1)
+		assert.ErrorIs(t, disconnects[0], constants.ErrSSEStreamClosed)
+	})
+
+	t.Run("returns after a clean close by default", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+		}))
+		defer srv.Close()
+
+		c := NewClient(srv.URL, nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		c.Run(ctx, func(string, string) {})
+		require.NoError(t, ctx.Err())
 	})
 }
 

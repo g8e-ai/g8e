@@ -51,7 +51,7 @@ func preparedFakeDocker(t *testing.T) (*deployDocker, *fakeDockerRunner) {
 			return []byte("ok\n"), nil
 		}
 	}}
-	d := newDeployDocker("livingroom-node", "g8e-operator:local", "/operators/fleet", nil, nil)
+	d := newDeployDocker("livingroom-node", "g8e-operator:local", "/operators/fleet", nil)
 	d.runner = fake
 	require.NoError(t, d.prepare(context.Background(), "192.168.1.2"))
 	return d, fake
@@ -76,7 +76,7 @@ func TestDockerDeploymentBuildsOwnedUnpublishedContainer(t *testing.T) {
 }
 
 func TestDockerDeploymentIdentityIsStableAndUniqueAtScale(t *testing.T) {
-	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil, nil)
+	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil)
 	first := d.spec("/operators/fleet/op-00001", nil)
 	assert.Equal(t, first, d.spec("/operators/fleet/op-00001", nil))
 	seen := make(map[string]bool, 5000)
@@ -86,7 +86,7 @@ func TestDockerDeploymentIdentityIsStableAndUniqueAtScale(t *testing.T) {
 		seen[op.container] = true
 		assert.LessOrEqual(t, len(op.hostname), 63)
 	}
-	other := newDeployDocker("livingroom-node", "image", "/operators/other", nil, nil)
+	other := newDeployDocker("livingroom-node", "image", "/operators/other", nil)
 	assert.NotEqual(t, first.container, other.spec("/operators/other/op-00001", nil).container)
 }
 
@@ -145,7 +145,7 @@ func TestDockerDeploymentRefusesUnownedContainer(t *testing.T) {
 }
 
 func TestDockerDeploymentRejectsMountCoveringRuntime(t *testing.T) {
-	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", []string{"type=bind,source=/srv,target=/operators,readonly"}, nil)
+	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", []string{"type=bind,source=/srv,target=/operators,readonly"})
 	err := d.validateMounts()
 	require.ErrorContains(t, err, "covers the Operator runtime")
 }
@@ -160,7 +160,7 @@ func TestOperatorDeployDockerMountFlagPreservesCommaSeparatedSpec(t *testing.T) 
 }
 
 func TestDockerDeploymentReportsExitedContainerImmediately(t *testing.T) {
-	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil, nil)
+	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil)
 	d.imageID = "sha256:resolved"
 	dir := "/operators/fleet/op-00001"
 	op := d.spec(dir, nil)
@@ -181,7 +181,7 @@ func TestDockerDeploymentReportsExitedContainerImmediately(t *testing.T) {
 }
 
 func TestDockerDeploymentReadsOnlyCurrentLaunchLogs(t *testing.T) {
-	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil, nil)
+	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil)
 	dir := "/operators/fleet/op-00001"
 	op := d.spec(dir, nil)
 	op.launchTime = time.Now().UTC()
@@ -197,7 +197,7 @@ func TestDockerDeploymentReadsOnlyCurrentLaunchLogs(t *testing.T) {
 }
 
 func TestDockerDeploymentRestartsContainerForEnrollmentRetry(t *testing.T) {
-	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil, nil)
+	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil)
 	dir := "/operators/fleet/op-00001"
 	op := d.spec(dir, nil)
 	d.operators[dir] = op

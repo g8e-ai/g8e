@@ -10,9 +10,8 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -36,11 +35,11 @@ type messageSender interface {
 	Send(msg tea.Msg)
 }
 
-// Adapter bridges the CLI session's SSE stream and pending-approval list to
-// bubbletea messages.
+// Adapter bridges the CLI session's SSE stream, pending-approval list,
+// Operator list, and Gateway health to bubbletea messages.
 type Adapter struct {
-	session Session
-	sender  messageSender
+	gw     *gateway
+	sender messageSender
 }
 
 // wireEvent is the inner event of a Gateway SSE frame. Gateway producers
@@ -52,117 +51,104 @@ type wireEvent struct {
 	raw  json.RawMessage
 }
 
-// pipelinePayload is the JSON payload for pipeline.* events.
-type pipelinePayload struct {
-	Stage  string `json:"stage"`
-	Status string `json:"status"`
-	TxID   string `json:"tx_id"`
-	Detail string `json:"detail"`
-}
+// operatorRefreshInterval is how often the Operator list is re-fetched.
+// Operator status events (g8e.v1.operator.status.updated.*) are routed only
+// to the owner's web sessions, never to a CLI session, so the TUI polls.
+const operatorRefreshInterval = 15 * time.Second
 
-// ledgerPayload is the JSON payload for ledger.* events.
-type ledgerPayload struct {
-	Level   string `json:"level"`
-	Message string `json:"message"`
-}
+// sessionExpiredDetail is the connection detail shown when the Gateway
+// rejects the CLI session; it names the same recovery as the rest of the CLI.
+const sessionExpiredDetail = "CLI session expired — run 'g8e auth refresh'"
 
-// consensusPayload is the JSON payload for consensus.* events.
-type consensusPayload struct {
-	Member   string `json:"member"`
-	Decision bool   `json:"decision"`
-	Signed   bool   `json:"signed"`
-	Quorum   int    `json:"quorum"`
-	Total    int    `json:"total"`
-	Result   string `json:"result"`
-	Hash     string `json:"hash"`
-}
-
-// reconnectBackoff is the fixed delay between SSE reconnection attempts.
-const reconnectBackoff = 3 * time.Second
-
-// NewAdapter creates an Adapter over the CLI session.
-func NewAdapter(session Session, sender messageSender) *Adapter {
-	return &Adapter{session: session, sender: sender}
+// NewAdapter creates an Adapter over the CLI session. userID scopes the
+// Operator list the same way 'g8e gw status' does.
+func NewAdapter(session Session, userID string, sender messageSender) *Adapter {
+	if session == nil {
+		return &Adapter{sender: sender}
+	}
+	return &Adapter{gw: &gateway{session: session, userID: userID}, sender: sender}
 }
 
 // Run streams the CLI session's SSE events into the program until ctx is
-// cancelled. The stream is live-only and approvals.changed is ephemeral, so
-// the pending-approval list is re-fetched on every connect and on every
-// approvals.changed event — the same reconciliation the console performs.
+// cancelled or the Gateway rejects the CLI session. The stream is live-only
+// and approvals.changed is ephemeral, so the pending-approval list (and the
+// Operator list and Gateway health) are re-fetched on every connect, and the
+// pending list again on every approvals.changed event — the same
+// reconciliation the console performs. Reconnects use the shared sse.Client
+// backoff.
 func (a *Adapter) Run(ctx context.Context) {
-	if a.session == nil {
+	if a.gw == nil {
 		return
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	refresh := make(chan struct{}, 1)
-	requestRefresh := func() {
+	connected := make(chan struct{}, 1)
+	approvalsChanged := make(chan struct{}, 1)
+	signal := func(ch chan struct{}) {
 		select {
-		case refresh <- struct{}{}:
+		case ch <- struct{}{}:
 		default:
 		}
 	}
 
-	stream := a.session.NewSSEClient()
+	stream := a.gw.session.NewSSEClient()
+	stream.SetReconnectOnClose(true)
 	stream.SetOnConnect(func() {
 		a.sender.Send(ConnStatusMsg{Status: ConnConnected})
-		requestRefresh()
+		signal(connected)
+	})
+	stream.SetOnDisconnect(func(err error) {
+		if errors.Is(err, constants.ErrCLISessionRefreshRequired) {
+			a.sender.Send(ConnStatusMsg{Status: ConnFailed, Detail: sessionExpiredDetail})
+			return
+		}
+		a.sender.Send(ConnStatusMsg{Status: ConnReconnecting, Detail: err.Error()})
 	})
 
 	refresherDone := make(chan struct{})
 	go func() {
 		defer close(refresherDone)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-refresh:
-				a.sender.Send(a.fetchPendingApprovals(ctx))
-			}
-		}
+		a.refresh(ctx, connected, approvalsChanged)
 	}()
 	defer func() { <-refresherDone }()
 
 	a.sender.Send(ConnStatusMsg{Status: ConnConnecting})
-	for {
-		err := stream.ConnectOnce(ctx, func(eventType, data string) {
-			ev, ok := decodeSSEEvent(eventType, data)
-			if !ok {
-				a.sender.Send(LedgerMsg{Level: LevelInfo, Message: data, Time: timeNow()})
-				return
-			}
-			if ev.Type == string(constants.EventPlatformApprovalsChanged) {
-				requestRefresh()
-			}
-			for _, msg := range translateEvent(ev) {
-				a.sender.Send(msg)
-			}
-		})
-		if err == nil || ctx.Err() != nil {
+	stream.Run(ctx, func(eventType, data string) {
+		ev, ok := decodeSSEEvent(eventType, data)
+		if !ok {
+			a.sender.Send(LedgerMsg{Level: LevelInfo, Message: data, Time: timeNow()})
 			return
 		}
+		if ev.Type == string(constants.EventPlatformApprovalsChanged) {
+			signal(approvalsChanged)
+		}
+		for _, msg := range translateEvent(ev) {
+			a.sender.Send(msg)
+		}
+	})
+}
 
-		a.sender.Send(ConnStatusMsg{Status: ConnReconnecting, Detail: err.Error()})
+// refresh re-fetches Gateway state until ctx is cancelled: everything on each
+// connect, pending approvals on each approvals.changed, and Operators on
+// operatorRefreshInterval.
+func (a *Adapter) refresh(ctx context.Context, connected, approvalsChanged <-chan struct{}) {
+	ticker := time.NewTicker(operatorRefreshInterval)
+	defer ticker.Stop()
+	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(reconnectBackoff):
+		case <-connected:
+			a.sender.Send(a.gw.fetchHealth(ctx))
+			a.sender.Send(a.gw.fetchPendingApprovals(ctx))
+			a.sender.Send(a.gw.fetchOperators(ctx))
+		case <-approvalsChanged:
+			a.sender.Send(a.gw.fetchPendingApprovals(ctx))
+		case <-ticker.C:
+			a.sender.Send(a.gw.fetchOperators(ctx))
 		}
-		a.sender.Send(ConnStatusMsg{Status: ConnConnecting})
 	}
-}
-
-// fetchPendingApprovals lists the session user's pending L3 transactions
-// from the same mTLS endpoint the CLI uses.
-func (a *Adapter) fetchPendingApprovals(ctx context.Context) PendingApprovalsMsg {
-	body, err := a.session.DoRequestContext(ctx, http.MethodGet, constants.APIPaths.ApprovalsCLIList, nil)
-	if err != nil {
-		return PendingApprovalsMsg{Err: err}
-	}
-	var resp models.SuspendedTransactionsResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return PendingApprovalsMsg{Err: fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)}
-	}
-	return PendingApprovalsMsg{Transactions: resp.Transactions}
 }
 
 // decodeSSEEvent unwraps a Gateway SSE frame. Stored and live events are a
@@ -206,13 +192,6 @@ func translateEvent(ev wireEvent) []tea.Msg {
 	innerType, payload := ev.Type, ev.Data
 
 	switch {
-	case strings.HasPrefix(innerType, "pipeline."):
-		return []tea.Msg{parsePipelineEvent(payload)}
-	case strings.HasPrefix(innerType, "ledger."):
-		return []tea.Msg{parseLedgerEvent(payload)}
-	case strings.HasPrefix(innerType, "consensus."):
-		return []tea.Msg{parseConsensusEvent(payload)}
-
 	// Stream sentinels
 	case innerType == "error":
 		var p models.SSEErrorEvent
@@ -282,11 +261,10 @@ func translateEvent(ev wireEvent) []tea.Msg {
 	case innerType == string(constants.EventOperatorFileEditApprovalRequested):
 		var p struct {
 			ApprovalID string `json:"approval_id"`
-			Path       string `json:"path"`
-			File       string `json:"file"`
+			FilePath   string `json:"file_path"`
 		}
 		_ = json.Unmarshal(payload, &p)
-		targetPath := firstNonEmpty(p.Path, p.File, p.ApprovalID)
+		targetPath := firstNonEmpty(p.FilePath, p.ApprovalID)
 		return []tea.Msg{
 			PipelineMsg{Stage: StageL3, Status: StatusWaiting, TxID: p.ApprovalID, Detail: "File edit approval requested: " + targetPath},
 			LedgerMsg{Level: LevelWarn, Message: "APPROVAL REQUIRED: File edit: " + targetPath, Time: timeNow()},
@@ -294,10 +272,10 @@ func translateEvent(ev wireEvent) []tea.Msg {
 	case innerType == string(constants.EventOperatorIntentApprovalRequested):
 		var p struct {
 			ApprovalID string `json:"approval_id"`
-			Intent     string `json:"intent"`
+			IntentName string `json:"intent_name"`
 		}
 		_ = json.Unmarshal(payload, &p)
-		intent := firstNonEmpty(p.Intent, p.ApprovalID)
+		intent := firstNonEmpty(p.IntentName, p.ApprovalID)
 		return []tea.Msg{
 			PipelineMsg{Stage: StageL3, Status: StatusWaiting, TxID: p.ApprovalID, Detail: "Intent approval requested: " + intent},
 			LedgerMsg{Level: LevelWarn, Message: "APPROVAL REQUIRED: Intent authorization: " + intent, Time: timeNow()},
@@ -331,10 +309,7 @@ func translateEvent(ev wireEvent) []tea.Msg {
 	case innerType == constants.SSEEventTypeApprovalCompleted:
 		var p models.ApprovalCompletedEvent
 		_ = json.Unmarshal(ev.raw, &p)
-		return []tea.Msg{
-			PipelineMsg{Stage: StageL3, Status: StatusPassed, TxID: p.TxHash, Detail: "Approval completed"},
-			LedgerMsg{Level: LevelInfo, Message: "Approval completed for tx " + p.TxHash, Time: timeNow()},
-		}
+		return []tea.Msg{ApprovalCompletedMsg{TxHash: p.TxHash}}
 	case innerType == string(constants.EventPlatformApprovalsChanged):
 		var p models.ApprovalsChangedPayload
 		_ = json.Unmarshal(payload, &p)
@@ -357,104 +332,4 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-// parsePipelineEvent translates a pipeline.* event into a PipelineMsg.
-func parsePipelineEvent(payload json.RawMessage) tea.Msg {
-	var p pipelinePayload
-	if err := json.Unmarshal(payload, &p); err != nil {
-		return LedgerMsg{Level: LevelWarn, Message: fmt.Sprintf("pipeline: unmarshal: %s", err), Time: timeNow()}
-	}
-
-	stage := parseStage(p.Stage)
-	status := parseStatus(p.Status)
-
-	return PipelineMsg{
-		Stage:  stage,
-		Status: status,
-		TxID:   p.TxID,
-		Detail: p.Detail,
-	}
-}
-
-// parseLedgerEvent translates a ledger.* event into a LedgerMsg.
-func parseLedgerEvent(payload json.RawMessage) tea.Msg {
-	var p ledgerPayload
-	if err := json.Unmarshal(payload, &p); err != nil {
-		return LedgerMsg{Level: LevelWarn, Message: fmt.Sprintf("ledger: unmarshal: %s", err), Time: timeNow()}
-	}
-
-	level := LevelInfo
-	switch strings.ToLower(p.Level) {
-	case "warn", "warning":
-		level = LevelWarn
-	case "crit", "critical":
-		level = LevelCritical
-	}
-
-	return LedgerMsg{
-		Level:   level,
-		Message: p.Message,
-		Time:    timeNow(),
-	}
-}
-
-// parseConsensusEvent translates a consensus.* event into a ConsensusMsg.
-func parseConsensusEvent(payload json.RawMessage) tea.Msg {
-	var p consensusPayload
-	if err := json.Unmarshal(payload, &p); err != nil {
-		return LedgerMsg{Level: LevelWarn, Message: fmt.Sprintf("consensus: unmarshal: %s", err), Time: timeNow()}
-	}
-
-	result := ConsensusPending
-	switch strings.ToLower(p.Result) {
-	case "reached", "approved":
-		result = ConsensusReached
-	case "rejected":
-		result = ConsensusRejected
-	}
-
-	return ConsensusMsg{
-		Member:   constants.ConsensusMember(p.Member),
-		Decision: p.Decision,
-		Signed:   p.Signed,
-		Quorum:   p.Quorum,
-		Total:    p.Total,
-		Result:   result,
-		Hash:     p.Hash,
-	}
-}
-
-// parseStage converts a string stage name to a pipelineStage constant.
-func parseStage(s string) PipelineStage {
-	switch strings.ToUpper(s) {
-	case "L1":
-		return StageL1
-	case "L2":
-		return StageL2
-	case "L3":
-		return StageL3
-	case "L4":
-		return StageL4
-	case "L5":
-		return StageL5
-	default:
-		return StageL1
-	}
-}
-
-// parseStatus converts a string status to a pipelineStatus constant.
-func parseStatus(s string) PipelineStatus {
-	switch strings.ToLower(s) {
-	case "active", "processing":
-		return StatusActive
-	case "waiting":
-		return StatusWaiting
-	case "passed", "ok":
-		return StatusPassed
-	case "failed", "blocked":
-		return StatusFailed
-	default:
-		return StatusIdle
-	}
 }

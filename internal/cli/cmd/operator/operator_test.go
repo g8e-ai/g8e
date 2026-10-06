@@ -632,12 +632,11 @@ func TestPromptForScpOptions(t *testing.T) {
 
 			port := 0
 			identityFile := ""
-			recursive := false
 			preserve := false
 			verbose := false
 			compression := false
 
-			err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
+			err := promptForScpOptions(cmd, &port, &identityFile, &preserve, &verbose, &compression)
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.wantPort, port)

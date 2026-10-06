@@ -13,6 +13,7 @@ package sse
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -33,11 +34,15 @@ type EventHandler func(eventType, data string)
 // Client is a reusable SSE client that connects to an SSE endpoint,
 // parses frames, and dispatches events to a handler.
 type Client struct {
-	url         string
-	headers     map[string]string
-	client      *http.Client
-	lastEventID int64
-	onConnect   func() // called once per successful HTTP connection (status 200)
+	url          string
+	headers      map[string]string
+	client       *http.Client
+	lastEventID  int64
+	onConnect    func()      // called once per successful HTTP connection (status 200)
+	onDisconnect func(error) // called by Run when a connection attempt ends with an error
+	// reconnectOnClose makes Run treat a clean server close as a disconnect
+	// and reconnect, instead of returning.
+	reconnectOnClose bool
 }
 
 // NewClient creates an SSE client. The http.Client should be configured with
@@ -70,9 +75,27 @@ func (c *Client) SetOnConnect(fn func()) {
 	c.onConnect = fn
 }
 
+// SetOnDisconnect sets a callback invoked by Run each time a connection
+// attempt ends with an error: before every backoff wait, and once with the
+// terminal error when Run stops retrying because the CLI session was
+// rejected (errors.Is(err, constants.ErrCLISessionRefreshRequired)). Must be
+// called before Run. The callback must not block.
+func (c *Client) SetOnDisconnect(fn func(error)) {
+	c.onDisconnect = fn
+}
+
+// SetReconnectOnClose makes Run reconnect (with the same backoff) when the
+// server closes the stream cleanly, reporting constants.ErrSSEStreamClosed to
+// the disconnect callback. Long-lived viewers such as the TUI use it; waiters
+// that treat a clean close as terminal leave it off. Must be called before Run.
+func (c *Client) SetReconnectOnClose(enabled bool) {
+	c.reconnectOnClose = enabled
+}
+
 // Run connects to the SSE stream and calls handler for each event.
 // Reconnects with exponential backoff and jitter on error. Returns when ctx
-// is cancelled.
+// is cancelled, or when the Gateway rejects the CLI session (HTTP 401),
+// because retrying with the same session cannot succeed.
 func (c *Client) Run(ctx context.Context, handler EventHandler) {
 	if c.url == "" {
 		return
@@ -99,10 +122,19 @@ func (c *Client) Run(ctx context.Context, handler EventHandler) {
 
 		err := c.ConnectOnce(ctx, wrapped)
 		if err == nil {
-			return
+			if !c.reconnectOnClose || ctx.Err() != nil {
+				return
+			}
+			err = constants.ErrSSEStreamClosed
 		}
 		if received {
 			attempt = 0
+		}
+		if c.onDisconnect != nil && ctx.Err() == nil {
+			c.onDisconnect(err)
+		}
+		if errors.Is(err, constants.ErrCLISessionRefreshRequired) {
+			return
 		}
 
 		// R13: exponential backoff with jitter, capped at 30s.
@@ -152,6 +184,9 @@ func (c *Client) ConnectOnce(ctx context.Context, handler EventHandler) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("sse client: %w: SSE returned %d", constants.ErrCLISessionRefreshRequired, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("sse client: SSE returned %d", resp.StatusCode)
 	}

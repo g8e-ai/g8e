@@ -518,7 +518,7 @@ func operatorScpCmd() *cobra.Command {
 			}
 
 			if prompt {
-				if err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression); err != nil {
+				if err := promptForScpOptions(cmd, &port, &identityFile, &preserve, &verbose, &compression); err != nil {
 					return err
 				}
 			}
@@ -555,7 +555,7 @@ func operatorScpCmd() *cobra.Command {
 	return cmd
 }
 
-func promptForScpOptions(cmd *cobra.Command, port *int, identityFile *string, recursive, preserve, verbose, compression *bool) error {
+func promptForScpOptions(cmd *cobra.Command, port *int, identityFile *string, preserve, verbose, compression *bool) error {
 	reader := bufio.NewReader(cmd.InOrStdin())
 
 	cmd.Println("\nSCP Configuration (press Enter to use default/skip):")

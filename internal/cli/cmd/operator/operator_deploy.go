@@ -877,7 +877,7 @@ func executeDeployDocker(
 	parallel int,
 	totalTargets int,
 ) ([]deployedOperator, []string, error) {
-	d := newDeployDocker(dockerContext, dockerImage, remoteDir, dockerMounts, cmd.ErrOrStderr())
+	d := newDeployDocker(dockerContext, dockerImage, remoteDir, dockerMounts)
 	preflightEndpoint := ""
 	if opts.background {
 		preflightEndpoint = opts.endpoint

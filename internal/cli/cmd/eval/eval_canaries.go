@@ -109,7 +109,7 @@ func runLiveEnvironmentCanaries(cmd *cobra.Command, deps nativeEvalDeps, opts ca
 	if err != nil {
 		return err
 	}
-	ensembleClient, err := chatEvalEnsembleClient(cfg, authContext, resolveChatEvalEnsembleURL(opts.EnsembleURL), chatDeps)
+	ensembleClient, err := chatEvalEnsembleClient(authContext, resolveChatEvalEnsembleURL(opts.EnsembleURL), chatDeps)
 	if err != nil {
 		return err
 	}
