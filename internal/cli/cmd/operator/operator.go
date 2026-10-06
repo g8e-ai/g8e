@@ -42,6 +42,7 @@ type operatorListEntry struct {
 	OperatorID                      string                   `json:"operator_id"`
 	OperatorSessionID               string                   `json:"operator_session_id"`
 	OperatorType                    constants.OperatorType   `json:"operator_type"`
+	OperatorRoles                   constants.OperatorRoles  `json:"operator_roles"`
 	Status                          constants.OperatorStatus `json:"status"`
 	Component                       constants.ComponentName  `json:"component"`
 	Hostname                        string                   `json:"hostname,omitempty"`
@@ -285,6 +286,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 						OperatorID:        op.ID,
 						OperatorSessionID: op.OperatorSessionID,
 						OperatorType:      op.OperatorType,
+						OperatorRoles:     operatorcapability.GetOperatorRoles(op),
 						Status:            op.Status,
 						Component:         op.Component,
 						Hostname:          operatorHostnameValue(op),
@@ -378,7 +380,21 @@ func operatorStartCmd() *cobra.Command {
 			}
 
 			if roles.Has(constants.OperatorRoleEmbedded) {
-				return serve.RunGateway(serve.GatewayConfig{WorkingDir: workingDir, OperatorRoles: operatorcapability.ResolveOperatorRoles(&models.RuntimeConfig{Roles: roles, InferenceEnabled: inferenceEnabled, ProvenanceOperatorEnabled: provenanceOperatorEnabled, ProviderBoundaryObserverEnabled: providerBoundaryObserverEnabled}), LogLevel: logLevel, InferenceOllamaEndpoint: inferenceOllamaEndpoint, InferenceKeepAlive: inferenceKeepAlive, ProviderBoundaryObserverID: providerBoundaryObserverID, ProvenanceOperatorID: provenanceOperatorID, ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot}, shared.VersionInfoFromCmd(cmd))
+				return serve.RunGateway(serve.GatewayConfig{
+					WorkingDir: workingDir,
+					OperatorRoles: operatorcapability.ResolveOperatorRoles(&models.RuntimeConfig{
+						Roles:                           roles,
+						InferenceEnabled:                inferenceEnabled,
+						ProvenanceOperatorEnabled:       provenanceOperatorEnabled,
+						ProviderBoundaryObserverEnabled: providerBoundaryObserverEnabled,
+					}),
+					LogLevel:                           logLevel,
+					InferenceOllamaEndpoint:            inferenceOllamaEndpoint,
+					InferenceKeepAlive:                 inferenceKeepAlive,
+					ProviderBoundaryObserverID:         providerBoundaryObserverID,
+					ProvenanceOperatorID:               provenanceOperatorID,
+					ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot,
+				}, shared.VersionInfoFromCmd(cmd))
 			}
 			// Run operator (this blocks until shutdown)
 			serve.RunOperator(opts, shared.VersionInfoFromCmd(cmd))

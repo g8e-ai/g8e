@@ -1,3 +1,10 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
 package constants
 
 import (
@@ -8,7 +15,7 @@ import (
 )
 
 // OperatorRoles is the complete set of capabilities enabled in one runtime.
-// Embedded and remote are deployment types, orthogonal to these roles.
+// Embedded selects the Gateway in-process runtime; all other capabilities compose independently.
 type OperatorRoles []OperatorRole
 
 func (r OperatorRoles) Has(role OperatorRole) bool { return slices.Contains(r, role) }

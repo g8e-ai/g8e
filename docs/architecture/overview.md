@@ -90,7 +90,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-ARCH-NODE-01 | The Gateway (PDP) and Operator (PEP) MUST be instantiated from the single static `g8e` Go binary (`g8e gw start` and `g8e operator start`). The Gateway coordinates ingress, PKI, and L1-L3 deliberation; the Operator maintains sovereign execution and local audit evidence. |
 | INV-ARCH-NODE-02 | Outbound Operators MUST establish outbound-only mTLS connections to the Gateway and subscribe to exact session-specific command channels (`cmd:<operator_id>:<operator_session_id>`). The Gateway MUST NOT expose or require inbound management listeners into remote Operator environments. |
-| INV-ARCH-NODE-03 | Multiple Operator instances running on the same host MUST be disambiguated by a composite SHA-256 system fingerprint combining host properties with `local_dir`, `account`, `port`, and `operator_role` (`inference`, `provenance`, `observer`, `data`). Witness operators (`provenance`, `observer`) MUST hard-reject arbitrary command execution. |
+| INV-ARCH-NODE-03 | Multiple Operator instances running on the same host MUST be disambiguated by a composite SHA-256 system fingerprint combining host properties with `local_dir`, `account`, `port`, and `operator_roles` (`embedded`, `inference`, `provenance`, `observer`, `data`). Witness-only operators (`provenance`, `observer`) MUST reject arbitrary command execution; adding Data enables governed commands in the same process. |
 | INV-ARCH-NODE-04 | Every read of an Operator document MUST first move a remote Operator in `active` status with no heartbeat for more than 60 seconds (`constants.OperatorHeartbeatStaleAfter`) to `stale` and persist that transition. The check lives in the Gateway document store, so no reader can observe a silent Operator as `active`. A heartbeat restores `stale` to `active`; it never revives `stopped` or `terminated`. The embedded Operator is exempt. `g8e operator start` MUST reject a `--heartbeat-interval` above half that window so a healthy Operator can miss one beat. |
 | INV-ARCH-NODE-05 | Enrolling an Operator whose `system_fingerprint` matches a non-terminated remote Operator the same owner already holds MUST terminate the earlier Operator document and deactivate its Operator session as part of the governed issuance. One Operator identity MUST NOT hold two live leases. |
 
@@ -245,9 +245,9 @@ The reference binary compiles a native registry of 32 typed tools in `internal/s
 
 ### Governed Operator Roles and Multi-Operator Coexistence
 
-The g8e Operator is a compact binary, and multiple operator processes can execute concurrently on the exact same host system for entirely different purposes. Operators running on the same host are differentiated by four key factors: `local_dir`, `account`, `port`, and `operator_role`.
+The g8e Operator is a compact binary, and multiple operator processes can execute concurrently on the exact same host system for entirely different purposes. Operators running on the same host are differentiated by four key factors: `local_dir`, `account`, `port`, and `operator_roles`.
 
-The canonical `system_fingerprint` is a SHA-256 composite hash combining immutable host properties (`os`, `arch`, `cpu_count`, `machine_id`, `hostname`) with `local_dir`, `account`, `port`, and `operator_role`. This ensures distinct, collision-free identities in the Gateway operator registry.
+The canonical `system_fingerprint` is a SHA-256 composite hash combining immutable host properties (`os`, `arch`, `cpu_count`, `machine_id`, `hostname`) with `local_dir`, `account`, `port`, and `operator_roles`. This ensures distinct, collision-free identities in the Gateway operator registry.
 
 | Role | Activation Flags | Responsibilities | Execution Boundaries |
 | --- | --- | --- | --- |

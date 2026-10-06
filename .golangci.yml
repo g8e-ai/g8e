@@ -26,13 +26,17 @@ linters:
     
     # Bug Prevention
     - bodyclose
+    - nilnesserr
+    - durationcheck
+    - reassign
+    - makezero
     # - contextcheck  # Disabled for gradual compliance (9 issues)
     # - copyloopvar  # Disabled for gradual compliance (14 issues)
     # - errorlint  # Disabled for gradual compliance (43 issues)
     # - nilerr  # Disabled for gradual compliance (16 issues)
     # - rowserrcheck  # Disabled for gradual compliance (9 issues)
     # - sqlclosecheck  # Disabled for gradual compliance (2 issues)
-    
+
     # Security
     - gosec
     
@@ -71,18 +75,13 @@ linters:
         - opinionated
     gosec:
       excludes:
-        - G104
-        - G101
-        - G204
-        - G306
-        - G402
-        - G703
-        - G107
-        - G115
-        - G102
-        - G123
-        - G702
-        - G706
+        - G104 # Unchecked errors (handled by errcheck)
+        - G101 # False positives on constant names containing "key" / "token"
+        - G204 # Subprocess exec with variable (common across CLI tools)
+        - G306 # File permissions (covered by project Perm* constants)
+        - G703 # Path traversal taint false positives
+        - G107 # HTTP request URL taint false positives
+        - G115 # Integer overflow conversion
     govet:
       disable:
         - fieldalignment
@@ -105,9 +104,12 @@ linters:
           - errcheck
           - gocritic
           - gosec
-          - govet
           - unused
         path: _test\.go
+      - linters:
+          - gosec
+        path: internal/cli/stream/proxy_command_unix\.go
+        text: G702
       - linters:
           - bodyclose
         path: internal/testutil/pubsub\.go

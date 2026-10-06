@@ -148,10 +148,9 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 	c.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: operators})
 }
 
-// withResolvedOperatorRoles fills operator_role for browser and CLI listings so
-// every enrolled Operator reports whether it is an inference, provenance,
-// observer, or data Operator, including documents whose claim predates the
-// stored role. Unclaimed slots have no runtime and keep an empty role.
+// withResolvedOperatorRoles fills operator_roles for browser and CLI listings so
+// every enrolled Operator reports its complete capability set, including
+// documents whose claim predates stored roles. Unclaimed slots have no runtime and keep an empty role.
 func withResolvedOperatorRoles(op *models.OperatorDocumentGo) {
 	if op.IsSlot && !op.Claimed {
 		return

@@ -26,8 +26,8 @@ type DataOperatorStatus struct {
 	WorkingDirectory  string
 }
 
-// IsDataOperator reports whether op is an active remote session whose role is
-// data. Inference, observer, and provenance Operators have their own roles.
+// IsDataOperator reports whether an active remote or configured embedded
+// session includes Data, even when other roles are enabled.
 func IsDataOperator(op models.OperatorDocumentGo) bool {
 	if op.Status != constants.OperatorStatusActive || (op.OperatorType != constants.OperatorTypeRemote && (op.OperatorType != constants.OperatorTypeEmbedded || op.RuntimeConfig == nil)) {
 		return false

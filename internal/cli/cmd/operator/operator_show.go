@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/spf13/cobra"
 )
 
@@ -130,6 +131,7 @@ type operatorShowOutput struct {
 	OperatorID        string                   `json:"operator_id"`
 	OperatorSessionID string                   `json:"operator_session_id"`
 	OperatorType      constants.OperatorType   `json:"operator_type"`
+	OperatorRoles     constants.OperatorRoles  `json:"operator_roles"`
 	Status            constants.OperatorStatus `json:"status"`
 	Component         constants.ComponentName  `json:"component"`
 	CreatedAt         time.Time                `json:"created_at"`
@@ -163,6 +165,7 @@ func operatorShowPayload(op models.OperatorDocumentGo) operatorShowOutput {
 		OperatorID:        op.ID,
 		OperatorSessionID: op.OperatorSessionID,
 		OperatorType:      op.OperatorType,
+		OperatorRoles:     operatorcapability.GetOperatorRoles(op),
 		Status:            op.Status,
 		Component:         op.Component,
 		CreatedAt:         op.CreatedAt,
@@ -222,6 +225,7 @@ func printOperatorShow(cmd *cobra.Command, op models.OperatorDocumentGo) {
 	cmd.Printf("Operator:  %s\n", op.ID)
 	cmd.Printf("Session:   %s\n", op.OperatorSessionID)
 	cmd.Printf("Type:      %s\n", op.OperatorType)
+	cmd.Printf("Roles:     %s\n", operatorcapability.GetOperatorRoles(op))
 	cmd.Printf("Status:    %s\n", op.Status)
 	if op.Name != "" {
 		cmd.Printf("Name:      %s\n", op.Name)

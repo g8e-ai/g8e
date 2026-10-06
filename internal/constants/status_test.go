@@ -393,3 +393,12 @@ func TestToolCallStatusConstants(t *testing.T) {
 		assert.Equal(t, tc.value, string(tc.goConst))
 	}
 }
+
+func TestStatusJSONOperatorRolesMatchesCentralVocabulary(t *testing.T) {
+	category := loadStatusJSON(t)["operator_role"]
+	roles := OperatorRoles{OperatorRoleEmbedded, OperatorRoleData, OperatorRoleInference, OperatorRoleProvenance, OperatorRoleObserver}
+	require.Len(t, category, len(roles))
+	for _, role := range roles {
+		require.Equal(t, string(role), category[string(role)].Value)
+	}
+}
