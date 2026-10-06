@@ -264,6 +264,8 @@ func bundleContainsFingerprint(data []byte, fingerprint string) (bool, error) {
 	return false, nil
 }
 
+var _ = bundleContainsFingerprint
+
 // writeTempCert writes certPEM to a restrictive temporary directory and returns
 // the file path. The caller must clean up the returned directory via
 // os.RemoveAll(dir).

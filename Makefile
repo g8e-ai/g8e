@@ -13,9 +13,16 @@ SHELL := /bin/bash
 # the uv installer places `uv`) on PATH so the dev tools installed by
 # `make dev-tools` resolve for every recipe even when the invoking shell has not
 # sourced the profile the setup scripts updated.
-GO_BIN_DIR := $(or $(shell go env GOBIN 2>/dev/null),$(if $(shell go env GOPATH 2>/dev/null),$(shell go env GOPATH)/bin,$(HOME)/go/bin))
+# On Windows, USERPROFILE is the home directory and paths must be converted to
+# POSIX style via cygpath. Also ensure /usr/bin is placed ahead of the inherited
+# Windows system PATH so that tools using `#!/usr/bin/env bash` (such as npm and
+# npx on Windows) resolve to Git/MSYS bash rather than C:\WINDOWS\system32\bash.exe
+# (the WSL entry point, which fails with "No such file or directory").
+USER_HOME := $(or $(HOME),$(USERPROFILE))
+USER_HOME_POSIX := $(shell cygpath -u "$(USER_HOME)" 2>/dev/null || echo "$(USER_HOME)")
+GO_BIN_DIR := $(or $(shell go env GOBIN 2>/dev/null),$(if $(shell go env GOPATH 2>/dev/null),$(shell go env GOPATH)/bin,$(USER_HOME_POSIX)/go/bin))
 GO_BIN_DIR := $(shell cygpath -u "$(GO_BIN_DIR)" 2>/dev/null || echo "$(GO_BIN_DIR)")
-export PATH := $(GO_BIN_DIR):$(HOME)/.local/bin:$(PATH)
+export PATH := $(GO_BIN_DIR):$(USER_HOME_POSIX)/.local/bin:/usr/bin:$(PATH)
 GOTOOLCHAIN ?= auto
 export GOTOOLCHAIN
 TMPDIR ?= /tmp
@@ -180,7 +187,7 @@ GO_DEV_TOOL_PKGS := \
 # Recursive (=) so the lookup runs when a recipe uses it, after buf-install has
 # had the chance to put buf on PATH. $(shell) does not see the exported PATH on
 # GNU make < 4.4, so the Go bin dir is added explicitly.
-BUF = $(shell export PATH="$(GO_BIN_DIR):$$PATH"; command -v buf 2>/dev/null || echo "./buf")
+BUF = $(shell export PATH="$(GO_BIN_DIR):$$PATH"; command -v buf 2>/dev/null || echo "$(CURDIR)/buf")
 PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
 PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "$(PROTOC_GEN_GO_VERSION)")
 
@@ -393,7 +400,7 @@ proto-python:
 
 .PHONY: proto-node-install
 proto-node-install:
-	@if [ ! -x "protocol/node/node_modules/.bin/protoc-gen-es" ]; then \
+	@if [ ! -f "protocol/node/node_modules/.bin/protoc-gen-es" ] && [ ! -f "protocol/node/node_modules/.bin/protoc-gen-es.cmd" ]; then \
 		echo "Installing Node Protobuf generator..."; \
 		npm ci --prefix protocol/node; \
 	fi
@@ -401,7 +408,7 @@ proto-node-install:
 .PHONY: proto-node
 proto-node: buf-install proto-node-install
 	@echo "Generating Node TypeScript Protobuf code with Buf..."
-	@cd protocol/node && $(abspath $(BUF)) generate ../proto --template buf.gen.yaml
+	@cd protocol/node && PATH="$$(pwd)/node_modules/.bin:$$PATH" $(BUF) generate ../proto --template buf.gen.yaml
 	@echo "Node TypeScript Protobuf generation complete."
 
 # Regenerate the ensemble uv.lock file that depends on protocol/python through

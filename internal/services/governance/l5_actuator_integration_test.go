@@ -30,7 +30,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	"github.com/g8e-ai/g8e/v2/internal/uuid"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -65,15 +64,6 @@ func newCommitmentTestActuator(t *testing.T) (*L5Actuator, *storage.SQLAuditStor
 	actuator.SQLAuditStore = auditStore
 	require.NoError(t, auditStore.CreateSession("test-operator-session", "operator", "Test Session", "test-user"))
 	return actuator, auditStore
-}
-
-// mustUUID returns a fresh UUID string, failing the test on the
-// (practically impossible) failure of the OS random source.
-func mustUUID(t *testing.T) string {
-	t.Helper()
-	id, err := uuid.NewString()
-	require.NoError(t, err)
-	return id
 }
 
 func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {

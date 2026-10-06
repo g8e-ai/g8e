@@ -77,7 +77,7 @@ func setupRunEnv(t *testing.T) *runEnv {
 		bindClientFactory: func(*config.Config) chatEvalBindClient { return &fakeBindClient{bound: []string{testDataSession}} },
 		runControl:        testRunControl(control),
 		now:               func() time.Time { return fixedNow },
-		newID:             func() string { return "test-id" },
+		newID:             func() (string, error) { return "test-id", nil },
 	}
 
 	cmd := cmdtest.SilentCobraCommand()
@@ -228,7 +228,7 @@ func newTestEnsembleServer(t *testing.T, traceFn func(assignmentID, attemptID st
 func (e *runEnv) firstAssignmentServer(t *testing.T, runID string) (*httptest.Server, *evalv1.EvaluationAssignment) {
 	t.Helper()
 	store := e.store(t)
-	controller := evaluation.NewCampaignController(store, nil, e.deps.now, func(prefix string) string { return prefix + "-" + e.deps.newID() })
+	controller := evaluation.NewCampaignController(store, nil, e.deps.now, adaptNewID(e.deps.newID))
 	assignment, ok, err := controller.ResumeNextAssignment(context.Background(), runID)
 	require.NoError(t, err)
 	require.True(t, ok)

@@ -372,7 +372,6 @@ func GetNetworkInterfaces() []string {
 	return interfaceNames
 }
 
-
 func getTimezone(tz string) string {
 	if tz != "" {
 		return tz

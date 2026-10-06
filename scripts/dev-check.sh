@@ -28,7 +28,11 @@ fi
 if command -v cygpath >/dev/null 2>&1 && [[ -n "$GO_BIN_DIR" ]]; then
     GO_BIN_DIR="$(cygpath -u "$GO_BIN_DIR")"
 fi
-export PATH="${GO_BIN_DIR:-$HOME/go/bin}:$HOME/.local/bin:$PATH"
+USER_HOME="${HOME:-${USERPROFILE:-}}"
+if command -v cygpath >/dev/null 2>&1 && [[ -n "$USER_HOME" ]]; then
+    USER_HOME="$(cygpath -u "$USER_HOME")"
+fi
+export PATH="${GO_BIN_DIR:-$USER_HOME/go/bin}:$USER_HOME/.local/bin:/usr/bin:$PATH"
 
 FAILED=0
 

@@ -85,6 +85,10 @@ func writeGenerated(root string, out generationOutputs) error {
 	return nil
 }
 
+func normalizeLineEndings(b []byte) []byte {
+	return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+}
+
 func verifyGenerated(root string, out generationOutputs) error {
 	targets := map[string]string{
 		filepath.Join(root, relPathEventsGo):      out.EventsGo,
@@ -98,7 +102,7 @@ func verifyGenerated(root string, out generationOutputs) error {
 			diffs = append(diffs, fmt.Sprintf("%s: %v", path, err))
 			continue
 		}
-		if !bytes.Equal(actual, []byte(expected)) {
+		if !bytes.Equal(normalizeLineEndings(actual), normalizeLineEndings([]byte(expected))) {
 			diffs = append(diffs, fmt.Sprintf("%s: generated output differs from committed file (run make constants-generate)", path))
 		}
 	}
@@ -138,7 +142,7 @@ func verifyBundledPythonEvents(root string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %v", path, err)
 	}
-	if !bytes.Equal(actual, canonical) {
+	if !bytes.Equal(normalizeLineEndings(actual), normalizeLineEndings(canonical)) {
 		return fmt.Errorf("%s: bundled Python events.json differs from protocol/constants/events.json (run make constants-generate)", path)
 	}
 	return nil

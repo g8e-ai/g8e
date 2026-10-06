@@ -1,4 +1,11 @@
 #!/bin/sh
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
 # Build a runtime-only Operator image on an explicit Docker context using an
 # allowlisted temporary context. No repository scratch or credential paths are sent.
 set -eu

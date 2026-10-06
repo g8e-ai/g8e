@@ -54,7 +54,7 @@ GENERATED_PREFIXES = (
 def should_check(path: Path) -> bool:
     if set(path.parts) & SKIP_DIRS:
         return False
-    rendered = str(path)
+    rendered = path.as_posix()
     if any(substr in rendered for substr in SKIP_PATH_SUBSTRINGS):
         return False
     if path.name in SPECIAL_FILES:

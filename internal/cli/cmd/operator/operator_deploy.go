@@ -173,58 +173,11 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
 			}
 
-			selectedTransports := 0
-			if local {
-				selectedTransports++
-			}
-			if hosts != "" {
-				selectedTransports++
-			}
-			if dockerContext != "" {
-				selectedTransports++
-			}
-			if selectedTransports != 1 {
-				return fmt.Errorf("%w: exactly one of --local, --hosts, or --docker-context is required", constants.ErrMissingRequiredField)
-			}
-			if local && !cmd.Flags().Changed("dest-dir") && !cmd.Flags().Changed("remote-dir") {
-				return fmt.Errorf("%w: --local requires --dest-dir", constants.ErrMissingRequiredField)
-			}
-			if local {
-				hosts = "local"
-			}
-			if dockerContext != "" && strings.TrimSpace(dockerImage) == "" {
-				return fmt.Errorf("%w: --docker-image is required with --docker-context", constants.ErrMissingRequiredField)
-			}
-			if remoteDir == "" || strings.ContainsAny(remoteDir, "\x00\r\n") || (dockerContext == "" && !local && (!operatorDeployRemoteDirPattern.MatchString(remoteDir) || strings.HasPrefix(remoteDir, "-"))) {
-				return fmt.Errorf("%w: --dest-dir %q must match %s", constants.ErrPathValidation, remoteDir, operatorDeployRemoteDirPattern)
-			}
-			if dockerContext != "" && (!filepath.IsAbs(remoteDir) || filepath.Clean(remoteDir) == "/") {
-				return fmt.Errorf("%w: Docker --dest-dir must be an absolute non-root container path", constants.ErrPathValidation)
-			}
-			if parallel < 1 || parallel > constants.PlatformEnrollmentMaxLiveOperatorRequests {
-				return fmt.Errorf("%w: --parallel must be between 1 and %d", constants.ErrMissingRequiredField, constants.PlatformEnrollmentMaxLiveOperatorRequests)
-			}
-			if count < 1 || count > 5000 || startIndex < 1 || startIndex > 5000 || count > 5001-startIndex {
-				return fmt.Errorf("%w: --count and --start-index must select operators within 1..5000", constants.ErrMissingRequiredField)
-			}
-			endpoint, _ := cmd.Flags().GetString("endpoint")
-			endpoint = strings.TrimSpace(endpoint)
-			workerEndpoint := strings.TrimSpace(operatorEndpoint)
-			if workerEndpoint == "" {
-				workerEndpoint = endpoint
-			}
-			if background && workerEndpoint == "" {
-				return fmt.Errorf("%w: --operator-endpoint or --endpoint is required with --background", constants.ErrMissingRequiredField)
-			}
-			if background && !operatorDeployEndpointPattern.MatchString(workerEndpoint) {
-				return fmt.Errorf("%w: worker endpoint %q must match %s", constants.ErrPathValidation, workerEndpoint, operatorDeployEndpointPattern)
-			}
-			if approve && !background {
-				return fmt.Errorf("%w: --approve requires --background", constants.ErrMissingRequiredField)
-			}
-			logLevel, _ := cmd.Flags().GetString("log")
-			if approve && logLevel != "info" && logLevel != "debug" {
-				return fmt.Errorf("%w: --approve requires --log info or debug to observe worker readiness", constants.ErrMissingRequiredField)
+			hosts, workerEndpoint, err := validateOperatorDeployFlags(
+				cmd, local, hosts, dockerContext, dockerImage, remoteDir, parallel, count, startIndex, background, operatorEndpoint, approve,
+			)
+			if err != nil {
+				return err
 			}
 
 			startArgs, err := operatorDeployStartArgs(cmd, role)
@@ -276,54 +229,14 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 			var deployed []deployedOperator
 			var failed []string
 			if dockerContext != "" {
-				d := newDeployDocker(dockerContext, dockerImage, remoteDir, dockerMounts, cmd.ErrOrStderr())
-				preflightEndpoint := ""
-				if background {
-					preflightEndpoint = opts.endpoint
-				}
-				if err := d.prepare(ctx, preflightEndpoint); err != nil {
+				deployed, failed, err = executeDeployDocker(ctx, cmd, dockerContext, dockerImage, remoteDir, dockerMounts, dirs, opts, parallel, len(hostList)*len(dirs))
+				if err != nil {
 					return err
 				}
-				results := deployDockerBatch(ctx, d, dirs, opts, parallel)
-				for result := range results {
-					cmd.Print(result.output)
-					if result.err != nil {
-						cmd.Printf("Failed to deploy %s:%s: %v\n", dockerContext, result.dir, result.err)
-						failed = append(failed, dockerContext+":"+result.dir)
-						continue
-					}
-					deployed = append(deployed, result.op)
-				}
-				if err := ctx.Err(); err != nil {
-					total := len(hostList) * len(dirs)
-					notStarted := total - len(deployed) - len(failed)
-					return fmt.Errorf("%w: Docker deployment canceled (completed=%d failed=%d not-started=%d)", err, len(deployed), len(failed), notStarted)
-				}
 			} else {
-				for _, host := range hostList {
-					s := deploySSH{host: strings.TrimSpace(host), port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr(), local: local}
-					// Upload once per host. Per-directory links share executable pages and disk space.
-					cache, err := s.prepareDir(ctx, strings.TrimSuffix(remoteDir, "/")+"/.deploy-bin")
-					if err != nil {
-						return err
-					}
-					if err := s.installBinary(ctx, sourceBinary, cache); err != nil {
-						return err
-					}
-					s.binaryDir = cache
-					results := deployOperatorBatch(ctx, s, sourceBinary, dirs, opts, parallel)
-					for result := range results {
-						cmd.Print(result.output)
-						if result.err != nil {
-							cmd.Printf("Failed to deploy %s:%s: %v\n", s.host, result.dir, result.err)
-							failed = append(failed, s.host+":"+result.dir)
-							continue
-						}
-						deployed = append(deployed, result.op)
-					}
-					if err := ctx.Err(); err != nil {
-						return err
-					}
+				deployed, failed, err = executeDeploySSH(ctx, cmd, hostList, port, identityFile, local, remoteDir, sourceBinary, dirs, opts, parallel)
+				if err != nil {
+					return err
 				}
 			}
 
@@ -903,4 +816,153 @@ func (s deploySSH) awaitReady(ctx context.Context, dir string) error {
 		}
 		return bytes.Contains(log, []byte("Channel established - Ready to receive")), nil
 	})
+}
+
+func validateOperatorDeployFlags(
+	cmd *cobra.Command,
+	local bool,
+	hosts string,
+	dockerContext string,
+	dockerImage string,
+	remoteDir string,
+	parallel int,
+	count int,
+	startIndex int,
+	background bool,
+	operatorEndpoint string,
+	approve bool,
+) (effectiveHosts string, workerEndpoint string, err error) {
+	selectedTransports := 0
+	if local {
+		selectedTransports++
+	}
+	if hosts != "" {
+		selectedTransports++
+	}
+	if dockerContext != "" {
+		selectedTransports++
+	}
+	if selectedTransports != 1 {
+		return "", "", fmt.Errorf("%w: exactly one of --local, --hosts, or --docker-context is required", constants.ErrMissingRequiredField)
+	}
+	if local && !cmd.Flags().Changed("dest-dir") && !cmd.Flags().Changed("remote-dir") {
+		return "", "", fmt.Errorf("%w: --local requires --dest-dir", constants.ErrMissingRequiredField)
+	}
+	effectiveHosts = hosts
+	if local {
+		effectiveHosts = "local"
+	}
+	if dockerContext != "" && strings.TrimSpace(dockerImage) == "" {
+		return "", "", fmt.Errorf("%w: --docker-image is required with --docker-context", constants.ErrMissingRequiredField)
+	}
+	if remoteDir == "" || strings.ContainsAny(remoteDir, "\x00\r\n") || (dockerContext == "" && !local && (!operatorDeployRemoteDirPattern.MatchString(remoteDir) || strings.HasPrefix(remoteDir, "-"))) {
+		return "", "", fmt.Errorf("%w: --dest-dir %q must match %s", constants.ErrPathValidation, remoteDir, operatorDeployRemoteDirPattern)
+	}
+	if dockerContext != "" && (!filepath.IsAbs(remoteDir) || filepath.Clean(remoteDir) == "/") {
+		return "", "", fmt.Errorf("%w: Docker --dest-dir must be an absolute non-root container path", constants.ErrPathValidation)
+	}
+	if parallel < 1 || parallel > constants.PlatformEnrollmentMaxLiveOperatorRequests {
+		return "", "", fmt.Errorf("%w: --parallel must be between 1 and %d", constants.ErrMissingRequiredField, constants.PlatformEnrollmentMaxLiveOperatorRequests)
+	}
+	if count < 1 || count > 5000 || startIndex < 1 || startIndex > 5000 || count > 5001-startIndex {
+		return "", "", fmt.Errorf("%w: --count and --start-index must select operators within 1..5000", constants.ErrMissingRequiredField)
+	}
+	endpoint, _ := cmd.Flags().GetString("endpoint")
+	endpoint = strings.TrimSpace(endpoint)
+	workerEndpoint = strings.TrimSpace(operatorEndpoint)
+	if workerEndpoint == "" {
+		workerEndpoint = endpoint
+	}
+	if background && workerEndpoint == "" {
+		return "", "", fmt.Errorf("%w: --operator-endpoint or --endpoint is required with --background", constants.ErrMissingRequiredField)
+	}
+	if background && !operatorDeployEndpointPattern.MatchString(workerEndpoint) {
+		return "", "", fmt.Errorf("%w: worker endpoint %q must match %s", constants.ErrPathValidation, workerEndpoint, operatorDeployEndpointPattern)
+	}
+	if approve && !background {
+		return "", "", fmt.Errorf("%w: --approve requires --background", constants.ErrMissingRequiredField)
+	}
+	logLevel, _ := cmd.Flags().GetString("log")
+	if approve && logLevel != "info" && logLevel != "debug" {
+		return "", "", fmt.Errorf("%w: --approve requires --log info or debug to observe worker readiness", constants.ErrMissingRequiredField)
+	}
+	return effectiveHosts, workerEndpoint, nil
+}
+
+func executeDeployDocker(
+	ctx context.Context,
+	cmd *cobra.Command,
+	dockerContext, dockerImage, remoteDir string,
+	dockerMounts []string,
+	dirs []string,
+	opts operatorDeployOptions,
+	parallel int,
+	totalTargets int,
+) ([]deployedOperator, []string, error) {
+	d := newDeployDocker(dockerContext, dockerImage, remoteDir, dockerMounts, cmd.ErrOrStderr())
+	preflightEndpoint := ""
+	if opts.background {
+		preflightEndpoint = opts.endpoint
+	}
+	if err := d.prepare(ctx, preflightEndpoint); err != nil {
+		return nil, nil, err
+	}
+	var deployed []deployedOperator
+	var failed []string
+	results := deployDockerBatch(ctx, d, dirs, opts, parallel)
+	for result := range results {
+		cmd.Print(result.output)
+		if result.err != nil {
+			cmd.Printf("Failed to deploy %s:%s: %v\n", dockerContext, result.dir, result.err)
+			failed = append(failed, dockerContext+":"+result.dir)
+			continue
+		}
+		deployed = append(deployed, result.op)
+	}
+	if err := ctx.Err(); err != nil {
+		notStarted := totalTargets - len(deployed) - len(failed)
+		return deployed, failed, fmt.Errorf("%w: Docker deployment canceled (completed=%d failed=%d not-started=%d)", err, len(deployed), len(failed), notStarted)
+	}
+	return deployed, failed, nil
+}
+
+func executeDeploySSH(
+	ctx context.Context,
+	cmd *cobra.Command,
+	hostList []string,
+	port int,
+	identityFile string,
+	local bool,
+	remoteDir, sourceBinary string,
+	dirs []string,
+	opts operatorDeployOptions,
+	parallel int,
+) ([]deployedOperator, []string, error) {
+	var deployed []deployedOperator
+	var failed []string
+	for _, host := range hostList {
+		s := deploySSH{host: strings.TrimSpace(host), port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr(), local: local}
+		cache, err := s.prepareDir(ctx, strings.TrimSuffix(remoteDir, "/")+"/.deploy-bin")
+		if err != nil {
+			return deployed, failed, err
+		}
+		if err := s.installBinary(ctx, sourceBinary, cache); err != nil {
+			return deployed, failed, err
+		}
+		s.binaryDir = cache
+		results := deployOperatorBatch(ctx, s, sourceBinary, dirs, opts, parallel)
+		for result := range results {
+			cmd.Print(result.output)
+			if result.err != nil {
+				cmd.Printf("Failed to deploy %s:%s: %v\n", s.host, result.dir, result.err)
+				failed = append(failed, s.host+":"+result.dir)
+				continue
+			}
+			deployed = append(deployed, result.op)
+		}
+		if err := ctx.Err(); err != nil {
+			return deployed, failed, err
+		}
+	}
+	return deployed, failed, nil
 }
