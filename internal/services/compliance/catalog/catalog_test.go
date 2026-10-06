@@ -356,5 +356,3 @@ func referenceIDs(refs []*compliancev1.VersionedReference) []string {
 	}
 	return ids
 }
-
-

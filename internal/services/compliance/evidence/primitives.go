@@ -71,7 +71,6 @@ func digestHex(body []byte) string {
 	return hex.EncodeToString(d[:])
 }
 
-
 // UnmarshalCanonicalProto unmarshals canonical JSON bytes into a proto
 // message using the compliance canonical decoder.
 func UnmarshalCanonicalProto(body []byte, msg proto.Message) error {
@@ -441,5 +440,3 @@ func ValidateVerificationReport(body []byte, reportID, verifierID, verifierVersi
 	}
 	return report, nil
 }
-
-

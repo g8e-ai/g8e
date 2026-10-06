@@ -31,7 +31,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-
 )
 
 func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
