@@ -14,6 +14,7 @@ SHELL := /bin/bash
 # `make dev-tools` resolve for every recipe even when the invoking shell has not
 # sourced the profile the setup scripts updated.
 GO_BIN_DIR := $(or $(shell go env GOBIN 2>/dev/null),$(if $(shell go env GOPATH 2>/dev/null),$(shell go env GOPATH)/bin,$(HOME)/go/bin))
+GO_BIN_DIR := $(shell cygpath -u "$(GO_BIN_DIR)" 2>/dev/null || echo "$(GO_BIN_DIR)")
 export PATH := $(GO_BIN_DIR):$(HOME)/.local/bin:$(PATH)
 GOTOOLCHAIN ?= auto
 export GOTOOLCHAIN
@@ -515,11 +516,13 @@ ensemble-env: dev-uv
 	@uv venv --python $(PYTHON_VERSION) --seed --allow-existing .venv
 	@# --no-sources: ensemble's [tool.uv.sources] pins g8e to a non-editable path, which
 	@# conflicts with the editable protocol/python install that lets protocol edits show up live.
-	@uv pip install --python .venv/bin/python --no-sources -e protocol/python -e ensemble
+	@VENV_PY=$$(if [ -f .venv/Scripts/python.exe ]; then echo .venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo .venv/Scripts/python; else echo .venv/bin/python; fi); \
+	uv pip install --python "$$VENV_PY" --no-sources -e protocol/python -e ensemble
 
 dev-python: ensemble-env
 	@echo "Installing ensemble test and lint dependencies..."
-	@uv pip install --python .venv/bin/python --no-sources -e "ensemble[test]"
+	@VENV_PY=$$(if [ -f .venv/Scripts/python.exe ]; then echo .venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo .venv/Scripts/python; else echo .venv/bin/python; fi); \
+	uv pip install --python "$$VENV_PY" --no-sources -e "ensemble[test]"
 
 .PHONY: dev-node
 dev-node:
@@ -879,9 +882,9 @@ demo-verify: build
 # The targets prefer the repo-root .venv if present (development), falling back
 # to system python3 (CI installs protocol/python + ensemble into system python).
 
-PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
-ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
-ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
+PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; elif [ -f .venv/Scripts/python.exe ]; then echo $(CURDIR)/.venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo $(CURDIR)/.venv/Scripts/python; else echo python3; fi)
+ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; elif [ -f .venv/Scripts/ruff.exe ]; then echo $(CURDIR)/.venv/Scripts/ruff.exe; elif [ -f .venv/Scripts/ruff ]; then echo $(CURDIR)/.venv/Scripts/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
+ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; elif [ -f .venv/Scripts/pyright.exe ]; then echo $(CURDIR)/.venv/Scripts/pyright.exe; elif [ -f .venv/Scripts/pyright ]; then echo $(CURDIR)/.venv/Scripts/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
 
 .PHONY: ensemble-test
 ensemble-test:
@@ -943,7 +946,8 @@ test-coverage:
 		$(if $(PKG),$(PKG),$(TEST_PKGS))
 	@$(FILTER_PROFILE)
 	@COVERAGE=$$($(COVERAGE_PCT)); \
-	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
+	BELOW=$$(if command -v bc >/dev/null 2>&1; then echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l; else awk -v cov="$$COVERAGE" -v th="$(COVERAGE_THRESHOLD)" 'BEGIN { print (cov < th) ? 1 : 0 }'; fi); \
+	if [ "$$BELOW" -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
 		exit 1; \
 	fi; \

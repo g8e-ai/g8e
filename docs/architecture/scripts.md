@@ -48,7 +48,7 @@ Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-set
 | INV-SCRIPTS-03 | Validator scripts (`cosais_validator`, `audit-dev-guidelines.py`) are triage tools; they identify review candidates but do not prove violations or replace semantic lint and test commands. |
 | INV-SCRIPTS-04 | Gateway-served deploy scripts (`g8e-deploy.sh`, `g8e-deploy.ps1`) are bootstrap conveniences for trusted networks only. They fetch artifacts over plain HTTP, lack TLS protection, and delete `~/.g8e/pki` before startup. Users MUST fetch and inspect the rendered script before execution. |
 | INV-SCRIPTS-05 | Image transfer commands (`g8e demos pull/export/import/images`) require reading `demos/images.json` relative to the current working directory and MUST be run from the repository root. Export MUST NOT include locally built images; import MUST NOT validate tars against the manifest. |
-| INV-SCRIPTS-06 | Unless `--build-only` is passed, the Linux and macOS setup scripts MUST leave a machine that passes `make dev-check`: they check or install `python3`, `uv`, `rg` (ripgrep), `bc`, and a C compiler (required by `go test -race`), then run `make dev-setup` for the Go dev tools, the repo-root `.venv`, and the Node dependencies. `make ci`, `make ci-platform`, `make ci-ensemble`, and `make ci-console` depend on `make dev-check`, so a missing tool fails once with an actionable list instead of partway through the pipeline. |
+| INV-SCRIPTS-06 | Unless `--build-only` is passed, the Linux, macOS, and Windows setup scripts MUST leave a machine that passes `make dev-check`: they check or install `python3`, `uv`, `rg` (ripgrep), and on Unix `bc` and a C compiler (required by `go test -race`), then run `make dev-setup` for the Go dev tools, the repo-root `.venv`, and the Node dependencies. `make ci`, `make ci-platform`, `make ci-ensemble`, and `make ci-console` depend on `make dev-check`, so a missing tool fails once with an actionable list instead of partway through the pipeline. |
 | INV-SCRIPTS-07 | A prerequisite that resolves under `/mnt/<drive>/` MUST NOT count as installed. On WSL the Windows `PATH` is appended to the Linux one and exposes Windows shims such as `npm` and `npx` that cannot build or test this repository. |
 
 ## Owned surfaces
@@ -57,7 +57,7 @@ Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-set
 | --- | --- | --- |
 | Linux development bootstrap | `scripts/linux-setup.sh` | Dependency checks, OS package, Go, Node.js, and uv installs, contributor toolchain, shell profile updates |
 | macOS development bootstrap | `scripts/macos-setup.sh` | Dependency checks, Homebrew and uv installs, contributor toolchain, shell profile updates |
-| Windows development bootstrap | `scripts/windows-setup.ps1` | PowerShell 7+, build-toolchain checks (git, make, go, node), user PATH updates; no contributor toolchain |
+| Windows development bootstrap | `scripts/windows-setup.ps1` | PowerShell 7+, build and contributor toolchain checks, winget/choco package installs, user Path updates |
 | Shared setup helpers | `scripts/lib/dev-setup-common.sh` | Version comparison, prerequisite checks, uv install, profile PATH edits, `Makefile` pin lookup |
 | Ensemble runtime bootstrap | `scripts/bootstrap-uv.sh`, `Makefile` (`ensemble-env`, `dev-python`) | Reuses available uv or installs the pinned version; provisions Python and runtime dependencies, with test and lint dependencies added by `dev-python` |
 | Toolchain preflight | `scripts/dev-check.sh` | Run by `make dev-check`; lists every missing or mismatched tool and exits non-zero |
@@ -97,7 +97,7 @@ With `--build-only`, the scripts check only `git`, `make`, `curl`, `go`, `node`,
 
 After setup, scripts print next steps: `./g8e --version`, `make dev-check` and `make ci` (full flow only), `g8e docker start`, `g8e gw start`, and `g8e auth enroll user -e localhost`.
 
-`windows-setup.ps1` requires PowerShell 7+ (`pwsh`). It builds `g8e` natively but does not install the contributor toolchain, because the `Makefile` targets assume a POSIX shell and `.venv/bin`. Windows contributors run `bash scripts/linux-setup.sh` inside WSL 2. It is not a substitute for WSL when native Windows build tooling is incomplete; use Docker quick-start when local compiler toolchain is unavailable.
+`windows-setup.ps1` requires PowerShell 7+ (`pwsh`). It builds `g8e` and sets up the contributor toolchain (Go dev tools, Python venv, Node dependencies) natively on Windows. Pass `--build-only` to skip the contributor toolchain. Windows contributors can also run `bash scripts/linux-setup.sh` inside WSL 2. Use Docker quick-start when local toolchains are unavailable.
 
 ### Contributor Toolchain
 

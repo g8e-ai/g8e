@@ -25,6 +25,9 @@ GO_BIN_DIR="$(go env GOBIN 2>/dev/null)"
 if [[ -z "$GO_BIN_DIR" ]] && command -v go >/dev/null 2>&1; then
     GO_BIN_DIR="$(go env GOPATH)/bin"
 fi
+if command -v cygpath >/dev/null 2>&1 && [[ -n "$GO_BIN_DIR" ]]; then
+    GO_BIN_DIR="$(cygpath -u "$GO_BIN_DIR")"
+fi
 export PATH="${GO_BIN_DIR:-$HOME/go/bin}:$HOME/.local/bin:$PATH"
 
 FAILED=0
