@@ -357,19 +357,6 @@ docker compose up -d --build
 
 On a new Gateway this creates the first CLI owner without a passkey. On an already bootstrapped Gateway, headless recovery requires approval by an enrolled CLI. A headless identity cannot authenticate to the browser console, so retain a passkey-enabled owner when console access or WebAuthn approval is required.
 
-### Demo Compose environments
-
-Healthcare, Finance, DHS, and FedRAMP deployments under `demos/` are separate demonstrations, not extensions of the root stack. Use the demos CLI or run Compose from the selected demo directory:
-
-```bash
-./g8e demos start healthcare
-./g8e demos status healthcare
-cd demos/healthcare
-docker compose up -d --build
-```
-
-Each demo builds the shared Go image from the repository-root Dockerfile through `context: ../..`. See [Demos](../../demos/README.md) for each demo's topology, ports, enrollment, and scenarios.
-
 ### FIPS runtime mode
 
 The root Dockerfile builds Linux binaries with Go Cryptographic Module v1.0.0 support. Strict enforcement is disabled by default so features that use non-approved primitives remain available. Verify the binary directly:

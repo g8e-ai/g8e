@@ -1,6 +1,6 @@
 # g8e Examples
 
-Runnable examples, client configuration templates, and reference shapes for integrating with g8e. This is the single home for examples. Sealed, deployable demo environments live separately in [`demos/`](../demos/README.md).
+Runnable examples, client configuration templates, and reference shapes for integrating with g8e. This is the single home for maintained examples; evaluation campaigns live under [`eval/`](../eval/README.md).
 
 ## Index
 

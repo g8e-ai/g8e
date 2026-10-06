@@ -3,8 +3,8 @@ doc_id: docs
 title: Documentation Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-26
-version: v2.2.0
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - docs/
   - protocol/docs/
@@ -89,7 +89,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Documentation catalog | `docs/devs/docs.md` | Authoritative inventory of all first-party docs |
 | Protobuf API references | `protocol/proto/g8e/`, `protocol/docs/reference/` | `make proto-generate` |
 | Gateway OpenAPI | `internal/services/gateway/docs/`, Go Swagger annotations | `make swagger-generate` |
-| Protocol constants | `protocol/constants/`, `internal/constants/` | `make doctrines-validate`, `make cosais-validate` |
+| Protocol constants | `protocol/constants/`, `internal/constants/` | `make doctrines-validate`, `make constants-check` |
 
 ## Procedures
 
@@ -114,9 +114,9 @@ make proto-generate
 # Gateway Swagger / OpenAPI JSON and YAML
 make swagger-generate
 
-# Validate doctrine and COSAiS JSON catalogs
+# Validate doctrine JSON and generated constant mirrors
 make doctrines-validate
-make cosais-validate
+make constants-check
 ```
 
 ## Anti-patterns

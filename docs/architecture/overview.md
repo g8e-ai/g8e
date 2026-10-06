@@ -132,7 +132,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Agentic Ensemble service (g8ee) | `ensemble/` | `cd ensemble && pytest` |
 | Console (Gateway-embedded browser frontend) | `console/`, `internal/services/gateway/console/` | `make console-test` |
 | Protocol definitions and bindings | `protocol/proto/g8e/`, `protocol/` | `make proto-generate` and `make doctrines-validate` |
-| Compliance catalogs and KSI verification | `protocol/compliance/`, `internal/cli/cmd/compliance/` | `g8e compliance demo-run verify` |
+| Compliance catalogs and KSI verification | `protocol/compliance/`, `internal/cli/cmd/compliance/` | `g8e compliance evidence-graph verify --eval-run <run-id>` |
 
 ## Procedures
 
@@ -346,16 +346,16 @@ The platform provides layered observation capabilities separated by strict trust
 
 The g8e Protocol Library (`protocol/`) defines canonical wire contracts, schemas, and models:
 - **Protobuf Schemas**: Defined in `protocol/proto/g8e/` and generated via `make proto-generate` using `buf`. Generated Go, Python, and TypeScript bindings provide typed message structures.
-- **Constants Registries**: JSON registries in `protocol/constants/` serve as single sources of truth for doctrines, COSAiS overlays, ports, and errors, validated via `make doctrines-validate` and `make cosais-validate`.
+- **Constants Registries**: JSON registries in `protocol/constants/` serve as single sources of truth for doctrines, ports, errors, and public contract values, validated through `make doctrines-validate`, `make constants-check`, and the protocol conformance suites.
 - **JSON Model Schemas**: Canonical schemas in `protocol/models/` and `protocol/schemas/` define structures for consensus policies, audit events, and compliance records.
 - **Canonical Serialization**: Transactions use canonical protojson serialization for deterministic hashing and cryptographic signatures. See [Protocol Library](protocol.md).
 
 ### Compliance Evidence and KSI Verification Foundation
 
 The platform incorporates a protocol-owned compliance evidence foundation:
-- **Catalog Infrastructure**: Canonical assertion, framework, crosswalk, and demo-scenario catalogs are digest-verified against FedRAMP 20x Key Security Indicators (KSI).
-- **Demo Run Evidence**: Compliance demo runs persist manifests, scenario definitions, receipts, and metric evidence under `.g8e/data/compliance/demo-evidence/<run-id>/`.
-- **Deterministic Verification**: The read-only verification command `g8e compliance demo-run verify <run-id>` verifies manifests, SHA-256 provenance hashes, content-addressed artifacts, protocol signatures, and directory integrity, exiting nonzero on any discrepancy.
+- **Catalog Infrastructure**: Canonical assertion, framework, and crosswalk catalogs define the reviewed FedRAMP 20x and NIST mappings. The retained demo-scenario catalog is historical and has no current runner.
+- **Evaluation Evidence**: Verified evaluation bundles can be imported into a typed content-addressed graph with `g8e compliance evidence-graph verify --eval-run <run-id>`.
+- **Operational Release Evidence**: `g8e compliance release-prepare` exports bounded Gateway operational evidence, creates external trust policies, generates and signs a public report bundle, verifies it offline, and projects its canonical Markdown and CSV into the release-notes directory.
 
 ### Docker Compose Unified Stack and Deployment Topologies
 

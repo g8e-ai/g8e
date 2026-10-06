@@ -3,19 +3,18 @@ doc_id: scripts
 title: Automation Scripts
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-02
-version: v2.3.0
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - scripts/
   - internal/services/gateway/scripts/
-  - demos/images.json
 related:
   - docs/devs/docs.md
   - docs/devs/devs.md
   - docs/guides/getting_started.md
   - docs/guides/build_operator.md
   - docs/guides/air_gap.md
-when_to_read: Understanding the automation under scripts/, the Gateway's embedded deploy templates, the air-gap image-transfer workflow, or the validation toolchain.
+when_to_read: Understanding the automation under scripts/, the Gateway's embedded deploy templates, onboarding workflows, or the validation toolchain.
 do_not_use_for:
   - Developer coding invariants (docs/devs/devs.md)
   - Getting-started user steps (docs/guides/getting_started.md)
@@ -26,7 +25,7 @@ do_not_use_for:
 
 ## Purpose
 
-Catalogs the executable automation under `scripts/`, the deploy-script templates embedded in the Gateway, the validation toolchain, and the script-backed `g8e demos` image-transfer workflow. The root `Makefile` owns build and validation orchestration.
+Catalogs the executable automation under `scripts/`, the deploy-script templates embedded in the Gateway, the onboarding workflow, and the validation toolchain. The root `Makefile` owns build and validation orchestration.
 
 ## Quick index
 
@@ -37,7 +36,7 @@ Catalogs the executable automation under `scripts/`, the deploy-script templates
 - [Anti-patterns](#anti-patterns)
 - [Links out](#links-out)
 
-Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-setup.sh`, `windows-setup.ps1`), [Smoke tests](#procedures) (`smoke-test-go.sh`, `smoke-test-python.sh`), [Validation](#procedures) (`make cosais-validate`, `audit-dev-guidelines.py`), [Gateway deploy](#procedures) (`g8e-deploy.sh`, `g8e-deploy.ps1`), [Image transfer](#procedures) (`g8e demos pull/export/import/images`).
+Entry points: [Development bootstrap](#development-bootstrap) (`linux-setup.sh`, `macos-setup.sh`, `windows-setup.ps1`), [Smoke tests](#smoke-tests) (`smoke-test-go.sh`, `smoke-test-python.sh`, `ci/onboarding-smoke.sh`), [Validation](#validation-and-audit) (`audit-dev-guidelines.py`), and [Gateway deploy](#gateway-embedded-operator-bootstrap) (`g8e-deploy.sh`, `g8e-deploy.ps1`).
 
 ## Invariants
 
@@ -45,9 +44,8 @@ Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-set
 | --- | --- |
 | INV-SCRIPTS-01 | Setup scripts MUST check for required dependencies (git, make, curl, go, node, npm) before building. Go version MUST be read from `go.mod` and compared including the patch component, so Go 1.26.0 does not satisfy a `go 1.26.6` directive. Node.js 22+ is required for `make build`. Every other tool pin (uv, Python, buf, protoc plugins, golangci-lint) MUST be read from the root `Makefile`, which is its single source of truth; setup scripts MUST NOT hardcode a second copy. |
 | INV-SCRIPTS-02 | Setup scripts on Linux and macOS MUST update shell profiles (`~/.zshrc`, `~/.bashrc`, or `~/.profile`) for persistent PATH modification. Windows scripts MUST update user-level `Path` through the registry. These are environment mutations; invoking users MUST open a new shell or source the profile before `g8e` is available. |
-| INV-SCRIPTS-03 | Validator scripts (`cosais_validator`, `audit-dev-guidelines.py`) are triage tools; they identify review candidates but do not prove violations or replace semantic lint and test commands. |
+| INV-SCRIPTS-03 | Audit scripts such as `audit-dev-guidelines.py` are triage tools; they identify review candidates but do not prove violations or replace semantic lint and test commands. |
 | INV-SCRIPTS-04 | Gateway-served deploy scripts (`g8e-deploy.sh`, `g8e-deploy.ps1`) are bootstrap conveniences for trusted networks only. They fetch artifacts over plain HTTP, lack TLS protection, and delete `~/.g8e/pki` before startup. Users MUST fetch and inspect the rendered script before execution. |
-| INV-SCRIPTS-05 | Image transfer commands (`g8e demos pull/export/import/images`) require reading `demos/images.json` relative to the current working directory and MUST be run from the repository root. Export MUST NOT include locally built images; import MUST NOT validate tars against the manifest. |
 | INV-SCRIPTS-06 | Unless `--build-only` is passed, the Linux, macOS, and Windows setup scripts MUST leave a machine that passes `make dev-check`: they check or install `python3`, `uv`, `rg` (ripgrep), and on Unix `bc` and a C compiler (required by `go test -race`), then run `make dev-setup` for the Go dev tools, the repo-root `.venv`, and the Node dependencies. `make ci`, `make ci-platform`, `make ci-ensemble`, and `make ci-console` depend on `make dev-check`, so a missing tool fails once with an actionable list instead of partway through the pipeline. |
 | INV-SCRIPTS-07 | A prerequisite that resolves under `/mnt/<drive>/` MUST NOT count as installed. On WSL the Windows `PATH` is appended to the Linux one and exposes Windows shims such as `npm` and `npx` that cannot build or test this repository. |
 
@@ -65,12 +63,10 @@ Entry points: [Development bootstrap](#procedures) (`linux-setup.sh`, `macos-set
 | Go package smoke test | `scripts/smoke-test-go.sh` | Temporary module creation, `replace` directive, import verification |
 | Python package smoke test | `scripts/smoke-test-python.sh` | Virtual environment, editable install, import and example verification |
 | Fresh onboarding smoke test | `scripts/ci/onboarding-smoke.sh` | Disposable Linux checkout only: installs build prerequisites, builds and starts Gateway, enrolls owner, installs Ensemble runtime, then starts and approves four Operators and Ensemble |
-| COSAiS validation | `internal/tools/cosais_validator` | Finalized overlay ID coverage check; invoked by `make cosais-validate` |
 | Developer-guideline audit | `scripts/audit-dev-guidelines.py` | Go/Python guideline checks, function clones, and protocol alignment |
 | Gateway-embedded deploy (Bash) | `internal/services/gateway/scripts/g8e-deploy.sh` | Embedded by `make build`; served at `/g8e-deploy.sh` |
 | Gateway-embedded deploy (PowerShell) | `internal/services/gateway/scripts/g8e-deploy.ps1` | Embedded by `make build`; served at `/g8e-deploy.ps1` |
 | Gateway binary download manifest | `g8e-binaries.json` (validated at build time) | Validated platform matrix: Linux amd64/arm64/386, Windows amd64/arm64, Darwin amd64/arm64 |
-| Image transfer manifest | `demos/images.json` | Digest-pinned external base and service images used across demo environments |
 
 ## Procedures
 
@@ -135,18 +131,6 @@ The primary CI workflow (`build-and-test.yml`) runs both scripts for pushes to `
 The same workflow runs `scripts/ci/onboarding-smoke.sh` as an unprivileged contributor with sudo in a fresh Ubuntu container. It checks native startup and enrollment without Ollama or live model API keys. Run it only in a disposable checkout/container: it installs tools, creates identities, and starts local processes. CI archives the checked-out commit; local validation of uncommitted changes must snapshot the working files instead of using `git archive HEAD`. The container uses `--init` to reap child processes, and the script prints Gateway, Ensemble, and Operator logs on failure before stopping the platform.
 
 ### Validation and Audit
-
-#### COSAiS Overlay Coverage
-
-Run through its Make target:
-
-```bash
-make cosais-validate
-```
-
-`go run ./internal/tools/cosais_validator` requires `docs/reference/cosais-overlays.json` and at least one `demos/*/doctrine/` directory. It reads overlays with `status` exactly matching `finalized`, collects `overlay_ids` from top-level `doctrines` arrays in every JSON file directly under each demo doctrine directory, and fails if a finalized overlay ID is absent from that collected set. When the catalog contains no finalized overlays, it exits successfully and reports that no coverage check is active. The validator does not query NIST or determine finalization independently.
-
-`make lint` includes `make cosais-validate`, and the primary CI workflow invokes it directly. Schema and broader doctrine-reference validation are owned by `make doctrines-validate`.
 
 #### Developer-Guideline Audit
 
@@ -213,17 +197,6 @@ iwr http://<gateway-host>:8080/g8e-deploy.ps1 -UseBasicParsing | iex
 
 Linux and macOS require `curl` or `wget`; Windows requires PowerShell. Standard Gateway container images ship only the runtime binary at `/g8e`; the `/.well-known/g8e/bin/` download surface is available when a validated `bin/` mirror exists beside a source-built Gateway or when `/opt/g8e/bin` contains a full manifest from a custom image build. Build the complete matrix with `make build-all`.
 
-### Air-Gap Image Transfer
-
-The `g8e demos` image commands read `demos/images.json` relative to the current working directory; run them from the repository root. Commands `g8e demos pull`, `export`, and `import` require the Docker CLI and a reachable Docker daemon; `g8e demos images` only reads the manifest.
-
-- `g8e demos images` prints each manifest image, digest, informational tag, and associated demos.
-- `g8e demos pull` pulls every entry as `<image>@<digest>`.
-- `g8e demos export [output-dir]` saves each manifest image to a separate tar file and skips a tar path that already exists. Default directory is `demos/images-export/`.
-- `g8e demos import [input-dir]` loads every `.tar` file directly under the selected directory. Default directory is `demos/images-export/`.
-
-The manifest covers digest-pinned external base and service images. Export does not include locally built Gateway, Operator, demo, or Ensemble images; import does not validate tars against `demos/images.json`. Follow [Air-Gapped Deployment Guide](../guides/air_gap.md) for source staging, locally built image transfer, offline checks, and runtime egress verification. The [Demos README](../../demos/README.md) owns per-demo topology and operating workflow.
-
 ## Anti-patterns
 
 - Invoking `g8e` immediately after setup without opening a new shell or sourcing the profile; PATH updates are not visible to the current shell (INV-SCRIPTS-02).
@@ -232,8 +205,6 @@ The manifest covers digest-pinned external base and service images. Export does 
 - Treating `command -v npm` as proof of a Linux Node.js toolchain on WSL; the match can be a Windows shim (INV-SCRIPTS-07).
 - Interpreting validator and audit script findings as definitive proof without semantic verification (INV-SCRIPTS-03).
 - Running Gateway deploy scripts on hosts whose `.g8e/pki` state must be retained (INV-SCRIPTS-04).
-- Running `g8e demos` commands from a directory other than the repository root; the tool will not find `demos/images.json` (INV-SCRIPTS-05).
-- Assuming exported images or tars are validated against the manifest; validation is the caller's responsibility (INV-SCRIPTS-05).
 
 ## Links out
 
@@ -242,4 +213,3 @@ The manifest covers digest-pinned external base and service images. Export does 
 - [Getting Started](../guides/getting_started.md): user-facing setup and first-run steps.
 - [Build and Run a g8e Operator](../guides/build_operator.md): Operator enrollment and configuration.
 - [Air-Gapped Deployment](../guides/air_gap.md): offline source staging and image transfer.
-- [Demo Environments](../../demos/README.md): per-demo topology and operating workflow.

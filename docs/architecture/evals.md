@@ -441,7 +441,7 @@ Current campaign aggregate records use Evaluation Explorer view schema `1.6.0`. 
 
 - [Position Paper](../core/position_paper.md) — Research framing for confidential edge execution and governed state mutation
 - [Unified Docker Stack Guide](../guides/unified_stack.md) — Compose profiles, enrollment order, campaign workflows, and troubleshooting
-- [Sovereignty Gauntlet](../guides/sovereignty_gauntlet.md) — Evidence-oriented demonstration and claim-scoping workflow
+- [Sovereignty Gauntlet](../guides/sovereignty_gauntlet.md) — Retired demonstration workflow and migration notice
 - [Ensemble Evaluations](../ensemble/evals.md) — How g8ee uses g8e evals through the production chat path
 - [Ensemble (g8ee)](./ensemble.md) — g8ee's role in the platform and trust boundaries
 - [Model Provenance](./model-provenance.md) — Zero-trust weight attestation, Provenance Operator enrollment, and chain of custody

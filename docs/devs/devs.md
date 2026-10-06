@@ -3,8 +3,8 @@ doc_id: devs
 title: Developer Guidelines
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - go.mod
   - Makefile
@@ -186,8 +186,7 @@ Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing 
 | Go, Python, TypeScript, and Markdown protobuf output | `protocol/proto/g8e/` | `make proto-generate` (runs `proto-go`, `proto-python`, `proto-node`, `proto-lockfiles`; bare `make proto` is a legacy alias of `proto-generate`) plus the affected conformance tests |
 | Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
 | Website | Root `README.md` | `make website-test` and `make website-build` when rendering changes |
-| Doctrine references | `protocol/constants/doctrine/` and demo doctrine inputs | `make doctrines-validate` |
-| COSAiS overlays | Canonical overlay and doctrine references | `make cosais-validate` |
+| Doctrine references | `protocol/constants/doctrine/` | `make doctrines-validate` |
 
 The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full matrix. The [Release Process](release_process.md) owns native evaluation and signed compliance evidence.
 

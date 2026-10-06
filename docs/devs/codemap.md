@@ -3,8 +3,8 @@ doc_id: codemap
 title: g8e Code Map
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - cmd/g8e/main.go
   - internal/cli/cmd/main.go
@@ -130,7 +130,6 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `console/` | Gateway-embedded browser console (React + TypeScript). Docs: [Console Architecture & Development](../architecture/console.md). |
 | `g8e-adapter/` | Audited browser adapter and deterministic contract pack for generated observe frontends. |
 | `evaluation-explorer/` | Evaluation explorer SPA; its build is embedded in `internal/services/gateway/explorer/static`. |
-| `demos/` | Healthcare, finance, DHS, and FedRAMP demo environments. Index: [Demo index](../../demos/README.md). |
 | `docs/` | Architecture, guides, references, developer docs, and release notes. |
 | `scripts/` | Validation, generation, release, and build support scripts. |
 | `website/` | Static site generator and Cloudflare Worker packaging. Source overview is the root `README.md`. |
@@ -141,7 +140,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 ### Process entry
 
-The executable starts in `cmd/g8e/main.go`. Command registration and process-level error handling live in `internal/cli/cmd/main.go`. `NewRootCmd` registers groups in this order: `gw`, `auth`, `mcp`, `operator`, `vault`, `test`, `demos`, `docker`, `audit`, `report`, `public`, `swagger`, `tui`, `version`, `compliance`, `eval`.
+The executable starts in `cmd/g8e/main.go`. Command registration and process-level error handling live in `internal/cli/cmd/main.go`. `NewRootCmd` registers the public command groups; confirm the current inventory with `./g8e --help` rather than duplicating its ordering here.
 
 | Path | Owns |
 | --- | --- |
@@ -165,7 +164,6 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | `operator` | `operatorcmd` | `internal/cli/cmd/operator/` | `operators` | Operator discovery, startup, deploy, copy, and streams. |
 | `vault` | `vaultcmd` | `internal/cli/cmd/vault/` | | Local vault init, unlock, rekey, status, reset, export, and import. |
 | `test` | `testcmd` | `internal/cli/cmd/test/` | | Unit, integration, e2e, e2e-full, coverage, lint, chaos, summary, and `public-loop`. |
-| `demos` | `demos` | `internal/cli/cmd/demos/` | `demo` | Demo environment and scenario lifecycle. |
 | `docker` | `docker` | `internal/cli/cmd/docker/` | | Unified Compose stack lifecycle. |
 | `ensemble` | `ensemblecmd` | `internal/cli/cmd/ensemble/` | | g8ee service lifecycle in the unified Compose stack. |
 | `audit` | `audit` | `internal/cli/cmd/audit/` | | Receipt, event, summary, export, and report queries against a running Gateway. |
@@ -174,7 +172,7 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | `swagger` | `swagger` | `internal/cli/cmd/swagger/` | | OpenAPI generation, serving, and validation. |
 | `tui` | `tuicmd` | `internal/cli/cmd/tui/` | | Tactical Governance Console. |
 | `version` | `version` | `internal/cli/cmd/version/` | | Build metadata. Optional FIPS module status is `./g8e version --help`. |
-| `compliance` | `compliancecmd` | `internal/cli/cmd/compliance/` | | `ksi`, `ksi-history`, `overlay`, `demo-run`, `release-evidence`, `release-prepare`, `evidence`, `evidence-graph`, and `report`. |
+| `compliance` | `compliancecmd` | `internal/cli/cmd/compliance/` | | `ksi`, `ksi-history`, `overlay`, `release-evidence`, `release-prepare`, `evidence`, `evidence-graph`, and `report`. |
 | `eval` | `eval` | `internal/cli/cmd/eval/` | `evals` | `models`, `campaigns`, `runs`, `rollout`, `formations`, `gates`, `boundary`, `suites`, `backup`, and `restore`. Also constructs `public restore`. |
 
 Files at `internal/cli/cmd/` root are the root command, its tests, and shared file-service and config-load tests. Factory-error tests live beside the group they cover (`factory_error_<group>_test.go`). The factory rule is INV-FS-08.
@@ -184,7 +182,7 @@ Files at `internal/cli/cmd/` root are the root command, its tests, and shared fi
 | `internal/cli/cmd/shared/` | `shared` | Config load, `NewFileSvc` (`fs.NewRuntimeFileService`), source-root lookup, command context, and version-info context. Exists so group packages do not import the root `cmd` package. |
 | `internal/cli/cmd/gwremote/` | `gwremote` | Gateway HTTP publication, model provenance, provider observation, and health hook used by `eval`, `public`, and `docker`. Exists so those packages do not import `gw`. |
 | `internal/cli/cmd/cmdtest/` | `cmdtest` | Cross-package test helpers. Not a Cobra group. |
-| `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/verify` and the harness `agent-launcher-config` scenario. |
+| `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/verify`. |
 | `internal/cli/api/` | | Typed CLI HTTP client. |
 | `internal/cli/auth/` | | CLI enrollment, credential staging, key generation, passkey registration, trust bundles, and mTLS clients. |
 | `internal/cli/browserorigin/` | | Frontend-origin validation and normalization. |
@@ -356,7 +354,7 @@ Schemas live under `protocol/proto/g8e/`. Wire requirements: [Protocol Specifica
 | `protocol/conformance/` | Cross-language constants, model, and hash parity tests. |
 | `protocol/python/` | Python protocol package. |
 | `protocol/node/` | TypeScript protocol package. |
-| `examples/` | Runnable Go/Python examples, external-console app, and MCP client configuration templates (demo environments stay in `demos/`). |
+| `examples/` | Runnable Go/Python examples, external-console app, and MCP client configuration templates. |
 | `protocol/docs/` | Protocol specifications and generated API references. |
 | `internal/tools/constgen/` | Regenerates event and action-type constants from `protocol/constants/events.json` and `protocol/constants/status.json`. `make constants-generate` writes. `make constants-check` verifies. Outputs include `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `console/src/generated/events.ts`, and `protocol/python/g8e/_data/events.json`. |
 
@@ -384,7 +382,6 @@ Evidence scope and signed artifacts are owned by the [Release Process](release_p
 | --- | --- | --- |
 | Ensemble (g8ee) | `ensemble/app/main.py` | Application code in `ensemble/app/`. Tests in `ensemble/tests/`. Docs: [g8ee index](../ensemble/index.md). |
 | Console | `console/src/main.tsx` | React + TypeScript SPA; the Gateway serves its embedded build (`internal/services/gateway/console/`) at `/console/`. The browser calls only the Gateway. Tests in `console/src/**/*.test.ts(x)` and `console/tests/`. Docs: [Console Architecture & Development](../architecture/console.md). |
-| Demos | `demos/` | Containerized services and verification scripts. CLI: `internal/cli/cmd/demos/`. Reference client: `internal/tools/agent_harness/`. |
 | Website | `website/` | Renders the root `README.md`. `make website-test`, `make website-build`. Generation policy: [Documentation Guide](docs.md#generated-outputs-inv-doc-gen). |
 
 ### Test map
@@ -414,16 +411,15 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 | `make build` | Host binary. Writes `bin/g8e-<os>-<arch>` and a repo-root copy. Refreshes the explorer and console embeds from `dist/` when built, else uses the committed embeds. |
 | `make proto-generate` | Go, Python, TypeScript, and Ensemble lockfile refresh (INV-PROTO-01). |
 | `make constants-generate`, `make constants-check` | `internal/tools/constgen` write and verify. |
-| `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `doctrines-validate`, `cosais-validate`, `swagger-generate`, then `golangci-lint run`. |
+| `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `doctrines-validate`, then `golangci-lint run`. |
 | `make test`, `make test-unit`, `make test-integration`, `make test-docker` | Platform tiers. `make test` is unit plus integration. |
 | `make protocol-python-build` | Python protocol distribution with bundled registries. |
 | `make console-test`, `make ensemble-test`, `make ensemble-test-external`, `make website-test` | Console, Ensemble, external-provider, and website checks. |
 | `make fips-build`, `make fips-verify` | Pinned Linux AMD64 FIPS variant. Reference: [FIPS 140-3](../reference/fips140-3.md). |
 | `make doctrines-validate` | Doctrine JSON under `protocol/constants/doctrine/`. |
-| `make cosais-validate` | `go run ./internal/tools/cosais_validator`. |
 | `make swagger-generate` | Gateway OpenAPI from Swagger annotations. |
 
-Other tools under `internal/tools/`: `agent_harness` (scripted Go governance client and demo scenarios, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `constgen`, `doctrine_validator`, `explorercatalog` (evaluation-explorer scenario catalog generation, see `make explorer-catalog`), `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
+Other tools under `internal/tools/`: `agent_harness` (shared typed Go client used by evaluation and smoke workflows, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `constgen`, `explorercatalog` (evaluation-explorer scenario catalog generation, see `make explorer-catalog`), `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
 
 ## Procedures
 
@@ -507,4 +503,4 @@ make swagger-generate
 - [AI Agents and the g8e Governance Boundary](../architecture/agents.md): ingress limits.
 - [Protocol README](../../protocol/README.md) and [Protocol Specification](../../protocol/docs/spec.md).
 - [Getting Started](../guides/getting_started.md): deployment and enrollment.
-- Component indexes: [Ensemble](../ensemble/index.md), [Console](../architecture/console.md), [Demos](../../demos/README.md).
+- Component indexes: [Ensemble](../ensemble/index.md), [Console](../architecture/console.md).

@@ -116,7 +116,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Observe contract generator | `g8e-adapter/generator/gen-contract-pack.mjs` | `node g8e-adapter/generator/gen-contract-pack.mjs --check` |
 | Cross-language test vectors | `protocol/vectors/` | `go test -v ./protocol` |
 | Conformance test suite | `protocol/conformance/` | `uv run --project protocol/python --extra dev pytest protocol/conformance -v` |
-| JSON constant registries | `protocol/constants/` | `make doctrines-validate && make cosais-validate` |
+| JSON constant registries | `protocol/constants/` | `make doctrines-validate && make constants-check` |
 | JSON model schemas | `protocol/models/` | `pytest protocol/conformance/test_models.py -v` |
 | Release orchestration | `Makefile`, `.github/workflows/` | `make release` check steps |
 
@@ -229,7 +229,7 @@ The deterministic generator at `g8e-adapter/generator/gen-contract-pack.mjs` con
 The directory `protocol/constants/` maintains 26 top-level JSON registries alongside compliance and doctrine catalogs:
 
 - Registries cover events (`events.json`), status codes (`status.json`), collections (`collections.json`), API paths (`api_paths.json`), auth parameters (`auth.json`), headers (`headers.json`), KV keys (`kv_keys.json`), channels (`channels.json`), pubsub topics (`pubsub.json`), intents (`intents.json`), prompt templates (`prompts.json`), agent roles (`agents.json`), platform parameters (`platform.json`), enrollment parameters and vectors (`platform_enrollment.json`, `platform_enrollment_completion_transcript_vectors.json`), exit codes (`exit_codes.json`), field paths (`field_paths.json`), document types (`document_ids.json`), network parameters (`network.json`), output formats (`output.json`), default ports (`ports.json`), timestamp formats (`timestamp.json`), and environment variables (`env_vars.json`).
-- `protocol/constants/compliance/`: Catalogs for assertions (`assertion-catalog.json`), frameworks (`framework-catalog.json`), FedRAMP/NIST crosswalks (`fedramp-nist-crosswalk.json`), and demo scenarios (`demo-scenario-catalog.json`).
+- `protocol/constants/compliance/`: Catalogs for assertions (`assertion-catalog.json`), frameworks (`framework-catalog.json`), and FedRAMP/NIST crosswalks (`fedramp-nist-crosswalk.json`). The retained `demo-scenario-catalog.json` describes the retired pre-v2.3.2 demo evidence format and is not a runnable scenario inventory.
 - `protocol/constants/doctrine/`: L1 threat detection pattern registries defining blacklist rules (`blacklist_doctrine.json`), whitelist rules (`whitelist_doctrine.json`), Gitleaks secrets signatures (`gitleaks_doctrine.json`), OWASP Core Rule Set patterns (`owasp_crs_doctrine.json`), and MCP attack vectors (`mcp_vectors_doctrine.json`).
 - `protocol/constants/event_dashboard_classification.json`: Enforces frontend observability relationships: `produced_to_sse`, `governed_record_only`, `mixed`, or `unsupported`.
 

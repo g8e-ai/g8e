@@ -144,7 +144,6 @@ This repository includes the main platform and supporting pieces:
 - `ensemble/` — Python agentic reasoning service
 - `console/` — browser console frontend
 - `eval/` — evaluation and compliance harnesses
-- `demos/` — sealed demo environments and org-specific scenarios
 - `docs/` — architecture, guides, and reference material
 
 ## What makes this different
@@ -202,7 +201,7 @@ If this resonates, I would love to hear from people who want to:
 If you want to contribute, the best ways to start are:
 
 - run the project locally and report issues
-- try a demo environment and document what was confusing
+- run an evaluation or deployment workflow and document what was confusing
 - review the docs and architecture for gaps
 - help build examples for real use cases
 - propose better security or UX patterns
@@ -234,7 +233,7 @@ For deeper detail, start here:
 - [docs/guides/getting_started.md](docs/guides/getting_started.md)
 - [docs/guides/unified_stack.md](docs/guides/unified_stack.md)
 - [docs/architecture/agents.md](docs/architecture/agents.md)
-- [demos/README.md](demos/README.md)
+- [docs/architecture/evals.md](docs/architecture/evals.md)
 - [ensemble/README.md](ensemble/README.md)
 
 If you are curious, try the stack, poke around the docs, and reach out with a concrete use case.

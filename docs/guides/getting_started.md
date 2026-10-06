@@ -3,8 +3,8 @@ doc_id: getting_started
 title: Getting Started
 audience: new users and platform evaluators
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - docs/guides/getting_started.md
   - Makefile
@@ -503,37 +503,6 @@ g8e integrates with popular AI agent binaries to provide governed MCP tool acces
 ```bash
 ./g8e mcp agent show claude
 ```
-
----
-
-## Industry Demos
-
-The `demos/` directory contains four Docker Compose environments: healthcare, finance, DHS, and FedRAMP.
-
-### Run a demo
-
-```bash
-./g8e demos list
-./g8e demos start healthcare
-
-# Follow the enrollment commands, then check readiness
-./g8e demos status healthcare
-
-# Run scenarios
-./g8e demos run healthcare 1
-./g8e demos run healthcare
-```
-
-Demo ports:
-
-| Demo | HTTP | HTTPS | Additional UI |
-|---|---|---|---|
-| healthcare | 8081 | 8444 | 3001 |
-| finance | 8082 | 8445 | 3002 |
-| dhs | 8087 | 8450 | - |
-| fedramp | 8088 | 8451 | - |
-
-See [demos/README.md](../../demos/README.md) for full details.
 
 ---
 

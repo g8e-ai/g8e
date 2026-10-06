@@ -3,8 +3,8 @@ doc_id: air_gap
 title: Air-Gapped Deployment
 audience: platform operators and infrastructure teams
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - docs/guides/air_gap.md
   - Dockerfile
@@ -18,7 +18,6 @@ related:
   - docs/guides/connect_operator_to_gateway.md
   - docs/architecture/network.md
   - docs/architecture/encryption.md
-  - demos/README.md
 when_to_read: Deploying g8e inside a network-isolated environment; staging binaries, containers, and protocol libraries for offline transfer.
 do_not_use_for:
   - Runtime encryption and vault mechanics (docs/architecture/encryption.md)
@@ -70,8 +69,8 @@ Ids are stable. Append the next free number in a group. Do not renumber.
 | --- | --- |
 | INV-AIR-BUILD-01 | Native binary builds MUST use `GOTOOLCHAIN=local GOFLAGS=-mod=vendor` to ensure the checked-in vendor tree provides all dependencies. Go 1.26.6 must already be installed; automatic toolchain selection is prohibited. |
 | INV-AIR-BUILD-02 | Container image builds on a connected host MUST complete fully (including `apt-get`, `pip`, and `npm` install steps) before transfer. Pre-pulling base images alone does not make Dockerfile builds offline. Final images MUST preserve exact repository names and tags for offline loading. |
-| INV-AIR-BUILD-03 | The evaluation-explorer asset at `evaluation-explorer/dist/index.html` MUST be built on the connected host before executing `make build`. `make build` refuses to proceed without this asset. |
-| INV-AIR-BUILD-04 | `make test-airgap` verifies vendor tree presence, vendored build success, demo manifest existence, and demo image pin patterns, but does NOT verify container build offline-capability, image completeness, runtime egress blocking, or endpoint configuration. |
+| INV-AIR-BUILD-03 | A source archive MUST include the committed Gateway frontend embeds. `make build` uses those embeds when local `dist/` trees are absent; release preparation rebuilds them explicitly. |
+| INV-AIR-BUILD-04 | `make test-airgap` verifies vendor tree presence and a vendored Go build, but does NOT verify container build offline-capability, image completeness, runtime egress blocking, or endpoint configuration. |
 
 ### Runtime Behavior (`INV-AIR-RUNTIME`)
 
@@ -86,11 +85,10 @@ Ids are stable. Append the next free number in a group. Do not renumber.
 
 | Claim | Path | Verify |
 | --- | --- | --- |
-| Makefile air-gap target | `Makefile` | `make test-airgap` target at line ~1800 |
+| Makefile air-gap target | `Makefile` | `make test-airgap` |
 | Go vendor build support | `go.mod`, `vendor/` | `go build -mod=vendor ./...` succeeds |
 | Container image build | `Dockerfile`, `docker-compose.yml` | `docker compose build` completes without external registry access on connected host |
 | Python wheel build | `protocol/python/pyproject.toml`, `Makefile` | `make protocol-python-build` produces `protocol/python/dist/g8e-2.3.1-py3-none-any.whl` |
-| Demo manifest and images | `demos/images.json`, `demos/*/compose.yml` | `./g8e demos pull`, `./g8e demos export` |
 | Gateway port defaults | `internal/constants/ports.go` | HTTP 8080, HTTPS 8443 |
 
 ## Procedures
@@ -239,34 +237,6 @@ Configure model roles before sending model requests. For deterministic operation
 
 See [Unified Docker Stack](unified_stack.md) for identity, volume, hostname, and port configuration.
 
-#### Demo stacks
-
-The demo image manifest contains digest-pinned external images referenced by the per-demo Compose files plus build-stage and runtime bases. On the connected host:
-
-```bash
-./g8e demos pull
-./g8e demos export /tmp/g8e-external-images
-
-# Build source-based images for the selected demos.
-docker compose -f demos/<org>/compose.yml build
-docker compose -f demos/<org>/compose.yml config --images
-
-# Export unique source-built image names (digest references are in the external export).
-docker save -o /tmp/g8e-<org>-built-images.tar <built-image-ref> [<built-image-ref> ...]
-```
-
-`./g8e demos export` saves only images listed in [demos/images.json](../../demos/images.json); it does not save locally built Gateway/Operator images. Transfer both archives, the selected `demos/<org>/` tree, and `demos/images.json`.
-
-On the isolated host:
-
-```bash
-./g8e demos import /media/g8e-external-images
-docker load -i /media/g8e-<org>-built-images.tar
-docker compose -f demos/<org>/compose.yml up -d --no-build --pull never
-```
-
-Use direct Compose commands with `--no-build --pull never` for strict offline startup. `./g8e demos start <org>` runs `docker compose up` without explicit controls. Complete owner and Operator enrollment using the Gateway ports printed for the selected demo; see [Demos README](../../demos/README.md) for per-demo port maps and bootstrap sequences.
-
 ### Protocol libraries and generation
 
 The root `vendor/` directory makes the repository buildable with `-mod=vendor`. It does not enable `go get github.com/g8e-ai/g8e/v2@<version>` to work offline in an unrelated Go module. Downstream Go applications need their own staged source tree, vendor tree, pre-populated module cache, or internal Go module proxy.
@@ -296,9 +266,6 @@ Run `make test-airgap` in the staged source tree before transfer. This target ve
 
 1. `vendor/` exists.
 2. `go build -mod=vendor ./...` succeeds.
-3. `demos/images.json` exists.
-4. Demo Compose files contain no unpinned image tags (no `:latest`, `:alpine`, `:slim`, `:bookworm`).
-5. Demo Python files contain no `pip install` or `import requests` references.
 
 This is a build and static-reference check. It does NOT verify container build offline-capability, image completeness, runtime egress blocking, or endpoint configuration. Verify those properties separately:
 
@@ -328,4 +295,3 @@ This is a build and static-reference check. It does NOT verify container build o
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Operator enrollment and private-network connectivity.
 - **[Network Architecture](../architecture/network.md)**: PKI hierarchy, SPIFFE identities, TLS/mTLS enforcement, and port topology.
 - **[Encryption](../architecture/encryption.md)**: Vault encryption, sensitive field scrubbing, and rehydration boundaries.
-- **[Demos README](../../demos/README.md)**: Demo environments, image manifest, export/import procedures, and per-demo startup sequences.
