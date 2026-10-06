@@ -236,7 +236,7 @@ class SettingsService:
 
         if not user_doc_dict:
             self._logger.info(
-                "No user settings document for user %s; using empty defaults so request overrides can complete validation",
+                "No user settings document for user %s; using governed inference defaults with caller-selected models",
                 user_id,
             )
             app_settings = await self.get_app_settings()

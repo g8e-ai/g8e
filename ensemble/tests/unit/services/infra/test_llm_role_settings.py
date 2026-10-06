@@ -55,6 +55,13 @@ class TestNormalizeEndpoint:
 
 
 class TestApplyRoleUpdates:
+    def test_default_roles_resolve_through_governed_inference(self):
+        llm = LLMSettings(primary_model="chosen-model")
+        for role in ("primary", "assistant", "lite"):
+            assert llm.resolve(role) == ("g8e", None, None, "chosen-model")
+        assert llm.assistant_provider is None
+        assert llm.lite_provider is None
+
     def test_writes_only_role_provider_and_model(self):
         llm = LLMSettings(
             ollama_endpoint="http://ollama:11434",

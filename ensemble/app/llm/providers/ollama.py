@@ -170,32 +170,20 @@ def _prompt_filled_context(prompt_eval_count: int | None, num_ctx: int | None) -
     return bool(num_ctx) and prompt_eval_count is not None and prompt_eval_count >= num_ctx
 
 
-def _raise_on_unusable_response(
+def _raise_on_context_overflow(
     response,
     *,
     model: str,
     channel: str,
     num_ctx: int,
-    num_predict: int | None,
 ) -> None:
-    """Raise when a non-streaming Ollama response cannot be trusted.
-
-    A prompt that filled ``num_ctx`` raises ``ContextWindowExceededError`` even
-    when the answer is non-empty, because Ollama truncated the prompt. Otherwise
-    an HTTP 200 with no content raises ``OllamaEmptyResponseError``; load
-    failures and thinking-only output surface that way, and the error captures
-    the diagnostic context needed to identify the root cause.
-
-    Raises:
-        ContextWindowExceededError: If the prompt filled num_ctx.
-        OllamaEmptyResponseError: If content is empty for any other reason.
-    """
+    """Reject truncated prompts on unary responses and terminal stream frames."""
     message = getattr(response, "message", None)
     content = getattr(message, "content", None) if message else None
     done_reason = getattr(response, "done_reason", None)
     prompt_eval_count = getattr(response, "prompt_eval_count", None)
 
-    from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+    from app.errors import ContextWindowExceededError
 
     if _prompt_filled_context(prompt_eval_count, num_ctx):
         logger.warning(
@@ -218,14 +206,31 @@ def _raise_on_unusable_response(
             channel=channel,
         )
 
-    if content:
+
+def _raise_on_unusable_response(
+    response,
+    *,
+    model: str,
+    channel: str,
+    num_ctx: int,
+    num_predict: int | None,
+) -> None:
+    """Reject overflow and empty answers; primary tool-only output is usable."""
+    from app.errors import OllamaEmptyResponseError
+
+    _raise_on_context_overflow(response, model=model, channel=channel, num_ctx=num_ctx)
+    message = getattr(response, "message", None)
+    content = getattr(message, "content", None) if message else None
+    done_reason = getattr(response, "done_reason", None)
+    prompt_eval_count = getattr(response, "prompt_eval_count", None)
+    tool_calls = getattr(message, "tool_calls", None) if message else None
+    tool_calls_count = len(tool_calls) if tool_calls else 0
+    if content or (channel == "primary" and tool_calls_count):
         return
 
     eval_count = getattr(response, "eval_count", None)
     thinking = getattr(message, "thinking", None) if message else None
     thinking_len = len(thinking) if thinking else 0
-    tool_calls = getattr(message, "tool_calls", None) if message else None
-    tool_calls_count = len(tool_calls) if tool_calls else 0
 
     logger.warning(
         "[OLLAMA] Empty message.content on 200 OK: channel=%s model=%s "
@@ -379,6 +384,11 @@ class OllamaProvider(LLMProvider):
 
         first_token_at: float | None = None
         chunks = await self._receive_stream(stream)
+        for chunk in chunks:
+            if chunk.done:
+                _raise_on_context_overflow(
+                    chunk, model=model, channel="primary", num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX
+                )
         for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):
@@ -507,6 +517,11 @@ class OllamaProvider(LLMProvider):
 
         first_token_at: float | None = None
         chunks = await self._receive_stream(stream)
+        for chunk in chunks:
+            if chunk.done:
+                _raise_on_context_overflow(
+                    chunk, model=model, channel="assistant", num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX
+                )
         for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):
@@ -606,6 +621,11 @@ class OllamaProvider(LLMProvider):
 
         first_token_at: float | None = None
         chunks = await self._receive_stream(stream)
+        for chunk in chunks:
+            if chunk.done:
+                _raise_on_context_overflow(
+                    chunk, model=model, channel="lite", num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX
+                )
         for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):

@@ -1319,6 +1319,40 @@ func TestOllamaBackend_GenerateStreamingPublishesProgressEvents(t *testing.T) {
 	assert.Equal(t, "lo", progressEvents[1].GetParts()[0].GetText())
 }
 
+func TestOllamaBackend_GenerateDeliversProgressBeforeProviderCompletes(t *testing.T) {
+	progress := make(chan struct{})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		encoder := json.NewEncoder(w)
+		_ = encoder.Encode(ollamaChatResponse{Model: "test-model", Message: ollamaChatMessage{Content: "hello"}})
+		w.(http.Flusher).Flush()
+		select {
+		case <-progress:
+			_ = encoder.Encode(ollamaChatResponse{Model: "test-model", Done: true, DoneReason: "stop"})
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+	backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+	require.NoError(t, err)
+	var events []*operatorv1.InferenceProgressEvent
+	ctx = WithProgressReporter(ctx, func(event *operatorv1.InferenceProgressEvent) error {
+		events = append(events, event)
+		close(progress)
+		return nil
+	})
+	response, err := backend.Generate(ctx, models.GenerateRequest{
+		Model: "test-model", Stream: true, ProviderAttemptID: "attempt-live",
+		Messages: []*operatorv1.InferenceMessage{{Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "hi"}}}}},
+	})
+	require.NoError(t, err, "provider completion depends on receiving live progress")
+	require.Len(t, events, 1)
+	response.ProviderAttemptID = "attempt-live"
+	require.NoError(t, models.ReconcileInferenceProgress(events, response.ToProtoInferenceResult()))
+}
+
 func TestOllamaBackend_GenerateStreamingReporterErrorDoesNotFailGeneration(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

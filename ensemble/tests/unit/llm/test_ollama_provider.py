@@ -12,6 +12,7 @@ Tests SSL verification strategy, close behavior, construction, and content gener
 """
 
 from contextvars import copy_context
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -1086,12 +1087,14 @@ class TestOllamaEmptyResponseError:
         assert error.ctx_overflow_suspected is False
 
     @pytest.mark.asyncio
-    async def test_generate_content_primary_with_tool_calls_raises_on_empty_content(self, provider):
+    async def test_generate_content_primary_accepts_tool_calls_without_text(self, provider):
         provider, mock_client = provider
 
         mock_response = MagicMock()
         mock_response.message.content = ""
-        mock_response.message.tool_calls = [MagicMock()]
+        mock_response.message.tool_calls = [
+            SimpleNamespace(function=SimpleNamespace(name="inspect", arguments={"path": "a"}))
+        ]
         mock_response.done_reason = "stop"
         mock_response.prompt_eval_count = 100
         mock_response.eval_count = 0
@@ -1112,11 +1115,43 @@ class TestOllamaEmptyResponseError:
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
-        with pytest.raises(OllamaEmptyResponseError) as exc_info:
-            await provider.generate_content_primary("llama3", contents, settings)
+        result = await provider.generate_content_primary("llama3", contents, settings)
+        call = result.candidates[0].content.parts[-1].tool_call
+        assert call is not None
+        assert call.name == "inspect"
+        assert call.args == {"path": "a"}
 
-        error = exc_info.value
-        assert error.tool_calls_count == 1
+
+class TestOllamaStreamingOverflow:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("channel", ["primary", "assistant", "lite"])
+    @pytest.mark.parametrize("has_text", [False, True])
+    async def test_stream_rejects_overflow_before_emitting_output(self, channel, has_text):
+        message = SimpleNamespace(content="answer" if has_text else "", thinking=None, tool_calls=[])
+        terminal = SimpleNamespace(
+            message=message, done=True, done_reason="stop",
+            prompt_eval_count=LLM_OLLAMA_DEFAULT_NUM_CTX, eval_count=1,
+        )
+
+        async def upstream():
+            yield terminal
+
+        client = MagicMock()
+        client.chat = AsyncMock(return_value=upstream())
+        settings = {
+            "primary": PrimaryLLMSettings(),
+            "assistant": AssistantLLMSettings(),
+            "lite": LiteLLMSettings(),
+        }[channel]
+        with patch(PATCH_TARGET, return_value=client):
+            provider = OllamaProvider(endpoint="http://localhost:11434", api_key="")
+            stream = getattr(provider, f"generate_content_stream_{channel}")(
+                "llama3", [Content(role="user", parts=[Part(text="hi")])], settings,
+            )
+            with pytest.raises(ContextWindowExceededError) as raised:
+                await anext(stream)
+        assert raised.value.channel == channel
+        assert raised.value.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
 
 
 class TestPromptFilledContext:

@@ -70,8 +70,8 @@ class TestSettingsService:
             collection=DB_COLLECTION_SETTINGS, document_id=user_doc_id
         )
 
-    async def test_get_user_settings_missing_returns_empty_defaults(self):
-        """Missing user settings document yields empty defaults so request-scoped
+    async def test_get_user_settings_missing_defaults_to_governed_inference(self):
+        """Missing user settings document selects governed inference; request-scoped
         LLM overrides (CLI/BYO) can populate validate_llm_config. Hard failure on
         absent credentials is the responsibility of validate_llm_config, not this
         dependency-injected loader."""
@@ -91,7 +91,7 @@ class TestSettingsService:
         settings = await service.get_user_settings(user_id)
 
         assert isinstance(settings, G8eeUserSettings)
-        assert settings.llm.primary_provider is None
+        assert settings.llm.primary_provider is LLMProvider.G8E
         assert settings.llm.primary_model is None
         assert settings.llm.openai_api_key is None
 
@@ -252,7 +252,7 @@ class TestLLMEnvVarBootstrapDefaults:
         service = self._make_service()
         settings = service.get_local_settings()
 
-        assert settings.llm.primary_provider is None
+        assert settings.llm.primary_provider is LLMProvider.G8E
         assert settings.llm.primary_model is None
         assert settings.llm.assistant_provider is None
         assert settings.llm.assistant_model is None
@@ -264,7 +264,7 @@ class TestLLMEnvVarBootstrapDefaults:
         service = self._make_service()
         settings = service.get_local_settings()
 
-        assert settings.llm.primary_provider is None
+        assert settings.llm.primary_provider is LLMProvider.G8E
         assert settings.llm.primary_model is None
         assert settings.llm.openai_api_key is None
         assert settings.llm.ollama_api_key is None

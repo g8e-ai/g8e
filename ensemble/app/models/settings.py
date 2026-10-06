@@ -275,7 +275,7 @@ class LLMSettings(_ProtocolLLMSettings):
 
     model_config = ConfigDict(coerce_numbers_from_str=True)
 
-    primary_provider: LLMProvider | None = Field(default=None, alias="llm_primary_provider")
+    primary_provider: LLMProvider | None = Field(default=LLMProvider.G8E, alias="llm_primary_provider")
     assistant_provider: LLMProvider | None = Field(default=None, alias="llm_assistant_provider")
     lite_provider: LLMProvider | None = Field(default=None, alias="llm_lite_provider")
 

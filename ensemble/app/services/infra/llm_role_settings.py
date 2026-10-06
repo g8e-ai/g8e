@@ -44,12 +44,12 @@ from app.models.settings import LLMSettings
 # provider that requires Tribunal to be disabled, and fake is test-only; both
 # stay configurable through platform settings, not here.
 _PROVIDER_FIELDS: dict[LLMProvider, tuple[str, FieldRequirement, FieldRequirement, bool]] = {
+    LLMProvider.G8E: ("g8e governed inference", "none", "none", True),
     LLMProvider.OLLAMA: ("Ollama", "optional", "optional", True),
     LLMProvider.OPENAI: ("OpenAI-compatible", "optional", "required", True),
     LLMProvider.ANTHROPIC: ("Anthropic", "optional", "required", True),
     LLMProvider.GEMINI: ("Google Gemini", "none", "required", True),
     LLMProvider.LLAMACPP: ("llama.cpp", "optional", "optional", True),
-    LLMProvider.G8E: ("g8e governed inference", "none", "none", True),
 }
 
 

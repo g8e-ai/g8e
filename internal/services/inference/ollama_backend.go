@@ -325,9 +325,23 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	}
 	defer resp.Body.Close()
 
-	// Receive and preserve the entire bounded body before interpreting it.
-	// Neither response parsing nor progress delivery can interrupt ingestion.
-	responseBody, received, readErr := b.receiveResponse(resp.Body, requestStartedAt)
+	// Ingestion owns the bounded raw bytes independently of parsing and delivery.
+	// A slow reporter or invalid frame cannot truncate the provider artifact.
+	capture := newProviderResponseCapture(b.maxResponseBytes, requestStartedAt)
+	go capture.receive(resp.Body)
+	var chatResp ollamaChatResponse
+	var parts []*operatorv1.InferenceResponsePart
+	var timeToFirstToken *int64
+	var decodeErr error
+	if resp.StatusCode == http.StatusOK {
+		var reporter ProgressReporter
+		if req.Stream {
+			reporter = ProgressReporterFromContext(ctx)
+		}
+		allowParallelToolCalls := req.ParallelToolCalls == nil || *req.ParallelToolCalls
+		chatResp, parts, timeToFirstToken, decodeErr = b.decodeChatStream(capture, capture.arrivalTime, allowParallelToolCalls, req.ContextLimit, req.ProviderAttemptID, reporter)
+	}
+	responseBody, readErr := capture.result()
 	if store := attemptStoreFromContext(ctx); store != nil {
 		if err := store.SaveRawResponse(context.WithoutCancel(ctx), req.ProviderAttemptID, responseBody); err != nil {
 			return nil, errors.Join(readErr, fmt.Errorf("ollama_backend: save raw response: %w", err))
@@ -357,14 +371,8 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		}
 	}
 
-	allowParallelToolCalls := req.ParallelToolCalls == nil || *req.ParallelToolCalls
-	var reporter ProgressReporter
-	if req.Stream {
-		reporter = ProgressReporterFromContext(ctx)
-	}
-	chatResp, parts, timeToFirstToken, err := b.decodeChatStream(responseBody, received, allowParallelToolCalls, req.ContextLimit, req.ProviderAttemptID, reporter)
-	if err != nil {
-		return nil, err
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	finishReason := chatResp.DoneReason
@@ -601,35 +609,15 @@ type responseRead struct {
 	elapsedNS int64
 }
 
-func (b *OllamaBackend) receiveResponse(body io.Reader, startedAt time.Time) ([]byte, []responseRead, error) {
-	limited := io.LimitReader(body, b.maxResponseBytes+1)
-	var raw bytes.Buffer
-	var received []responseRead
-	buffer := make([]byte, 32<<10)
-	for {
-		n, err := limited.Read(buffer)
-		if n > 0 {
-			raw.Write(buffer[:n])
-			received = append(received, responseRead{endOffset: int64(raw.Len()), elapsedNS: time.Since(startedAt).Nanoseconds()})
-		}
-		if errors.Is(err, io.EOF) {
-			return raw.Bytes(), received, nil
-		}
-		if err != nil {
-			return raw.Bytes(), received, err
-		}
-	}
-}
-
 func (b *OllamaBackend) decodeChatStream(
-	body []byte,
-	received []responseRead,
+	body io.Reader,
+	arrivalTime func(int64) *int64,
 	allowParallelToolCalls bool,
 	contextLimit *int32,
 	providerAttemptID string,
 	reporter ProgressReporter,
 ) (ollamaChatResponse, []*operatorv1.InferenceResponsePart, *int64, error) {
-	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder := json.NewDecoder(body)
 	parts := make([]*operatorv1.InferenceResponsePart, 0)
 	var terminal *ollamaChatResponse
 	var servedModel string
@@ -664,13 +652,7 @@ func (b *OllamaBackend) decodeChatStream(
 		}
 		if len(eventParts) > 0 {
 			if timeToFirstToken == nil {
-				for _, read := range received {
-					if read.endOffset >= decoder.InputOffset() {
-						duration := read.elapsedNS
-						timeToFirstToken = &duration
-						break
-					}
-				}
+				timeToFirstToken = arrivalTime(decoder.InputOffset())
 			}
 			if reporter != nil {
 				progressSequence++
