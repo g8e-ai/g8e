@@ -24,18 +24,18 @@ import (
 
 // OperatorRegistrationRequest is the inbound body for /api/pki/device-enroll (CSR-based enrollment).
 type OperatorRegistrationRequest struct {
-	CSR               string                 `json:"csr_pem"`
-	CLICSR            string                 `json:"cli_csr_pem,omitempty"`
-	SystemFingerprint string                 `json:"system_fingerprint"`
-	Hostname          string                 `json:"hostname"`
-	OS                string                 `json:"os"`
-	Arch              string                 `json:"arch"`
-	Username          string                 `json:"username"`
-	IPAddress         string                 `json:"ip_address,omitempty"`
-	LocalDir          string                 `json:"local_dir,omitempty"`
-	Account           string                 `json:"account,omitempty"`
-	Port              int                    `json:"port,omitempty"`
-	OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
+	CSR               string                  `json:"csr_pem"`
+	CLICSR            string                  `json:"cli_csr_pem,omitempty"`
+	SystemFingerprint string                  `json:"system_fingerprint"`
+	Hostname          string                  `json:"hostname"`
+	OS                string                  `json:"os"`
+	Arch              string                  `json:"arch"`
+	Username          string                  `json:"username"`
+	IPAddress         string                  `json:"ip_address,omitempty"`
+	LocalDir          string                  `json:"local_dir,omitempty"`
+	Account           string                  `json:"account,omitempty"`
+	Port              int                     `json:"port,omitempty"`
+	OperatorRoles     constants.OperatorRoles `json:"operator_roles,omitempty"`
 }
 
 // BootstrapRequest is the inbound body for /api/v1/auth/bootstrap.
@@ -116,7 +116,7 @@ type OperatorDocumentGo struct {
 	Claimed              bool                     `json:"claimed"`
 	OperatorType         constants.OperatorType   `json:"operator_type,omitempty"`
 	SystemFingerprint    string                   `json:"system_fingerprint,omitempty"`
-	OperatorRoles constants.OperatorRoles   `json:"operator_roles,omitempty"`
+	OperatorRoles        constants.OperatorRoles  `json:"operator_roles,omitempty"`
 	LocalDir             string                   `json:"local_dir,omitempty"`
 	Account              string                   `json:"account,omitempty"`
 	Port                 int                      `json:"port,omitempty"`

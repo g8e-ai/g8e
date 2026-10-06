@@ -51,7 +51,7 @@ func TestOperatorFingerprintOptions_ProvenanceIncludesRuntimePort(t *testing.T) 
 		LocalDir: "/var/lib/ollama/models",
 		Account:  "operator-user",
 		Port:     constants.Ports.OperatorHttp,
-		Role:     string(constants.OperatorRoleProvenance),
+		Roles:    constants.OperatorRoles{constants.OperatorRoleProvenance},
 	}, got)
 }
 
@@ -144,8 +144,8 @@ func TestServeOperatorOptions_Equality(t *testing.T) {
 	c := a
 	c.ExecutionVault = false
 
-	require.True(t, a == b, "structs with identical fields should be equal")
-	require.False(t, a == c, "structs differing in any field should not be equal")
+	require.Equal(t, a, b, "structs with identical fields should be equal")
+	require.NotEqual(t, a, c, "structs differing in any field should not be equal")
 }
 
 func TestServeOperatorOptions_PartialAssignment(t *testing.T) {
@@ -397,7 +397,7 @@ func TestServeOperatorOptions_Equality_DifferInEachField(t *testing.T) {
 		t.Run(f.name, func(t *testing.T) {
 			modified := base
 			f.mut(&modified)
-			require.False(t, base == modified,
+			require.NotEqual(t, base, modified,
 				"structs differing in %s should not be equal", f.name)
 		})
 	}
@@ -419,7 +419,7 @@ func TestServeOperatorOptions_Equality_AllFieldsEqual(t *testing.T) {
 		HeartbeatInterval: 45 * time.Second,
 	}
 	b := a
-	require.True(t, a == b, "structs with all fields identical should be equal")
+	require.Equal(t, a, b, "structs with all fields identical should be equal")
 }
 
 // ---------------------------------------------------------------------------
@@ -687,9 +687,9 @@ func TestClassifyConfigLoadError_NilError_ReturnsConfigError(t *testing.T) {
 }
 
 func TestOperatorInstanceIDSeparatesSameHostAndRole(t *testing.T) {
-	first := operatorInstanceID("host", constants.OperatorRoleData, "/fleet/op-00001")
-	assert.Equal(t, first, operatorInstanceID("host", constants.OperatorRoleData, "/fleet/./op-00001"))
-	assert.NotEqual(t, first, operatorInstanceID("host", constants.OperatorRoleData, "/fleet/op-00002"))
-	assert.NotEqual(t, first, operatorInstanceID("host", constants.OperatorRoleInference, "/fleet/op-00001"))
-	assert.LessOrEqual(t, len(operatorInstanceID(strings.Repeat("h", 253), constants.OperatorRoleProvenance, "/fleet")), constants.PlatformEnrollmentMaxInstanceIDBytes)
+	first := operatorInstanceID("host", constants.OperatorRoles{constants.OperatorRoleData}, "/fleet/op-00001")
+	assert.Equal(t, first, operatorInstanceID("host", constants.OperatorRoles{constants.OperatorRoleData}, "/fleet/./op-00001"))
+	assert.NotEqual(t, first, operatorInstanceID("host", constants.OperatorRoles{constants.OperatorRoleData}, "/fleet/op-00002"))
+	assert.NotEqual(t, first, operatorInstanceID("host", constants.OperatorRoles{constants.OperatorRoleInference}, "/fleet/op-00001"))
+	assert.LessOrEqual(t, len(operatorInstanceID(strings.Repeat("h", 253), constants.OperatorRoles{constants.OperatorRoleProvenance}, "/fleet")), constants.PlatformEnrollmentMaxInstanceIDBytes)
 }

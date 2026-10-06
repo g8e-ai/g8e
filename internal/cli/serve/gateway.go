@@ -35,12 +35,13 @@ import (
 
 // GatewayConfig holds configuration for starting the gateway in gateway mode.
 type GatewayConfig struct {
- OperatorRoles constants.OperatorRoles
- InferenceOllamaEndpoint string
- InferenceKeepAlive string
- ProviderBoundaryObserverID string
- ProvenanceOperatorID string
- ProvenanceOperatorModelStorageRoot string
+	WorkingDir                         string `json:"working_dir,omitempty"`
+	OperatorRoles                      constants.OperatorRoles
+	InferenceOllamaEndpoint            string
+	InferenceKeepAlive                 string
+	ProviderBoundaryObserverID         string
+	ProvenanceOperatorID               string
+	ProvenanceOperatorModelStorageRoot string
 
 	Posture             config.GatewayPosture `json:"posture"`
 	HTTPPort            int                   `json:"http_port"`
@@ -90,7 +91,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 
 	// Construct RuntimeFileService early so all .g8e/ I/O goes through it
 	initLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	fileSvc, err := fs.NewRuntimeFileService("", initLogger)
+	fileSvc, err := fs.NewRuntimeFileService(cfg.WorkingDir, initLogger)
 	if err != nil {
 		return fmt.Errorf("gateway: create file service: %w", err)
 	}
@@ -129,38 +130,39 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		"build", vi.BuildID)
 
 	gatewayCfg, err := config.LoadGateway(config.GatewayOptions{
- OperatorRoles: cfg.OperatorRoles,
- InferenceOllamaEndpoint: cfg.InferenceOllamaEndpoint,
- InferenceKeepAlive: cfg.InferenceKeepAlive,
- ProviderBoundaryObserverID: cfg.ProviderBoundaryObserverID,
- ProvenanceOperatorID: cfg.ProvenanceOperatorID,
- ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperatorModelStorageRoot,
-		Posture:             cfg.Posture,
-		HTTPPort:            cfg.HTTPPort,
-		HTTPSPort:           cfg.HTTPSPort,
-		DataDir:             cfg.DataDir,
-		PKIDir:              cfg.PKIDir,
-		SecretsDir:          cfg.SecretsDir,
-		VaultDir:            cfg.VaultDir,
-		VaultKeyPath:        cfg.VaultKeyPath,
-		PasskeyRpID:         cfg.PasskeyRpID,
-		PasskeyRpName:       cfg.PasskeyRpName,
-		PasskeyRpOrigins:    cfg.PasskeyRpOrigins,
-		RateLimitRPS:        cfg.RateLimitRPS,
-		RateLimitBurst:      cfg.RateLimitBurst,
-		CertMode:            cfg.CertIdentityMode,
-		NetworkIdentityFile: cfg.NetworkIdentityFile,
-		MCPDownstreamURL:    cfg.MCPDownstreamURL, // empty by default — no downstream proxy
-		MCPDownstreamCmd:    cfg.MCPDownstreamCmd,
-		MCPDownstreamArgs:   cfg.MCPDownstreamArgs,
-		A2ADownstreamURL:    cfg.A2ADownstreamURL, // empty by default — no downstream proxy
-		EnsembleUpstreamURL: cfg.EnsembleUpstreamURL,
-		PublicBaseURL:       cfg.PublicBaseURL,
-		AllowedOrigins:      cfg.AllowedOrigins,
-		ConsensusID:         cfg.ConsensusID,
-		ConsensusURL:        cfg.ConsensusURL,
-		DoctrineDir:         cfg.DoctrineDir,
-		AllowTestPortZero:   false,
+		WorkDir:                            cfg.WorkingDir,
+		OperatorRoles:                      cfg.OperatorRoles,
+		InferenceOllamaEndpoint:            cfg.InferenceOllamaEndpoint,
+		InferenceKeepAlive:                 cfg.InferenceKeepAlive,
+		ProviderBoundaryObserverID:         cfg.ProviderBoundaryObserverID,
+		ProvenanceOperatorID:               cfg.ProvenanceOperatorID,
+		ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperatorModelStorageRoot,
+		Posture:                            cfg.Posture,
+		HTTPPort:                           cfg.HTTPPort,
+		HTTPSPort:                          cfg.HTTPSPort,
+		DataDir:                            cfg.DataDir,
+		PKIDir:                             cfg.PKIDir,
+		SecretsDir:                         cfg.SecretsDir,
+		VaultDir:                           cfg.VaultDir,
+		VaultKeyPath:                       cfg.VaultKeyPath,
+		PasskeyRpID:                        cfg.PasskeyRpID,
+		PasskeyRpName:                      cfg.PasskeyRpName,
+		PasskeyRpOrigins:                   cfg.PasskeyRpOrigins,
+		RateLimitRPS:                       cfg.RateLimitRPS,
+		RateLimitBurst:                     cfg.RateLimitBurst,
+		CertMode:                           cfg.CertIdentityMode,
+		NetworkIdentityFile:                cfg.NetworkIdentityFile,
+		MCPDownstreamURL:                   cfg.MCPDownstreamURL, // empty by default — no downstream proxy
+		MCPDownstreamCmd:                   cfg.MCPDownstreamCmd,
+		MCPDownstreamArgs:                  cfg.MCPDownstreamArgs,
+		A2ADownstreamURL:                   cfg.A2ADownstreamURL, // empty by default — no downstream proxy
+		EnsembleUpstreamURL:                cfg.EnsembleUpstreamURL,
+		PublicBaseURL:                      cfg.PublicBaseURL,
+		AllowedOrigins:                     cfg.AllowedOrigins,
+		ConsensusID:                        cfg.ConsensusID,
+		ConsensusURL:                       cfg.ConsensusURL,
+		DoctrineDir:                        cfg.DoctrineDir,
+		AllowTestPortZero:                  false,
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: load configuration: %w", err)

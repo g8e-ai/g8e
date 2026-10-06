@@ -1200,3 +1200,10 @@ class WorkflowType(CaseInsensitiveStrEnum):
     G8E_NOT_BOUND: str
     INVESTIGATION: str
     TRIAGE: str
+
+class OperatorRole(CaseInsensitiveStrEnum):
+    EMBEDDED = "embedded"
+    DATA = "data"
+    INFERENCE = "inference"
+    PROVENANCE = "provenance"
+    OBSERVER = "observer"

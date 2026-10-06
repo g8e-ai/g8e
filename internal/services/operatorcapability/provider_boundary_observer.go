@@ -29,10 +29,10 @@ type ProviderBoundaryObserverStatus struct {
 func ActiveProviderBoundaryObservers(operators []models.OperatorDocumentGo) []ProviderBoundaryObserverStatus {
 	matches := make([]ProviderBoundaryObserverStatus, 0)
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+		if op.Status != constants.OperatorStatusActive || (op.OperatorType != constants.OperatorTypeRemote && (op.OperatorType != constants.OperatorTypeEmbedded || op.RuntimeConfig == nil)) {
 			continue
 		}
-		if op.RuntimeConfig == nil || !op.RuntimeConfig.ProviderBoundaryObserverEnabled {
+		if op.RuntimeConfig == nil || !GetOperatorRoles(op).Has(constants.OperatorRoleObserver) {
 			continue
 		}
 		if op.OperatorSessionID == "" {

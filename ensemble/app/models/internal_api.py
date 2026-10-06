@@ -27,7 +27,7 @@ from g8e.operator.v1.operator_pb2 import (
     InferenceDispatchResponse as _G8eInferenceDispatchResponse,
 )
 
-from app.constants import LLMProvider
+from app.constants import LLMProvider, OperatorType
 from app.models.attachments import AttachmentMetadata
 from app.models.base import ConfigDict, Field, G8eBaseModel, model_validator
 from app.models.cases import CaseModel
@@ -267,7 +267,7 @@ class OperatorSlotCreationRequest(G8eBaseModel):
         ..., description="Request context with session/user/organization identity"
     )
     slot_number: int = Field(..., description="Slot number")
-    operator_type: str = Field(..., description="Operator type (EMBEDDED, REMOTE)")
+    operator_type: OperatorType = Field(..., description="Operator type (EMBEDDED, REMOTE)")
     name_prefix: str = Field(default="operator", description="Name prefix")
 
 
@@ -297,7 +297,7 @@ class OperatorSlotClaimRequest(G8eBaseModel):
     operator_session_id: str = Field(..., description="Operator session ID")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     bound_cli_session_id: str | None = Field(default=None, description="Bound CLI session ID")
-    operator_type: str = Field(..., description="Operator type")
+    operator_type: OperatorType = Field(..., description="Operator type")
 
 
 class OperatorSlotClaimResponse(G8eBaseModel):
@@ -444,7 +444,7 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     operator_id: str | None = Field(
         default=None, description="Operator ID (optional if creating on-demand)"
     )
-    operator_type: str = Field(default="REMOTE", description="Operator type")
+    operator_type: OperatorType = Field(default=OperatorType.REMOTE, description="Operator type")
     device_link_token: str | None = Field(
         default=None, description="Device link token for on-demand slot creation"
     )

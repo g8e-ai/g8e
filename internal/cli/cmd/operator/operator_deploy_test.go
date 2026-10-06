@@ -244,9 +244,8 @@ func TestOperatorDeployRejectsUnsafeBatchesAndRoles(t *testing.T) {
 	for _, flags := range [][]string{
 		{"--count", "5001"}, {"--count", "2", "--start-index", "5000"},
 		{"--start-index", "0"}, {"--parallel", "0"}, {"--parallel", "5"},
-		{"--role", "unknown"}, {"--role", "data", "--inference-enabled"},
-		{"--role", "observer", "--provider-boundary-observer-enabled=false"},
-		{"--inference-enabled", "--provenance-operator-enabled"},
+		{"--roles", "unknown"},
+
 		{"--local"}, {"--hosts", "a,,b"}, {"--hosts", "a,a"}, {"--hosts", "-oProxyCommand=bad"},
 	} {
 		_, err := runOperatorDeploy(t, &cmdtest.MockAPIClient{}, append([]string{"--hosts", "host"}, flags...)...)
@@ -260,7 +259,7 @@ func TestOperatorDeployRoleFlagsReachWorkerWithoutShellExpansion(t *testing.T) {
 	payload := "http://provider:11434/path?q='$(touch INJECTED)'"
 	client := &cmdtest.MockAPIClient{}
 	out, err := runOperatorDeploy(t, client, "--hosts", "host", "--dest-dir", root,
-		"--role", "inference", "--inference-ollama-endpoint", payload, "--background", "--endpoint", "localhost")
+		"--roles", "inference", "--inference-ollama-endpoint", payload, "--background", "--endpoint", "localhost")
 	require.NoError(t, err, out)
 	require.Eventually(t, func() bool {
 		data, err := os.ReadFile(filepath.Join(root, "args.txt"))
@@ -268,9 +267,9 @@ func TestOperatorDeployRoleFlagsReachWorkerWithoutShellExpansion(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 	data, err := os.ReadFile(filepath.Join(root, "args.txt"))
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "--inference-enabled=true\n")
+	assert.Contains(t, string(data), "--roles=inference\n")
 	assert.Contains(t, string(data), "--inference-ollama-endpoint="+payload+"\n")
-	assert.Contains(t, string(data), "--provenance-operator-enabled=false\n")
+	assert.NotContains(t, string(data), "--provenance-operator-enabled=true\n")
 	assert.NoFileExists(t, filepath.Join(root, "INJECTED"))
 }
 

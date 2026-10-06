@@ -92,6 +92,7 @@ func newInferenceDispatchService(t *testing.T, signerStore governance.SignerStor
 		governance.NewL1Doctrine(),
 		nil,
 		signerStore,
+		nil,
 	)
 }
 

@@ -28,6 +28,7 @@ from app.constants import (
     OperatorHistoryEventType,
     OperatorStatus,
     OperatorType,
+    OperatorRole,
     VersionStability,
 )
 from app.models.base import (
@@ -127,6 +128,25 @@ class OperatorHistoryEntry(G8eBaseModel):
         return v
 
 
+class OperatorRuntimeConfig(G8eBaseModel):
+    """Typed runtime configuration reported by remote and embedded operators."""
+    roles: list[OperatorRole] = Field(default_factory=list)
+    cloud_mode: bool = False
+    cloud_provider: str | None = None
+    local_storage_enabled: bool = False
+    no_git: bool = False
+    log_level: str = "info"
+    http_port: int = 0
+    local_dir: str | None = None
+    account: str | None = None
+    inference_enabled: bool = False
+    inference_ollama_endpoint: str | None = None
+    provider_boundary_observer_enabled: bool = False
+    provenance_operator_enabled: bool = False
+    provenance_operator_model_storage_root: str | None = None
+    platform: str | None = None
+
+
 class OperatorDocument(G8eIdentifiableModel):
     """g8ee read-side projection of the Gateway OperatorDocument.
 
@@ -195,15 +215,15 @@ class OperatorDocument(G8eIdentifiableModel):
     system_fingerprint: str | None = Field(
         default=None, description="System fingerprint differentiating operator instance"
     )
-    operator_role: str | None = Field(
-        default=None, description="Operational role (inference, provenance, observer, data)"
+    operator_roles: list[OperatorRole] = Field(
+        default_factory=list, description="Complete enabled Operator role set"
     )
     local_dir: str | None = Field(default=None, description="Local runtime or working directory")
     account: str | None = Field(
         default=None, description="OS user account that launched the operator"
     )
     port: int | None = Field(default=None, description="Port configured for operator")
-    runtime_config: dict[str, Any] | None = Field(
+    runtime_config: OperatorRuntimeConfig | None = Field(
         default=None, description="Active runtime configuration"
     )
 

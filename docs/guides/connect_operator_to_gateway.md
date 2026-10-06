@@ -248,7 +248,7 @@ Then deploy a small batch. Here the owner CLI talks to its local Gateway while c
   --docker-context livingroom-node \
   --docker-image g8e-operator:local \
   --dest-dir /operators/livingroom-data \
-  --count 10 --role data \
+  --count 10 --roles data \
   --endpoint localhost --operator-endpoint 192.168.1.2 \
   --background --approve
 ```
@@ -279,22 +279,22 @@ Deploy up to 5000 Operators per host. Use `--local` to run on this system withou
 ```bash
 ./g8e operator deploy --local --endpoint localhost \
   --dest-dir .local.local/tmp/operator-fleet --count 10 \
-  --role data --background --approve
+  --roles data --background --approve
 
 # Add another 100 without replacing the first 10.
 ./g8e operator deploy --local --endpoint localhost \
   --dest-dir .local.local/tmp/operator-fleet --start-index 11 --count 100 \
-  --role data --background --approve
+  --roles data --background --approve
 
 # A separate provenance batch; role flags are forwarded to operator start.
 ./g8e operator deploy --hosts storage-host --endpoint gateway-host \
-  --dest-dir /opt/provenance --count 20 --role provenance \
+  --dest-dir /opt/provenance --count 20 --roles provenance \
   --model-storage-root /srv/models --background --approve
 ```
 
 `--count N` creates `op-00001` through `op-NNNNN`. A single Operator uses the destination itself, unless `--start-index` is explicitly supplied. The selected numbered range must fit within 1..5000. Repeating the same range replaces only those workers, retaining their enrollment credentials. Use different destinations or non-overlapping ranges for different roles.
 
-`--role` accepts `data` (default), `provenance`, `inference`, or `observer`. The corresponding `operator start` enable flags and settings are also supported, including `--inference-ollama-endpoint`, `--inference-keep-alive`, `--model-storage-root`, and the provenance/observer ID flags. Conflicting roles are rejected. Provenance and observer IDs default to stable values unique to the deployment host and directory. Explicit flag values may include `{host}`, `{name}` (directory basename), and `{dir}` (absolute working directory), for example `--provenance-operator-id '{host}-{name}'`.
+`--roles` accepts `data` (default), `provenance`, `inference`, or `observer`. The corresponding `operator start` enable flags and settings are also supported, including `--inference-ollama-endpoint`, `--inference-keep-alive`, `--model-storage-root`, and the provenance/observer ID flags. Roles are additive; one process can enable any combination of these capabilities. Provenance and observer IDs default to stable values unique to the deployment host and directory. Explicit flag values may include `{host}`, `{name}` (directory basename), and `{dir}` (absolute working directory), for example `--provenance-operator-id '{host}-{name}'`.
 
 `--parallel` controls concurrent deployments (default 4, range 1..4). With `--approve`, each worker reads its own request ID from `start.log`, approves that exact request as the authenticated owner, and waits for enrollment completion before starting another. This respects the Gateway's four-live-request limit. Transient enrollment failures receive up to three attempts. Other deployments share that Gateway quota; use fewer parallel workers when sharing capacity. Without `--approve`, deployment only launches workers; owner approval and the Gateway's pending-request limit still apply.
 

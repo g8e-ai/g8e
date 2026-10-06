@@ -153,7 +153,7 @@ func setupObserveProducerEndpointEnv(t *testing.T) *observeProducerEndpointEnv {
 			Responder: infra.Responder,
 		},
 		DispatchControllerDeps: DispatchControllerDeps{
-			DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(infra.Cfg.Gateway.Posture), governance.NewL1Doctrine(), nil, infra.SignerStore),
+			DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(infra.Cfg.Gateway.Posture), governance.NewL1Doctrine(), nil, infra.SignerStore, nil),
 			Responder:   infra.Responder,
 			Logger:      infra.Logger,
 		},

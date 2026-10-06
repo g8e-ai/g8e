@@ -193,7 +193,7 @@ func selectProviderBoundaryObserverForGateway(operators []models.OperatorDocumen
 	inference := make([]models.OperatorDocumentGo, 0, len(operators))
 	for _, op := range operators {
 		if op.Status == constants.OperatorStatusActive &&
-			op.OperatorType == constants.OperatorTypeRemote &&
+			(op.OperatorType == constants.OperatorTypeRemote || op.OperatorType == constants.OperatorTypeEmbedded) &&
 			op.RuntimeConfig != nil &&
 			op.RuntimeConfig.InferenceEnabled &&
 			op.SystemFingerprint != "" {

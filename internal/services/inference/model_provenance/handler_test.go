@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -25,7 +26,7 @@ type stubAttestationPublisher struct {
 	completions []*evalv1.ModelProvenanceObservationCompleted
 }
 
-func (s *stubAttestationPublisher) PublishModelProvenanceObservationCompleted(_ context.Context, _ string, completion *evalv1.ModelProvenanceObservationCompleted) error {
+func (s *stubAttestationPublisher) PublishModelProvenanceObservationCompleted(_ context.Context, _ *commonv1.GovernanceEnvelope, completion *evalv1.ModelProvenanceObservationCompleted) error {
 	s.completions = append(s.completions, completion)
 	return nil
 }
@@ -64,7 +65,7 @@ func TestHandler_BeginAndFinalize(t *testing.T) {
 	}
 	beginPayload, err := proto.Marshal(begin)
 	require.NoError(t, err)
-	providerAttemptID, err := handler.HandleCommand(ctx, "msg-begin", beginPayload)
+	providerAttemptID, err := handler.HandleCommand(ctx, &commonv1.GovernanceEnvelope{Id: "msg-begin"}, beginPayload)
 	require.NoError(t, err)
 	assert.Equal(t, "attempt-1", providerAttemptID)
 
@@ -78,7 +79,7 @@ func TestHandler_BeginAndFinalize(t *testing.T) {
 	}
 	finalizePayload, err := proto.Marshal(finalize)
 	require.NoError(t, err)
-	attestationDigest, err := handler.HandleCommand(ctx, "msg-finalize", finalizePayload)
+	attestationDigest, err := handler.HandleCommand(ctx, &commonv1.GovernanceEnvelope{Id: "msg-finalize"}, finalizePayload)
 	require.NoError(t, err)
 	assert.NotEmpty(t, attestationDigest)
 	require.Len(t, publisher.completions, 1)
@@ -100,7 +101,7 @@ func TestHandler_UnsupportedPhase(t *testing.T) {
 	command := &evalv1.ModelProvenanceObservationCommand{ProviderAttemptId: "attempt-1"}
 	payload, err := proto.Marshal(command)
 	require.NoError(t, err)
-	_, err = handler.HandleCommand(ctx, "msg-1", payload)
+	_, err = handler.HandleCommand(ctx, &commonv1.GovernanceEnvelope{Id: "msg-1"}, payload)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported phase")
 }

@@ -235,7 +235,7 @@ func TestExportReceipts(t *testing.T) {
 
 func TestDiscoverOperatorKeepsIdentityPaired(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"success":true,"operators":[{"id":"embedded-operator","operator_session_id":"embedded-session","status":"active","operator_type":"embedded"},{"id":"data-worker","operator_session_id":"data-session","status":"active","operator_type":"remote","operator_role":"data"}]}`))
+		w.Write([]byte(`{"success":true,"operators":[{"id":"embedded-operator","operator_session_id":"embedded-session","status":"active","operator_type":"embedded"},{"id":"data-worker","operator_session_id":"data-session","status":"active","operator_type":"remote","operator_roles":["data"]}]}`))
 	}))
 	t.Cleanup(server.Close)
 	for _, tt := range []struct{ name, id, session, wantID, wantSession string }{
@@ -276,8 +276,8 @@ func TestDiscoverOperatorRejectsUnresolvedTargets(t *testing.T) {
 		{"registry unauthorized", `{}`, http.StatusUnauthorized, constants.ErrHTTPStatusError},
 		{"malformed registry", `broken`, http.StatusOK, constants.ErrInvalidJSONResponse},
 		{"incomplete registry", `{"success":false}`, http.StatusOK, constants.ErrInvalidJSONResponse},
-		{"ambiguous data workers", `{"success":true,"operators":[{"id":"one","operator_session_id":"s1","status":"active","operator_type":"remote","operator_role":"data"},{"id":"two","operator_session_id":"s2","status":"active","operator_type":"remote","operator_role":"data"}]}`, http.StatusOK, constants.ErrEvaluationTargetAmbiguous},
-		{"inactive worker", `{"success":true,"operators":[{"id":"one","operator_session_id":"s1","status":"inactive","operator_type":"remote","operator_role":"data"}]}`, http.StatusOK, constants.ErrEvaluationTargetUnavailable},
+		{"ambiguous data workers", `{"success":true,"operators":[{"id":"one","operator_session_id":"s1","status":"active","operator_type":"remote","operator_roles":["data"]},{"id":"two","operator_session_id":"s2","status":"active","operator_type":"remote","operator_roles":["data"]}]}`, http.StatusOK, constants.ErrEvaluationTargetAmbiguous},
+		{"inactive worker", `{"success":true,"operators":[{"id":"one","operator_session_id":"s1","status":"inactive","operator_type":"remote","operator_roles":["data"]}]}`, http.StatusOK, constants.ErrEvaluationTargetUnavailable},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tt.status); w.Write([]byte(tt.body)) }))

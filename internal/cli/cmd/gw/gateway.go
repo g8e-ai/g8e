@@ -52,12 +52,12 @@ func getBinaryName() string {
 // It is populated by addGatewayFlags and converted to serve.GatewayConfig
 // via gatewayFlagsToServeConfig.
 type GatewayFlags struct {
- OperatorRoles constants.OperatorRoles
- InferenceOllamaEndpoint string
- InferenceKeepAlive string
- ProviderBoundaryObserverID string
- ProvenanceOperatorID string
- ProvenanceOperatorModelStorageRoot string
+	OperatorRoles                      constants.OperatorRoles
+	InferenceOllamaEndpoint            string
+	InferenceKeepAlive                 string
+	ProviderBoundaryObserverID         string
+	ProvenanceOperatorID               string
+	ProvenanceOperatorModelStorageRoot string
 
 	Posture             string
 	HTTPPort            int
@@ -98,12 +98,12 @@ type GatewayFlags struct {
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
 // binding them to the provided GatewayFlags struct.
 func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
- cmd.Flags().Var(&f.OperatorRoles, "roles", "Comma-separated embedded operator roles: data,inference,provenance,observer (repeatable; default: embedded,data)")
- cmd.Flags().StringVar(&f.InferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Approved Ollama endpoint for embedded inference")
- cmd.Flags().StringVar(&f.InferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration")
- cmd.Flags().StringVar(&f.ProviderBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity")
- cmd.Flags().StringVar(&f.ProvenanceOperatorID, "provenance-operator-id", "", "Stable provenance identity")
- cmd.Flags().StringVar(&f.ProvenanceOperatorModelStorageRoot, "model-storage-root", "", "Root directory containing model weight blobs")
+	cmd.Flags().Var(&f.OperatorRoles, "roles", "Comma-separated embedded operator roles: data,inference,provenance,observer (repeatable; default: embedded,data)")
+	cmd.Flags().StringVar(&f.InferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Approved Ollama endpoint for embedded inference")
+	cmd.Flags().StringVar(&f.InferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration")
+	cmd.Flags().StringVar(&f.ProviderBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity")
+	cmd.Flags().StringVar(&f.ProvenanceOperatorID, "provenance-operator-id", "", "Stable provenance identity")
+	cmd.Flags().StringVar(&f.ProvenanceOperatorModelStorageRoot, "model-storage-root", "", "Root directory containing model weight blobs")
 
 	cmd.Flags().StringVar(&f.Posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced)")
 	cmd.Flags().IntVar(&f.HTTPPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
@@ -188,45 +188,45 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 // gateway config struct.
 func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	return serve.GatewayConfig{
- OperatorRoles: f.OperatorRoles,
- InferenceOllamaEndpoint: f.InferenceOllamaEndpoint,
- InferenceKeepAlive: f.InferenceKeepAlive,
- ProviderBoundaryObserverID: f.ProviderBoundaryObserverID,
- ProvenanceOperatorID: f.ProvenanceOperatorID,
- ProvenanceOperatorModelStorageRoot: f.ProvenanceOperatorModelStorageRoot,
-		Posture:                           g8econfig.GatewayPosture(f.Posture),
-		HTTPPort:                          f.HTTPPort,
-		HTTPSPort:                         f.HTTPSPort,
-		DataDir:                           f.DataDir,
-		PKIDir:                            f.PKIDir,
-		SecretsDir:                        f.SecretsDir,
-		VaultDir:                          f.VaultDir,
-		VaultKeyPath:                      f.VaultKeyPath,
-		PasskeyRpID:                       f.PasskeyRpID,
-		PasskeyRpName:                     f.PasskeyRpName,
-		PasskeyRpOrigins:                  f.PasskeyRpOrigins,
-		RateLimitRPS:                      f.RateLimitRPS,
-		RateLimitBurst:                    f.RateLimitBurst,
-		LogLevel:                          f.LogLevel,
-		CertIdentityMode:                  f.CertIdentityMode,
-		ConsensusID:                       f.ConsensusID,
-		ConsensusURL:                      f.ConsensusURL,
-		ConsensusBootstrap:                f.ConsensusBootstrap,
-		MCPDownstreamURL:                  f.MCPDownstreamURL,
-		MCPDownstreamCmd:                  f.MCPDownstreamCmd,
-		MCPDownstreamArgs:                 parseDownstreamArgs(f.MCPDownstreamArgs),
-		A2ADownstreamURL:                  f.A2ADownstreamURL,
-		EnsembleUpstreamURL:               f.EnsembleUpstreamURL,
-		PublicBaseURL:                     f.PublicBaseURL,
-		AllowedOrigins:                    f.AllowedOrigins,
-		DoctrineDir:                       f.DoctrineDir,
-		PublicSpectatorEnabled:            f.PublicSpectatorEnabled,
-		PublicSpectatorPrivateAddr:        f.PublicSpectatorPrivateAddr,
-		PublicSpectatorPublicAddr:         f.PublicSpectatorPublicAddr,
-		PublicSpectatorAllowContainerBind: f.PublicSpectatorAllowContainerBind,
-		EvalExplorerAddr:                  f.EvalExplorerAddr,
-		EvalExplorerRoot:                  f.EvalExplorerRoot,
-		PublicSpectatorTrustedProxyCIDRs:  f.PublicSpectatorTrustedProxyCIDRs,
+		OperatorRoles:                      f.OperatorRoles,
+		InferenceOllamaEndpoint:            f.InferenceOllamaEndpoint,
+		InferenceKeepAlive:                 f.InferenceKeepAlive,
+		ProviderBoundaryObserverID:         f.ProviderBoundaryObserverID,
+		ProvenanceOperatorID:               f.ProvenanceOperatorID,
+		ProvenanceOperatorModelStorageRoot: f.ProvenanceOperatorModelStorageRoot,
+		Posture:                            g8econfig.GatewayPosture(f.Posture),
+		HTTPPort:                           f.HTTPPort,
+		HTTPSPort:                          f.HTTPSPort,
+		DataDir:                            f.DataDir,
+		PKIDir:                             f.PKIDir,
+		SecretsDir:                         f.SecretsDir,
+		VaultDir:                           f.VaultDir,
+		VaultKeyPath:                       f.VaultKeyPath,
+		PasskeyRpID:                        f.PasskeyRpID,
+		PasskeyRpName:                      f.PasskeyRpName,
+		PasskeyRpOrigins:                   f.PasskeyRpOrigins,
+		RateLimitRPS:                       f.RateLimitRPS,
+		RateLimitBurst:                     f.RateLimitBurst,
+		LogLevel:                           f.LogLevel,
+		CertIdentityMode:                   f.CertIdentityMode,
+		ConsensusID:                        f.ConsensusID,
+		ConsensusURL:                       f.ConsensusURL,
+		ConsensusBootstrap:                 f.ConsensusBootstrap,
+		MCPDownstreamURL:                   f.MCPDownstreamURL,
+		MCPDownstreamCmd:                   f.MCPDownstreamCmd,
+		MCPDownstreamArgs:                  parseDownstreamArgs(f.MCPDownstreamArgs),
+		A2ADownstreamURL:                   f.A2ADownstreamURL,
+		EnsembleUpstreamURL:                f.EnsembleUpstreamURL,
+		PublicBaseURL:                      f.PublicBaseURL,
+		AllowedOrigins:                     f.AllowedOrigins,
+		DoctrineDir:                        f.DoctrineDir,
+		PublicSpectatorEnabled:             f.PublicSpectatorEnabled,
+		PublicSpectatorPrivateAddr:         f.PublicSpectatorPrivateAddr,
+		PublicSpectatorPublicAddr:          f.PublicSpectatorPublicAddr,
+		PublicSpectatorAllowContainerBind:  f.PublicSpectatorAllowContainerBind,
+		EvalExplorerAddr:                   f.EvalExplorerAddr,
+		EvalExplorerRoot:                   f.EvalExplorerRoot,
+		PublicSpectatorTrustedProxyCIDRs:   f.PublicSpectatorTrustedProxyCIDRs,
 	}
 }
 
@@ -836,7 +836,7 @@ func isOperatorConnected(op models.OperatorDocumentGo) bool {
 }
 
 func operatorRoleDisplay(op models.OperatorDocumentGo) string {
- return operatorcapability.GetOperatorRoles(op).String()
+	return operatorcapability.GetOperatorRoles(op).String()
 }
 
 func operatorHostnameDisplay(op models.OperatorDocumentGo) string {

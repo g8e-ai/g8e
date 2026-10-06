@@ -287,7 +287,7 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 		Operators: []models.OperatorDocumentGo{
 			{
 				ID:                "g8e-model-provenance-operator",
-				OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleProvenance},
+				OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleProvenance},
 				OperatorType:      constants.OperatorTypeRemote,
 				CurrentHostname:   "beepboop",
 				OperatorSessionID: "sess-prov-1",
@@ -295,7 +295,7 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 			},
 			{
 				ID:                "g8e-provider-boundary-observer",
-				OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleObserver},
+				OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleObserver},
 				OperatorType:      constants.OperatorTypeRemote,
 				CurrentHostname:   "beepboop",
 				OperatorSessionID: "sess-obs-1",
@@ -303,17 +303,17 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 			},
 			{
 				ID:                "g8e-inference-operator",
-				OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleInference},
+				OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleInference},
 				OperatorType:      constants.OperatorTypeRemote,
 				CurrentHostname:   "beepboop",
 				OperatorSessionID: "sess-inf-1",
 				Status:            constants.OperatorStatusActive,
 			},
 			{
-				ID:           "old-stopped-op",
+				ID:            "old-stopped-op",
 				OperatorRoles: constants.OperatorRoles{constants.OperatorRoleData},
-				OperatorType: constants.OperatorTypeRemote,
-				Status:       constants.OperatorStatusStopped,
+				OperatorType:  constants.OperatorTypeRemote,
+				Status:        constants.OperatorStatusStopped,
 			},
 		},
 	})

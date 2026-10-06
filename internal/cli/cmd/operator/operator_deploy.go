@@ -129,7 +129,6 @@ func operatorDeployCmdWithConfig(
 	var approve bool
 	var local bool
 	var startIndex int
-	var role string
 	var parallel int
 	var operatorEndpoint string
 	var dockerContext string
@@ -148,8 +147,8 @@ without replacing earlier Operators. An explicit --start-index always uses numbe
 The binary is installed once per host and hard-linked into each directory.
 --parallel bounds concurrent deployments (default 4, maximum 4).
 
---role selects data (default), provenance, inference, or observer. Role-specific settings
-use the same flags as operator start. Use separate batches for different roles.
+--roles selects any combination of data (default), provenance, inference, and observer.
+Capability flags and role-specific settings use the same flags as operator start.
 Role IDs default to unique, stable values per host/directory. Flag values support
 {name} (directory basename), {dir} (absolute directory), and {host} substitutions.
 --background starts workers; --endpoint or --operator-endpoint is required.
@@ -180,7 +179,7 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 				return err
 			}
 
-			startArgs, err := operatorDeployStartArgs(cmd, role)
+			startArgs, err := operatorDeployStartArgs(cmd)
 			if err != nil {
 				return err
 			}
@@ -272,7 +271,6 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 	cmd.MarkFlagsMutuallyExclusive("dest-dir", "remote-dir")
 	cmd.Flags().BoolVar(&local, "local", false, "Deploy on this system without SSH (requires --dest-dir)")
 	cmd.Flags().IntVar(&startIndex, "start-index", 1, "First numbered operator directory (1..5000)")
-	cmd.Flags().StringVar(&role, "role", "", "Operator role: data, provenance, inference, observer (default data)")
 	for _, name := range operatorDeployForwardFlags {
 		cmd.Flags().AddFlag(start.Flags().Lookup(name))
 	}
@@ -682,44 +680,19 @@ func (s deploySSH) awaitSessionID(ctx context.Context, dir string) (string, erro
 
 // Reuse start's flag definitions so deploy and start cannot drift in types/defaults.
 var operatorDeployForwardFlags = []string{
-	"inference-enabled", "inference-ollama-endpoint", "inference-keep-alive",
+	"roles", "inference-enabled", "inference-ollama-endpoint", "inference-keep-alive",
 	"provider-boundary-observer-enabled", "provider-boundary-observer-id",
 	"provenance-operator-enabled", "provenance-operator-id", "model-storage-root",
 	"heartbeat-interval", "no-git", "execution-vault", "log", "trust-bundle",
 }
 
-func operatorDeployStartArgs(cmd *cobra.Command, role string) ([]string, error) {
-	roleFlags := map[string]string{
-		"inference": "inference-enabled", "provenance": "provenance-operator-enabled",
-		"observer": "provider-boundary-observer-enabled",
-	}
-	if role != "" && role != "data" && roleFlags[role] == "" {
-		return nil, fmt.Errorf("%w: unknown role %q", constants.ErrMissingRequiredField, role)
-	}
-	enabled := 0
+func operatorDeployStartArgs(cmd *cobra.Command) ([]string, error) {
 	var args []string
 	for _, name := range operatorDeployForwardFlags {
 		flag := cmd.Flags().Lookup(name)
-		value := flag.Value.String()
-		isRole := name == "inference-enabled" || name == "provenance-operator-enabled" || name == "provider-boundary-observer-enabled"
-		if isRole {
-			if role != "" {
-				expected := name == roleFlags[role]
-				if flag.Changed && (value == "true") != expected {
-					return nil, fmt.Errorf("%w: --role conflicts with --%s", constants.ErrMissingRequiredField, name)
-				}
-				value = fmt.Sprint(expected)
-			}
-			if value == "true" {
-				enabled++
-			}
+		if flag.Changed {
+			args = append(args, "--"+name+"="+flag.Value.String())
 		}
-		if flag.Changed || isRole {
-			args = append(args, "--"+name+"="+value)
-		}
-	}
-	if enabled > 1 {
-		return nil, fmt.Errorf("%w: choose one Operator role per batch", constants.ErrMissingRequiredField)
 	}
 	heartbeat, _ := cmd.Flags().GetInt("heartbeat-interval")
 	if err := validateHeartbeatInterval(heartbeat); err != nil {
@@ -794,7 +767,12 @@ func operatorDeployArgsForDir(args []string, host, dir string) []string {
 		"--provenance-operator-enabled":        "--provenance-operator-id",
 		"--provider-boundary-observer-enabled": "--provider-boundary-observer-id",
 	} {
-		if flags[enabled] == "true" && flags[id] == "" {
+		var roles constants.OperatorRoles
+		if value := flags["--roles"]; value != "" {
+			_ = roles.Set(value)
+		}
+		roleEnabled := (enabled == "--provenance-operator-enabled" && roles.Has(constants.OperatorRoleProvenance)) || (enabled == "--provider-boundary-observer-enabled" && roles.Has(constants.OperatorRoleObserver))
+		if (flags[enabled] == "true" || roleEnabled) && flags[id] == "" {
 			result = append(result, fmt.Sprintf("%s=operator-%x", id, digest[:16]))
 		}
 	}

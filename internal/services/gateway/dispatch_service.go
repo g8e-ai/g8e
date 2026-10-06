@@ -248,6 +248,7 @@ type L2ConsensusDeliberator interface {
 // postures that require L3 proof (ratify, notary) are rejected at envelope
 // construction because the gateway dispatch path cannot mint human proofs.
 type DispatchService struct {
+	embeddedProcessor governance.EnvelopeProcessor
 	logger            *slog.Logger
 	pubsub            *GatewayWebSocketHandler
 	stateRootProvider governance.StateRootProvider
@@ -270,8 +271,9 @@ type DispatchService struct {
 // signerStore resolves the operator's actuator public key for inference
 // completion receipt verification; a nil store fails inference dispatch
 // closed.
-func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string, doctrine *governance.L1Doctrine, l2Deliberator L2ConsensusDeliberator, signerStore governance.SignerStore) *DispatchService {
+func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string, doctrine *governance.L1Doctrine, l2Deliberator L2ConsensusDeliberator, signerStore governance.SignerStore, embeddedProcessor governance.EnvelopeProcessor) *DispatchService {
 	return &DispatchService{
+		embeddedProcessor: embeddedProcessor,
 		logger:            logger,
 		pubsub:            pubsubHandler,
 		stateRootProvider: stateRootProvider,
@@ -416,7 +418,18 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	//    is a terminal transport failure: no operator received the command,
 	//    so no result can ever arrive.
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
-	delivered := d.pubsub.Publish(cmdChannel, wire)
+	delivered := 0
+	if op.OperatorType == constants.OperatorTypeEmbedded {
+		if d.embeddedProcessor == nil {
+			return nil, fmt.Errorf("dispatch embedded operator: %w", constants.ErrDispatchNoDelivery)
+		}
+		if _, err := d.embeddedProcessor.ProcessEnvelope(ctx, wire); err != nil {
+			return nil, fmt.Errorf("dispatch embedded operator: %w", err)
+		}
+		delivered = 1
+	} else {
+		delivered = d.pubsub.Publish(cmdChannel, wire)
+	}
 	d.logger.Info("dispatch: published command",
 		"transaction_id", txHash,
 		"cmd_channel", cmdChannel,

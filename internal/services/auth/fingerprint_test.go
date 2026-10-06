@@ -292,16 +292,16 @@ func TestGenerateOperatorFingerprint_DifferentiationOnSameSystem(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("differentiates by role", func(t *testing.T) {
-		fpInference, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Role: "inference"})
+		fpInference, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Roles: constants.OperatorRoles{constants.OperatorRoleInference}})
 		require.NoError(t, err)
 
-		fpData, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Role: "data"})
+		fpData, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Roles: constants.OperatorRoles{constants.OperatorRoleData}})
 		require.NoError(t, err)
 
-		fpProvenance, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Role: "provenance"})
+		fpProvenance, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Roles: constants.OperatorRoles{constants.OperatorRoleProvenance}})
 		require.NoError(t, err)
 
-		fpObserver, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Role: "observer"})
+		fpObserver, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Roles: constants.OperatorRoles{constants.OperatorRoleObserver}})
 		require.NoError(t, err)
 
 		assert.NotEqual(t, baseFp.Fingerprint, fpInference.Fingerprint)
@@ -348,14 +348,14 @@ func TestGenerateOperatorFingerprint_DifferentiationOnSameSystem(t *testing.T) {
 			LocalDir: "/data/g8e/operators/inference",
 			Account:  "service-inference",
 			Port:     9090,
-			Role:     string(constants.OperatorRoleInference),
+			Roles:    constants.OperatorRoles{constants.OperatorRoleInference},
 		})
 		require.NoError(t, err)
 
 		assert.Equal(t, filepath.Clean("/data/g8e/operators/inference"), fpFull.LocalDir)
 		assert.Equal(t, "service-inference", fpFull.Account)
 		assert.Equal(t, 9090, fpFull.Port)
-		assert.Equal(t, string(constants.OperatorRoleInference), fpFull.Role)
+		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleInference}, fpFull.Roles)
 		assert.Len(t, fpFull.Fingerprint, 64)
 	})
 }

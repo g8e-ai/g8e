@@ -18,25 +18,46 @@ import (
 
 // ResolveOperatorRoles returns every enabled role. Ordinary operators default to Data.
 func ResolveOperatorRoles(cfg *models.RuntimeConfig) constants.OperatorRoles {
- if cfg == nil { return constants.OperatorRoles{constants.OperatorRoleData} }
- roles := append(constants.OperatorRoles{}, cfg.Roles...)
- if cfg.InferenceEnabled { roles = append(roles, constants.OperatorRoleInference) }
- if cfg.ProvenanceOperatorEnabled { roles = append(roles, constants.OperatorRoleProvenance) }
- if cfg.ProviderBoundaryObserverEnabled { roles = append(roles, constants.OperatorRoleObserver) }
- if len(roles) == 0 { roles = append(roles, constants.OperatorRoleData) }
- return roles.Canonical()
+	if cfg == nil {
+		return constants.OperatorRoles{constants.OperatorRoleData}
+	}
+	roles := append(constants.OperatorRoles{}, cfg.Roles...)
+	if cfg.InferenceEnabled {
+		roles = append(roles, constants.OperatorRoleInference)
+	}
+	if cfg.ProvenanceOperatorEnabled {
+		roles = append(roles, constants.OperatorRoleProvenance)
+	}
+	if cfg.ProviderBoundaryObserverEnabled {
+		roles = append(roles, constants.OperatorRoleObserver)
+	}
+	if len(roles) == 0 {
+		roles = append(roles, constants.OperatorRoleData)
+	}
+	return roles.Canonical()
 }
 
 // GetOperatorRoles resolves runtime capabilities; stored role metadata is used only without runtime configuration.
 func GetOperatorRoles(op models.OperatorDocumentGo) constants.OperatorRoles {
- if op.RuntimeConfig != nil { return ResolveOperatorRoles(op.RuntimeConfig) }
- if len(op.OperatorRoles) > 0 { return op.OperatorRoles.Canonical() }
- return constants.OperatorRoles{constants.OperatorRoleData}
+	var roles constants.OperatorRoles
+	if op.RuntimeConfig != nil {
+		roles = ResolveOperatorRoles(op.RuntimeConfig)
+	} else if len(op.OperatorRoles) > 0 {
+		roles = op.OperatorRoles.Canonical()
+	} else {
+		roles = constants.OperatorRoles{constants.OperatorRoleData}
+	}
+	if op.OperatorType == constants.OperatorTypeEmbedded {
+		roles = append(roles, constants.OperatorRoleEmbedded).Canonical()
+	}
+	return roles
 }
 
 // RoleResponsibilities returns a human-readable summary of the role's responsibilities.
-func RoleResponsibilities(role constants.OperatorRoles) string {
+func RoleResponsibilities(role constants.OperatorRole) string {
 	switch role {
+	case constants.OperatorRoleEmbedded:
+		return "Gateway in-process operator substrate"
 	case constants.OperatorRoleInference:
 		return "Governed model inference backend (g8ellama), model registry and lifecycle management"
 	case constants.OperatorRoleProvenance:
@@ -51,7 +72,7 @@ func RoleResponsibilities(role constants.OperatorRoles) string {
 }
 
 // ValidateOperatorRoleCapabilities verifies that an operator document possesses the required role.
-func ValidateOperatorRoleCapabilities(op models.OperatorDocumentGo, requiredRole constants.OperatorRoles) error {
+func ValidateOperatorRoleCapabilities(op models.OperatorDocumentGo, requiredRole constants.OperatorRole) error {
 	actualRole := GetOperatorRoles(op)
 	if !actualRole.Has(requiredRole) {
 		return fmt.Errorf("%w: operator %s has role %q (%s), but required role is %q (%s)",

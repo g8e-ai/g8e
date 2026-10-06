@@ -267,6 +267,25 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 		"--log", opts.LogLevel,
 	}
 
+	if len(opts.OperatorRoles) > 0 {
+		args = append(args, "--roles", opts.OperatorRoles.String())
+	}
+
+	if opts.InferenceOllamaEndpoint != "" {
+		args = append(args, "--inference-ollama-endpoint", opts.InferenceOllamaEndpoint)
+	}
+	if opts.InferenceKeepAlive != "" {
+		args = append(args, "--inference-keep-alive", opts.InferenceKeepAlive)
+	}
+	if opts.ProviderBoundaryObserverID != "" {
+		args = append(args, "--provider-boundary-observer-id", opts.ProviderBoundaryObserverID)
+	}
+	if opts.ProvenanceOperatorID != "" {
+		args = append(args, "--provenance-operator-id", opts.ProvenanceOperatorID)
+	}
+	if opts.ProvenanceOperatorModelStorageRoot != "" {
+		args = append(args, "--model-storage-root", opts.ProvenanceOperatorModelStorageRoot)
+	}
 	if opts.VaultDir != "" {
 		args = append(args, "--vault-dir", opts.VaultDir)
 	}

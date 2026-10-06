@@ -46,15 +46,17 @@ class TestOperatorDocumentNoSystemInfoField:
             user_id="user-1",
             status=OperatorStatus.ACTIVE,
             system_fingerprint="fp-sha256-composite",
-            operator_role="inference",
+            operator_roles=["inference"],
             local_dir="/home/bob/op-inf",
             account="bob",
             port=8444,
             runtime_config={"inference_enabled": True, "http_port": 8444},
         )
-        assert doc.operator_role == "inference"
+        assert doc.operator_roles == ["inference"]
         assert doc.local_dir == "/home/bob/op-inf"
         assert doc.account == "bob"
         assert doc.port == 8444
         assert doc.system_fingerprint == "fp-sha256-composite"
-        assert doc.runtime_config == {"inference_enabled": True, "http_port": 8444}
+        assert doc.runtime_config is not None
+        assert doc.runtime_config.inference_enabled is True
+        assert doc.runtime_config.http_port == 8444

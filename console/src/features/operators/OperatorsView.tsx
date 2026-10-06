@@ -10,17 +10,18 @@ import { errorText, useToast } from '../../state/toast';
 import { DeployPanel } from './DeployPanel';
 
 const ROLES: Record<OperatorRole, { label: string; tone: string; hint: string }> = {
+  embedded: { label: 'Embedded', tone: 'pill-accent', hint: 'Gateway in-process operator.' },
   data: { label: 'Data', tone: 'pill-ok', hint: 'Governed tool and command execution on its host.' },
   inference: { label: 'Inference', tone: 'pill-accent', hint: 'Governed model inference backend and model lifecycle.' },
   provenance: {
     label: 'Provenance',
     tone: 'pill-violet',
-    hint: 'Witness: attests local model weights at the storage site. Read-only, cannot execute commands.',
+    hint: 'Witness: attests local model weights at the storage site. Read-only witness capability.',
   },
   observer: {
     label: 'Observer',
     tone: 'pill-cyan',
-    hint: 'Witness: observes provider-boundary hardware telemetry. Read-only, cannot execute commands.',
+    hint: 'Witness: observes provider-boundary hardware telemetry. Read-only witness capability.',
   },
 };
 
@@ -159,7 +160,7 @@ export function OperatorsView() {
                         <StatusPill status={op.status === 'active' && op.bound_web_session_id ? 'bound' : op.status} />
                       </td>
                       <td>
-                        <RolePill role={op.operator_role} />
+                        {op.operator_roles?.map((role) => <RolePill key={role} role={role} />)}
                       </td>
                       <td className="text-2">{op.operator_type || '—'}</td>
                       <td className="text-2">{relativeTime(op.last_heartbeat_at) || '—'}</td>

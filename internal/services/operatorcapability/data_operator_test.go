@@ -58,7 +58,7 @@ func TestIsDataOperator_ExcludesOtherRoles(t *testing.T) {
 			OperatorSessionID: "sess-role-1",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleObserver},
+			OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleObserver},
 		},
 		{
 			ID:                "offline-1",

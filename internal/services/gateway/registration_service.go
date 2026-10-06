@@ -19,8 +19,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
@@ -139,16 +139,16 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 		return constants.ErrMissingRequiredField
 	}
 	type configUpdatePayload struct {
-		RuntimeConfig *models.RuntimeConfig  `json:"runtime_config"`
+		RuntimeConfig *models.RuntimeConfig   `json:"runtime_config"`
 		OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
-		LocalDir      string                 `json:"local_dir,omitempty"`
-		Account       string                 `json:"account,omitempty"`
-		Port          int                    `json:"port,omitempty"`
-		UpdatedAt     time.Time              `json:"updated_at"`
+		LocalDir      string                  `json:"local_dir,omitempty"`
+		Account       string                  `json:"account,omitempty"`
+		Port          int                     `json:"port,omitempty"`
+		UpdatedAt     time.Time               `json:"updated_at"`
 	}
 	payload := configUpdatePayload{
 		RuntimeConfig: runtimeConfig,
-		OperatorRole:  operatorcapability.ResolveOperatorRoles(runtimeConfig),
+		OperatorRoles: operatorcapability.ResolveOperatorRoles(runtimeConfig),
 		LocalDir:      runtimeConfig.LocalDir,
 		Account:       runtimeConfig.Account,
 		Port:          runtimeConfig.HTTPPort,
@@ -357,24 +357,24 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// Update Operator document
 	type operatorClaimUpdate struct {
-		Status             string                 `json:"status"`
-		OperatorSessionID  string                 `json:"operator_session_id"`
-		SystemFingerprint  string                 `json:"system_fingerprint"`
-		OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
-		LocalDir           string                 `json:"local_dir,omitempty"`
-		Account            string                 `json:"account,omitempty"`
-		Port               int                    `json:"port,omitempty"`
-		Claimed            bool                   `json:"claimed"`
-		ClaimedAt          time.Time              `json:"claimed_at"`
-		OperatorCert       string                 `json:"operator_cert,omitempty"`
-		OperatorCertChain  string                 `json:"operator_cert_chain,omitempty"`
-		OperatorCertSerial string                 `json:"operator_cert_serial,omitempty"`
+		Status             string                  `json:"status"`
+		OperatorSessionID  string                  `json:"operator_session_id"`
+		SystemFingerprint  string                  `json:"system_fingerprint"`
+		OperatorRoles      constants.OperatorRoles `json:"operator_roles,omitempty"`
+		LocalDir           string                  `json:"local_dir,omitempty"`
+		Account            string                  `json:"account,omitempty"`
+		Port               int                     `json:"port,omitempty"`
+		Claimed            bool                    `json:"claimed"`
+		ClaimedAt          time.Time               `json:"claimed_at"`
+		OperatorCert       string                  `json:"operator_cert,omitempty"`
+		OperatorCertChain  string                  `json:"operator_cert_chain,omitempty"`
+		OperatorCertSerial string                  `json:"operator_cert_serial,omitempty"`
 	}
 	update := operatorClaimUpdate{
 		Status:            string(constants.OperatorStatusActive),
 		OperatorSessionID: operatorSessionID,
 		SystemFingerprint: sanitizedFingerprint,
-		OperatorRole:      req.OperatorRoles,
+		OperatorRoles:     req.OperatorRoles,
 		LocalDir:          req.LocalDir,
 		Account:           req.Account,
 		Port:              req.Port,

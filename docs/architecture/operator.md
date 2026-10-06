@@ -13,6 +13,33 @@ The Operator is not the Gateway and does not receive inbound management connecti
 
 This document describes the outbound Operator. The Gateway also has an embedded in-process Operator substrate that executes only against the Gateway process runtime. See [Gateway Architecture](./gateway.md) for the distinction and [Connect Operator to Gateway](../guides/connect_operator_to_gateway.md) for deployment procedure.
 
+## Combining Operator roles
+
+One `g8e` binary can assume any nonempty combination of Embedded, Data, Inference, Provenance, and Observer. `OperatorRoles` is the centralized Go set type; `protocol/constants/status.json` owns the public vocabulary. Documents expose `operator_roles` arrays and `runtime_config.roles` arrays. Capability checks use membership, and runtime configuration reports every enabled role.
+
+```bash
+# One remote process with three capabilities
+./g8e operator start --endpoint gateway.example --roles provenance,observer,inference \
+  --model-storage-root /srv/ollama/models --inference-ollama-endpoint http://127.0.0.1:11434
+
+# Add governed Data commands to either inference or a witness
+./g8e operator start --endpoint gateway.example --roles inference,data
+./g8e operator start --endpoint gateway.example --roles provenance,data --model-storage-root /srv/ollama/models
+
+# The Gateway's embedded operator can assume all capabilities
+./g8e gw start --roles embedded,data,inference,provenance,observer \
+  --model-storage-root /srv/ollama/models --inference-ollama-endpoint http://127.0.0.1:11434
+
+# The same embedded runtime is available through the operator startup command
+./g8e operator start --roles embedded,data,inference --working-dir /srv/gateway
+```
+
+`--roles` accepts comma-separated values and repeated occurrences. Existing enable flags are additive. No role flags means Data for a remote worker and Embedded plus Data for the Gateway. Provenance needs `--model-storage-root`; Inference uses the configured Ollama endpoint. Witness-only processes reject generic command execution. Adding Data permits governed commands in the same process.
+
+Embedded runs the Gateway in process, including its enrollment and governance substrate. It does not become a remote worker by enabling another capability. `operator_type` continues to distinguish `embedded` and `remote` deployment. Cloud remains a deployment setting (`--cloud` and `--provider`), and Cloud, System, and Node are not entries in the operator type or role vocabulary. “Inference Node” names the Inference topology, not a separate operator type.
+
+The singular `operator_role` and runtime `role` fields are replaced by role arrays. Deploy remote workers with `operator deploy --roles data,provenance`; role settings are forwarded intact to startup. Role identity and fingerprints include the entire canonical set, so flag order and duplicate values do not change identity.
+
 ## Runtime and trust boundaries
 
 A remote Operator is sovereign only for the runtime visible to its process. Its filesystem, process table, services, network, and container runtime are those of that runtime; an Operator container is not automatically the Docker host. In the root Compose deployment, `g8e-gateway` and `g8e-data-operator` are separate containers with separate process and network namespaces and separate named volumes. Neither receives host-root, host-PID, host-network, or Docker-socket access by default. The Gateway's embedded Operator targets the Gateway container in that deployment; the outbound Operator targets the Operator container.
@@ -76,7 +103,7 @@ Operators running on the same host are differentiated and separated by four key 
 1. **Local Directory (`local_dir`)**: The working and runtime root where the instance maintains its sovereign `.g8e/` state and execution tree.
 2. **Launching Account (`account`)**: The operating system account or user profile that spawned the process.
 3. **Port (`port`)**: The HTTP/HTTPS port dialed or bound by the operator instance.
-4. **Operational Role (`operator_role`)**: The primary purpose and execution boundary determined by startup flags.
+4. **Operational Roles (`operator_roles`)**: The complete typed set of capabilities enabled by startup flags.
 
 The canonical `system_fingerprint` is a SHA-256 composite hash of immutable host properties (`os`, `arch`, `cpu_count`, `machine_id`, `hostname`) combined with `local_dir`, `account`, `port`, and `role`. This ensures that each operator running on the same host produces a distinct, collision-free identity in the Gateway operator registry and SQLite document store, allowing idempotent re-enrollment and unambiguous slot binding. Platform enrollment (`operatorFingerprintOptions` in `internal/cli/serve/operator.go`) and runtime bootstrap (`internal/services/auth/bootstrap.go`) derive the role from the same startup flags and both include `port`. An Operator enrolled by an earlier release computed its enrollment fingerprint without `port`, so re-enrolling it after an upgrade yields a different fingerprint and does not supersede the earlier document; revoke the earlier enrollment explicitly.
 
@@ -99,7 +126,7 @@ Each operator's responsibilities and execution boundaries are strictly gated by 
 | **Observer Operator** | `--provider-boundary-observer-enabled`, `--provider-boundary-observer-id` | Read-only hardware, temperature, power, and residency observation on approved host | Read-only witness. Arbitrary command execution is hard-rejected by `ValidateWitnessCommand`. |
 | **Data Operator** | Default (or `--data-operator-enabled`) | Governed tool execution, command execution, local filesystem triage, and execution vault | Primary PEP for tool execution. Discovered by Gateway session service for tool and workflow dispatch. |
 
-The Gateway's `OperatorDocument` stores `operator_role`, `local_dir`, `account`, and `port` alongside `system_fingerprint`. Session resolution helpers (`IsDataOperator`, `SelectDataOperator`, `SelectInferenceOperatorForHardware`, `SelectProviderBoundaryObserverForHardware`) verify that callers cannot dispatch general commands to witness operators or confuse distinct operators sharing the same machine. When the unified Docker stack is running, `SelectDataOperator` prioritizes the container session with hostname `data-operator` (`constants.DataOperatorHostname`); in host-native and local development environments without the Docker container, `SelectDataOperator` resolves the active host-native data operator session.
+The Gateway's `OperatorDocument` stores `operator_roles`, `local_dir`, `account`, and `port` alongside `system_fingerprint`. Session resolution helpers (`IsDataOperator`, `SelectDataOperator`, `SelectInferenceOperatorForHardware`, `SelectProviderBoundaryObserverForHardware`) verify that callers cannot dispatch general commands to witness operators or confuse distinct operators sharing the same machine. When the unified Docker stack is running, `SelectDataOperator` prioritizes the container session with hostname `data-operator` (`constants.DataOperatorHostname`); in host-native and local development environments without the Docker container, `SelectDataOperator` resolves the active host-native data operator session.
 
 ## Command and receipt channels
 

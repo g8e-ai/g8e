@@ -1297,14 +1297,14 @@ func (rs *OperatorPubSubService) handleProviderBoundaryObservationSync(ctx conte
 	if rs.providerBoundaryObserver == nil {
 		return "", fmt.Errorf("provider boundary observer handler not configured: %w", constants.ErrMissingRequiredField)
 	}
-	return rs.providerBoundaryObserver.HandleCommand(ctx, msg.ID, msg.Payload)
+	return rs.providerBoundaryObserver.HandleCommand(ctx, msg.ResultOrigin(), msg.Payload)
 }
 
 func (rs *OperatorPubSubService) handleModelProvenanceObservationSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.modelProvenanceOperator == nil {
 		return "", fmt.Errorf("model provenance operator handler not configured: %w", constants.ErrMissingRequiredField)
 	}
-	return rs.modelProvenanceOperator.HandleCommand(ctx, msg.ID, msg.Payload)
+	return rs.modelProvenanceOperator.HandleCommand(ctx, msg.ResultOrigin(), msg.Payload)
 }
 
 // handleInferenceRequestSync is the Actuator egress for INFERENCE
@@ -1497,4 +1497,16 @@ func (m *PubSubCommandMessage) GetPayload() []byte {
 
 func (m *PubSubCommandMessage) SetPayload(p []byte) {
 	m.Payload = p
+}
+
+// ResultOrigin preserves request identity when a witness completion is published.
+func (msg *PubSubCommandMessage) ResultOrigin() *govpkg.GovernanceEnvelope {
+	origin := &govpkg.GovernanceEnvelope{Id: msg.ID, OperatorSessionId: msg.OperatorSessionID, CaseId: msg.CaseID, InvestigationId: msg.InvestigationID, WebSessionId: msg.WebSessionID, CliSessionId: msg.CLISessionID}
+	if msg.OperatorID != nil {
+		origin.OperatorId = *msg.OperatorID
+	}
+	if msg.TaskID != nil {
+		origin.TaskId = *msg.TaskID
+	}
+	return origin
 }

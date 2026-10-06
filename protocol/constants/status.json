@@ -2816,6 +2816,33 @@
         "_python_const": "UPDATE",
         "value": "update"
       }
+    },
+    "operator_role": {
+      "embedded": {
+        "_go_const": "OperatorRoleEmbedded",
+        "_python_const": "EMBEDDED",
+        "value": "embedded"
+      },
+      "data": {
+        "_go_const": "OperatorRoleData",
+        "_python_const": "DATA",
+        "value": "data"
+      },
+      "inference": {
+        "_go_const": "OperatorRoleInference",
+        "_python_const": "INFERENCE",
+        "value": "inference"
+      },
+      "provenance": {
+        "_go_const": "OperatorRoleProvenance",
+        "_python_const": "PROVENANCE",
+        "value": "provenance"
+      },
+      "observer": {
+        "_go_const": "OperatorRoleObserver",
+        "_python_const": "OBSERVER",
+        "value": "observer"
+      }
     }
   }
 }

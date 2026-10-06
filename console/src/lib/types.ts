@@ -29,15 +29,15 @@ export type OperatorStatus =
   | 'terminated'
   | 'unavailable';
 
-export type OperatorRole = 'inference' | 'provenance' | 'observer' | 'data';
+export type OperatorRole = 'embedded' | 'inference' | 'provenance' | 'observer' | 'data';
 
 export interface Operator {
   id: string;
   user_id: string;
   name?: string;
   status: OperatorStatus;
-  operator_type?: string;
-  operator_role?: OperatorRole;
+  operator_type?: 'embedded' | 'remote';
+  operator_roles?: OperatorRole[];
   operator_session_id?: string;
   bound_web_session_id?: string;
   current_hostname?: string;

@@ -120,8 +120,8 @@ func TestNewOperatorPlatformEnrollmentClient_NormalizesTrailingSlashes(t *testin
 
 func TestOperatorPlatformEnrollmentClient_SetFingerprintOptions_ReplacesPriorOptions(t *testing.T) {
 	client, _ := newEnrollClient(t, "http://gw:8080")
-	first := auth.FingerprintOptions{LocalDir: "/srv/a", Account: "alice", Port: 8443, Role: "data"}
-	second := auth.FingerprintOptions{LocalDir: "/srv/b", Role: "inference"}
+	first := auth.FingerprintOptions{LocalDir: "/srv/a", Account: "alice", Port: 8443, Roles: constants.OperatorRoles{constants.OperatorRoleData}}
+	second := auth.FingerprintOptions{LocalDir: "/srv/b", Roles: constants.OperatorRoles{constants.OperatorRoleInference}}
 
 	client.SetFingerprintOptions(first)
 	assert.Equal(t, first, client.fingerprintOpts)

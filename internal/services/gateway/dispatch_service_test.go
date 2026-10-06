@@ -201,6 +201,7 @@ func newTestDispatchService(t *testing.T, stateRoot string, op *models.OperatorD
 		governance.NewL1Doctrine(),
 		nil, // no L2 deliberator under doctrine posture
 		nil, // no receipt signer store; inference dispatch tests wire their own
+		nil, // no embedded processor in remote dispatch tests
 	)
 	return svc, broker
 }
@@ -280,6 +281,7 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
 		governance.NewL1Doctrine(),
+		nil,
 		nil,
 		nil,
 	)

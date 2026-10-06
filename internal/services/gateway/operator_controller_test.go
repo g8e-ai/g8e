@@ -91,7 +91,7 @@ func stopOperatorRequest(t *testing.T, controller *OperatorController, userID, s
 
 func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
+	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore, nil)
 	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Dispatch: dispatch, Responder: infra.Responder})
 
 	seedStopOperator(t, infra, "stop-remote", "stop-remote-session", "stop-owner", constants.OperatorTypeRemote, constants.OperatorStatusActive)
@@ -934,11 +934,11 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 func TestWithResolvedOperatorRole(t *testing.T) {
 	t.Run("keeps a stored role", func(t *testing.T) {
 		op := models.OperatorDocumentGo{
-			OperatorRoles:  constants.OperatorRoles{constants.OperatorRoleObserver},
+			OperatorRoles: constants.OperatorRoles{constants.OperatorRoleObserver},
 			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
 		}
 		withResolvedOperatorRoles(&op)
-		assert.Equal(t, constants.OperatorRoleObserver, op.OperatorRoles)
+		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, op.OperatorRoles)
 	})
 
 	t.Run("resolves a missing role from runtime config", func(t *testing.T) {
@@ -947,7 +947,7 @@ func TestWithResolvedOperatorRole(t *testing.T) {
 			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
 		}
 		withResolvedOperatorRoles(&op)
-		assert.Equal(t, constants.OperatorRoleProvenance, op.OperatorRoles)
+		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, op.OperatorRoles)
 	})
 
 	t.Run("leaves an unclaimed slot without a role", func(t *testing.T) {
