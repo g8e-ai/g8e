@@ -383,10 +383,6 @@ func VerifyReceiptEvidenceSignatures(receipt *operatorv1.ActionReceipt, publicKe
 	return VerifyReceiptPersistence(receipt, publicKey)
 }
 
-func ReceiptActionType(receipt *operatorv1.ActionReceipt) (string, error) {
-	return governance.DeterministicStageActionType(receipt)
-}
-
 // ReceiptInvestigationBound returns true if any deterministic stage evidence
 // in the receipt carries one of the given investigation IDs.
 func ReceiptInvestigationBound(receipt *operatorv1.ActionReceipt, investigationIDs []string) bool {

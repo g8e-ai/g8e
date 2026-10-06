@@ -829,34 +829,6 @@ func FindCrosswalk(catalog *compliancev1.ControlCrosswalkCatalog, id string) *co
 	return nil
 }
 
-func FindCrosswalksForControl(catalog *compliancev1.ControlCrosswalkCatalog, frameworkID, frameworkVersion, controlID string) []*compliancev1.ControlCrosswalk {
-	if catalog == nil {
-		return nil
-	}
-	var result []*compliancev1.ControlCrosswalk
-	for _, crosswalk := range catalog.Mappings {
-		if crosswalk == nil || crosswalk.FrameworkRef == nil {
-			continue
-		}
-		if crosswalk.FrameworkRef.Id == frameworkID && crosswalk.FrameworkRef.Version == frameworkVersion && crosswalk.ControlId == controlID {
-			result = append(result, crosswalk)
-		}
-	}
-	return result
-}
-
-func FindAssertionAssessment(assessments []*compliancev1.ControlAssertionAssessment, assertionID, assertionVersion string) *compliancev1.ControlAssertionAssessment {
-	for _, assessment := range assessments {
-		if assessment == nil || assessment.AssertionRef == nil {
-			continue
-		}
-		if assessment.AssertionRef.Id == assertionID && assessment.AssertionRef.Version == assertionVersion {
-			return assessment
-		}
-	}
-	return nil
-}
-
 func CatalogDigest(message proto.Message) (string, error) {
 	candidate := proto.Clone(message)
 	switch typed := candidate.(type) {
