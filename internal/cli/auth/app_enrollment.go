@@ -710,7 +710,7 @@ func encodeECPrivateKeyPEM(key *ecdsa.PrivateKey) (string, error) {
 
 func doHTTPRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
 	client := &http.Client{}
-	return client.Do(req)
+	return client.Do(req.WithContext(ctx))
 }
 
 func parseRetryAfter(value string) time.Duration {

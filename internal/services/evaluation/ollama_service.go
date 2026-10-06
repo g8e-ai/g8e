@@ -195,12 +195,12 @@ func dispatchOllamaBashCommand(
 	command string,
 	investigationID string,
 	executionPrefix string,
-) (*OllamaModelCommandDispatchResult, error) {
+) error {
 	if dispatcher == nil {
-		return nil, fmt.Errorf("evaluation: Ollama model maintenance: %w", constants.ErrMissingRequiredField)
+		return fmt.Errorf("evaluation: Ollama model maintenance: %w", constants.ErrMissingRequiredField)
 	}
 	if err := maintenance.validate(); err != nil {
-		return nil, err
+		return err
 	}
 	caseID := strings.TrimSpace(maintenance.CaseID)
 	if caseID == "" {
@@ -214,7 +214,7 @@ func dispatchOllamaBashCommand(
 		TimeoutSeconds: maintenance.timeoutSeconds(),
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	request := OllamaModelCommandDispatchRequest{
 		TargetOperatorSessionID: maintenance.TargetOperatorSessionID,
@@ -230,12 +230,12 @@ func dispatchOllamaBashCommand(
 	}
 	result, err := dispatcher.DispatchOllamaModelCommand(ctx, request)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: Ollama model maintenance: %w", err)
+		return fmt.Errorf("evaluation: Ollama model maintenance: %w", err)
 	}
 	if err := ValidateOllamaModelCommandResult(command, result); err != nil {
-		return nil, fmt.Errorf("evaluation: Ollama model maintenance: %w", err)
+		return fmt.Errorf("evaluation: Ollama model maintenance: %w", err)
 	}
-	return result, nil
+	return nil
 }
 
 func dispatchOllamaTypedQuery(

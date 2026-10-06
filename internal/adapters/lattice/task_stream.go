@@ -102,7 +102,6 @@ func (a *Adapter) processStream(ctx context.Context, stream taskmanagerv1.TaskMa
 				"active_posture", a.postureProvider(),
 				"floor", a.config.PostureFloor)
 			_ = a.reportTaskStatus(ctx, task.GetVersion(),
-				taskmanagerv1.Status_STATUS_DONE_NOT_OK,
 				taskmanagerv1.ErrorCode_ERROR_CODE_REJECTED,
 				"posture floor violated")
 			continue
@@ -116,7 +115,6 @@ func (a *Adapter) processStream(ctx context.Context, stream taskmanagerv1.TaskMa
 					"task_id", taskID,
 					"error", err)
 				_ = a.reportTaskStatus(ctx, task.GetVersion(),
-					taskmanagerv1.Status_STATUS_DONE_NOT_OK,
 					taskmanagerv1.ErrorCode_ERROR_CODE_FAILED,
 					err.Error())
 			}
@@ -161,12 +159,12 @@ func (a *Adapter) checkPostureFloor() error {
 // reportTaskStatus sends a task status update to the Lattice TaskManager via
 // the UpdateStatus RPC. The version field provides optimistic concurrency
 // control — the caller must pass the task's current version.
-func (a *Adapter) reportTaskStatus(ctx context.Context, version *taskmanagerv1.TaskVersion, status taskmanagerv1.Status, errCode taskmanagerv1.ErrorCode, errMsg string) error {
+func (a *Adapter) reportTaskStatus(ctx context.Context, version *taskmanagerv1.TaskVersion, errCode taskmanagerv1.ErrorCode, errMsg string) error {
 	req := &taskmanagerv1.UpdateStatusRequest{
 		StatusUpdate: &taskmanagerv1.StatusUpdate{
 			Version: version,
 			Status: &taskmanagerv1.TaskStatus{
-				Status: status,
+				Status: taskmanagerv1.Status_STATUS_DONE_NOT_OK,
 				TaskError: &taskmanagerv1.TaskError{
 					Code:    errCode,
 					Message: errMsg,
@@ -184,7 +182,7 @@ func (a *Adapter) reportTaskStatus(ctx context.Context, version *taskmanagerv1.T
 
 	a.logger.Info("Lattice: reported task status",
 		"task_id", version.GetTaskId(),
-		"status", status.String(),
+		"status", taskmanagerv1.Status_STATUS_DONE_NOT_OK.String(),
 		"entity_id", a.entityID)
 	return nil
 }

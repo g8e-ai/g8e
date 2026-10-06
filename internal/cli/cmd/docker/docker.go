@@ -744,7 +744,7 @@ func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 	for i, component := range components {
 		step := i + 2
 		cmd.Printf("Step %d: Approve the %s platform enrollment request.\n", step, component)
-		if err := promptApproveComponent(cmd, ctx, client, component); err != nil {
+		if err := promptApproveComponent(cmd, client, component); err != nil {
 			cmd.Printf("  %s enrollment step failed: %v\n", component, err)
 		}
 		cmd.Println()
@@ -919,7 +919,7 @@ func waitForDockerGatewayHealthy(cmd *cobra.Command) error {
 // decision. A missing pending request is reported but not fatal — the
 // component may already be enrolled, or its container may not have submitted
 // its request yet.
-func promptApproveComponent(cmd *cobra.Command, ctx context.Context, client authcmd.APIClient, component models.PlatformComponentKind) error {
+func promptApproveComponent(cmd *cobra.Command, client authcmd.APIClient, component models.PlatformComponentKind) error {
 	pendingBody, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentPending)
 	if err != nil {
 		return fmt.Errorf("fetch pending list: %w", err)

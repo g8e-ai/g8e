@@ -129,7 +129,6 @@ func TestReportTaskStatus_CallsUpdateStatusRPC(t *testing.T) {
 
 	version := &taskmanagerv1.TaskVersion{TaskId: "task-abc", StatusVersion: 1}
 	err := a.reportTaskStatus(context.Background(), version,
-		taskmanagerv1.Status_STATUS_DONE_NOT_OK,
 		taskmanagerv1.ErrorCode_ERROR_CODE_REJECTED,
 		"posture floor violated")
 
@@ -154,7 +153,6 @@ func TestReportTaskStatus_ReturnsErrLatticeStatusReportFailedOnRPCError(t *testi
 
 	version := &taskmanagerv1.TaskVersion{TaskId: "task-xyz", StatusVersion: 1}
 	err := a.reportTaskStatus(context.Background(), version,
-		taskmanagerv1.Status_STATUS_DONE_NOT_OK,
 		taskmanagerv1.ErrorCode_ERROR_CODE_FAILED,
 		"handler error")
 
@@ -180,7 +178,6 @@ func TestReportTaskStatus_ReturnsErrLatticeStatusReportFailedOnNonGRPCError(t *t
 
 	version := &taskmanagerv1.TaskVersion{TaskId: "task-plain", StatusVersion: 1}
 	err := a.reportTaskStatus(context.Background(), version,
-		taskmanagerv1.Status_STATUS_DONE_NOT_OK,
 		taskmanagerv1.ErrorCode_ERROR_CODE_FAILED,
 		"plain")
 

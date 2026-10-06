@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,99 +21,91 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-// TestAdapterNewAdapter_SetsCLISessionHeader verifies that the CLI session ID
-// passed to NewAdapter is sent as the X-G8E-CLI-Session-ID header on the SSE
-// request. Without this header, the gateway mTLS auth middleware cannot locate
-// the CLI session and returns 401.
-func TestAdapterNewAdapter_SetsCLISessionHeader(t *testing.T) {
-	var mu sync.Mutex
-	var gotHeader string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		gotHeader = r.Header.Get(constants.HeaderCLISessionID)
-		mu.Unlock()
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"type\":\"ledger.entry\",\"payload\":{\"level\":\"info\",\"message\":\"hi\"}}\n\n")
-	}))
-	defer srv.Close()
-
-	sender := &mockSender{}
-	a := NewAdapter(srv.URL, "", "cli-sess-123", sender, nil)
-
+// runAdapter starts the adapter against session and returns a stop func that
+// cancels it and waits for Run to return.
+func runAdapter(t *testing.T, session Session, sender messageSender) func() {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		a.Run(ctx)
+		NewAdapter(session, sender).Run(ctx)
 		close(done)
 	}()
-
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return gotHeader != ""
-	}, 3*time.Second, 50*time.Millisecond, "SSE request never received the CLI session header")
-
-	mu.Lock()
-	assert.Equal(t, "cli-sess-123", gotHeader, "X-G8E-CLI-Session-ID header must match cliSessionID arg")
-	mu.Unlock()
-
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("adapter.Run did not return after context cancellation")
+	return func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("adapter.Run did not return after context cancellation")
+		}
 	}
 }
 
-func TestAdapterRun_EmitsConnConnectedOnFirstEvent(t *testing.T) {
+// TestAdapterRun_ConnectedOnOpenStream verifies the adapter reports CONNECTED
+// once the stream opens, before any event arrives. The Gateway's heartbeats
+// are SSE comments, so a quiet live-only stream never dispatches an event.
+func TestAdapterRun_ConnectedOnOpenStream(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"type\":\"ledger.entry\",\"payload\":{\"level\":\"info\",\"message\":\"hello\"}}\n\n")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
 	}))
 	defer srv.Close()
 
 	sender := &mockSender{}
-	a := newAdapterWithSender(srv.URL, sender)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		a.Run(ctx)
-		close(done)
-	}()
+	stop := runAdapter(t, &testSession{url: srv.URL}, sender)
+	defer stop()
 
 	require.Eventually(t, func() bool {
-		msgs := sender.snapshot()
-		for _, m := range msgs {
+		for _, m := range sender.snapshot() {
 			if cs, ok := m.(ConnStatusMsg); ok && cs.Status == ConnConnected {
 				return true
 			}
 		}
 		return false
 	}, 3*time.Second, 50*time.Millisecond, "adapter never emitted ConnConnected")
+}
 
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("adapter.Run did not return after context cancellation")
-	}
+// TestAdapterRun_ReconcilesPendingApprovals verifies the pending-approval list
+// is fetched on connect and re-fetched on approvals.changed.
+func TestAdapterRun_ReconcilesPendingApprovals(t *testing.T) {
+	changed := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		select {
+		case <-changed:
+			frame := gatewayFrame(t, string(constants.EventPlatformApprovalsChanged), models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedTransactions})
+			fmt.Fprintf(w, "data: %s\n\n", frame)
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		}
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
 
-	msgs := sender.snapshot()
-	var connecting, connected bool
-	for _, m := range msgs {
-		if cs, ok := m.(ConnStatusMsg); ok {
-			if cs.Status == ConnConnecting {
-				connecting = true
-			}
-			if cs.Status == ConnConnected {
-				connected = true
-			}
+	session := &testSession{url: srv.URL, pendingJSON: `{"transactions":[{"transaction_hash":"tx-pending-1","tool_name":"run_command"}]}`}
+	sender := &mockSender{}
+	stop := runAdapter(t, session, sender)
+	defer stop()
+
+	require.Eventually(t, func() bool { return session.pendingListCalls() == 1 }, 3*time.Second, 20*time.Millisecond, "pending approvals not fetched on connect")
+	close(changed)
+	require.Eventually(t, func() bool { return session.pendingListCalls() == 2 }, 3*time.Second, 20*time.Millisecond, "pending approvals not re-fetched on approvals.changed")
+
+	var got PendingApprovalsMsg
+	for _, m := range sender.snapshot() {
+		if pm, ok := m.(PendingApprovalsMsg); ok {
+			got = pm
 		}
 	}
-	assert.True(t, connecting, "expected ConnConnecting before ConnConnected")
-	assert.True(t, connected, "expected ConnConnected after first event")
+	require.NoError(t, got.Err)
+	require.Len(t, got.Transactions, 1)
+	assert.Equal(t, "tx-pending-1", got.Transactions[0].TransactionHash)
 }

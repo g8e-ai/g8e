@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestNewModel(t *testing.T) {
@@ -188,6 +189,27 @@ func TestApplyLedgerMsg(t *testing.T) {
 		assert.Equal(t, fixedTime, m.ledger[0].time)
 		assert.Equal(t, fixedTime.Add(504*time.Second), m.ledger[504].time)
 	})
+}
+
+func TestApplyPendingApprovalsMsg(t *testing.T) {
+	m := NewModel(Options{})
+	pending := PendingApprovalsMsg{Transactions: []models.SuspendedTxResponse{{TransactionHash: "tx-aaaaaaaaaaaaaaaaaaaa", ToolName: "run_command"}}}
+
+	m = m.applyPendingApprovalsMsg(pending)
+	assert.Equal(t, StatusWaiting, m.pipeline[StageL3].status)
+	assert.Equal(t, "tx-aaaaaaaaaaaaaaaaaaaa", m.activeTx)
+	require.Len(t, m.ledger, 1)
+	assert.Contains(t, m.ledger[0].message, "g8e auth approve tx-aaaaaaaaaaaaaaaaaaaa")
+
+	m = m.applyPendingApprovalsMsg(pending)
+	assert.Len(t, m.ledger, 1, "an already-announced approval must not be logged again")
+
+	m = m.applyPendingApprovalsMsg(PendingApprovalsMsg{})
+	assert.Equal(t, StatusIdle, m.pipeline[StageL3].status, "L3 returns to idle once nothing is pending")
+
+	m = m.applyPendingApprovalsMsg(PendingApprovalsMsg{Err: constants.ErrHTTPStatusError})
+	require.Len(t, m.ledger, 2)
+	assert.Equal(t, LevelWarn, m.ledger[1].level)
 }
 
 func TestApplyConsensusMsg(t *testing.T) {

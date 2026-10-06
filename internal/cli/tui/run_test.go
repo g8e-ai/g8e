@@ -16,6 +16,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/sse"
 )
 
 // newTestProgram builds a headless bubbletea program (no renderer, no real
@@ -37,7 +39,7 @@ func headlessProgramOptions(input string) []tea.ProgramOption {
 	}
 }
 
-func TestRun_EmptySSEURLReturnsQuickly(t *testing.T) {
+func TestRun_NoSessionReturnsQuickly(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		done <- Run(t.Context(), Options{
@@ -95,12 +97,21 @@ func TestRun_PassesOptionsToModel(t *testing.T) {
 	assert.Equal(t, 7, capturedModel.total)
 }
 
+type stubSession struct{}
+
+func (s *stubSession) NewSSEClient() *sse.Client {
+	return sse.NewClient("http://127.0.0.1:1/nonexistent", nil)
+}
+
+func (s *stubSession) DoRequestContext(_ context.Context, _, _ string, _ interface{}) ([]byte, error) {
+	return nil, nil
+}
+
 func TestRun_AdapterGoroutineCleanedUpOnExit(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		done <- Run(t.Context(), Options{
-			SSEURL:         "http://127.0.0.1:1/nonexistent",
-			HTTPClient:     nil,
+			Session:        &stubSession{},
 			ProgramOptions: headlessProgramOptions("q"),
 		})
 	}()
