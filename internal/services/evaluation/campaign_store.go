@@ -589,6 +589,7 @@ func (s *Store) InspectRun(ctx context.Context, runID string) (RunInventoryEntry
 		if loadErr != nil {
 			entry.Kind = RunKindMalformed
 			entry.Reason = "native evaluation report is malformed"
+			//nolint:nilerr // intentional fallback: unreadable report is classified as RunKindMalformed
 			return entry, nil
 		}
 		run := report.GetRun()
@@ -604,6 +605,7 @@ func (s *Store) InspectRun(ctx context.Context, runID string) (RunInventoryEntry
 	if loadErr != nil || run.GetCampaignBinding() == nil || run.GetCampaignBinding().GetCampaignId() == "" {
 		entry.Kind = RunKindMalformed
 		entry.Reason = "campaign run record is malformed"
+		//nolint:nilerr // intentional fallback: unreadable run is classified as RunKindMalformed
 		return entry, nil
 	}
 	if run.GetSchemaVersion() != CampaignSchemaVersion {

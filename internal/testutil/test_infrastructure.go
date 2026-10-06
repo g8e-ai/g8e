@@ -11,7 +11,6 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -122,7 +121,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 
 // NewTestLogger returns a silent logger suitable for unit tests.
 func NewTestLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	return slog.New(slog.DiscardHandler)
 }
 
 // NewVerboseTestLogger returns a logger that writes to t.Log, useful for

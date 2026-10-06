@@ -213,7 +213,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 			delay = min(delay*2, bootstrapMaxDelay)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "POST", authURL, bytes.NewReader(bodyBytes))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL, bytes.NewReader(bodyBytes))
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapRequestBuild, err)
 		}

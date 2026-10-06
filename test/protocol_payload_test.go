@@ -91,9 +91,9 @@ func TestGatewayProtocols_PayloadVariationsSuspendExecution(t *testing.T) {
 	af := newAdapterFixture(t, "payload-variations", downstreamServer.URL)
 
 	for _, adapter := range bothAdapters() {
-		adapter := adapter
+
 		for _, tc := range payloadCases {
-			tc := tc
+
 			t.Run(adapter.name()+"/"+tc.name, func(t *testing.T) {
 				body := adapter.makeCallBody(tc.tool, tc.payload)
 				status, respBody := af.postAdapterWithStatus(t, adapter, body)

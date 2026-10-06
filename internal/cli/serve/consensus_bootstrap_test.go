@@ -12,7 +12,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -448,7 +447,7 @@ func TestDeriveSeedPublicKey_PublicKeyIs64HexChars(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBootstrapConsensusPolicy_PathIsDirectory(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	tmpDir := testutil.TempDir(t)
 	// Pass the directory itself as the config path — os.ReadFile should fail
@@ -459,7 +458,7 @@ func TestBootstrapConsensusPolicy_PathIsDirectory(t *testing.T) {
 }
 
 func TestBootstrapConsensusPolicy_EmptyFile(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
@@ -472,7 +471,7 @@ func TestBootstrapConsensusPolicy_EmptyFile(t *testing.T) {
 }
 
 func TestBootstrapConsensusPolicy_ValidConfigNilStoresOnlyChecksStoresAfterParse(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
@@ -492,7 +491,7 @@ func TestBootstrapConsensusPolicy_ValidConfigNilStoresOnlyChecksStoresAfterParse
 }
 
 func TestBootstrapConsensusPolicy_NilStoresWithInvalidSeedHex(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
@@ -520,7 +519,7 @@ func TestBootstrapConsensusPolicy_NilStoresWithInvalidSeedHex(t *testing.T) {
 // nil-stores guard and is exercised at the Tier 2 bootstrap level with a
 // real GatewayModeService fixture.
 func TestBootstrapConsensusPolicy_NilStoresWithMemberSeeds(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)

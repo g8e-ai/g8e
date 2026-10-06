@@ -293,7 +293,7 @@ func TestCanonicalCatalogDigestsMatchContent(t *testing.T) {
 	}
 	t.Run("assertion catalog", func(t *testing.T) { assertDigest(t, assertions.Sha256, assertions) })
 	for _, framework := range frameworks.Frameworks {
-		framework := framework
+
 		t.Run(framework.FrameworkId, func(t *testing.T) { assertDigest(t, framework.CatalogSha256, framework) })
 	}
 	t.Run("framework catalog", func(t *testing.T) { assertDigest(t, frameworks.Sha256, frameworks) })

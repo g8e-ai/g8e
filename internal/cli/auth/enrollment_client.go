@@ -76,7 +76,7 @@ func NewEnrollmentClient(cfg *config.Config, systemFingerprint func() (string, e
 // bootstrap/recovery/remote enrollment to stamp the request with host
 // metadata. Extracted here so tests can inject a no-op fingerprint.
 func defaultSystemFingerprint() (string, error) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	fp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrInternal, err)

@@ -10,7 +10,6 @@ package lattice
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	taskmanagerv1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1"
@@ -186,6 +185,6 @@ func (a *Adapter) reportTaskStatus(ctx context.Context, version *taskmanagerv1.T
 	a.logger.Info("Lattice: reported task status",
 		"task_id", version.GetTaskId(),
 		"status", status.String(),
-		slog.String("entity_id", a.entityID))
+		"entity_id", a.entityID)
 	return nil
 }

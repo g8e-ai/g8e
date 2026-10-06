@@ -151,9 +151,9 @@ type EvidenceImporter interface {
 // GraphFailure records one validation failure detected during graph
 // construction or validation.
 type GraphFailure struct {
-	Code    error
-	Subject string
-	Reason  string
+	Code    error  `json:"code,omitempty"`
+	Subject string `json:"subject,omitempty"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 // EvidenceGraph is the content-addressed evidence graph. Nodes are indexed

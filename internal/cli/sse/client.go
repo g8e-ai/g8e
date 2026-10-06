@@ -217,6 +217,7 @@ func parseSSEStream(ctx context.Context, r io.Reader, handler EventHandler, c *C
 
 	if err := scanner.Err(); err != nil {
 		if ctx.Err() != nil {
+			//nolint:nilerr // intentional fallback: context cancellation cleanly terminates stream
 			return nil
 		}
 		return fmt.Errorf("sse client: scan: %w", err)

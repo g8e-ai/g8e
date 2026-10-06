@@ -52,6 +52,7 @@ func printBriefStatus(cmd *cobra.Command, cfg *config.Config, clientFactory auth
 	}
 	if clientErr != nil {
 		cmd.Println("  Operators  unavailable; enroll your CLI identity to view connections")
+		//nolint:nilerr // intentional fallback: brief status displays unenrollment message without erroring
 		return nil
 	}
 	path := constants.APIPaths.Operators
@@ -62,6 +63,7 @@ func printBriefStatus(cmd *cobra.Command, cfg *config.Config, clientFactory auth
 	var response models.OperatorSlotResponse
 	if err != nil || json.Unmarshal(body, &response) != nil || !response.Success {
 		cmd.Println("  Operators  unavailable; check enrollment or Gateway logs")
+		//nolint:nilerr // intentional fallback: brief status prints unavailable message without erroring
 		return nil
 	}
 	connected := make([]models.OperatorDocumentGo, 0)

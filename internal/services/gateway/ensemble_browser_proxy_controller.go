@@ -473,6 +473,7 @@ func injectBrowserContext(body []byte, userID, webSessionID string, bound []brow
 	}
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
+		//nolint:nilerr // intentional fallback: non-JSON body returned unchanged
 		return body, nil
 	}
 	ctx, _ := payload["context"].(map[string]interface{})

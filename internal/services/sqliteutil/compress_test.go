@@ -74,7 +74,7 @@ func TestCompress(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			compressed, err := Compress(tt.input)
@@ -140,7 +140,7 @@ func TestDecompress(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			decompressed, err := Decompress(tt.input)
@@ -207,7 +207,7 @@ func TestHashBytes(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			h := HashBytes(tt.input)

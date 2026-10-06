@@ -132,6 +132,7 @@ func (s *CredentialStore) Inspect(ctx context.Context) (LocalIdentity, error) {
 		out.CLICert = cliCert   // may be nil
 		out.HasCLIKey = cliKeyPresent
 		out.TrustBundle = bundle // may be nil
+		//nolint:nilerr // intentional fallback: corrupt identity state is captured in out.State
 		return out, nil
 	}
 

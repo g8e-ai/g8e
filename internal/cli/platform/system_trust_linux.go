@@ -95,6 +95,7 @@ func (i *SystemTrustInstaller) isTrustedDebian(ctx context.Context, fingerprint 
 	out, err := i.runner.Run(ctx, nil, "cat", managedPath)
 	if err != nil {
 		// File does not exist or is unreadable — not trusted yet.
+		//nolint:nilerr // intentional fallback: missing file indicates cert is not installed
 		return false, nil
 	}
 	return bundleContainsFingerprint(out, fingerprint)
@@ -168,6 +169,7 @@ func (i *SystemTrustInstaller) listStaleAnchorsPlatform(ctx context.Context, cur
 	out, err := i.runner.Run(ctx, nil, "ls", dir)
 	if err != nil {
 		// Directory does not exist or is empty — no stale anchors.
+		//nolint:nilerr // intentional fallback: unreadable or missing directory indicates no stale anchors
 		return []StaleAnchor{}, nil
 	}
 

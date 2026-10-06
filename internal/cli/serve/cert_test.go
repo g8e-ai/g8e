@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"io"
 	"log/slog"
 	"math/big"
 	"net"
@@ -45,7 +44,7 @@ import (
 
 // testLogger returns a silent logger suitable for unit tests.
 func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	return slog.New(slog.DiscardHandler)
 }
 
 // generateTestCert creates a self-signed x509 certificate for testing,

@@ -367,7 +367,10 @@ func (c *AppPlatformEnrollmentClient) pendingStatePath() string {
 
 func (c *AppPlatformEnrollmentClient) loadPendingState(relPath string) (*appPendingState, error) {
 	exists, err := c.fileSvc.FileExists(context.Background(), relPath)
-	if err != nil || !exists {
+	if err != nil {
+		return nil, fmt.Errorf("app enrollment: check pending state exists: %w", err)
+	}
+	if !exists {
 		return nil, nil
 	}
 	data, err := c.fileSvc.ReadFile(context.Background(), relPath)

@@ -35,49 +35,47 @@ import (
 
 // GatewayConfig holds configuration for starting the gateway in gateway mode.
 type GatewayConfig struct {
-	WorkingDir                         string `json:"working_dir,omitempty"`
-	OperatorRoles                      constants.OperatorRoles
-	InferenceOllamaEndpoint            string
-	InferenceKeepAlive                 string
-	ProviderBoundaryObserverID         string
-	ProvenanceOperatorID               string
-	ProvenanceOperatorModelStorageRoot string
-
-	Posture             config.GatewayPosture `json:"posture"`
-	HTTPPort            int                   `json:"http_port"`
-	HTTPSPort           int                   `json:"https_port"`
-	DataDir             string                `json:"data_dir,omitempty"`
-	PKIDir              string                `json:"pki_dir,omitempty"`
-	SecretsDir          string                `json:"secrets_dir,omitempty"`
-	VaultDir            string                `json:"vault_dir,omitempty"`
-	VaultKeyPath        string                `json:"vault_key_path,omitempty"`
-	PasskeyRpID         string                `json:"passkey_rp_id,omitempty"`
-	PasskeyRpName       string                `json:"passkey_rp_name,omitempty"`
-	PasskeyRpOrigins    []string              `json:"passkey_rp_origins,omitempty"`
-	RateLimitRPS        float64               `json:"rate_limit_rps"`
-	RateLimitBurst      int                   `json:"rate_limit_burst"`
-	LogLevel            string                `json:"log_level"`
-	CertIdentityMode    string                `json:"cert_identity_mode,omitempty"`
-	NetworkIdentityFile string                `json:"network_identity_file,omitempty"`
-	ConsensusID         string                `json:"consensus_id,omitempty"`
-	ConsensusURL        string                `json:"consensus_url,omitempty"`
-	ConsensusBootstrap  string                `json:"consensus_bootstrap,omitempty"`
-	MCPDownstreamURL    string                `json:"mcp_downstream_url,omitempty"`
-	MCPDownstreamCmd    string                `json:"mcp_downstream_cmd,omitempty"`
-	MCPDownstreamArgs   []string              `json:"mcp_downstream_args,omitempty"`
-	A2ADownstreamURL    string                `json:"a2a_downstream_url,omitempty"`
-	EnsembleUpstreamURL string                `json:"ensemble_upstream_url,omitempty"`
-	PublicBaseURL       string                `json:"public_base_url,omitempty"`
-	AllowedOrigins      []string              `json:"allowed_origins,omitempty"`
-	DoctrineDir         string                `json:"doctrine_dir,omitempty"`
-
-	PublicSpectatorEnabled            bool     `json:"public_spectator_enabled"`
-	PublicSpectatorPrivateAddr        string   `json:"public_spectator_private_addr,omitempty"`
-	PublicSpectatorPublicAddr         string   `json:"public_spectator_public_addr,omitempty"`
-	PublicSpectatorAllowContainerBind bool     `json:"public_spectator_allow_container_bind,omitempty"`
-	EvalExplorerAddr                  string   `json:"eval_explorer_addr,omitempty"`
-	EvalExplorerRoot                  string   `json:"eval_explorer_root,omitempty"`
-	PublicSpectatorTrustedProxyCIDRs  []string `json:"public_spectator_trusted_proxy_cidrs,omitempty"`
+	WorkingDir                         string                  `json:"working_dir,omitempty"`
+	OperatorRoles                      constants.OperatorRoles `json:"operator_roles,omitempty"`
+	InferenceOllamaEndpoint            string                  `json:"inference_ollama_endpoint,omitempty"`
+	InferenceKeepAlive                 string                  `json:"inference_keep_alive,omitempty"`
+	ProviderBoundaryObserverID         string                  `json:"provider_boundary_observer_id,omitempty"`
+	ProvenanceOperatorID               string                  `json:"provenance_operator_id,omitempty"`
+	ProvenanceOperatorModelStorageRoot string                  `json:"provenance_operator_model_storage_root,omitempty"`
+	Posture                            config.GatewayPosture   `json:"posture"`
+	HTTPPort                           int                     `json:"http_port"`
+	HTTPSPort                          int                     `json:"https_port"`
+	DataDir                            string                  `json:"data_dir,omitempty"`
+	PKIDir                             string                  `json:"pki_dir,omitempty"`
+	SecretsDir                         string                  `json:"secrets_dir,omitempty"`
+	VaultDir                           string                  `json:"vault_dir,omitempty"`
+	VaultKeyPath                       string                  `json:"vault_key_path,omitempty"`
+	PasskeyRpID                        string                  `json:"passkey_rp_id,omitempty"`
+	PasskeyRpName                      string                  `json:"passkey_rp_name,omitempty"`
+	PasskeyRpOrigins                   []string                `json:"passkey_rp_origins,omitempty"`
+	RateLimitRPS                       float64                 `json:"rate_limit_rps"`
+	RateLimitBurst                     int                     `json:"rate_limit_burst"`
+	LogLevel                           string                  `json:"log_level"`
+	CertIdentityMode                   string                  `json:"cert_identity_mode,omitempty"`
+	NetworkIdentityFile                string                  `json:"network_identity_file,omitempty"`
+	ConsensusID                        string                  `json:"consensus_id,omitempty"`
+	ConsensusURL                       string                  `json:"consensus_url,omitempty"`
+	ConsensusBootstrap                 string                  `json:"consensus_bootstrap,omitempty"`
+	MCPDownstreamURL                   string                  `json:"mcp_downstream_url,omitempty"`
+	MCPDownstreamCmd                   string                  `json:"mcp_downstream_cmd,omitempty"`
+	MCPDownstreamArgs                  []string                `json:"mcp_downstream_args,omitempty"`
+	A2ADownstreamURL                   string                  `json:"a2a_downstream_url,omitempty"`
+	EnsembleUpstreamURL                string                  `json:"ensemble_upstream_url,omitempty"`
+	PublicBaseURL                      string                  `json:"public_base_url,omitempty"`
+	AllowedOrigins                     []string                `json:"allowed_origins,omitempty"`
+	DoctrineDir                        string                  `json:"doctrine_dir,omitempty"`
+	PublicSpectatorEnabled             bool                    `json:"public_spectator_enabled"`
+	PublicSpectatorPrivateAddr         string                  `json:"public_spectator_private_addr,omitempty"`
+	PublicSpectatorPublicAddr          string                  `json:"public_spectator_public_addr,omitempty"`
+	PublicSpectatorAllowContainerBind  bool                    `json:"public_spectator_allow_container_bind,omitempty"`
+	EvalExplorerAddr                   string                  `json:"eval_explorer_addr,omitempty"`
+	EvalExplorerRoot                   string                  `json:"eval_explorer_root,omitempty"`
+	PublicSpectatorTrustedProxyCIDRs   []string                `json:"public_spectator_trusted_proxy_cidrs,omitempty"`
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central

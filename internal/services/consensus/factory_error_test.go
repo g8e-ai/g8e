@@ -11,7 +11,6 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"testing"
 
@@ -56,7 +55,7 @@ func TestKeyProviderFunc_GetMemberKey_Error(t *testing.T) {
 func TestNewConsensusFromPolicy_NilPolicy(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	responder := response.NewWriter(logger)
 
 	_, priv, err := ed25519.GenerateKey(nil)
@@ -75,7 +74,7 @@ func TestNewConsensusFromPolicy_NilPolicy(t *testing.T) {
 func TestNewConsensusFromPolicy_NilKeyProvider(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	responder := response.NewWriter(logger)
 
 	policy := &models.ConsensusPolicy{
@@ -93,7 +92,7 @@ func TestNewConsensusFromPolicy_NilKeyProvider(t *testing.T) {
 func TestNewConsensusFromPolicy_KeyProviderError(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	responder := response.NewWriter(logger)
 
 	policy := &models.ConsensusPolicy{
@@ -123,7 +122,7 @@ func TestNewConsensusFromPolicy_KeyProviderError(t *testing.T) {
 func TestNewConsensusFromPolicy_AllKeysResolved(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	responder := response.NewWriter(logger)
 
 	_, priv1, err := ed25519.GenerateKey(nil)
@@ -164,7 +163,7 @@ func TestNewConsensusFromPolicy_AllKeysResolved(t *testing.T) {
 func TestNewConsensusFromPolicy_EmptyMemberList(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	responder := response.NewWriter(logger)
 
 	policy := &models.ConsensusPolicy{

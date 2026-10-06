@@ -165,8 +165,8 @@ func TestModelsShow(t *testing.T) {
 	out, err = runModelsJSON(t, root, "show", "gemma3:1b")
 	require.NoError(t, err)
 	var payload struct {
-		Scopes      []string
-		DigestDrift bool `json:"digest_drift"`
+		Scopes      []string `json:"scopes"`
+		DigestDrift bool     `json:"digest_drift"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(out), &payload))
 	assert.Equal(t, []string{"catalog", "registry"}, payload.Scopes)

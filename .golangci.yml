@@ -37,12 +37,13 @@ linters:
     - fatcontext
     - recvcheck
     - mirror
+    - musttag
     # - contextcheck  # Disabled for gradual compliance (9 issues)
-    # - copyloopvar  # Disabled for gradual compliance (14 issues)
-    # - errorlint  # Disabled for gradual compliance (43 issues)
-    # - nilerr  # Disabled for gradual compliance (16 issues)
-
-    # Security
+    - copyloopvar
+    - usestdlibvars
+    - nilerr
+    - nolintlint
+    - sloglint
     - gosec
     
     # Test Helpers (relaxed for gradual compliance)
@@ -95,6 +96,9 @@ linters:
       enable-all: true
     gocyclo:
       min-complexity: 60
+    nolintlint:
+      require-explanation: true
+      require-specific: true
     goconst:
       min-len: 5
       min-occurrences: 5

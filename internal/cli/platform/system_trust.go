@@ -258,6 +258,7 @@ func certFingerprint(cert *x509.Certificate) string {
 func bundleContainsFingerprint(data []byte, fingerprint string) (bool, error) {
 	certs, err := parseBundleCerts(data)
 	if err != nil {
+		//nolint:nilerr // intentional fallback: unparseable cert bundle treated as not containing fingerprint
 		return false, nil
 	}
 	for _, c := range certs {

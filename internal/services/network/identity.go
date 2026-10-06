@@ -79,31 +79,31 @@ func getExternalInterfaceIPWithFunc(getInterfaces netInterfacesFunc, getAddrs in
 
 // NetworkIdentity represents all detected network identities for the machine.
 type NetworkIdentity struct {
-	IPs          []string
-	Hostnames    []string
-	EtcHosts     []HostAlias
-	MDNSNames    []string
-	DNSPTRs      []DNSPTRRecord
-	SSHHostnames []string
-	Windows      WindowsIdentity
+	IPs          []string        `json:"ips,omitempty"`
+	Hostnames    []string        `json:"hostnames,omitempty"`
+	EtcHosts     []HostAlias     `json:"etc_hosts,omitempty"`
+	MDNSNames    []string        `json:"mdns_names,omitempty"`
+	DNSPTRs      []DNSPTRRecord  `json:"dns_ptrs,omitempty"`
+	SSHHostnames []string        `json:"ssh_hostnames,omitempty"`
+	Windows      WindowsIdentity `json:"windows,omitempty"`
 }
 
 // HostAlias represents an entry from the hosts file pointing to this machine.
 type HostAlias struct {
-	IP      string
-	Aliases []string
+	IP      string   `json:"ip,omitempty"`
+	Aliases []string `json:"aliases,omitempty"`
 }
 
 // DNSPTRRecord represents a DNS PTR record for an IP.
 type DNSPTRRecord struct {
-	IP       string
-	Hostname string
+	IP       string `json:"ip,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
 }
 
 // WindowsIdentity represents Windows-specific network identities.
 type WindowsIdentity struct {
-	NetBIOSName string
-	ADFQDN      string
+	NetBIOSName string `json:"netbios_name,omitempty"`
+	ADFQDN      string `json:"adfqdn,omitempty"`
 }
 
 // Detector handles network identity detection.

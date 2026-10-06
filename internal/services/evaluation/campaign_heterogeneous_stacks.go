@@ -25,22 +25,22 @@ const (
 // HeterogeneousCoverageMatrix records which variant-role placements are
 // satisfied by a stack set. Its field names are the persisted JSON keys.
 type HeterogeneousCoverageMatrix struct {
-	HypothesisStackCount int
-	CoverageStackCount   int
-	TotalStackCount      int
-	VariantRoleCoverage  map[string][]string
+	HypothesisStackCount int                 `json:"hypothesis_stack_count,omitempty"`
+	CoverageStackCount   int                 `json:"coverage_stack_count,omitempty"`
+	TotalStackCount      int                 `json:"total_stack_count,omitempty"`
+	VariantRoleCoverage  map[string][]string `json:"variant_role_coverage,omitempty"`
 }
 
 // HeterogeneousStackSet is the frozen stack set of one system-lane campaign:
 // one stack per formation, bound to the campaign's frozen model registry.
 type HeterogeneousStackSet struct {
-	CampaignID     string
-	GenerationRule string
-	Seed           uint64
-	SetDigest      string
-	VariantIDs     []string
-	Stacks         []*evalv1.HeterogeneousStackDefinition
-	Coverage       *HeterogeneousCoverageMatrix
+	CampaignID     string                                 `json:"campaign_id,omitempty"`
+	GenerationRule string                                 `json:"generation_rule,omitempty"`
+	Seed           uint64                                 `json:"seed,omitempty"`
+	SetDigest      string                                 `json:"set_digest,omitempty"`
+	VariantIDs     []string                               `json:"variant_ids,omitempty"`
+	Stacks         []*evalv1.HeterogeneousStackDefinition `json:"stacks,omitempty"`
+	Coverage       *HeterogeneousCoverageMatrix           `json:"coverage,omitempty"`
 }
 
 // ValidateHeterogeneousStackSet verifies stack digests, coverage, and set digest.

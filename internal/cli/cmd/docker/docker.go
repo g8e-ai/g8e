@@ -1240,6 +1240,7 @@ the gateway, not just the default-profile gateway container.`,
 			}
 			if err := checkDockerAvailable(); err != nil {
 				cmd.Println("Docker not available — nothing to clean.")
+				//nolint:nilerr // intentional fallback: when docker is unavailable, clean is a no-op
 				return nil
 			}
 			cmd.Println("Cleaning Docker Compose stack...")

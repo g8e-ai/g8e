@@ -11,6 +11,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -154,7 +155,7 @@ func TestAuthIntegrity_AppRateLimitEnforced(t *testing.T) {
 	}
 
 	// Create a test request
-	req := httptest.NewRequest("GET", "/api/mcp/v1/tools/list", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/mcp/v1/tools/list", nil)
 	req.ContentLength = 100
 
 	// First request should pass
@@ -197,7 +198,7 @@ func TestAuthIntegrity_AppRateLimitZeroConfigured(t *testing.T) {
 	}
 
 	// Create a test request
-	req := httptest.NewRequest("GET", "/api/mcp/v1/tools/list", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/mcp/v1/tools/list", nil)
 	req.ContentLength = 100
 
 	// Many requests should all pass when rate limit is not configured

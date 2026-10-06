@@ -10,7 +10,6 @@ package consensus
 import (
 	"context"
 	"crypto/ed25519"
-	"io"
 	"log/slog"
 	"testing"
 
@@ -32,7 +31,7 @@ func TestLocalDeliberator_HappyPath(t *testing.T) {
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 1)
 	svc := NewConsensusService("test-consensus", members, doctrine,
-		slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+		slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 	envBytes, err := (protojson.MarshalOptions{Multiline: false}).Marshal(env)
@@ -61,7 +60,7 @@ func TestLocalDeliberator_InvalidJSON(t *testing.T) {
 
 	members := makeMembers(t, 1)
 	svc := NewConsensusService("test-consensus", members, nil,
-		slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+		slog.New(slog.DiscardHandler), newTestResponder())
 
 	ld := NewLocalDeliberator(svc)
 	_, err := ld.Deliberate(context.Background(), []byte("not json"))
@@ -76,7 +75,7 @@ func TestLocalDeliberator_HashMismatch(t *testing.T) {
 
 	members := makeMembers(t, 1)
 	svc := NewConsensusService("test-consensus", members, nil,
-		slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+		slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 	env.Id = "wrong-id"
@@ -102,7 +101,7 @@ func TestLocalDeliberator_SignatureVerifiable(t *testing.T) {
 		{AppID: "verifiable-member", PrivateKey: priv},
 	}
 	svc := NewConsensusService("test-consensus", members, doctrine,
-		slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+		slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 	envBytes, err := (protojson.MarshalOptions{Multiline: false}).Marshal(env)

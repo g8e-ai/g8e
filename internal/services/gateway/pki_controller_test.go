@@ -199,7 +199,7 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
@@ -259,7 +259,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
@@ -395,7 +395,7 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
@@ -442,7 +442,7 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
