@@ -8,7 +8,6 @@
 package tui
 
 import (
-	"net/http"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,15 +17,15 @@ import (
 
 // Options configures the TUI at launch.
 type Options struct {
-	Version      string
-	NodeName     string
-	NetLabel     string
-	Quorum       int
-	Total        int
-	SSEURL       string
-	Token        string
-	CLISessionID string
-	HTTPClient   *http.Client
+	Version  string
+	NodeName string
+	NetLabel string
+	Quorum   int
+	Total    int
+
+	// Session is the CLI's authenticated Gateway session (*api.Client). When
+	// nil the TUI runs without a live event source.
+	Session Session
 
 	// ProgramOptions are appended to the default bubbletea program options
 	// (AltScreen, MouseCellMotion). Tests use this to inject headless options.
@@ -57,6 +56,10 @@ type Model struct {
 	total         int
 	result        ConsensusResult
 	consensusHash string
+
+	// Pending L3 approvals, keyed by transaction hash, from the last
+	// successful pending-approval refresh.
+	pending map[string]struct{}
 
 	// Animation
 	blinkOn bool

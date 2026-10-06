@@ -11,9 +11,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net/http"
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
@@ -24,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/sse"
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -54,13 +53,22 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 				CLISessionID:      "cli-sess-test",
 			}, nil
 		},
-		buildMTLSClient: func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
-			return &http.Client{}, nil
+		newSession: func(fs.RuntimeFileService, *config.Config) (tui.Session, error) {
+			return &stubSession{}, nil
 		},
 		tuiRun: func(ctx context.Context, opts tui.Options) error {
 			return nil
 		},
 	}
+}
+
+// stubSession is a tui.Session that never reaches a gateway.
+type stubSession struct{}
+
+func (*stubSession) NewSSEClient() *sse.Client { return sse.NewClient("", nil) }
+
+func (*stubSession) DoRequestContext(context.Context, string, string, interface{}) ([]byte, error) {
+	return []byte(`{"transactions":[]}`), nil
 }
 
 // setupTUITestConfig creates a minimal config in a temp directory for hermetic tests.
@@ -215,14 +223,14 @@ func TestTUI_NotEnrolled(t *testing.T) {
 	})
 }
 
-// --- mTLS client build failure ---
+// --- CLI session open failure ---
 
-func TestTUI_BuildMTLSClientFailure(t *testing.T) {
-	t.Run("returns error when BuildMTLSClient fails", func(t *testing.T) {
+func TestTUI_NewSessionFailure(t *testing.T) {
+	t.Run("returns error when the CLI API session cannot be opened", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
 		tlsErr := fmt.Errorf("cert file missing")
-		deps.buildMTLSClient = func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
+		deps.newSession = func(fs.RuntimeFileService, *config.Config) (tui.Session, error) {
 			return nil, tlsErr
 		}
 		cmd := tuiCmdWithDeps(deps)
@@ -236,7 +244,7 @@ func TestTUI_BuildMTLSClientFailure(t *testing.T) {
 // --- tui.Run invocation ---
 
 func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
-	t.Run("passes correct version, node name, net label, and SSE URL to tui.Run", func(t *testing.T) {
+	t.Run("passes correct version, node name, net label, and CLI session to tui.Run", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
 
@@ -256,10 +264,7 @@ func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
 		assert.Equal(t, "v9.9.9", capturedOpts.Version)
 		assert.Equal(t, "operator-test", capturedOpts.NodeName)
 		assert.Equal(t, "mTLS", capturedOpts.NetLabel)
-		assert.Contains(t, capturedOpts.SSEURL, constants.APIPaths.SSEStream)
-		assert.NotContains(t, capturedOpts.SSEURL, "cli_session_id=", "routing IDs must not appear in SSE URL query string")
-		assert.Equal(t, "cli-sess-test", capturedOpts.CLISessionID, "CLISessionID must be threaded into tui.Options for X-G8E-CLI-Session-ID header")
-		assert.NotNil(t, capturedOpts.HTTPClient)
+		assert.IsType(t, &stubSession{}, capturedOpts.Session, "the CLI API session must be threaded into tui.Options")
 	})
 
 	t.Run("defaults version to dev when root version is empty", func(t *testing.T) {
@@ -297,28 +302,14 @@ func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
 	})
 }
 
-// --- SSE URL construction ---
+// --- CLI session wiring ---
 
-func TestTUI_SSEURLConstruction(t *testing.T) {
-	t.Run("SSE URL is built from OperatorHTTPURL and SSEStream path", func(t *testing.T) {
-		cfg := setupTUITestConfig(t)
-		deps := stubTUIDeps(t, cfg)
-
-		var capturedSSEURL string
-		deps.tuiRun = func(_ context.Context, opts tui.Options) error {
-			capturedSSEURL = opts.SSEURL
-			return nil
-		}
-
-		root := newRootCmdWithVersion("test")
-		cmd := tuiCmdWithDeps(deps)
-		root.AddCommand(cmd)
-		root.SetArgs([]string{"tui"})
-		require.NoError(t, root.Execute())
-
-		expectedBase := cfg.OperatorHTTPURL()
-		assert.Contains(t, capturedSSEURL, expectedBase)
-		assert.Contains(t, capturedSSEURL, constants.APIPaths.SSEStream)
+func TestTUI_DefaultSessionIsCLIAPIClient(t *testing.T) {
+	t.Run("default session factory is the shared CLI API client", func(t *testing.T) {
+		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+		_, err := defaultTUIDeps().newSession(fileSvc, cfg)
+		require.Error(t, err, "api.NewClient must reject an unenrolled environment")
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 	})
 }
 
@@ -336,7 +327,7 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 				return dockerContainerState{}, constants.ErrNotFound
 			},
 			loadCredentials: auth.LoadCredentials,
-			buildMTLSClient: auth.BuildMTLSClient,
+			newSession:      newAPISession,
 			tuiRun:          func(context.Context, tui.Options) error { return nil },
 		}
 
@@ -364,7 +355,7 @@ func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 			fileSvcFactory:       cmdtest.FileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return nil },
 			loadCredentials:      auth.LoadCredentials,
-			buildMTLSClient:      auth.BuildMTLSClient,
+			newSession:           newAPISession,
 			tuiRun:               func(context.Context, tui.Options) error { return nil },
 		}
 
@@ -389,7 +380,7 @@ func TestTUI_RealCredentialsCorruptJSON(t *testing.T) {
 			fileSvcFactory:       cmdtest.FileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return nil },
 			loadCredentials:      auth.LoadCredentials,
-			buildMTLSClient:      auth.BuildMTLSClient,
+			newSession:           newAPISession,
 			tuiRun:               func(context.Context, tui.Options) error { return nil },
 		}
 

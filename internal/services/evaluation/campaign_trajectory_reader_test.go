@@ -689,7 +689,7 @@ func TestBuildGradingToolCalls_PrependsOnlyFailedToolEventsFromTheSeed(t *testin
 		{Summary: "no tool", Error: "boom"},
 	}
 
-	got := buildGradingToolCalls(realCalls, policyGuided, seed)
+	got := buildGradingToolCalls(realCalls, seed)
 
 	require.Len(t, got, 3, "two failed seed events and the real call")
 	assert.Equal(t, traceToolCall{CallID: "s1", ToolName: toolGrep, ArgumentsJSON: `{"pattern":"X"}`, Command: "grep X", Error: "boom", ErrorType: "execution.error", Seeded: true}, got[0])
@@ -697,7 +697,7 @@ func TestBuildGradingToolCalls_PrependsOnlyFailedToolEventsFromTheSeed(t *testin
 	assert.Equal(t, "permission.denied", got[1].ErrorType)
 	assert.True(t, got[1].IsDenied(), "a seeded permission denial reads as a denial")
 	assert.Equal(t, realCalls[0], got[2], "real calls keep their order, after the seeded ones")
-	assert.Equal(t, realCalls, buildGradingToolCalls(realCalls, policyGuided, nil))
+	assert.Equal(t, realCalls, buildGradingToolCalls(realCalls, nil))
 }
 
 func TestParseFailedArgAndRule(t *testing.T) {

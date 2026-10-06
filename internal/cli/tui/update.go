@@ -8,6 +8,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -57,6 +59,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.connStatus = msg.Status
 		m.connDetail = msg.Detail
 
+	case PendingApprovalsMsg:
+		m = m.applyPendingApprovalsMsg(msg)
+		if m.hasBlinkingState() {
+			return m, tick()
+		}
+
 	case ScenarioCompleteMsg:
 		level := LevelCritical
 		checkpoint := "scenario-status-unknown"
@@ -97,6 +105,44 @@ func (m Model) applyPipelineMsg(msg PipelineMsg) Model {
 	m.pipeline[idx].detail = msg.Detail
 	if msg.TxID != "" {
 		m.activeTx = msg.TxID
+	}
+	return m
+}
+
+// applyPendingApprovalsMsg reconciles the pending L3 approval set: each newly
+// pending transaction is announced in the ledger with the CLI command that
+// approves it, and the L3 stage reflects whether anything is still waiting.
+func (m Model) applyPendingApprovalsMsg(msg PendingApprovalsMsg) Model {
+	if msg.Err != nil {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Pending approvals refresh failed: " + msg.Err.Error()})
+	}
+
+	next := make(map[string]struct{}, len(msg.Transactions))
+	for _, tx := range msg.Transactions {
+		next[tx.TransactionHash] = struct{}{}
+		if _, seen := m.pending[tx.TransactionHash]; seen {
+			continue
+		}
+		tool := tx.ToolName
+		if tool == "" {
+			tool = "transaction"
+		}
+		m = m.applyLedgerMsg(LedgerMsg{
+			Level:   LevelWarn,
+			Message: fmt.Sprintf("APPROVAL REQUIRED: %s (tx %s) — run 'g8e auth approve %s'", tool, shortHash(tx.TransactionHash), tx.TransactionHash),
+		})
+	}
+	m.pending = next
+
+	l3 := &m.pipeline[StageL3]
+	switch {
+	case len(msg.Transactions) > 0:
+		l3.status = StatusWaiting
+		l3.detail = fmt.Sprintf("%d pending approval(s)", len(msg.Transactions))
+		m.activeTx = msg.Transactions[0].TransactionHash
+	case l3.status == StatusWaiting:
+		l3.status = StatusIdle
+		l3.detail = ""
 	}
 	return m
 }

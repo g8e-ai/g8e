@@ -220,7 +220,7 @@ func (f Formation) ToStackDefinition() (*evalv1.HeterogeneousStackDefinition, er
 	if err != nil {
 		return nil, err
 	}
-	stack, err := materializeStack(f.ID, f.ID, variants[0], variants[1], variants[2])
+	stack, err := materializeStack(f.ID, variants[0], variants[1], variants[2])
 	if err != nil {
 		return nil, err
 	}

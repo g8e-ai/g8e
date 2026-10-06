@@ -44,10 +44,7 @@ func generateAll(root string, reg registryFile, actionTypes map[string]actionTyp
 	if err != nil {
 		return generationOutputs{}, err
 	}
-	actionTypesGo, err := generateActionTypesGo(actionTypes)
-	if err != nil {
-		return generationOutputs{}, err
-	}
+	actionTypesGo := generateActionTypesGo(actionTypes)
 	formattedEvents, err := format.Source([]byte(eventsGo))
 	if err != nil {
 		return generationOutputs{}, fmt.Errorf("format generated event constants: %w", err)
@@ -56,10 +53,7 @@ func generateAll(root string, reg registryFile, actionTypes map[string]actionTyp
 	if err != nil {
 		return generationOutputs{}, fmt.Errorf("format generated action constants: %w", err)
 	}
-	consoleTS, err := generateConsoleEventsTS(reg)
-	if err != nil {
-		return generationOutputs{}, err
-	}
+	consoleTS := generateConsoleEventsTS(reg)
 
 	return generationOutputs{
 		EventsGo:      string(formattedEvents),

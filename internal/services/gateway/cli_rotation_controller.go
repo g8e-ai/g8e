@@ -143,7 +143,7 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 		c.logger.Warn("CLI rotation: session user mismatch",
 			"context_user_id", userID,
 			"session_user_id", oldSession.UserID,
-			"cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+			"cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 		)
 		c.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 		return
@@ -188,7 +188,7 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 		c.logger.Error("CLI rotation: failed to sign new CLI CSR",
 			"error", err,
 			"user_id", userID,
-			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 		)
 		c.writeRotationError(w, fmt.Errorf("%s: %w", constants.ErrCLIRotationFailed, err))
 		return
@@ -225,8 +225,8 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 		c.logger.Warn("CLI rotation: ReplaceCLISession failed",
 			"error", err,
 			"user_id", userID,
-			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
+			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
 		)
 		if revokeErr := c.pki.RevokeCertificate(newCertSerial, "rotation_race_lost"); revokeErr != nil {
 			c.logger.Error("CLI rotation: failed to revoke orphaned new cert after race loss",
@@ -247,7 +247,7 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 			c.logger.Error("CLI rotation: failed to revoke old cert (rotation succeeded; old session inactive)",
 				"error", revokeErr,
 				"old_cert_serial", oldSession.CertSerial,
-				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 			)
 			// Do not fail the request — the new identity is usable.
 		}
@@ -262,8 +262,8 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 
 	c.logger.Info("CLI rotation completed via controller",
 		"user_id", userID,
-		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
+		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
 	)
 
 	c.responder.JSON(w, http.StatusCreated, models.CLIRotationResponse{

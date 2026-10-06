@@ -119,7 +119,7 @@ func recordRoleCoverage(coverage map[string]map[string]struct{}, variantID, role
 	coverage[variantID][role] = struct{}{}
 }
 
-func materializeStack(campaignID, stackID string, primary, assistant, lite *evalv1.ModelVariant) (*evalv1.HeterogeneousStackDefinition, error) {
+func materializeStack(stackID string, primary, assistant, lite *evalv1.ModelVariant) (*evalv1.HeterogeneousStackDefinition, error) {
 	if primary == nil || assistant == nil || lite == nil {
 		return nil, fmt.Errorf("evaluation: materialize heterogeneous stack: %w", constants.ErrMissingRequiredField)
 	}

@@ -40,7 +40,7 @@ func GenerateHeterogeneousStackSet(req HeterogeneousStackGenerationRequest) (*He
 	variantIDs := make([]string, 0, len(variants))
 	for i, variant := range variants {
 		variantIDs = append(variantIDs, variant.GetVariantId())
-		stack, err := materializeStack(req.CampaignID, fmt.Sprintf("stack-%02d", i), variant, variants[(i+1)%len(variants)], variants[(i+2)%len(variants)])
+		stack, err := materializeStack(fmt.Sprintf("stack-%02d", i), variant, variants[(i+1)%len(variants)], variants[(i+2)%len(variants)])
 		if err != nil {
 			return nil, err
 		}

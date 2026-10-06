@@ -109,7 +109,7 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	// Direct handling of operator approval response when local suspended transaction exists
 	// or when posture requires L3 grounding.
 	if method == http.MethodPost && (upstreamPath == constants.APIPaths.EnsembleOperatorApprovalPrefix+"respond" || strings.HasSuffix(upstreamPath, "/operator/approval/respond")) {
-		if c.handleApprovalRespond(w, r, userID, webSessionID, cliSessionID, body) {
+		if c.handleApprovalRespond(w, r, userID, cliSessionID, body) {
 			return
 		}
 	}
@@ -222,7 +222,7 @@ func (c *EnsembleBrowserProxyController) handleProxySigningKey(w http.ResponseWr
 // handleApprovalRespond handles approval decisions directly when a local
 // suspended transaction exists, enforcing posture-specific security guarantees
 // (WebAuthn for web callers, mTLS for CLI callers under ratify or notary postures).
-func (c *EnsembleBrowserProxyController) handleApprovalRespond(w http.ResponseWriter, r *http.Request, userID, webSessionID, cliSessionID string, body []byte) bool {
+func (c *EnsembleBrowserProxyController) handleApprovalRespond(w http.ResponseWriter, r *http.Request, userID, cliSessionID string, body []byte) bool {
 	var req struct {
 		ApprovalID string `json:"approval_id"`
 		Approved   bool   `json:"approved"`

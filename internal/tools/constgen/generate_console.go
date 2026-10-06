@@ -13,7 +13,7 @@ import (
 	"unicode"
 )
 
-func generateConsoleEventsTS(reg registryFile) (string, error) {
+func generateConsoleEventsTS(reg registryFile) string {
 	keys := sortedEventKeys(reg.Events)
 
 	var b strings.Builder
@@ -66,7 +66,7 @@ export const EventRegistry = Object.freeze({
 	}
 	b.WriteString(`});
 `)
-	return b.String(), nil
+	return b.String()
 }
 
 func registryKeyToJSEnum(key string) string {

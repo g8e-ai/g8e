@@ -285,7 +285,7 @@ func PullOllamaModel(ctx context.Context, dispatcher OllamaModelCommandDispatche
 	if err != nil {
 		return fmt.Errorf("evaluation: pull Ollama model: %w", err)
 	}
-	_, err = dispatchOllamaBashCommand(ctx, dispatcher, maintenance, command, "ollama-model-pull", "ollama-pull")
+	err = dispatchOllamaBashCommand(ctx, dispatcher, maintenance, command, "ollama-model-pull", "ollama-pull")
 	return err
 }
 
@@ -295,7 +295,7 @@ func CopyOllamaModel(ctx context.Context, dispatcher OllamaModelCommandDispatche
 	if err != nil {
 		return fmt.Errorf("evaluation: copy Ollama model: %w", err)
 	}
-	_, err = dispatchOllamaBashCommand(ctx, dispatcher, maintenance, command, "ollama-model-copy", "ollama-copy")
+	err = dispatchOllamaBashCommand(ctx, dispatcher, maintenance, command, "ollama-model-copy", "ollama-copy")
 	return err
 }
 

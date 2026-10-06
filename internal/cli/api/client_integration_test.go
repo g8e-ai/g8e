@@ -10,6 +10,7 @@
 package api
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -277,6 +278,33 @@ func TestDoRequest_HeadersSetCorrectly(t *testing.T) {
 	assert.Equal(t, "test-user-id", receivedHeaders.Get(constants.HeaderUserID))
 	assert.Equal(t, "test-operator-id", receivedHeaders.Get(constants.HeaderOperatorID))
 	assert.Equal(t, "application/json", receivedHeaders.Get("Content-Type"))
+}
+
+// TestNewSSEClient_UsesCLISession verifies the SSE stream shares the API
+// client's CLI session: the session header is sent and the stream is
+// live-only (since_id=0). The TUI and auth approval waiters depend on this.
+func TestNewSSEClient_UsesCLISession(t *testing.T) {
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
+
+	requests := make(chan *http.Request, 1)
+	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case requests <- r.Clone(context.Background()):
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := setupTLSClient(t, fileSvc, cfg, server)
+	require.NoError(t, client.NewSSEClient().ConnectOnce(t.Context(), func(string, string) {}))
+
+	r := <-requests
+	assert.Equal(t, constants.APIPaths.SSEStream, r.URL.Path)
+	assert.Equal(t, "0", r.URL.Query().Get("since_id"))
+	assert.Equal(t, "test-cli-session-id", r.Header.Get(constants.HeaderCLISessionID))
 }
 
 func TestDoRequest_URLConstruction(t *testing.T) {

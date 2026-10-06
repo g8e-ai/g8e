@@ -116,12 +116,7 @@ func OpenCanonicalDBService(logger *slog.Logger, vaultKeyPath string, ks *keysto
 	}
 
 	vaultDirAbs := fileSvc.Resolve(constants.VaultDirname)
-	resolvedVaultKeyPath, err := resolveVaultKeyPath(vaultKeyPath, fileSvc)
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	vaultKeyPath = resolvedVaultKeyPath
+	vaultKeyPath = resolveVaultKeyPath(vaultKeyPath, fileSvc)
 
 	// Auto-initialize vault on first run. If no vault header exists, generate
 	// a random key, create the vault header, and write the key file. This
@@ -244,15 +239,15 @@ func OpenCanonicalDBService(logger *slog.Logger, vaultKeyPath string, ks *keysto
 	return svc, nil
 }
 
-func resolveVaultKeyPath(vaultKeyPath string, fileSvc fs.RuntimeFileService) (string, error) {
+func resolveVaultKeyPath(vaultKeyPath string, fileSvc fs.RuntimeFileService) string {
 	vaultKeyPath = strings.TrimSpace(vaultKeyPath)
 	if vaultKeyPath == "" {
-		return fileSvc.Resolve(constants.DefaultVaultKeyRelPath), nil
+		return fileSvc.Resolve(constants.DefaultVaultKeyRelPath)
 	}
 	if filepath.IsAbs(vaultKeyPath) {
-		return vaultKeyPath, nil
+		return vaultKeyPath
 	}
-	return fileSvc.Resolve(filepath.ToSlash(vaultKeyPath)), nil
+	return fileSvc.Resolve(filepath.ToSlash(vaultKeyPath))
 }
 
 func (s *CanonicalDBService) initStateRoot() error {

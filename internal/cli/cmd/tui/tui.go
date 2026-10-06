@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
@@ -35,7 +35,7 @@ type tuiDeps struct {
 	checkOperatorRunning func(*config.Config) error
 	inspectDockerGateway func(context.Context) (dockerContainerState, error)
 	loadCredentials      func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error)
-	buildMTLSClient      func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error)
+	newSession           func(fs.RuntimeFileService, *config.Config) (tui.Session, error)
 	tuiRun               func(context.Context, tui.Options) error
 }
 
@@ -67,9 +67,18 @@ func defaultTUIDeps() tuiDeps {
 		checkOperatorRunning: auth.CheckOperatorRunning,
 		inspectDockerGateway: inspectDockerGateway,
 		loadCredentials:      auth.LoadCredentials,
-		buildMTLSClient:      auth.BuildMTLSClient,
+		newSession:           newAPISession,
 		tuiRun:               tui.Run,
 	}
+}
+
+// newAPISession opens the same mTLS API client every other CLI command uses.
+func newAPISession(fileSvc fs.RuntimeFileService, cfg *config.Config) (tui.Session, error) {
+	client, err := api.NewClient(fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 func inspectDockerGateway(ctx context.Context) (dockerContainerState, error) {
@@ -117,8 +126,10 @@ func tuiCmdWithDeps(deps tuiDeps) *cobra.Command {
 		Use:   "tui",
 		Short: "Launch the Tactical Governance Console (TUI)",
 		Long: `Launch the Tactical Governance Console — a real-time terminal UI that
-connects to a running g8e Gateway via SSE and visualizes the execution
-pipeline (L1-L5), Sovereign Audit Ledger, and L2 Consensus.
+connects to a running g8e Gateway over the enrolled CLI session (mTLS + SSE)
+and visualizes the execution pipeline (L1-L5), Sovereign Audit Ledger, and
+L2 Consensus. Pending L3 approvals are listed on connect and whenever the
+Gateway reports a change; approve them with 'g8e auth approve <tx_hash>'.
 
 The Gateway must be running and the CLI must be enrolled (g8e auth enroll user)
 before launching the TUI.
@@ -165,16 +176,12 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 		return fmt.Errorf("%w — run 'g8e auth enroll user' first", constants.ErrNotEnrolled)
 	}
 
-	// Build mTLS HTTP client for SSE streaming (no timeout — context-controlled).
-	httpClient, err := deps.buildMTLSClient(fileSvc, cfg, 0)
+	// Open the CLI session: the same mTLS identity, CLI session header, and
+	// SSE stream every other CLI command uses.
+	session, err := deps.newSession(fileSvc, cfg)
 	if err != nil {
-		return fmt.Errorf("tui: build mTLS client: %w", err)
+		return fmt.Errorf("tui: open CLI session: %w", err)
 	}
-
-	// Construct the SSE stream URL. The CLI session ID is sent via the
-	// X-G8E-CLI-Session-ID header (set by the TUI adapter from opts.CLISessionID),
-	// not in the URL query string. The mTLS cert binds user_id at the gateway.
-	sseURL := cfg.OperatorHTTPURL() + constants.APIPaths.SSEStream
 
 	version := cmd.Root().Version
 	if version == "" {
@@ -185,11 +192,9 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 	defer cancel()
 
 	return deps.tuiRun(ctx, tui.Options{
-		Version:      version,
-		NodeName:     creds.OperatorID,
-		NetLabel:     "mTLS",
-		SSEURL:       sseURL,
-		CLISessionID: creds.CLISessionID,
-		HTTPClient:   httpClient,
+		Version:  version,
+		NodeName: creds.OperatorID,
+		NetLabel: "mTLS",
+		Session:  session,
 	})
 }

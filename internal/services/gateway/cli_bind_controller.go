@@ -88,10 +88,10 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			var authErr *AuthError
 			if errors.As(err, &authErr) {
-				c.responder.Error(w, authErr.Status, fmt.Sprintf("operator session %s: %s", safeTruncateID(sessionID, 8), authErr.Message))
+				c.responder.Error(w, authErr.Status, fmt.Sprintf("operator session %s: %s", safeTruncateID(sessionID), authErr.Message))
 				return
 			}
-			c.logger.Error("CLI bind: validate operator session", "error", err, "operator_session_id_prefix", safeTruncateID(sessionID, 8))
+			c.logger.Error("CLI bind: validate operator session", "error", err, "operator_session_id_prefix", safeTruncateID(sessionID))
 			c.responder.Error(w, http.StatusInternalServerError, "failed to verify operator session")
 			return
 		}
@@ -99,7 +99,7 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 			c.logger.Warn("CLI bind: operator session does not belong to authenticated user",
 				"user_id", userID,
 				"operator_user_id", op.UserID,
-				"operator_session_id_prefix", safeTruncateID(sessionID, 8),
+				"operator_session_id_prefix", safeTruncateID(sessionID),
 			)
 			c.responder.Error(w, http.StatusForbidden, "operator session does not belong to the authenticated user")
 			return
@@ -114,7 +114,7 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		if err != nil && !errors.Is(err, constants.ErrCLISessionNotFound) {
 			c.logger.Error("CLI bind: failed to load old session",
 				"error", err,
-				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 			)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to load CLI session")
 			return
@@ -163,8 +163,8 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		c.logger.Warn("CLI bind: RefreshCLISession failed",
 			"error", err,
 			"user_id", userID,
-			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
+			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
 		)
 		c.writeRefreshError(w, err)
 		return
@@ -172,9 +172,9 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 
 	c.logger.Info("CLI session bound to operator session(s) via controller",
 		"user_id", userID,
-		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
-		"primary_operator_session_id_prefix", safeTruncateID(primary.OperatorSessionID, 8),
+		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
+		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
+		"primary_operator_session_id_prefix", safeTruncateID(primary.OperatorSessionID),
 		"operator_count", len(bound),
 	)
 
@@ -278,7 +278,7 @@ func (c *CLIRefreshController) handleUnbind(w http.ResponseWriter, r *http.Reque
 		if err != nil && !errors.Is(err, constants.ErrCLISessionNotFound) {
 			c.logger.Error("CLI unbind: failed to load old session",
 				"error", err,
-				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 			)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to load CLI session")
 			return
@@ -322,8 +322,8 @@ func (c *CLIRefreshController) handleUnbind(w http.ResponseWriter, r *http.Reque
 		c.logger.Warn("CLI unbind: UnbindCLISession failed",
 			"error", err,
 			"user_id", userID,
-			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
+			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
 		)
 		c.writeRefreshError(w, err)
 		return
@@ -331,8 +331,8 @@ func (c *CLIRefreshController) handleUnbind(w http.ResponseWriter, r *http.Reque
 
 	c.logger.Info("CLI session unbound from operator via controller",
 		"user_id", userID,
-		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
+		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
 	)
 
 	c.responder.JSON(w, http.StatusCreated, models.CLIUnbindResponse{

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // PipelineStage identifies a layer in the 5-layer verification gauntlet.
@@ -171,6 +172,13 @@ func (c ConnStatus) String() string {
 type ConnStatusMsg struct {
 	Status ConnStatus
 	Detail string
+}
+
+// PendingApprovalsMsg carries the session user's pending L3 transactions as
+// listed by the Gateway, or the error that prevented listing them.
+type PendingApprovalsMsg struct {
+	Transactions []models.SuspendedTxResponse
+	Err          error
 }
 
 // ScenarioStatus represents the terminal state of a demo scenario run.

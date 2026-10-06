@@ -43,7 +43,7 @@ func Targets() []Target {
 	return result
 }
 
-func targetByFilename(name string) (Target, bool) {
+func isSupportedArtifactFilename(name string) (Target, bool) {
 	for _, target := range targets {
 		if target.Filename == name || target.Checksum == name {
 			return target, true
@@ -56,7 +56,7 @@ func ValidateArtifactName(name string) error {
 	if name == "" || filepath.Base(name) != name || strings.Contains(name, "\\") || strings.Contains(name, "..") {
 		return fmt.Errorf("%w: %q", constants.ErrG8eBinaryArtifact, name)
 	}
-	if _, ok := targetByFilename(name); !ok {
+	if _, ok := isSupportedArtifactFilename(name); !ok {
 		return fmt.Errorf("%w: unsupported filename %q", constants.ErrG8eBinaryArtifact, name)
 	}
 	return nil

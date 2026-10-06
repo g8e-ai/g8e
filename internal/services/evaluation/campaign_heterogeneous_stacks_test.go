@@ -57,6 +57,6 @@ func TestValidateHeterogeneousStackSet_RejectsAVariantMissingARole(t *testing.T)
 
 func TestComputeHeterogeneousStackDigest_RejectsDuplicateVariants(t *testing.T) {
 	variants := testHeterogeneousVariants()
-	_, err := materializeStack("campaign", "invalid", variants[0], variants[0], variants[1])
+	_, err := materializeStack("invalid", variants[0], variants[0], variants[1])
 	assert.Error(t, err)
 }

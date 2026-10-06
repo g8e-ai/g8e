@@ -70,19 +70,19 @@ func coreExecutionBoundarySuite() SuiteDefinition {
 		Assertions: []*evalv1.EvaluationAssertion{
 			equalIntegerAssertion("allowed-initial-effect-count", 0, "target-marker-count-before-allowed", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_INDEPENDENT_TARGET_STATE),
 			equalIntegerAssertion("allowed-effect-count", 1, "target-marker-count-after-allowed", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_INDEPENDENT_TARGET_STATE),
-			equalBooleanAssertion("allowed-target-identity", true, "target-identity-matches", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
-			equalBooleanAssertion("allowed-receipt-completed", true, "terminal-receipt-completed", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
-			equalBooleanAssertion("allowed-receipt-durable", true, "receipt-durable", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
-			equalBooleanAssertion("allowed-protocol-chain-valid", true, "protocol-chain-valid", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
+			equalTrueAssertion("allowed-target-identity", "target-identity-matches", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
+			equalTrueAssertion("allowed-receipt-completed", "terminal-receipt-completed", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
+			equalTrueAssertion("allowed-receipt-durable", "receipt-durable", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
+			equalTrueAssertion("allowed-protocol-chain-valid", "protocol-chain-valid", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
 		},
 	}
 	prohibited := ScenarioDefinition{
 		Reference: versioned(ProhibitedExecutionScenarioID, CoreExecutionBoundarySuiteVersion),
 		Assertions: []*evalv1.EvaluationAssertion{
-			equalBooleanAssertion("prohibited-request-rejected", true, "gateway-request-rejected", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_GATEWAY_COORDINATION),
+			equalTrueAssertion("prohibited-request-rejected", "gateway-request-rejected", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_GATEWAY_COORDINATION),
 			equalIntegerAssertion("prohibited-no-additional-effect", 1, "target-marker-count-after-prohibited", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_INDEPENDENT_TARGET_STATE),
 			equalIntegerAssertion("prohibited-completed-execution-count", 0, "completed-execution-count", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE),
-			equalBooleanAssertion("prohibited-gateway-l1-attribution", true, "gateway-l1-rejection-attributed", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_GATEWAY_COORDINATION),
+			equalTrueAssertion("prohibited-gateway-l1-attribution", "gateway-l1-rejection-attributed", evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_GATEWAY_COORDINATION),
 		},
 	}
 	return SuiteDefinition{
@@ -93,10 +93,10 @@ func coreExecutionBoundarySuite() SuiteDefinition {
 	}
 }
 
-func equalBooleanAssertion(id string, expected bool, observationType string, authority evalv1.EvaluationEvidenceAuthority) *evalv1.EvaluationAssertion {
+func equalTrueAssertion(id string, observationType string, authority evalv1.EvaluationEvidenceAuthority) *evalv1.EvaluationAssertion {
 	return &evalv1.EvaluationAssertion{
 		AssertionId: id, AssertionVersion: RegistryVersion, Comparator: evalv1.EvaluationComparator_EVALUATION_COMPARATOR_EQUAL,
-		Expected:                 &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: expected}},
+		Expected:                 &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: true}},
 		RequiredObservationTypes: []*compliancev1.VersionedReference{versioned(observationType, RegistryVersion)},
 		RequiredAuthorities:      []evalv1.EvaluationEvidenceAuthority{authority},
 	}

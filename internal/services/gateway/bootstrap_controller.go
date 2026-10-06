@@ -217,7 +217,7 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	response.OperatorID = operatorID
 	response.OperatorSessionID = operatorSessionID
 
-	c.logger.Info("[BOOTSTRAP] System initialized with user, embedded operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", safeTruncateID(cliSessionID, 8))
+	c.logger.Info("[BOOTSTRAP] System initialized with user, embedded operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", safeTruncateID(cliSessionID))
 
 	c.responder.JSON(w, http.StatusCreated, response)
 }
