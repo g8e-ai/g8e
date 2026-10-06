@@ -25,6 +25,12 @@ SPEC.loader.exec_module(FULL)
 
 
 class FullTests(unittest.TestCase):
+    @staticmethod
+    def terminate_process(process):
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=5)
+
     def test_missing_dotenv_points_to_runtime_setup(self):
         with (
             patch.dict(sys.modules, {"dotenv": None}),
@@ -200,8 +206,10 @@ class FullTests(unittest.TestCase):
         ):
             FULL.main()
         provenance = launch.call_args_list[0]
-        self.assertEqual(provenance.args[1], "/operator with spaces")
-        self.assertIn("/models with spaces", provenance.args[2])
+        self.assertEqual(
+            provenance.args[1], str(Path("/operator with spaces").resolve())
+        )
+        self.assertIn(str(Path("/models with spaces").resolve()), provenance.args[2])
 
     def test_unattended_stale_identity_fails_without_prompt_or_mutation(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -301,10 +309,7 @@ class FullTests(unittest.TestCase):
                 stdout=subprocess.PIPE,
                 text=True,
             )
-            self.addCleanup(process.wait)
-            self.addCleanup(
-                lambda: process.terminate() if process.poll() is None else None
-            )
+            self.addCleanup(self.terminate_process, process)
             self.addCleanup(process.stdout.close)
             # Wait for exec/startup before checking the command line in stop_ensemble.
             self.assertEqual(process.stdout.readline().strip(), "ready")
@@ -436,7 +441,10 @@ class FullTests(unittest.TestCase):
             root = Path(temp)
             directory, saved, _ = self.setup_identities(root)
             saved.unlink()
-            saved.symlink_to(root / FULL.TRUST_PATH)
+            try:
+                saved.symlink_to(root / FULL.TRUST_PATH)
+            except OSError as exc:
+                self.skipTest(f"symlinks are unavailable: {exc}")
             with (
                 patch.object(FULL, "ROOT", root),
                 patch.object(FULL.subprocess, "run") as run,
@@ -511,8 +519,7 @@ class FullTests(unittest.TestCase):
             process = subprocess.Popen(
                 [sys.executable, "-c", "import time; time.sleep(30)"]
             )
-            self.addCleanup(process.wait)
-            self.addCleanup(process.terminate)
+            self.addCleanup(self.terminate_process, process)
             with patch.object(FULL.subprocess, "Popen", return_value=process) as launch:
                 FULL.start_local("observer", temp, ["g8e", "operator", "start"])
                 FULL.start_local("observer", temp, ["g8e", "operator", "start"])
@@ -763,10 +770,7 @@ class FullTests(unittest.TestCase):
                 stdout=subprocess.PIPE,
                 text=True,
             )
-            self.addCleanup(process.wait)
-            self.addCleanup(
-                lambda: process.terminate() if process.poll() is None else None
-            )
+            self.addCleanup(self.terminate_process, process)
             self.addCleanup(process.stdout.close)
             self.assertEqual(process.stdout.readline().strip(), "ready")
             directory = Path(temp)

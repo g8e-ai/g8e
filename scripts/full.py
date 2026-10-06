@@ -8,6 +8,7 @@
 """Host stack launcher: unattended `make full`, interactive `make full-setup`."""
 
 import argparse
+import ctypes
 import hashlib
 import ipaddress
 import json
@@ -302,8 +303,15 @@ def model_root():
     candidates = [
         Path("/var/snap/ollama/common/models"),
         Path("/usr/share/ollama/.ollama/models"),
-        Path.home() / ".ollama/models",
     ]
+    try:
+        home_models = Path.home() / ".ollama/models"
+    except RuntimeError:
+        # A deliberately minimal environment (including tests and containers)
+        # may not have HOME/USERPROFILE. Other configured stores remain usable.
+        home_models = None
+    if home_models is not None:
+        candidates.append(home_models)
     if snap_models is not None:
         candidates.insert(0, snap_models)
     # Windows Ollama storage may be exposed through WSL drive mounts.
@@ -327,7 +335,9 @@ def model_root():
     for path in candidates:
         if path.is_dir():
             return str(path)
-    return str(Path.home() / ".ollama/models")
+    if home_models is not None:
+        return str(home_models)
+    raise RuntimeError("Could not determine an Ollama model storage directory")
 
 
 def prompt(label, default):
@@ -474,7 +484,42 @@ def start_ensemble(dry_run=False, gateway=GATEWAY_HOST):
     )
 
 
+def windows_kernel32():
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = ctypes.c_void_p
+    dword = ctypes.c_ulong
+    kernel32.OpenProcess.argtypes = (dword, ctypes.c_int, dword)
+    kernel32.OpenProcess.restype = handle
+    kernel32.GetExitCodeProcess.argtypes = (handle, ctypes.POINTER(dword))
+    kernel32.GetExitCodeProcess.restype = ctypes.c_int
+    kernel32.TerminateProcess.argtypes = (handle, ctypes.c_uint)
+    kernel32.TerminateProcess.restype = ctypes.c_int
+    kernel32.WaitForSingleObject.argtypes = (handle, dword)
+    kernel32.WaitForSingleObject.restype = dword
+    kernel32.CloseHandle.argtypes = (handle,)
+    kernel32.CloseHandle.restype = ctypes.c_int
+    return kernel32
+
+
 def ensemble_running(pid):
+    if os.name == "nt":
+        # os.kill(pid, 0) raises WinError 87 for a stale PID on Windows and the
+        # POSIX /proc checks below do not exist there. Query the process handle
+        # without sending a console signal.
+        process_query_limited_information = 0x1000
+        still_active = 259
+        kernel32 = windows_kernel32()
+        handle = kernel32.OpenProcess(
+            process_query_limited_information, False, pid
+        )
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            queried = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            return bool(queried) and exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
     # Linux signal-0 also sees zombies; treat them as stopped.
     stat = Path(f"/proc/{pid}/stat")
     try:
@@ -488,6 +533,24 @@ def ensemble_running(pid):
     except ProcessLookupError:
         return False
     return True
+
+
+def terminate_process(pid, force=False):
+    if os.name != "nt":
+        os.kill(pid, signal.SIGKILL if force else signal.SIGTERM)
+        return
+    process_terminate = 0x0001
+    synchronize = 0x00100000
+    kernel32 = windows_kernel32()
+    handle = kernel32.OpenProcess(process_terminate | synchronize, False, pid)
+    if not handle:
+        raise ProcessLookupError(pid)
+    try:
+        if not kernel32.TerminateProcess(handle, 1):
+            raise ctypes.WinError()
+        kernel32.WaitForSingleObject(handle, 5000)
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def resolve_g8e_binary():
@@ -564,7 +627,7 @@ def stop_ensemble(dry_run=False):
         cmdline = Path(f"/proc/{pid}/cmdline")
         if cmdline.exists() and b"app.serve" not in cmdline.read_bytes().split(b"\0"):
             raise RuntimeError(f"PID {pid} is not the ensemble; refusing to stop it")
-        os.kill(pid, signal.SIGTERM)
+        terminate_process(pid)
         deadline = time.monotonic() + 10
         while ensemble_running(pid):
             if time.monotonic() >= deadline:
@@ -606,12 +669,12 @@ def stop_operator(role, directory, dry_run=False):
                     )
         except OSError:
             pass
-        os.kill(pid, signal.SIGTERM)
+        terminate_process(pid)
         deadline = time.monotonic() + 5
         while ensemble_running(pid):
             if time.monotonic() >= deadline:
                 try:
-                    os.kill(pid, signal.SIGKILL)
+                    terminate_process(pid, force=True)
                 except ProcessLookupError:
                     pass
                 break
@@ -1023,7 +1086,7 @@ def main():
             )
         else:
             remote_commands(system, directory, command_args)
-    if not (args.operator_action in ("start", "restart")):
+    if args.operator_action not in ("start", "restart"):
         start_ensemble(args.dry_run, gateway_host)
     failed = report_workloads() if not args.dry_run else False
     print_summary(

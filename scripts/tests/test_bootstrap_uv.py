@@ -8,6 +8,8 @@
 """Regression coverage for the uv bootstrap script."""
 
 import os
+import shlex
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -15,7 +17,72 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BOOTSTRAP_SCRIPT = REPO_ROOT / "scripts" / "bootstrap-uv.sh"
+
+
+def bash_executable():
+    if os.name == "nt" and (git := shutil.which("git")):
+        git_bash = Path(git).parents[1] / "bin" / "bash.exe"
+        if git_bash.exists():
+            return str(git_bash)
+    return "bash"
+
+
+BASH = bash_executable()
+
+
+def bash_path(path):
+    """Return a path understood by the selected Bash (WSL, MSYS, or POSIX)."""
+    if os.name != "nt":
+        return str(path)
+    if "git" in BASH.lower():
+        return subprocess.run(
+            ["cygpath", "-u", str(path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    converted = subprocess.run(
+        [
+            BASH,
+            "-c",
+            'command -v wslpath >/dev/null && wslpath -u "$1"',
+            "bash",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if converted.returncode == 0:
+        return converted.stdout.strip()
+    return subprocess.run(
+        ["cygpath", "-u", str(path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+def bash_environment(fake_home, fake_bin):
+    env = os.environ.copy()
+    env["HOME"] = bash_path(fake_home)
+    env["PATH"] = f"{bash_path(fake_bin)}:/usr/bin:/bin"
+    return env
+
+
+def run_bootstrap(env):
+    command = (
+        f"export HOME={shlex.quote(env['HOME'])} PATH={shlex.quote(env['PATH'])}; "
+        "source scripts/bootstrap-uv.sh"
+    )
+    return subprocess.run(
+        [BASH, "--noprofile", "--norc", "-c", command],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
 
 
 class BootstrapUVTests(unittest.TestCase):
@@ -37,18 +104,9 @@ class BootstrapUVTests(unittest.TestCase):
             fake_curl.write_text("#!/bin/sh\necho 'curl called unexpectedly' >&2\nexit 99\n")
             fake_curl.chmod(fake_curl.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-            env = os.environ.copy()
-            env["HOME"] = str(fake_home)
-            env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+            env = bash_environment(fake_home, fake_bin)
 
-            result = subprocess.run(
-                ["bash", str(BOOTSTRAP_SCRIPT)],
-                cwd=REPO_ROOT,
-                capture_output=True,
-                text=True,
-                env=env,
-                check=False,
-            )
+            result = run_bootstrap(env)
 
             self.assertEqual(result.returncode, 0, f"stdout: {result.stdout}\nstderr: {result.stderr}")
             self.assertNotIn("curl called unexpectedly", result.stderr)
@@ -88,23 +146,9 @@ class BootstrapUVTests(unittest.TestCase):
             )
             fake_curl.chmod(fake_curl.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-            # Strip existing uv from PATH
-            clean_paths = [
-                p for p in os.environ.get("PATH", "").split(os.pathsep)
-                if not (Path(p) / "uv").exists()
-            ]
-            env = os.environ.copy()
-            env["HOME"] = str(fake_home)
-            env["PATH"] = f"{fake_bin}{os.pathsep}{os.pathsep.join(clean_paths)}"
+            env = bash_environment(fake_home, fake_bin)
 
-            result = subprocess.run(
-                ["bash", str(BOOTSTRAP_SCRIPT)],
-                cwd=REPO_ROOT,
-                capture_output=True,
-                text=True,
-                env=env,
-                check=False,
-            )
+            result = run_bootstrap(env)
 
             self.assertEqual(result.returncode, 0, f"stdout: {result.stdout}\nstderr: {result.stderr}")
             installed_uv = fake_home / ".local" / "bin" / "uv"
@@ -124,25 +168,11 @@ class BootstrapUVTests(unittest.TestCase):
             fake_curl.write_text("#!/bin/sh\necho 'curl: (22) The requested URL returned error: 404' >&2\nexit 22\n")
             fake_curl.chmod(fake_curl.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-            # Strip existing uv from PATH
-            clean_paths = [
-                p for p in os.environ.get("PATH", "").split(os.pathsep)
-                if not (Path(p) / "uv").exists()
-            ]
-            env = os.environ.copy()
-            env["HOME"] = str(fake_home)
-            env["PATH"] = f"{fake_bin}{os.pathsep}{os.pathsep.join(clean_paths)}"
+            env = bash_environment(fake_home, fake_bin)
 
-            result = subprocess.run(
-                ["bash", str(BOOTSTRAP_SCRIPT)],
-                cwd=REPO_ROOT,
-                capture_output=True,
-                text=True,
-                env=env,
-                check=False,
-            )
+            result = run_bootstrap(env)
 
-            self.assertNotEqual(result.returncode, 0)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("could not install uv", result.stderr)
 
 
