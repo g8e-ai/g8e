@@ -8,7 +8,7 @@
 import logging
 
 from app.clients.governance_client import GovernanceClient
-from app.constants import AITaskId, DB_COLLECTION_MEMORIES, EventType, G8EE_COMPONENT
+from app.constants import DB_COLLECTION_MEMORIES, G8EE_COMPONENT, AITaskId, EventType
 from app.errors import DatabaseError
 from app.models.cache import FieldFilter
 from app.models.command_request_payloads import DocumentUpdateRequestPayload

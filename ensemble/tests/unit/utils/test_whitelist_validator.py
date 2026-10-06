@@ -389,7 +389,7 @@ class TestLoadWhitelistErrors:
             patch("app.utils.validation.whitelist_validator.Path.exists", return_value=False),
             pytest.raises(ConfigurationError, match="Required whitelist configuration not found"),
         ):
-            CommandWhitelistValidator(whitelist_path=None)
+            CommandWhitelistValidator(whitelist_path="")
 
 
 # ---------------------------------------------------------------------------

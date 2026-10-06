@@ -71,8 +71,8 @@ class TribunalEmitter:
             # Inject correlation_id if provided and supported by the payload
             # If not provided to emit, try to use the one stored on the emitter
             corr_id = correlation_id or getattr(self, "correlation_id", None)
-            if corr_id and hasattr(payload, "correlation_id"):
-                payload.correlation_id = corr_id
+            if corr_id and "correlation_id" in type(payload).model_fields:
+                payload = payload.model_copy(update={"correlation_id": corr_id})
 
             event = SessionEvent.from_context(
                 context=self.g8e_context,

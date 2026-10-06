@@ -160,14 +160,14 @@ def _llm_settings_from_env():
             OPENAI_DEFAULT_MODEL,
         )
 
-        _DEFAULT_MODELS = {
+        default_models = {
             LLMProvider.GEMINI: GEMINI_DEFAULT_MODEL,
             LLMProvider.OPENAI: OPENAI_DEFAULT_MODEL,
             LLMProvider.ANTHROPIC: ANTHROPIC_DEFAULT_MODEL,
             LLMProvider.OLLAMA: OLLAMA_DEFAULT_MODEL,
             LLMProvider.LLAMACPP: LLAMACPP_DEFAULT_MODEL,
         }
-        primary = _DEFAULT_MODELS.get(provider)
+        primary = default_models.get(provider)
 
     if not assistant:
         assistant = primary
@@ -187,7 +187,7 @@ def _llm_settings_from_env():
     if lite:
         kwargs["lite_model"] = lite
 
-    _PROVIDER_MODEL_FIELD = {
+    provider_model_field = {
         LLMProvider.GEMINI: "gemini_model",
         LLMProvider.OPENAI: "openai_model",
         LLMProvider.ANTHROPIC: "anthropic_model",
@@ -197,13 +197,13 @@ def _llm_settings_from_env():
 
     if primary:
         kwargs["primary_model"] = primary
-        mod_field = _PROVIDER_MODEL_FIELD.get(provider)
+        mod_field = provider_model_field.get(provider)
         if mod_field:
             kwargs[mod_field] = primary
 
     if assistant:
         kwargs["assistant_model"] = assistant
-        mod_field = _PROVIDER_MODEL_FIELD.get(assistant_provider)
+        mod_field = provider_model_field.get(assistant_provider)
         if mod_field:
             kwargs[mod_field] = assistant
 

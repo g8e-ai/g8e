@@ -16,6 +16,7 @@ from app.constants import (
     HealthStatus,
 )
 from app.constants.generated_paths import PortConstants
+from app.constants.platform import LogLevel
 from app.dependencies import (
     get_g8ee_app_settings,
     get_g8ee_attachment_service,
@@ -62,7 +63,15 @@ def mock_request():
 class TestGetG8eeAppSettings:
     async def test_returns_settings_from_app_state(self, mock_request):
         # We need a real G8eeAppSettings object for this test to be meaningful
-        settings = G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
+        settings = G8eeAppSettings(
+            port=PortConstants.G8E_PORT_G8EE_HTTPS,
+            host="0.0.0.0",
+            log_level=LogLevel.INFO,
+            enable_logging=True,
+            session_ttl=28800,
+            absolute_session_timeout=86400,
+            docs_dir="docs",
+        )
         mock_request.app.state.settings = settings
         result = await get_g8ee_app_settings(mock_request)
         assert result.port == settings.port

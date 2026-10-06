@@ -24,6 +24,8 @@ import logging
 import time
 from collections.abc import Sequence
 
+from g8e.models.internal_api import DesignatedModelRole
+
 import app.llm.llm_types as types
 from app.constants import (
     EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
@@ -48,7 +50,7 @@ from app.llm.utils import ModelOverrideResolver, resolve_model
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.agent_activity import AgentActivityMetadata
 from app.models.agents.triage import TriageRequest
-from app.models.attachments import AttachmentMetadata, ChatAttachment, ProcessedAttachment
+from app.models.attachments import ChatAttachment, ProcessedAttachment
 from app.models.evaluation_trace import EvaluationSeedApplication
 from app.models.events import (
     ChatErrorPayload,
@@ -644,7 +646,9 @@ class ChatPipelineService:
                 investigation_id=inputs.investigation_id,
                 case_id=inputs.case_id,
                 web_session_id=inputs.web_session_id,
-                agent_mode=inputs.agent_mode,
+                agent_mode=(
+                    inputs.agent_mode if isinstance(inputs.agent_mode, AgentMode) else None
+                ),
                 model_name=inputs.model_to_use,
                 provider=inputs.request_settings.llm.primary_provider.value
                 if inputs.request_settings.llm.primary_provider
@@ -797,7 +801,7 @@ class ChatPipelineService:
 
         background_calls: list[ModelCallTelemetry] = []
         memory_task = memory_holder.get("task") if memory_holder else None
-        if memory_task is not None:
+        if isinstance(memory_task, asyncio.Task):
             try:
                 async with asyncio.timeout(EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS):
                     await memory_task
@@ -832,10 +836,16 @@ class ChatPipelineService:
         reasoning = None
         if inputs.active_agent is not None:
             active_agent = ReasoningAgent(inputs.active_agent)
+            model_role: DesignatedModelRole
+            if inputs.designated_model_role in ("primary", "assistant", "lite"):
+                model_role = inputs.designated_model_role
+            elif active_agent == ReasoningAgent.DASH:
+                model_role = "assistant"
+            else:
+                model_role = "primary"
             reasoning = reasoning_step(
                 player=active_agent.value,
-                model_role=inputs.designated_model_role
-                or ("assistant" if active_agent == ReasoningAgent.DASH else "primary"),
+                model_role=model_role,
                 model=inputs.model_to_use or "",
                 text=state.response_text or "",
                 succeeded=not state.stream_failed,
@@ -960,7 +970,7 @@ class ChatPipelineService:
             getattr(g8e_context, "web_session_id", None) if g8e_context else "None",
         )
 
-        investigation_id = g8e_context.investigation_id if g8e_context else ""
+        investigation_id = g8e_context.investigation_id or ""
         logger.info("[SSE-CHAT] Extracted investigation_id: %s", investigation_id)
 
         task = None

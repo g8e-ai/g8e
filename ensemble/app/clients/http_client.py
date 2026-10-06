@@ -537,7 +537,7 @@ class HTTPClient:
 
     async def _raise_timeout_error(
         self,
-        exc: BaseException,
+        exc: Exception,
         circuit_breaker: CircuitBreaker,
         trace: RequestTrace,
         final_url: str,
@@ -577,7 +577,7 @@ class HTTPClient:
 
     @staticmethod
     async def _raise_connection_error(
-        exc: BaseException,
+        exc: Exception,
         circuit_breaker: CircuitBreaker,
         trace: RequestTrace,
         final_url: str,

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from typing import Any, override
 
 import httpx
@@ -95,7 +96,7 @@ class JevProvider(DecisionProvider):
         *,
         model: str,
         state: DecisionState,
-        questions: dict[str, Question],
+        questions: Mapping[str, Question],
     ) -> dict[str, Any]:
         return {
             "model": model,
@@ -168,7 +169,7 @@ class JevProvider(DecisionProvider):
         *,
         model: str,
         state: DecisionState,
-        questions: dict[str, Question],
+        questions: Mapping[str, Question],
     ) -> EvaluateResponse:
         if not questions:
             raise ExternalServiceError(

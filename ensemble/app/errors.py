@@ -51,7 +51,7 @@ class G8eError(Exception):
             trace_id=trace_id,
             execution_id=execution_id,
             retry_suggested=retry_suggested,
-            remediation_steps=remediation_steps,
+            remediation_steps=remediation_steps or [],
             cause=cause_detail,
         )
         self.cause = cause

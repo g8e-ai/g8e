@@ -442,6 +442,8 @@ async def get_g8ee_chat_user_settings(
     Each role's provider and model are exactly what the user chose in the
     Console, g8e provider included; nothing rewrites them.
     """
+    if not g8e_context.user_id:
+        raise AuthenticationError("Authenticated user identity is required for chat settings")
     return await settings_service.get_user_settings(g8e_context.user_id)
 
 

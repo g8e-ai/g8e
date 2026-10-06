@@ -539,9 +539,9 @@ class G8eeAppSettings(G8eBaseModel):
     log_level: LogLevel = Field(LogLevel.INFO)
     enable_logging: bool = Field(True)
 
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    gateway: GatewaySettings = Field(default_factory=GatewaySettings)
-    auth: AuthSettings = Field(default_factory=AuthSettings)
+    database: DatabaseSettings = Field(default_factory=lambda: DatabaseSettings.model_validate({}))
+    gateway: GatewaySettings = Field(default_factory=lambda: GatewaySettings.model_validate({}))
+    auth: AuthSettings = Field(default_factory=lambda: AuthSettings.model_validate({}))
     component_urls: ComponentURLsSettings = Field(default_factory=ComponentURLsSettings)
 
     session_ttl: int = Field(28800)
@@ -568,12 +568,16 @@ class G8eeAppSettings(G8eBaseModel):
         )
     )
 
-    llm: LLMSettings = Field(default_factory=LLMSettings)
-    command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
-    search: SearchSettings = Field(default_factory=SearchSettings)
-    eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
-    reputation: ReputationSettings = Field(default_factory=ReputationSettings)
-    batch_execution: BatchExecutionSettings = Field(default_factory=BatchExecutionSettings)
+    llm: LLMSettings = Field(default_factory=lambda: LLMSettings.model_validate({}))
+    command_validation: CommandValidationSettings = Field(
+        default_factory=lambda: CommandValidationSettings.model_validate({})
+    )
+    search: SearchSettings = Field(default_factory=lambda: SearchSettings.model_validate({}))
+    eval_judge: EvalJudgeSettings = Field(default_factory=lambda: EvalJudgeSettings.model_validate({}))
+    reputation: ReputationSettings = Field(default_factory=lambda: ReputationSettings.model_validate({}))
+    batch_execution: BatchExecutionSettings = Field(
+        default_factory=lambda: BatchExecutionSettings.model_validate({})
+    )
 
     # Private fields for overrides (GDD §18.2)
     _ca_cert_path: str | None = PrivateAttr(default=None)
@@ -635,8 +639,10 @@ class G8eeAppSettings(G8eBaseModel):
 class G8eeUserSettings(_ProtocolG8eeUserSettings):
     """Per-user settings, overlaid on platform settings."""
 
-    llm: LLMSettings = Field(default_factory=LLMSettings)
-    command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
+    llm: LLMSettings = Field(default_factory=lambda: LLMSettings.model_validate({}))
+    command_validation: CommandValidationSettings = Field(
+        default_factory=lambda: CommandValidationSettings.model_validate({})
+    )
 
     @classmethod
     async def from_db(cls, settings_service: Any, user_id: str) -> G8eeUserSettings:

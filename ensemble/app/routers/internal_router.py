@@ -114,9 +114,9 @@ from app.models.internal_api import (
     StopAIResponse,
     StopOperatorRequest,
 )
-from app.models.investigations import InvestigationCreateRequest
 from app.models.investigations import (
     ConversationMessageMetadata,
+    InvestigationCreateRequest,
     InvestigationGetRequest,
     InvestigationModel,
     InvestigationQueryRequest,
@@ -127,7 +127,6 @@ from app.models.operators import (
     OperatorStatusUpdatedPayload,
 )
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
-from app.utils.time_ids.timestamp import now
 from app.models.triage_api import (
     TriageAnswerRequest,
     TriageSkipRequest,
@@ -150,6 +149,7 @@ from app.services.infra.settings_service import SettingsService
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.operator.approval_service import OperatorApprovalService
 from app.services.operator.command_service import OperatorCommandService
+from app.utils.time_ids.timestamp import now
 
 InvestigationUpdateRequest.model_rebuild()
 InvestigationQueryRequest.model_rebuild()

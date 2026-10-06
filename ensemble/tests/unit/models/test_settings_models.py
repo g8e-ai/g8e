@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from app.constants.config import LLMProvider
+from app.constants.platform import LogLevel
 from app.models.settings import (
     BatchExecutionSettings,
     G8eeAppSettings,
@@ -21,24 +22,24 @@ pytestmark = [pytest.mark.unit]
 
 class TestBatchExecutionSettingsBounds:
     def test_default_max_concurrency(self):
-        be = BatchExecutionSettings()
+        be = BatchExecutionSettings(max_concurrency=10, fail_fast=False)
         assert be.max_concurrency == 10
         assert be.fail_fast is False
 
     def test_accepts_valid_concurrency(self):
-        be = BatchExecutionSettings(max_concurrency=32)
+        be = BatchExecutionSettings(max_concurrency=32, fail_fast=False)
         assert be.max_concurrency == 32
 
     def test_rejects_zero_or_negative_concurrency(self):
         with pytest.raises(PydanticValidationError):
-            BatchExecutionSettings(max_concurrency=0)
+            BatchExecutionSettings(max_concurrency=0, fail_fast=False)
         with pytest.raises(PydanticValidationError):
-            BatchExecutionSettings(max_concurrency=-1)
+            BatchExecutionSettings(max_concurrency=-1, fail_fast=False)
 
     def test_rejects_absurdly_large_concurrency(self):
         # Guards against a misconfiguration that would fan out to every operator at once.
         with pytest.raises(PydanticValidationError):
-            BatchExecutionSettings(max_concurrency=10000)
+            BatchExecutionSettings(max_concurrency=10000, fail_fast=False)
 
 
 class TestLLMSettingsProviderValidation:
@@ -219,13 +220,29 @@ class TestLLMSettingsResolveLiteFallback:
 
 class TestG8eeAppSettingsMTLSPaths:
     def test_default_paths_are_none_or_string(self):
-        settings = G8eeAppSettings()
+        settings = G8eeAppSettings(
+            port=8080,
+            host="localhost",
+            log_level=LogLevel.INFO,
+            enable_logging=True,
+            session_ttl=28800,
+            absolute_session_timeout=86400,
+            docs_dir="docs",
+        )
         # Should not raise AttributeError
         assert settings.client_cert_path is None or isinstance(settings.client_cert_path, str)
         assert settings.client_key_path is None or isinstance(settings.client_key_path, str)
 
     def test_private_field_overrides(self):
-        settings = G8eeAppSettings()
+        settings = G8eeAppSettings(
+            port=8080,
+            host="localhost",
+            log_level=LogLevel.INFO,
+            enable_logging=True,
+            session_ttl=28800,
+            absolute_session_timeout=86400,
+            docs_dir="docs",
+        )
         settings._client_cert_path = "/tmp/cert.pem"
         settings._client_key_path = "/tmp/key.pem"
         assert settings.client_cert_path == "/tmp/cert.pem"

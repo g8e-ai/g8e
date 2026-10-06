@@ -134,6 +134,7 @@ class TestEnvelopeIdentityBinding:
 
         # Recompute without acting_app_id to prove it was included
 
+        assert message.payload is not None
         payload_bytes = message.payload.to_protobuf().SerializeToString()
         payload_b64 = base64.b64encode(payload_bytes).decode("ascii")
         hash_without_app = compute_transaction_hash(

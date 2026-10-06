@@ -346,7 +346,7 @@ class WebSearchProvider:
 
         Args:
             query: Search query string.
-            num:   Number of results to return (1–25, capped at 25).
+            num:   Number of results to return (1-25, capped at 25).
 
         Returns:
             SearchWebResult with success=True and populated results on success,

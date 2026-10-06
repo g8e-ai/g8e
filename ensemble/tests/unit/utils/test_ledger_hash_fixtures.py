@@ -46,16 +46,18 @@ FIXTURES = _load_fixtures()
 
 if FIXTURES is None:
     pytest.skip("Protocol ledger hash fixtures not found — skipping", allow_module_level=True)
+assert FIXTURES is not None
+_fixtures = FIXTURES
 
 
-@pytest.mark.parametrize("case", FIXTURES["canonical_json"], ids=lambda c: c["name"])
+@pytest.mark.parametrize("case", _fixtures["canonical_json"], ids=lambda c: c["name"])
 def test_canonical_json_matches_fixture(case):
     """Python canonical_json output must match the recorded UTF-8 string."""
     actual = canonical_json(case["input"]).decode("utf-8")
     assert actual == case["expected_utf8"]
 
 
-@pytest.mark.parametrize("case", FIXTURES["entry_hash"], ids=lambda c: c["name"])
+@pytest.mark.parametrize("case", _fixtures["entry_hash"], ids=lambda c: c["name"])
 def test_compute_entry_hash_matches_fixture(case):
     """Python compute_entry_hash output must match the recorded hash."""
     actual = compute_entry_hash(case["entry"], case["prev_hash"])
@@ -64,7 +66,7 @@ def test_compute_entry_hash_matches_fixture(case):
 
 @pytest.mark.parametrize(
     "case",
-    FIXTURES["genesis_hash"],
+    _fixtures["genesis_hash"],
     ids=lambda c: f"{c['investigation_id']}@{c['created_at']}",
 )
 def test_genesis_hash_matches_fixture(case):
@@ -75,7 +77,7 @@ def test_genesis_hash_matches_fixture(case):
 
 def test_chain_fixture_verifies():
     """The recorded multi-entry chain must verify cleanly."""
-    chain = FIXTURES["chain"]
+    chain = _fixtures["chain"]
     is_valid, first_bad = verify_chain(
         chain["entries"], chain["investigation_id"], chain["created_at"]
     )
@@ -85,7 +87,7 @@ def test_chain_fixture_verifies():
 
 def test_chain_fixture_tampering_detected():
     """Tampering with any chain entry must be caught."""
-    chain = FIXTURES["chain"]
+    chain = _fixtures["chain"]
     tampered = [dict(e) for e in chain["entries"]]
     # Mutate the middle entry's content; entry_hash will no longer match.
     tampered[1] = dict(tampered[1])

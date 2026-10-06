@@ -32,6 +32,7 @@ sensitive data from reaching the cloud AI.
 
 import logging
 import re
+from typing import ClassVar
 
 from app.constants.generated_status import ScrubberPriority
 from app.models.base import G8eBaseModel
@@ -86,7 +87,7 @@ class SentinelScrubber:
     messages are sent to the cloud AI.
     """
 
-    _scrubbers: list[RegexScrubber] = []
+    _scrubbers: ClassVar[list[RegexScrubber]] = []
 
     def __init__(self, config: SentinelConfig):
         self.config = config or SentinelConfig()
@@ -202,7 +203,7 @@ class SentinelScrubber:
             )
         )
 
-        # URL or Connections (URL_OR_CONNECTION)
+        # URLs and connection strings
         scrubbers.append(
             RegexScrubber(
                 "url_with_creds",

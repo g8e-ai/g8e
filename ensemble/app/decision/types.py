@@ -35,7 +35,9 @@ class NoulQuestion(G8eBaseModel):
 
 def _question_discriminator(value: Any) -> str:
     if isinstance(value, G8eBaseModel):
-        return value.type
+        question_type = getattr(value, "type", None)
+        if isinstance(question_type, str):
+            return question_type
     if isinstance(value, dict):
         question_type = value.get("type")
         if isinstance(question_type, str):
@@ -73,7 +75,9 @@ class NoulAnswer(G8eBaseModel):
 
 def _answer_discriminator(value: Any) -> str:
     if isinstance(value, G8eBaseModel):
-        return value.type
+        answer_type = getattr(value, "type", None)
+        if isinstance(answer_type, str):
+            return answer_type
     if isinstance(value, dict):
         answer_type = value.get("type")
         if isinstance(answer_type, str):

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from contextvars import ContextVar
 
 from app.decision.types import DecisionState, EvaluateResponse, Question
@@ -54,7 +55,7 @@ class DecisionProvider(ABC):
         *,
         model: str,
         state: DecisionState,
-        questions: dict[str, Question],
+        questions: Mapping[str, Question],
     ) -> EvaluateResponse:
         """Evaluate typed questions against the given state."""
 

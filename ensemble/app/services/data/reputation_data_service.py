@@ -28,9 +28,9 @@ from app.clients.governance_client import GovernanceClient
 from app.constants import (
     DB_COLLECTION_REPUTATION_COMMITMENTS,
     DB_COLLECTION_REPUTATION_STATE,
-    EventType,
     G8EE_COMPONENT,
     ErrorCode,
+    EventType,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
