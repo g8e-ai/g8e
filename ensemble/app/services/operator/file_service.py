@@ -361,7 +361,7 @@ class OperatorFileService:
             )
         except Exception as e:
             logger.exception(
-                "[FILE-ERROR] Unexpected error in execute_fetch_file_history: %s", e, exc_info=True
+                "[FILE-ERROR] Unexpected error in execute_fetch_file_history: %s", e
             )
             return FetchFileHistoryToolResult(
                 success=False,
@@ -462,8 +462,8 @@ class OperatorFileService:
                 operator_session_id=operator_session_id,
             )
         except Exception as e:
-            logger.error(
-                "[FILE-ERROR] Unexpected error in execute_fetch_file_diff: %s", e, exc_info=True
+            logger.exception(
+                "[FILE-ERROR] Unexpected error in execute_fetch_file_diff: %s", e
             )
             return FetchFileDiffToolResult(
                 success=False,

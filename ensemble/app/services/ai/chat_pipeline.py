@@ -922,10 +922,9 @@ class ChatPipelineService:
                 seed_application=seed_application,
             )
         except Exception as finalize_err:
-            logger.error(
+            logger.exception(
                 "[SSE-CHAT] Failed to finalize crashed evaluation trace: %s",
                 finalize_err,
-                exc_info=True,
             )
 
     async def run_chat(
@@ -1005,11 +1004,10 @@ class ChatPipelineService:
             logger.info("[SSE-CHAT] Task cancelled for investigation %s", investigation_id)
             raise
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[SSE-CHAT] Background task crashed for investigation %s: %s",
                 investigation_id,
                 e,
-                exc_info=True,
             )
             self._finalize_crashed_evaluation_assignment(g8e_context, e, seed_application)
             try:

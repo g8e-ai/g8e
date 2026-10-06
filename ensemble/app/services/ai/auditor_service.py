@@ -582,11 +582,10 @@ async def run_auditor(
             logger.info(
                 "[TRIBUNAL-AUDITOR] Unexpected error total_duration_ms=%.2f", total_duration_ms
             )
-            logger.error(
+            logger.exception(
                 "[TRIBUNAL-AUDITOR] Unexpected error: %s (raw_text=%r)",
                 exc,
                 raw_text[:200] if raw_text else "None",
-                exc_info=True,
             )
             await fail_auditor(emitter, request, AuditorReason.AUDITOR_ERROR, str(exc), target_cmd)
 

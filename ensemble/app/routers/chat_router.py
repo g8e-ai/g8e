@@ -306,7 +306,10 @@ async def get_latest_chat_session_for_case(
 
     if latest_investigation:
         logger.info(
-            f"Found latest investigation for case {case_id}: {latest_investigation.id} with {len(latest_investigation.conversation_history)} messages",
+            "Found latest investigation for case %s: %s with %s messages",
+            case_id,
+            latest_investigation.id,
+            len(latest_investigation.conversation_history),
             extra={
                 "case_id": case_id,
                 "investigation_id": latest_investigation.id,
@@ -332,7 +335,8 @@ async def get_latest_chat_session_for_case(
         )
 
     logger.info(
-        f"No investigations with conversation history found for case {case_id}",
+        "No investigations with conversation history found for case %s",
+        case_id,
         extra={"case_id": case_id, "user_id": authenticated_user_id},
     )
 

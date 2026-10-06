@@ -195,8 +195,8 @@ class ReputationDataService:
         except DatabaseError:
             raise
         except Exception as exc:
-            logger.error(
-                "Failed to create reputation_commitment %s: %s", commitment.id, exc, exc_info=True
+            logger.exception(
+                "Failed to create reputation_commitment %s: %s", commitment.id, exc
             )
             raise DatabaseError(
                 message=f"Failed to create reputation_commitment: {exc}",
@@ -219,8 +219,8 @@ class ReputationDataService:
             doc.setdefault("id", commitment_id)
             return ReputationCommitment.model_validate(doc)
         except Exception as exc:
-            logger.error(
-                "Failed to get reputation_commitment %s: %s", commitment_id, exc, exc_info=True
+            logger.exception(
+                "Failed to get reputation_commitment %s: %s", commitment_id, exc
             )
             raise DatabaseError(
                 message=f"Failed to get reputation_commitment: {exc}",
@@ -276,11 +276,10 @@ class ReputationDataService:
             )
             return [ReputationCommitment.model_validate(d) for d in results]
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Failed to list reputation_commitments for investigation %s: %s",
                 investigation_id,
                 exc,
-                exc_info=True,
             )
             raise DatabaseError(
                 message=f"Failed to list reputation_commitments: {exc}",

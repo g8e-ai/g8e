@@ -129,8 +129,8 @@ class AgentActivityDataService:
             return AgentActivityMetadata.model_validate(doc_data)
 
         except Exception as e:
-            logger.error(
-                "Failed to retrieve agent activity metadata %s: %s", activity_id, e, exc_info=True
+            logger.exception(
+                "Failed to retrieve agent activity metadata %s: %s", activity_id, e
             )
             raise DatabaseError(
                 message=f"Failed to retrieve agent activity metadata: {e}",
@@ -225,8 +225,8 @@ class AgentActivityDataService:
             logger.info("Agent activity metadata deleted: %s", activity_id)
 
         except Exception as e:
-            logger.error(
-                "Failed to delete agent activity metadata %s: %s", activity_id, e, exc_info=True
+            logger.exception(
+                "Failed to delete agent activity metadata %s: %s", activity_id, e
             )
             raise DatabaseError(
                 message=f"Failed to delete agent activity metadata: {e}",

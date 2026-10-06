@@ -104,8 +104,8 @@ class AIGenerationConfigBuilder:
         clamped = clamp_thinking_level(desired_level, config)
         if clamped is ThinkingLevel.OFF:
             logger.info(
-                f"[CONFIG] ThinkingConfig: disabled "
-                f"(model={config.name} has no supported thinking levels)"
+                "[CONFIG] ThinkingConfig: disabled (model=%s has no supported thinking levels)",
+                config.name
             )
             return types.ThinkingConfig(
                 thinking_level=ThinkingLevel.OFF,
@@ -114,12 +114,16 @@ class AIGenerationConfigBuilder:
 
         if clamped is not desired_level:
             logger.info(
-                f"[CONFIG] ThinkingConfig: clamped desired={desired_level} -> {clamped} "
-                f"(model={config.name})"
+                "[CONFIG] ThinkingConfig: clamped desired=%s -> %s (model=%s)",
+                desired_level,
+                clamped,
+                config.name
             )
         logger.info(
-            f"[CONFIG] ThinkingConfig: thinking_level={clamped}, "
-            f"include_thoughts={include_thoughts} (model={config.name})"
+            "[CONFIG] ThinkingConfig: thinking_level=%s, include_thoughts=%s (model=%s)",
+            clamped,
+            include_thoughts,
+            config.name
         )
         return types.ThinkingConfig(
             thinking_level=clamped,
@@ -158,9 +162,12 @@ class AIGenerationConfigBuilder:
         thinking_level = getattr(thinking_config, "thinking_level", None)
         tool_names = AIGenerationConfigBuilder._extract_tool_names(tools)
         logger.info(
-            f" [BUILD_CONFIG] primary model={model}, max_tokens={effective_max_tokens}, "
-            f"thinking_level={thinking_level}, tools_count={len(tools) if tools else 0}, "
-            f"tool_names={tool_names}"
+            " [BUILD_CONFIG] primary model=%s, max_tokens=%s, thinking_level=%s, tools_count=%s, tool_names=%s",
+            model,
+            effective_max_tokens,
+            thinking_level,
+            len(tools) if tools else 0,
+            tool_names
         )
         return settings
 
@@ -244,9 +251,12 @@ class AIGenerationConfigBuilder:
         thinking_level = getattr(thinking_config, "thinking_level", None)
         tool_names = AIGenerationConfigBuilder._extract_tool_names(tools)
         logger.info(
-            f" [BUILD_CONFIG] model={model}, max_tokens={effective_max_tokens}, "
-            f"thinking_level={thinking_level}, tools_count={len(tools) if tools else 0}, "
-            f"tool_names={tool_names}"
+            " [BUILD_CONFIG] model=%s, max_tokens=%s, thinking_level=%s, tools_count=%s, tool_names=%s",
+            model,
+            effective_max_tokens,
+            thinking_level,
+            len(tools) if tools else 0,
+            tool_names
         )
         return config
 
@@ -278,7 +288,9 @@ class AIGenerationConfigBuilder:
         )
 
         logger.info(
-            f" [BUILD_CONFIG] lite model={model}, max_tokens={effective_max_tokens}, thinking=disabled"
+            " [BUILD_CONFIG] lite model=%s, max_tokens=%s, thinking=disabled",
+            model,
+            effective_max_tokens
         )
         return config
 

@@ -142,8 +142,8 @@ class StakeResolutionDataService:
         except DatabaseError:
             raise
         except Exception as exc:
-            logger.error(
-                "Failed to create stake_resolution %s: %s", resolution.id, exc, exc_info=True
+            logger.exception(
+                "Failed to create stake_resolution %s: %s", resolution.id, exc
             )
             raise DatabaseError(
                 message=f"Failed to create stake_resolution: {exc}",
@@ -169,11 +169,10 @@ class StakeResolutionDataService:
             )
             return [StakeResolution.model_validate(d) for d in results]
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Failed to list stake_resolutions for %s: %s",
                 tribunal_command_id,
                 exc,
-                exc_info=True,
             )
             raise DatabaseError(
                 message=f"Failed to list stake_resolutions: {exc}",

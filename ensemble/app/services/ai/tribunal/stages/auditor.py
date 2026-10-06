@@ -392,10 +392,9 @@ class TribunalAuditor:
                     correlation_id=correlation_id or None,
                 )
             except Exception as exc:
-                logger.error(
+                logger.exception(
                     "[TRIBUNAL-AUDITOR] reputation commitment failed (fatal): %s",
                     exc,
-                    exc_info=True,
                 )
                 await self.emitter.emit(
                     EventType.OPERATOR_REPUTATION_COMMITMENT_FAILED,

@@ -479,19 +479,17 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             )
             return
         except NetworkError as exc:
-            logger.error(
+            logger.exception(
                 "[EXECUTION] Direct command Gateway dispatch failed for %s: %s",
                 execution_id,
                 exc,
-                exc_info=True,
             )
             return
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[EXECUTION] Direct command dispatch failed for %s: %s",
                 execution_id,
                 e,
-                exc_info=True,
             )
             return
 

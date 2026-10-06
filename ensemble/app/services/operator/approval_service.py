@@ -333,8 +333,8 @@ class OperatorApprovalService:
                 logger.info("[AGENT_CONTINUE_APPROVAL] Published to client")
             except Exception as publish_error:
                 error_msg = f"Failed to publish agent continuation approval request to client: {publish_error}"
-                logger.error(
-                    "[AGENT_CONTINUE_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True
+                logger.exception(
+                    "[AGENT_CONTINUE_APPROVAL-PUBLISH-FAILURE] %s", error_msg
                 )
                 return ApprovalResult(
                     approved=False,
@@ -424,10 +424,9 @@ class OperatorApprovalService:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[AGENT_CONTINUE_APPROVAL-EXCEPTION] Failed to request agent continuation approval: %s",
                 e,
-                exc_info=True,
             )
             return ApprovalResult(
                 approved=False,
@@ -618,7 +617,7 @@ class OperatorApprovalService:
 
         except Exception as e:
             logger.exception(
-                "[APPROVAL-EXCEPTION] Failed to request command approval: %s", e, exc_info=True
+                "[APPROVAL-EXCEPTION] Failed to request command approval: %s", e
             )
             logger.error(
                 "[APPROVAL-EXCEPTION] command=%s approval_id=%s case_id=%s investigation_id=%s user_id=%s web_session_id=%s operator_id=%s",
@@ -787,7 +786,6 @@ class OperatorApprovalService:
             logger.exception(
                 "[FILE_EDIT_APPROVAL-EXCEPTION] Failed to request file edit approval: %s",
                 e,
-                exc_info=True,
             )
             logger.error(
                 "[FILE_EDIT_APPROVAL-EXCEPTION] file_path=%s approval_id=%s case_id=%s investigation_id=%s operator_id=%s",
@@ -982,8 +980,8 @@ class OperatorApprovalService:
             )
 
         except Exception as e:
-            logger.error(
-                "[INTENT_APPROVAL] Failed to request intent permission: %s", e, exc_info=True
+            logger.exception(
+                "[INTENT_APPROVAL] Failed to request intent permission: %s", e
             )
             return ApprovalResult(
                 approved=False,

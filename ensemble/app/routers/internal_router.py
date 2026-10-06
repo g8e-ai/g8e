@@ -254,10 +254,9 @@ async def _generate_and_update_title(
                 user_id=context.user_id,
             )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "[INTERNAL-HTTP] Failed to generate case title in background task",
             extra={"case_id": case_id, "error": str(e)},
-            exc_info=True,
         )
 
 
