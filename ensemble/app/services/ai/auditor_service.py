@@ -334,24 +334,9 @@ async def call_auditor_llm(
     )
 
 
-async def run_auditor(
-    provider: LLMProvider,
-    model: str,
-    request: str,
-    guidelines: str,
-    mode: ConsensusAuditMode,
-    vote_winner: str | None,
-    vote_breakdown: VoteBreakdown,
-    tied_candidates: list[CandidateCommand] | None,
-    operator_context: OperatorContext | None,
-    emitter: TribunalEmitter,
-    command_constraints_message: str,
-    auditor_persona: AgentPersona,
-    whitelisting_enabled: bool = False,
-    blacklisting_enabled: bool = False,
-) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:
-    """Run the dissent-aware Auditor (Deprecated: Use stage orchestrator instead)."""
-    # Prepare cluster info and mapping
+def _prepare_legacy_audit_clusters(
+    vote_winner: str | None, vote_breakdown: VoteBreakdown
+) -> tuple[str, list[AuditorClusterInfo], dict[str, str], dict[str, list[str]]]:
     clusters: list[AuditorClusterInfo] = []
     cluster_to_cmd: dict[str, str] = {}
     cluster_to_members: dict[str, list[str]] = {}
@@ -383,6 +368,172 @@ async def run_auditor(
             AuditorClusterInfo(cluster_id=c_id, command=cmd, support_count=len(members))
         )
         idx += 1
+
+    return target_cmd, clusters, cluster_to_cmd, cluster_to_members
+
+
+async def _handle_legacy_auditor_decision(
+    emitter: TribunalEmitter,
+    request: str,
+    status: ConsensusAuditStatus,
+    revised_raw: str | None,
+    swap_to_cluster: str | None,
+    mode: ConsensusAuditMode,
+    target_cmd: str,
+    cluster_to_cmd: dict[str, str],
+    cluster_to_members: dict[str, list[str]],
+    whitelisting_enabled: bool,
+    blacklisting_enabled: bool,
+    operator_context: OperatorContext | None,
+    auditor_start_time: float,
+    correlation_id: str | None,
+) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None] | None:
+    if status == ConsensusAuditStatus.OK:
+        total_duration_ms = (time.time() - auditor_start_time) * 1000
+        logger.info(
+            "[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f",
+            total_duration_ms,
+        )
+        await emitter.emit(
+            EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
+            TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
+            correlation_id=correlation_id,
+        )
+        return True, target_cmd, None, AuditorReason.OK, None, None
+
+    if status == ConsensusAuditStatus.SWAP and swap_to_cluster:
+        final_cmd = cluster_to_cmd[swap_to_cluster]
+        swap_to_member = cluster_to_members[swap_to_cluster][
+            0
+        ]  # Pick first member for telemetry
+
+        # RE-VALIDATE SWAP TARGET SAFETY (L1Doctrine Technical Bedrock)
+        safety_result = validate_command_safety(
+            final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context
+        )
+        if not safety_result.is_safe:
+            reason = (
+                AuditorReason.WHITELIST_VIOLATION
+                if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION
+                else AuditorReason.NO_VALID_REVISION
+            )
+            await fail_auditor(
+                emitter,
+                request,
+                reason,
+                f"Swap target technical safety failure: {safety_result.error_message}",
+                target_cmd,
+            )
+
+        total_duration_ms = (time.time() - auditor_start_time) * 1000
+        logger.info(
+            "[TRIBUNAL-AUDITOR] Completed with status=swap total_duration_ms=%.2f",
+            total_duration_ms,
+        )
+        await emitter.emit(
+            EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
+            TribunalAuditorCompletedPayload(
+                passed=True,
+                reason=AuditorReason.SWAPPED_TO_DISSENTER,
+                swap_to_cluster=swap_to_cluster,
+                swap_to_member=swap_to_member,
+            ),
+            correlation_id=correlation_id,
+        )
+        return (
+            True,
+            final_cmd,
+            None,
+            AuditorReason.SWAPPED_TO_DISSENTER,
+            swap_to_cluster,
+            swap_to_member,
+        )
+
+    # Handle revised
+    if status == ConsensusAuditStatus.REVISED and revised_raw:
+        revised_str = str(revised_raw)
+        revised = normalise_command(revised_str)
+        if not revised:
+            await fail_auditor(
+                emitter,
+                request,
+                AuditorReason.NO_VALID_REVISION,
+                "Empty revision",
+                target_cmd,
+            )
+
+    # RE-VALIDATE REVISION SAFETY (L1Doctrine Technical Bedrock)
+    # revised is defined if status == "revised" and normalise_command succeeded
+    if status == ConsensusAuditStatus.REVISED:
+        # Ensure revised is bound for safety, though normalise_command check above handles it
+        revised_final = locals().get("revised")
+        if not revised_final:
+            await fail_auditor(
+                emitter,
+                request,
+                AuditorReason.NO_VALID_REVISION,
+                "Missing revision variable",
+                target_cmd,
+            )
+
+        safety_result = validate_command_safety(
+            revised_final, whitelisting_enabled, blacklisting_enabled, operator_context
+        )
+        if not safety_result.is_safe:
+            reason = (
+                AuditorReason.WHITELIST_VIOLATION
+                if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION
+                else AuditorReason.NO_VALID_REVISION
+            )
+            await fail_auditor(
+                emitter,
+                request,
+                reason,
+                f"Revision technical safety failure: {safety_result.error_message}",
+                target_cmd,
+            )
+
+        reason = (
+            AuditorReason.REVISED_FROM_DISSENT
+            if mode in (ConsensusAuditMode.MAJORITY, ConsensusAuditMode.TIED)
+            else AuditorReason.REVISED
+        )
+        total_duration_ms = (time.time() - auditor_start_time) * 1000
+        logger.info(
+            "[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f",
+            total_duration_ms,
+        )
+        await emitter.emit(
+            EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
+            TribunalAuditorCompletedPayload(
+                passed=False, revision=revised_final, reason=reason
+            ),
+            correlation_id=correlation_id,
+        )
+        return False, revised_final, revised_final, reason, None, None
+    return None
+
+
+async def run_auditor(
+    provider: LLMProvider,
+    model: str,
+    request: str,
+    guidelines: str,
+    mode: ConsensusAuditMode,
+    vote_winner: str | None,
+    vote_breakdown: VoteBreakdown,
+    tied_candidates: list[CandidateCommand] | None,
+    operator_context: OperatorContext | None,
+    emitter: TribunalEmitter,
+    command_constraints_message: str,
+    auditor_persona: AgentPersona,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
+) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:
+    """Run the dissent-aware Auditor (Deprecated: Use stage orchestrator instead)."""
+    target_cmd, clusters, cluster_to_cmd, cluster_to_members = _prepare_legacy_audit_clusters(
+        vote_winner, vote_breakdown
+    )
 
     correlation_id = getattr(emitter, "correlation_id", None)
 
@@ -416,129 +567,24 @@ async def run_auditor(
                 call_result.raw_text, mode, list(cluster_to_cmd.keys())
             )
 
-            if status == ConsensusAuditStatus.OK:
-                total_duration_ms = (time.time() - auditor_start_time) * 1000
-                logger.info(
-                    "[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f",
-                    total_duration_ms,
-                )
-                await emitter.emit(
-                    EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
-                    TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
-                    correlation_id=correlation_id,
-                )
-                return True, target_cmd, None, AuditorReason.OK, None, None
-
-            if status == ConsensusAuditStatus.SWAP and swap_to_cluster:
-                final_cmd = cluster_to_cmd[swap_to_cluster]
-                swap_to_member = cluster_to_members[swap_to_cluster][
-                    0
-                ]  # Pick first member for telemetry
-
-                # RE-VALIDATE SWAP TARGET SAFETY (L1Doctrine Technical Bedrock)
-                safety_result = validate_command_safety(
-                    final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context
-                )
-                if not safety_result.is_safe:
-                    reason = (
-                        AuditorReason.WHITELIST_VIOLATION
-                        if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION
-                        else AuditorReason.NO_VALID_REVISION
-                    )
-                    await fail_auditor(
-                        emitter,
-                        request,
-                        reason,
-                        f"Swap target technical safety failure: {safety_result.error_message}",
-                        target_cmd,
-                    )
-
-                total_duration_ms = (time.time() - auditor_start_time) * 1000
-                logger.info(
-                    "[TRIBUNAL-AUDITOR] Completed with status=swap total_duration_ms=%.2f",
-                    total_duration_ms,
-                )
-                await emitter.emit(
-                    EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
-                    TribunalAuditorCompletedPayload(
-                        passed=True,
-                        reason=AuditorReason.SWAPPED_TO_DISSENTER,
-                        swap_to_cluster=swap_to_cluster,
-                        swap_to_member=swap_to_member,
-                    ),
-                    correlation_id=correlation_id,
-                )
-                return (
-                    True,
-                    final_cmd,
-                    None,
-                    AuditorReason.SWAPPED_TO_DISSENTER,
-                    swap_to_cluster,
-                    swap_to_member,
-                )
-
-            # Handle revised
-            if status == ConsensusAuditStatus.REVISED and revised_raw:
-                revised_str = str(revised_raw)
-                revised = normalise_command(revised_str)
-                if not revised:
-                    await fail_auditor(
-                        emitter,
-                        request,
-                        AuditorReason.NO_VALID_REVISION,
-                        "Empty revision",
-                        target_cmd,
-                    )
-
-            # RE-VALIDATE REVISION SAFETY (L1Doctrine Technical Bedrock)
-            # revised is defined if status == "revised" and normalise_command succeeded
-            if status == ConsensusAuditStatus.REVISED:
-                # Ensure revised is bound for safety, though normalise_command check above handles it
-                revised_final = locals().get("revised")
-                if not revised_final:
-                    await fail_auditor(
-                        emitter,
-                        request,
-                        AuditorReason.NO_VALID_REVISION,
-                        "Missing revision variable",
-                        target_cmd,
-                    )
-
-                safety_result = validate_command_safety(
-                    revised_final, whitelisting_enabled, blacklisting_enabled, operator_context
-                )
-                if not safety_result.is_safe:
-                    reason = (
-                        AuditorReason.WHITELIST_VIOLATION
-                        if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION
-                        else AuditorReason.NO_VALID_REVISION
-                    )
-                    await fail_auditor(
-                        emitter,
-                        request,
-                        reason,
-                        f"Revision technical safety failure: {safety_result.error_message}",
-                        target_cmd,
-                    )
-
-                reason = (
-                    AuditorReason.REVISED_FROM_DISSENT
-                    if mode in (ConsensusAuditMode.MAJORITY, ConsensusAuditMode.TIED)
-                    else AuditorReason.REVISED
-                )
-                total_duration_ms = (time.time() - auditor_start_time) * 1000
-                logger.info(
-                    "[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f",
-                    total_duration_ms,
-                )
-                await emitter.emit(
-                    EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
-                    TribunalAuditorCompletedPayload(
-                        passed=False, revision=revised_final, reason=reason
-                    ),
-                    correlation_id=correlation_id,
-                )
-                return False, revised_final, revised_final, reason, None, None
+            decision = await _handle_legacy_auditor_decision(
+                emitter,
+                request,
+                status,
+                revised_raw,
+                swap_to_cluster,
+                mode,
+                target_cmd,
+                cluster_to_cmd,
+                cluster_to_members,
+                whitelisting_enabled,
+                blacklisting_enabled,
+                operator_context,
+                auditor_start_time,
+                correlation_id,
+            )
+            if decision is not None:
+                return decision
 
         except ContextWindowExceededError as exc:
             logger.error(

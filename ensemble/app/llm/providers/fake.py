@@ -512,70 +512,9 @@ class FakeProvider(LLMProvider):
         properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
         prop_names = set(properties.keys()) if isinstance(properties, dict) else set()
 
-        if {"complexity", "intent", "intent_summary"}.issubset(prop_names):
-            return json.dumps(
-                {
-                    "complexity": "complex",
-                    "complexity_confidence": "high",
-                    "intent": "action",
-                    "intent_confidence": "high",
-                    "intent_summary": "Execute the requested deterministic operator action.",
-                    "request_posture": "normal",
-                    "posture_confidence": "high",
-                }
-            )
-
-        if prop_names == {"command"}:
-            return json.dumps({"command": "cat /proc/uptime"})
-
-        if {"status", "revised_command", "swap_to_cluster"}.issubset(prop_names):
-            return json.dumps(
-                {
-                    "status": "ok",
-                    "revised_command": None,
-                    "swap_to_cluster": None,
-                }
-            )
-
-        if {"score", "reasoning"}.issubset(prop_names):
-            return json.dumps(
-                {
-                    "score": 5,
-                    "reasoning": "Deterministic fake-provider evaluation passed.",
-                }
-            )
-
-        if prop_names in ({"risk_level"}, {"risk_level", "model_call"}):
-            return json.dumps({"risk_level": "LOW"})
-
-        # FileOperationRiskAnalysis: risk_level, is_system_file, safe_to_proceed,
-        # blocking_issues, approval_prompt
-        if {"risk_level", "safe_to_proceed"}.issubset(prop_names):
-            return json.dumps(
-                {
-                    "risk_level": "LOW",
-                    "is_system_file": False,
-                    "safe_to_proceed": True,
-                    "blocking_issues": [],
-                    "approval_prompt": None,
-                }
-            )
-
-        # ErrorAnalysisResult: error_category, root_cause, can_auto_fix,
-        # suggested_fix, suggested_command, should_escalate, reasoning, user_message
-        if {"error_category", "root_cause"}.issubset(prop_names):
-            return json.dumps(
-                {
-                    "error_category": "system",
-                    "root_cause": "Fake provider deterministic response",
-                    "can_auto_fix": False,
-                    "suggested_fix": None,
-                    "suggested_command": None,
-                    "should_escalate": False,
-                    "reasoning": "Fake provider does not perform real analysis.",
-                    "user_message": "No action needed.",
-                }
-            )
+        known_response = self._known_lite_schema_response(prop_names)
+        if known_response is not None:
+            return known_response
 
         # CommandRiskAnalysis and other structured schemas: return a permissive
         # minimal object with any required enum fields set to their first value
@@ -602,6 +541,72 @@ class FakeProvider(LLMProvider):
             else:
                 fallback[field_name] = "fake"
         return json.dumps(fallback)
+
+    @staticmethod
+    def _known_lite_schema_response(prop_names: set[str]) -> str | None:
+        complexity = FakeProvider._complexity_schema_response(prop_names)
+        if complexity is not None:
+            return complexity
+        fixed_response = FakeProvider._fixed_lite_schema_response(prop_names)
+        if fixed_response is not None:
+            return fixed_response
+        if {"status", "revised_command", "swap_to_cluster"}.issubset(prop_names):
+            return json.dumps({"status": "ok", "revised_command": None, "swap_to_cluster": None})
+        if prop_names in ({"risk_level"}, {"risk_level", "model_call"}) or {
+            "risk_level",
+            "safe_to_proceed",
+        }.issubset(prop_names):
+            if "safe_to_proceed" not in prop_names:
+                return json.dumps({"risk_level": "LOW"})
+            return json.dumps(
+                {
+                    "risk_level": "LOW",
+                    "is_system_file": False,
+                    "safe_to_proceed": True,
+                    "blocking_issues": [],
+                    "approval_prompt": None,
+                }
+            )
+        if {"error_category", "root_cause"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "error_category": "system",
+                    "root_cause": "Fake provider deterministic response",
+                    "can_auto_fix": False,
+                    "suggested_fix": None,
+                    "suggested_command": None,
+                    "should_escalate": False,
+                    "reasoning": "Fake provider does not perform real analysis.",
+                    "user_message": "No action needed.",
+                }
+            )
+        return None
+
+    @staticmethod
+    def _complexity_schema_response(prop_names: set[str]) -> str | None:
+        if not {"complexity", "intent", "intent_summary"}.issubset(prop_names):
+            return None
+        return json.dumps(
+            {
+                "complexity": "complex",
+                "complexity_confidence": "high",
+                "intent": "action",
+                "intent_confidence": "high",
+                "intent_summary": "Execute the requested deterministic operator action.",
+                "request_posture": "normal",
+                "posture_confidence": "high",
+            }
+        )
+
+    @staticmethod
+    def _fixed_lite_schema_response(prop_names: set[str]) -> str | None:
+        if prop_names == {"command"}:
+            return json.dumps({"command": "cat /proc/uptime"})
+        if prop_names == {"score", "reasoning"}:
+            return json.dumps(
+                {"score": 5, "reasoning": "Deterministic fake-provider evaluation passed."}
+            )
+        return None
 
     async def generate_content(
         self,

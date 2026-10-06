@@ -401,6 +401,93 @@ class AnthropicProvider(LLMProvider):
             )
             yield StreamChunkFromModel(finish_reason="stop")
 
+    async def _handle_primary_stream_event(self, event, state: dict):
+        if isinstance(event, ContentBlockStartEvent):
+            self._handle_primary_block_start(event, state)
+        elif isinstance(event, ContentBlockDeltaEvent):
+            async for chunk in self._handle_primary_block_delta(event, state):
+                yield chunk
+        elif isinstance(event, ContentBlockStopEvent):
+            async for chunk in self._handle_primary_block_stop(event, state):
+                yield chunk
+        elif isinstance(event, MessageDeltaEvent):
+            async for chunk in self._handle_primary_message_delta(event, state):
+                yield chunk
+        elif isinstance(event, MessageStartEvent):
+            usage = event.message.usage
+            yield StreamChunkFromModel(
+                usage_metadata=UsageMetadata(
+                    prompt_token_count=usage.input_tokens or 0,
+                    cache_token_count=_cache_token_count(usage),
+                    usage_reported=True,
+                )
+            )
+
+    def _handle_primary_block_start(self, event, state: dict) -> None:
+        idx, block = event.index, event.content_block
+        state["block_types"][idx] = block.type
+        if block.type == "tool_use":
+            state["tool_name"][idx] = block.name
+            state["tool_id"][idx] = block.id
+            state["tool_input"][idx] = ""
+        elif block.type == "thinking":
+            signature = getattr(block, "signature", None)
+            if signature:
+                state["thinking_sig"][idx] = signature
+
+    async def _handle_primary_block_delta(self, event, state: dict):
+        idx, delta = event.index, event.delta
+        if delta.type == "text_delta":
+            yield StreamChunkFromModel(text=delta.text or "")
+        elif delta.type == "thinking_delta":
+            yield StreamChunkFromModel(text=delta.thinking or "", thought=True)
+        elif delta.type == "signature_delta":
+            signature = getattr(delta, "signature", None)
+            if signature:
+                state["thinking_sig"][idx] = signature
+        elif delta.type == "input_json_delta":
+            state["tool_input"][idx] = state["tool_input"].get(idx, "") + (delta.partial_json or "")
+
+    async def _handle_primary_block_stop(self, event, state: dict):
+        idx = event.index
+        if state["block_types"].get(idx) == "thinking":
+            signature = state["thinking_sig"].pop(idx, None)
+            if signature:
+                yield StreamChunkFromModel(
+                    thought=True, thought_signature=ThoughtSignature.from_sdk(signature)
+                )
+        elif state["block_types"].get(idx) == "tool_use":
+            raw_input = state["tool_input"].get(idx, "{}")
+            try:
+                args = json.loads(raw_input)
+            except json.JSONDecodeError as exc:
+                raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+            if not isinstance(args, dict):
+                raise ValidationError("Provider tool arguments must be a JSON object")
+            yield StreamChunkFromModel(
+                tool_calls=[
+                    ToolCall(
+                        name=state["tool_name"].get(idx, ""),
+                        args=args,
+                        id=state["tool_id"].get(idx),
+                    )
+                ]
+            )
+
+    async def _handle_primary_message_delta(self, event, state: dict):
+        stop_reason, usage = event.delta.stop_reason, event.usage
+        metadata = (
+            UsageMetadata(
+                candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
+                usage_reported=True,
+            )
+            if usage
+            else UsageMetadata()
+        )
+        if stop_reason:
+            state["finish_reason_received"] = True
+            yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=metadata)
+
     async def generate_content_stream_primary(
         self,
         model: str,
@@ -434,12 +521,14 @@ class AnthropicProvider(LLMProvider):
             thinking_config=primary_llm_settings.thinking_config,
         )
 
-        accumulated_tool_name: dict[int, str] = {}
-        accumulated_tool_id: dict[int, str] = {}
-        accumulated_tool_input: dict[int, str] = {}
-        block_types: dict[int, str] = {}
-        accumulated_thinking_sig: dict[int, str] = {}
-        finish_reason_received = False
+        state = {
+            "tool_name": {},
+            "tool_id": {},
+            "tool_input": {},
+            "block_types": {},
+            "thinking_sig": {},
+            "finish_reason_received": False,
+        }
         stream_exhausted = False
 
         payload = request.model_dump(mode="json", exclude_none=True)
@@ -447,95 +536,8 @@ class AnthropicProvider(LLMProvider):
         async with self._client.messages.stream(**payload) as stream:
             try:
                 for event in await self._receive_stream(stream):
-                    if isinstance(event, ContentBlockStartEvent):
-                        idx = event.index
-                        block = event.content_block
-                        block_types[idx] = block.type
-                        if block.type == "tool_use":
-                            accumulated_tool_name[idx] = block.name
-                            accumulated_tool_id[idx] = block.id
-                            accumulated_tool_input[idx] = ""
-                        elif block.type == "thinking":
-                            sig = getattr(block, "signature", None)
-                            if sig:
-                                accumulated_thinking_sig[idx] = sig
-
-                    elif isinstance(event, ContentBlockDeltaEvent):
-                        idx = event.index
-                        delta = event.delta
-
-                        if delta.type == "text_delta":
-                            yield StreamChunkFromModel(text=delta.text or "")
-
-                        elif delta.type == "thinking_delta":
-                            yield StreamChunkFromModel(text=delta.thinking or "", thought=True)
-
-                        elif delta.type == "signature_delta":
-                            sig = getattr(delta, "signature", None)
-                            if sig:
-                                accumulated_thinking_sig[idx] = sig
-
-                        elif delta.type == "input_json_delta":
-                            accumulated_tool_input[idx] = accumulated_tool_input.get(idx, "") + (
-                                delta.partial_json or ""
-                            )
-
-                    elif isinstance(event, ContentBlockStopEvent):
-                        idx = event.index
-                        if block_types.get(idx) == "thinking":
-                            sig = accumulated_thinking_sig.pop(idx, None)
-                            if sig:
-                                yield StreamChunkFromModel(
-                                    thought=True,
-                                    thought_signature=ThoughtSignature.from_sdk(sig),
-                                )
-                        elif block_types.get(idx) == "tool_use":
-                            raw_input = accumulated_tool_input.get(idx, "{}")
-                            try:
-                                args = json.loads(raw_input)
-                            except json.JSONDecodeError as exc:
-                                raise ValidationError(
-                                    "Provider returned invalid tool arguments JSON"
-                                ) from exc
-                            if not isinstance(args, dict):
-                                raise ValidationError(
-                                    "Provider tool arguments must be a JSON object"
-                                )
-                            yield StreamChunkFromModel(
-                                tool_calls=[
-                                    ToolCall(
-                                        name=accumulated_tool_name.get(idx, ""),
-                                        args=args,
-                                        id=accumulated_tool_id.get(idx),
-                                    )
-                                ]
-                            )
-
-                    elif isinstance(event, MessageDeltaEvent):
-                        stop_reason = event.delta.stop_reason
-                        usage = event.usage
-                        um = None
-                        if usage:
-                            um = UsageMetadata(
-                                candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
-                                usage_reported=True,
-                            )
-                        if stop_reason:
-                            finish_reason_received = True
-                            yield StreamChunkFromModel(
-                                finish_reason=stop_reason,
-                                usage_metadata=um or UsageMetadata(),
-                            )
-
-                    elif isinstance(event, MessageStartEvent):
-                        usage = event.message.usage
-                        yield StreamChunkFromModel(
-                            usage_metadata=UsageMetadata(
-                                prompt_token_count=usage.input_tokens or 0,
-                                cache_token_count=_cache_token_count(usage),
-                                usage_reported=True,
-                            )
-                        )
+                    async for chunk in self._handle_primary_stream_event(event, state):
+                        yield chunk
                 stream_exhausted = True
             except Exception as e:
                 logger.exception("[ANTHROPIC] Exception during primary streaming: %s", e)
@@ -553,7 +555,7 @@ class AnthropicProvider(LLMProvider):
 
         # Fallback: if stream ended without message_delta with stop_reason, yield completion
         # Only trigger fallback if stream was fully exhausted (no early termination)
-        if stream_exhausted and not finish_reason_received:
+        if stream_exhausted and not state["finish_reason_received"]:
             logger.warning(
                 "[ANTHROPIC] Primary stream ended without message_delta with stop_reason, using fallback completion"
             )

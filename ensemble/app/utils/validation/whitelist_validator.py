@@ -139,64 +139,25 @@ class CommandWhitelistValidator:
         command_args = parts[1:] if len(parts) > 1 else []
 
         logger.info("Validating command: %s with args: %s", base_command, command_args)
-
-        for pattern in self.forbidden_patterns:
-            try:
-                if re.search(pattern, command_string, re.IGNORECASE):
-                    logger.info("Command blocked by forbidden pattern: %s", pattern)
-                    return CommandValidationResult(
-                        is_valid=False,
-                        command=base_command,
-                        reason=f"Contains forbidden pattern: {pattern}",
-                        violations=[f"forbidden_pattern: {pattern}"],
-                    )
-            except re.error as e:
-                logger.error("Invalid forbidden pattern regex '%s': %s", pattern, e)
-                continue
-
-        for forbidden_dir in self.forbidden_directories:
-            if forbidden_dir in command_string:
-                logger.info("Command blocked by forbidden directory: %s", forbidden_dir)
-                return CommandValidationResult(
-                    is_valid=False,
-                    command=base_command,
-                    reason=f"Accesses forbidden directory: {forbidden_dir}",
-                    violations=[f"forbidden_directory: {forbidden_dir}"],
-                )
+        forbidden_result = self._check_forbidden_content(command_string, base_command)
+        if forbidden_result:
+            return forbidden_result
 
         # CSV override mode: if user supplied an explicit allow-list, replace the
         # JSON whitelist entirely (per design choice). Per-command arg metadata is
         # not available, so we fall back to the conservative `_is_safe_value`
         # check on every argument.
         if allowed_commands_override:
-            if base_command not in allowed_commands_override:
-                logger.info(
-                    "Command '%s' not in user-configured whitelist (CSV mode)", base_command
-                )
-                return CommandValidationResult(
-                    is_valid=False,
-                    command=base_command,
-                    reason=f"Command '{base_command}' not in whitelist",
-                )
-            violations = [
-                f"Argument '{arg}' contains unsafe characters or format"
-                for arg in command_args
-                if not self._is_safe_value(arg)
-            ]
-            if violations:
-                return CommandValidationResult(
-                    is_valid=False,
-                    command=base_command,
-                    reason=f"Invalid arguments: {'; '.join(violations)}",
-                    violations=violations,
-                )
-            return CommandValidationResult(
-                is_valid=True,
-                command=base_command,
-                category=CommandCategory.CSV_WHITELIST,
-                platform=platform,
-            )
+            return self._validate_override(base_command, command_args, platform, allowed_commands_override)
 
+        return self._validate_configured_command(
+            command_string, base_command, command_args, platform
+        )
+
+    def _validate_configured_command(
+        self, command_string: str, base_command: str, command_args: list[str], platform: Platform
+    ) -> CommandValidationResult:
+        """Validate a command through its JSON whitelist entry."""
         command_config = self._find_command_config(base_command)
         if not command_config:
             logger.info("Command '%s' not found in whitelist", base_command)
@@ -205,7 +166,6 @@ class CommandWhitelistValidator:
                 command=base_command,
                 reason=f"Command '{base_command}' not in whitelist",
             )
-
         category_name, config = command_config
         logger.info("Found command '%s' in category '%s'", base_command, category_name)
 
@@ -238,6 +198,62 @@ class CommandWhitelistValidator:
             platform=platform,
             max_execution_time=config.get("max_execution_time"),
             safe_options_used=validation_result.safe_options_used,
+        )
+
+    def _check_forbidden_content(
+        self, command_string: str, base_command: str
+    ) -> CommandValidationResult | None:
+        """Return a validation error when global forbidden rules match."""
+        for pattern in self.forbidden_patterns:
+            try:
+                if re.search(pattern, command_string, re.IGNORECASE):
+                    logger.info("Command blocked by forbidden pattern: %s", pattern)
+                    return CommandValidationResult(
+                        is_valid=False,
+                        command=base_command,
+                        reason=f"Contains forbidden pattern: {pattern}",
+                        violations=[f"forbidden_pattern: {pattern}"],
+                    )
+            except re.error as exc:
+                logger.error("Invalid forbidden pattern regex '%s': %s", pattern, exc)
+        for forbidden_dir in self.forbidden_directories:
+            if forbidden_dir in command_string:
+                logger.info("Command blocked by forbidden directory: %s", forbidden_dir)
+                return CommandValidationResult(
+                    is_valid=False,
+                    command=base_command,
+                    reason=f"Accesses forbidden directory: {forbidden_dir}",
+                    violations=[f"forbidden_directory: {forbidden_dir}"],
+                )
+        return None
+
+    def _validate_override(
+        self, base_command: str, command_args: list[str], platform: Platform, allowed: list[str]
+    ) -> CommandValidationResult:
+        """Validate command and arguments when an explicit CSV allow-list is active."""
+        if base_command not in allowed:
+            logger.info("Command '%s' not in user-configured whitelist (CSV mode)", base_command)
+            return CommandValidationResult(
+                is_valid=False,
+                command=base_command,
+                reason=f"Command '{base_command}' not in whitelist",
+            )
+        violations = [
+            f"Argument '{arg}' contains unsafe characters or format"
+            for arg in command_args if not self._is_safe_value(arg)
+        ]
+        if violations:
+            return CommandValidationResult(
+                is_valid=False,
+                command=base_command,
+                reason=f"Invalid arguments: {'; '.join(violations)}",
+                violations=violations,
+            )
+        return CommandValidationResult(
+            is_valid=True,
+            command=base_command,
+            category=CommandCategory.CSV_WHITELIST,
+            platform=platform,
         )
 
     def _find_command_config(self, command: str) -> tuple[str, dict[str, Any]] | None:
@@ -283,49 +299,16 @@ class CommandWhitelistValidator:
                     option_matched = True
 
                     if "<" in safe_option and ">" in safe_option:
-                        param_name = self._extract_parameter_name(safe_option)
-                        param_value = None
-
-                        if "=" in arg:
-                            _, param_value = arg.split("=", 1)
-                        elif i + 1 < len(args):
-                            param_value = args[i + 1]
-                            i += 1
-
-                        if param_value is not None:
-                            if param_name and param_name in validation_patterns:
-                                pattern = validation_patterns[param_name]
-                                if not re.match(pattern, param_value):
-                                    violations.append(
-                                        f"Parameter {param_name}='{param_value}' doesn't match pattern {pattern}"
-                                    )
-                            elif not self._is_safe_value(param_value):
-                                violations.append(
-                                    f"Parameter value '{param_value}' contains unsafe characters"
-                                )
+                        parameter_violation, consumed_next = self._validate_option_parameter(
+                            safe_option, arg, args, i, validation_patterns
+                        )
+                        if parameter_violation:
+                            violations.append(parameter_violation)
+                        i += consumed_next
                     break
 
             if not option_matched:
-                pattern_matched = False
-                for pattern_name, pattern in validation_patterns.items():
-                    try:
-                        if re.match(pattern, arg):
-                            pattern_matched = True
-                            break
-                    except re.error:
-                        logger.error("Invalid regex pattern '%s' for %s", pattern, pattern_name)
-                        continue
-
-                if not pattern_matched:
-                    for pattern in _COMMON_SAFE_PATTERNS.values():
-                        try:
-                            if re.match(pattern, arg):
-                                pattern_matched = True
-                                break
-                        except re.error:
-                            continue
-
-                if not pattern_matched and not self._is_safe_value(arg):
+                if not self._matches_validation_pattern(arg, validation_patterns) and not self._is_safe_value(arg):
                     violations.append(f"Argument '{arg}' contains unsafe characters or format")
 
             i += 1
@@ -341,6 +324,49 @@ class CommandWhitelistValidator:
         return CommandValidationResult(
             is_valid=True, command=command, safe_options_used=safe_options_used
         )
+
+    def _validate_option_parameter(
+        self, safe_option: str, arg: str, args: list[str], index: int,
+        validation_patterns: dict[str, str],
+    ) -> tuple[str | None, int]:
+        """Validate the value attached to a parameterized safe option."""
+        parameter_name = self._extract_parameter_name(safe_option)
+        if "=" in arg:
+            _, parameter_value = arg.split("=", 1)
+            consumed_next = 0
+        elif index + 1 < len(args):
+            parameter_value = args[index + 1]
+            consumed_next = 1
+        else:
+            return None, 0
+
+        if parameter_name and parameter_name in validation_patterns:
+            pattern = validation_patterns[parameter_name]
+            if not re.match(pattern, parameter_value):
+                return (
+                    f"Parameter {parameter_name}='{parameter_value}' doesn't match pattern {pattern}",
+                    consumed_next,
+                )
+        elif not self._is_safe_value(parameter_value):
+            return f"Parameter value '{parameter_value}' contains unsafe characters", consumed_next
+        return None, consumed_next
+
+    @staticmethod
+    def _matches_validation_pattern(arg: str, validation_patterns: dict[str, str]) -> bool:
+        """Return whether any configured or common safe pattern accepts an argument."""
+        for pattern_name, pattern in validation_patterns.items():
+            try:
+                if re.match(pattern, arg):
+                    return True
+            except re.error:
+                logger.error("Invalid regex pattern '%s' for %s", pattern, pattern_name)
+        for pattern in _COMMON_SAFE_PATTERNS.values():
+            try:
+                if re.match(pattern, arg):
+                    return True
+            except re.error:
+                continue
+        return False
 
     def _is_safe_value(self, value: str) -> bool:
         """Check if a value contains only safe characters."""
@@ -436,13 +462,21 @@ class CommandWhitelistValidator:
         return None
 
 
-_validator_instance: CommandWhitelistValidator | None = None
+class _ValidatorState:
+    instance: CommandWhitelistValidator | None = None
+
+
+_validator_state = _ValidatorState()
 
 
 def register_whitelist_validator(validator: CommandWhitelistValidator) -> None:
     """Explicitly register the global whitelist validator instance."""
-    global _validator_instance
-    _validator_instance = validator
+    _validator_state.instance = validator
+
+
+def reset_whitelist_validator() -> None:
+    """Clear the registered whitelist validator so it is reloaded on next access."""
+    _validator_state.instance = None
 
 
 def get_whitelist_validator(whitelist_path: str | None = None) -> CommandWhitelistValidator:
@@ -452,14 +486,13 @@ def get_whitelist_validator(whitelist_path: str | None = None) -> CommandWhiteli
     the default path (or the provided path). This backward-compatibility mode
     is deprecated; new code should use register_whitelist_validator().
     """
-    global _validator_instance
-    if _validator_instance is None:
+    if _validator_state.instance is None:
         logger.warning(
             "get_whitelist_validator() called without explicit registration; "
             "creating validator implicitly. Use register_whitelist_validator() for explicit DI."
         )
-        _validator_instance = CommandWhitelistValidator(whitelist_path=whitelist_path or "")
-    return _validator_instance
+        _validator_state.instance = CommandWhitelistValidator(whitelist_path=whitelist_path or "")
+    return _validator_state.instance
 
 
 def validate_command_against_whitelist(

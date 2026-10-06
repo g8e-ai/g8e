@@ -60,11 +60,11 @@ from app.services.ai.generator import generate_command
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.services.ai.tool_service import AIToolService
 from app.services.evaluation.player_steps import PlayerStepRecorder
-from app.services.protocols import EventServiceProtocol
 from app.services.investigation.investigation_service import (
     extract_operator_context_by_target,
     extract_single_operator_context,
 )
+from app.services.protocols import EventServiceProtocol
 from app.utils.csv_commands import parse_command_csv
 from app.utils.time_ids.ids import generate_command_execution_id
 from app.utils.validation.safety import map_os_string_to_platform

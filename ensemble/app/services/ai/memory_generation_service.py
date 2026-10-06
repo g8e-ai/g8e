@@ -52,6 +52,40 @@ PAST_MEMORIES_LIMIT = 10
 MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS = 2048
 
 
+def _format_past_memories(
+    past_memories: list[InvestigationMemory] | None,
+) -> str:
+    """Format recent user memories as compact baseline context."""
+    if not past_memories:
+        return ""
+
+    past_lines = []
+    for i, memory in enumerate(past_memories[:PAST_MEMORIES_LIMIT], 1):
+        attributes = [
+            label + value
+            for label, value in (
+                ("technical: ", memory.technical_background),
+                ("communication: ", memory.communication_preferences),
+                ("interaction: ", memory.interaction_style),
+                ("response: ", memory.response_style),
+                ("approach: ", memory.problem_solving_approach),
+            )
+            if value
+        ]
+        if attributes:
+            past_lines.append(
+                f"- Past memory {i} ({memory.case_title or 'Investigation'}): "
+                f"{'; '.join(attributes)}"
+            )
+    if not past_lines:
+        return ""
+    return (
+        "RECENT PAST MEMORIES (for context on user temperature and knowledge baseline):\n"
+        + "\n".join(past_lines)
+        + "\n\n"
+    )
+
+
 class MemoryGenerationService:
     """AI-backed memory analysis - updates an InvestigationMemory from conversation history.
 
@@ -334,32 +368,7 @@ class MemoryGenerationService:
     ) -> list[types.Content]:
         contents: list[types.Content] = []
 
-        # Add past memories context if present (5-10 recent memories for baseline context)
-        past_context = ""
-        if past_memories:
-            past_lines = []
-            for i, pm in enumerate(past_memories[:PAST_MEMORIES_LIMIT], 1):
-                attrs = []
-                if pm.technical_background:
-                    attrs.append(f"technical: {pm.technical_background}")
-                if pm.communication_preferences:
-                    attrs.append(f"communication: {pm.communication_preferences}")
-                if pm.interaction_style:
-                    attrs.append(f"interaction: {pm.interaction_style}")
-                if pm.response_style:
-                    attrs.append(f"response: {pm.response_style}")
-                if pm.problem_solving_approach:
-                    attrs.append(f"approach: {pm.problem_solving_approach}")
-                if attrs:
-                    past_lines.append(
-                        f"- Past memory {i} ({pm.case_title or 'Investigation'}): {'; '.join(attrs)}"
-                    )
-            if past_lines:
-                past_context = (
-                    "RECENT PAST MEMORIES (for context on user temperature and knowledge baseline):\n"
-                    + "\n".join(past_lines)
-                    + "\n\n"
-                )
+        past_context = _format_past_memories(past_memories)
 
         # Add existing memory context first
         memory_context = (

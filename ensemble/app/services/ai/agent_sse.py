@@ -13,6 +13,7 @@ streaming loop into client EventService pub/sub calls for browser delivery.
 import asyncio
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from typing import cast
 
 from app.constants import (
     DEFAULT_FINISH_REASON,
@@ -438,24 +439,33 @@ async def _handle_universal_tool_result(
 
 def _universal_tool_result_details(fn: str, result):
     """Return the event and result fields for a completed universal tool."""
-    if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
-        event_type = EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
-        if isinstance(result, InvestigationContextResult):
-            content = str(result.data) if result.data is not None else None
-            return event_type, content, None, result.error if not result.success else None
+    handlers = {
+        OperatorToolName.QUERY_INVESTIGATION_CONTEXT: (
+            EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED,
+            InvestigationContextResult,
+            lambda value: str(value.data) if value.data is not None else None,
+        ),
+        OperatorToolName.GET_COMMAND_CONSTRAINTS: (
+            EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED,
+            CommandConstraintsResult,
+            lambda value: value.message,
+        ),
+        OperatorToolName.G8E_SEARCH_WEB: (
+            EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
+            SearchWebResult,
+            lambda value: [item.model_dump(mode="json") for item in value.results],
+        ),
+    }
+    handler = next((handlers[key] for key in handlers if fn == key), None)
+    if handler is None:
+        return None, None, None, None
+    event_type, result_type, content_for = handler
+    if not isinstance(result, result_type):
         return event_type, None, None, None
-    if fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
-        event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED
-        if isinstance(result, CommandConstraintsResult):
-            return event_type, result.message, None, result.error if not result.success else None
-        return event_type, None, None, None
-    if fn == OperatorToolName.G8E_SEARCH_WEB:
-        event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED
-        if isinstance(result, SearchWebResult):
-            results = [item.model_dump(mode="json") for item in result.results]
-            return event_type, None, results, result.error if not result.success else None
-        return event_type, None, None, None
-    return None, None, None, None
+    content = content_for(result) if result_type is not SearchWebResult else None
+    results = content_for(result) if result_type is SearchWebResult else None
+    error = result.error if not result.success else None
+    return event_type, content, results, error
 
 
 async def _handle_operator_tool_result(
@@ -490,18 +500,29 @@ def _operator_result_content(result):
     """Convert a typed operator result to the content shown in its SSE event."""
     if not result.success and result.error:
         return None
-    if isinstance(result, CommandExecutionResult):
-        return result.output
-    if isinstance(result, (FileEditResult, FsReadToolResult)):
-        return result.content
-    if isinstance(result, FetchLogsToolResult):
-        return result.stdout
-    if isinstance(result, FetchFileDiffToolResult):
-        return result.diff.diff_content if result.diff else None
-    if isinstance(result, InvestigationContextResult):
-        return str(result.data) if result.data is not None else None
-    if isinstance(result, CommandConstraintsResult):
-        return result.message
+    return _operator_result_content_value(result)
+
+
+_NO_OPERATOR_CONTENT = object()
+
+
+def _simple_operator_result_content(result):
+    handlers = (
+        (CommandExecutionResult, lambda value: value.output),
+        ((FileEditResult, FsReadToolResult), lambda value: value.content),
+        (FetchLogsToolResult, lambda value: value.stdout),
+        (FetchFileDiffToolResult, lambda value: value.diff.diff_content if value.diff else None),
+        (InvestigationContextResult, lambda value: str(value.data) if value.data is not None else None),
+        (CommandConstraintsResult, lambda value: value.message),
+    )
+    handler = next((render for types, render in handlers if isinstance(result, types)), None)
+    return handler(result) if handler else _NO_OPERATOR_CONTENT
+
+
+def _operator_result_content_value(result):
+    content = _simple_operator_result_content(result)
+    if content is not _NO_OPERATOR_CONTENT:
+        return cast(str | None, content)
     if isinstance(result, PortCheckToolResult):
         return f"Port {result.port} on {result.host} is {'open' if result.is_open else 'closed'}"
     if isinstance(result, (FsListToolResult, FsGrepToolResult, SshInventoryToolResult, SearchWebResult)):

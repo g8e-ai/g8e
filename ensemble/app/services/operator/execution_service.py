@@ -235,12 +235,29 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 error_type=CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY,
             ), None
 
+        return await self._dispatch_and_build_result(
+            g8e_message=g8e_message,
+            operator_id=operator_id,
+            operator_session_id=operator_session_id,
+            g8e_context=g8e_context,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def _dispatch_and_build_result(
+        self, *, g8e_message, operator_id, operator_session_id,
+        g8e_context, timeout_seconds,
+    ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]:
+        """Dispatch a validated message and translate the gateway response."""
+        gateway_operator_client = self._gateway_operator_client
+        assert gateway_operator_client is not None
+        payload = g8e_message.payload
+        execution_id = getattr(payload, "execution_id", None) or g8e_message.id
         payload_bytes = payload.to_protobuf().SerializeToString()
         target_resource = getattr(payload, "file_path", None) or getattr(payload, "path", None)
 
         try:
             dispatch_result = await asyncio.wait_for(
-                self._gateway_operator_client.dispatch(
+                gateway_operator_client.dispatch(
                     context=g8e_context,
                     operator_session_id=operator_session_id,
                     event_type=g8e_message.event_type,
@@ -289,6 +306,13 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 operator_id=operator_id,
             ), None
 
+        return self._result_from_envelope(envelope, execution_id, operator_id)
+
+    @staticmethod
+    def _result_from_envelope(
+        envelope: G8eoResultEnvelope, execution_id: str, operator_id: str
+    ) -> tuple[CommandInternalResult, G8eoResultEnvelope]:
+        """Convert supported gateway payloads to the internal execution result."""
         if isinstance(
             envelope.payload,
             (FileEditResultPayload, FsListResultPayload, FsReadResultPayload, FsGrepResultPayload),

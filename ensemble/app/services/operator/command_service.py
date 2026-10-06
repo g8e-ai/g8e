@@ -367,95 +367,26 @@ class OperatorCommandService:
         semaphore = asyncio.Semaphore(max_concurrency)
         cancel_event = asyncio.Event()
 
-        async def _dispatch(op: OperatorDocument, exec_id: str) -> BatchOperatorExecutionResult:
-            op_id = op.id
-            op_session_id = op.operator_session_id or ""
-            hostname = (
-                op.current_hostname
-                or (
-                    op.latest_heartbeat_snapshot.system_identity.hostname
-                    if op.latest_heartbeat_snapshot
-                    else None
-                )
-                or op_id
-            )
-
-            if cancel_event.is_set():
-                return BatchOperatorExecutionResult(
-                    hostname=hostname,
-                    operator_id=op_id,
-                    execution_id=exec_id,
-                    success=False,
-                    error="Cancelled by fail-fast",
-                )
-
-            async with semaphore:
-                if cancel_event.is_set():
-                    return BatchOperatorExecutionResult(
-                        hostname=hostname,
-                        operator_id=op_id,
-                        execution_id=exec_id,
-                        success=False,
-                        error="Cancelled by fail-fast",
-                    )
-
-                g8e_message = G8eMessage(
-                    id=exec_id,
-                    source_component=G8EE_COMPONENT,
-                    event_type=EventType.OPERATOR_COMMAND_REQUESTED,
-                    case_id=g8e_context.case_id,
-                    task_id=AITaskId.COMMAND,
-                    investigation_id=g8e_context.investigation_id,
-                    web_session_id=g8e_context.web_session_id,
-                    user_id=g8e_context.user_id,
-                    cli_session_id=g8e_context.cli_session_id,
-                    operator_session_id=op_session_id,
-                    operator_id=op_id,
-                    payload=CommandRequestPayload(
-                        command=command,
-                        execution_id=exec_id,
-                        justification=justification,
-                        timeout_seconds=args.timeout_seconds,
-                    ),
-                )
-
-                try:
-                    internal_result, _ = await self._execution_service.execute(
-                        g8e_message=g8e_message,
-                        g8e_context=g8e_context,
-                        timeout_seconds=args.timeout_seconds,
-                    )
-                except Exception as e:
-                    logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
-                    if fail_fast:
-                        cancel_event.set()
-                    return BatchOperatorExecutionResult(
-                        hostname=hostname,
-                        operator_id=op_id,
-                        execution_id=exec_id,
-                        success=False,
-                        error=f"Command execution failed: {e}. Check operator status and retry.",
-                    )
-
-                succeeded = internal_result.status == ExecutionStatus.COMPLETED
-                if not succeeded and fail_fast:
-                    cancel_event.set()
-                return BatchOperatorExecutionResult(
-                    hostname=hostname,
-                    operator_id=op_id,
-                    execution_id=exec_id,
-                    success=succeeded,
-                    result=internal_result,
-                    error=internal_result.error if not succeeded else None,
-                )
-
         logger.info(
             "[COMMAND] Dispatching to %d operator(s) (batch_id=%s)",
             len(target_operator_docs),
             batch_id,
         )
         per_operator_results: list[BatchOperatorExecutionResult] = await asyncio.gather(
-            *[_dispatch(op, per_operator_exec_ids[i]) for i, op in enumerate(target_operator_docs)]
+            *[
+                self._dispatch_operator_command(
+                    op=op,
+                    exec_id=per_operator_exec_ids[i],
+                    command=command,
+                    justification=justification,
+                    args=args,
+                    g8e_context=g8e_context,
+                    semaphore=semaphore,
+                    cancel_event=cancel_event,
+                    fail_fast=fail_fast,
+                )
+                for i, op in enumerate(target_operator_docs)
+            ]
         )
 
         return self._assemble_result(
@@ -467,6 +398,93 @@ class OperatorCommandService:
             batch_id=batch_id,
             marshal_risk=args.risk_analysis.risk_level if args.risk_analysis else None,
         )
+
+    async def _dispatch_operator_command(
+        self,
+        *,
+        op: OperatorDocument,
+        exec_id: str,
+        command: str,
+        justification: str,
+        args: ExecutorCommandArgs,
+        g8e_context: G8eHttpContext,
+        semaphore: asyncio.Semaphore,
+        cancel_event: asyncio.Event,
+        fail_fast: bool,
+    ) -> BatchOperatorExecutionResult:
+        op_id = op.id
+        op_session_id = op.operator_session_id or ""
+        hostname = (
+            op.current_hostname
+            or (
+                op.latest_heartbeat_snapshot.system_identity.hostname
+                if op.latest_heartbeat_snapshot
+                else None
+            )
+            or op_id
+        )
+
+        def cancelled_result() -> BatchOperatorExecutionResult:
+            return BatchOperatorExecutionResult(
+                hostname=hostname,
+                operator_id=op_id,
+                execution_id=exec_id,
+                success=False,
+                error="Cancelled by fail-fast",
+            )
+
+        if cancel_event.is_set():
+            return cancelled_result()
+        async with semaphore:
+            if cancel_event.is_set():
+                return cancelled_result()
+            message = G8eMessage(
+                id=exec_id,
+                source_component=G8EE_COMPONENT,
+                event_type=EventType.OPERATOR_COMMAND_REQUESTED,
+                case_id=g8e_context.case_id,
+                task_id=AITaskId.COMMAND,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
+                user_id=g8e_context.user_id,
+                cli_session_id=g8e_context.cli_session_id,
+                operator_session_id=op_session_id,
+                operator_id=op_id,
+                payload=CommandRequestPayload(
+                    command=command,
+                    execution_id=exec_id,
+                    justification=justification,
+                    timeout_seconds=args.timeout_seconds,
+                ),
+            )
+            try:
+                internal_result, _ = await self._execution_service.execute(
+                    g8e_message=message,
+                    g8e_context=g8e_context,
+                    timeout_seconds=args.timeout_seconds,
+                )
+            except Exception as exc:
+                logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, exc)
+                if fail_fast:
+                    cancel_event.set()
+                return BatchOperatorExecutionResult(
+                    hostname=hostname,
+                    operator_id=op_id,
+                    execution_id=exec_id,
+                    success=False,
+                    error=f"Command execution failed: {exc}. Check operator status and retry.",
+                )
+            succeeded = internal_result.status == ExecutionStatus.COMPLETED
+            if not succeeded and fail_fast:
+                cancel_event.set()
+            return BatchOperatorExecutionResult(
+                hostname=hostname,
+                operator_id=op_id,
+                execution_id=exec_id,
+                success=succeeded,
+                result=internal_result,
+                error=internal_result.error if not succeeded else None,
+            )
 
     # ------------------------------------------------------------------
     # Helpers

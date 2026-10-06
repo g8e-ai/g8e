@@ -89,18 +89,14 @@ def _has_llm_credentials(llm) -> bool:
     """Return True if the given LLMSettings has the credentials it needs."""
     if llm is None:
         return False
-    provider = llm.primary_provider
-    if provider == LLMProvider.GEMINI:
-        return bool(llm.gemini_api_key)
-    if provider == LLMProvider.ANTHROPIC:
-        return bool(llm.anthropic_api_key)
-    if provider == LLMProvider.OPENAI:
-        return bool(llm.openai_api_key and llm.openai_endpoint)
-    if provider == LLMProvider.OLLAMA:
-        return bool(llm.ollama_endpoint)
-    if provider == LLMProvider.LLAMACPP:
-        return bool(llm.llamacpp_endpoint)
-    return False
+    credentials_by_provider = {
+        LLMProvider.GEMINI: bool(llm.gemini_api_key),
+        LLMProvider.ANTHROPIC: bool(llm.anthropic_api_key),
+        LLMProvider.OPENAI: bool(llm.openai_api_key and llm.openai_endpoint),
+        LLMProvider.OLLAMA: bool(llm.ollama_endpoint),
+        LLMProvider.LLAMACPP: bool(llm.llamacpp_endpoint),
+    }
+    return credentials_by_provider.get(llm.primary_provider, False)
 
 
 def _llm_settings_from_env():
@@ -109,43 +105,19 @@ def _llm_settings_from_env():
     Returns None when no --llm-provider flag was supplied, which means
     ai_integration tests should be skipped.
     """
-    provider_str = os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip()
-    if not provider_str:
+    if not os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip():
         return None
 
     llm_settings = import_module("app.models.settings").LLMSettings
-
-    try:
-        provider = LLMProvider(provider_str)
-    except ValueError:
-        logger.warning("G8E_TEST_LLM_PRIMARY_PROVIDER=%s is not a valid provider", provider_str)
+    provider = _test_provider(EnvVar.TEST_LLM_PRIMARY_PROVIDER)
+    if provider is None:
         return None
-
-    assistant_provider_str = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_PROVIDER, "").strip()
-    if assistant_provider_str:
-        try:
-            assistant_provider = LLMProvider(assistant_provider_str)
-        except ValueError:
-            logger.warning(
-                "G8E_TEST_LLM_ASSISTANT_PROVIDER=%s is not a valid provider, falling back to primary",
-                assistant_provider_str,
-            )
-            assistant_provider = provider
-    else:
-        assistant_provider = provider
-
-    lite_provider_str = os.environ.get(EnvVar.TEST_LLM_LITE_PROVIDER, "").strip()
-    if lite_provider_str:
-        try:
-            lite_provider = LLMProvider(lite_provider_str)
-        except ValueError:
-            logger.warning(
-                "G8E_TEST_LLM_LITE_PROVIDER=%s is not a valid provider, falling back to assistant",
-                lite_provider_str,
-            )
-            lite_provider = assistant_provider
-    else:
-        lite_provider = assistant_provider
+    assistant_provider = _test_provider(
+        EnvVar.TEST_LLM_ASSISTANT_PROVIDER, fallback=provider
+    )
+    lite_provider = _test_provider(
+        EnvVar.TEST_LLM_LITE_PROVIDER, fallback=assistant_provider
+    )
 
     primary = os.environ.get(EnvVar.TEST_LLM_PRIMARY_MODEL, "").strip() or None
     assistant = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_MODEL, "").strip() or None
@@ -153,20 +125,7 @@ def _llm_settings_from_env():
 
     # Fallback to defaults if not provided but provider is set
     if not primary:
-        anthropic_default_model = import_module("app.constants.config").ANTHROPIC_DEFAULT_MODEL
-        gemini_default_model = import_module("app.constants.config").GEMINI_DEFAULT_MODEL
-        llamacpp_default_model = import_module("app.constants.config").LLAMACPP_DEFAULT_MODEL
-        ollama_default_model = import_module("app.constants.config").OLLAMA_DEFAULT_MODEL
-        openai_default_model = import_module("app.constants.config").OPENAI_DEFAULT_MODEL
-
-        default_models = {
-            LLMProvider.GEMINI: gemini_default_model,
-            LLMProvider.OPENAI: openai_default_model,
-            LLMProvider.ANTHROPIC: anthropic_default_model,
-            LLMProvider.OLLAMA: ollama_default_model,
-            LLMProvider.LLAMACPP: llamacpp_default_model,
-        }
-        primary = default_models.get(provider)
+        primary = _default_test_model(provider)
 
     if not assistant:
         assistant = primary
@@ -179,34 +138,11 @@ def _llm_settings_from_env():
         "assistant_provider": assistant_provider,
         "lite_provider": lite_provider,
     }
-    if primary:
-        kwargs["primary_model"] = primary
-    if assistant:
-        kwargs["assistant_model"] = assistant
-    if lite:
-        kwargs["lite_model"] = lite
-
-    provider_model_field = {
-        LLMProvider.GEMINI: "gemini_model",
-        LLMProvider.OPENAI: "openai_model",
-        LLMProvider.ANTHROPIC: "anthropic_model",
-        LLMProvider.OLLAMA: "ollama_model",
-        LLMProvider.LLAMACPP: "llamacpp_model",
-    }
-
-    if primary:
-        kwargs["primary_model"] = primary
-        mod_field = provider_model_field.get(provider)
-        if mod_field:
-            kwargs[mod_field] = primary
-
-    if assistant:
-        kwargs["assistant_model"] = assistant
-        mod_field = provider_model_field.get(assistant_provider)
-        if mod_field:
-            kwargs[mod_field] = assistant
-
-    kwargs["lite_model"] = lite or assistant or primary
+    _apply_provider_models(
+        kwargs,
+        (primary, assistant, lite),
+        (provider, assistant_provider),
+    )
 
     # Connections are configured once per provider, using the same environment
     # variables as the running service. Role-specific test credentials no
@@ -226,6 +162,54 @@ def _llm_settings_from_env():
             kwargs[field] = value
 
     return llm_settings(**kwargs)
+
+
+def _test_provider(env_var: str, fallback: LLMProvider | None = None) -> LLMProvider | None:
+    """Read a provider override, warning and using its configured fallback if invalid."""
+    provider_str = os.environ.get(env_var, "").strip()
+    if not provider_str:
+        return fallback
+    try:
+        return LLMProvider(provider_str)
+    except ValueError:
+        fallback_text = f", falling back to {fallback.value}" if fallback else ""
+        logger.warning("%s=%s is not a valid provider%s", env_var, provider_str, fallback_text)
+        return fallback
+
+
+def _default_test_model(provider: LLMProvider) -> str | None:
+    """Return the standard model name for a test provider."""
+    config = import_module("app.constants.config")
+    defaults = {
+        LLMProvider.GEMINI: config.GEMINI_DEFAULT_MODEL,
+        LLMProvider.OPENAI: config.OPENAI_DEFAULT_MODEL,
+        LLMProvider.ANTHROPIC: config.ANTHROPIC_DEFAULT_MODEL,
+        LLMProvider.OLLAMA: config.OLLAMA_DEFAULT_MODEL,
+        LLMProvider.LLAMACPP: config.LLAMACPP_DEFAULT_MODEL,
+    }
+    return defaults.get(provider)
+
+
+def _apply_provider_models(kwargs, models, providers):
+    """Apply role model names and provider-specific compatibility fields."""
+    primary, assistant, lite = models
+    provider, assistant_provider = providers
+    provider_fields = {
+        LLMProvider.GEMINI: "gemini_model",
+        LLMProvider.OPENAI: "openai_model",
+        LLMProvider.ANTHROPIC: "anthropic_model",
+        LLMProvider.OLLAMA: "ollama_model",
+        LLMProvider.LLAMACPP: "llamacpp_model",
+    }
+    if primary:
+        kwargs["primary_model"] = primary
+        if field := provider_fields.get(provider):
+            kwargs[field] = primary
+    if assistant:
+        kwargs["assistant_model"] = assistant
+        if field := provider_fields.get(assistant_provider):
+            kwargs[field] = assistant
+    kwargs["lite_model"] = lite or assistant or primary
 
 
 def _web_search_settings_from_env():

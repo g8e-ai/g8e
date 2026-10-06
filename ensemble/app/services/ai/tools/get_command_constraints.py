@@ -34,6 +34,101 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _auto_approved_commands(
+    svc: AIToolService, cv: object
+) -> tuple[list[str], list[dict[str, str]]]:
+    commands: list[str] = []
+    sources: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for name in svc.auto_approved_validator.get_auto_approved_command_names():
+        if name not in seen:
+            seen.add(name)
+            commands.append(name)
+            sources.append({"command": name, "source": "platform"})
+    # CSV duplicates retain their existing precedence for source attribution.
+    for name in parse_command_csv(cv.auto_approved_commands):  # type: ignore[attr-defined]
+        if name not in seen:
+            seen.add(name)
+            commands.append(name)
+            sources.append({"command": name, "source": "user"})
+        else:
+            for entry in sources:
+                if entry["command"] == name and entry["source"] == "platform":
+                    entry["source"] = "user"
+                    break
+    return commands, sources
+
+
+def _whitelist_data(
+    svc: AIToolService,
+    investigation: EnrichedInvestigationContext,
+    cv: object,
+) -> tuple[list[WhitelistedCommand], list[str], list[str]]:
+    primary = investigation.operator_documents[0] if investigation.operator_documents else None
+    operator_context = extract_single_operator_context(primary) if primary else None
+    os_name = operator_context.os if operator_context else DEFAULT_OS_NAME
+    csv_override = cv.whitelisted_commands if cv else None  # type: ignore[attr-defined]
+    csv_commands = parse_command_csv(csv_override) if csv_override else []
+    commands = (
+        [WhitelistedCommand(command=cmd) for cmd in csv_commands]
+        if csv_commands
+        else svc.whitelist_validator.get_available_commands_with_metadata(
+            map_os_string_to_platform(os_name)
+        )
+    )
+    return (
+        commands,
+        list(svc.whitelist_validator.forbidden_patterns),
+        list(svc.whitelist_validator.forbidden_directories),
+    )
+
+
+def _constraint_message(
+    whitelisting_enabled: bool,
+    blacklisting_enabled: bool,
+    auto_approve_enabled: bool,
+    whitelisted_commands: list[WhitelistedCommand],
+    auto_approved_commands: list[str],
+    auto_approved_sources: list[dict[str, str]],
+) -> str:
+    """Describe the enabled controls and their effective behavior."""
+    if not whitelisting_enabled and not blacklisting_enabled and not auto_approve_enabled:
+        return "No command constraints are currently enforced. All commands require human approval."
+    parts = []
+    if whitelisting_enabled:
+        parts.append(
+            f"Whitelisting ENABLED: only the {len(whitelisted_commands)} listed commands are permitted. "
+            "Each command has strict 'safe_options' and 'validation' patterns that MUST be followed. "
+            "Any command or argument not explicitly allowed by these rules will be blocked by the technical (L1Doctrine) validator."
+        )
+    if blacklisting_enabled:
+        parts.append("Blacklisting ENABLED: commands matching blacklisted entries will be blocked.")
+    if auto_approve_enabled:
+        parts.append(_auto_approve_message(auto_approved_commands, auto_approved_sources))
+    return " ".join(parts)
+
+
+def _auto_approve_message(commands: list[str], sources: list[dict[str, str]]) -> str:
+    if not commands:
+        return "Auto-approve ENABLED but auto_approved_commands list is empty: all commands still require human approval."
+    platform_count = sum(1 for source in sources if source["source"] == "platform")
+    user_count = sum(1 for source in sources if source["source"] == "user")
+    if platform_count > 0 and user_count > 0:
+        breakdown = f" ({platform_count} platform defaults + {user_count} user-configured)"
+    elif platform_count > 0:
+        breakdown = f" ({platform_count} platform defaults)"
+    elif user_count > 0:
+        breakdown = f" ({user_count} user-configured)"
+    else:
+        breakdown = ""
+    return (
+        f"Auto-approve ENABLED: the {len(commands)} listed base commands "
+        f"{breakdown} ({', '.join(commands)}) skip the human approval prompt - the user has "
+        "rubber-stamped them as benign. All other commands still require human approval. "
+        "Auto-approve does NOT widen the whitelist or bypass the blacklist."
+    )
+
+
 def build() -> types.ToolDeclaration:
     return types.ToolDeclaration(
         name=OperatorToolName.GET_COMMAND_CONSTRAINTS,
@@ -52,57 +147,23 @@ async def handle(
     del tool_args, g8e_context, execution_id
     logger.info("[GET_COMMAND_CONSTRAINTS] Retrieving command constraints")
 
-    user_settings = request_settings
-    cv = user_settings.command_validation if user_settings else None
+    cv = request_settings.command_validation if request_settings else None
     whitelisting_enabled = cv.enable_whitelisting if cv else False
     blacklisting_enabled = cv.enable_blacklisting if cv else False
     auto_approve_enabled = cv.enable_auto_approve if cv else False
-    auto_approved_commands: list[str] = []
-    auto_approved_sources: list[dict[str, str]] = []
-    if cv and auto_approve_enabled:
-        # Union of JSON-configured platform defaults and per-user CSV override.
-        # Order: JSON entries first (platform-blessed), then any extras from CSV.
-        seen: set[str] = set()
-        for name in svc.auto_approved_validator.get_auto_approved_command_names():
-            if name not in seen:
-                seen.add(name)
-                auto_approved_commands.append(name)
-                auto_approved_sources.append({"command": name, "source": "platform"})
-        for name in parse_command_csv(cv.auto_approved_commands):
-            if name not in seen:
-                seen.add(name)
-                auto_approved_commands.append(name)
-                auto_approved_sources.append({"command": name, "source": "user"})
-            else:
-                # Command exists in both JSON and CSV; CSV override takes precedence for source attribution
-                for source_entry in auto_approved_sources:
-                    if source_entry["command"] == name and source_entry["source"] == "platform":
-                        source_entry["source"] = "user"
-                        break
+    auto_approved_commands, auto_approved_sources = (
+        _auto_approved_commands(svc, cv) if cv and auto_approve_enabled else ([], [])
+    )
 
     whitelisted_commands: list[WhitelistedCommand] = []
     global_forbidden_patterns: list[str] = []
     global_forbidden_directories: list[str] = []
     if whitelisting_enabled:
-        primary_operator = (
-            investigation.operator_documents[0] if investigation.operator_documents else None
-        )
-        operator_context = (
-            extract_single_operator_context(primary_operator) if primary_operator else None
-        )
-        os_name = operator_context.os if operator_context else DEFAULT_OS_NAME
-        platform = map_os_string_to_platform(os_name)
-
-        csv_override = cv.whitelisted_commands if cv else None
-        csv_commands = parse_command_csv(csv_override) if csv_override else []
-        if csv_commands:
-            whitelisted_commands = [WhitelistedCommand(command=cmd) for cmd in csv_commands]
-        else:
-            whitelisted_commands = svc.whitelist_validator.get_available_commands_with_metadata(
-                platform
-            )
-        global_forbidden_patterns = list(svc.whitelist_validator.forbidden_patterns)
-        global_forbidden_directories = list(svc.whitelist_validator.forbidden_directories)
+        (
+            whitelisted_commands,
+            global_forbidden_patterns,
+            global_forbidden_directories,
+        ) = _whitelist_data(svc, investigation, cv)
 
     blacklisted_commands: list[dict[str, str]] = []
     blacklisted_substrings: list[dict[str, str]] = []
@@ -112,45 +173,14 @@ async def handle(
         blacklisted_substrings = svc.blacklist_validator.get_forbidden_substrings()
         blacklisted_patterns = svc.blacklist_validator.get_forbidden_patterns()
 
-    parts: list[str] = []
-    if not whitelisting_enabled and not blacklisting_enabled and not auto_approve_enabled:
-        parts.append(
-            "No command constraints are currently enforced. All commands require human approval."
-        )
-    else:
-        if whitelisting_enabled:
-            parts.append(
-                f"Whitelisting ENABLED: only the {len(whitelisted_commands)} listed commands are permitted. "
-                "Each command has strict 'safe_options' and 'validation' patterns that MUST be followed. "
-                "Any command or argument not explicitly allowed by these rules will be blocked by the technical (L1Doctrine) validator."
-            )
-        if blacklisting_enabled:
-            parts.append(
-                "Blacklisting ENABLED: commands matching blacklisted entries will be blocked."
-            )
-        if auto_approve_enabled:
-            if auto_approved_commands:
-                platform_count = sum(1 for s in auto_approved_sources if s["source"] == "platform")
-                user_count = sum(1 for s in auto_approved_sources if s["source"] == "user")
-                source_breakdown = ""
-                if platform_count > 0 and user_count > 0:
-                    source_breakdown = (
-                        f" ({platform_count} platform defaults + {user_count} user-configured)"
-                    )
-                elif platform_count > 0:
-                    source_breakdown = f" ({platform_count} platform defaults)"
-                elif user_count > 0:
-                    source_breakdown = f" ({user_count} user-configured)"
-                parts.append(
-                    f"Auto-approve ENABLED: the {len(auto_approved_commands)} listed base commands "
-                    f"{source_breakdown} ({', '.join(auto_approved_commands)}) skip the human approval prompt - the user has "
-                    "rubber-stamped them as benign. All other commands still require human approval. "
-                    "Auto-approve does NOT widen the whitelist or bypass the blacklist."
-                )
-            else:
-                parts.append(
-                    "Auto-approve ENABLED but auto_approved_commands list is empty: all commands still require human approval."
-                )
+    message = _constraint_message(
+        whitelisting_enabled,
+        blacklisting_enabled,
+        auto_approve_enabled,
+        whitelisted_commands,
+        auto_approved_commands,
+        auto_approved_sources,
+    )
 
     result = CommandConstraintsResult(
         success=True,
@@ -165,7 +195,7 @@ async def handle(
         auto_approved_sources=auto_approved_sources,
         global_forbidden_patterns=global_forbidden_patterns,
         global_forbidden_directories=global_forbidden_directories,
-        message=" ".join(parts),
+        message=message,
     )
     logger.info(
         "[GET_COMMAND_CONSTRAINTS] whitelisting=%s blacklisting=%s auto_approve=%s "

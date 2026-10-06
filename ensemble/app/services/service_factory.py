@@ -21,7 +21,7 @@ from app.db.db_service import DBService
 from app.db.kv_service import KVService
 from app.models.settings import G8eeAppSettings
 from app.models.state import G8eeAppState
-from app.services.ai.agent import g8eEnsemble
+from app.services.ai.agent import G8eEnsemble
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.services.ai.grounding import GroundingService, WebSearchProvider
@@ -138,7 +138,7 @@ class AllServices:
     operator_command_service: OperatorCommandService
     tool_service: ToolExecutorProtocol
     request_builder: AIRequestBuilder
-    g8e_agent: g8eEnsemble
+    g8e_agent: G8eEnsemble
     chat_task_manager: BackgroundTaskManager
     chat_pipeline: ChatPipelineService
     memory_service: MemoryDataService | MemoryDataServiceProtocol
@@ -395,7 +395,7 @@ class ServiceFactory:
             tool_executor=tool_service,
         )
 
-        g8e_agent = g8eEnsemble(
+        g8e_agent = G8eEnsemble(
             tool_executor=tool_service,
             grounding_service=grounding_service,
             approval_service=approval_service,

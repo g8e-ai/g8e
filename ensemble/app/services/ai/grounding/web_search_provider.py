@@ -125,7 +125,9 @@ class WebSearchProvider:
                 favicon_url=favicon_url,
             )
         except Exception as e:
-            logger.exception("Failed to extract source info from URI=%s, title=%s: %s", uri, title, e)
+            logger.exception(
+                "Failed to extract source info from URI=%s, title=%s: %s", uri, title, e
+            )
             return GroundingSourceInfo(
                 uri=uri or "",
                 domain=title if title else "",
@@ -158,55 +160,7 @@ class WebSearchProvider:
                     "Stripped %d characters of auto-citations from response", stripped_count
                 )
 
-            chunk_to_citation_num: dict[int, int] = {}
-            chunk_to_source_info: dict[int, GroundingSourceInfo] = {}
-            chunk_to_segments: dict[int, list[str]] = {}
-            next_citation_num = 1
-
-            for support in supports:
-                chunk_indices = support.grounding_chunk_indices
-                if not chunk_indices:
-                    continue
-
-                segment_text = support.text
-
-                for chunk_idx in chunk_indices:
-                    if chunk_idx < len(chunks):
-                        if chunk_idx not in chunk_to_segments:
-                            chunk_to_segments[chunk_idx] = []
-                        if segment_text:
-                            chunk_to_segments[chunk_idx].append(segment_text)
-                        if chunk_idx not in chunk_to_citation_num:
-                            uri = chunks[chunk_idx].uri
-                            title = chunks[chunk_idx].title
-                            if uri:
-                                source_info = self.extract_source_info(uri, title)
-                                source_info = GroundingSourceInfo(
-                                    uri=source_info.uri,
-                                    domain=source_info.domain,
-                                    display_name=source_info.display_name,
-                                    full_title=source_info.full_title,
-                                    favicon_url=source_info.favicon_url,
-                                    citation_num=next_citation_num,
-                                )
-                                chunk_to_citation_num[chunk_idx] = next_citation_num
-                                chunk_to_source_info[chunk_idx] = source_info
-                                next_citation_num += 1
-
-            for chunk_idx, source_info in chunk_to_source_info.items():
-                chunk_to_source_info[chunk_idx] = GroundingSourceInfo(
-                    uri=source_info.uri,
-                    domain=source_info.domain,
-                    display_name=source_info.display_name,
-                    full_title=source_info.full_title,
-                    favicon_url=source_info.favicon_url,
-                    citation_num=source_info.citation_num,
-                    segments=chunk_to_segments.get(chunk_idx, []),
-                )
-
-            sources_list = [
-                chunk_to_source_info[idx] for idx in sorted(chunk_to_source_info.keys())
-            ]
+            chunk_to_citation_num, sources_list = self._resolve_inline_sources(supports, chunks)
             grounding_metadata.sources = sources_list
 
             if not sources_list:
@@ -215,52 +169,88 @@ class WebSearchProvider:
 
             logger.info("Built %d citation sources for response", len(sources_list))
 
-            supports_with_segments = [
-                s for s in supports if s.segment.end_index > 0 and s.grounding_chunk_indices
-            ]
-
-            if not supports_with_segments:
-                logger.info("No supports with valid segment end_index found")
-                return text_clean
-
-            sorted_supports = sorted(
-                supports_with_segments,
-                key=lambda s: s.segment.end_index,
-                reverse=True,
-            )
-
-            citations_inserted = 0
-            for support in sorted_supports:
-                end_index = support.segment.end_index
-                chunk_indices = support.grounding_chunk_indices
-                if end_index > len(text_clean):
-                    logger.warning(
-                        "Segment end_index %d exceeds text length %d, skipping citation",
-                        end_index,
-                        len(text_clean),
-                    )
-                    continue
-
-                if not chunk_indices:
-                    continue
-
-                citation_nums = [
-                    str(chunk_to_citation_num[idx])
-                    for idx in chunk_indices
-                    if idx in chunk_to_citation_num
-                ]
-
-                if citation_nums:
-                    citation_string = "[" + ",".join(citation_nums) + "]"
-                    text_clean = text_clean[:end_index] + citation_string + text_clean[end_index:]
-                    citations_inserted += 1
-
-            logger.info("Inserted %d properly-placed citations into response", citations_inserted)
-            return text_clean
+            return self._insert_inline_citations(text_clean, supports, chunk_to_citation_num)
 
         except Exception as e:
             logger.error("Failed to add inline citations: %s", e)
             return text
+
+    def _resolve_inline_sources(self, supports, chunks):
+        """Build stable citation numbers and source records from support metadata."""
+        citation_nums: dict[int, int] = {}
+        source_info: dict[int, GroundingSourceInfo] = {}
+        segments: dict[int, list[str]] = {}
+        for support in supports:
+            if not support.grounding_chunk_indices:
+                continue
+            for chunk_idx in support.grounding_chunk_indices:
+                if chunk_idx >= len(chunks):
+                    continue
+                segments.setdefault(chunk_idx, [])
+                if support.text:
+                    segments[chunk_idx].append(support.text)
+                if chunk_idx in citation_nums:
+                    continue
+                chunk = chunks[chunk_idx]
+                if not chunk.uri:
+                    continue
+                source = self.extract_source_info(chunk.uri, chunk.title)
+                number = len(citation_nums) + 1
+                citation_nums[chunk_idx] = number
+                source_info[chunk_idx] = GroundingSourceInfo(
+                    uri=source.uri,
+                    domain=source.domain,
+                    display_name=source.display_name,
+                    full_title=source.full_title,
+                    favicon_url=source.favicon_url,
+                    citation_num=number,
+                )
+        sources = [
+            GroundingSourceInfo(
+                uri=source_info[idx].uri,
+                domain=source_info[idx].domain,
+                display_name=source_info[idx].display_name,
+                full_title=source_info[idx].full_title,
+                favicon_url=source_info[idx].favicon_url,
+                citation_num=source_info[idx].citation_num,
+                segments=segments.get(idx, []),
+            )
+            for idx in sorted(source_info)
+        ]
+        return citation_nums, sources
+
+    @staticmethod
+    def _insert_inline_citations(text, supports, citation_nums):
+        """Insert citations from right to left so earlier offsets stay valid."""
+        valid_supports = sorted(
+            (s for s in supports if s.segment.end_index > 0 and s.grounding_chunk_indices),
+            key=lambda support: support.segment.end_index,
+            reverse=True,
+        )
+        if not valid_supports:
+            logger.info("No supports with valid segment end_index found")
+            return text
+        inserted = 0
+        for support in valid_supports:
+            end_index = support.segment.end_index
+            if end_index > len(text):
+                logger.warning(
+                    "Segment end_index %d exceeds text length %d, skipping citation",
+                    end_index,
+                    len(text),
+                )
+                continue
+            citation_nums_for_support = [
+                str(citation_nums[idx])
+                for idx in support.grounding_chunk_indices
+                if idx in citation_nums
+            ]
+            if citation_nums_for_support:
+                citation = "[" + ",".join(citation_nums_for_support) + "]"
+                text = text[:end_index] + citation + text[end_index:]
+                inserted += 1
+        logger.info("Inserted %d properly-placed citations into response", inserted)
+        return text
 
     def normalize_citation_numbers(self, markdown_text: str | None) -> str | None:
         """Ensure citation numbers in HTML anchor tags are sequential by first URI appearance."""

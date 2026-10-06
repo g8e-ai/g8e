@@ -121,35 +121,11 @@ class OperatorIntentService:
         operation_context = (args.operation_context or "").strip()
         justification = args.justification.strip()
 
-        requested_intents = [
-            i.strip().replace("-", "_").lower() for i in intent_names_raw.split(",") if i.strip()
-        ]
-
-        if not requested_intents:
-            return IntentPermissionResult(
-                success=False,
-                error="At least one intent name is required",
-                error_type=CommandErrorType.VALIDATION_ERROR,
-            )
-
-        if not justification:
-            return IntentPermissionResult(
-                success=False,
-                error="Justification is required",
-                error_type=CommandErrorType.VALIDATION_ERROR,
-            )
-
-        all_intents = self._resolve_intent_dependencies(requested_intents)
-
-        invalid_intents = [i for i in all_intents if i not in CloudIntent._value2member_map_]
-        if invalid_intents:
-            return IntentPermissionResult(
-                success=False,
-                error=f"Invalid intents: {', '.join(invalid_intents)}. Valid intents: {', '.join(sorted(CloudIntent._value2member_map_))}",
-                error_type=CommandErrorType.INVALID_INTENT,
-                invalid_intents=invalid_intents,
-                requested_intents=requested_intents,
-            )
+        _requested_intents, all_intents, validation_error = self._validate_grant_request(
+            intent_names_raw, justification
+        )
+        if validation_error:
+            return validation_error
 
         op_doc = (
             investigation.operator_documents[0]
@@ -272,6 +248,50 @@ class OperatorIntentService:
             iam_results=iam_results,
             timestamp=now(),
         )
+
+    def _validate_grant_request(
+        self, intent_names_raw: str, justification: str
+    ) -> tuple[list[str], list[str], IntentPermissionResult | None]:
+        requested = [
+            item.strip().replace("-", "_").lower()
+            for item in intent_names_raw.split(",")
+            if item.strip()
+        ]
+        if not requested:
+            return (
+                requested,
+                [],
+                IntentPermissionResult(
+                    success=False,
+                    error="At least one intent name is required",
+                    error_type=CommandErrorType.VALIDATION_ERROR,
+                ),
+            )
+        if not justification:
+            return (
+                requested,
+                [],
+                IntentPermissionResult(
+                    success=False,
+                    error="Justification is required",
+                    error_type=CommandErrorType.VALIDATION_ERROR,
+                ),
+            )
+        all_intents = self._resolve_intent_dependencies(requested)
+        invalid = [item for item in all_intents if item not in CloudIntent._value2member_map_]
+        if invalid:
+            return (
+                requested,
+                all_intents,
+                IntentPermissionResult(
+                    success=False,
+                    error=f"Invalid intents: {', '.join(invalid)}. Valid intents: {', '.join(sorted(CloudIntent._value2member_map_))}",
+                    error_type=CommandErrorType.INVALID_INTENT,
+                    invalid_intents=invalid,
+                    requested_intents=requested,
+                ),
+            )
+        return requested, all_intents, None
 
     async def execute_intent_revocation(
         self,

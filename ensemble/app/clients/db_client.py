@@ -119,6 +119,12 @@ class DBClient:
                 raise NetworkError(f"client HTTP {resp.status}: {text}", component="g8ee")
             return json.loads(text)
 
+    async def request_json(
+        self, method: str, path: str, **kwargs: Any
+    ) -> dict[str, object] | None:
+        """Execute a JSON request for services using an operator-owned endpoint."""
+        return await self._request_json(method, path, **kwargs)
+
     async def _request_list(self, method: str, path: str, **kwargs: Any) -> list[dict[str, object]]:
         """Execute a request and return the parsed JSON array."""
         session = await self._get_http_session()

@@ -106,6 +106,10 @@ class CommandBlacklistValidator:
             )
 
         command_string = command_string.strip()
+        match = self._find_matching_rule(command_string)
+        return match or CommandBlacklistResult(is_allowed=True)
+
+    def _find_matching_rule(self, command_string: str) -> CommandBlacklistResult | None:
         tokens = command_string.split()
         base_command = tokens[0]
 
@@ -160,7 +164,7 @@ class CommandBlacklistValidator:
                     rule=f"pattern:{entry.get('value')}",
                 )
 
-        return CommandBlacklistResult(is_allowed=True)
+        return None
 
     def get_forbidden_commands(self) -> list[dict[str, str]]:
         """Get list of forbidden base commands with reasons."""
@@ -197,6 +201,11 @@ _validator_state = _ValidatorState()
 def register_blacklist_validator(validator: CommandBlacklistValidator) -> None:
     """Explicitly register the global blacklist validator instance."""
     _validator_state.instance = validator
+
+
+def reset_blacklist_validator() -> None:
+    """Clear the registered blacklist validator so it is reloaded on next access."""
+    _validator_state.instance = None
 
 
 def get_blacklist_validator(blacklist_path: str | None = None) -> CommandBlacklistValidator:

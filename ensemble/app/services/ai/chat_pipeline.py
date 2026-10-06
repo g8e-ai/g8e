@@ -87,7 +87,7 @@ from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.protocols import EventServiceProtocol
 from app.utils.interrogation import extract_interrogation_questions
 
-from .agent import g8eEnsemble
+from .agent import G8eEnsemble
 from .chat_task_manager import BackgroundTaskManager
 from .memory_generation_service import MemoryGenerationService
 from .request_builder import AIRequestBuilder
@@ -111,7 +111,7 @@ class ChatPipelineService:
         event_service: EventServiceProtocol,
         investigation_service: InvestigationService,
         request_builder: AIRequestBuilder,
-        g8e_agent: g8eEnsemble,
+        g8e_agent: G8eEnsemble,
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
         agent_activity_data_service: AgentActivityDataService,
@@ -284,36 +284,10 @@ class ChatPipelineService:
         keep request inputs immutable.
         """
         case_id = g8e_context.case_id
-        investigation_id = g8e_context.investigation_id
+        investigation_id = self._require_investigation_id(g8e_context)
         user_id = g8e_context.user_id
-
-        logger.info(
-            "[SSE-CHAT] _prepare_chat_context started: investigation_id=%s case_id=%s",
-            investigation_id,
-            case_id,
-        )
-
-        logger.info(
-            "[SSE-CHAT] Extracted context: case_id=%s investigation_id=%s web_session_id=%s user_id=%s",
-            case_id,
-            investigation_id,
-            g8e_context.web_session_id,
-            user_id,
-        )
-
-        if not investigation_id:
-            raise BusinessLogicError(
-                "_prepare_chat_context requires investigation_id",
-                details={"investigation_id": investigation_id},
-            )
-
-        investigation = await self.investigation_service.get_investigation_context(
-            context=RequestContext.from_app_context(g8e_context),
-            investigation_id=investigation_id,
-            user_id=user_id or "",
-        )
-        investigation = await self.investigation_service.get_enriched_investigation_context(
-            investigation=investigation, user_id=user_id or "", g8e_context=g8e_context
+        investigation = await self._load_investigation_context(
+            g8e_context, investigation_id, user_id
         )
 
         current_sentinel_mode = investigation.sentinel_mode
@@ -414,24 +388,9 @@ class ChatPipelineService:
             )
         )
 
-        user_memories = []
-        case_memories = []
-        # A scored request does not read user-wide memories: they are artifacts
-        # of other assignments and would leak one scenario into the next. Case
-        # memories (including any the seed wrote) are still read. The
-        # divergence is keyed on evaluation_context and recorded in the trace.
-        user_memories_suppressed = g8e_context.evaluation_context is not None
-        try:
-            if investigation.user_id and not user_memories_suppressed:
-                user_memories = await self.memory_service.get_user_memories(
-                    user_id=investigation.user_id
-                )
-            if case_id and investigation.user_id:
-                case_memories = await self.memory_service.get_case_memories(
-                    case_id=case_id, user_id=investigation.user_id
-                )
-        except Exception as e:
-            logger.warning("Failed to retrieve memories for chat context: %s", e, exc_info=True)
+        user_memories, case_memories, user_memories_suppressed = await self._load_chat_memories(
+            g8e_context, investigation, case_id
+        )
 
         all_operator_contexts = extract_all_operators_context(investigation)
         system_instructions, context_sizes = build_modular_system_prompt(
@@ -515,6 +474,58 @@ class ChatPipelineService:
                 else None
             ),
         )
+
+    @staticmethod
+    def _require_investigation_id(g8e_context: G8eHttpContext) -> str:
+        investigation_id = g8e_context.investigation_id
+        if not investigation_id:
+            raise BusinessLogicError(
+                "_prepare_chat_context requires investigation_id",
+                details={"investigation_id": investigation_id},
+            )
+        return investigation_id
+
+    async def _load_investigation_context(
+        self, g8e_context: G8eHttpContext, investigation_id: str, user_id: str | None
+    ):
+        logger.info(
+            "[SSE-CHAT] _prepare_chat_context started: investigation_id=%s case_id=%s",
+            investigation_id,
+            g8e_context.case_id,
+        )
+        logger.info(
+            "[SSE-CHAT] Extracted context: case_id=%s investigation_id=%s web_session_id=%s user_id=%s",
+            g8e_context.case_id,
+            investigation_id,
+            g8e_context.web_session_id,
+            user_id,
+        )
+        investigation = await self.investigation_service.get_investigation_context(
+            context=RequestContext.from_app_context(g8e_context),
+            investigation_id=investigation_id,
+            user_id=user_id or "",
+        )
+        return await self.investigation_service.get_enriched_investigation_context(
+            investigation=investigation, user_id=user_id or "", g8e_context=g8e_context
+        )
+
+    async def _load_chat_memories(self, g8e_context, investigation, case_id):
+        # A scored request avoids user-wide memories from other assignments.
+        user_memories = []
+        case_memories = []
+        suppressed = g8e_context.evaluation_context is not None
+        try:
+            if investigation.user_id and not suppressed:
+                user_memories = await self.memory_service.get_user_memories(
+                    user_id=investigation.user_id
+                )
+            if case_id and investigation.user_id:
+                case_memories = await self.memory_service.get_case_memories(
+                    case_id=case_id, user_id=investigation.user_id
+                )
+        except Exception as exc:
+            logger.warning("Failed to retrieve memories for chat context: %s", exc, exc_info=True)
+        return user_memories, case_memories, suppressed
 
     async def _persist_ai_response(
         self,
@@ -802,24 +813,10 @@ class ChatPipelineService:
         background_calls: list[ModelCallTelemetry] = []
         memory_task = memory_holder.get("task") if memory_holder else None
         if isinstance(memory_task, asyncio.Task):
-            try:
-                async with asyncio.timeout(EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS):
-                    await memory_task
-            except TimeoutError:
-                logger.warning(
-                    "Evaluation background memory barrier timed out after %.0fs for assignment %s",
-                    EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
-                    g8e_context.evaluation_context.assignment_id,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Evaluation background memory barrier failed for assignment %s: %s",
-                    g8e_context.evaluation_context.assignment_id,
-                    exc,
-                    exc_info=True,
-                )
-            model_call = memory_holder.get("model_call") if memory_holder else None
-            if isinstance(model_call, ModelCallTelemetry):
+            model_call = await self._await_evaluation_memory_task(
+                memory_task, memory_holder, g8e_context.evaluation_context.assignment_id
+            )
+            if model_call is not None:
                 background_calls.append(model_call)
 
         model_calls = list(state.model_calls)
@@ -912,6 +909,31 @@ class ChatPipelineService:
             status="failed" if state.stream_failed else "completed",
             error=state.error,
         )
+
+    @staticmethod
+    async def _await_evaluation_memory_task(
+        memory_task: asyncio.Task,
+        memory_holder: MemoryHolder | None,
+        assignment_id: str,
+    ) -> ModelCallTelemetry | None:
+        try:
+            async with asyncio.timeout(EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS):
+                await memory_task
+        except TimeoutError:
+            logger.warning(
+                "Evaluation background memory barrier timed out after %.0fs for assignment %s",
+                EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
+                assignment_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Evaluation background memory barrier failed for assignment %s: %s",
+                assignment_id,
+                exc,
+                exc_info=True,
+            )
+        model_call = memory_holder.get("model_call") if memory_holder else None
+        return model_call if isinstance(model_call, ModelCallTelemetry) else None
 
     def _finalize_crashed_evaluation_assignment(
         self,

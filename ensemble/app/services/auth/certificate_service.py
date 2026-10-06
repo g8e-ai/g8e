@@ -139,7 +139,7 @@ class CertificateService:
         }
 
         try:
-            response = await db_client._request_json(
+            response = await db_client.request_json(
                 "POST", "/.well-known/g8e/pki/sign-csr", json=payload
             )
             if not response or not response.get("success"):

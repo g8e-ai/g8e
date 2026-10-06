@@ -18,7 +18,7 @@ from app.services.investigation.investigation_service import (
     extract_system_context,
 )
 
-from .agent import g8eEnsemble
+from .agent import G8eEnsemble
 from .chat_pipeline import ChatPipelineService
 from .chat_task_manager import BackgroundTaskManager
 from .generation_config_builder import AIGenerationConfigBuilder
@@ -36,10 +36,17 @@ __all__ = [
     "AttachmentGroundingProvider",
     "BackgroundTaskManager",
     "ChatPipelineService",
+    "G8eEnsemble",
     "GroundingService",
     "WebSearchProvider",
     "extract_all_operators_context",
     "extract_system_context",
-    "g8eEnsemble",
     "generate_case_title",
 ]
+
+
+def __getattr__(name: str) -> type[G8eEnsemble]:
+    """Provide the historical mixed-case class export for compatibility."""
+    if name == "g8eEnsemble":
+        return G8eEnsemble
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

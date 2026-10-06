@@ -126,6 +126,16 @@ def _tools_to_openai(tools: list[ToolGroup] | None) -> list[dict] | None:
     return openai_tools if openai_tools else None
 
 
+def _parse_openai_tool_call(tc) -> ToolCall:
+    try:
+        args = json.loads(tc.function.arguments)
+    except json.JSONDecodeError as exc:
+        raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+    if not isinstance(args, dict):
+        raise ValidationError("Provider tool arguments must be a JSON object")
+    return ToolCall(name=tc.function.name, args=args, id=getattr(tc, "id", None))
+
+
 class OpenAIProvider(LLMProvider):
     def __init__(self, endpoint: str, api_key: str):
         super().__init__()
@@ -256,83 +266,76 @@ class OpenAIProvider(LLMProvider):
         effective_max_tokens = primary_llm_settings.max_output_tokens
 
         if openai_tools:
-            # Some endpoints hang on streaming when tools are present.
-            # Use non-streaming and yield the response as chunks.
-            kwargs = self._build_openai_kwargs(
-                model=model,
-                messages=messages,
-                max_tokens=effective_max_tokens,
-                top_p=primary_llm_settings.top_p_nucleus_sampling,
-                stop=primary_llm_settings.stop_sequences,
-                tools=openai_tools,
-                stream=False,
-                thinking_config=primary_llm_settings.thinking_config,
-            )
-            self._record_model_boundary(kwargs)
-            response = await self._client.chat.completions.create(**kwargs)
-            self._record_response(response, complete=True)
-            choice = response.choices[0] if response.choices else None
-            finish_reason = choice.finish_reason if choice else None
-
-            if choice and choice.message:
-                # Check for reasoning content (OpenAI)
-                reasoning = getattr(choice.message, "reasoning_content", None)
-                if reasoning:
-                    yield StreamChunkFromModel(text=reasoning, thought=True)
-
-                if choice.message.content:
-                    yield StreamChunkFromModel(text=choice.message.content)
-
-                if choice.message.tool_calls:
-                    calls = []
-                    for tc in choice.message.tool_calls:
-                        try:
-                            args = json.loads(tc.function.arguments)
-                        except json.JSONDecodeError as exc:
-                            raise ValidationError(
-                                "Provider returned invalid tool arguments JSON"
-                            ) from exc
-                        if not isinstance(args, dict):
-                            raise ValidationError("Provider tool arguments must be a JSON object")
-                        calls.append(
-                            ToolCall(name=tc.function.name, args=args, id=getattr(tc, "id", None))
-                        )
-                    yield StreamChunkFromModel(tool_calls=calls)
-
-            usage = _usage_from_sdk(response.usage)
-            yield StreamChunkFromModel(finish_reason=finish_reason or "stop", usage_metadata=usage)
+            async for chunk in self._stream_primary_with_tools(
+                model, messages, effective_max_tokens, openai_tools, primary_llm_settings
+            ):
+                yield chunk
         else:
-            kwargs = self._build_openai_kwargs(
-                model=model,
-                messages=messages,
-                max_tokens=effective_max_tokens,
-                top_p=primary_llm_settings.top_p_nucleus_sampling,
-                stop=primary_llm_settings.stop_sequences,
-                tools=openai_tools,
-                stream=True,
-                thinking_config=primary_llm_settings.thinking_config,
-            )
-            self._record_model_boundary(kwargs)
-            stream = await self._client.chat.completions.create(**kwargs)
+            async for chunk in self._stream_primary_without_tools(
+                model, messages, effective_max_tokens, openai_tools, primary_llm_settings
+            ):
+                yield chunk
 
-            for chunk in await self._receive_stream(stream):
-                delta = chunk.choices[0].delta if chunk.choices else None
-                finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
-                usage = _usage_from_sdk(getattr(chunk, "usage", None))
-                if usage.usage_reported:
-                    yield StreamChunkFromModel(usage_metadata=usage)
+    async def _stream_primary_with_tools(
+        self, model, messages, max_tokens, tools, settings
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        """Use a complete response for endpoints that hang on tool streaming."""
+        kwargs = self._build_openai_kwargs(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            top_p=settings.top_p_nucleus_sampling,
+            stop=settings.stop_sequences,
+            tools=tools,
+            stream=False,
+            thinking_config=settings.thinking_config,
+        )
+        self._record_model_boundary(kwargs)
+        response = await self._client.chat.completions.create(**kwargs)
+        self._record_response(response, complete=True)
+        choice = response.choices[0] if response.choices else None
+        if choice and choice.message:
+            reasoning = getattr(choice.message, "reasoning_content", None)
+            if reasoning:
+                yield StreamChunkFromModel(text=reasoning, thought=True)
+            if choice.message.content:
+                yield StreamChunkFromModel(text=choice.message.content)
+            if choice.message.tool_calls:
+                calls = [_parse_openai_tool_call(tc) for tc in choice.message.tool_calls]
+                yield StreamChunkFromModel(tool_calls=calls)
+        yield StreamChunkFromModel(
+            finish_reason=(choice.finish_reason if choice else None) or "stop",
+            usage_metadata=_usage_from_sdk(response.usage),
+        )
 
-                if delta:
-                    # Check for reasoning content (OpenAI)
-                    reasoning = getattr(delta, "reasoning_content", None)
-                    if reasoning:
-                        yield StreamChunkFromModel(text=reasoning, thought=True)
-
-                if delta and delta.content:
-                    yield StreamChunkFromModel(text=delta.content)
-
-                if finish_reason and finish_reason != "tool_calls":
-                    yield StreamChunkFromModel(finish_reason=finish_reason)
+    async def _stream_primary_without_tools(
+        self, model, messages, max_tokens, tools, settings
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        kwargs = self._build_openai_kwargs(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            top_p=settings.top_p_nucleus_sampling,
+            stop=settings.stop_sequences,
+            tools=tools,
+            stream=True,
+            thinking_config=settings.thinking_config,
+        )
+        self._record_model_boundary(kwargs)
+        stream = await self._client.chat.completions.create(**kwargs)
+        for chunk in await self._receive_stream(stream):
+            delta = chunk.choices[0].delta if chunk.choices else None
+            finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+            usage = _usage_from_sdk(getattr(chunk, "usage", None))
+            if usage.usage_reported:
+                yield StreamChunkFromModel(usage_metadata=usage)
+            reasoning = getattr(delta, "reasoning_content", None) if delta else None
+            if reasoning:
+                yield StreamChunkFromModel(text=reasoning, thought=True)
+            if delta and delta.content:
+                yield StreamChunkFromModel(text=delta.content)
+            if finish_reason and finish_reason != "tool_calls":
+                yield StreamChunkFromModel(finish_reason=finish_reason)
 
     async def generate_content_primary(
         self,

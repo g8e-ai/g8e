@@ -132,11 +132,19 @@ def build_learned_context_section(
         prefs.extend(
             value
             for value in (
-                f"Communication: {latest.communication_preferences}" if latest.communication_preferences else None,
-                f"Technical background: {latest.technical_background}" if latest.technical_background else None,
+                f"Communication: {latest.communication_preferences}"
+                if latest.communication_preferences
+                else None,
+                f"Technical background: {latest.technical_background}"
+                if latest.technical_background
+                else None,
                 f"Response style: {latest.response_style}" if latest.response_style else None,
-                f"Problem-solving: {latest.problem_solving_approach}" if latest.problem_solving_approach else None,
-                f"Interaction style: {latest.interaction_style}" if latest.interaction_style else None,
+                f"Problem-solving: {latest.problem_solving_approach}"
+                if latest.problem_solving_approach
+                else None,
+                f"Interaction style: {latest.interaction_style}"
+                if latest.interaction_style
+                else None,
             )
             if value
         )
@@ -330,8 +338,7 @@ def build_tribunal_auditor_context(
     elif mode == "majority":
         parts.append("<candidates_by_cluster>")
         parts.extend(
-            f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}"
-            for c in clusters
+            f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}" for c in clusters
         )
         parts.append("</candidates_by_cluster>")
         parts.append(f"\nMAJORITY WINNER: [{clusters[0]['cluster_id']}]")
@@ -346,8 +353,7 @@ def build_tribunal_auditor_context(
     elif mode == "tied":
         parts.append("<tied_candidates>")
         parts.extend(
-            f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}"
-            for c in clusters
+            f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}" for c in clusters
         )
         parts.append("</tied_candidates>")
         parts.append("\nVOTING TIED: The tie-break ladder could not resolve a single winner.")
@@ -572,6 +578,33 @@ def build_modular_system_prompt(
     Returns:
         Tuple of (complete system prompt string, context_sizes dict with character counts)
     """
+    sections, section_labels = _build_static_prompt_sections(
+        operator_bound, g8e_web_search_available, agent_name
+    )
+    _append_dynamic_prompt_sections(
+        sections,
+        section_labels,
+        system_context,
+        investigation,
+        user_memories,
+        case_memories,
+        triage_result,
+    )
+
+    full_prompt = "\n".join(sections)
+    _log_prompt_sections(sections, section_labels, full_prompt, operator_bound)
+    context_sizes = {
+        label: len(section) for label, section in zip(section_labels, sections, strict=False)
+    }
+    context_sizes["total"] = len(full_prompt)
+    return full_prompt, context_sizes
+
+
+def _build_static_prompt_sections(
+    operator_bound: bool,
+    g8e_web_search_available: bool,
+    agent_name: ReasoningAgent | None,
+) -> tuple[list[str], list[str]]:
     sections: list[str] = []
     section_labels: list[str] = []
 
@@ -629,9 +662,18 @@ def build_modular_system_prompt(
         sections.append(load_prompt(PromptFile.CORE_IDENTITY))
         section_labels.append(PromptSection.IDENTITY)
 
-    # ---------------------------------------------------------------------
-    # Dynamic per-turn context (appended last so the static prefix caches).
-    # ---------------------------------------------------------------------
+    return sections, section_labels
+
+
+def _append_dynamic_prompt_sections(
+    sections: list[str],
+    section_labels: list[str],
+    system_context: OperatorContext | list[OperatorContext] | None,
+    investigation: EnrichedInvestigationContext | None,
+    user_memories: list[InvestigationMemory],
+    case_memories: list[InvestigationMemory],
+    triage_result: TriageResult | None,
+) -> None:
     if system_context:
         system_context_str = _build_system_context_section(system_context)
         sections.append(system_context_str)
@@ -676,8 +718,10 @@ def build_modular_system_prompt(
             sections.append(learned_section)
             section_labels.append(PromptSection.LEARNED_CONTEXT)
 
-    full_prompt = "\n".join(sections)
 
+def _log_prompt_sections(
+    sections: list[str], section_labels: list[str], full_prompt: str, operator_bound: bool
+) -> None:
     logger.info(
         "[PROMPT] sections=%d total_chars=%d operator_bound=%s sections=[%s]",
         len(sections),
@@ -688,10 +732,3 @@ def build_modular_system_prompt(
     for label, section in zip(section_labels, sections, strict=False):
         logger.info("[PROMPT] section=%-24s chars=%d", label, len(section))
     logger.info("[PROMPT] full_prompt:\n%s", full_prompt)
-
-    context_sizes = {
-        label: len(section) for label, section in zip(section_labels, sections, strict=False)
-    }
-    context_sizes["total"] = len(full_prompt)
-
-    return full_prompt, context_sizes

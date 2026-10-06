@@ -10,20 +10,20 @@
 This ensures that typos or gutted config files are caught by CI before deploy.
 """
 
-import app.utils.validation.auto_approved_validator as av_module
-import app.utils.validation.blacklist_validator as bv_module
-import app.utils.validation.whitelist_validator as wv_module
 from app.utils.validation.auto_approved_validator import (
     get_auto_approved_validator,
     register_auto_approved_validator,
+    reset_auto_approved_validator,
 )
 from app.utils.validation.blacklist_validator import (
     get_blacklist_validator,
     register_blacklist_validator,
+    reset_blacklist_validator,
 )
 from app.utils.validation.whitelist_validator import (
     get_whitelist_validator,
     register_whitelist_validator,
+    reset_whitelist_validator,
 )
 
 
@@ -36,7 +36,7 @@ class TestDefaultWhitelistConfigLoads:
         This catches typos and malformed JSON in the config file before deploy.
         """
 
-        wv_module._validator_instance = None
+        reset_whitelist_validator()
         validator = get_whitelist_validator(whitelist_path=None)
         assert validator is not None
         register_whitelist_validator(validator)
@@ -51,7 +51,7 @@ class TestDefaultBlacklistConfigLoads:
         This catches typos and malformed JSON in the config file before deploy.
         """
 
-        bv_module._validator = None
+        reset_blacklist_validator()
         validator = get_blacklist_validator(blacklist_path=None)
         assert validator.get_forbidden_commands()
         register_blacklist_validator(validator)
@@ -66,7 +66,7 @@ class TestDefaultAutoApprovedConfigLoads:
         This catches typos and malformed JSON in the config file before deploy.
         """
 
-        av_module._validator = None
+        reset_auto_approved_validator()
         validator = get_auto_approved_validator(auto_approved_path=None)
         assert validator is not None
         register_auto_approved_validator(validator)
@@ -78,7 +78,7 @@ class TestDefaultAutoApprovedConfigLoads:
         to catch gutted files.
         """
 
-        av_module._validator = None
+        reset_auto_approved_validator()
         validator = get_auto_approved_validator(auto_approved_path=None)
         command_names = validator.get_auto_approved_command_names()
         assert "uptime" in command_names, "Default auto_approved.json should contain 'uptime'"

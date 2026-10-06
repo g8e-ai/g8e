@@ -329,6 +329,36 @@ async def _create_investigation_for_case(
     return g8e_context.model_copy(update={"investigation_id": investigation.id})
 
 
+def _log_internal_chat_request(
+    request: ChatMessageRequest,
+    context: G8eHttpContext,
+    create_new_case: bool,
+) -> None:
+    logger.info(
+        "[INTERNAL-HTTP] Non-streaming chat request received",
+        extra={
+            "case_id": context.case_id,
+            "investigation_id": context.investigation_id,
+            "create_new_case": create_new_case,
+            "web_session_id": (context.web_session_id[:8] + "...")
+            if context.web_session_id
+            else None,
+            "message_length": len(request.message),
+        },
+    )
+
+
+def _validate_chat_seed(request: ChatMessageRequest, create_new_case: bool):
+    seed = request.evaluation_context.seed if request.evaluation_context is not None else None
+    if seed is not None and not create_new_case:
+        raise ValidationError(
+            "an investigation seed is only accepted when the request creates the case",
+            field="evaluation_context.seed",
+            constraint="requires_create_case",
+        )
+    return seed
+
+
 @router.post(InternalAPIPaths.G8EE_CHAT, response_model=ChatStartedResponse)
 async def internal_chat(
     request: ChatMessageRequest,
@@ -369,13 +399,7 @@ async def internal_chat(
     create_new_investigation = bool(
         resource_creation and resource_creation.create_investigation and not create_new_case
     )
-    seed = request.evaluation_context.seed if request.evaluation_context is not None else None
-    if seed is not None and not create_new_case:
-        raise ValidationError(
-            "an investigation seed is only accepted when the request creates the case",
-            field="evaluation_context.seed",
-            constraint="requires_create_case",
-        )
+    seed = _validate_chat_seed(request, create_new_case)
 
     if request.evaluation_context is not None:
         g8e_context = g8e_context.model_copy(
@@ -396,11 +420,7 @@ async def internal_chat(
 
     # Validate investigation_id exists before proceeding, UNLESS we are creating
     # a new case or a new investigation under an existing case
-    if (
-        not create_new_case
-        and not create_new_investigation
-        and not g8e_context.investigation_id
-    ):
+    if not create_new_case and not create_new_investigation and not g8e_context.investigation_id:
         logger.error(
             "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing",
             extra={
@@ -416,18 +436,7 @@ async def internal_chat(
             investigation_id=g8e_context.investigation_id or "",
         )
 
-    logger.info(
-        "[INTERNAL-HTTP] Non-streaming chat request received",
-        extra={
-            "case_id": g8e_context.case_id,
-            "investigation_id": g8e_context.investigation_id,
-            "create_new_case": create_new_case,
-            "web_session_id": (g8e_context.web_session_id[:8] + "...")
-            if g8e_context.web_session_id
-            else None,
-            "message_length": len(request.message),
-        },
-    )
+    _log_internal_chat_request(request, g8e_context, create_new_case)
 
     seed_application: EvaluationSeedApplication | None = None
     if create_new_case:
@@ -575,9 +584,7 @@ async def internal_chat(
     return ChatStartedResponse(
         success=True,
         case_id=_require_context_value(g8e_context.case_id, "case_id"),
-        investigation_id=_require_context_value(
-            g8e_context.investigation_id, "investigation_id"
-        ),
+        investigation_id=_require_context_value(g8e_context.investigation_id, "investigation_id"),
     )
 
 
@@ -614,9 +621,7 @@ async def internal_triage_answer(
         },
     )
 
-    investigation_id = _require_context_value(
-        g8e_context.investigation_id, "investigation_id"
-    )
+    investigation_id = _require_context_value(g8e_context.investigation_id, "investigation_id")
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation:
         raise ResourceNotFoundError(
@@ -691,9 +696,7 @@ async def internal_triage_skip(
         },
     )
 
-    investigation_id = _require_context_value(
-        g8e_context.investigation_id, "investigation_id"
-    )
+    investigation_id = _require_context_value(g8e_context.investigation_id, "investigation_id")
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation:
         raise ResourceNotFoundError(
@@ -777,9 +780,7 @@ async def stop_ai_processing(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    investigation_id = _require_context_value(
-        g8e_context.investigation_id, "investigation_id"
-    )
+    investigation_id = _require_context_value(g8e_context.investigation_id, "investigation_id")
     reason = request.reason
     web_session_id = g8e_context.web_session_id
 

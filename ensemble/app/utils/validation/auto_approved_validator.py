@@ -180,6 +180,11 @@ def register_auto_approved_validator(validator: CommandAutoApprovedValidator) ->
     _validator_state.instance = validator
 
 
+def reset_auto_approved_validator() -> None:
+    """Clear the registered validator so it is reloaded on next access."""
+    _validator_state.instance = None
+
+
 def get_auto_approved_validator(
     auto_approved_path: str | None = None,
 ) -> CommandAutoApprovedValidator:

@@ -16,11 +16,11 @@ import tempfile
 
 import pytest
 
-import app.utils.validation.auto_approved_validator as module
 from app.errors import ConfigurationError
 from app.utils.validation.auto_approved_validator import (
     CommandAutoApprovedValidator,
     get_auto_approved_validator,
+    reset_auto_approved_validator,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -139,7 +139,7 @@ class TestDefaultJsonFileLoads:
     def test_default_singleton_loads(self):
         # Reset singleton to force a fresh load from the default path.
 
-        module._validator = None
+        reset_auto_approved_validator()
         validator = get_auto_approved_validator()
         # Default config ships with sensible benign defaults.
         assert "uptime" in validator.get_auto_approved_command_names()
