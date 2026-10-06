@@ -62,4 +62,3 @@ func reapRemainingChild(t *testing.T, fileSvc fs.RuntimeFileService) {
 	_, _ = syscall.Wait4(pid, &ws, 0, nil)
 	_ = fileSvc.Remove(context.Background(), pidRel)
 }
-

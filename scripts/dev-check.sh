@@ -32,7 +32,14 @@ USER_HOME="${HOME:-${USERPROFILE:-}}"
 if command -v cygpath >/dev/null 2>&1 && [[ -n "$USER_HOME" ]]; then
     USER_HOME="$(cygpath -u "$USER_HOME")"
 fi
-export PATH="${GO_BIN_DIR:-$USER_HOME/go/bin}:$USER_HOME/.local/bin:/usr/bin:$PATH"
+case "$(uname -s):${OS:-}" in
+    MINGW*|MSYS*|CYGWIN*|*:Windows_NT)
+        export PATH="${GO_BIN_DIR:-$USER_HOME/go/bin}:$USER_HOME/.local/bin:/usr/bin:$PATH"
+        ;;
+    *)
+        export PATH="${GO_BIN_DIR:-$USER_HOME/go/bin}:$USER_HOME/.local/bin:$PATH"
+        ;;
+esac
 
 FAILED=0
 

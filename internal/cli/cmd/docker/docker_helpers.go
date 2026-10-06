@@ -55,7 +55,7 @@ func forceRemoveLeftovers(cmd *cobra.Command, projectPrefix string) {
 			remove.Stdout = os.Stdout
 			remove.Stderr = os.Stderr
 			if err := remove.Run(); err != nil {
-				cmd.Printf("Warning: could not force-remove %s %q: %v\n", kind, name, err)
+				cmd.Printf("Warning: could not force-remove %s '%s': %v\n", kind, name, err)
 			}
 		}
 	}

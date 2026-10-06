@@ -22,7 +22,12 @@ USER_HOME := $(or $(HOME),$(USERPROFILE))
 USER_HOME_POSIX := $(shell cygpath -u "$(USER_HOME)" 2>/dev/null || echo "$(USER_HOME)")
 GO_BIN_DIR := $(or $(shell go env GOBIN 2>/dev/null),$(if $(shell go env GOPATH 2>/dev/null),$(shell go env GOPATH)/bin,$(USER_HOME_POSIX)/go/bin))
 GO_BIN_DIR := $(shell cygpath -u "$(GO_BIN_DIR)" 2>/dev/null || echo "$(GO_BIN_DIR)")
+HOST_OS := $(shell go env GOOS 2>/dev/null)
+ifeq ($(filter Windows_NT,$(OS))$(filter windows,$(HOST_OS)),)
+export PATH := $(GO_BIN_DIR):$(USER_HOME_POSIX)/.local/bin:$(PATH)
+else
 export PATH := $(GO_BIN_DIR):$(USER_HOME_POSIX)/.local/bin:/usr/bin:$(PATH)
+endif
 GOTOOLCHAIN ?= auto
 export GOTOOLCHAIN
 TMPDIR ?= /tmp
@@ -50,7 +55,7 @@ SOURCE_TREE_HASH ?= $(shell go run ./internal/tools/treehash -mode manifest -bas
 BUILD_ID ?= $(SOURCE_TREE_HASH)
 SOURCE_REVISION ?= unknown
 LDFLAGS = -X main.version=$(VERSION) -X main.buildID=$(BUILD_ID) -X main.buildTime=$(BUILD_TIME) -X main.sourceRevision=$(SOURCE_REVISION) -X main.sourceTreeHash=$(SOURCE_TREE_HASH)
-HOST_OS := $(shell go env GOOS)
+HOST_OS ?= $(shell go env GOOS)
 HOST_ARCH := $(shell go env GOARCH)
 
 # Platform and architecture lists are emitted by the typed g8e-binary catalog.
@@ -923,7 +928,7 @@ test-coverage:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: lint-no-embedded-newlines vulncheck doctrines-validate swagger-generate
+lint: lint-no-embedded-newlines vulncheck doctrines-validate 
 	@golangci-lint run
 	@echo "All linting and quality checks complete."
 
