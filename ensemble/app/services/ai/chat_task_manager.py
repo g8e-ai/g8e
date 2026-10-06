@@ -146,7 +146,7 @@ class BackgroundTaskManager:
 
         return True
 
-    async def wait_all(self, timeout: float | None = None) -> None:
+    async def wait_all(self, wait_timeout: float | None = None) -> None:
         """Await completion of all tracked tasks.
 
         This is used during cleanup to ensure all background operations
@@ -154,8 +154,8 @@ class BackgroundTaskManager:
         skipped. Cancelled tasks are awaited to ensure proper cleanup.
 
         Args:
-            timeout: Optional timeout in seconds. If provided, raises TimeoutError
-                    if not all tasks complete within the timeout.
+            wait_timeout: Optional timeout in seconds. If provided, raises TimeoutError
+                          if not all tasks complete within the timeout.
         """
         async with self._task_lock:
             tasks = list(self._active_tasks.values())
@@ -167,8 +167,8 @@ class BackgroundTaskManager:
         logger.info("Awaiting completion of %d tracked tasks", len(tasks))
 
         try:
-            if timeout is not None:
-                async with asyncio.timeout(timeout):
+            if wait_timeout is not None:
+                async with asyncio.timeout(wait_timeout):
                     await asyncio.gather(*tasks, return_exceptions=True)
             else:
                 await asyncio.gather(*tasks, return_exceptions=True)
@@ -177,7 +177,7 @@ class BackgroundTaskManager:
             logger.warning(
                 "Timeout waiting for %d tasks to complete after %s seconds",
                 len(tasks),
-                timeout,
+                wait_timeout,
             )
             raise
         except Exception as e:

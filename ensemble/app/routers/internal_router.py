@@ -1482,13 +1482,13 @@ async def get_evaluation_trace(
     trace_service = EvaluationTraceService()
     try:
         trace = trace_service.load(assignment_id, evaluation_attempt_id)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         raise ResourceNotFoundError(
             f"Evaluation trace not found for assignment {assignment_id}",
             resource_type="evaluation_trace",
             resource_id=f"{assignment_id}/{evaluation_attempt_id}",
             component="g8ee",
-        )
+        ) from exc
     return EvaluationTraceResponse(trace=trace.model_dump(mode="json"))
 
 

@@ -82,7 +82,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 ### Approvals invalidation event
 
-`g8e.v1.platform.approvals.changed` is an ephemeral, Gateway-produced invalidation: its payload names only the changed list (`transactions` or `enrollments`) and a timestamp. The Gateway publishes it to the owning user's unexpired web sessions whenever a suspended L3 transaction is stored, approved, deleted, or swept as expired, and whenever a platform enrollment request is created, decided, or expires. Transaction events go to the transaction's user; enrollment events go to the platform owner (the first user), the only reviewer. It is published through `SSEEventPublisher.PublishEphemeral`, which appends no row, so it carries no `id:` and cannot be replayed; consumers re-list on receipt and on every stream (re)open. A failed push is logged and never fails the mutation. Owners: `internal/services/gateway/approvals_events.go`.
+`g8e.v1.platform.approvals.changed` is an ephemeral, Gateway-produced invalidation: its payload names only the changed list (`transactions` or `enrollments`) and a timestamp. The Gateway publishes it to the owning user's unexpired web sessions and active, unexpired CLI sessions whenever a suspended L3 transaction is stored, approved, deleted, or swept as expired, and whenever a platform enrollment request is created, decided, or expires. Transaction events go to the transaction's user; enrollment events go to the platform owner (the first user), the only reviewer. It is published through `SSEEventPublisher.PublishEphemeral`, which appends no row, so it carries no `id:` and cannot be replayed; consumers re-list on receipt and on every stream (re)open. A failed push is logged and never fails the mutation. Owners: `internal/services/gateway/approvals_events.go`.
 
 ### Model provenance preflight progress
 
@@ -149,6 +149,8 @@ reason, and request cancellation releases the probe and receipt subscription.
 6. Deduplication: Persisted events emitted during replay are suppressed when they appear on the live channel. Ephemeral events carry no ID and are always delivered.
 7. Reconnection: Client sends `Last-Event-ID: <id>` header; Gateway resumes from that cursor.
 8. On disconnect: Client may reconnect and recover missed events; dropped oldest events can be recovered via DB replay.
+
+The CLI client (`internal/cli/sse`, `Client.Run`) reconnects with exponential backoff and jitter, capped at 30 seconds, and resets the backoff after an event is dispatched. `SetOnConnect` fires when response headers arrive. `SetOnDisconnect` fires before every backoff wait. With `SetReconnectOnClose(true)`, a clean server close (for example, a graceful Gateway shutdown) counts as a disconnect (`ErrSSEStreamClosed`) and is retried instead of ending `Run`. A 401 means the CLI session was rejected (`ErrCLISessionRefreshRequired`): `Run` reports it once through `SetOnDisconnect` and stops, because only `g8e auth refresh` recovers it.
 
 ### Running maintenance
 

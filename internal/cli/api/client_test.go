@@ -91,7 +91,7 @@ func generateTestCA(t *testing.T) (caCertPEM []byte) {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 
-func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService, string) {
+func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService) {
 	t.Helper()
 
 	tempDir := testutil.TempDir(t)
@@ -113,7 +113,7 @@ func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService, strin
 
 	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), caCertPEM, constants.PermFilePublic))
 
-	return cfg, fileSvc, tempDir
+	return cfg, fileSvc
 }
 
 func setupTestCredentials(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config) {
@@ -153,7 +153,7 @@ func setupTLSClient(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Con
 }
 
 func TestNewClient_Success(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	client, err := NewClient(fileSvc, cfg)
@@ -174,7 +174,7 @@ func TestNewClient_Success(t *testing.T) {
 }
 
 func TestNewClient_NoCredentials(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 
 	credsDir := cfg.RuntimeDir
 	os.RemoveAll(credsDir)
@@ -186,7 +186,7 @@ func TestNewClient_NoCredentials(t *testing.T) {
 }
 
 func TestNewClient_LoadCredentialsError(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 
 	credsDir := cfg.RuntimeDir
 	require.NoError(t, os.MkdirAll(credsDir, constants.PermDirPrivate))
@@ -201,7 +201,7 @@ func TestNewClient_LoadCredentialsError(t *testing.T) {
 }
 
 func TestNewClient_MissingCertFile(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	require.NoError(t, os.Remove(cfg.CLICertFile()))
@@ -213,7 +213,7 @@ func TestNewClient_MissingCertFile(t *testing.T) {
 }
 
 func TestNewClient_MissingKeyFile(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	require.NoError(t, os.Remove(cfg.CLIKeyFile()))
@@ -225,7 +225,7 @@ func TestNewClient_MissingKeyFile(t *testing.T) {
 }
 
 func TestNewClient_MissingTrustBundle(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	caRel := cfg.DefaultTrustBundleRelPath()
@@ -238,7 +238,7 @@ func TestNewClient_MissingTrustBundle(t *testing.T) {
 }
 
 func TestNewClient_InvalidTrustBundle(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	caRel := cfg.DefaultTrustBundleRelPath()
@@ -251,7 +251,7 @@ func TestNewClient_InvalidTrustBundle(t *testing.T) {
 }
 
 func TestDoRequest_MarshalError(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	client, err := NewClient(fileSvc, cfg)
@@ -264,7 +264,7 @@ func TestDoRequest_MarshalError(t *testing.T) {
 }
 
 func TestDoRequest_HTTPError(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	client, err := NewClient(fileSvc, cfg)
@@ -276,7 +276,7 @@ func TestDoRequest_HTTPError(t *testing.T) {
 }
 
 func TestNewClient_TLSConfig(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	client, err := NewClient(fileSvc, cfg)

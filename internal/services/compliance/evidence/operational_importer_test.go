@@ -104,9 +104,9 @@ func operationalAdmissionForTest() *compliancev1.AssessmentSourceAdmission {
 	}
 }
 
-func operationalExportFiles(t *testing.T, outputDir string, inventory *OperationalSourceInventory, admissionID string) map[string][]byte {
+func operationalExportFiles(t *testing.T, outputDir string, inventory *OperationalSourceInventory) map[string][]byte {
 	t.Helper()
-	sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, admissionID)
+	sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1")
 	inventoryBody, err := os.ReadFile(filepath.Join(outputDir, constants.ComplianceOperationalInventoryFilename))
 	require.NoError(t, err)
 	files := map[string][]byte{path.Join(sourceRoot, constants.ComplianceOperationalInventoryFilename): inventoryBody}
@@ -138,7 +138,7 @@ func TestOperationalExportImporter_RejectsBrokenCommitmentSegment(t *testing.T) 
 	assert.Equal(t, int64(10), inventory.CommitmentFirstSequence)
 	assert.Equal(t, int64(11), inventory.CommitmentLastSequence)
 
-	files := operationalExportFiles(t, outputDir, inventory, "source-1")
+	files := operationalExportFiles(t, outputDir, inventory)
 	admission := operationalAdmissionForTest()
 	importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
 	_, err = importer.Import(context.Background())
@@ -158,7 +158,7 @@ func TestOperationalExportImporter_AcceptsBoundedCommitmentSegmentWithoutWholeLe
 	require.NoError(t, err)
 	assert.Equal(t, "external-prior", inventory.CommitmentBoundaryPriorHash)
 	assert.Equal(t, commitment.GetHash(), inventory.CommitmentHeadHash)
-	files := operationalExportFiles(t, outputDir, inventory, "source-1")
+	files := operationalExportFiles(t, outputDir, inventory)
 	admission := operationalAdmissionForTest()
 	importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
 	nodes, err := importer.Import(context.Background())
@@ -182,7 +182,7 @@ func TestOperationalExportImporter_RejectsCommitmentSegmentSequenceGap(t *testin
 	require.NoError(t, err)
 	assert.False(t, inventory.CommitmentSequenceContiguous)
 
-	files := operationalExportFiles(t, outputDir, inventory, "source-1")
+	files := operationalExportFiles(t, outputDir, inventory)
 	admission := operationalAdmissionForTest()
 	importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
 	_, err = importer.Import(context.Background())
@@ -239,7 +239,7 @@ func TestOperationalExportImporter_RejectsRetainedReceiptAndStageSubstitutions(t
 				Commitments: []storage.OperationalCommitmentSource{{Sequence: 10, TransactionID: commitment.GetTransactionId(), CommittedAt: executedAt, Body: canonicalOperationalCommitment(t, commitment)}},
 			}, operationalExportRequestForTest(outputDir, executedAt))
 			require.NoError(t, err)
-			files := operationalExportFiles(t, outputDir, inventory, "source-1")
+			files := operationalExportFiles(t, outputDir, inventory)
 			admission := operationalAdmissionForTest()
 			importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
 			_, err = importer.Import(context.Background())
@@ -379,7 +379,7 @@ func TestOperationalExportImporter_VerifiesAuditChainAndCrossLinksReceipts(t *te
 	require.NoError(t, err)
 	assert.Equal(t, 1, inventory.AuditChainCount)
 
-	files := operationalExportFiles(t, outputDir, inventory, "source-1")
+	files := operationalExportFiles(t, outputDir, inventory)
 	admission := operationalAdmissionForTest()
 	importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
 	nodes, err := importer.Import(context.Background())

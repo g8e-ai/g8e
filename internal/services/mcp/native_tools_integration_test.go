@@ -721,7 +721,7 @@ func mustUUID(t *testing.T) string {
 	return id
 }
 
-func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, error) {
+func setupMTLSClient(t *testing.T, _ string) (*http.Client, string, error) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
@@ -842,7 +842,7 @@ func computeTransactionHash(toolName string, arguments json.RawMessage) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func verifyAuditVaultPersistence(t *testing.T, transactionID, sessionID string) {
+func verifyAuditVaultPersistence(t *testing.T, transactionID, _ string) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))

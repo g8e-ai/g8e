@@ -515,7 +515,9 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
-    with patch("app.services.ai.chat_pipeline.get_llm_provider"), pytest.raises(ValueError):
+    with patch("app.services.ai.chat_pipeline.get_llm_provider"), pytest.raises(
+        ValueError, match="not-a-real-provider"
+    ):
         await svc._run_chat_impl(
             message="hello",
             g8e_context=g8e_ctx,

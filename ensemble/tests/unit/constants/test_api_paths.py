@@ -42,8 +42,9 @@ def test_gateway_api_paths_matches_g8e_constants():
 
 
 def test_gateway_api_paths_raises_on_unknown_key():
+    unknown_name = "".join(("NONEXISTENT", "_PATH"))
     with pytest.raises(AttributeError, match="NONEXISTENT_PATH"):
-        GatewayAPIPaths.NONEXISTENT_PATH
+        getattr(GatewayAPIPaths, unknown_name)
 
 
 def test_gateway_api_paths_governance_envelopes_value():

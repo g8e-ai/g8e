@@ -34,7 +34,7 @@ import (
 func newIntegrationAuditStore(t *testing.T) *SQLAuditStore {
 	t.Helper()
 
-	fileSvc, _ := newTestFileSvc(t, testutil.TempDir(t))
+	fileSvc := newTestFileSvc(t, testutil.TempDir(t))
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, fileSvc, privKey)
@@ -80,7 +80,7 @@ func sampleActionReceiptRecord(t *testing.T, sessionID string) *models.ActionRec
 }
 
 func TestNewSQLAuditStore_NilLoggerUsesDefault(t *testing.T) {
-	fileSvc, _ := newTestFileSvc(t, testutil.TempDir(t))
+	fileSvc := newTestFileSvc(t, testutil.TempDir(t))
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, fileSvc, privKey)
@@ -281,7 +281,7 @@ func TestSQLAuditStore_VerifyChain_AppendAndTamper(t *testing.T) {
 }
 
 func TestSQLAuditStore_VerifyChain_BackfillLegacyRows(t *testing.T) {
-	fileSvc, _ := newTestFileSvc(t, testutil.TempDir(t))
+	fileSvc := newTestFileSvc(t, testutil.TempDir(t))
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, fileSvc, privKey)
@@ -421,7 +421,7 @@ func TestSQLAuditStore_VerifyChain_SurvivesVaultRekey(t *testing.T) {
 	oldKey := []byte("audit-chain-old-vault-key!!")
 	newKey := []byte("audit-chain-new-vault-key!!")
 
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 	testVault := CreateTestVault(t, fileSvc, oldKey)
 
 	config := DefaultAuditStoreConfig()

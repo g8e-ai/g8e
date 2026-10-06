@@ -110,21 +110,50 @@ type testSession struct {
 	mu            sync.Mutex
 	listCalls     int
 	paths         []string
+
+	enrollPendingJSON string
+	enrolledJSON      string
+	decisionJSON      string
+	revokeJSON        string
+	stopJSON          string
+	postErr           error
+	enrollListCalls   int
+	posted            []interface{}
 }
 
 func (s *testSession) NewSSEClient() *sse.Client { return sse.NewClient(s.url, nil) }
 
-func (s *testSession) DoRequestContext(_ context.Context, method, path string, _ interface{}) ([]byte, error) {
+func (s *testSession) DoRequestContext(_ context.Context, method, path string, body interface{}) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.paths = append(s.paths, path)
 	if s.err != nil {
 		return nil, s.err
 	}
+	if method == http.MethodPost {
+		s.posted = append(s.posted, body)
+		if s.postErr != nil {
+			return nil, s.postErr
+		}
+		switch path {
+		case constants.APIPaths.AuthPlatformEnrollmentDecision:
+			return []byte(orDefault(s.decisionJSON, `{"request_id":"req-1","state":"approved"}`)), nil
+		case constants.APIPaths.AuthPlatformEnrollmentRevoke:
+			return []byte(orDefault(s.revokeJSON, `{"request_id":"req-1","component_kind":"operator","state":"revoked"}`)), nil
+		case constants.APIPaths.OperatorsStop:
+			return []byte(orDefault(s.stopJSON, `{"success":true,"operator_id":"op-remote","operator_session_id":"sess-remote"}`)), nil
+		}
+		return nil, constants.ErrNotFound
+	}
 	if method != http.MethodGet {
 		return nil, constants.ErrNotFound
 	}
 	switch {
+	case path == constants.APIPaths.AuthPlatformEnrollmentPending:
+		s.enrollListCalls++
+		return []byte(orDefault(s.enrollPendingJSON, `{"requests":[]}`)), nil
+	case path == constants.APIPaths.AuthPlatformEnrollmentEnrolled:
+		return []byte(orDefault(s.enrolledJSON, `{"enrollments":[]}`)), nil
 	case path == constants.APIPaths.ApprovalsCLIList:
 		s.listCalls++
 		return []byte(orDefault(s.pendingJSON, `{"transactions":[]}`)), nil
@@ -136,6 +165,12 @@ func (s *testSession) DoRequestContext(_ context.Context, method, path string, _
 		return []byte(orDefault(s.statusJSON, `{"status":"approved"}`)), nil
 	}
 	return nil, constants.ErrNotFound
+}
+
+func (s *testSession) enrollmentListCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.enrollListCalls
 }
 
 func (s *testSession) pendingListCalls() int {
@@ -264,13 +299,10 @@ func TestTranslateSSEEvents_GatewayWireShape(t *testing.T) {
 		assert.Empty(t, translateSSEEvents("", frame))
 	})
 
-	t.Run("enrollment approvals.changed points at the CLI command", func(t *testing.T) {
+	t.Run("enrollment approvals.changed produces no message", func(t *testing.T) {
+		// The adapter re-lists enrollments; the model announces new requests.
 		frame := gatewayFrame(t, string(constants.EventPlatformApprovalsChanged), models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedEnrollments})
-		msgs := translateSSEEvents("", frame)
-		require.Len(t, msgs, 1)
-		lm, ok := msgs[0].(LedgerMsg)
-		require.True(t, ok)
-		assert.Contains(t, lm.Message, "g8e auth enroll pending")
+		assert.Empty(t, translateSSEEvents("", frame))
 	})
 
 	t.Run("replay error sentinel surfaces as a warning", func(t *testing.T) {

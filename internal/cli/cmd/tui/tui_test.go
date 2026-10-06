@@ -105,7 +105,11 @@ func TestTUICmdStructure(t *testing.T) {
 		assert.Contains(t, cmd.Long, "Move in the focused pane")
 		assert.Contains(t, cmd.Long, "Jump to ledger bottom")
 		assert.Contains(t, cmd.Long, "Approve the selected pending transaction")
-		assert.Contains(t, cmd.Long, "Refresh approvals, operators, and posture")
+		assert.Contains(t, cmd.Long, "Refresh approvals, operators, enrollments, and posture")
+		assert.Contains(t, cmd.Long, "Switch view")
+		assert.Contains(t, cmd.Long, "6 Enrollments")
+		assert.Contains(t, cmd.Long, "g8e auth enroll approve|deny|revoke")
+		assert.Contains(t, cmd.Long, "Confirm / cancel the pending action")
 	})
 
 	t.Run("command has a RunE function", func(t *testing.T) {

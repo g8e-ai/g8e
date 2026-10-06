@@ -41,11 +41,11 @@ type mockProgram struct {
 	runCalled int32
 }
 
-func newMockProgram(final tea.Model, runErr error) *mockProgram {
+func newMockProgram(final tea.Model) *mockProgram {
 	return &mockProgram{
 		sendCh: make(chan tea.Msg, 64),
 		final:  final,
-		runErr: runErr,
+		runErr: nil,
 	}
 }
 
@@ -145,7 +145,7 @@ func TestRegister_BrowserOpenFailure_ContinuesToTUI(t *testing.T) {
 	// the user pressing q after seeing the URL). The program IS called now
 	// because browser failure is no longer fatal. Use runFn so the factory's
 	// overwrite of prog.final doesn't clobber our error model.
-	prog := newMockProgram(enrollModel{}, nil)
+	prog := newMockProgram(enrollModel{})
 	prog.runFn = func() (tea.Model, error) {
 		return enrollModel{err: context.Canceled}, nil
 	}
@@ -231,7 +231,7 @@ func TestRegister_SSEReadyBeforeBrowserLaunch(t *testing.T) {
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {
-		prog := newMockProgram(m, nil)
+		prog := newMockProgram(m)
 		// Ordering is established before Run; simulate the user exiting the TUI.
 		prog.runFn = func() (tea.Model, error) {
 			return enrollModel{err: context.Canceled}, nil
@@ -543,7 +543,7 @@ func TestRegister_ContextCancelledBeforeEnrollment(t *testing.T) {
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {
-		return newMockProgram(m, nil)
+		return newMockProgram(m)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -607,7 +607,7 @@ func TestPasskeyRegistrar_Out_EmitsURLBeforeBrowser(t *testing.T) {
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {
-		prog := newMockProgram(m, nil)
+		prog := newMockProgram(m)
 		// Ordering is established before Run; simulate the user exiting the TUI.
 		prog.runFn = func() (tea.Model, error) {
 			return enrollModel{err: context.Canceled}, nil
@@ -682,7 +682,7 @@ func TestPasskeyRegistrar_Out_EmitsBrowserErrorOnOpenFailure(t *testing.T) {
 		Out:     outFunc,
 		Timeout: 5 * time.Second,
 	})
-	prog := newMockProgram(enrollModel{}, nil)
+	prog := newMockProgram(enrollModel{})
 	prog.runFn = func() (tea.Model, error) {
 		return enrollModel{err: context.Canceled}, nil
 	}

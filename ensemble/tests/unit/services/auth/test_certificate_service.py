@@ -5,7 +5,6 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -62,12 +61,11 @@ def ca_cert(ca_key):
 
 @pytest.fixture
 def setup_ca_files(temp_pki_dir, ca_cert):
-    trust_dir = os.path.join(temp_pki_dir, "trust")
-    os.makedirs(trust_dir, exist_ok=True)
-    cert_path = os.path.join(trust_dir, "g8eg-ca-bundle.pem")
+    trust_dir = Path(temp_pki_dir) / "trust"
+    trust_dir.mkdir(parents=True, exist_ok=True)
+    cert_path = trust_dir / "g8eg-ca-bundle.pem"
 
-    with Path(cert_path).open("wb") as f:
-        f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
+    cert_path.write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     return temp_pki_dir
 
@@ -109,17 +107,17 @@ async def test_initialize_success(setup_ca_files, mock_data_service):
 @pytest.mark.asyncio
 async def test_initialize_alternate_path(temp_pki_dir, ca_cert, mock_data_service):
     # Test path: pki_dir/authorities/hub_ca.crt
-    auth_subdir = os.path.join(temp_pki_dir, "authorities")
-    os.makedirs(auth_subdir)
+    auth_subdir = Path(temp_pki_dir) / "authorities"
+    auth_subdir.mkdir()
 
-    cert_path = os.path.join(auth_subdir, "hub_ca.crt")
+    cert_path = auth_subdir / "hub_ca.crt"
 
-    with Path(cert_path).open("wb") as f:
+    with cert_path.open("wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     service = CertificateService(
-        pki_dir=os.path.join(temp_pki_dir, "missing"),
-        ca_cert_path=cert_path,
+        pki_dir=str(Path(temp_pki_dir) / "missing"),
+        ca_cert_path=str(cert_path),
         data_service=mock_data_service,
     )
     await service.initialize()

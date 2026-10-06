@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupBlobStoreTest(t *testing.T) (*BlobStoreService, *CanonicalDBService) {
+func setupBlobStoreTest(t *testing.T) *BlobStoreService {
 	t.Helper()
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
@@ -26,12 +26,12 @@ func setupBlobStoreTest(t *testing.T) (*BlobStoreService, *CanonicalDBService) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	return db.GetBlobStore(), db
+	return db.GetBlobStore()
 }
 
 func TestBlobStoreService_BlobPut(t *testing.T) {
 
-	blobStore, _ := setupBlobStoreTest(t)
+	blobStore := setupBlobStoreTest(t)
 
 	t.Run("BlobPut with no expiration (ttlSeconds=0)", func(t *testing.T) {
 		data := []byte("test data without expiration")
@@ -124,7 +124,7 @@ func TestBlobStoreService_BlobPut(t *testing.T) {
 
 func TestBlobStoreService_BlobGet(t *testing.T) {
 
-	blobStore, _ := setupBlobStoreTest(t)
+	blobStore := setupBlobStoreTest(t)
 
 	t.Run("BlobGet returns not found for non-existent blob", func(t *testing.T) {
 		data, contentType, found := blobStore.BlobGet("nonexistent-ns", "nonexistent-id")
@@ -186,7 +186,7 @@ func TestBlobStoreService_BlobGet(t *testing.T) {
 
 func TestBlobStoreService_BlobMeta(t *testing.T) {
 
-	blobStore, _ := setupBlobStoreTest(t)
+	blobStore := setupBlobStoreTest(t)
 
 	t.Run("BlobMeta returns not found for non-existent blob", func(t *testing.T) {
 		meta, found := blobStore.BlobMeta("nonexistent-ns", "nonexistent-id")
@@ -243,7 +243,7 @@ func TestBlobStoreService_BlobMeta(t *testing.T) {
 
 func TestBlobStoreService_BlobDelete(t *testing.T) {
 
-	blobStore, _ := setupBlobStoreTest(t)
+	blobStore := setupBlobStoreTest(t)
 
 	t.Run("BlobDelete returns false for non-existent blob", func(t *testing.T) {
 		deleted, err := blobStore.BlobDelete("nonexistent-ns", "nonexistent-id")
@@ -289,7 +289,7 @@ func TestBlobStoreService_BlobDelete(t *testing.T) {
 
 func TestBlobStoreService_BlobDeleteNamespace(t *testing.T) {
 
-	blobStore, _ := setupBlobStoreTest(t)
+	blobStore := setupBlobStoreTest(t)
 
 	t.Run("BlobDeleteNamespace deletes all blobs in namespace", func(t *testing.T) {
 		namespace := "ns-to-delete"
@@ -352,7 +352,7 @@ func TestBlobStoreService_BlobDeleteNamespace(t *testing.T) {
 
 func TestBlobStoreService_RunMaintenance_Comprehensive(t *testing.T) {
 
-	blobStore, _ := setupBlobStoreTest(t)
+	blobStore := setupBlobStoreTest(t)
 
 	t.Run("RunMaintenance removes expired blobs", func(t *testing.T) {
 		// Insert blob that is already expired (ttlSeconds = -1)
@@ -418,7 +418,7 @@ func TestBlobStoreService_RunMaintenance_Comprehensive(t *testing.T) {
 
 func TestBlobStoreService_NamespaceIsolation(t *testing.T) {
 
-	blobStore, _ := setupBlobStoreTest(t)
+	blobStore := setupBlobStoreTest(t)
 
 	t.Run("Blobs in different namespaces are isolated", func(t *testing.T) {
 		ns1 := "isolated-ns-1"
@@ -444,7 +444,7 @@ func TestBlobStoreService_NamespaceIsolation(t *testing.T) {
 
 func TestBlobStoreService_ConcurrentOperations(t *testing.T) {
 
-	blobStore, _ := setupBlobStoreTest(t)
+	blobStore := setupBlobStoreTest(t)
 
 	t.Run("Concurrent BlobPut operations", func(t *testing.T) {
 		namespace := "concurrent-put"

@@ -71,10 +71,10 @@ func (s *stubInferenceOperatorLister) ListUserOperators(_ string) ([]models.Oper
 	return s.ops, s.err
 }
 
-func inferenceCapableOperator(sessionID string) models.OperatorDocumentGo {
+func inferenceCapableOperator(_ string) models.OperatorDocumentGo {
 	return models.OperatorDocumentGo{
 		ID:                "op-inf-001",
-		OperatorSessionID: sessionID,
+		OperatorSessionID: "sess-inf-1",
 		Status:            constants.OperatorStatusActive,
 		RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
 	}

@@ -274,7 +274,7 @@ func TestCreateCampaign_VersioningStillConflictsOnNonCatalogDrift(t *testing.T) 
 
 func TestCampaignsCreate_RejectsMultiModelModelRoleCampaign(t *testing.T) {
 	env := setupRunEnv(t)
-	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, threeModelRegistry()...)
+	writeTestFrozenInventory(t, env.root, threeModelRegistry()...)
 
 	_, err := env.run(t, "campaigns", "create", "eval-many", "--all")
 	require.Error(t, err)
@@ -286,7 +286,7 @@ func TestCampaignsCreate_RejectsMultiModelModelRoleCampaign(t *testing.T) {
 
 func TestCampaignsCreate_AllFormationsMaterializesEveryCatalogStack(t *testing.T) {
 	env := setupRunEnv(t)
-	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, testFormationCatalogCLIVariants()...)
+	writeTestFrozenInventory(t, env.root, testFormationCatalogCLIVariants()...)
 
 	out := env.mustRun(t, "campaigns", "create", "eval-formations", "--all-formations")
 	assert.Contains(t, out, "Lane: system")
@@ -311,7 +311,7 @@ func TestCampaignsCreate_AllFormationsMaterializesEveryCatalogStack(t *testing.T
 
 func TestCampaignsCreate_FormationSubsetSchedulesOnlyThoseFormations(t *testing.T) {
 	env := setupRunEnv(t)
-	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, testFormationCatalogCLIVariants()...)
+	writeTestFrozenInventory(t, env.root, testFormationCatalogCLIVariants()...)
 
 	env.mustRun(t, "campaigns", "create", "eval-two", "--formations", "qwen-powerhouse", "--formations", "ultra-efficient-speedster")
 

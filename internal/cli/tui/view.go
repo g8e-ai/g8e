@@ -19,21 +19,26 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
+// Layout sizes are outer sizes: a pane's height and width include its border.
 const (
 	defaultTerminalWidth  = 100
 	defaultTerminalHeight = 30
 	leftPaneWidthRatio    = 2 // numerator; left pane = width * leftPaneWidthRatio / leftPaneWidthDivisor
 	leftPaneWidthDivisor  = 5
-	listPaneRows          = 6 // visible rows in the approvals and Operators panes
+	headerLines           = 2
+	tabLines              = 1
+	statusBarLines        = 1
+	chromeLines           = headerLines + tabLines + statusBarLines
+	listPaneRows          = 6 // content rows in the overview's approvals and Operators panes, including the pane header
 	listPaneHeight        = listPaneRows + 2
-	reservedLines         = 2 + listPaneHeight + 2 // header + status bar + list pane and its border
 	minTopHeight          = 10
-	ledgerReservedLines   = 4 // header + border padding
+	minBodyHeight         = minTopHeight + listPaneHeight
+	paneTitleLines        = 2 // a pane's title and the blank line under it
 	hashDisplayLen        = 8
 )
 
-// View implements tea.Model. It renders the header, the pipeline and ledger,
-// the pending-approval and Operator panes, and the status bar.
+// View implements tea.Model. It renders the header, the view tabs, the
+// active view (or the help or confirmation overlay), and the status bar.
 func (m Model) View() string {
 	if m.quitting {
 		return ""
@@ -47,42 +52,68 @@ func (m Model) View() string {
 	if height == 0 {
 		height = defaultTerminalHeight
 	}
+	bodyHeight := max(height-chromeLines, minBodyHeight)
 
+	var body string
+	switch {
+	case m.confirm != nil || m.showHelp:
+		body = m.renderOverlay(width, bodyHeight)
+	case m.view == viewApprovals:
+		body = m.renderApprovalsView(width, bodyHeight)
+	case m.view == viewOperators:
+		body = m.renderOperatorsView(width, bodyHeight)
+	case m.view == viewEnrollments:
+		body = m.renderEnrollmentsView(width, bodyHeight)
+	default:
+		body = m.renderOverview(width, bodyHeight)
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		m.renderHeader(width),
+		m.renderTabs(width),
+		body,
+		m.renderStatusBar(width),
+	)
+}
+
+// renderOverview renders the overview: the pipeline and ledger over the
+// pending-approval and Operator panes.
+func (m Model) renderOverview(width, height int) string {
 	leftWidth := width * leftPaneWidthRatio / leftPaneWidthDivisor
-	rightWidth := width - leftWidth
-
-	topHeight := max(height-reservedLines, minTopHeight)
-
+	topHeight := max(height-listPaneHeight, minTopHeight)
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top,
 		m.renderPipeline(leftWidth, topHeight),
-		m.renderLedger(rightWidth, topHeight),
+		m.renderLedger(width-leftWidth, topHeight),
 	)
 	halfWidth := width / 2
 	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top,
 		m.renderApprovals(halfWidth),
 		m.renderOperators(width-halfWidth),
 	)
-
-	return lipgloss.JoinVertical(lipgloss.Left,
-		m.renderHeader(width),
-		topRow,
-		bottomRow,
-		m.renderStatusBar(width),
-	)
+	return lipgloss.JoinVertical(lipgloss.Left, topRow, bottomRow)
 }
 
-// renderHeader renders the identity and governance posture line: the same
-// identity 'g8e auth' reports and the posture the Gateway runs.
+// renderHeader renders two lines: the console title and the Gateway posture,
+// then the same identity 'g8e auth' reports. Each line is cut to width.
 func (m Model) renderHeader(width int) string {
+	title := " g8e TACTICAL GOVERNANCE CONSOLE " + m.version
+	posture := "POSTURE: " + m.postureLabel() + " "
+	gap := max(width-lipgloss.Width(title)-lipgloss.Width(posture), 1)
+
 	operator := m.identity.OperatorID
 	if operator == "" {
 		operator = "unbound"
 	}
-	left := fmt.Sprintf(" g8e TACTICAL GOVERNANCE CONSOLE %s | USER: %s | CLI SESSION: %s | OPERATOR: %s",
-		m.version, m.identity.UserID, shortHash(m.identity.CLISessionID), operator)
-	right := "POSTURE: " + m.postureLabel() + " "
-	gap := max(width-lipgloss.Width(left)-lipgloss.Width(right), 1)
-	return headerStyle.Render(left + strings.Repeat(" ", gap) + right)
+	identity := fmt.Sprintf(" USER: %s | CLI SESSION: %s | OPERATOR: %s",
+		m.identity.UserID, shortHash(m.identity.CLISessionID), operator)
+	if m.gatewayVersion != "" {
+		identity += " | GATEWAY: " + m.gatewayVersion
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		fitLine(headerStyle.Render(title+strings.Repeat(" ", gap)+posture), width),
+		fitLine(detailStyle.Render(identity), width),
+	)
 }
 
 // postureLabel names the Gateway posture and which of L2/L3 it enforces.
@@ -109,12 +140,47 @@ func (m Model) paneBorder(p pane) lipgloss.Style {
 	return borderPane
 }
 
+// box renders lines in style's bordered pane at exactly width x height
+// (outer size). Lines are cut to the inner width and the inner height, so
+// content never wraps or pushes the layout past the terminal.
+func box(style lipgloss.Style, width, height int, lines []string) string {
+	innerWidth := max(width-style.GetHorizontalFrameSize(), 1)
+	innerHeight := max(height-style.GetVerticalFrameSize(), 1)
+	if len(lines) > innerHeight {
+		lines = lines[:innerHeight]
+	}
+	fitted := make([]string, len(lines))
+	for i, line := range lines {
+		fitted[i] = fitLine(line, innerWidth)
+	}
+	return style.
+		Width(max(width-style.GetHorizontalBorderSize(), 1)).
+		Height(max(height-style.GetVerticalBorderSize(), 1)).
+		Render(strings.Join(fitted, "\n"))
+}
+
+// fitLine cuts a single (possibly styled) line to width cells.
+func fitLine(line string, width int) string {
+	return lipgloss.NewStyle().MaxWidth(width).Render(line)
+}
+
+// innerWidth is the content width of a pane of outer width.
+func innerWidth(width int) int {
+	return max(width-borderPane.GetHorizontalFrameSize(), 1)
+}
+
 // renderPipeline renders the left pane: the L1-L5 execution pipeline.
 func (m Model) renderPipeline(width, height int) string {
 	header := pipelineHeaderStyle.Render("EXECUTION PIPELINE (L1-L5)")
 
-	var lines []string
-	lines = append(lines, header, "")
+	// Drop the spacer lines when the pane is too short to show every stage
+	// with them: a title, then a label, a detail, and a spacer per stage.
+	spaced := height-borderPane.GetVerticalFrameSize() >= paneTitleLines+3*len(m.pipeline)
+
+	lines := []string{header}
+	if spaced {
+		lines = append(lines, "")
+	}
 
 	for i, stage := range m.pipeline {
 		icon := statusIcon(stage.status)
@@ -147,11 +213,13 @@ func (m Model) renderPipeline(width, height int) string {
 		if detail == "" {
 			detail = stage.status.String()
 		}
-		lines = append(lines, "    "+detailStyle.Render(detail), "")
+		lines = append(lines, "    "+detailStyle.Render(detail))
+		if spaced {
+			lines = append(lines, "")
+		}
 	}
 
-	content := strings.Join(lines, "\n")
-	return borderPane.Width(width).Height(height).Render(content)
+	return box(borderPane, width, height, lines)
 }
 
 // stageAnnotation marks L2 and L3 as audited when the posture does not
@@ -169,46 +237,52 @@ func (m Model) stageAnnotation(stage PipelineStage) string {
 	}
 }
 
-// renderLedger renders the right pane: the Sovereign Audit Ledger.
+// renderLedger renders the right pane: the Sovereign Audit Ledger. Entries
+// wrap to the pane width so long lines (such as an approval URL to visit)
+// stay readable; the newest lines that fit are shown.
 func (m Model) renderLedger(width, height int) string {
-	header := ledgerHeaderStyle.Render("SOVEREIGN AUDIT LEDGER")
-
-	var lines []string
-	lines = append(lines, header, "")
+	lines := []string{ledgerHeaderStyle.Render("SOVEREIGN AUDIT LEDGER"), ""}
 
 	visibleEntries := m.ledger
 	if m.ledgerScroll > 0 && m.ledgerScroll < len(m.ledger) {
-		scrollOffset := len(m.ledger) - m.ledgerScroll
-		visibleEntries = m.ledger[:scrollOffset]
+		visibleEntries = m.ledger[:len(m.ledger)-m.ledgerScroll]
 	}
 
-	maxLines := height - ledgerReservedLines
-	start := 0
-	if len(visibleEntries) > maxLines {
-		start = len(visibleEntries) - maxLines
-	}
-	visibleEntries = visibleEntries[start:]
-
-	for _, entry := range visibleEntries {
-		ts := entry.time.Format("15:04:05")
-		var line string
-		switch entry.level {
-		case LevelCritical:
-			line = ledgerCritStyle.Render(fmt.Sprintf("%s %s %s", ts, entry.level.Tag(), entry.message))
-		case LevelWarn:
-			line = ledgerWarnStyle.Render(fmt.Sprintf("%s %s %s", ts, entry.level.Tag(), entry.message))
-		default:
-			line = ledgerInfoStyle.Render(fmt.Sprintf("%s %s %s", ts, entry.level.Tag(), entry.message))
+	wrap := lipgloss.NewStyle().Width(innerWidth(width))
+	maxLines := max(height-borderPane.GetVerticalFrameSize()-paneTitleLines, 1)
+	var body []string
+	// Walk back from the newest entry until the pane is full.
+	for i := len(visibleEntries) - 1; i >= 0 && len(body) < maxLines; i-- {
+		entry := visibleEntries[i]
+		text := fmt.Sprintf("%s %s %s", entry.time.Format("15:04:05"), entry.level.Tag(), entry.message)
+		wrapped := strings.Split(wrap.Render(text), "\n")
+		for j := range wrapped {
+			wrapped[j] = ledgerLevelStyle(entry.level).Render(strings.TrimRight(wrapped[j], " "))
 		}
-		lines = append(lines, line)
+		body = append(wrapped, body...)
 	}
+	if len(body) > maxLines {
+		body = body[len(body)-maxLines:]
+	}
+	lines = append(lines, body...)
 
 	if len(m.ledger) == 0 {
 		lines = append(lines, detailStyle.Render("(awaiting events...)"))
 	}
 
-	content := strings.Join(lines, "\n")
-	return m.paneBorder(paneLedger).Width(width).Height(height).Render(content)
+	return box(m.paneBorder(paneLedger), width, height, lines)
+}
+
+// ledgerLevelStyle returns the text style for a ledger level.
+func ledgerLevelStyle(level LedgerLevel) lipgloss.Style {
+	switch level {
+	case LevelCritical:
+		return ledgerCritStyle
+	case LevelWarn:
+		return ledgerWarnStyle
+	default:
+		return ledgerInfoStyle
+	}
 }
 
 // renderApprovals renders the pending L3 approval queue with the selection.
@@ -230,7 +304,7 @@ func (m Model) renderApprovals(width int) string {
 		}
 		lines = append(lines, m.listRow(paneApprovals, i == m.pendingSelected, row))
 	}
-	return m.paneBorder(paneApprovals).Width(width).Height(listPaneHeight).Render(strings.Join(lines, "\n"))
+	return box(m.paneBorder(paneApprovals), width, listPaneHeight, lines)
 }
 
 // renderOperators renders the connected Operators with the selection.
@@ -257,7 +331,7 @@ func (m Model) renderOperators(width int) string {
 		}
 		lines = append(lines, m.listRow(paneOperators, i == m.operatorsSelected, row))
 	}
-	return m.paneBorder(paneOperators).Width(width).Height(listPaneHeight).Render(strings.Join(lines, "\n"))
+	return box(m.paneBorder(paneOperators), width, listPaneHeight, lines)
 }
 
 // listRow renders one list row, marking the selection when its pane has focus.
@@ -271,12 +345,7 @@ func (m Model) listRow(p pane, selected bool, row string) string {
 // listWindow returns the [start, end) rows of an n-row list to show so the
 // selected row stays visible.
 func listWindow(n, selected int) (int, int) {
-	rows := listPaneRows - 1 // the header takes one row
-	start := 0
-	if selected >= rows {
-		start = selected - rows + 1
-	}
-	return start, min(n, start+rows)
+	return windowFor(n, selected, listPaneRows-1) // the header takes one row
 }
 
 // operatorHostname names an Operator for display, as 'g8e gw status' does.
@@ -317,10 +386,10 @@ func (m Model) renderStatusBar(width int) string {
 		connPart += " (" + m.connDetail + ")"
 	}
 
-	right := "tab: focus | j/k: move | a: approve | r: refresh | q: quit "
+	right := m.statusHints()
 
 	gap := max(width-lipgloss.Width(connPart)-lipgloss.Width(right), 1)
-	return statusBarStyle.Render(connPart + strings.Repeat(" ", gap) + right)
+	return fitLine(statusBarStyle.Render(connPart+strings.Repeat(" ", gap)+right), width)
 }
 
 // shortHash truncates a hash to hashDisplayLen characters with ellipsis for display.

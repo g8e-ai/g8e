@@ -70,7 +70,7 @@ func newLocalhostTLSServer(t *testing.T, handler http.HandlerFunc) *httptest.Ser
 }
 
 func TestDoRequest_Success(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +97,7 @@ func TestDoRequest_Success(t *testing.T) {
 }
 
 func TestDoRequest_GetWithoutBody(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +118,7 @@ func TestDoRequest_GetWithoutBody(t *testing.T) {
 }
 
 func TestDoRequest_APIError(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +136,7 @@ func TestDoRequest_APIError(t *testing.T) {
 }
 
 func TestDoRequest_UnauthorizedIsTypedStatus(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +157,7 @@ func TestDoRequest_UnauthorizedIsTypedStatus(t *testing.T) {
 }
 
 func TestDoRequest_InvalidJSONResponse(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +175,7 @@ func TestDoRequest_InvalidJSONResponse(t *testing.T) {
 }
 
 func TestDoRequest_ReadResponseError(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +197,7 @@ func TestDoRequest_ReadResponseError(t *testing.T) {
 }
 
 func TestGet_Success(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -216,7 +216,7 @@ func TestGet_Success(t *testing.T) {
 }
 
 func TestPost_Success(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +237,7 @@ func TestPost_Success(t *testing.T) {
 }
 
 func TestPut_Success(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -258,7 +258,7 @@ func TestPut_Success(t *testing.T) {
 }
 
 func TestDelete_Success(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +277,7 @@ func TestDelete_Success(t *testing.T) {
 }
 
 func TestDoRequest_HeadersSetCorrectly(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	var receivedHeaders http.Header
@@ -305,7 +305,7 @@ func TestDoRequest_HeadersSetCorrectly(t *testing.T) {
 // client's CLI session: the session header is sent and the stream is
 // live-only (since_id=0). The TUI and auth approval waiters depend on this.
 func TestNewSSEClient_UsesCLISession(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	requests := make(chan *http.Request, 1)
@@ -329,7 +329,7 @@ func TestNewSSEClient_UsesCLISession(t *testing.T) {
 }
 
 func TestDoRequest_URLConstruction(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	var receivedURL string
@@ -350,7 +350,7 @@ func TestDoRequest_URLConstruction(t *testing.T) {
 }
 
 func TestDoRequest_ResponseBodyValidation(t *testing.T) {
-	cfg, fileSvc, _ := setupTestConfig(t)
+	cfg, fileSvc := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
 	testCases := []struct {

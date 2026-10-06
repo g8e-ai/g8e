@@ -521,7 +521,7 @@ class InternalHttpClient:
                     request,
                     preserving_proto_field_name=True,
                 ),
-                timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
+                request_timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
             )
         except NetworkError:
             raise
@@ -573,7 +573,7 @@ class InternalHttpClient:
                     request,
                     preserving_proto_field_name=True,
                 ),
-                timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
+                request_timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
             ):
                 buffer += decoder.decode(chunk)
                 while "\n" in buffer:

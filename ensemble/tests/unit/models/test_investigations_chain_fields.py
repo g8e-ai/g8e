@@ -38,7 +38,7 @@ def test_conversation_history_message_with_hash_fields():
 
 def test_conversation_history_message_without_hash_fields():
     """ConversationHistoryMessage requires prev_hash and entry_hash (no backward compat in ephemeral architecture)."""
-    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+    with pytest.raises(ValueError, match=r"prev_hash|entry_hash"):
         ConversationHistoryMessage(
             sender="user.chat",
             content="Test message",
@@ -77,7 +77,7 @@ def test_conversation_history_message_round_trip_without_hashes():
         "metadata": {},
     }
 
-    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+    with pytest.raises(ValueError, match=r"prev_hash|entry_hash"):
         ConversationHistoryMessage.model_validate(original_data)
 
 
@@ -105,7 +105,7 @@ def test_investigation_history_entry_with_hash_fields():
 
 def test_investigation_history_entry_without_hash_fields():
     """InvestigationHistoryEntry requires prev_hash and entry_hash (no backward compat in ephemeral architecture)."""
-    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+    with pytest.raises(ValueError, match=r"prev_hash|entry_hash"):
         InvestigationHistoryEntry(
             attempt_number=1,
             event_type=EventType.APP_INVESTIGATION_CREATED,
@@ -148,7 +148,7 @@ def test_investigation_history_entry_round_trip_without_hashes():
         "details": {},
     }
 
-    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+    with pytest.raises(ValueError, match=r"prev_hash|entry_hash"):
         InvestigationHistoryEntry.model_validate(original_data)
 
 
@@ -169,7 +169,7 @@ def test_hash_field_validation_length():
 
 def test_hash_field_accepts_none():
     """Hash fields do not accept None (no backward compat in ephemeral architecture)."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"valid string"):
         ConversationHistoryMessage(
             sender="user.chat",
             content="Test",

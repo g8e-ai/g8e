@@ -125,7 +125,7 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 }
 
 // setupAuthService creates a test AuthService with minimal dependencies.
-func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
+func setupAuthService(t *testing.T) *AuthService {
 	t.Helper()
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
@@ -136,13 +136,13 @@ func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 	responderSvc := response.NewWriter(logger)
 	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	auth := NewAuthService(db.GetDocStore(), nil, logger, nil, personaSvc, responderSvc, nil, "", "", "")
-	return auth, db
+	return auth
 }
 
 // TestAuthIntegrity_AppRateLimitEnforced verifies that app policy rate limits
 // are actually enforced, not just logged as warnings.
 func TestAuthIntegrity_AppRateLimitEnforced(t *testing.T) {
-	auth, _ := setupAuthService(t)
+	auth := setupAuthService(t)
 
 	// Create an app policy with a very low rate limit (2 RPS)
 	appID := "spiffe://g8e.local/app/test-app"
@@ -185,7 +185,7 @@ func TestAuthIntegrity_AppRateLimitEnforced(t *testing.T) {
 // TestAuthIntegrity_AppRateLimitZeroConfigured verifies that when rate limit
 // is not configured (RPS = 0), no rate limiting is applied.
 func TestAuthIntegrity_AppRateLimitZeroConfigured(t *testing.T) {
-	auth, _ := setupAuthService(t)
+	auth := setupAuthService(t)
 
 	// Create an app policy with no rate limit (0 RPS)
 	appID := "spiffe://g8e.local/app/test-app-nolimit"

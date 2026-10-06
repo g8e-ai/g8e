@@ -23,17 +23,17 @@ const otherHostPID = 9999
 
 // holdRun records a lease on a run for a process that the fake process control
 // reports as alive.
-func (e *runEnv) holdRun(t *testing.T, runID string, pid int) {
+func (e *runEnv) holdRun(t *testing.T, runID string) {
 	t.Helper()
 	_, err := e.store(t).AcquireRunLease(context.Background(), evaluation.RunLease{
 		RunID:     runID,
-		PID:       pid,
+		PID:       otherHostPID,
 		Host:      testHost,
 		StartedAt: e.deps.now(),
 		LogPath:   path.Join(constants.EvaluationQueueLogsDirname, runID, "execution-1.txt"),
 	}, nil)
 	require.NoError(t, err)
-	e.control.setAlive(pid, true)
+	e.control.setAlive(otherHostPID, true)
 }
 
 func (e *runEnv) writeLog(t *testing.T, relPath, body string) {

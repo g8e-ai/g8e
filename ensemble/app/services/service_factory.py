@@ -468,7 +468,7 @@ class ServiceFactory:
         # First, await all background tasks to ensure they complete before cleanup
         try:
             _logger.info("Awaiting background task completion before service shutdown")
-            await services.chat_task_manager.wait_all(timeout=5.0)
+            await services.chat_task_manager.wait_all(wait_timeout=5.0)
         except TimeoutError:
             _logger.warning(
                 "Background tasks did not complete within 5s timeout, proceeding with shutdown"

@@ -227,17 +227,17 @@ func seedActiveUser(t *testing.T, infra *TestInfrastructure, userID string) {
 // seedAppPolicy registers an AppPolicy for the given app ID so the auth
 // middleware's handleAppAuth path admits the mTLS app cert. The ensemble app
 // identity (spiffe://g8e.local/app/g8ee) is the canonical producer.
-func seedAppPolicy(t *testing.T, infra *TestInfrastructure, appID string) {
+func seedAppPolicy(t *testing.T, infra *TestInfrastructure, _ string) {
 	t.Helper()
 	policy := &models.AppPolicy{
-		AppID:     appID,
+		AppID:     protocol.EnsembleAppID,
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 	}
 	policyBytes, err := json.Marshal(policy)
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(
-		marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes))
+		marshaler.CollectionName(constants.CollectionAppPolicies), protocol.EnsembleAppID, policyBytes))
 }
 
 // seedWebSession creates a valid web session for the given user and returns

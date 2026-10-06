@@ -76,13 +76,13 @@ func TestObservedProviderEnvironmentFromCapacities(t *testing.T) {
 	assert.Nil(t, observedProviderEnvironment(set(testVRAMBytes), set(testHostRAMBytes, testHostRAMBytes*2)), "windows that disagree on RAM make no claim")
 }
 
-func capacitySample(offsetSeconds int64, vram, hostRAM uint64, availability evalv1.ProviderHardwareMetricAvailability) *evalv1.ProviderBoundaryHardwareSample {
+func capacitySample(offsetSeconds int64, vram uint64, availability evalv1.ProviderHardwareMetricAvailability) *evalv1.ProviderBoundaryHardwareSample {
 	return &evalv1.ProviderBoundaryHardwareSample{
 		ObservedAtUnixNanos:   uint64(time.Unix(1_700_000_000+offsetSeconds, 0).UnixNano()),
 		VramBytesAvailability: availability,
 		VramTotalBytes:        vram,
 		HostRamAvailability:   availability,
-		HostRamTotalBytes:     hostRAM,
+		HostRamTotalBytes:     testHostRAMBytes,
 	}
 }
 
@@ -131,8 +131,8 @@ func TestObservedProviderEnvironmentReadsRunWindows(t *testing.T) {
 
 	t.Run("derives the environment from windows across assignments", func(t *testing.T) {
 		reader, fileSvc := newReader(t)
-		saveObservationWindow(t, fileSvc, "attempt-1", capacitySample(1, testVRAMBytes, testHostRAMBytes, reported), capacitySample(2, testVRAMBytes, testHostRAMBytes, reported))
-		saveObservationWindow(t, fileSvc, "attempt-2", capacitySample(1, testVRAMBytes, testHostRAMBytes, reported))
+		saveObservationWindow(t, fileSvc, "attempt-1", capacitySample(1, testVRAMBytes, reported), capacitySample(2, testVRAMBytes, reported))
+		saveObservationWindow(t, fileSvc, "attempt-2", capacitySample(1, testVRAMBytes, reported))
 
 		environment, err := reader.ObservedProviderEnvironment(ctx, map[string]*evalv1.EvaluationAssignmentResult{
 			"assignment-1": resultWithAttempts("attempt-1"),
@@ -144,7 +144,7 @@ func TestObservedProviderEnvironmentReadsRunWindows(t *testing.T) {
 
 	t.Run("skips an attempt whose window was never captured", func(t *testing.T) {
 		reader, fileSvc := newReader(t)
-		saveObservationWindow(t, fileSvc, "attempt-1", capacitySample(1, testVRAMBytes, testHostRAMBytes, reported))
+		saveObservationWindow(t, fileSvc, "attempt-1", capacitySample(1, testVRAMBytes, reported))
 
 		environment, err := reader.ObservedProviderEnvironment(ctx, map[string]*evalv1.EvaluationAssignmentResult{
 			"assignment-1": resultWithAttempts("attempt-1", "attempt-missing"),
@@ -166,7 +166,7 @@ func TestObservedProviderEnvironmentReadsRunWindows(t *testing.T) {
 	t.Run("ignores capacities the observer marked unavailable", func(t *testing.T) {
 		reader, fileSvc := newReader(t)
 		unavailable := evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE
-		saveObservationWindow(t, fileSvc, "attempt-1", capacitySample(1, testVRAMBytes, testHostRAMBytes, unavailable))
+		saveObservationWindow(t, fileSvc, "attempt-1", capacitySample(1, testVRAMBytes, unavailable))
 
 		environment, err := reader.ObservedProviderEnvironment(ctx, map[string]*evalv1.EvaluationAssignmentResult{
 			"assignment-1": resultWithAttempts("attempt-1"),
@@ -177,8 +177,8 @@ func TestObservedProviderEnvironmentReadsRunWindows(t *testing.T) {
 
 	t.Run("makes no claim when windows disagree about the hardware", func(t *testing.T) {
 		reader, fileSvc := newReader(t)
-		saveObservationWindow(t, fileSvc, "attempt-1", capacitySample(1, testVRAMBytes, testHostRAMBytes, reported))
-		saveObservationWindow(t, fileSvc, "attempt-2", capacitySample(1, testVRAMBytes/2, testHostRAMBytes, reported))
+		saveObservationWindow(t, fileSvc, "attempt-1", capacitySample(1, testVRAMBytes, reported))
+		saveObservationWindow(t, fileSvc, "attempt-2", capacitySample(1, testVRAMBytes/2, reported))
 
 		environment, err := reader.ObservedProviderEnvironment(ctx, map[string]*evalv1.EvaluationAssignmentResult{
 			"assignment-1": resultWithAttempts("attempt-1"),
@@ -268,7 +268,7 @@ func TestPublishedCatalogCarriesTheObservedEnvironmentOnlyOnceTheRunIsComplete(t
 	assignments, err := store.ListAssignments(ctx, run.GetRunId())
 	require.NoError(t, err)
 	for _, assignment := range assignments {
-		saveObservationWindow(t, files, "attempt-"+assignment.GetAssignmentId(), capacitySample(1, testVRAMBytes, testHostRAMBytes, reported))
+		saveObservationWindow(t, files, "attempt-"+assignment.GetAssignmentId(), capacitySample(1, testVRAMBytes, reported))
 	}
 	binding := CampaignExecutionBinding{
 		InferenceOperatorSessionID: "inf-session",

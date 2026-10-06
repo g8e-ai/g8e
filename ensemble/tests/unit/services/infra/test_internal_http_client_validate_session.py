@@ -20,6 +20,7 @@ exact Gateway API path. They mock the underlying HTTPClient.post so no network
 or TLS machinery is required (Tier 1).
 """
 
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -124,7 +125,7 @@ async def test_validate_operator_session_malformed_response_returns_none():
     client = _make_client()
     client._http.post = AsyncMock(return_value=_make_response(200, b"not-json"))
 
-    with pytest.raises(Exception):
+    with pytest.raises(json.JSONDecodeError):
         await client.validate_operator_session("op-session", "cli-session", "user-1")
 
 

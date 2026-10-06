@@ -566,7 +566,7 @@ class TestGetServiceClient:
             )
 
     def test_plain_value_error_never_raised_for_missing_base_url(self):
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ValidationError, match="No base_url provided"):
             get_service_client(
                 target_service=ComponentName.CLIENT,
                 source_service=G8EE_COMPONENT,
@@ -574,7 +574,6 @@ class TestGetServiceClient:
                 timeout=DEFAULT_TIMEOUT,
                 auth_token="",
             )
-        assert type(exc_info.value) is not ValueError
 
 
 # =============================================================================

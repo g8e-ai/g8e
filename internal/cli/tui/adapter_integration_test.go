@@ -109,3 +109,45 @@ func TestAdapterRun_ReconcilesPendingApprovals(t *testing.T) {
 	require.Len(t, got.Transactions, 1)
 	assert.Equal(t, "tx-pending-1", got.Transactions[0].TransactionHash)
 }
+
+// TestAdapterRun_ReconcilesEnrollments verifies platform enrollments are
+// fetched on connect and re-fetched on approvals.changed for enrollments only,
+// without re-listing pending L3 transactions.
+func TestAdapterRun_ReconcilesEnrollments(t *testing.T) {
+	changed := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		select {
+		case <-changed:
+			frame := gatewayFrame(t, string(constants.EventPlatformApprovalsChanged), models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedEnrollments})
+			fmt.Fprintf(w, "data: %s\n\n", frame)
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		}
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	session := &testSession{url: srv.URL, enrollPendingJSON: `{"requests":[{"request_id":"req-1","component_kind":"operator","hostname":"web-01"}]}`}
+	sender := &mockSender{}
+	stop := runAdapter(t, session, sender)
+	defer stop()
+
+	require.Eventually(t, func() bool { return session.enrollmentListCalls() == 1 }, 3*time.Second, 20*time.Millisecond, "enrollments not fetched on connect")
+	close(changed)
+	require.Eventually(t, func() bool { return session.enrollmentListCalls() == 2 }, 3*time.Second, 20*time.Millisecond, "enrollments not re-fetched on approvals.changed")
+	assert.Equal(t, 1, session.pendingListCalls(), "an enrollments change must not re-list L3 transactions")
+
+	var got EnrollmentsMsg
+	for _, m := range sender.snapshot() {
+		if em, ok := m.(EnrollmentsMsg); ok {
+			got = em
+		}
+	}
+	require.NoError(t, got.Err)
+	require.Len(t, got.Pending, 1)
+	assert.Equal(t, "web-01", got.Pending[0].Hostname)
+}

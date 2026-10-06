@@ -192,7 +192,6 @@ def make_provider_chunk(
     chunk.text = text
     chunk.thought_signature = thought_signature
     chunk.tool_calls = tool_calls or []
-    chunk.usage_metadata
     chunk.finish_reason = finish_reason
     return chunk
 

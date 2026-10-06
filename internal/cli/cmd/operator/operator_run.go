@@ -222,11 +222,8 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 				if target == nil {
 					return fmt.Errorf("operator stop: no operator found with session id %s for the authenticated user", sessionID)
 				}
-				if target.OperatorType == constants.OperatorTypeEmbedded {
-					return constants.ErrOperatorStopEmbedded
-				}
-				if target.OperatorType != constants.OperatorTypeRemote {
-					return constants.ErrOperatorStopNotRemote
+				if err := operator.CheckStoppable(*target); err != nil {
+					return err
 				}
 				var matched []localOperatorProcess
 				for _, p := range locals {
@@ -302,18 +299,11 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 }
 
 func requestOperatorStop(client authcmd.APIClient, sessionID, reason string) (models.StopOperatorResponse, error) {
-	var response models.StopOperatorResponse
-	body, err := client.Post(constants.APIPaths.OperatorsStop, models.StopOperatorRequest{OperatorSessionID: sessionID, Reason: strings.TrimSpace(reason)})
+	body, err := client.Post(constants.APIPaths.OperatorsStop, operator.NewStopRequest(sessionID, reason))
 	if err != nil {
-		return response, fmt.Errorf("operator stop: request shutdown: %w", err)
+		return models.StopOperatorResponse{}, fmt.Errorf("operator stop: request shutdown: %w", err)
 	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return response, fmt.Errorf("operator stop: parse response: %w", err)
-	}
-	if !response.Success {
-		return response, fmt.Errorf("operator stop: shutdown request was unsuccessful")
-	}
-	return response, nil
+	return operator.DecodeStopResponse(body)
 }
 
 func dedupeOperatorSessionIDs(args []string) []string {

@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
 
 func TestView_QuittingReturnsEmpty(t *testing.T) {
@@ -643,4 +645,59 @@ func (mp *mockPosture) RequiresL2Signature() bool {
 
 func (mp *mockPosture) RequiresL3Proof() bool {
 	return mp.requiresL3
+}
+
+// TestView_FitsTerminalExactly guards the layout math: borders count toward
+// each pane's size, so the frame is exactly the terminal and the header is
+// never scrolled off the top.
+func TestView_FitsTerminalExactly(t *testing.T) {
+	fixedTime := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
+	for _, size := range []struct{ width, height int }{{160, 40}, {120, 40}, {100, 30}, {80, 24}, {200, 60}} {
+		m := NewModel(Options{
+			Version: "v2.3.1",
+			Identity: Identity{
+				UserID:       "d0816a38-86b4-478c-a80a-5ddfd0f87541",
+				CLISessionID: "0506b69e-6753-453a-bf70-782e76ca0542",
+				OperatorID:   "embedded-operator",
+			},
+		})
+		m.width, m.height = size.width, size.height
+		posture, err := governance.ParseGovernancePosture("notary")
+		require.NoError(t, err)
+		m.posture = posture
+		for i := 0; i < 40; i++ {
+			m.ledger = append(m.ledger, ledgerEntry{
+				level:   LevelWarn,
+				message: "Could not open a browser (exec: \"xdg-open\": not found); approve tx abcdef12... at https://localhost:8443/console/approve?tx=" + strings.Repeat("ab", 32),
+				time:    fixedTime,
+			})
+		}
+		for i := 0; i < 9; i++ {
+			m.operators = append(m.operators, models.OperatorDocumentGo{ID: strings.Repeat("f", 36), CurrentHostname: strings.Repeat("host", 20), Status: "active"})
+		}
+		m.operatorsLoaded = true
+
+		out := m.View()
+		lines := strings.Split(out, "\n")
+		assert.Len(t, lines, size.height, "%dx%d: line count", size.width, size.height)
+		for i, line := range lines {
+			assert.LessOrEqual(t, lipgloss.Width(line), size.width, "%dx%d: line %d too wide", size.width, size.height, i)
+		}
+		assert.Contains(t, lines[0], "g8e TACTICAL GOVERNANCE CONSOLE", "%dx%d: header on the first line", size.width, size.height)
+		assert.Contains(t, lines[len(lines)-1], "SSE:", "%dx%d: status bar on the last line", size.width, size.height)
+	}
+}
+
+func TestRenderLedger_WrapsLongEntries(t *testing.T) {
+	m := NewModel(Options{})
+	m.ledger = append(m.ledger, ledgerEntry{level: LevelInfo, message: "visit https://localhost:8443/console/approve?tx=0123456789abcdef-END", time: time.Now()})
+	out := m.renderLedger(40, 20)
+	assert.Contains(t, out, "-END", "the tail of a long entry wraps instead of being cut")
+}
+
+func TestRenderPipeline_ShortPaneShowsEveryStage(t *testing.T) {
+	m := NewModel(Options{})
+	out := m.renderPipeline(40, 13)
+	assert.Contains(t, out, "L5: Actuator", "a short pane drops spacer lines instead of the last stages")
+	assert.Len(t, strings.Split(out, "\n"), 13)
 }

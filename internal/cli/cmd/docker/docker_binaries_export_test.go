@@ -75,10 +75,10 @@ func exportArchive(t *testing.T, buildID string) []byte {
 	return archive.Bytes()
 }
 
-func provenanceLabels(buildID string) map[string]string {
+func provenanceLabels() map[string]string {
 	return map[string]string{
 		constants.G8eImageVersionLabel:   testExportVersion,
-		constants.G8eBuildIDLabel:        buildID,
+		constants.G8eBuildIDLabel:        testExportBuildID,
 		constants.G8eBuildTimeLabel:      testExportBuildTime,
 		constants.G8eSourceRevisionLabel: testExportRevision,
 		constants.G8eSourceTreeHashLabel: testExportTreeHash,
@@ -130,7 +130,7 @@ func (r *scriptedBinaryRunner) RemoveContainer(_ context.Context, container stri
 func newExportRunner(t *testing.T, buildID string) *scriptedBinaryRunner {
 	t.Helper()
 	return &scriptedBinaryRunner{
-		image:   dockerImage{ID: "sha256:img-export", Config: dockerImageConfig{Labels: provenanceLabels(testExportBuildID)}},
+		image:   dockerImage{ID: "sha256:img-export", Config: dockerImageConfig{Labels: provenanceLabels()}},
 		archive: exportArchive(t, buildID),
 	}
 }
@@ -494,7 +494,7 @@ exit 0`)
 
 func TestDockerBinariesExportCmd_ExportsTheMirrorFromTheNamedImage(t *testing.T) {
 	writeRootCompose(t)
-	image := dockerImage{ID: "sha256:img-cmd", Config: dockerImageConfig{Labels: provenanceLabels(testExportBuildID)}}
+	image := dockerImage{ID: "sha256:img-cmd", Config: dockerImageConfig{Labels: provenanceLabels()}}
 	callLog := fakeDockerForMirrorExport(t, image, exportArchive(t, testExportBuildID))
 	output := filepath.Join(t.TempDir(), "mirror")
 	cmd := dockerBinariesExportCmd()
@@ -515,7 +515,7 @@ func TestDockerBinariesExportCmd_ExportsTheMirrorFromTheNamedImage(t *testing.T)
 
 func TestDockerBinariesExportCmd_DefaultsToTheGatewayImageAndTheRepoBinDirectory(t *testing.T) {
 	tmp := writeRootCompose(t)
-	image := dockerImage{ID: "sha256:img-default", Config: dockerImageConfig{Labels: provenanceLabels(testExportBuildID)}}
+	image := dockerImage{ID: "sha256:img-default", Config: dockerImageConfig{Labels: provenanceLabels()}}
 	callLog := fakeDockerForMirrorExport(t, image, exportArchive(t, testExportBuildID))
 
 	_, err := runDockerCommand(t, dockerBinariesExportCmd())
@@ -537,7 +537,7 @@ func TestDockerBinariesExportCmd_FailsClosed(t *testing.T) {
 
 	t.Run("image with mismatched provenance publishes nothing", func(t *testing.T) {
 		writeRootCompose(t)
-		image := dockerImage{ID: "sha256:img", Config: dockerImageConfig{Labels: provenanceLabels(testExportBuildID)}}
+		image := dockerImage{ID: "sha256:img", Config: dockerImageConfig{Labels: provenanceLabels()}}
 		fakeDockerForMirrorExport(t, image, exportArchive(t, "tampered-build"))
 		output := filepath.Join(t.TempDir(), "mirror")
 		cmd := dockerBinariesExportCmd()

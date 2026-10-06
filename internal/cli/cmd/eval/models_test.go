@@ -130,7 +130,7 @@ func TestModelsList_JSONReportsScopes(t *testing.T) {
 
 func TestModelsList_ReadsRegistryWithoutDigest(t *testing.T) {
 	root := testutil.TempDir(t)
-	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath,
+	writeTestFrozenInventory(t, root,
 		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest", ProviderClass: "ollama"},
 	)
 

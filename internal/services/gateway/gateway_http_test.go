@@ -709,7 +709,7 @@ func makeTestAppWorkloadCert(t *testing.T, appID string) *x509.Certificate {
 }
 
 // makeTestOperatorCert returns a self-signed cert with a SPIFFE URI SAN for an operator identity.
-func makeTestOperatorCert(t *testing.T, operatorSessionID string) *x509.Certificate {
+func makeTestOperatorCert(t *testing.T, _ string) *x509.Certificate {
 	t.Helper()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)

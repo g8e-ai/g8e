@@ -29,19 +29,19 @@ import (
 )
 
 // sseApproveServer returns an httptest.Server that serves a single
-// approval.completed SSE event with the given userID and txHash.
-func sseApproveServer(t *testing.T, userID, txHash string) *httptest.Server {
+// approval.completed SSE event for the test user and given transaction.
+func sseApproveServer(t *testing.T, txHash string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
 			Type:   constants.SSEEventTypeApprovalCompleted,
-			UserID: userID,
+			UserID: "user-test",
 			TxHash: txHash,
 		})
 		require.NoError(t, err)
 		envelope := models.SSEPushPayload{
-			UserID: userID,
+			UserID: "user-test",
 			Event:  eventPayload,
 		}
 		envelopeJSON, err := json.Marshal(envelope)
@@ -75,7 +75,7 @@ func sseNoEventServer(t *testing.T) *httptest.Server {
 func TestApproveCmd_SSE_HappyPath(t *testing.T) {
 	cfg, _, fileSvc := cmdtest.SetupApproveSSETestEnv(t)
 
-	srv := sseApproveServer(t, "user-test", "txhash123")
+	srv := sseApproveServer(t, "txhash123")
 	t.Cleanup(srv.Close)
 	cmdtest.WithEndpointOverride(t, srv.URL)
 
@@ -128,7 +128,7 @@ func TestApproveCmd_SSE_Timeout(t *testing.T) {
 func TestApproveCmd_SSE_Success_GetError(t *testing.T) {
 	cfg, _, fileSvc := cmdtest.SetupApproveSSETestEnv(t)
 
-	srv := sseApproveServer(t, "user-test", "txhash123")
+	srv := sseApproveServer(t, "txhash123")
 	t.Cleanup(srv.Close)
 	cmdtest.WithEndpointOverride(t, srv.URL)
 
@@ -152,7 +152,7 @@ func TestApproveCmd_SSE_Success_GetError(t *testing.T) {
 func TestApproveCmd_SSE_Success_InvalidJSONStatus(t *testing.T) {
 	cfg, _, fileSvc := cmdtest.SetupApproveSSETestEnv(t)
 
-	srv := sseApproveServer(t, "user-test", "txhash123")
+	srv := sseApproveServer(t, "txhash123")
 	t.Cleanup(srv.Close)
 	cmdtest.WithEndpointOverride(t, srv.URL)
 
@@ -176,7 +176,7 @@ func TestApproveCmd_SSE_Success_InvalidJSONStatus(t *testing.T) {
 func TestApproveCmd_SSE_Success_EmptyStatus(t *testing.T) {
 	cfg, _, fileSvc := cmdtest.SetupApproveSSETestEnv(t)
 
-	srv := sseApproveServer(t, "user-test", "txhash456")
+	srv := sseApproveServer(t, "txhash456")
 	t.Cleanup(srv.Close)
 	cmdtest.WithEndpointOverride(t, srv.URL)
 
@@ -201,7 +201,7 @@ func TestApproveCmd_SSE_Success_EmptyStatus(t *testing.T) {
 func TestApproveCmd_SSE_Success_StatusNotApproved(t *testing.T) {
 	cfg, _, fileSvc := cmdtest.SetupApproveSSETestEnv(t)
 
-	srv := sseApproveServer(t, "user-test", "txhash789")
+	srv := sseApproveServer(t, "txhash789")
 	t.Cleanup(srv.Close)
 	cmdtest.WithEndpointOverride(t, srv.URL)
 

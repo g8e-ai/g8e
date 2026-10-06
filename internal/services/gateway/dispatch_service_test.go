@@ -188,14 +188,14 @@ func fsReadPayloadBytes(t *testing.T) []byte {
 // simulated by registering an in-process handler on the cmd channel that
 // publishes a result envelope on the results channel.
 
-func newTestDispatchService(t *testing.T, stateRoot string, op *models.OperatorDocumentGo) (*DispatchService, *GatewayWebSocketHandler) {
+func newTestDispatchService(t *testing.T, _ string, op *models.OperatorDocumentGo) (*DispatchService, *GatewayWebSocketHandler) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 	svc := NewDispatchService(
 		logger,
 		broker,
-		&stubStateRootProvider{root: stateRoot},
+		&stubStateRootProvider{root: "root-abc"},
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
 		governance.NewL1Doctrine(),

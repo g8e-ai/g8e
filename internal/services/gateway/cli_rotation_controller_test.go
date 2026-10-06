@@ -59,7 +59,7 @@ func setupTestCLIRotationController(t *testing.T) (*CLIRotationController, *mode
 // and returns the session ID. The session is signed with a real CSR so the
 // cert serial/fingerprint are populated (rotation revokes the old cert by
 // serial).
-func persistActiveCLISession(t *testing.T, c *CLIRotationController, userID string) (cliSessionID, operatorSessionID, certSerial string) {
+func persistActiveCLISession(t *testing.T, c *CLIRotationController, userID string) string {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 	// Re-use the controller's underlying services by signing through the
@@ -71,9 +71,9 @@ func persistActiveCLISession(t *testing.T, c *CLIRotationController, userID stri
 	// keeps pki private, the test creates the session document directly
 	// with a known serial so the revocation path can be exercised.
 	_ = infra
-	operatorSessionID = "op-session-" + userID
-	cliSessionID = "cli-session-" + userID
-	certSerial = "test-serial-" + userID
+	operatorSessionID := "op-session-" + userID
+	cliSessionID := "cli-session-" + userID
+	certSerial := "test-serial-" + userID
 
 	// Persist a CLI session document directly. We don't need a real cert
 	// for the rotation tests — the controller revokes by serial, and a
@@ -99,7 +99,7 @@ func persistActiveCLISession(t *testing.T, c *CLIRotationController, userID stri
 	require.NoError(t, c.cliSessionSvc.db.DocSet(
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b,
 	))
-	return cliSessionID, operatorSessionID, certSerial
+	return cliSessionID
 }
 
 // rotationRequestWithContext builds a POST /rotate request with the mTLS
@@ -131,7 +131,7 @@ func parseRotationResponse(t *testing.T, rr *httptest.ResponseRecorder) models.C
 
 func TestCLIRotationController_Rotate_Success(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	csrPEM, newPrivKey, _ := generateTestCSR(t, "rotation-new-cli")
 	req := rotationRequestWithContext(t, user.ID, oldSessionID, csrPEM)
@@ -159,7 +159,7 @@ func TestCLIRotationController_Rotate_Success(t *testing.T) {
 
 func TestCLIRotationController_Rotate_OldSessionDeactivated(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	csrPEM, _, _ := generateTestCSR(t, "rotation-deactivate-old")
 	req := rotationRequestWithContext(t, user.ID, oldSessionID, csrPEM)
@@ -181,7 +181,7 @@ func TestCLIRotationController_Rotate_OldSessionDeactivated(t *testing.T) {
 
 func TestCLIRotationController_Rotate_NewCertUsableForMTLS(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	csrPEM, newPrivKey, _ := generateTestCSR(t, "rotation-usable-cli")
 	req := rotationRequestWithContext(t, user.ID, oldSessionID, csrPEM)
@@ -251,7 +251,7 @@ func TestCLIRotationController_Rotate_MissingCLISessionContext(t *testing.T) {
 
 func TestCLIRotationController_Rotate_MissingCSR(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	req := rotationRequestWithContext(t, user.ID, oldSessionID, "")
 	rr := httptest.NewRecorder()
@@ -263,7 +263,7 @@ func TestCLIRotationController_Rotate_MissingCSR(t *testing.T) {
 
 func TestCLIRotationController_Rotate_InvalidJSON(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIRotate, bytes.NewReader([]byte("{invalid")))
 	ctx := context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID)
@@ -298,7 +298,7 @@ func TestCLIRotationController_Rotate_SessionNotFound(t *testing.T) {
 func TestCLIRotationController_Rotate_SessionUserMismatch(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
 	// Persist a session for user A, then try to rotate it as user B.
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	otherUser, err := c.userSvc.CreateUser()
 	require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestCLIRotationController_Rotate_SessionUserMismatch(t *testing.T) {
 
 func TestCLIRotationController_Rotate_UserNotActive(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	// Disable the user after the session was created.
 	require.NoError(t, c.userSvc.Disable(user.ID, "test", "actor", "op"))
@@ -330,7 +330,7 @@ func TestCLIRotationController_Rotate_UserNotActive(t *testing.T) {
 
 func TestCLIRotationController_Rotate_AlreadyDeactivatedSession(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	// Deactivate the session first.
 	require.NoError(t, c.cliSessionSvc.DeactivateCLISession(oldSessionID))
@@ -350,7 +350,7 @@ func TestCLIRotationController_Rotate_AlreadyDeactivatedSession(t *testing.T) {
 
 func TestCLIRotationController_Rotate_ConcurrentOnlyOneSucceeds(t *testing.T) {
 	c, user := setupTestCLIRotationController(t)
-	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
+	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	const goroutines = 10
 	var wg sync.WaitGroup

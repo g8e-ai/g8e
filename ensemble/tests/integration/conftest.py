@@ -23,9 +23,11 @@ All integration tests should use these fixtures to ensure consistency
 and avoid code duplication.
 """
 
+import asyncio
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -225,7 +227,6 @@ async def all_services(cache_aside_service, test_settings):
     Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
-    import os
     from unittest.mock import MagicMock
 
     from app.clients.db_client import DBClient
@@ -239,7 +240,7 @@ async def all_services(cache_aside_service, test_settings):
     # Check if CA certificate exists
     paths = get_paths()
     ca_cert_path = paths["infra"]["ca_cert_path"]
-    if not os.path.exists(ca_cert_path):
+    if not await asyncio.to_thread(Path(ca_cert_path).exists):
         pytest.skip(f"CA certificate not found at {ca_cert_path}")
 
     # Check if operator is online AND SSL is working

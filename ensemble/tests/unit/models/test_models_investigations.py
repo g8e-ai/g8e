@@ -12,6 +12,7 @@ Covers: Attachment
 """
 
 import pytest
+from pydantic import ValidationError
 
 from app.models.investigations import Attachment
 
@@ -43,7 +44,7 @@ class TestAttachment:
         assert att.updated_at is None
 
     def test_filename_required(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Attachment()
 
     def test_content_type_defaults_to_none(self):

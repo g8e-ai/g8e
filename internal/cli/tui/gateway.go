@@ -15,6 +15,7 @@ import (
 	"net/url"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
@@ -81,4 +82,74 @@ func (g *gateway) verifyApproval(ctx context.Context, txHash string) ApprovalVer
 	}
 	status, err := auth.VerifyApprovalStatus(txHash, body)
 	return ApprovalVerifiedMsg{TxHash: txHash, Status: status, Err: err}
+}
+
+// fetchEnrollments lists the pending platform enrollment requests and the
+// completed enrollments, as 'g8e auth enroll pending' and 'g8e auth enroll
+// list' do.
+func (g *gateway) fetchEnrollments(ctx context.Context) EnrollmentsMsg {
+	body, err := g.session.DoRequestContext(ctx, http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentPending, nil)
+	if err != nil {
+		return EnrollmentsMsg{Err: fmt.Errorf("fetch pending list: %w", err)}
+	}
+	var pending models.PlatformEnrollmentPendingResponse
+	if err := json.Unmarshal(body, &pending); err != nil {
+		return EnrollmentsMsg{Err: fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)}
+	}
+	body, err = g.session.DoRequestContext(ctx, http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentEnrolled, nil)
+	if err != nil {
+		return EnrollmentsMsg{Err: fmt.Errorf("fetch enrolled list: %w", err)}
+	}
+	var enrolled models.PlatformEnrollmentEnrolledResponse
+	if err := json.Unmarshal(body, &enrolled); err != nil {
+		return EnrollmentsMsg{Err: fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)}
+	}
+	return EnrollmentsMsg{Pending: pending.Requests, Enrolled: enrolled.Enrollments}
+}
+
+// decideEnrollment posts an owner decision on a pending platform enrollment
+// request, as 'g8e auth enroll approve|deny' does.
+func (g *gateway) decideEnrollment(ctx context.Context, req models.PlatformEnrollmentDecisionRequest) EnrollmentDecidedMsg {
+	msg := EnrollmentDecidedMsg{RequestID: req.RequestID, Decision: req.Decision}
+	if err := req.Validate(); err != nil {
+		msg.Err = fmt.Errorf("validate decision: %w", err)
+		return msg
+	}
+	body, err := g.session.DoRequestContext(ctx, http.MethodPost, constants.APIPaths.AuthPlatformEnrollmentDecision, req)
+	if err != nil {
+		msg.Err = fmt.Errorf("post decision: %w", err)
+		return msg
+	}
+	msg.Response, msg.Err = auth.DecodePlatformEnrollmentDecision(body)
+	return msg
+}
+
+// revokeEnrollment revokes a completed platform enrollment, as 'g8e auth
+// enroll revoke' does.
+func (g *gateway) revokeEnrollment(ctx context.Context, req models.PlatformEnrollmentRevokeRequest) EnrollmentRevokedMsg {
+	msg := EnrollmentRevokedMsg{RequestID: req.RequestID}
+	if err := req.Validate(); err != nil {
+		msg.Err = err
+		return msg
+	}
+	body, err := g.session.DoRequestContext(ctx, http.MethodPost, constants.APIPaths.AuthPlatformEnrollmentRevoke, req)
+	if err != nil {
+		msg.Err = fmt.Errorf("post revocation: %w", err)
+		return msg
+	}
+	msg.Response, msg.Err = auth.DecodePlatformEnrollmentRevoke(body)
+	return msg
+}
+
+// stopOperator asks the Gateway for a governed shutdown of a remote Operator,
+// as 'g8e operator stop <session_id>' does.
+func (g *gateway) stopOperator(ctx context.Context, operatorSessionID, reason string) OperatorStopMsg {
+	msg := OperatorStopMsg{OperatorSessionID: operatorSessionID}
+	body, err := g.session.DoRequestContext(ctx, http.MethodPost, constants.APIPaths.OperatorsStop, clioperator.NewStopRequest(operatorSessionID, reason))
+	if err != nil {
+		msg.Err = fmt.Errorf("operator stop: request shutdown: %w", err)
+		return msg
+	}
+	msg.Response, msg.Err = clioperator.DecodeStopResponse(body)
+	return msg
 }

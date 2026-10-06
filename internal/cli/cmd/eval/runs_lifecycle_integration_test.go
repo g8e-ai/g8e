@@ -52,7 +52,7 @@ func TestRunsCancel_JSONReportsWhatItStopped(t *testing.T) {
 func TestRunsCancel_ClearsAStaleLeaseAndReportsIt(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	env.holdRun(t, "run-a-1", otherHostPID)
+	env.holdRun(t, "run-a-1")
 	env.control.setAlive(otherHostPID, false)
 
 	out := env.mustRun(t, "runs", "cancel", "run-a-1")
@@ -65,7 +65,7 @@ func TestRunsCancel_ClearsAStaleLeaseAndReportsIt(t *testing.T) {
 func TestRunsCancel_AsksALiveProcessToStopAndWaitsForItToRelease(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	env.holdRun(t, "run-a-1", otherHostPID)
+	env.holdRun(t, "run-a-1")
 
 	type outcome struct {
 		out string
@@ -190,7 +190,7 @@ func TestRunsLogs_RejectsMissingRun(t *testing.T) {
 func TestRunsLogs_ReadsTheLiveLogOfAHeldRun(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	env.holdRun(t, "run-a-1", otherHostPID)
+	env.holdRun(t, "run-a-1")
 	env.writeLog(t, path.Join(constants.EvaluationQueueLogsDirname, "run-a-1", "execution-1.txt"), "live line\n")
 
 	out := env.mustRun(t, "runs", "logs", "run-a-1")
@@ -200,7 +200,7 @@ func TestRunsLogs_ReadsTheLiveLogOfAHeldRun(t *testing.T) {
 func TestRunsLogs_FollowPrintsAppendedOutputUntilTheProcessExits(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	env.holdRun(t, "run-a-1", otherHostPID)
+	env.holdRun(t, "run-a-1")
 	logPath := path.Join(constants.EvaluationQueueLogsDirname, "run-a-1", "execution-1.txt")
 	env.writeLog(t, logPath, "first line\n")
 
@@ -310,7 +310,7 @@ func TestRunsArchive_ArchivedRunsAreRejectedByMutatingCommands(t *testing.T) {
 func TestRunsArchive_RefusesARunThatIsRunning(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	env.holdRun(t, "run-a-1", otherHostPID)
+	env.holdRun(t, "run-a-1")
 
 	_, err := env.run(t, "runs", "archive", "run-a-1")
 	require.Error(t, err)
@@ -324,7 +324,7 @@ func TestRunsArchive_RefusesARunThatIsRunning(t *testing.T) {
 func TestRunsArchive_ArchivesARunWhoseLeaseIsStale(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	env.holdRun(t, "run-a-1", otherHostPID)
+	env.holdRun(t, "run-a-1")
 	env.control.setAlive(otherHostPID, false)
 
 	env.mustRun(t, "runs", "archive", "run-a-1")
@@ -421,7 +421,7 @@ func TestCampaignsArchive_MovesNothingWhenARunIsRunning(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
 	env.startPrepared(t, "eval-a", "run-a-2")
-	env.holdRun(t, "run-a-2", otherHostPID)
+	env.holdRun(t, "run-a-2")
 
 	_, err := env.run(t, "campaigns", "archive", "eval-a")
 	require.Error(t, err)

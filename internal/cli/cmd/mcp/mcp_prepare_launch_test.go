@@ -23,7 +23,7 @@ import (
 
 // createFakeAgentBinary creates a fake executable named agentName in a temp dir
 // and prepends that dir to PATH so exec.LookPath finds it.
-func createFakeAgentBinary(t *testing.T, agentName string) string {
+func createFakeAgentBinary(t *testing.T, agentName string) {
 	t.Helper()
 	binDir := testutil.TempDir(t)
 	if runtime.GOOS == "windows" {
@@ -34,7 +34,6 @@ func createFakeAgentBinary(t *testing.T, agentName string) string {
 
 	originalPath := os.Getenv("PATH")
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+originalPath)
-	return binDir
 }
 
 // ─── prepareAgentLaunch: verify=true for each supported agent ────────────────

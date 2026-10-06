@@ -69,7 +69,14 @@ type Model struct {
 	approvalURL func(string) string
 	openBrowser func(string) error
 
+	// view is the main-area view; focus is the focused pane of the overview.
+	view  viewID
 	focus pane
+
+	// showHelp shows the key help over the main area; confirm, when set, is
+	// a y/N prompt guarding a mutating action and takes every key.
+	showHelp bool
+	confirm  *confirmation
 
 	// Pipeline state — 5 entries: L1-L5
 	pipeline []pipelineStageState
@@ -93,6 +100,17 @@ type Model struct {
 	operatorsLoaded   bool
 	operatorsErr      string
 	operatorsSelected int
+
+	// Platform enrollments from the last successful refresh: pending
+	// requests and completed enrollments. The enrollments view selects in one
+	// section at a time.
+	enrollPending          []models.PlatformEnrollmentPendingRequest
+	enrollEnrolled         []models.PlatformEnrollmentEnrolledRequest
+	enrollmentsLoaded      bool
+	enrollmentsErr         string
+	enrollSection          enrollSection
+	enrollPendingSelected  int
+	enrollEnrolledSelected int
 
 	// Gateway health: posture is nil until health is fetched.
 	posture        governance.GovernancePosture

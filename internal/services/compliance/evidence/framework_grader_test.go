@@ -75,7 +75,7 @@ func frameworkTestFramework(frameworkID, frameworkVersion string, controls ...*c
 	}
 }
 
-func frameworkTestControl(controlID, responsibility string) *compliancev1.FrameworkControlDefinition {
+func frameworkTestControl(controlID string) *compliancev1.FrameworkControlDefinition {
 	return &compliancev1.FrameworkControlDefinition{
 		ControlId:        controlID,
 		Title:            "Test Control " + controlID,
@@ -83,11 +83,11 @@ func frameworkTestControl(controlID, responsibility string) *compliancev1.Framew
 		SourceReference:  "TEST",
 		SupportStatus:    "mapped",
 		SupportRationale: "Test crosswalk maps this control.",
-		Responsibility:   responsibility,
+		Responsibility:   "shared",
 	}
 }
 
-func frameworkTestCrosswalk(crosswalkID, frameworkID, frameworkVersion, controlID, mappingType, responsibility, evidenceLevel string, assertionRefs ...*compliancev1.VersionedReference) *compliancev1.ControlCrosswalk {
+func frameworkTestCrosswalk(crosswalkID, frameworkID, frameworkVersion, controlID, mappingType string, assertionRefs ...*compliancev1.VersionedReference) *compliancev1.ControlCrosswalk {
 	return &compliancev1.ControlCrosswalk{
 		CrosswalkId:           crosswalkID,
 		CrosswalkVersion:      "1.0.0",
@@ -96,8 +96,8 @@ func frameworkTestCrosswalk(crosswalkID, frameworkID, frameworkVersion, controlI
 		AssertionRefs:         assertionRefs,
 		MappingType:           mappingType,
 		Rationale:             "Test rationale",
-		Responsibility:        responsibility,
-		RequiredEvidenceLevel: evidenceLevel,
+		Responsibility:        "shared",
+		RequiredEvidenceLevel: "L3",
 		ReviewedAt:            timestamppb.New(time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)),
 		ReviewerIdentity:      "g8e-project",
 	}
@@ -107,8 +107,8 @@ func frameworkTestCatalogs(t *testing.T) (*compliancev1.ControlAssertionCatalog,
 	t.Helper()
 	assertions := frameworkTestAssertionCatalog("G8E-GOV-BLOCK-001", "G8E-GOV-ALLOW-001")
 	framework := frameworkTestFramework("fedramp-20x", "CR26-2026-06-24",
-		frameworkTestControl("KSI-MLA-07", "shared"),
-		frameworkTestControl("KSI-IAM-05", "shared"),
+		frameworkTestControl("KSI-MLA-07"),
+		frameworkTestControl("KSI-IAM-05"),
 	)
 	frameworks := &compliancev1.FrameworkCatalog{
 		CatalogId:      "framework-grader-test-frameworks",
@@ -121,9 +121,9 @@ func frameworkTestCatalogs(t *testing.T) (*compliancev1.ControlAssertionCatalog,
 		CatalogVersion: "1.0.0",
 		Sha256:         frameworkTestSHA256,
 		Mappings: []*compliancev1.ControlCrosswalk{
-			frameworkTestCrosswalk("fedramp-20x:KSI-MLA-07:G8E-GOV-BLOCK-001", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "supporting", "shared", "L3",
+			frameworkTestCrosswalk("fedramp-20x:KSI-MLA-07:G8E-GOV-BLOCK-001", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "supporting",
 				&compliancev1.VersionedReference{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"}),
-			frameworkTestCrosswalk("fedramp-20x:KSI-IAM-05:G8E-GOV-ALLOW-001", "fedramp-20x", "CR26-2026-06-24", "KSI-IAM-05", "supporting", "shared", "L3",
+			frameworkTestCrosswalk("fedramp-20x:KSI-IAM-05:G8E-GOV-ALLOW-001", "fedramp-20x", "CR26-2026-06-24", "KSI-IAM-05", "supporting",
 				&compliancev1.VersionedReference{Id: "G8E-GOV-ALLOW-001", Version: "1.0.0"}),
 		},
 	}
@@ -266,7 +266,7 @@ func TestGradeFrameworkControls_CustomerAttestationRequiredWhenAssertionRequires
 func TestGradeFrameworkControls_NotApplicableWhenAllMappingsNotApplicable(t *testing.T) {
 	assertions := frameworkTestAssertionCatalog("G8E-GOV-BLOCK-001")
 	framework := frameworkTestFramework("fedramp-20x", "CR26-2026-06-24",
-		frameworkTestControl("KSI-MLA-07", "shared"),
+		frameworkTestControl("KSI-MLA-07"),
 	)
 	frameworks := &compliancev1.FrameworkCatalog{CatalogId: "test", CatalogVersion: "1.0.0", Sha256: frameworkTestSHA256, Frameworks: []*compliancev1.FrameworkDefinition{framework}}
 	crosswalks := &compliancev1.ControlCrosswalkCatalog{
@@ -274,7 +274,7 @@ func TestGradeFrameworkControls_NotApplicableWhenAllMappingsNotApplicable(t *tes
 		CatalogVersion: "1.0.0",
 		Sha256:         frameworkTestSHA256,
 		Mappings: []*compliancev1.ControlCrosswalk{
-			frameworkTestCrosswalk("xwalk-1", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "not_applicable", "shared", "L3",
+			frameworkTestCrosswalk("xwalk-1", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "not_applicable",
 				&compliancev1.VersionedReference{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"}),
 		},
 	}
@@ -518,17 +518,17 @@ func TestGradeFrameworkControls_EmitsAssessmentForEveryMappedControl(t *testing.
 
 func TestGradeFrameworkControls_MultipleFrameworks(t *testing.T) {
 	assertions := frameworkTestAssertionCatalog("G8E-GOV-BLOCK-001")
-	framework1 := frameworkTestFramework("fedramp-20x", "CR26-2026-06-24", frameworkTestControl("KSI-MLA-07", "shared"))
-	framework2 := frameworkTestFramework("nist-sp-800-53", "rev5", frameworkTestControl("AU-12", "shared"))
+	framework1 := frameworkTestFramework("fedramp-20x", "CR26-2026-06-24", frameworkTestControl("KSI-MLA-07"))
+	framework2 := frameworkTestFramework("nist-sp-800-53", "rev5", frameworkTestControl("AU-12"))
 	frameworks := &compliancev1.FrameworkCatalog{CatalogId: "test", CatalogVersion: "1.0.0", Sha256: frameworkTestSHA256, Frameworks: []*compliancev1.FrameworkDefinition{framework1, framework2}}
 	crosswalks := &compliancev1.ControlCrosswalkCatalog{
 		CatalogId:      "test",
 		CatalogVersion: "1.0.0",
 		Sha256:         frameworkTestSHA256,
 		Mappings: []*compliancev1.ControlCrosswalk{
-			frameworkTestCrosswalk("xwalk-1", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "supporting", "shared", "L3",
+			frameworkTestCrosswalk("xwalk-1", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "supporting",
 				&compliancev1.VersionedReference{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"}),
-			frameworkTestCrosswalk("xwalk-2", "nist-sp-800-53", "rev5", "AU-12", "supporting", "shared", "L3",
+			frameworkTestCrosswalk("xwalk-2", "nist-sp-800-53", "rev5", "AU-12", "supporting",
 				&compliancev1.VersionedReference{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"}),
 		},
 	}
@@ -555,16 +555,16 @@ func TestGradeFrameworkControls_MultipleFrameworks(t *testing.T) {
 
 func TestGradeFrameworkControls_MultipleMappingsPerControl(t *testing.T) {
 	assertions := frameworkTestAssertionCatalog("G8E-GOV-BLOCK-001", "G8E-GOV-ALLOW-001")
-	framework := frameworkTestFramework("fedramp-20x", "CR26-2026-06-24", frameworkTestControl("KSI-MLA-07", "shared"))
+	framework := frameworkTestFramework("fedramp-20x", "CR26-2026-06-24", frameworkTestControl("KSI-MLA-07"))
 	frameworks := &compliancev1.FrameworkCatalog{CatalogId: "test", CatalogVersion: "1.0.0", Sha256: frameworkTestSHA256, Frameworks: []*compliancev1.FrameworkDefinition{framework}}
 	crosswalks := &compliancev1.ControlCrosswalkCatalog{
 		CatalogId:      "test",
 		CatalogVersion: "1.0.0",
 		Sha256:         frameworkTestSHA256,
 		Mappings: []*compliancev1.ControlCrosswalk{
-			frameworkTestCrosswalk("xwalk-1", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "supporting", "shared", "L3",
+			frameworkTestCrosswalk("xwalk-1", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "supporting",
 				&compliancev1.VersionedReference{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"}),
-			frameworkTestCrosswalk("xwalk-2", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "supporting", "shared", "L3",
+			frameworkTestCrosswalk("xwalk-2", "fedramp-20x", "CR26-2026-06-24", "KSI-MLA-07", "supporting",
 				&compliancev1.VersionedReference{Id: "G8E-GOV-ALLOW-001", Version: "1.0.0"}),
 		},
 	}

@@ -140,17 +140,17 @@ class TestEmaUpdate:
         assert 0.0 <= x <= 1.0
 
     def test_invalid_half_life_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="half_life"):
             ema_update(0.5, 0.5, half_life=0)
 
     @pytest.mark.parametrize("bad", [-0.01, 1.01])
     def test_invalid_old_raises(self, bad):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="old scalar out of range"):
             ema_update(bad, 0.5)
 
     @pytest.mark.parametrize("bad", [-0.01, 1.01])
     def test_invalid_outcome_raises(self, bad):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="outcome out of range"):
             ema_update(0.5, bad)
 
 
@@ -770,7 +770,7 @@ class TestResolveStakes:
         assert auditor.scalar_after <= auditor.scalar_before
 
     async def test_invalid_command_id_raises(self, service):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="tribunal_command_id is required"):
             await service.resolve_stakes(
                 tribunal_command_id="",
                 investigation_id="inv-1",
@@ -783,7 +783,7 @@ class TestResolveStakes:
             )
 
     async def test_invalid_investigation_id_raises(self, service):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="investigation_id is required"):
             await service.resolve_stakes(
                 tribunal_command_id="tc-1",
                 investigation_id="",
@@ -796,7 +796,7 @@ class TestResolveStakes:
             )
 
     async def test_invalid_half_life_in_constructor_raises(self, reputation_data, stake_data):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="half_life"):
             ReputationService(
                 reputation_data_service=reputation_data,
                 stake_resolution_data_service=stake_data,

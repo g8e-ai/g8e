@@ -213,7 +213,7 @@ async def test_second_run_after_terminal_state_follows_gateway_transitions():
     )
 
     statuses = _agent_state_statuses(event_svc)
-    for previous, current in zip(statuses, statuses[1:]):
+    for previous, current in zip(statuses, statuses[1:], strict=False):
         if previous in ("completed", "failed"):
             assert current in (previous, "idle", "offline"), statuses
 

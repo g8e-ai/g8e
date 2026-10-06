@@ -39,7 +39,7 @@ import (
 func setupRunEnv(t *testing.T) *runEnv {
 	t.Helper()
 	root := testutil.TempDir(t)
-	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath, testQwenVariant())
+	writeTestFrozenInventory(t, root, testQwenVariant())
 
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: testRunOperators()})
 	require.NoError(t, err)

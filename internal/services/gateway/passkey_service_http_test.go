@@ -391,12 +391,10 @@ func TestPasskeyCLIStatus(t *testing.T) {
 func TestPasskeyEnforceFirstCred(t *testing.T) {
 	tests := []struct {
 		name      string
-		source    passkeyRequestSource
 		wantAllow bool
 	}{
 		{
 			name:      "allows registration when user has no credentials",
-			source:    sourceJWT,
 			wantAllow: true,
 		},
 	}
@@ -404,7 +402,6 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, _, user := newPasskeyServiceHTTPForTest(t)
-			cfg := passkeyHandlerConfig{source: tc.source, enforceFirstCredentialOnly: true}
 			forbidden, _, _ := svc.enforceFirstCred(user.ID)
 			if tc.wantAllow {
 				assert.False(t, forbidden)

@@ -78,12 +78,12 @@ func seedStopOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessi
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 }
 
-func stopOperatorRequest(t *testing.T, controller *OperatorController, userID, sessionID, reason string) *httptest.ResponseRecorder {
+func stopOperatorRequest(t *testing.T, controller *OperatorController, _, sessionID, reason string) *httptest.ResponseRecorder {
 	t.Helper()
 	body, err := json.Marshal(models.StopOperatorRequest{OperatorSessionID: sessionID, Reason: reason})
 	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsStop, strings.NewReader(string(body)))
-	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, userID))
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "stop-owner"))
 	rr := httptest.NewRecorder()
 	controller.handleStopOperator(rr, req)
 	return rr

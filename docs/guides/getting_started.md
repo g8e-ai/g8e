@@ -154,6 +154,8 @@ make status
 ./g8e tui
 ```
 
+`g8e tui` needs an enrolled CLI (`g8e auth enroll user`). It lists pending L3 approvals and can approve them: press `tab` to focus the queue, then `enter` to open the browser WebAuthn page.
+
 Visit the browser console at `https://localhost:8443/console/` to see the passkey sign-in and approvals UI.
 
 ### Stop the platform

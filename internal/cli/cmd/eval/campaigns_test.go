@@ -13,8 +13,8 @@ import (
 
 func threeModelRegistry() []*evalv1.ModelVariant {
 	return []*evalv1.ModelVariant{
-		{VariantId: "gemma4-e4b", ServedModelTag: "gemma4:e4b", ModelDigest: repeatTestHex('a', 64), ProviderClass: "ollama", ParameterCount: 4_000_000_000, ModelFamily: "Gemma"},
-		{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: repeatTestHex('b', 64), ProviderClass: "ollama", ParameterCount: 4_000_000_000, ModelFamily: "Qwen"},
-		{VariantId: "llama3-8b", ServedModelTag: "llama3:8b", ModelDigest: repeatTestHex('c', 64), ProviderClass: "ollama", ParameterCount: 8_000_000_000, ModelFamily: "Llama"},
+		{VariantId: "gemma4-e4b", ServedModelTag: "gemma4:e4b", ModelDigest: repeatTestHex('a'), ProviderClass: "ollama", ParameterCount: 4_000_000_000, ModelFamily: "Gemma"},
+		{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: repeatTestHex('b'), ProviderClass: "ollama", ParameterCount: 4_000_000_000, ModelFamily: "Qwen"},
+		{VariantId: "llama3-8b", ServedModelTag: "llama3:8b", ModelDigest: repeatTestHex('c'), ProviderClass: "ollama", ParameterCount: 8_000_000_000, ModelFamily: "Llama"},
 	}
 }

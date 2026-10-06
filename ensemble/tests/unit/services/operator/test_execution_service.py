@@ -231,7 +231,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=None,
         )
         g8e_context = build_g8e_http_context()
-        with pytest.raises(ValidationError, match="g8e_message.payload is required"):
+        with pytest.raises(ValidationError, match=r"g8e_message\.payload is required"):
             await execution_service.dispatch_command(msg, g8e_context)
 
     @pytest.mark.asyncio

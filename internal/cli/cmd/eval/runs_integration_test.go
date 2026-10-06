@@ -320,12 +320,12 @@ func TestRunsStart_ExecutesAndVerifiesWithoutPublication(t *testing.T) {
 	assert.Equal(t, 1, result.Executed)
 	require.NotNil(t, result.Report)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, result.Report.GetStatus())
-	assertPopulationBoundCampaignReport(t, result.Report, 41, 1)
+	assertPopulationBoundCampaignReport(t, result.Report)
 	assert.Contains(t, out.String(), "verification")
 
 	loaded, err := env.store(t).LoadCampaignVerification(context.Background(), "run-a-1")
 	require.NoError(t, err)
-	assertPopulationBoundCampaignReport(t, loaded, 41, 1)
+	assertPopulationBoundCampaignReport(t, loaded)
 	assert.Empty(t, publication.completionRunIDs)
 	assert.Empty(t, publication.reports)
 }
@@ -509,7 +509,7 @@ func TestVerifyRun_PersistsAndPublishesPopulationBoundReport(t *testing.T) {
 	loaded, err := store.LoadCampaignVerification(context.Background(), runID)
 	require.NoError(t, err)
 	assert.Equal(t, report.GetStatus(), loaded.GetStatus())
-	assertPopulationBoundCampaignReport(t, loaded, 41, 1)
+	assertPopulationBoundCampaignReport(t, loaded)
 	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, loaded.GetProviderObservationPolicy())
 	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, loaded.GetModelProvenancePolicy())
 	assert.Equal(t, spec.GetCampaignDigest(), loaded.GetCampaignDigest())
@@ -517,7 +517,7 @@ func TestVerifyRun_PersistsAndPublishesPopulationBoundReport(t *testing.T) {
 	assert.Equal(t, spec.GetModelRegistryDigest(), loaded.GetModelRegistryDigest())
 	assert.Equal(t, []string{runID}, publication.completionRunIDs)
 	require.Len(t, publication.reports, 1)
-	assertPopulationBoundCampaignReport(t, publication.reports[0], 41, 1)
+	assertPopulationBoundCampaignReport(t, publication.reports[0])
 	assert.Equal(t, loaded.GetReportDigestRef().GetSha256(), publication.reports[0].GetReportDigestRef().GetSha256())
 }
 
@@ -545,7 +545,7 @@ func TestRunsVerify_ViaCLIPersistsAndPublishesPopulationBoundReport(t *testing.T
 
 	loaded, err := env.store(t).LoadCampaignVerification(context.Background(), "run-a-1")
 	require.NoError(t, err)
-	assertPopulationBoundCampaignReport(t, loaded, 41, 1)
+	assertPopulationBoundCampaignReport(t, loaded)
 	assert.Equal(t, []string{"run-a-1"}, publication.completionRunIDs)
 	require.Len(t, publication.reports, 1)
 	assert.Equal(t, loaded.GetReportDigestRef().GetSha256(), publication.reports[0].GetReportDigestRef().GetSha256())
@@ -643,7 +643,7 @@ func TestRunsCompare_ReportsSharedCellsAndDifferences(t *testing.T) {
 func TestRunsCompare_FlagsCellsOnlyInOneRun(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	env.createCampaignOver(t, "eval-b", &evalv1.ModelVariant{VariantId: "gemma3-4b", ServedModelTag: "gemma3:4b", ModelDigest: repeatTestHex('d', 64), ProviderClass: "ollama"})
+	env.createCampaignOver(t, "eval-b", &evalv1.ModelVariant{VariantId: "gemma3-4b", ServedModelTag: "gemma3:4b", ModelDigest: repeatTestHex('d'), ProviderClass: "ollama"})
 	env.startPrepared(t, "eval-b", "run-b-1")
 
 	var payload runCompareJSON

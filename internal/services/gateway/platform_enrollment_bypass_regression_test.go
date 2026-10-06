@@ -178,7 +178,7 @@ func TestPlatformEnrollmentBypassClosed_DelegatedAppEnrollRouteRemoved(t *testin
 // (operator, CLI, app, gateway-peer) is minted. This closes the privileged
 // generic CSR signing bypass (invariant 16).
 func TestPlatformEnrollmentBypassClosed_PrivilegedGenericCSRSignRequiresMTLS(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
+	c, _ := setupTestPKIController(t)
 
 	body := map[string]string{
 		"csr_pem":   testutil.GenerateTestCSRP256(t, "rogue-operator"),

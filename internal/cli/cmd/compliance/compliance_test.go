@@ -29,7 +29,7 @@ import (
 )
 
 // writeTestKSICatalog creates and writes a valid test KSI catalog via the given file service.
-func writeTestKSICatalog(t *testing.T, fileSvc fs.RuntimeFileService, relPath string) string {
+func writeTestKSICatalog(t *testing.T, fileSvc fs.RuntimeFileService) string {
 	t.Helper()
 	cat := &compliance.KSICatalog{
 		Version: "CR26-TEST",
@@ -63,8 +63,8 @@ func writeTestKSICatalog(t *testing.T, fileSvc fs.RuntimeFileService, relPath st
 	}
 	data, err := json.MarshalIndent(cat, "", "  ")
 	require.NoError(t, err)
-	require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, data, constants.PermFilePublic))
-	return fileSvc.Resolve(relPath)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), constants.KSICatalogFilename, data, constants.PermFilePublic))
+	return fileSvc.Resolve(constants.KSICatalogFilename)
 }
 
 // testEvaluationBinding returns a valid EvaluationBinding for tests that need
@@ -144,14 +144,13 @@ func setupTestVaultWithKey(t *testing.T, fileSvc fs.RuntimeFileService, privKey 
 }
 
 // writeTestOverlays creates and writes an overlay catalog JSON file in the given directory.
-func writeTestOverlays(t *testing.T, dir string, overlayCat *compliance.OverlayCatalog) string {
+func writeTestOverlays(t *testing.T, dir string, overlayCat *compliance.OverlayCatalog) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(dir, constants.PermDirStandard))
 	data, err := json.MarshalIndent(overlayCat, "", "  ")
 	require.NoError(t, err)
 	overlayFile := filepath.Join(dir, constants.COSAiSOverlaysFilename)
 	require.NoError(t, os.WriteFile(overlayFile, data, constants.PermFilePublic))
-	return dir
 }
 
 // TestComplianceCmd_Structure asserts that complianceCmd() is non-nil and has
@@ -268,7 +267,7 @@ func TestComplianceKSICmd_ValidationErrors(t *testing.T) {
 		{
 			name: "invalid certification class",
 			setup: func(t *testing.T, fileSvc fs.RuntimeFileService) (string, string) {
-				catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
+				catPath := writeTestKSICatalog(t, fileSvc)
 				return catPath, "INVALID"
 			},
 			expectedErr: constants.ErrValidationFailed,
@@ -316,7 +315,7 @@ func TestComplianceKSICmd_ValidationErrors(t *testing.T) {
 // when storage dependencies are unavailable.
 func TestComplianceKSICmd_StoresUnavailable(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
+	catPath := writeTestKSICatalog(t, fileSvc)
 
 	// Block data directory with a plain file so SQLite / audit store cannot open.
 	dataDir := fileSvc.Resolve(constants.DataDirname)
@@ -344,7 +343,7 @@ func TestComplianceKSICmd_StoresUnavailable(t *testing.T) {
 // the live state, outputs a valid KSIResultSet JSON, and saves history.
 func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
+	catPath := writeTestKSICatalog(t, fileSvc)
 
 	cmd := complianceKSICmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
@@ -550,7 +549,7 @@ func TestComplianceOverlayCmd_EmptyOverlayDir(t *testing.T) {
 // without warnings when all overlay control references match KSIs in the catalog.
 func TestComplianceOverlayCmd_Success_NoDanglingRefs(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
+	catPath := writeTestKSICatalog(t, fileSvc)
 	overlayDir := fileSvc.Resolve(constants.TestOverlaysDirname)
 
 	writeTestOverlays(t, overlayDir, &compliance.OverlayCatalog{
@@ -722,7 +721,7 @@ func TestSaveKSIHistorySnapshot_Pruning(t *testing.T) {
 // TestEvaluateKSIs_NilContextHandling asserts that evaluateKSIs handles nil context safely.
 func TestEvaluateKSIs_NilContextHandling(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
+	catPath := writeTestKSICatalog(t, fileSvc)
 	cat, err := compliance.LoadKSICatalog(catPath)
 	require.NoError(t, err)
 

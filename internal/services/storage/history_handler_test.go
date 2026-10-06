@@ -28,7 +28,7 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *va
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)

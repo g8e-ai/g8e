@@ -103,8 +103,8 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
         .sign(ca_key, hashes.SHA256())
     )
 
-    ca_path = os.path.join(tmpdir, "ca.pem")
-    with Path(ca_path).open("wb") as f:
+    ca_path = Path(tmpdir) / "ca.pem"
+    with ca_path.open("wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     # --- Server cert signed by CA ---
@@ -134,12 +134,12 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
         .sign(ca_key, hashes.SHA256())
     )
 
-    cert_path = os.path.join(tmpdir, "server.pem")
-    with Path(cert_path).open("wb") as f:
+    cert_path = Path(tmpdir) / "server.pem"
+    with cert_path.open("wb") as f:
         f.write(server_cert.public_bytes(serialization.Encoding.PEM))
 
-    key_path = os.path.join(tmpdir, "server.key")
-    with Path(key_path).open("wb") as f:
+    key_path = Path(tmpdir) / "server.key"
+    with key_path.open("wb") as f:
         f.write(
             server_key.private_bytes(
                 serialization.Encoding.PEM,
@@ -148,7 +148,7 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
             )
         )
 
-    return ca_path, cert_path, key_path
+    return str(ca_path), str(cert_path), str(key_path)
 
 
 # ---------------------------------------------------------------------------

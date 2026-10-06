@@ -7,7 +7,6 @@
 
 """Unit tests for OperatorApprovalService."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,6 +14,7 @@ import pytest
 from app.constants import FileOperation
 from app.constants.generated_status import EventType
 from app.constants.intents import CloudIntent
+from app.errors import ValidationError
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import ApprovalMetadata
@@ -181,10 +181,8 @@ class TestHandleApprovalResponse:
             ),
         )
 
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ValidationError, match="approval_id must be provided"):
             await service.handle_approval_response(response)
-
-        assert "approval_id must be provided" in str(exc_info.value)
 
 
 class TestMarkPendingApprovalsAsFeedback:
@@ -824,21 +822,15 @@ class TestRequestAgentContinueApproval:
             turns_completed=25,
         )
 
-        # Resolve the pending approval in the background as feedback
-        async def _resolve_as_feedback():
-            while not service._pending_approvals:
-                await asyncio.sleep(0)
-            approval_id = next(iter(service._pending_approvals))
-            service._pending_approvals[approval_id].resolve(
+        def _resolve_as_feedback(approval_id, pending) -> None:
+            pending.resolve(
                 approved=False,
                 reason="User typed a new message",
                 feedback=True,
             )
 
-        result, _ = await asyncio.gather(
-            service.request_agent_continue_approval(request),
-            _resolve_as_feedback(),
-        )
+        service.set_on_approval_requested(_resolve_as_feedback)
+        result = await service.request_agent_continue_approval(request)
 
         assert result.approved is False
         assert result.feedback is True

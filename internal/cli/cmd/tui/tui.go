@@ -130,22 +130,42 @@ func tuiCmdWithDeps(deps tuiDeps) *cobra.Command {
 		Short: "Launch the Tactical Governance Console (TUI)",
 		Long: `Launch the Tactical Governance Console — a real-time terminal UI that
 connects to a running g8e Gateway over the enrolled CLI session (mTLS + SSE).
-It shows your CLI identity and the Gateway's governance posture, the execution
-pipeline (L1-L5), the Sovereign Audit Ledger, the pending L3 approval queue,
-and your connected Operators. Pending approvals are listed on connect and
-whenever the Gateway reports a change; approving one opens the same browser
+The header shows your CLI identity and the Gateway's governance posture; number
+keys switch the main area between views:
+
+  1 Overview     the execution pipeline (L1-L5), the Sovereign Audit Ledger,
+                 the pending L3 approval queue, and your connected Operators
+  2 Approvals    every pending L3 transaction with its details
+  3 Operators    your connected Operators with their details; stop a
+                 remote Operator
+  6 Enrollments  pending platform enrollment requests and completed
+                 enrollments (platform owner only)
+
+Pending approvals and enrollments are listed on connect and whenever the
+Gateway reports a change. Approving a transaction opens the same browser
 WebAuthn page as 'g8e auth approve <tx_hash>' and verifies the result.
+Enrollment decisions and revocations make the same mTLS requests as
+'g8e auth enroll approve|deny|revoke', stopping an Operator makes the same
+governed shutdown request as 'g8e operator stop <session_id>', and every one
+asks y/N first.
 
 The Gateway must be running and the CLI must be enrolled (g8e auth enroll user)
 before launching the TUI. If the CLI session expires, run 'g8e auth refresh'.
 
 Controls:
   q / Ctrl+C       Quit
-  Tab / Shift+Tab  Focus the next / previous pane (ledger, approvals, operators)
+  1 2 3 6          Switch view
+  ?                Show the keys for the current view
+  Tab / Shift+Tab  Focus the next / previous pane (overview: ledger, approvals,
+                   operators; enrollments: pending requests, enrollments)
   j / ↓, k / ↑     Move in the focused pane (ledger: newer / older)
   G / g            Jump to ledger bottom (newest) / top (oldest)
   a / Enter        Approve the selected pending transaction (browser WebAuthn)
-  r                Refresh approvals, operators, and posture`,
+  a / d / x        Enrollments view: approve / deny the selected request,
+                   revoke the selected enrollment
+  s                Operators view: stop the selected remote Operator
+  y / n, Esc       Confirm / cancel the pending action
+  r                Refresh approvals, operators, enrollments, and posture`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

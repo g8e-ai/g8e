@@ -46,7 +46,7 @@ func newTestOAuthServer(t *testing.T, token string, expiresIn int) *httptest.Ser
 	return httptest.NewServer(mux)
 }
 
-func newInspectOAuthServer(t *testing.T, token string, expiresIn int) (*httptest.Server, *oauthRequestInspector) {
+func newInspectOAuthServer(t *testing.T, token string) (*httptest.Server, *oauthRequestInspector) {
 	t.Helper()
 	insp := &oauthRequestInspector{}
 	mux := http.NewServeMux()
@@ -59,7 +59,7 @@ func newInspectOAuthServer(t *testing.T, token string, expiresIn int) (*httptest
 
 		resp := map[string]interface{}{
 			"access_token": token,
-			"expires_in":   expiresIn,
+			"expires_in":   3600,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -81,7 +81,7 @@ func TestGetRequestMetadata_ReturnsAuthorizationBearerToken(t *testing.T) {
 
 func TestGetRequestMetadata_IncludesSandboxHeaderWhenSandboxesTokenSet(t *testing.T) {
 
-	srv, insp := newInspectOAuthServer(t, "test-token-456", 3600)
+	srv, insp := newInspectOAuthServer(t, "test-token-456")
 	defer srv.Close()
 
 	auth := NewClientCredentialsAuth("client-id", "client-secret", "sandbox-token-value", srv.URL+"/oauth/token")
@@ -96,7 +96,7 @@ func TestGetRequestMetadata_IncludesSandboxHeaderWhenSandboxesTokenSet(t *testin
 
 func TestGetRequestMetadata_OmitsSandboxHeaderWhenSandboxesTokenEmpty(t *testing.T) {
 
-	srv, insp := newInspectOAuthServer(t, "test-token-789", 3600)
+	srv, insp := newInspectOAuthServer(t, "test-token-789")
 	defer srv.Close()
 
 	auth := NewClientCredentialsAuth("client-id", "client-secret", "", srv.URL+"/oauth/token")
@@ -112,7 +112,7 @@ func TestGetRequestMetadata_OmitsSandboxHeaderWhenSandboxesTokenEmpty(t *testing
 
 func TestGetRequestMetadata_TokenIsReusedAcrossCallsWithinValidityWindow(t *testing.T) {
 
-	srv, insp := newInspectOAuthServer(t, "shared-token", 3600)
+	srv, insp := newInspectOAuthServer(t, "shared-token")
 	defer srv.Close()
 
 	auth := NewClientCredentialsAuth("client-id", "client-secret", "", srv.URL+"/oauth/token")
@@ -128,7 +128,7 @@ func TestGetRequestMetadata_TokenIsReusedAcrossCallsWithinValidityWindow(t *test
 
 func TestForceRefresh_ClearsCachedTokenForcingReacquisition(t *testing.T) {
 
-	srv, insp := newInspectOAuthServer(t, "refreshed-token", 3600)
+	srv, insp := newInspectOAuthServer(t, "refreshed-token")
 	defer srv.Close()
 
 	auth := NewClientCredentialsAuth("client-id", "client-secret", "", srv.URL+"/oauth/token")
@@ -164,7 +164,7 @@ func TestAcquireToken_ReturnsErrLatticeTokenAcquireFailedOnNon200(t *testing.T) 
 
 func TestAcquireToken_SendsFormEncodedClientCredentials(t *testing.T) {
 
-	srv, insp := newInspectOAuthServer(t, "form-token", 3600)
+	srv, insp := newInspectOAuthServer(t, "form-token")
 	defer srv.Close()
 
 	auth := NewClientCredentialsAuth("form-client-id", "form-client-secret", "", srv.URL+"/oauth/token")

@@ -170,11 +170,11 @@ class TestAuditorSafety:
 
             from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 
+            auditor = TribunalAuditor(
+                emitter=emitter,
+                reputation_data_service=MagicMock(),
+            )
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
-                auditor = TribunalAuditor(
-                    emitter=emitter,
-                    reputation_data_service=MagicMock(),
-                )
                 await auditor.run(
                     provider=mock_provider,
                     model="test-model",

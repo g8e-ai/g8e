@@ -317,14 +317,14 @@ func (e *runEnv) recordPublication() *recordingCampaignVerificationPublication {
 	return publication
 }
 
-func assertPopulationBoundCampaignReport(t *testing.T, report *evalv1.EvaluationVerificationReport, expectedAssignments, verifiedAssignments uint32) {
+func assertPopulationBoundCampaignReport(t *testing.T, report *evalv1.EvaluationVerificationReport) {
 	t.Helper()
 	require.NotNil(t, report)
 	assert.Equal(t, constants.CampaignVerifierVersion, report.GetSchemaVersion())
 	assert.Equal(t, constants.CampaignVerifierVersion, report.GetVerifierContractVersion())
 	assert.Equal(t, constants.EvaluationSourceVersion, report.GetVerifierReleaseVersion())
-	assert.Equal(t, expectedAssignments, report.GetExpectedAssignmentCount())
-	assert.Equal(t, verifiedAssignments, report.GetVerifiedAssignmentCount())
+	assert.Equal(t, 41, report.GetExpectedAssignmentCount())
+	assert.Equal(t, 1, report.GetVerifiedAssignmentCount())
 	assert.NotEmpty(t, report.GetVerifiedPopulationDigest())
 	assert.NotEmpty(t, report.GetCampaignDigest())
 	assert.NotEmpty(t, report.GetCatalogDigest())
@@ -377,10 +377,10 @@ func buildCompletedCampaignTrace(assignment *evalv1.EvaluationAssignment, attemp
 				"model_role":              role,
 				"provider":                "G8EProvider",
 				"governed_transaction_id": "tx-1",
-				"governed_result_digest":  repeatTestHex('a', 64),
+				"governed_result_digest":  repeatTestHex('a'),
 				"provider_attempt_id":     "attempt-1",
-				"normalized_request_hash": repeatTestHex('b', 64),
-				"output_hash":             repeatTestHex('c', 64),
+				"normalized_request_hash": repeatTestHex('b'),
+				"output_hash":             repeatTestHex('c'),
 				"usage_reported":          true,
 				"input_tokens":            10,
 				"output_tokens":           5,
@@ -395,8 +395,8 @@ func buildCompletedCampaignTrace(assignment *evalv1.EvaluationAssignment, attemp
 	return trace
 }
 
-func repeatTestHex(ch byte, n int) string {
-	out := make([]byte, n)
+func repeatTestHex(ch byte) string {
+	out := make([]byte, 64)
 	for i := range out {
 		out[i] = ch
 	}
@@ -453,7 +453,7 @@ func testFormationCatalogCLIVariants() []*evalv1.ModelVariant {
 		if ch == 0 {
 			ch = 'a'
 		}
-		return repeatTestHex(ch, 64)
+		return repeatTestHex(ch)
 	})
 }
 

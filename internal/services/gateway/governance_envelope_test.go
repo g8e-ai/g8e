@@ -44,11 +44,11 @@ func marshalEnvelope(t *testing.T, env *commonv1.GovernanceEnvelope) []byte {
 // identityEnvelope builds a wire envelope carrying only operator/session
 // identity, for CLI- and operator-cert binding cases that have no source
 // component.
-func identityEnvelope(t *testing.T, operatorID, operatorSessionID string) []byte {
+func identityEnvelope(t *testing.T, _, _ string) []byte {
 	t.Helper()
 	return marshalEnvelope(t, &commonv1.GovernanceEnvelope{
-		OperatorId:        operatorID,
-		OperatorSessionId: operatorSessionID,
+		OperatorId:        "op-1",
+		OperatorSessionId: "sess-1",
 	})
 }
 

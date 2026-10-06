@@ -637,13 +637,16 @@ class TestG8EProviderDispatch:
         client = _client()
         client.dispatch_inference_stream = _dispatch_stream_response(response)
         provider = G8EProvider(internal_http_client=client)
-        emitted = []
+        async def consume_stream() -> list:
+            return [
+                chunk
+                async for chunk in provider.generate_content_stream_primary(
+                    "gemma3:4b", _contents(), PrimaryLLMSettings()
+                )
+            ]
+
         with pytest.raises(ValidationError):
-            async for chunk in provider.generate_content_stream_primary(
-                "gemma3:4b", _contents(), PrimaryLLMSettings()
-            ):
-                emitted.append(chunk)
-        assert emitted == []
+            await consume_stream()
         assert provider.response_artifact.received_complete is True
 
     @pytest.mark.asyncio

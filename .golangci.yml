@@ -22,8 +22,7 @@ linters:
     - misspell
     - unconvert
     - whitespace
-    # - nolintlint  # Disabled pending removal of redundant G115 directives (46 issues)
-    # - unparam  # Disabled for gradual compliance (27 issues)
+    - unparam
     
     # Bug Prevention
     - bodyclose
@@ -136,9 +135,6 @@ linters:
           - gosec
         path: internal/cli/cmd/auth/auth_context\.go
         text: G117
-      - linters:
-          - unparam
-        path: _test\.go
       - linters:
           - whitespace
         path: _test\.go

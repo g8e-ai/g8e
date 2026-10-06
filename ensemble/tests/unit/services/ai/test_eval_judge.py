@@ -22,6 +22,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from app.constants import ANTHROPIC_CLAUDE_HAIKU_4_5
 from app.errors import ContextWindowExceededError
@@ -96,19 +97,19 @@ class TestEvalGradeModel:
         assert EvalGrade(**data) == g
 
     def test_score_below_range_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             EvalGrade(score=0, reasoning="Too low", passed=False)
 
     def test_score_above_range_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             EvalGrade(score=6, reasoning="Too high", passed=True)
 
     def test_empty_reasoning_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="reasoning must not be empty"):
             EvalGrade(score=3, reasoning="", passed=True)
 
     def test_whitespace_only_reasoning_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="reasoning must not be empty"):
             EvalGrade(score=3, reasoning="   ", passed=True)
 
 
@@ -309,7 +310,7 @@ class TestGradeTurnErrorPaths:
 
     async def test_none_response_raises(self, judge, mock_provider):
         mock_provider.generate_content_lite.return_value = None
-        with pytest.raises(EvalJudgeError, match="NoneType.*has no attribute"):
+        with pytest.raises(EvalJudgeError, match=r"NoneType.*has no attribute"):
             await judge.grade_turn(**GRADE_KWARGS)
 
     async def test_invalid_json_raises(self, judge, mock_provider):
@@ -422,7 +423,7 @@ class TestGradeTurnRetry:
     async def test_eval_judge_error_not_retried(self, judge, mock_provider):
         """EvalJudgeError from _call_and_parse propagates immediately."""
         mock_provider.generate_content_lite.return_value = None
-        with pytest.raises(EvalJudgeError, match="NoneType.*has no attribute"):
+        with pytest.raises(EvalJudgeError, match=r"NoneType.*has no attribute"):
             await judge.grade_turn(**GRADE_KWARGS)
         assert mock_provider.generate_content_lite.call_count == 1
 

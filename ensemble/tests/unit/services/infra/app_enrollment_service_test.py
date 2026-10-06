@@ -30,7 +30,6 @@ import asyncio
 import base64
 import datetime as _dt
 import json
-import os
 import stat
 import sys
 from collections.abc import Callable
@@ -274,7 +273,7 @@ def _mock_platform_enrollment_handler(
 
 def _file_mode(path: str) -> int:
     """Return the permission bits (0o777 mask) of a file."""
-    return stat.S_IMODE(os.stat(path).st_mode)
+    return stat.S_IMODE(Path(path).stat().st_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +381,7 @@ class TestLoadIdentityMalformedCert:
         _write_existing_identity(pki_dir, "not a cert", "not a key")
 
         service = AppEnrollmentService()
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="Unable to load PEM"):
             service.load_identity()
 
 
@@ -451,16 +450,18 @@ class TestEnrollPlatformEnrollment:
         assert "/api/v1/auth/platform-enrollments/complete" in paths_hit
 
         # Credentials were written to disk.
-        cert_on_disk = Path(identity.cert_path).read_text(encoding="utf-8")
+        cert_on_disk = await asyncio.to_thread(
+            Path(identity.cert_path).read_text, encoding="utf-8"
+        )
         assert "BEGIN CERTIFICATE" in cert_on_disk
-        key_on_disk = Path(identity.key_path).read_text(encoding="utf-8")
+        key_on_disk = await asyncio.to_thread(Path(identity.key_path).read_text, encoding="utf-8")
         assert "BEGIN PRIVATE KEY" in key_on_disk
-        ca_on_disk = Path(identity.ca_cert_path).read_text(encoding="utf-8")
+        ca_on_disk = await asyncio.to_thread(Path(identity.ca_cert_path).read_text, encoding="utf-8")
         assert ca_on_disk == "CA-BUNDLE-PEM"
 
         # Pending state was removed after successful enrollment.
         pending_path = str(pki_dir / "pending-enrollment" / "g8ee.json")
-        assert not Path(pending_path).exists()
+        assert not await asyncio.to_thread(Path(pending_path).exists)
 
     async def test_fetch_ca_bundle_pulls_via_http_and_writes_to_disk(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -502,8 +503,8 @@ class TestEnrollPlatformEnrollment:
             # The key must be 0600 (private).
             assert _file_mode(key_path) == 0o600
         else:
-            assert os.path.isfile(cert_path)
-            assert os.path.isfile(key_path)
+            assert await asyncio.to_thread(Path(cert_path).is_file)
+            assert await asyncio.to_thread(Path(key_path).is_file)
 
     async def test_persists_pending_state_with_0600_during_enrollment(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -599,7 +600,9 @@ class TestEnrollPlatformEnrollment:
         # Give the filesystem a moment to settle.
         await asyncio.sleep(0.05)
 
-        assert Path(pending_path_str).exists(), "pending state file should exist during enrollment"
+        assert await asyncio.to_thread(Path(pending_path_str).exists), (
+            "pending state file should exist during enrollment"
+        )
         if sys.platform != "win32":
             assert _file_mode(pending_path_str) == 0o600
 
@@ -607,7 +610,7 @@ class TestEnrollPlatformEnrollment:
         identity = await asyncio.wait_for(enroll_task, timeout=10.0)
         assert isinstance(identity, AppIdentity)
         # Pending state removed after completion.
-        assert not Path(pending_path_str).exists()
+        assert not await asyncio.to_thread(Path(pending_path_str).exists)
 
     async def test_resumes_from_persisted_pending_state_without_generating_new_keys(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -637,7 +640,7 @@ class TestEnrollPlatformEnrollment:
             "instance_id": "ensemble-resume-1",
         }
         pending_path.write_text(json.dumps(pending_state), encoding="utf-8")
-        os.chmod(pending_path, 0o600)
+        pending_path.chmod(0o600)
 
         request_submitted = False
 

@@ -47,7 +47,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compliancereport.ComplianceReportSigningIdentity, *compliancev1.ComplianceReportTrustPolicy, ed25519.PrivateKey) {
+func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compliancereport.ComplianceReportSigningIdentity, *compliancev1.ComplianceReportTrustPolicy) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -75,11 +75,11 @@ func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compl
 			AllowedScopeRefs: []string{scopeID},
 		}},
 	}
-	return identity, policy, privateKey
+	return identity, policy
 }
 
 func complianceReportSigningIdentityForTest(t *testing.T) *compliancereport.ComplianceReportSigningIdentity {
-	identity, _, _ := complianceReportSigningFixtureForTest(t, evidence.EvalScopeID("evidence-graph-suite"))
+	identity, _ := complianceReportSigningFixtureForTest(t, evidence.EvalScopeID("evidence-graph-suite"))
 	return identity
 }
 
@@ -597,7 +597,7 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	}))
 	require.NoError(t, fileSvc.MkdirAll(context.Background(), path.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, "incomplete-candidate"), constants.PermDirStandard))
 	scopeID := constants.EvalScopePrefix + req.CampaignID
-	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
+	identity, policy := complianceReportSigningFixtureForTest(t, scopeID)
 	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 		return identity, nil
 	}, func() time.Time { return assessmentAsOf })
@@ -766,7 +766,7 @@ func generateCampaignComplianceBundleFixture(t *testing.T, includeWitnesses bool
 	}
 	assessmentAsOf := time.Now().UTC()
 	scopeID := constants.EvalScopePrefix + req.CampaignID
-	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
+	identity, policy := complianceReportSigningFixtureForTest(t, scopeID)
 	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 		return identity, nil
 	}, func() time.Time { return assessmentAsOf })

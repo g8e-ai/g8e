@@ -190,11 +190,15 @@ func TestAuditAppQueries_DocumentCreateMergeThroughRealGateway(t *testing.T) {
 	require.Equal(t, "merged", doc.GetString("case_title"))
 	require.Equal(t, "open", doc.GetString("status"))
 
-	loader := func(string) (*clicfg.Config, error) { return cliConfig, nil }
+	loader := func(string) (*clicfg.Config, error) { //nolint:unparam // The loader contract returns an error; this fixture exercises success.
+		return cliConfig, nil
+	}
 	factory := func(fs.RuntimeFileService, *clicfg.Config) (authcmd.APIClient, error) {
 		return api.NewClientWithURL(files, cliConfig, server.URL)
 	}
-	fileFactory := func(string, *slog.Logger) (fs.RuntimeFileService, error) { return files, nil }
+	fileFactory := func(string, *slog.Logger) (fs.RuntimeFileService, error) { //nolint:unparam // The factory contract returns an error; this fixture exercises success.
+		return files, nil
+	}
 	for _, scope := range []struct {
 		name, flag, value string
 		receipts, events  int

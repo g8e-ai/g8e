@@ -29,7 +29,7 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func writeTestFrozenInventory(t *testing.T, root, relPath string, variants ...*evalv1.ModelVariant) {
+func writeTestFrozenInventory(t *testing.T, root string, variants ...*evalv1.ModelVariant) {
 	t.Helper()
 	bodies := make([]json.RawMessage, 0, len(variants))
 	for _, variant := range variants {
@@ -41,16 +41,10 @@ func writeTestFrozenInventory(t *testing.T, root, relPath string, variants ...*e
 		Variants []json.RawMessage `json:"variants"`
 	}{Variants: bodies})
 	require.NoError(t, err)
-	if relPath == evaluation.DefaultModelInventoryRelPath {
-		fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
-		require.NoError(t, err)
-		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, payload, constants.PermFileReadOnly))
-		return
-	}
-	path := filepath.Join(root, relPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), constants.PermDirPrivate))
-	require.NoError(t, os.WriteFile(path, payload, constants.PermFileReadOnly))
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), evaluation.DefaultModelInventoryRelPath, payload, constants.PermFileReadOnly))
 }
 
 func writeTestRuntimeQueue(t *testing.T, root string, queue *evaluation.CampaignQueue) fs.RuntimeFileService {

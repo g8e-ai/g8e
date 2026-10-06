@@ -36,7 +36,8 @@ type messageSender interface {
 }
 
 // Adapter bridges the CLI session's SSE stream, pending-approval list,
-// Operator list, and Gateway health to bubbletea messages.
+// Operator list, platform enrollments, and Gateway health to bubbletea
+// messages.
 type Adapter struct {
 	gw     *gateway
 	sender messageSender
@@ -85,6 +86,7 @@ func (a *Adapter) Run(ctx context.Context) {
 
 	connected := make(chan struct{}, 1)
 	approvalsChanged := make(chan struct{}, 1)
+	enrollmentsChanged := make(chan struct{}, 1)
 	signal := func(ch chan struct{}) {
 		select {
 		case ch <- struct{}{}:
@@ -109,7 +111,7 @@ func (a *Adapter) Run(ctx context.Context) {
 	refresherDone := make(chan struct{})
 	go func() {
 		defer close(refresherDone)
-		a.refresh(ctx, connected, approvalsChanged)
+		a.refresh(ctx, connected, approvalsChanged, enrollmentsChanged)
 	}()
 	defer func() { <-refresherDone }()
 
@@ -121,7 +123,13 @@ func (a *Adapter) Run(ctx context.Context) {
 			return
 		}
 		if ev.Type == string(constants.EventPlatformApprovalsChanged) {
-			signal(approvalsChanged)
+			var p models.ApprovalsChangedPayload
+			_ = json.Unmarshal(ev.Data, &p)
+			if p.Subject == models.ApprovalsChangedEnrollments {
+				signal(enrollmentsChanged)
+			} else {
+				signal(approvalsChanged)
+			}
 		}
 		for _, msg := range translateEvent(ev) {
 			a.sender.Send(msg)
@@ -130,9 +138,9 @@ func (a *Adapter) Run(ctx context.Context) {
 }
 
 // refresh re-fetches Gateway state until ctx is cancelled: everything on each
-// connect, pending approvals on each approvals.changed, and Operators on
-// operatorRefreshInterval.
-func (a *Adapter) refresh(ctx context.Context, connected, approvalsChanged <-chan struct{}) {
+// connect, pending approvals or platform enrollments on each approvals.changed
+// for that subject, and Operators on operatorRefreshInterval.
+func (a *Adapter) refresh(ctx context.Context, connected, approvalsChanged, enrollmentsChanged <-chan struct{}) {
 	ticker := time.NewTicker(operatorRefreshInterval)
 	defer ticker.Stop()
 	for {
@@ -143,8 +151,11 @@ func (a *Adapter) refresh(ctx context.Context, connected, approvalsChanged <-cha
 			a.sender.Send(a.gw.fetchHealth(ctx))
 			a.sender.Send(a.gw.fetchPendingApprovals(ctx))
 			a.sender.Send(a.gw.fetchOperators(ctx))
+			a.sender.Send(a.gw.fetchEnrollments(ctx))
 		case <-approvalsChanged:
 			a.sender.Send(a.gw.fetchPendingApprovals(ctx))
+		case <-enrollmentsChanged:
+			a.sender.Send(a.gw.fetchEnrollments(ctx))
 		case <-ticker.C:
 			a.sender.Send(a.gw.fetchOperators(ctx))
 		}
@@ -311,12 +322,8 @@ func translateEvent(ev wireEvent) []tea.Msg {
 		_ = json.Unmarshal(ev.raw, &p)
 		return []tea.Msg{ApprovalCompletedMsg{TxHash: p.TxHash}}
 	case innerType == string(constants.EventPlatformApprovalsChanged):
-		var p models.ApprovalsChangedPayload
-		_ = json.Unmarshal(payload, &p)
-		if p.Subject == models.ApprovalsChangedEnrollments {
-			return []tea.Msg{LedgerMsg{Level: LevelInfo, Message: "Pending platform enrollments changed — review with 'g8e auth enroll pending'", Time: timeNow()}}
-		}
-		// Transaction changes are reconciled by the adapter's pending-approval refresh.
+		// Both subjects are reconciled by the adapter's refresh: transactions
+		// re-list pending approvals, and enrollments re-list enrollments.
 		return nil
 
 	default:

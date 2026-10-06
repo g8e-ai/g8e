@@ -50,10 +50,10 @@ type enrollRoutes struct {
 	complete http.HandlerFunc
 }
 
-func newEnrollClient(t *testing.T, gatewayURL string) (*OperatorPlatformEnrollmentClient, fs.RuntimeFileService) {
+func newEnrollClient(t *testing.T, _ string) (*OperatorPlatformEnrollmentClient, fs.RuntimeFileService) {
 	t.Helper()
 	fileSvc := newTestFileSvc(t)
-	client, err := NewOperatorPlatformEnrollmentClient(gatewayURL, "inst-1", "host-1", fileSvc, testLogger())
+	client, err := NewOperatorPlatformEnrollmentClient("http://gw:8080", "inst-1", "host-1", fileSvc, testLogger())
 	require.NoError(t, err)
 	return client, fileSvc
 }

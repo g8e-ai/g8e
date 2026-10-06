@@ -68,17 +68,17 @@ func (s *stubAuditReceiptQuery) GetActionReceipt(transactionID string) (*models.
 	return s.getByID[transactionID], nil
 }
 
-func sampleReceiptRecord(txID, sessionID, actionType string, executedAt time.Time, status operatorv1.ExecutionStatus) *models.ActionReceiptRecord {
+func sampleReceiptRecord(txID, _ string, actionType string, executedAt time.Time, _ operatorv1.ExecutionStatus) *models.ActionReceiptRecord {
 	return &models.ActionReceiptRecord{
 		TransactionID:     txID,
 		TransactionHash:   "hash-" + txID,
 		OperatorID:        "op-1",
-		OperatorSessionID: sessionID,
+		OperatorSessionID: "sess-1",
 		RequestorUserID:   "user-1",
 		ActingAppID:       "app-1",
 		ActionType:        constants.ActionType(actionType),
 		TargetResource:    "/tmp/file.txt",
-		Status:            status,
+		Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		ResultSummary:     "ok",
 		StateRootBefore:   "root-before",
 		StateRootAfter:    "root-after",

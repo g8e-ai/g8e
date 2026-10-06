@@ -185,6 +185,40 @@ type PendingApprovalsMsg struct {
 	Err          error
 }
 
+// EnrollmentsMsg carries the pending platform enrollment requests and the
+// completed enrollments as listed by the Gateway, or the error that prevented
+// listing them. Only the platform owner may list them.
+type EnrollmentsMsg struct {
+	Pending  []models.PlatformEnrollmentPendingRequest
+	Enrolled []models.PlatformEnrollmentEnrolledRequest
+	Err      error
+}
+
+// EnrollmentDecidedMsg carries the Gateway's response to an owner decision on
+// a pending platform enrollment request, or the error that failed it.
+type EnrollmentDecidedMsg struct {
+	RequestID string
+	Decision  models.PlatformEnrollmentDecision
+	Response  *models.PlatformEnrollmentDecisionResponse
+	Err       error
+}
+
+// EnrollmentRevokedMsg carries the Gateway's response to revoking a completed
+// platform enrollment, or the error that failed it.
+type EnrollmentRevokedMsg struct {
+	RequestID string
+	Response  *models.PlatformEnrollmentRevokeResponse
+	Err       error
+}
+
+// OperatorStopMsg carries the Gateway's response to a governed shutdown
+// request for a remote Operator, or the error that failed it.
+type OperatorStopMsg struct {
+	OperatorSessionID string
+	Response          models.StopOperatorResponse
+	Err               error
+}
+
 // ScenarioStatus represents the terminal state of a demo scenario run.
 type ScenarioStatus int
 

@@ -232,7 +232,7 @@ def _web_search_settings_from_env():
     )
 
 
-async def _load_settings_from_operator(timeout: float = 5.0):
+async def _load_settings_from_operator(probe_timeout: float = 5.0):
     """Probe the operator for platform settings.
 
     Returns ``(settings, status)`` where ``status`` is ``"ok"`` when the
@@ -272,7 +272,7 @@ async def _load_settings_from_operator(timeout: float = 5.0):
         noisy_logger.setLevel(_logging.CRITICAL)
 
     try:
-        async with asyncio.timeout(timeout):
+        async with asyncio.timeout(probe_timeout):
             tls_config = TLSConfig(
                 ca_cert_path=bootstrap_settings.ca_cert_path,
                 client_cert_path=bootstrap_settings.client_cert_path,

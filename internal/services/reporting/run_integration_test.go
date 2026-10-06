@@ -31,7 +31,7 @@ import (
 // setupReportingEnv creates a fully populated reporting environment in a temp
 // directory. It returns Options pre-configoured with all paths, plus the vault
 // key path so tests can pass it to Run.
-func setupReportingEnv(t *testing.T, seed bool, withSecondaryStores bool) (Options, string) {
+func setupReportingEnv(t *testing.T, seed bool, withSecondaryStores bool) Options {
 	t.Helper()
 
 	root := testutil.TempDir(t)
@@ -129,7 +129,7 @@ func setupReportingEnv(t *testing.T, seed bool, withSecondaryStores bool) (Optio
 		seedReportingData(t, store, ev, rs, sts)
 	}
 
-	return opts, keyPath
+	return opts
 }
 
 func seedReportingData(t *testing.T, store *storage.SQLAuditStore, ev *storage.ExecutionVaultService, rs *storage.SQLReplayStore, sts *storage.SuspendedTransactionService) {
@@ -217,7 +217,7 @@ func seedReportingData(t *testing.T, store *storage.SQLAuditStore, ev *storage.E
 }
 
 func TestRun_PopulatedStores_AllCSVFilesWritten(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true, true)
+	opts := setupReportingEnv(t, true, true)
 
 	result, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -301,7 +301,7 @@ func TestRun_PopulatedStores_AllCSVFilesWritten(t *testing.T) {
 }
 
 func TestRun_EmptyStores_AllCSVFilesWritten(t *testing.T) {
-	opts, _ := setupReportingEnv(t, false, true)
+	opts := setupReportingEnv(t, false, true)
 
 	result, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -331,7 +331,7 @@ func TestRun_EmptyStores_AllCSVFilesWritten(t *testing.T) {
 }
 
 func TestRun_LockedVault_NoKeyPath(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true, true)
+	opts := setupReportingEnv(t, true, true)
 	opts.VaultKeyPath = "" // No key → locked vault.
 
 	result, err := Run(context.Background(), opts)
@@ -340,7 +340,7 @@ func TestRun_LockedVault_NoKeyPath(t *testing.T) {
 }
 
 func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true, true)
+	opts := setupReportingEnv(t, true, true)
 	opts.VaultKeyPath = filepath.Join(testutil.TempDir(t), "nonexistent.key")
 
 	result, err := Run(context.Background(), opts)
@@ -349,7 +349,7 @@ func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
 }
 
 func TestRun_MissingExecutionVault(t *testing.T) {
-	opts, _ := setupReportingEnv(t, false, false)
+	opts := setupReportingEnv(t, false, false)
 	opts.FileSvc = blockedDBPathFileSvc(t, opts.FileSvc, constants.ExecutionVaultDBRelPath)
 
 	_, err := Run(context.Background(), opts)
@@ -360,7 +360,7 @@ func TestRun_MissingExecutionVault(t *testing.T) {
 }
 
 func TestRun_MissingReplayStore(t *testing.T) {
-	opts, _ := setupReportingEnv(t, false, false)
+	opts := setupReportingEnv(t, false, false)
 	opts.FileSvc = blockedDBPathFileSvc(t, opts.FileSvc, constants.ReplayStoreDBRelPath)
 
 	_, err := Run(context.Background(), opts)
@@ -370,7 +370,7 @@ func TestRun_MissingReplayStore(t *testing.T) {
 }
 
 func TestRun_MissingSuspendedTxStore(t *testing.T) {
-	opts, _ := setupReportingEnv(t, false, false)
+	opts := setupReportingEnv(t, false, false)
 	opts.FileSvc = blockedDBPathFileSvc(t, opts.FileSvc, constants.SuspendedTransactionDBRelPath)
 
 	_, err := Run(context.Background(), opts)
@@ -380,7 +380,7 @@ func TestRun_MissingSuspendedTxStore(t *testing.T) {
 }
 
 func TestRun_CancelledContext(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true, true)
+	opts := setupReportingEnv(t, true, true)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -394,7 +394,7 @@ func TestRun_CancelledContext(t *testing.T) {
 }
 
 func TestRun_BadOutDir(t *testing.T) {
-	opts, _ := setupReportingEnv(t, false, true)
+	opts := setupReportingEnv(t, false, true)
 	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.OutDir = filepath.Join(blocker, "cannot-create-here")

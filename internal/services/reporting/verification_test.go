@@ -111,9 +111,9 @@ func setupTestCommitmentLedger(t *testing.T) (*storage.CommitmentLedger, *sqlite
 }
 
 // insertCommitment inserts a commitment row directly via SQL for testing.
-func insertCommitment(t *testing.T, cl *storage.CommitmentLedger, txID, txHash, priorHash, actionType, targetResource string) string {
+func insertCommitment(t *testing.T, cl *storage.CommitmentLedger, txID, txHash, priorHash, _, targetResource string) string {
 	t.Helper()
-	return insertCommitmentWithKey(t, cl, ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)), txID, txHash, priorHash, actionType, targetResource)
+	return insertCommitmentWithKey(t, cl, ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)), txID, txHash, priorHash, "FS_WRITE", targetResource)
 }
 
 func insertCommitmentWithKey(t *testing.T, cl *storage.CommitmentLedger, privateKey ed25519.PrivateKey, txID, txHash, priorHash, actionType, targetResource string) string {

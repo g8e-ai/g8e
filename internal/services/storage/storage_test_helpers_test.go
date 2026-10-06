@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	vault "github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -30,14 +29,13 @@ func testGitPath(t *testing.T) string {
 }
 
 // newTestFileSvc creates a RuntimeFileService backed by baseDir with the full
-// .g8e runtime tree created. Returns the file service and the data directory
-// path (fileSvc.Resolve(constants.DataDirname)).
-func newTestFileSvc(t *testing.T, baseDir string) (fs.RuntimeFileService, string) {
+// .g8e runtime tree created.
+func newTestFileSvc(t *testing.T, baseDir string) fs.RuntimeFileService {
 	t.Helper()
 	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
-	return svc, svc.Resolve(constants.DataDirname)
+	return svc
 }
 
 // CreateTestVault creates a new unlocked Vault using the provided runtime file service and private key.

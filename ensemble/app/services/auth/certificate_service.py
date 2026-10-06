@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -42,8 +43,8 @@ class CertificateService:
         data_service: CertificateDataService | None = None,
     ):
         if pki_dir is None:
-            pki_dir = PATHS["infra"]["pki_dir"]
-            ca_cert_path = ca_cert_path or PATHS["infra"]["ca_cert_path"]
+            pki_dir = str(PATHS["infra"]["pki_dir"])
+            ca_cert_path = ca_cert_path or str(PATHS["infra"]["ca_cert_path"])
         self.pki_dir = pki_dir
         self.ca_cert_path = ca_cert_path or str(Path(pki_dir) / "trust" / "g8eg-ca-bundle.pem")
         self.data_service = data_service
@@ -84,14 +85,14 @@ class CertificateService:
 
         found_cert_path: Path | None = None
         for cert_path in paths:
-            if cert_path.exists():
+            if await asyncio.to_thread(cert_path.exists):
                 found_cert_path = cert_path
                 break
 
         if found_cert_path:
             try:
-                with Path(found_cert_path).open("rb") as f:
-                    self.ca_cert = x509.load_pem_x509_certificate(f.read())
+                cert_bytes = await asyncio.to_thread(found_cert_path.read_bytes)
+                self.ca_cert = x509.load_pem_x509_certificate(cert_bytes)
                 # CodeQL: Avoid logging absolute paths as they can reveal system information
                 logger.info("[CERT-SERVICE] CA certificate loaded")
                 self.initialized = True

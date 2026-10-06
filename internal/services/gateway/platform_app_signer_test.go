@@ -22,7 +22,7 @@ import (
 )
 
 func TestSignPlatformAppCSRCreatesNormalValidityDualSANIdentity(t *testing.T) {
-	controller, _, _ := setupTestPKIController(t)
+	controller, _ := setupTestPKIController(t)
 	csr := testutil.GenerateTestCSRP256(t, "requester-controlled-name")
 
 	certPEM, chainPEM, err := controller.pki.SignPlatformAppCSR(csr, "g8ed", "owner-user")
