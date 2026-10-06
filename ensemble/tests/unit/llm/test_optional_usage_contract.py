@@ -8,12 +8,12 @@
 """Contract tests for preserving absent versus explicitly-zero usage metrics."""
 
 import pytest
+from g8e.models.events import ModelCallTelemetry
+from g8e.operator.v1.operator_pb2 import InferenceResult
 
 from app.llm.llm_dataclasses import UsageMetadata
 from app.models.agent import TurnResult
 from app.models.tool_results import TokenUsage
-from g8e.models.events import ModelCallTelemetry
-from g8e.operator.v1.operator_pb2 import InferenceResult
 
 
 @pytest.mark.unit

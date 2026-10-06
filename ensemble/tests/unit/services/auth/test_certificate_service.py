@@ -6,17 +6,17 @@
 # released under the Apache License, Version 2.0.
 
 import os
-import pytest
 import shutil
 import tempfile
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app.services.auth.certificate_service import CertificateService
 from app.services.auth.certificate_data_service import CertificateDataService
+from app.services.auth.certificate_service import CertificateService
 
 
 @pytest.fixture

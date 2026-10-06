@@ -8,8 +8,9 @@
 """Unit tests for BatchRunner."""
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from app.models.settings import BatchExecutionSettings
 from app.models.tool_results import PerOperatorResultBase

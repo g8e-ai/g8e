@@ -28,39 +28,37 @@ import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import app.llm.llm_types as types
-from app.errors import ToolsNotSupportedError, ValidationError
 from app.constants import (
     AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
     AGENT_MAX_TOOL_TURNS,
     AGENT_RETRY_BACKOFF_MULTIPLIER,
     AGENT_RETRY_DELAY_SECONDS,
-    AITaskId,
     DEFAULT_FINISH_REASON,
+    AITaskId,
 )
-from app.llm.model_evidence import model_boundary_hash, model_boundary_json
+from app.errors import ToolsNotSupportedError, ValidationError
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash, model_boundary_json
 from app.llm.provider import LLMProvider
 from app.llm.providers.g8e import G8EProvider
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
-    ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
     StreamChunkFromModelType,
     TokenUsage,
+    ToolCallResponse,
 )
-from app.models.model_telemetry import ModelCallTelemetry
 from app.models.grounding import GroundingMetadata
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.operators import AgentContinueApprovalRequest
+from app.services.ai.agent_sse import deliver_via_sse
 from app.services.ai.agent_tool_loop import (
     execute_turn_tool_calls,
     merge_grounding,
 )
-from app.services.ai.agent_sse import deliver_via_sse
-from app.services.evaluation.role_control import resolve_scored_model_role
-from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.ai.agent_turn import (
     GatedTurnResult,
     consolidate_model_parts,
@@ -69,6 +67,8 @@ from app.services.ai.agent_turn import (
 )
 from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
+from app.services.evaluation.role_control import resolve_scored_model_role
+from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.infra.event_service import EventService
 from app.services.protocols import ApprovalServiceProtocol
 from app.utils.time_ids.ids import generate_command_execution_id

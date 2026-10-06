@@ -8,7 +8,6 @@
 """Regression tests for Phase 11 — Prompt section/mode values sourced from g8e.constants.PROMPTS."""
 
 import pytest
-
 from g8e.constants import prompt as _g8e_prompt
 
 from app.constants.prompts import (
@@ -78,7 +77,9 @@ class TestAgentModePromptFiles:
 
     def test_all_modes_have_prompt_files(self):
         for mode in AgentMode:
-            assert mode in AGENT_MODE_PROMPT_FILES, f"{mode.name} missing from AGENT_MODE_PROMPT_FILES"
+            assert mode in AGENT_MODE_PROMPT_FILES, (
+                f"{mode.name} missing from AGENT_MODE_PROMPT_FILES"
+            )
 
     def test_prompt_files_keys_are_agent_mode_members(self):
         assert set(AGENT_MODE_PROMPT_FILES.keys()) == set(AgentMode)
@@ -86,8 +87,14 @@ class TestAgentModePromptFiles:
     @pytest.mark.parametrize(
         ("mode", "expected_sections"),
         [
-            (AgentMode.G8E_BOUND, {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS}),
-            (AgentMode.G8E_NOT_BOUND, {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS}),
+            (
+                AgentMode.G8E_BOUND,
+                {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS},
+            ),
+            (
+                AgentMode.G8E_NOT_BOUND,
+                {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS},
+            ),
         ],
     )
     def test_each_mode_has_capabilities_execution_tools(

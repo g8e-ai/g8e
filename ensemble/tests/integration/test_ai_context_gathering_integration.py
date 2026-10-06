@@ -587,7 +587,9 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator)
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, operator
+        )
 
         # Create g8e context with bound operator
         bound_operator = BoundOperator(
@@ -647,9 +649,15 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator1)
-        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator2)
-        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator3)
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, operator1
+        )
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, operator2
+        )
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, operator3
+        )
 
         # Create g8e context with multiple bound operators
         bound_operators = [
@@ -926,8 +934,12 @@ class TestCompleteContextAssembly:
             user_id=created_investigation.user_id,
         )
         await memory_data_service.save_memory(memory, is_new=True, context=memory_context)
-        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator1)
-        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator2)
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, operator1
+        )
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, operator2
+        )
 
         # Create g8e context with both operators
         bound_operators = [

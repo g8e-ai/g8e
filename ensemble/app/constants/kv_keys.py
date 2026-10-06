@@ -7,7 +7,8 @@
 
 """Gateway document and query cache keys derived from protocol templates."""
 
-from g8e.constants import KV, kv_key as _g8e_kv_key
+from g8e.constants import KV
+from g8e.constants import kv_key as _g8e_kv_key
 
 CACHE_PREFIX: str = KV["kv_keys"]["CachePrefix"]["value"]
 

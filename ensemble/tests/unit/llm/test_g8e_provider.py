@@ -20,6 +20,21 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+from g8e.operator.v1.operator_pb2 import (
+    EXECUTION_STATUS_COMPLETED,
+    INFERENCE_MESSAGE_ROLE_ASSISTANT,
+    INFERENCE_MESSAGE_ROLE_SYSTEM,
+    INFERENCE_MESSAGE_ROLE_TOOL,
+    INFERENCE_MESSAGE_ROLE_USER,
+    INFERENCE_TOOL_CHOICE_MODE_AUTO,
+    MODEL_ROLE_ASSISTANT,
+    MODEL_ROLE_LITE,
+    MODEL_ROLE_PRIMARY,
+    InferenceDispatchStreamFailure,
+    InferenceDispatchStreamFrame,
+    InferenceProgressEvent,
+)
 
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, LLMProvider, ThinkingLevel
 from app.errors import (
@@ -59,22 +74,7 @@ from app.llm.llm_types import (
 from app.llm.providers.g8e import G8EProvider, _contents_to_messages, _validate_response_identity
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import InferenceDispatchRequest, InferenceDispatchResponse
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 from app.models.settings import G8eeUserSettings, LLMSettings
-from g8e.operator.v1.operator_pb2 import (
-    EXECUTION_STATUS_COMPLETED,
-    INFERENCE_MESSAGE_ROLE_ASSISTANT,
-    INFERENCE_MESSAGE_ROLE_SYSTEM,
-    INFERENCE_MESSAGE_ROLE_TOOL,
-    INFERENCE_MESSAGE_ROLE_USER,
-    INFERENCE_TOOL_CHOICE_MODE_AUTO,
-    MODEL_ROLE_ASSISTANT,
-    MODEL_ROLE_LITE,
-    MODEL_ROLE_PRIMARY,
-    InferenceDispatchStreamFailure,
-    InferenceDispatchStreamFrame,
-    InferenceProgressEvent,
-)
 
 pytestmark = pytest.mark.unit
 
@@ -933,7 +933,9 @@ class TestG8EProviderToolDeclarationEvidence:
         provider = G8EProvider(internal_http_client=client)
 
         await provider.generate_content_primary(
-            "gemma3:4b", _contents(), _tool_settings("recursive_grep_search", "file_read_on_operator")
+            "gemma3:4b",
+            _contents(),
+            _tool_settings("recursive_grep_search", "file_read_on_operator"),
         )
 
         request = client.dispatch_inference.await_args.args[0]

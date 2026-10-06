@@ -12,11 +12,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     CaseStatus,
     ComponentName,
     ErrorCode,
     EventType,
-    G8EE_COMPONENT,
     Priority,
     Severity,
     TaskStatus,
@@ -161,8 +161,8 @@ class TestCaseDataService:
             await service.create_case(request, "Title")
 
     async def test_create_case_g8e_error(self, service, mock_cache, mock_governance_client):
-        from app.errors import G8eError
         from app.constants import ErrorCategory
+        from app.errors import G8eError
 
         request = CaseCreateRequest(
             user_id="user-123", web_session_id="ws-123", initial_message="Hello"
@@ -261,8 +261,8 @@ class TestCaseDataService:
             )
 
     async def test_update_case_g8e_error(self, service, mock_cache, mock_governance_client):
-        from app.errors import G8eError
         from app.constants import ErrorCategory
+        from app.errors import G8eError
 
         case_id = "case-123"
         mock_cache.get_document_with_cache.return_value = {

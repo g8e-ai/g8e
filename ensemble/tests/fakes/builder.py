@@ -12,8 +12,8 @@ wired with typed fakes. Use the individual fake constructors directly when
 testing a sub-service in isolation.
 """
 
-from app.constants.generated_paths import PortConstants
 from app.constants import G8EE_COMPONENT
+from app.constants.generated_paths import PortConstants
 from app.models.cache import CacheOperationResult
 from app.models.settings import G8eeAppSettings
 from app.services.operator.command_service import OperatorCommandService
@@ -22,16 +22,17 @@ from app.services.protocols import ExecutionServiceProtocol
 from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.validation.blacklist_validator import CommandBlacklistValidator
 from app.utils.validation.whitelist_validator import CommandWhitelistValidator
-from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient
+from tests.fakes.fake_operator_clients import (
+    FakeDBClient,
+    FakeG8eClient,
+    FakeKVClient,
+)
 
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService
 from .fake_db_service import FakeDBService
 from .fake_event_service import FakeEventService
 from .fake_execution_service import FakeExecutionService
-from tests.fakes.fake_operator_clients import (
-    FakeG8eClient,
-)
 from .fake_investigation_service import FakeInvestigationService
 
 

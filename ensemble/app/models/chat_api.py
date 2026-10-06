@@ -7,7 +7,7 @@
 
 
 from app.constants import ChatSessionStatus, EntityType
-from app.models.base import G8eBaseModel, UTCDatetime, Field
+from app.models.base import Field, G8eBaseModel, UTCDatetime
 from app.models.investigations import ConversationHistoryMessage
 
 

@@ -40,7 +40,6 @@ from app.constants import CommandErrorType, OperatorStatus, OperatorToolName, Op
 from app.llm.llm_types import ToolCall
 from app.models.agent import StreamChunkData
 from app.models.agents.tribunal import TribunalSystemError
-from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.operators import (
     HeartbeatNetworkInfo,
     HeartbeatSnapshot,
@@ -49,6 +48,7 @@ from app.models.operators import (
 )
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import CommandExecutionResult
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.services.ai.agent_tool_loop import ToolCallResult, orchestrate_tool_execution
 from app.services.ai.tool_service import AIToolService
 from tests.fakes.factories import (
@@ -1667,7 +1667,11 @@ class TestTargetOperatorResolution:
 
 
 async def test_producer_result_chunk_drives_universal_tool_completed_event(
-    mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service
+    mock_tool_executor,
+    sample_investigation,
+    sample_g8e_context,
+    request_settings,
+    mock_event_service,
 ):
     """The TOOL_RESULT chunk orchestrate_tool_execution builds must identify its
     tool. deliver_via_sse keys universal-tool *_COMPLETED events (and trace
@@ -1696,8 +1700,12 @@ async def test_producer_result_chunk_drives_universal_tool_completed_event(
 
     async def _stream():
         yield StreamChunkFromModel(type=StreamChunkFromModelType.TOOL_CALL, data=produced.call_info)
-        yield StreamChunkFromModel(type=StreamChunkFromModelType.TOOL_RESULT, data=produced.result_info)
-        yield StreamChunkFromModel(type=StreamChunkFromModelType.COMPLETE, data=StreamChunkData(finish_reason="STOP"))
+        yield StreamChunkFromModel(
+            type=StreamChunkFromModelType.TOOL_RESULT, data=produced.result_info
+        )
+        yield StreamChunkFromModel(
+            type=StreamChunkFromModelType.COMPLETE, data=StreamChunkData(finish_reason="STOP")
+        )
 
     inputs, state = make_agent_run_args(
         case_id="case-producer-sse",

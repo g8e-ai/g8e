@@ -9,15 +9,15 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app.models.base import G8eBaseModel, Field
 from app.constants import (
-    CommandGenerationOutcome,
-    EventType,
-    TieBreakReason,
-    ConsensusMember,
     AuditorReason,
+    CommandGenerationOutcome,
+    ConsensusMember,
+    EventType,
     RiskLevel,
+    TieBreakReason,
 )
+from app.models.base import Field, G8eBaseModel
 from app.models.model_telemetry import ModelBoundaryPrivacyAttestation, ModelCallTelemetry
 from app.models.tool_results import CommandRiskAnalysis
 

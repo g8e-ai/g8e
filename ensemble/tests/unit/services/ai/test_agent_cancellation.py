@@ -6,13 +6,14 @@
 # released under the Apache License, Version 2.0.
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
-    make_g8e_agent,
     make_event_service,
+    make_g8e_agent,
     make_gen_config,
     make_provider_chunk,
 )

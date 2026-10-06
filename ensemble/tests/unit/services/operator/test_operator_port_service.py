@@ -11,8 +11,7 @@ Unit tests for OperatorPortService (port_service.py).
 
 import pytest
 
-from app.constants import CommandErrorType, EventType, OperatorStatus
-from app.constants import ExecutionStatus
+from app.constants import CommandErrorType, EventType, ExecutionStatus, OperatorStatus
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.operators import (

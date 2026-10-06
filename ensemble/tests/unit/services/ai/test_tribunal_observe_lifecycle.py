@@ -201,9 +201,7 @@ async def test_producer_payload_contains_no_raw_request_or_candidate_command():
         dumped = req.model_dump(mode="json")
         for value in dumped.values():
             if isinstance(value, str):
-                assert "list files" not in value, (
-                    "Raw request must not appear in producer payload"
-                )
+                assert "list files" not in value, "Raw request must not appear in producer payload"
                 assert "ls -la" not in value, (
                     "Candidate command must not appear in producer payload"
                 )

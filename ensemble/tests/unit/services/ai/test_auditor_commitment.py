@@ -26,8 +26,8 @@ from datetime import UTC, datetime
 import pytest
 
 from app.errors import DatabaseError
-from app.models.reputation import GENESIS_PREV_ROOT, ReputationState, ReputationSignResponse
 from app.models.http_context import RequestContext
+from app.models.reputation import GENESIS_PREV_ROOT, ReputationSignResponse, ReputationState
 from app.services.ai.auditor_service import commit_reputation
 from app.services.data.reputation_data_service import ReputationDataService
 from app.utils.hashing.merkle import leaf_bytes, merkle_root
@@ -85,8 +85,17 @@ class TestCommitReputation:
 
         gov = MagicMock()
         gov.update_governed_doc = AsyncMock(side_effect=_write_through)
+
         async def _sign(request):
-            return ReputationSignResponse(signature=_expected_signature(request.merkle_root, request.prev_root, request.tribunal_command_id, _FIXED_HMAC_KEY))
+            return ReputationSignResponse(
+                signature=_expected_signature(
+                    request.merkle_root,
+                    request.prev_root,
+                    request.tribunal_command_id,
+                    _FIXED_HMAC_KEY,
+                )
+            )
+
         gov.sign_reputation_commitment = AsyncMock(side_effect=_sign)
         return ReputationDataService(fake_cache_aside_service, gov)
 
@@ -237,7 +246,10 @@ class TestCommitReputation:
         await _seed_states(service, seeded_states)
 
         from app.errors import NetworkError
-        service._governance_client.sign_reputation_commitment.side_effect = NetworkError("Gateway signing unavailable")
+
+        service._governance_client.sign_reputation_commitment.side_effect = NetworkError(
+            "Gateway signing unavailable"
+        )
         with pytest.raises(NetworkError):
             await commit_reputation(
                 reputation_data_service=service,

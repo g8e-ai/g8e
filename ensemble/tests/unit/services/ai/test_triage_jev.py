@@ -14,8 +14,8 @@ from unittest.mock import patch
 import pytest
 
 from app.constants import (
-    AgentMode,
     JEV_DEFAULT_MODEL,
+    AgentMode,
     LLMProvider,
     TriageComplexityClassification,
     TriageConfidence,

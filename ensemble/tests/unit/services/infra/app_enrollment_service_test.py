@@ -39,6 +39,10 @@ from pathlib import Path
 
 import httpx
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap, get_bootstrap
 from app.constants.generated_paths import PortConstants
@@ -47,10 +51,6 @@ from app.services.infra.app_enrollment_service import (
     AppEnrollmentService,
     AppIdentity,
 )
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509.oid import NameOID
 
 pytestmark = pytest.mark.unit
 

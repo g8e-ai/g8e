@@ -6,9 +6,9 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
+from g8e.enums import HistoryActor
 
 from app.constants import EventType
-from g8e.enums import HistoryActor
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,

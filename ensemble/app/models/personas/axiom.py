@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 from app.constants import PersonaCapability
+
 from .base import AgentPersonaModel
 
 

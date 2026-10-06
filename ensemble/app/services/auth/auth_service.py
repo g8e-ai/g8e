@@ -14,7 +14,6 @@ from fastapi import Request
 
 from app.constants import (
     AUTHORIZATION,
-    AuthMethod,
     CLI_SESSION_ID,
     G8EE_COMPONENT,
     X_PROXY_CLI_SESSION_ID,
@@ -22,6 +21,7 @@ from app.constants import (
     X_PROXY_USER_EMAIL,
     X_PROXY_USER_ID,
     X_PROXY_WEB_SESSION_ID,
+    AuthMethod,
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser

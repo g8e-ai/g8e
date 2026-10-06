@@ -18,14 +18,14 @@ Separation of Concerns:
 
 import logging
 
-from app.constants import ThinkingLevel
 import app.llm.llm_types as types
+from app.constants import ThinkingLevel
 from app.llm.llm_types import (
     AssistantLLMSettings,
     LiteLLMSettings,
     PrimaryLLMSettings,
 )
-from app.models.model_configs import clamp_thinking_level, get_model_config, LLModelConfig
+from app.models.model_configs import LLModelConfig, clamp_thinking_level, get_model_config
 
 logger = logging.getLogger(__name__)
 

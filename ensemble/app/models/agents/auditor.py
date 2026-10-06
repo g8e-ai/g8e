@@ -5,8 +5,8 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from app.models.base import G8eBaseModel, Field
 from app.constants import AuditorReason
+from app.models.base import Field, G8eBaseModel
 
 
 class AuditorRequest(G8eBaseModel):

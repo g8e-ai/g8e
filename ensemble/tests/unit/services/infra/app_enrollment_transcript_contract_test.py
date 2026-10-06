@@ -19,10 +19,10 @@ same bytes, so both languages are pinned to one contract.
 """
 
 import pytest
+from g8e.common.v1 import common_pb2
 
 from app.services.infra import app_enrollment_service as svc_module
 from app.services.infra.app_enrollment_service import AppEnrollmentService
-from g8e.common.v1 import common_pb2
 
 REQUEST_ID = "req-0123456789abcdef"
 TOKEN_HASH = "a" * 64

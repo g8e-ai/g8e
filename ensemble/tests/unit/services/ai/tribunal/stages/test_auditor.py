@@ -125,12 +125,26 @@ class TestRunAuditStage:
         )
         responses = [
             GenerateContentResponse(
-                candidates=[Candidate(content=Content(role=Role.MODEL, parts=[Part(text="invalid")]), finish_reason="stop")],
-                usage_metadata=UsageMetadata(prompt_token_count=10, candidates_token_count=2, total_token_count=12),
+                candidates=[
+                    Candidate(
+                        content=Content(role=Role.MODEL, parts=[Part(text="invalid")]),
+                        finish_reason="stop",
+                    )
+                ],
+                usage_metadata=UsageMetadata(
+                    prompt_token_count=10, candidates_token_count=2, total_token_count=12
+                ),
             ),
             GenerateContentResponse(
-                candidates=[Candidate(content=Content(role=Role.MODEL, parts=[Part(text='{"status": "ok"}')]), finish_reason="stop")],
-                usage_metadata=UsageMetadata(prompt_token_count=12, candidates_token_count=4, total_token_count=16),
+                candidates=[
+                    Candidate(
+                        content=Content(role=Role.MODEL, parts=[Part(text='{"status": "ok"}')]),
+                        finish_reason="stop",
+                    )
+                ],
+                usage_metadata=UsageMetadata(
+                    prompt_token_count=12, candidates_token_count=4, total_token_count=16
+                ),
             ),
         ]
         provider = make_mock_provider(generate_content_lite_side_effect=responses)
@@ -181,7 +195,9 @@ class TestRunAuditStage:
         ("kwargs", "expected_role"),
         [
             pytest.param({}, "primary", id="auditor-runs-on-the-primary-tier-by-default"),
-            pytest.param({"model_role": "lite"}, "lite", id="fallback-to-the-lite-provider-is-reported"),
+            pytest.param(
+                {"model_role": "lite"}, "lite", id="fallback-to-the-lite-provider-is-reported"
+            ),
         ],
     )
     async def test_auditor_attributes_its_calls_to_the_tier_it_was_resolved_from(
@@ -208,7 +224,9 @@ class TestRunAuditStage:
                     finish_reason="stop",
                 )
             ],
-            usage_metadata=UsageMetadata(prompt_token_count=10, candidates_token_count=2, total_token_count=12),
+            usage_metadata=UsageMetadata(
+                prompt_token_count=10, candidates_token_count=2, total_token_count=12
+            ),
         )
         provider = make_mock_provider(generate_content_lite_side_effect=[response])
         event_service = MagicMock()

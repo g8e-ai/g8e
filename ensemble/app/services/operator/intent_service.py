@@ -12,33 +12,33 @@ Intent permission grant and revocation via Two-Role IAM architecture.
 
 import logging
 
-from app.services.protocols import (
-    ApprovalServiceProtocol,
-    ExecutionServiceProtocol,
-    InvestigationServiceProtocol,
-    G8eClientProtocol,
-)
-from app.constants import EventType, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, EventType
+from app.constants.config import ExecutionStatus
 from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
 )
-from app.constants.config import ExecutionStatus
 from app.constants.intents import (
     CLOUD_INTENT_DEPENDENCIES,
     CLOUD_INTENT_VERIFICATION_ACTIONS,
     CloudIntent,
 )
-from app.models.tool_args import GrantIntentArgs, RevokeIntentArgs
+from app.models.command_request_payloads import CommandRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.tool_results import FailedIntentResult, IamIntentResult, IntentPermissionResult
-from app.models.command_request_payloads import CommandRequestPayload
 from app.models.operators import (
     IntentApprovalRequest,
 )
 from app.models.pubsub_messages import G8eMessage
+from app.models.tool_args import GrantIntentArgs, RevokeIntentArgs
+from app.models.tool_results import FailedIntentResult, IamIntentResult, IntentPermissionResult
 from app.services.operator.iam_command_builder import IamCommandBuilder
+from app.services.protocols import (
+    ApprovalServiceProtocol,
+    ExecutionServiceProtocol,
+    G8eClientProtocol,
+    InvestigationServiceProtocol,
+)
 from app.utils.time_ids.ids import (
     generate_iam_execution_id,
     generate_iam_revoke_intent_execution_id,
@@ -206,8 +206,8 @@ class OperatorIntentService:
                 web_session_id=g8e_context.web_session_id,
                 user_id=g8e_context.user_id,
                 cli_session_id=g8e_context.cli_session_id,
-                operator_session_id=final_session_id,
-                operator_id=final_op_id,
+                operator_session_id=operator_session_id,
+                operator_id=operator_id,
                 payload=CommandRequestPayload(
                     command=attach_cmd,
                     execution_id=exec_id,
@@ -240,8 +240,8 @@ class OperatorIntentService:
                         web_session_id=g8e_context.web_session_id,
                         user_id=g8e_context.user_id,
                         cli_session_id=g8e_context.cli_session_id,
-                        operator_session_id=final_session_id,
-                        operator_id=final_op_id,
+                        operator_session_id=operator_session_id,
+                        operator_id=operator_id,
                         payload=CommandRequestPayload(
                             command=v_cmd,
                             execution_id=v_exec_id,

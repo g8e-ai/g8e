@@ -17,10 +17,10 @@ from datetime import UTC, datetime
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     CaseStatus,
     ComponentName,
     EventType,
-    G8EE_COMPONENT,
     Priority,
     Severity,
 )

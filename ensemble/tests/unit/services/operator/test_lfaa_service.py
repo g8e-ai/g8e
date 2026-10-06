@@ -5,16 +5,16 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.services.operator.lfaa_service import OperatorLFAAService
+import pytest
+
 from app.constants import G8EE_COMPONENT
-from app.models.pubsub_messages import G8eMessage
+from app.constants.generated_status import AITaskId, EventType
 from app.models.command_request_payloads import DirectCommandAuditRequestPayload
 from app.models.http_context import G8eHttpContext
-from app.constants.generated_status import EventType
-from app.constants.generated_status import AITaskId
+from app.models.pubsub_messages import G8eMessage
+from app.services.operator.lfaa_service import OperatorLFAAService
 
 
 @pytest.fixture

@@ -17,10 +17,10 @@ from app.constants.collections import (
 from app.constants.config import LLMProvider
 from app.constants.env_vars import EnvVar
 from app.models.settings import (
+    AppSettingsDocument,
     G8eeAppSettings,
     G8eeUserSettings,
     LLMSettings,
-    AppSettingsDocument,
     UserSettingsDocument,
 )
 from app.services.infra.settings_service import SettingsService

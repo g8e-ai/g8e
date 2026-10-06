@@ -12,18 +12,18 @@ import time
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
 from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
-from app.llm import get_generative_lite_provider, Role
+from app.llm import Role, get_generative_lite_provider
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.structured import parse_structured_response
-from app.utils.agent_persona_loader import get_agent_persona
-from app.models.settings import G8eeUserSettings
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import ConversationHistoryMessage, InvestigationModel
 from app.models.memory import InvestigationMemory, MemoryAnalysis
-from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import G8eeUserSettings
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.protocols import MemoryDataServiceProtocol
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -119,10 +119,14 @@ class MemoryGenerationService:
                 user_id=investigation.user_id,
                 status=investigation.status,
                 case_title=investigation.case_title,
-                communication_preferences=latest_past.communication_preferences if latest_past else "",
+                communication_preferences=latest_past.communication_preferences
+                if latest_past
+                else "",
                 technical_background=latest_past.technical_background if latest_past else "",
                 response_style=latest_past.response_style if latest_past else "",
-                problem_solving_approach=latest_past.problem_solving_approach if latest_past else "",
+                problem_solving_approach=latest_past.problem_solving_approach
+                if latest_past
+                else "",
                 interaction_style=latest_past.interaction_style if latest_past else "",
             )
         else:
@@ -202,11 +206,13 @@ class MemoryGenerationService:
                 MemoryAnalysis.model_json_schema()
             ),
         )
-        input_artifact_hash = model_boundary_hash({
-            "model": lite_model,
-            "contents": contents,
-            "settings": config,
-        })
+        input_artifact_hash = model_boundary_hash(
+            {
+                "model": lite_model,
+                "contents": contents,
+                "settings": config,
+            }
+        )
         monotonic_start = time.monotonic()
         try:
             response = await provider.generate_content_lite(
@@ -345,7 +351,9 @@ class MemoryGenerationService:
                 if pm.problem_solving_approach:
                     attrs.append(f"approach: {pm.problem_solving_approach}")
                 if attrs:
-                    past_lines.append(f"- Past memory {i} ({pm.case_title or 'Investigation'}): {'; '.join(attrs)}")
+                    past_lines.append(
+                        f"- Past memory {i} ({pm.case_title or 'Investigation'}): {'; '.join(attrs)}"
+                    )
             if past_lines:
                 past_context = (
                     "RECENT PAST MEMORIES (for context on user temperature and knowledge baseline):\n"

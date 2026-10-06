@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from .base import G8eBaseModel, Field
+from .base import Field, G8eBaseModel
 
 
 class BindOperatorsRequest(G8eBaseModel):

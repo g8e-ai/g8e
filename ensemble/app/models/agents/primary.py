@@ -5,11 +5,11 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from app.models.base import G8eBaseModel, Field
 from app.constants.prompts import AgentMode
-from app.models.attachments import AttachmentMetadata
-from app.models.investigations import ConversationHistoryMessage
 from app.llm.llm_dataclasses import ToolCall
+from app.models.attachments import AttachmentMetadata
+from app.models.base import Field, G8eBaseModel
+from app.models.investigations import ConversationHistoryMessage
 
 
 class PrimaryRequest(G8eBaseModel):

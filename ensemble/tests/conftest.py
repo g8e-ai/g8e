@@ -16,6 +16,7 @@ tests/fixtures/operators.py.
 E2E fixtures are in tests/e2e/conftest.py.
 """
 
+import contextlib
 import logging
 import os
 
@@ -23,7 +24,6 @@ import httpx
 import pytest
 import pytest_asyncio
 
-import contextlib
 from app.constants import G8EE_COMPONENT, OLLAMA_DEFAULT_ENDPOINT
 
 # Lazy imports for protocol-dependent modules to prevent pytest collection crashes
@@ -48,6 +48,7 @@ def test_runtime_dir():
     """Isolated test directory under project root .g8e-test-tmp (avoiding system /tmp)."""
     import shutil
     import uuid
+
     from app.utils.path import resolve_project_root
 
     root = resolve_project_root()
@@ -87,8 +88,8 @@ def _llm_settings_from_env():
     Returns None when no --llm-provider flag was supplied, which means
     ai_integration tests should be skipped.
     """
-    from app.constants.env_vars import EnvVar
     from app.constants import LLMProvider
+    from app.constants.env_vars import EnvVar
     from app.models.settings import LLMSettings
 
     provider_str = os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip()
@@ -241,17 +242,16 @@ async def _load_settings_from_operator(timeout: float = 5.0):
     during the probe so the caller can emit a single concise status line
     instead of three stacked error traces.
     """
+    import asyncio
+    import logging as _logging
+
     from app.clients.db_client import DBClient
     from app.clients.kv_cache_client import KVCacheClient
-
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
     from app.models.settings import TLSConfig
     from app.services.cache.cache_aside import CacheAsideService
     from app.services.infra.settings_service import SettingsService
-
-    import asyncio
-    import logging as _logging
 
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
@@ -308,9 +308,9 @@ async def _load_settings_from_operator(timeout: float = 5.0):
 
 
 def pytest_configure(config):
-    from app.llm.factory import set_llm_settings, set_search_settings, set_settings
-
     import asyncio
+
+    from app.llm.factory import set_llm_settings, set_search_settings, set_settings
 
     # Probe the operator for platform settings. Prints a single concise
     # status line (operator: ok | down) so the test runner output starts
@@ -321,7 +321,6 @@ def pytest_configure(config):
         from app.services.infra.settings_service import SettingsService
 
         settings = SettingsService().get_local_settings()
-
 
     set_settings(settings)
 
@@ -387,7 +386,9 @@ def pytest_collection_modifyitems(config, items):
         else False
     )
     has_system_one = any(item.get_closest_marker("requires_system_one") for item in items) and (
-        _ollama_has_model(os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT, "nimble")
+        _ollama_has_model(
+            os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT, "nimble"
+        )
     )
 
     for item in items:
@@ -520,6 +521,7 @@ async def task_tracker():
     tracker = TaskTracker()
     yield tracker
     await tracker.cleanup()
+
 
 @pytest.fixture
 def unique_investigation_id():
@@ -798,7 +800,6 @@ def provider_config():
 async def cache_aside_service(test_settings):
     from app.clients.db_client import DBClient
     from app.clients.kv_cache_client import KVCacheClient
-
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
     from app.models.settings import TLSConfig

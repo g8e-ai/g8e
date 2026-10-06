@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.clients.http_client import AiohttpResponse, GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG
+from app.clients.http_client import GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG, AiohttpResponse
 from app.constants.api_paths import GatewayAPIPaths
 from app.models.auth import OperatorSessionValidationRequest
 from app.services.infra.internal_http_client import InternalHttpClient
@@ -61,10 +61,12 @@ def _make_client() -> InternalHttpClient:
 @pytest.mark.asyncio
 async def test_validate_operator_session_success_returns_typed_response():
     client = _make_client()
-    client._http.post = AsyncMock(return_value=_make_response(
-        200,
-        b'{"valid": true, "operator_id": "op-1", "user_id": "user-1"}',
-    ))
+    client._http.post = AsyncMock(
+        return_value=_make_response(
+            200,
+            b'{"valid": true, "operator_id": "op-1", "user_id": "user-1"}',
+        )
+    )
 
     result = await client.validate_operator_session("op-session", "cli-session", "user-1")
 
@@ -77,10 +79,12 @@ async def test_validate_operator_session_success_returns_typed_response():
 @pytest.mark.asyncio
 async def test_validate_operator_session_posts_typed_request_to_exact_path():
     client = _make_client()
-    client._http.post = AsyncMock(return_value=_make_response(
-        200,
-        b'{"valid": true, "operator_id": "op-1", "user_id": "user-1"}',
-    ))
+    client._http.post = AsyncMock(
+        return_value=_make_response(
+            200,
+            b'{"valid": true, "operator_id": "op-1", "user_id": "user-1"}',
+        )
+    )
 
     await client.validate_operator_session("op-session", "cli-session", "user-1")
 
@@ -127,10 +131,12 @@ async def test_validate_operator_session_malformed_response_returns_none():
 @pytest.mark.asyncio
 async def test_validate_operator_session_gateway_says_invalid_returns_none():
     client = _make_client()
-    client._http.post = AsyncMock(return_value=_make_response(
-        200,
-        b'{"valid": false, "operator_id": "", "user_id": ""}',
-    ))
+    client._http.post = AsyncMock(
+        return_value=_make_response(
+            200,
+            b'{"valid": false, "operator_id": "", "user_id": ""}',
+        )
+    )
 
     result = await client.validate_operator_session("op-session", "cli-session", "user-1")
 
@@ -140,10 +146,12 @@ async def test_validate_operator_session_gateway_says_invalid_returns_none():
 @pytest.mark.asyncio
 async def test_validate_operator_session_user_mismatch_returns_none():
     client = _make_client()
-    client._http.post = AsyncMock(return_value=_make_response(
-        200,
-        b'{"valid": true, "operator_id": "op-1", "user_id": "different-user"}',
-    ))
+    client._http.post = AsyncMock(
+        return_value=_make_response(
+            200,
+            b'{"valid": true, "operator_id": "op-1", "user_id": "different-user"}',
+        )
+    )
 
     result = await client.validate_operator_session("op-session", "cli-session", "user-1")
 

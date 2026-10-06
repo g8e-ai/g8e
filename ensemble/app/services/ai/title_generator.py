@@ -16,8 +16,8 @@ import logging
 import time
 
 from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
-from app.llm import get_generative_lite_provider, Role
-from app.llm.llm_types import Content, Part, LiteLLMSettings
+from app.llm import Role, get_generative_lite_provider
+from app.llm.llm_types import Content, LiteLLMSettings, Part
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
 from app.models.agents.title_generator import CaseTitleResult
@@ -90,11 +90,13 @@ async def generate_case_title(
         )
         prepare_provider_call(provider, g8e_context=g8e_context)
         contents = [Content(role=Role.USER, parts=[Part.from_text(prompt)])]
-        input_artifact_hash = model_boundary_hash({
-            "model": model,
-            "contents": contents,
-            "settings": lite_llm_settings,
-        })
+        input_artifact_hash = model_boundary_hash(
+            {
+                "model": model,
+                "contents": contents,
+                "settings": lite_llm_settings,
+            }
+        )
         monotonic_start = time.monotonic()
         try:
             response = await provider.generate_content_lite(

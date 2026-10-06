@@ -16,12 +16,12 @@ keyed on the context object only, never on an environment variable.
 """
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 from app.constants.prompts import AgentMode
 from app.models.evaluation_trace import ToolGate
 from app.models.model_configs import get_model_config
 from app.services.evaluation.tool_gate import resolve_tool_gate
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 pytestmark = [pytest.mark.unit]
 

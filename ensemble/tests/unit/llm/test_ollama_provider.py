@@ -192,7 +192,10 @@ class TestOllamaProviderGeneration:
         assert provider.model_boundary_privacy.raw_sensitive_types == []
         unsanitized_kwargs = {
             **call_kwargs,
-            "messages": [*call_kwargs["messages"][:-1], {"role": "user", "content": "canary@example.com"}],
+            "messages": [
+                *call_kwargs["messages"][:-1],
+                {"role": "user", "content": "canary@example.com"},
+            ],
         }
         assert "[REDACTED_EMAIL]" in str(call_kwargs)
         assert "canary@example.com" not in str(call_kwargs)
@@ -767,9 +770,7 @@ class TestOllamaNativeDurations:
         )
         chunks = [
             chunk
-            async for chunk in provider.generate_content_stream_lite(
-                "llama3", contents, settings
-            )
+            async for chunk in provider.generate_content_stream_lite("llama3", contents, settings)
         ]
 
         terminal = chunks[-1]
@@ -892,7 +893,9 @@ class TestOllamaEmptyResponseError:
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("prompt_eval_count", [LLM_OLLAMA_DEFAULT_NUM_CTX, LLM_OLLAMA_DEFAULT_NUM_CTX + 50])
+    @pytest.mark.parametrize(
+        "prompt_eval_count", [LLM_OLLAMA_DEFAULT_NUM_CTX, LLM_OLLAMA_DEFAULT_NUM_CTX + 50]
+    )
     async def test_generate_content_lite_raises_context_window_exceeded_on_answered_prompt_at_limit(
         self, provider, prompt_eval_count
     ):
@@ -1127,10 +1130,15 @@ class TestOllamaStreamingOverflow:
     @pytest.mark.parametrize("channel", ["primary", "assistant", "lite"])
     @pytest.mark.parametrize("has_text", [False, True])
     async def test_stream_rejects_overflow_before_emitting_output(self, channel, has_text):
-        message = SimpleNamespace(content="answer" if has_text else "", thinking=None, tool_calls=[])
+        message = SimpleNamespace(
+            content="answer" if has_text else "", thinking=None, tool_calls=[]
+        )
         terminal = SimpleNamespace(
-            message=message, done=True, done_reason="stop",
-            prompt_eval_count=LLM_OLLAMA_DEFAULT_NUM_CTX, eval_count=1,
+            message=message,
+            done=True,
+            done_reason="stop",
+            prompt_eval_count=LLM_OLLAMA_DEFAULT_NUM_CTX,
+            eval_count=1,
         )
 
         async def upstream():
@@ -1146,7 +1154,9 @@ class TestOllamaStreamingOverflow:
         with patch(PATCH_TARGET, return_value=client):
             provider = OllamaProvider(endpoint="http://localhost:11434", api_key="")
             stream = getattr(provider, f"generate_content_stream_{channel}")(
-                "llama3", [Content(role="user", parts=[Part(text="hi")])], settings,
+                "llama3",
+                [Content(role="user", parts=[Part(text="hi")])],
+                settings,
             )
             with pytest.raises(ContextWindowExceededError) as raised:
                 await anext(stream)

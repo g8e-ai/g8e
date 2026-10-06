@@ -6,45 +6,48 @@
 # released under the Apache License, Version 2.0.
 
 from __future__ import annotations
+
+import asyncio
 import logging
 
 from app.clients.gateway_operator_client import GatewayOperatorClient
-from app.models.settings import G8eeAppSettings, G8eeUserSettings
-from app.constants.generated_status import CommandErrorType, RiskLevel
+from app.constants import G8EE_COMPONENT, EventType
 from app.constants.config import ExecutionStatus
-from app.constants import EventType, G8EE_COMPONENT
-from app.constants.generated_status import AITaskId
+from app.constants.generated_status import AITaskId, CommandErrorType, RiskLevel
+from app.errors import BusinessLogicError, ValidationError
 from app.models.agent import ExecutorCommandArgs
-from app.models.tool_args import (
-    GrantIntentArgs,
-    RevokeIntentArgs,
-)
 from app.models.command_request_payloads import (
     CheckPortRequestPayload,
     CommandRequestPayload,
-    FetchFileHistoryRequestPayload,
     FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
     FileEditRequestPayload,
+    FsGrepRequestPayload,
     FsListRequestPayload,
     FsReadRequestPayload,
 )
 from app.models.http_context import G8eHttpContext
+from app.models.internal_api import DirectCommandRequest
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import (
     ApprovalResult,
     BatchOperatorExecutionResult,
     CommandApprovalRequest,
+    DirectCommandResult,
     OperatorDocument,
     TargetSystem,
-    DirectCommandResult,
 )
-from app.models.internal_api import DirectCommandRequest
 from app.models.pubsub_messages import G8eMessage
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
+from app.models.tool_args import (
+    GrantIntentArgs,
+    RevokeIntentArgs,
+)
 from app.models.tool_results import (
-    CommandInternalResult,
     CommandExecutionResult,
-    FetchFileHistoryToolResult,
+    CommandInternalResult,
     FetchFileDiffToolResult,
+    FetchFileHistoryToolResult,
     FileEditResult,
     FsGrepToolResult,
     FsListToolResult,
@@ -52,19 +55,30 @@ from app.models.tool_results import (
     IntentPermissionResult,
     PortCheckToolResult,
 )
+from app.services.investigation.investigation_service import extract_single_operator_context
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ApprovalServiceProtocol,
     ExecutionServiceProtocol,
     FileServiceProtocol,
     FilesystemServiceProtocol,
-    InvestigationServiceProtocol,
+    G8eClientProtocol,
     IntentServiceProtocol,
+    InvestigationServiceProtocol,
     LFAAServiceProtocol,
     PortServiceProtocol,
-    G8eClientProtocol,
 )
-from app.services.investigation.investigation_service import extract_single_operator_context
+from app.utils.csv_commands import parse_command_csv
+from app.utils.time_ids.ids import generate_batch_id, generate_command_execution_id
+from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.safety import validate_command_safety
+from app.utils.validation.validators import (
+    get_auto_approved_validator,
+    get_blacklist_validator,
+    get_whitelist_validator,
+)
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 from .execution_service import OperatorExecutionService
 from .file_service import OperatorFileService
@@ -72,19 +86,6 @@ from .filesystem_service import OperatorFilesystemService
 from .intent_service import OperatorIntentService
 from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
-from app.utils.validation.safety import validate_command_safety
-from app.utils.csv_commands import parse_command_csv
-from app.utils.validation.validators import (
-    get_auto_approved_validator,
-    get_blacklist_validator,
-    get_whitelist_validator,
-)
-from app.utils.time_ids.ids import generate_command_execution_id, generate_batch_id
-from app.utils.validation.whitelist_validator import CommandWhitelistValidator
-from app.utils.validation.blacklist_validator import CommandBlacklistValidator
-from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
-from app.errors import ValidationError, BusinessLogicError
-import asyncio
 
 logger = logging.getLogger(__name__)
 

@@ -11,9 +11,9 @@ from uuid import uuid4
 from app.clients.governance_client import GovernanceClient
 from app.constants import (
     DB_COLLECTION_AGENT_ACTIVITY_METADATA,
+    G8EE_COMPONENT,
     ErrorCode,
     EventType,
-    G8EE_COMPONENT,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.agent_activity import AgentActivityMetadata

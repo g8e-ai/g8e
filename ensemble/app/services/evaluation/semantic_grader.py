@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 
+from g8e.models.internal_api import EvaluationGoldSummary, EvaluationInferenceContext
+
 from app.constants import LLMProvider
 from app.decision import get_decision_provider
 from app.errors import ConfigurationError
@@ -21,7 +23,6 @@ from app.models.evaluation_trace import (
 from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeUserSettings
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
-from g8e.models.internal_api import EvaluationGoldSummary, EvaluationInferenceContext
 
 logger = logging.getLogger(__name__)
 

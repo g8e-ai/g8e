@@ -10,38 +10,38 @@ import asyncio
 import logging
 
 from app.constants import (
-    EventType,
     G8EE_COMPONENT,
-    HistoryActor,
     INVESTIGATION_LOOKUP_MAX_RETRIES,
     INVESTIGATION_LOOKUP_RETRY_DELAYS_MS,
+    EventType,
+    HistoryActor,
     OperatorStatus,
 )
+from app.constants.message_sender import MessageSender
 from app.errors import ExternalServiceError, ResourceNotFoundError
 from app.models.agent import OperatorContext
-from app.models.http_context import G8eHttpContext, RequestContext
-from app.constants.message_sender import MessageSender
 from app.models.grounding import GroundingMetadata
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import (
     AIResponseMetadata,
+    ConversationHistoryMessage,
+    ConversationMessageMetadata,
     EnrichedInvestigationContext,
+    InvestigationCreateRequest,
     InvestigationModel,
     InvestigationUpdateRequest,
-    ConversationMessageMetadata,
-    ConversationHistoryMessage,
-    InvestigationCreateRequest,
 )
 from app.models.operators import OperatorDocument
 from app.models.tool_results import TokenUsage
-from app.services.protocols import (
-    EventServiceProtocol,
-    InvestigationDataServiceProtocol,
-    OperatorDataServiceProtocol,
-    MemoryDataServiceProtocol,
-)
 from app.services.observe.payloads import (
     build_investigation_run_state_request,
     map_investigation_status_to_run_lifecycle,
+)
+from app.services.protocols import (
+    EventServiceProtocol,
+    InvestigationDataServiceProtocol,
+    MemoryDataServiceProtocol,
+    OperatorDataServiceProtocol,
 )
 
 logger = logging.getLogger(__name__)

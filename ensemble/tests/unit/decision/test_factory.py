@@ -56,7 +56,9 @@ class TestDecisionProviderFactory:
         second = get_decision_provider(_jev_settings())
         assert first is second
 
-        different_key = get_decision_provider(_jev_settings(ollama_endpoint="http://other-host:11434"))
+        different_key = get_decision_provider(
+            _jev_settings(ollama_endpoint="http://other-host:11434")
+        )
         assert different_key is not first
 
     @pytest.mark.asyncio

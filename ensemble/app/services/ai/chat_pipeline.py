@@ -24,42 +24,42 @@ import logging
 import time
 
 import app.llm.llm_types as types
-from app.models.settings import G8eeUserSettings
-from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
-    ReasoningAgent,
-    AITaskId,
     EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
-    EventType,
     LLM_OLLAMA_DEFAULT_NUM_CTX,
     LLM_OLLAMA_HISTORY_BUDGET_FRACTION,
-    LLMProvider,
-    TriageComplexityClassification,
     AgentMode,
+    AITaskId,
+    EventType,
+    LLMProvider,
     OperatorStatus,
+    ReasoningAgent,
+    TriageComplexityClassification,
 )
-from app.models.model_telemetry import ModelCallTelemetry
 from app.constants.message_sender import MessageSender
+from app.errors import BusinessLogicError, ConfigurationError
 from app.llm import get_llm_provider
 from app.llm.factory import get_llm_provider_class
+from app.llm.prompts import build_modular_system_prompt
+from app.llm.utils import ModelOverrideResolver, resolve_model
 from app.models.agent import AgentInputs, AgentStreamState
-from app.models.evaluation_trace import EvaluationSeedApplication
+from app.models.agent_activity import AgentActivityMetadata
+from app.models.agents.triage import TriageRequest
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
+from app.models.evaluation_trace import EvaluationSeedApplication
+from app.models.events import (
+    ChatErrorPayload,
+    TriageClarificationQuestionsPayload,
+)
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import (
-    ConversationMessageMetadata,
     ConversationHistoryMessage,
+    ConversationMessageMetadata,
     EnrichedInvestigationContext,
 )
-from app.models.agent_activity import AgentActivityMetadata
-from app.llm.prompts import build_modular_system_prompt
-from app.llm.utils import resolve_model, ModelOverrideResolver
-
-from app.services.infra.event_service import EventService
-from .agent import g8eEnsemble
-from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
-from app.services.evaluation.tool_gate import resolve_tool_gate
-from app.services.evaluation.trace_service import EvaluationTraceService
+from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import G8eeUserSettings
+from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.services.evaluation.player_steps import (
     assemble_player_steps,
     memory_step,
@@ -71,22 +71,22 @@ from app.services.evaluation.role_control import (
     resolve_role_outcome,
     resolve_scored_model_role,
 )
+from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
+from app.services.evaluation.tool_gate import resolve_tool_gate
+from app.services.evaluation.trace_service import EvaluationTraceService
+from app.services.infra.event_service import EventService
 from app.services.investigation.investigation_service import (
-    extract_all_operators_context,
     InvestigationService,
+    extract_all_operators_context,
 )
 from app.services.investigation.memory_data_service import MemoryDataService
-from .memory_generation_service import MemoryGenerationService
+from app.utils.interrogation import extract_interrogation_questions
+
+from .agent import g8eEnsemble
 from .chat_task_manager import BackgroundTaskManager
+from .memory_generation_service import MemoryGenerationService
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
-from app.services.data.agent_activity_data_service import AgentActivityDataService
-from app.models.agents.triage import TriageRequest
-from app.models.events import (
-    ChatErrorPayload,
-    TriageClarificationQuestionsPayload,
-)
-from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)
 
@@ -725,7 +725,10 @@ class ChatPipelineService:
 
         async def _run_memory_update() -> None:
             try:
-                memory, model_call = await self.memory_generation_service.update_memory_from_conversation(
+                (
+                    memory,
+                    model_call,
+                ) = await self.memory_generation_service.update_memory_from_conversation(
                     conversation_history=conversation_history,
                     investigation=investigation,
                     settings=user_settings,
@@ -1052,12 +1055,10 @@ class ChatPipelineService:
         # Resolve effective provider/key/endpoint per tier.
         resolved_settings = user_settings
 
-        primary_provider, _, _, primary_model = (
-            user_settings.llm.resolve(
-                "primary",
-                provider_override=llm_primary_provider,
-                model_override=llm_primary_model,
-            )
+        primary_provider, _, _, primary_model = user_settings.llm.resolve(
+            "primary",
+            provider_override=llm_primary_provider,
+            model_override=llm_primary_model,
         )
         if primary_provider:
             resolved_settings = resolved_settings.model_copy(
@@ -1074,12 +1075,10 @@ class ChatPipelineService:
                 }
             )
 
-        assistant_provider, _, _, assistant_model = (
-            resolved_settings.llm.resolve(
-                "assistant",
-                provider_override=llm_assistant_provider,
-                model_override=llm_assistant_model,
-            )
+        assistant_provider, _, _, assistant_model = resolved_settings.llm.resolve(
+            "assistant",
+            provider_override=llm_assistant_provider,
+            model_override=llm_assistant_model,
         )
         if assistant_provider:
             resolved_settings = resolved_settings.model_copy(

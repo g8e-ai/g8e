@@ -13,17 +13,17 @@ from pathlib import Path
 from typing import TypeVar
 
 import app.llm.llm_types as types
-from app.models.settings import G8eeUserSettings
-from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
-from app.llm import get_generative_lite_provider, Role
-from app.llm.model_evidence import model_boundary_hash
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm import Role, get_generative_lite_provider
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.provider import LLMProvider
 from app.llm.structured import parse_structured_response
 from app.models.base import G8eBaseModel
-from app.llm.provider import LLMProvider
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
@@ -33,7 +33,7 @@ from app.models.tool_results import (
     FileOperationRiskContext,
 )
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
+from app.utils.agent_persona_loader import AgentPersona, get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -214,11 +214,13 @@ class AIResponseAnalyzer:
             )
             contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
             prepare_provider_call(client, g8e_context=g8e_context)
-            input_artifact_hash = model_boundary_hash({
-                "model": lite_model,
-                "contents": contents,
-                "settings": config,
-            })
+            input_artifact_hash = model_boundary_hash(
+                {
+                    "model": lite_model,
+                    "contents": contents,
+                    "settings": config,
+                }
+            )
         except Exception as exc:
             logger.error("%s setup failed: %s", log_context, exc, exc_info=True)
             return fallback_exception(exc)
@@ -296,7 +298,9 @@ class AIResponseAnalyzer:
         error: Exception | None = None,
     ) -> ModelCallTelemetry:
         usage = response.usage_metadata if response else types.UsageMetadata()
-        finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
+        finish_reason = (
+            response.candidates[0].finish_reason if response and response.candidates else None
+        )
         return build_model_call_telemetry(
             provider=provider,
             agent_role=agent_role,
@@ -563,7 +567,9 @@ class AIResponseAnalyzer:
                 risk_level=RiskLevel.HIGH,
                 is_system_file=False,
                 safe_to_proceed=False,
-                blocking_issues=["Risk analysis failed - the conversation exceeded the model's context window"],
+                blocking_issues=[
+                    "Risk analysis failed - the conversation exceeded the model's context window"
+                ],
                 approval_prompt=f"Risk analysis failed because the conversation exceeded the model's context window. File operation: {operation} on {file_path}\nProceed with extreme caution?",
             ),
             fallback_exception=lambda e: FileOperationRiskAnalysis(

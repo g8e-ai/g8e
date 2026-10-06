@@ -18,6 +18,7 @@ import sys
 import pytest
 
 from app.constants import LogLevel
+from app.constants.generated_paths import PortConstants
 from app.logging import (
     PII_FIELDS,
     ComponentFormatter,
@@ -30,7 +31,6 @@ from app.logging import (
     setup_logging,
 )
 from app.models.settings import G8eeAppSettings
-from app.constants.generated_paths import PortConstants
 
 pytestmark = pytest.mark.unit
 

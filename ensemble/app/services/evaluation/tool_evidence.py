@@ -124,7 +124,9 @@ def record_tool_call_completed(
             arguments_json=arguments_json,
             arguments_hash=hashlib.sha256(arguments_json.encode()).hexdigest(),
             command=chunk.command or "",
-            result_json=_canonical_json(chunk.result.model_dump(mode="json")) if chunk.result is not None else "",
+            result_json=_canonical_json(chunk.result.model_dump(mode="json"))
+            if chunk.result is not None
+            else "",
             success=success,
             is_operator_tool=bool(chunk.is_operator_tool),
             execution_id=execution_id,

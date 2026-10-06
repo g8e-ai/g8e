@@ -28,8 +28,8 @@ from app.constants import (
     TriageRequestPosture,
 )
 from app.errors import ContextWindowExceededError
-from app.models.agents.triage import TriageRequest
 from app.llm.providers.fake import FakeProvider
+from app.models.agents.triage import TriageRequest
 from app.models.attachments import AttachmentMetadata
 from app.services.ai.triage import TriageAgent
 from tests.fakes.fake_llm_provider import FakeLLMProvider

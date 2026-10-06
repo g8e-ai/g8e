@@ -16,6 +16,7 @@ from app.constants import InvestigationStatus
 from app.constants.message_sender import MessageSender
 from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Content, Role
+from app.models.http_context import RequestContext
 from app.models.investigations import (
     AIResponseMetadata,
     ConversationHistoryMessage,
@@ -23,7 +24,6 @@ from app.models.investigations import (
     InvestigationModel,
 )
 from app.models.memory import InvestigationMemory, MemoryAnalysis
-from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.memory_generation_service import (
     CONVERSATION_HISTORY_LIMIT,
@@ -31,8 +31,8 @@ from app.services.ai.memory_generation_service import (
     MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS,
     MemoryGenerationService,
 )
-from tests.fakes.fake_memory_data_service import FakeMemoryDataService
 from tests.fakes.fake_llm_provider import FakeLLMProvider
+from tests.fakes.fake_memory_data_service import FakeMemoryDataService
 
 
 @pytest.mark.asyncio

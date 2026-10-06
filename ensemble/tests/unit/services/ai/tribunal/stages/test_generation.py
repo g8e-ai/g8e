@@ -6,12 +6,14 @@
 # released under the Apache License, Version 2.0.
 
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
+
 from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Role
 from app.models.agents.tribunal import (
-    TribunalSystemError,
     TribunalGenerationFailedError,
+    TribunalSystemError,
 )
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.generation import (

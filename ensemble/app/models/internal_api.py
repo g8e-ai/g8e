@@ -7,17 +7,23 @@
 
 from typing import Literal
 
-from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
+from g8e.models.internal_api import ChatMessageRequest as _G8eChatMessageRequest
 from g8e.models.internal_api import ChatStartedResponse as _G8eChatStartedResponse
 from g8e.models.internal_api import EvaluationTraceResponse as _G8eEvaluationTraceResponse
-from g8e.models.internal_api import ChatMessageRequest as _G8eChatMessageRequest
+from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
 from g8e.models.observe_api import (
     ObserveProducerAgentStateRequest as _G8eObserveProducerAgentStateRequest,
-    ObserveProducerRunStateRequest as _G8eObserveProducerRunStateRequest,
+)
+from g8e.models.observe_api import (
     ObserveProducerResponse as _G8eObserveProducerResponse,
+)
+from g8e.models.observe_api import (
+    ObserveProducerRunStateRequest as _G8eObserveProducerRunStateRequest,
 )
 from g8e.operator.v1.operator_pb2 import (
     InferenceDispatchRequest as _G8eInferenceDispatchRequest,
+)
+from g8e.operator.v1.operator_pb2 import (
     InferenceDispatchResponse as _G8eInferenceDispatchResponse,
 )
 
@@ -25,8 +31,8 @@ from app.constants import LLMProvider
 from app.models.attachments import AttachmentMetadata
 from app.models.base import ConfigDict, Field, G8eBaseModel, model_validator
 from app.models.cases import CaseModel
-from app.models.operators import PendingApproval
 from app.models.http_context import RequestContext
+from app.models.operators import PendingApproval
 
 ResourceCreationRequest = _G8eResourceCreationRequest
 

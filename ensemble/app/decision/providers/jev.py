@@ -61,7 +61,9 @@ class JevProvider(DecisionProvider):
     ) -> None:
         super().__init__()
         self._api_key = api_key
-        self._endpoint = normalize_ollama_host(endpoint or OLLAMA_DEFAULT_ENDPOINT) + OLLAMA_SYSTEM_ONE_PATH
+        self._endpoint = (
+            normalize_ollama_host(endpoint or OLLAMA_DEFAULT_ENDPOINT) + OLLAMA_SYSTEM_ONE_PATH
+        )
         self._default_model = default_model
         self._client = client
         self._owns_client = client is None

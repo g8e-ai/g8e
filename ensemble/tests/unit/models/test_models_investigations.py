@@ -130,4 +130,3 @@ class TestInvestigationStatus:
         )
         assert inv.status == InvestigationStatus.OPEN
         assert inv.status.value == "Open"
-

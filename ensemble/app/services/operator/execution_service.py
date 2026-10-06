@@ -13,22 +13,16 @@ and result assembly.
 
 import asyncio
 import logging
+
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants import EventType
+from app.constants.config import ExecutionStatus
 from app.constants.generated_status import (
     CommandErrorType,
 )
-from app.constants.config import ExecutionStatus
 from app.errors import BusinessLogicError, NetworkError, ValidationError
-from app.services.protocols import (
-    AIResponseAnalyzerProtocol,
-    ApprovalServiceProtocol,
-    ExecutionServiceProtocol,
-    InvestigationServiceProtocol,
-)
-
-from app.models.tool_results import CommandExecutionResult
 from app.models.command_request_payloads import CommandCancelRequestPayload, CommandRequestPayload
+from app.models.http_context import G8eHttpContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CancelCommandResult,
@@ -37,20 +31,25 @@ from app.models.operators import (
     TargetSystem,
 )
 from app.models.pubsub_messages import (
-    G8eMessage,
-    G8eoResultEnvelope,
     ExecutionResultsPayload,
     FileEditResultPayload,
+    FsGrepResultPayload,
     FsListResultPayload,
     FsReadResultPayload,
-    FsGrepResultPayload,
+    G8eMessage,
+    G8eoResultEnvelope,
     PortCheckResultPayload,
 )
-from app.models.tool_results import CommandInternalResult
-from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeAppSettings
-from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
+from app.models.tool_results import CommandExecutionResult, CommandInternalResult
+from app.services.protocols import (
+    AIResponseAnalyzerProtocol,
+    ApprovalServiceProtocol,
+    ExecutionServiceProtocol,
+    InvestigationServiceProtocol,
+)
 from app.utils.gateway_decoding.gateway_dispatch_result import envelope_from_gateway_dispatch
+from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
 
 logger = logging.getLogger(__name__)
 

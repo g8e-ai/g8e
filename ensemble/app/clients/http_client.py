@@ -1,18 +1,18 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
-#
-# As of the Change Date listed in the LICENSE file, this software is
-# released under the Apache License, Version 2.0.
-
-from __future__ import annotations
-
 """
 g8ee HTTP Client
 
 A robust HTTP client for inter-component communication with built-in retry,
 circuit breaking, and error handling capabilities.
 """
+
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+from __future__ import annotations
 
 import asyncio
 import json
@@ -29,11 +29,11 @@ import aiohttp
 
 from app.constants import (
     AUTHORIZATION,
-    CircuitBreakerState,
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BACKOFF_FACTOR,
     DEFAULT_RETRY_JITTER,
     EXECUTION_ID,
+    CircuitBreakerState,
     ErrorCode,
     ErrorSeverity,
 )
@@ -420,7 +420,9 @@ class HTTPClient:
             )
         )
 
-    def _calculate_backoff(self, retry_count: int, retry_config: RetryConfig | None = None) -> float:
+    def _calculate_backoff(
+        self, retry_count: int, retry_config: RetryConfig | None = None
+    ) -> float:
         effective_retry = retry_config or self.retry_config
         backoff = effective_retry.retry_backoff_factor * (2**retry_count)
         jitter = random.uniform(
@@ -510,9 +512,7 @@ class HTTPClient:
         retry_count = 0
         effective_retry = retry_config or self.retry_config
         session = await self._get_http_session()
-        request_timeout = (
-            aiohttp.ClientTimeout(total=timeout) if timeout is not None else None
-        )
+        request_timeout = aiohttp.ClientTimeout(total=timeout) if timeout is not None else None
 
         while True:
             try:
@@ -626,9 +626,7 @@ class HTTPClient:
                 raise error
 
             except (TimeoutError, aiohttp.ServerTimeoutError) as e:
-                if self._should_retry(
-                    method, 0, retry_count, e, retry_config=effective_retry
-                ):
+                if self._should_retry(method, 0, retry_count, e, retry_config=effective_retry):
                     retry_count += 1
                     backoff = self._calculate_backoff(retry_count, retry_config=effective_retry)
                     logger.error(
@@ -684,9 +682,7 @@ class HTTPClient:
                 raise error from e
 
             except (aiohttp.ClientError, OSError) as e:
-                if self._should_retry(
-                    method, 0, retry_count, e, retry_config=effective_retry
-                ):
+                if self._should_retry(method, 0, retry_count, e, retry_config=effective_retry):
                     retry_count += 1
                     backoff = self._calculate_backoff(retry_count, retry_config=effective_retry)
                     logger.error(
@@ -841,9 +837,7 @@ class HTTPClient:
             )
 
         session = await self._get_http_session()
-        request_timeout = (
-            aiohttp.ClientTimeout(total=timeout) if timeout is not None else None
-        )
+        request_timeout = aiohttp.ClientTimeout(total=timeout) if timeout is not None else None
         try:
             async with session.request(
                 method,

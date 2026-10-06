@@ -25,17 +25,17 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
+from g8e.models.internal_api import EvaluationInferenceContext
+
 import app.llm.llm_types as types
 from app.constants import G8EE_COMPONENT
+from app.constants.config import FORBIDDEN_COMMAND_PATTERNS
 from app.constants.generated_status import (
     CommandErrorType,
     OperatorToolName,
 )
 from app.constants.prompts import AgentMode
-from app.constants.config import FORBIDDEN_COMMAND_PATTERNS
 from app.errors import ConfigurationError, ExternalServiceError, ValidationError
-from g8e.models.internal_api import EvaluationInferenceContext
-
 from app.models.evaluation_trace import ToolGate
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -47,25 +47,25 @@ from app.services.ai.tool_registry import (
     OPERATOR_TOOLS,
     TOOL_SPECS,
 )
+from app.services.data.reputation_data_service import ReputationDataService
 from app.services.evaluation.tool_gate import resolve_tool_gate
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.operator.command_service import OperatorCommandService
 from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.validation.blacklist_validator import CommandBlacklistValidator
-from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 from app.utils.validation.validators import (
     get_auto_approved_validator,
     get_blacklist_validator,
     get_whitelist_validator,
 )
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 from .grounding.web_search_provider import WebSearchProvider
 from .ssh_inventory_service import SshInventoryService
-from app.services.data.reputation_data_service import ReputationDataService
 
 if TYPE_CHECKING:
-    from .reputation_service import ReputationService
     from .chat_task_manager import BackgroundTaskManager
+    from .reputation_service import ReputationService
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +211,6 @@ class AIToolService:
         """
         return self._reputation_data_service
 
-
     @property
     def reputation_service(self) -> ReputationService:
         """The configured ``ReputationService`` (required)."""
@@ -226,7 +225,6 @@ class AIToolService:
     def ssh_inventory_service(self) -> SshInventoryService:
         """The configured ``SshInventoryService`` (required)."""
         return self._ssh_inventory_service
-
 
     @property
     def whitelist_validator(self) -> CommandWhitelistValidator:

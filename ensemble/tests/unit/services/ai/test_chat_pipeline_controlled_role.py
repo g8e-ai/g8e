@@ -8,6 +8,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 from app.constants import (
     ReasoningAgent,
@@ -24,7 +25,6 @@ from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.evaluation.role_control import apply_homogeneous_role_control
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 
 def _evaluation_context(role: str) -> EvaluationInferenceContext:

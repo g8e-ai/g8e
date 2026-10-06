@@ -114,7 +114,9 @@ class TestLLMSettingsResolvedLiteModel:
         assert llm.resolved_lite_model == "llama3:8b"
 
     def test_lite_model_takes_precedence_over_provider_default(self):
-        llm = LLMSettings(lite_provider=LLMProvider.OLLAMA, lite_model="custom:1b", ollama_model="llama3:8b")
+        llm = LLMSettings(
+            lite_provider=LLMProvider.OLLAMA, lite_model="custom:1b", ollama_model="llama3:8b"
+        )
         assert llm.resolved_lite_model == "custom:1b"
 
     def test_primary_provider_default_used_when_only_primary_configured(self):
@@ -160,7 +162,9 @@ class TestLLMSettingsResolveLiteFallback:
 
     def test_resolve_lite_uses_lite_provider_when_configured(self):
         llm = LLMSettings(
-            lite_provider=LLMProvider.OLLAMA, lite_model="llama3:8b", primary_provider=LLMProvider.FAKE
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="llama3:8b",
+            primary_provider=LLMProvider.FAKE,
         )
         provider, api_key, endpoint, model = llm.resolve("lite")
         assert provider == LLMProvider.OLLAMA.value
@@ -168,8 +172,10 @@ class TestLLMSettingsResolveLiteFallback:
 
     def test_resolve_lite_uses_assistant_provider_when_configured(self):
         llm = LLMSettings(
-            assistant_provider=LLMProvider.OLLAMA, assistant_model="llama3:8b",
-            primary_provider=LLMProvider.FAKE, primary_model="fake",
+            assistant_provider=LLMProvider.OLLAMA,
+            assistant_model="llama3:8b",
+            primary_provider=LLMProvider.FAKE,
+            primary_model="fake",
         )
         provider, api_key, endpoint, model = llm.resolve("lite")
         assert provider == LLMProvider.OLLAMA.value
@@ -185,9 +191,7 @@ class TestLLMSettingsResolveLiteFallback:
 
     def test_resolve_lite_model_override_honored_with_primary_provider_fallback(self):
         llm = LLMSettings(primary_provider=LLMProvider.FAKE, primary_model="fake")
-        provider, api_key, endpoint, model = llm.resolve(
-            "lite", model_override="custom-lite:1b"
-        )
+        provider, api_key, endpoint, model = llm.resolve("lite", model_override="custom-lite:1b")
         assert provider == LLMProvider.FAKE.value
         assert model == "custom-lite:1b"
 

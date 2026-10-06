@@ -13,10 +13,10 @@ import logging
 from typing import Any
 
 from app.constants import (
-    ReasoningAgent,
     FORBIDDEN_COMMAND_PATTERNS,
     PromptFile,
     PromptSection,
+    ReasoningAgent,
 )
 from app.constants.prompts import InvestigationContextLabel
 from app.models.agent import OperatorContext

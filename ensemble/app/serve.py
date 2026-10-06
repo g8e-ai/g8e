@@ -39,13 +39,22 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.serve", description=__doc__)
     parser.add_argument("--host", default=DEFAULT_HOST, help="Interface the API binds to")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Port the API binds to")
-    parser.add_argument("--gateway-http-url", help="Gateway plain-HTTP bootstrap URL used for enrollment")
-    parser.add_argument("--gateway-url", help="Gateway HTTPS base URL used by the internal HTTP client")
-    parser.add_argument("--gateway-https-url", help="Gateway HTTPS URL for operator and app endpoints")
+    parser.add_argument(
+        "--gateway-http-url", help="Gateway plain-HTTP bootstrap URL used for enrollment"
+    )
+    parser.add_argument(
+        "--gateway-url", help="Gateway HTTPS base URL used by the internal HTTP client"
+    )
+    parser.add_argument(
+        "--gateway-https-url", help="Gateway HTTPS URL for operator and app endpoints"
+    )
     parser.add_argument("--gateway-pubsub-url", help="Gateway WebSocket pub/sub URL")
     parser.add_argument("--runtime-dir", help="Runtime (.g8e) directory")
     parser.add_argument("--pki-dir", help="PKI directory (default: <runtime-dir>/pki)")
-    parser.add_argument("--ca-cert-path", help="Gateway trust bundle path (default: <pki-dir>/trust/g8eg-ca-bundle.pem)")
+    parser.add_argument(
+        "--ca-cert-path",
+        help="Gateway trust bundle path (default: <pki-dir>/trust/g8eg-ca-bundle.pem)",
+    )
     return parser
 
 

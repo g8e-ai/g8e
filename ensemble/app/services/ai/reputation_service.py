@@ -27,24 +27,23 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-
-from app.models.base import BaseModel, ConfigDict
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.constants import (
     AuditorReason,
     CommandGenerationOutcome,
-    RiskLevel,
     ConsensusMember,
+    RiskLevel,
 )
 from app.models.agents.tribunal import CommandGenerationResult
+from app.models.base import BaseModel, ConfigDict
+from app.models.http_context import RequestContext
 from app.models.reputation import (
     ReputationState,
     SlashTier,
     StakeResolution,
 )
 from app.models.tool_results import CommandExecutionResult
-from app.models.http_context import RequestContext
 from app.services.data.reputation_data_service import ReputationDataService
 from app.services.data.stake_resolution_data_service import (
     StakeResolutionDataService,

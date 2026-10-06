@@ -24,18 +24,18 @@ from __future__ import annotations
 
 import logging
 
+from app.clients.governance_client import GovernanceClient
 from app.constants import (
     DB_COLLECTION_REPUTATION_COMMITMENTS,
     DB_COLLECTION_REPUTATION_STATE,
-    ErrorCode,
     G8EE_COMPONENT,
+    ErrorCode,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
-from app.models.reputation import ReputationCommitment, ReputationState, ReputationSignRequest
 from app.models.http_context import RequestContext
+from app.models.reputation import ReputationCommitment, ReputationSignRequest, ReputationState
 from app.services.protocols import DocumentServiceProtocol
-from app.clients.governance_client import GovernanceClient
 
 logger = logging.getLogger(__name__)
 

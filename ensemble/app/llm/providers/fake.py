@@ -67,7 +67,9 @@ _TOOL_FILE_WRITE = "file_write_on_operator"
 _TOOL_RUN_COMMANDS = "run_commands_with_operator"
 
 # Regex patterns for extracting file path and content from the user message.
-_FILE_PATH_RE = re.compile(r"(?:file\s+at\s+|path\s*[:=]\s*|create.*?at\s+)([^\s,]+)", re.IGNORECASE)
+_FILE_PATH_RE = re.compile(
+    r"(?:file\s+at\s+|path\s*[:=]\s*|create.*?at\s+)([^\s,]+)", re.IGNORECASE
+)
 _CONTENT_RE = re.compile(
     r"(?:content\s*[:=]\s*|with\s+the\s+content\s*:?\s*|following\s+content\s+to\s+the\s+file\s+at\s+\S+\s*:\s*)(.+?)(?:$|\n)",
     re.IGNORECASE | re.DOTALL,
@@ -495,9 +497,7 @@ class FakeProvider(LLMProvider):
                 "Respond now with the exact command string and nothing else."
             ):
                 return "cat /proc/uptime"
-            if message.rstrip().endswith(
-                "Respond now with the JSON object and nothing else."
-            ):
+            if message.rstrip().endswith("Respond now with the JSON object and nothing else."):
                 return json.dumps(
                     {
                         "status": "ok",

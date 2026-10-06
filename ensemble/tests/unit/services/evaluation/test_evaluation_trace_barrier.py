@@ -9,8 +9,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from app.models.settings import G8eeUserSettings
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.evaluation_trace import (
@@ -20,8 +19,8 @@ from app.models.evaluation_trace import (
 )
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import G8eeUserSettings
 from app.services.ai.chat_pipeline import ChatPipelineService
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 
 def _evaluation_context() -> EvaluationInferenceContext:
@@ -100,7 +99,7 @@ async def test_finalize_evaluation_assignment_waits_for_memory_barrier():
         g8e_context=g8e_context,
         judge_settings=G8eeUserSettings(),
         inputs=inputs,
-                state=state,
+        state=state,
         memory_holder=memory_holder,
     )
 
@@ -218,7 +217,7 @@ async def test_finalize_records_the_eval_only_divergences_and_the_seed_applicati
         g8e_context=g8e_context,
         judge_settings=G8eeUserSettings(),
         inputs=inputs,
-                state=state,
+        state=state,
         memory_holder=None,
         seed_application=seed_application,
     )

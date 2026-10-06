@@ -26,7 +26,6 @@ from app.models.internal_api import (
 )
 from app.services.infra.event_service import EventService
 
-
 pytestmark = pytest.mark.unit
 
 

@@ -21,8 +21,8 @@ from app.constants import (
 )
 from app.llm.llm_types import ToolDeclaration, ToolGroup
 from app.llm.providers.open_ai import OpenAIProvider
-from app.models.tool_results import CommandExecutionResult
 from app.models.model_configs import UNKNOWN_MODEL_CONFIG, get_model_config
+from app.models.tool_results import CommandExecutionResult
 from app.services.ai.request_builder import AIRequestBuilder
 from tests.fakes.agent_helpers import (
     make_agent_inputs,

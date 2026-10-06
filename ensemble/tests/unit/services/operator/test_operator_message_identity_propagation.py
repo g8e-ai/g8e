@@ -17,11 +17,12 @@ identity fields.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.constants import FileOperation, G8EE_COMPONENT
+import pytest
+
+from app.constants import G8EE_COMPONENT, FileOperation
+from app.constants.config import ExecutionStatus
 from app.models.command_request_payloads import (
     FileEditRequestPayload,
     FsGrepRequestPayload,
@@ -29,12 +30,11 @@ from app.models.command_request_payloads import (
     FsReadRequestPayload,
 )
 from app.models.http_context import G8eHttpContext, RequestContext
-from app.models.investigations import EnrichedInvestigationContext
 from app.models.internal_api import DirectCommandRequest
+from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import OperatorDocument
 from app.models.pubsub_messages import FileEditResultPayload
 from app.models.tool_results import CommandInternalResult
-from app.constants.config import ExecutionStatus
 from tests.fakes.builder import build_command_service
 
 
@@ -72,9 +72,7 @@ def _mock_envelope() -> MagicMock:
 def _stub_execute_for_identity(service) -> None:
     """Wire execution_service.execute to a no-op AsyncMock returning a completed result."""
     internal_result = CommandInternalResult(status=ExecutionStatus.COMPLETED, output="")
-    service.execution_service.execute = AsyncMock(
-        return_value=(internal_result, _mock_envelope())
-    )
+    service.execution_service.execute = AsyncMock(return_value=(internal_result, _mock_envelope()))
 
 
 class TestFileServiceIdentityPropagation:
@@ -287,4 +285,6 @@ class TestLFAAServiceIdentityPropagation:
         assert result is True
         kwargs = lfaa_service._gateway_operator_client.ingest_audit_record.await_args.kwargs
         assert kwargs["user_id"] == "user-123", "user_id must be propagated from g8e_context"
-        assert kwargs["cli_session_id"] == "cli-456", "cli_session_id must be propagated from g8e_context"
+        assert kwargs["cli_session_id"] == "cli-456", (
+            "cli_session_id must be propagated from g8e_context"
+        )

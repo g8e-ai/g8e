@@ -5,12 +5,14 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from unittest.mock import AsyncMock, MagicMock, ANY
+from unittest.mock import ANY, AsyncMock, MagicMock
+
 import pytest
+
 from app.constants import ErrorAnalysisCategory, EventType, RiskLevel
+from app.models.agents.tribunal import TribunalMarshalBlockedError
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import CommandRiskAnalysis, ErrorAnalysisResult
-from app.models.agents.tribunal import TribunalMarshalBlockedError
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
 

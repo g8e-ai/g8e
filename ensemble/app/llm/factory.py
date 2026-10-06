@@ -33,11 +33,11 @@ All Gemini-specific logic lives in app.llm.providers.gemini.
 
 import logging
 
-from app.models.settings import LLMSettings, G8eeAppSettings, SearchSettings
 from app.constants import LLMProvider
+from app.models.settings import G8eeAppSettings, LLMSettings, SearchSettings
 
-from .provider import LLMProvider as LLMProviderBase
 from .endpoints import normalize_ollama_host
+from .provider import LLMProvider as LLMProviderBase
 
 logger = logging.getLogger(__name__)
 
@@ -150,9 +150,7 @@ def get_generative_lite_provider(settings: LLMSettings) -> LLMProviderBase:
     get_decision_provider() when lite_provider is jev.
     """
     if settings.lite_provider is LLMProvider.JEV:
-        logger.debug(
-            "Lite provider is jev; using assistant provider for generative lite call"
-        )
+        logger.debug("Lite provider is jev; using assistant provider for generative lite call")
         return get_llm_provider(settings, is_assistant=True)
     return get_llm_provider(settings, is_lite=True)
 

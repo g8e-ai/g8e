@@ -5,16 +5,17 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.constants import ExecutionStatus, FileOperation, G8EE_COMPONENT
+import pytest
+
+from app.constants import G8EE_COMPONENT, ExecutionStatus, FileOperation
 from app.models.command_request_payloads import FileEditRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
+from app.models.operators import OperatorDocument
 from app.models.pubsub_messages import FileEditResultPayload
 from app.models.tool_results import CommandInternalResult
-from app.models.operators import OperatorDocument
 from tests.fakes.builder import build_command_service
 
 
@@ -75,5 +76,3 @@ async def test_execute_file_edit_read_returns_content():
     assert result.success is True
     # THIS IS THE BUG: result.content is currently None for READ operations
     assert result.content == mock_content
-
-

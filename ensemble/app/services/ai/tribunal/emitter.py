@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import logging
+
 from app.constants import EventType
 from app.models.agents.tribunal import TribunalObserver
 from app.models.base import G8eBaseModel
@@ -43,9 +44,7 @@ class TribunalEmitter:
         self.correlation_id = correlation_id
         self.observer = observer
 
-    def observe_marshal_risk(
-        self, command: str, analysis: CommandRiskAnalysis | None
-    ) -> None:
+    def observe_marshal_risk(self, command: str, analysis: CommandRiskAnalysis | None) -> None:
         """Tell the observer what Marshal classified. Marshal publishes no event unless it blocks."""
         if self.observer is None:
             return

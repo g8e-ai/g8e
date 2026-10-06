@@ -51,7 +51,7 @@ Only the WebSearchProvider network boundary is replaced:
 
 import pytest
 
-from app.constants import EventType, G8EE_COMPONENT, OperatorToolName, StreamChunkFromModelType
+from app.constants import G8EE_COMPONENT, EventType, OperatorToolName, StreamChunkFromModelType
 from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.models.grounding import GroundingMetadata
 from app.models.settings import G8eeUserSettings, LLMSettings
@@ -120,7 +120,6 @@ async def _collect_sse_events(chunks, inputs=None, state=None):
         if call.kwargs:
             from app.models.events import SessionEvent
             from app.models.http_context import RequestContext
-
 
             ctx = RequestContext(
                 web_session_id=call.kwargs.get("web_session_id"),

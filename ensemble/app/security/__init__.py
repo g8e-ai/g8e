@@ -19,7 +19,6 @@ from .output_sanitizer import (
     sanitize_file_content,
     sanitize_g8eo_output,
 )
-
 from .sentinel_scrubber import (
     ScrubResult,
     SentinelConfig,

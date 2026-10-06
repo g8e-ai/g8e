@@ -19,16 +19,16 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import httpx
-from google.protobuf.message import DecodeError
-
-from app.constants import EventType, LLMProvider
-from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
-from app.models.http_context import G8eHttpContext
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
     OllamaModelInventoryRequested,
     OllamaModelInventoryResult,
 )
+from google.protobuf.message import DecodeError
+
+from app.constants import EventType, LLMProvider
+from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
+from app.models.http_context import G8eHttpContext
 
 if TYPE_CHECKING:
     from app.clients.gateway_operator_client import GatewayOperatorClient
@@ -132,7 +132,8 @@ async def inference_operator_session_id(
     """
     operators = await operator_client.list(user_id=user_id or "")
     inference_operators = [
-        op for op in operators
+        op
+        for op in operators
         if isinstance(op, dict)
         and op.get("status") == "active"
         and op.get("operator_type") == "remote"
@@ -143,7 +144,9 @@ async def inference_operator_session_id(
     if not inference_operators:
         raise ServiceUnavailableError("No active Inference Operator is available to list models")
     if len(inference_operators) != 1:
-        raise ServiceUnavailableError("Multiple Inference Operators are active; model source is ambiguous")
+        raise ServiceUnavailableError(
+            "Multiple Inference Operators are active; model source is ambiguous"
+        )
     return str(inference_operators[0]["operator_session_id"])
 
 
@@ -167,7 +170,9 @@ async def request_governed_inventory(
         payload = base64.b64decode(response["result_payload"], validate=True)
         result = OllamaModelInventoryResult.FromString(payload)
     except (ValueError, TypeError, DecodeError) as exc:
-        raise ServiceUnavailableError("The Inference Operator returned an invalid model inventory") from exc
+        raise ServiceUnavailableError(
+            "The Inference Operator returned an invalid model inventory"
+        ) from exc
     if result.status != EXECUTION_STATUS_COMPLETED:
         raise ServiceUnavailableError("The Inference Operator could not list models")
     return result

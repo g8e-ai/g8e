@@ -8,8 +8,8 @@
 """Regression tests for Phase 8 — KV key patterns sourced from g8e.constants.KV."""
 
 import pytest
-
-from g8e.constants import KV, kv_key as _g8e_kv_key
+from g8e.constants import KV
+from g8e.constants import kv_key as _g8e_kv_key
 
 from app.constants.kv_keys import CACHE_PREFIX, KVKey, KVKeyPrefix
 

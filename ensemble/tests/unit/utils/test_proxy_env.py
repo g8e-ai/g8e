@@ -69,8 +69,12 @@ def test_result_parses_under_httpx():
     assert env["no_proxy"] == "localhost,::1,fd8b:4f84:7d32:99::1"
 
     proxy_keys = (
-        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-        "http_proxy", "https_proxy", "all_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
     )
     with patch.dict(os.environ, {"no_proxy": env["no_proxy"]}):
         for key in proxy_keys:

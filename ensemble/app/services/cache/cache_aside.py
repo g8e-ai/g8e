@@ -9,11 +9,8 @@ import hashlib
 import json
 import logging
 from typing import Any, cast
-from app.db.db_service import DBService
-from app.db.kv_service import KVService
-from app.services.protocols import DocumentServiceProtocol, KVServiceProtocol
+
 from app.constants import (
-    BatchWriteOpType,
     CACHE_TTL_DEFAULT,
     CACHE_TTL_LONG,
     CACHE_TTL_MEDIUM,
@@ -23,22 +20,24 @@ from app.constants import (
     DB_COLLECTION_CASES,
     DB_COLLECTION_INVESTIGATIONS,
     DB_COLLECTION_MEMORIES,
-    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_OPERATOR_SESSIONS,
+    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_ORGANIZATIONS,
     DB_COLLECTION_REPUTATION_COMMITMENTS,
     DB_COLLECTION_REPUTATION_STATE,
     DB_COLLECTION_SETTINGS,
     DB_COLLECTION_USERS,
     DB_COLLECTION_WEB_SESSIONS,
-    ErrorCode,
     G8EE_COMPONENT,
+    BatchWriteOpType,
+    ErrorCode,
     KVKey,
     KVKeyPrefix,
 )
-
+from app.db.db_service import DBService
+from app.db.kv_service import KVService
 from app.errors import DatabaseError
-from app.models.base import recursive_serialize, G8eBaseModel
+from app.models.base import G8eBaseModel, recursive_serialize
 from app.models.cache import (
     BatchCreateDocumentOperation,
     BatchOperationResult,
@@ -49,6 +48,7 @@ from app.models.cache import (
     FieldFilter,
     QueryResult,
 )
+from app.services.protocols import DocumentServiceProtocol, KVServiceProtocol
 
 logger = logging.getLogger(__name__)
 

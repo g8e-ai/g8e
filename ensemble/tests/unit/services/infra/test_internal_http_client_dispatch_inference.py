@@ -19,6 +19,13 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.operator.v1.operator_pb2 import (
+    EXECUTION_STATUS_COMPLETED,
+    INFERENCE_MESSAGE_ROLE_USER,
+    MODEL_ROLE_ASSISTANT,
+    RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED,
+    InferenceDispatchStreamFrame,
+)
 from google.protobuf import json_format
 
 from app.constants import G8EE_COMPONENT
@@ -28,13 +35,6 @@ from app.models.internal_api import (
     InferenceDispatchResponse,
 )
 from app.services.infra.internal_http_client import InternalHttpClient
-from g8e.operator.v1.operator_pb2 import (
-    EXECUTION_STATUS_COMPLETED,
-    INFERENCE_MESSAGE_ROLE_USER,
-    MODEL_ROLE_ASSISTANT,
-    RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED,
-    InferenceDispatchStreamFrame,
-)
 
 pytestmark = pytest.mark.unit
 

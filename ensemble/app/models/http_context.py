@@ -15,8 +15,8 @@ from g8e.models.context import RequestContext as _G8eRequestContext
 from g8e.models.internal_api import EvaluationInferenceContext
 
 from app.constants import (
-    ComponentName,
     G8EE_COMPONENT,
+    ComponentName,
     OperatorStatus,
 )
 from app.utils.time_ids.ids import generate_execution_id

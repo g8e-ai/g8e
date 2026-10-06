@@ -16,13 +16,13 @@ import copy
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
-
 from app.constants import BatchWriteOpType, GatewayAPIPaths, InvestigationStatus
 from app.db import ArrayRemove, ArrayUnion, DBClient
 from app.errors import NetworkError, ResourceNotFoundError
 from app.models.cache import BatchWriteOperation
 from app.models.settings import TLSConfig
+
+pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 
 class InMemoryOperator:

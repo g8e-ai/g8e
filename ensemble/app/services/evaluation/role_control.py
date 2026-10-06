@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from g8e.models.internal_api import EvaluationInferenceContext
+
 from app.constants import ReasoningAgent, TriageComplexityClassification
 from app.constants.evaluation import DesignatedRoleToAgent
 from app.errors import ValidationError
@@ -22,7 +24,6 @@ from app.models.evaluation_trace import (
 )
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
-from g8e.models.internal_api import EvaluationInferenceContext
 
 _SCORED_AGENT_ROLES = frozenset({"sage", "dash"})
 

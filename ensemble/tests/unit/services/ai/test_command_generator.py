@@ -12,12 +12,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     AuditorReason,
     CommandGenerationOutcome,
     ConsensusMember,
     ErrorAnalysisCategory,
     EventType,
-    G8EE_COMPONENT,
     LLMProvider,
     RiskLevel,
 )
@@ -32,13 +32,14 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields as _prompt_fields,
 )
 from app.models.agent import OperatorContext
-from app.models.http_context import RequestContext
 from app.models.agents.tribunal import (
     CandidateCommand,
     TribunalAuditorFailedError,
     TribunalAuditorFailedPayload,
     TribunalDisabledError,
     TribunalGenerationFailedError,
+    TribunalMarshalBlockedError,
+    TribunalMarshalBlockedPayload,
     TribunalModelNotConfiguredError,
     TribunalProviderUnavailableError,
     TribunalSessionCompletedPayload,
@@ -49,17 +50,10 @@ from app.models.agents.tribunal import (
     TribunalSessionStartedPayload,
     TribunalSessionSystemErrorPayload,
     TribunalSystemError,
-    TribunalMarshalBlockedError,
-    TribunalMarshalBlockedPayload,
     VoteBreakdown,
 )
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.settings import G8eeUserSettings, LLMSettings
-from tests.unit.services.ai.tribunal.conftest import (
-    _MOCK_USER_SETTINGS,
-    _make_mock_reputation_service,
-    make_tribunal_generation_request,
-)
 from app.models.tool_results import (
     CommandRiskAnalysis,
     ErrorAnalysisResult,
@@ -69,12 +63,17 @@ from app.services.ai.generator import (
     _build_and_emit_result,
     generate_command,
 )
+from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+from app.services.ai.tribunal.stages.generation import _run_generation_pass
+from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
 from app.services.ai.tribunal.utils import member_for_pass
 from app.services.evaluation.player_steps import PlayerStepRecorder
-from app.services.ai.tribunal.stages.generation import _run_generation_pass
-from app.services.ai.tribunal.stages.auditor import TribunalAuditor
-from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
 from app.utils.agent_persona_loader import get_agent_persona
+from tests.unit.services.ai.tribunal.conftest import (
+    _MOCK_USER_SETTINGS,
+    _make_mock_reputation_service,
+    make_tribunal_generation_request,
+)
 
 _TEST_HMAC_KEY = "a" * 64
 

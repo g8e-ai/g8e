@@ -17,12 +17,12 @@ protocol/proto/operator.proto.
 
 from typing import Literal, Union
 
+from g8e.operator.v1 import operator_pb2
 from google.protobuf.json_format import ParseDict
 from google.protobuf.struct_pb2 import Struct
 
 from app.constants import FileOperation
-from app.models.base import G8eBaseModel, Field
-from g8e.operator.v1 import operator_pb2
+from app.models.base import Field, G8eBaseModel
 
 __all__ = [
     "CheckPortRequestPayload",

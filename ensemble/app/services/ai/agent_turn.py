@@ -18,9 +18,8 @@ the TurnResult alongside streamed chunks.
 from __future__ import annotations
 
 import logging
-
-from app.models.base import BaseModel, ConfigDict, Field
 from collections.abc import AsyncGenerator
+
 from httpx import HTTPStatusError as HttpxHTTPStatusError
 from httpx import TimeoutException as HttpxTimeout
 
@@ -36,6 +35,7 @@ from app.models.agent import (
     StreamChunkFromModel,
     TurnResult,
 )
+from app.models.base import BaseModel, ConfigDict, Field
 from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)

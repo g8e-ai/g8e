@@ -14,24 +14,22 @@ authority for shell command generation.
 
 import logging
 
-from app.errors import ConfigurationError
-from app.models.http_context import RequestContext
-from app.models.agent import OperatorContext
 from app.constants import (
-    CommandGenerationOutcome,
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    EventType,
     AuditorReason,
+    CommandGenerationOutcome,
+    EventType,
 )
-from app.services.ai.voter import TRIBUNAL_MIN_CONSENSUS
+from app.errors import ConfigurationError
+from app.llm.factory import get_llm_provider
+from app.llm.model_call_attribution import prepare_provider_call
 from app.llm.prompts import (
     build_command_constraints_message,
     build_tribunal_prompt_fields,
 )
-from app.llm.factory import get_llm_provider
-from app.llm.model_call_attribution import prepare_provider_call
+from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
@@ -48,24 +46,25 @@ from app.models.agents.tribunal import (
     TribunalVotingCompletedPayload,
     VoteBreakdown,
 )
-from app.models.tribunal_commands import TribunalGenerationRequest
-from app.utils.time_ids.ids import generate_tribunal_correlation_id
+from app.models.http_context import RequestContext
 from app.models.tool_results import CommandRiskAnalysis
-from app.utils.validation.safety import validate_command_safety
-
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.generation import (
     _anonymize_clusters,
     _run_generation_stage,
 )
-from app.services.ai.tribunal.stages.voting import _run_voting_stage
 from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
+from app.services.ai.tribunal.stages.voting import _run_voting_stage
 from app.services.ai.tribunal.utils import (
     member_for_pass,
     resolve_model,
 )
+from app.services.ai.voter import TRIBUNAL_MIN_CONSENSUS
 from app.services.observe.payloads import agent_state_sequence, build_agent_state_request
+from app.utils.time_ids.ids import generate_tribunal_correlation_id
+from app.utils.validation.safety import validate_command_safety
 
 logger = logging.getLogger(__name__)
 

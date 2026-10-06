@@ -6,7 +6,8 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
-from app.constants import TieBreakReason, ConsensusMember
+
+from app.constants import ConsensusMember, TieBreakReason
 from app.models.agents.tribunal import CandidateCommand
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.voting import _run_voting_stage

@@ -106,7 +106,9 @@ class TestEvalJudgeJevHappyPath:
         assert result.model_calls[0].agent_role == "judge"
         assert result.model_calls[0].succeeded is True
 
-    async def test_low_score_fails(self, jev_judge: EvalJudge, fake_decision_provider: FakeDecisionProvider):
+    async def test_low_score_fails(
+        self, jev_judge: EvalJudge, fake_decision_provider: FakeDecisionProvider
+    ):
         fake_decision_provider.add_response(_jev_grade_response(score_index=1.0))
 
         result = await jev_judge.grade_turn(**GRADE_KWARGS)

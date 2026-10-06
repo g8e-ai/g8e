@@ -5,14 +5,16 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from __future__ import annotations
-
 """Typed fake for EventServiceProtocol."""
+
+from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from app.constants import EventType, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, EventType
+from app.models.base import G8eBaseModel
 from app.models.events import BackgroundEvent, SessionEvent
+from app.models.http_context import G8eHttpContext
 
 
 class FakeEventService:
@@ -39,7 +41,6 @@ class FakeEventService:
         if isinstance(event, (SessionEvent, BackgroundEvent)):
             self.published.append(event)
         return "fake-publish-id"
-
 
     async def publish_reputation_event(
         self,
@@ -71,7 +72,6 @@ class FakeEventService:
         """Typed fake for publish_investigation_event."""
         # We can just record this as a SessionEvent in self.published
         from app.models.http_context import RequestContext
-
 
         ctx = RequestContext(
             web_session_id=web_session_id,

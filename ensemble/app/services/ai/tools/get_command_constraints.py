@@ -13,9 +13,9 @@ import logging
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
-from app.constants.prompts import PromptFile
 from app.constants.config import DEFAULT_OS_NAME
 from app.constants.generated_status import OperatorToolName
+from app.constants.prompts import PromptFile
 from app.llm.prompts import load_prompt
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -25,8 +25,8 @@ from app.models.whitelist import WhitelistedCommand
 from app.services.investigation.investigation_service import (
     extract_single_operator_context,
 )
-from app.utils.validation.safety import map_os_string_to_platform
 from app.utils.csv_commands import parse_command_csv
+from app.utils.validation.safety import map_os_string_to_platform
 
 if TYPE_CHECKING:
     from app.services.ai.tool_service import AIToolService

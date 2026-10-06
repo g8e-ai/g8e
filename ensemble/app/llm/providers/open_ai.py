@@ -11,24 +11,23 @@ from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
 
-from app.llm.thinking import translate_for_openai
-from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
     Content,
-    LiteLLMSettings,
-    PrimaryLLMSettings,
-    ToolCall,
     GenerateContentResponse,
+    LiteLLMSettings,
     Part,
+    PrimaryLLMSettings,
     StreamChunkFromModel,
-    UsageMetadata,
+    ToolCall,
     ToolGroup,
+    UsageMetadata,
 )
-
 from app.llm.provider import LLMProvider
 from app.llm.providers._capability import translate_capability_error
+from app.llm.thinking import translate_for_openai
+from app.models.model_configs import get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -290,9 +289,13 @@ class OpenAIProvider(LLMProvider):
                             args = json.loads(tc.function.arguments)
                         except json.JSONDecodeError as exc:
                             from app.errors import ValidationError
-                            raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+
+                            raise ValidationError(
+                                "Provider returned invalid tool arguments JSON"
+                            ) from exc
                         if not isinstance(args, dict):
                             from app.errors import ValidationError
+
                             raise ValidationError("Provider tool arguments must be a JSON object")
                         calls.append(
                             ToolCall(name=tc.function.name, args=args, id=getattr(tc, "id", None))
@@ -388,9 +391,13 @@ class OpenAIProvider(LLMProvider):
                         args = json.loads(tc.function.arguments)
                     except json.JSONDecodeError as exc:
                         from app.errors import ValidationError
-                        raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+
+                        raise ValidationError(
+                            "Provider returned invalid tool arguments JSON"
+                        ) from exc
                     if not isinstance(args, dict):
                         from app.errors import ValidationError
+
                         raise ValidationError("Provider tool arguments must be a JSON object")
                     parts.append(
                         Part(

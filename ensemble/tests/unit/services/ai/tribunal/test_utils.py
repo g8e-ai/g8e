@@ -6,9 +6,10 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
-from app.constants import LLMProvider, ConsensusMember
-from app.models.settings import LLMSettings
+
+from app.constants import ConsensusMember, LLMProvider
 from app.models.agents.tribunal import TribunalModelNotConfiguredError
+from app.models.settings import LLMSettings
 from app.services.ai.tribunal.utils import is_system_error, member_for_pass, resolve_model
 
 

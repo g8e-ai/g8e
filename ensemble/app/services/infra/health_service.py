@@ -8,6 +8,7 @@
 import logging
 from collections.abc import Coroutine
 from typing import Any
+
 from fastapi import Request
 
 from app.constants import G8EE_COMPONENT, HealthStatus
@@ -30,12 +31,12 @@ class HealthService:
         """
         from app.dependencies import (
             get_g8ee_app_settings,
+            get_g8ee_attachment_service,
             get_g8ee_cache_aside_service,
+            get_g8ee_chat_pipeline,
             get_g8ee_investigation_data_service,
             get_g8ee_investigation_service,
             get_g8ee_memory_service,
-            get_g8ee_chat_pipeline,
-            get_g8ee_attachment_service,
         )
 
         dependencies: dict[str, DependencyStatus] = {}

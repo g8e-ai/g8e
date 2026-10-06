@@ -12,54 +12,52 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NoReturn
 
-from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
-from app.models.base import G8eBaseModel
-from app.models.agent import OperatorContext
-from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment, ReputationSignRequest
-from app.models.http_context import RequestContext
-from app.services.data.reputation_data_service import ReputationDataService
-from app.utils.hashing.merkle import leaf_bytes, merkle_root
 from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    EventType,
     AuditorReason,
-    ConsensusAuditStatus,
     ConsensusAuditMode,
+    ConsensusAuditStatus,
+    EventType,
 )
 from app.constants.generated_status import CommandErrorType
-from app.llm.prompts import (
-    build_tribunal_auditor_prompt,
-    build_tribunal_auditor_context,
-    build_tribunal_prompt_fields,
-)
-from app.llm.llm_types import Content, Part, Role, ResponseFormat
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm.llm_types import Content, Part, ResponseFormat, Role
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
+from app.llm.prompts import (
+    build_tribunal_auditor_context,
+    build_tribunal_auditor_prompt,
+    build_tribunal_prompt_fields,
+)
 from app.llm.provider import LLMProvider
-from app.models.http_context import G8eHttpContext
+from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
-    CandidateCommand,
     AuditorClusterInfo,
-    TribunalAuditorFailedError,
-    TribunalAuditorStartedPayload,
+    CandidateCommand,
     TribunalAuditorCompletedPayload,
+    TribunalAuditorFailedError,
     TribunalAuditorFailedPayload,
+    TribunalAuditorStartedPayload,
     VoteBreakdown,
 )
-from app.utils.agent_persona_loader import AgentPersona
+from app.models.base import G8eBaseModel
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.model_configs import get_model_config
 from app.models.model_telemetry import ModelCallTelemetry
+from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment, ReputationSignRequest
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+from app.services.data.reputation_data_service import ReputationDataService
+from app.utils.agent_persona_loader import AgentPersona
+from app.utils.hashing.merkle import leaf_bytes, merkle_root
 
 if TYPE_CHECKING:
     from app.services.ai.generator import TribunalEmitter
-from app.utils.json_utils import extract_json_from_text
-from app.utils.validation.safety import validate_command_safety
-
 # Internal import for normalisation
 from app.utils.command import normalise_command
+from app.utils.json_utils import extract_json_from_text
+from app.utils.validation.safety import validate_command_safety
 
 logger = logging.getLogger(__name__)
 
@@ -249,11 +247,13 @@ async def call_auditor_llm(
 
     contents = [Content(role=Role.USER, parts=[Part.from_text(current_prompt)])]
     prepare_provider_call(provider, g8e_context=g8e_context, retry_count=attempt)
-    input_artifact_hash = model_boundary_hash({
-        "model": model,
-        "contents": contents,
-        "settings": settings,
-    })
+    input_artifact_hash = model_boundary_hash(
+        {
+            "model": model,
+            "contents": contents,
+            "settings": settings,
+        }
+    )
     monotonic_start = time.monotonic()
     try:
         response = await provider.generate_content_lite(
@@ -403,9 +403,7 @@ async def run_auditor(
 
     for attempt in range(max_attempts):
         try:
-            call_result = await call_auditor_llm(
-                provider, model, prompt, auditor_persona, attempt
-            )
+            call_result = await call_auditor_llm(provider, model, prompt, auditor_persona, attempt)
             if call_result.error:
                 raise call_result.error
             status, revised_raw, swap_to_cluster = parse_auditor_response(
@@ -630,9 +628,13 @@ async def commit_reputation(
     latest = await reputation_data_service.get_latest_commitment()
     prev_root = latest.merkle_root if latest is not None else GENESIS_PREV_ROOT
 
-    signature = await reputation_data_service.sign_commitment(ReputationSignRequest(
-        merkle_root=root, prev_root=prev_root, tribunal_command_id=tribunal_command_id,
-    ))
+    signature = await reputation_data_service.sign_commitment(
+        ReputationSignRequest(
+            merkle_root=root,
+            prev_root=prev_root,
+            tribunal_command_id=tribunal_command_id,
+        )
+    )
 
     commitment = ReputationCommitment(
         investigation_id=investigation_id,

@@ -21,10 +21,10 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     CommandGenerationOutcome,
     EventType,
     ExecutionStatus,
-    G8EE_COMPONENT,
     OperatorToolName,
 )
 from app.llm.llm_types import ToolCall

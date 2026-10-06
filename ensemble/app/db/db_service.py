@@ -10,11 +10,11 @@ import logging
 from app.clients.db_client import DBClient
 from app.models.base import G8eBaseModel
 from app.models.cache import (
+    BatchWriteOperation,
     CacheOperationResult,
     DocumentResult,
-    QueryResult,
-    BatchWriteOperation,
     FieldFilter,
+    QueryResult,
 )
 
 logger = logging.getLogger(__name__)

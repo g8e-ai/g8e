@@ -23,7 +23,6 @@ from app.models.model_telemetry import (
     ModelBoundaryPrivacyAttestation,
 )
 
-
 _MODEL_BOUNDARY_SCANNER_VERSION = "sentinel-regex@1.0.0"
 
 

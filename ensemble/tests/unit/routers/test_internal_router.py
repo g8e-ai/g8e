@@ -10,30 +10,29 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import ComponentName
+from app.constants import ComponentName, LLMProvider, OperatorStatus
 from app.errors import ResourceNotFoundError, ValidationError
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.cases import (
+    CaseDeleteRequest,
     CaseGetRequest,
     CaseUpdateRequest,
-    CaseDeleteRequest,
 )
 from app.models.http_context import BoundOperator, G8eHttpContext, RequestContext
-from app.models.investigations import InvestigationQueryRequest
-from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.internal_api import (
     ChatMessageRequest,
     DirectCommandRequest,
     LLMModelListRequest,
-    ResourceCreationRequest,
     OperatorApprovalResponse,
     OperatorBindRequest,
     OperatorSlotClaimRequest,
     OperatorSlotCreationRequest,
     OperatorUnbindRequest,
+    ResourceCreationRequest,
     StopAIRequest,
 )
-from app.constants import OperatorStatus
+from app.models.investigations import InvestigationQueryRequest
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.routers.internal_router import (
     _generate_and_update_title,
     _status_payload_from_gateway_doc,
@@ -42,6 +41,7 @@ from app.routers.internal_router import (
     create_operator_slot,
     delete_case,
     execute_direct_command,
+    get_case,
     internal_chat,
     list_llm_models,
     operator_approval_respond,
@@ -49,10 +49,8 @@ from app.routers.internal_router import (
     stop_ai_processing,
     unbind_operators,
     update_case,
-    get_case,
 )
 from app.services.ai.chat_task_manager import BackgroundTaskManager
-from app.constants import LLMProvider
 from tests.fakes.factories import build_case_model, create_investigation_data
 
 # Canonical API key format from protocol/constants/api_key_patterns.json
@@ -68,9 +66,13 @@ async def test_governed_model_list_uses_bound_inference_operator(request_context
         context=request_context,
         provider=LLMProvider.G8E,
     )
-    with patch("app.routers.internal_router.list_governed_models", new_callable=AsyncMock) as listing:
+    with patch(
+        "app.routers.internal_router.list_governed_models", new_callable=AsyncMock
+    ) as listing:
         listing.return_value = ["qwen3:4b"]
-        result = await list_llm_models(request, settings_service, g8e_context, gateway_operator_client)
+        result = await list_llm_models(
+            request, settings_service, g8e_context, gateway_operator_client
+        )
     assert result.models == ["qwen3:4b"]
     listing.assert_awaited_once_with(gateway_operator_client, g8e_context)
     settings_service.get_user_settings.assert_not_called()
@@ -211,7 +213,9 @@ async def test_internal_chat_missing_investigation(request_context, g8e_context,
     assert response.investigation_id != ""
 
 
-async def _run_internal_chat(request, g8e_context, task_tracker, case_service, investigation_service):
+async def _run_internal_chat(
+    request, g8e_context, task_tracker, case_service, investigation_service
+):
     mock_chat_pipeline = MagicMock()
     mock_chat_pipeline.run_chat = AsyncMock()
     mock_chat_task_manager = MagicMock()
@@ -322,7 +326,9 @@ async def test_query_investigations_scopes_to_authenticated_user(request_context
         g8e_context=g8e_context,
     )
 
-    scoped = mock_investigation_service.investigation_data_service.query_investigations.call_args.args[0]
+    scoped = (
+        mock_investigation_service.investigation_data_service.query_investigations.call_args.args[0]
+    )
     assert scoped.user_id == "user-123"
 
 
@@ -393,7 +399,9 @@ async def test_generate_and_update_title_success():
         assert case_context.operator_id == "operator-123"
         assert case_context.operator_session_id == "operator-session-123"
         mock_investigation_service.update_investigation.assert_called_once()
-        investigation_context = mock_investigation_service.update_investigation.call_args[0][1].context
+        investigation_context = mock_investigation_service.update_investigation.call_args[0][
+            1
+        ].context
         assert investigation_context.operator_id == "operator-123"
         assert investigation_context.operator_session_id == "operator-session-123"
         assert mock_investigation_service.update_investigation.call_args[0][0] == "inv-123"
@@ -794,9 +802,6 @@ def test_status_payload_from_gateway_doc_prefers_snapshot_hostname():
     assert payload.system_fingerprint == "fp-abc"
     assert payload.metrics is not None
     assert payload.metrics.system_identity.hostname == "live-host"
-
-
-
 
 
 @pytest.mark.asyncio

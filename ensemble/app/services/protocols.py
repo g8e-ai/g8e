@@ -9,15 +9,17 @@
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable, TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+from g8e.models.internal_api import EvaluationInferenceContext
 
 from app.constants import (
     EventType,
     FileOperation,
     HistoryActor,
 )
-from g8e.models.internal_api import EvaluationInferenceContext
-
+from app.constants.prompts import AgentMode
+from app.llm import llm_types as types
 from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,
@@ -26,9 +28,29 @@ from app.models.cache import (
     FieldFilter,
     QueryResult,
 )
+from app.models.command_request_payloads import (
+    CheckPortRequestPayload,
+    FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FileEditRequestPayload,
+    FsGrepRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+)
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.infra import HTTPClientStatus
+from app.models.internal_api import (
+    DirectCommandRequest,
+    InferenceDispatchRequest,
+    InferenceDispatchResponse,
+    IntentOperationResult,
+    ObserveProducerAgentStateRequest,
+    ObserveProducerResponse,
+    ObserveProducerRunStateRequest,
+    OperatorApprovalResponse,
+    SSEPushResponse,
+)
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,
@@ -40,18 +62,6 @@ from app.models.investigations import (
     InvestigationUpdateRequest,
 )
 from app.models.memory import InvestigationMemory
-from app.models.sessions import CliSessionDocument
-from app.models.internal_api import (
-    DirectCommandRequest,
-    InferenceDispatchRequest,
-    InferenceDispatchResponse,
-    IntentOperationResult,
-    ObserveProducerAgentStateRequest,
-    ObserveProducerRunStateRequest,
-    ObserveProducerResponse,
-    OperatorApprovalResponse,
-    SSEPushResponse,
-)
 from app.models.operators import (
     AgentContinueApprovalRequest,
     ApprovalResult,
@@ -64,6 +74,9 @@ from app.models.operators import (
     TargetSystem,
 )
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
+from app.models.sessions import CliSessionDocument
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
+from app.models.tool_args import GrantIntentArgs, RevokeIntentArgs
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,
@@ -72,31 +85,18 @@ from app.models.tool_results import (
     ErrorAnalysisResult,
     FetchFileDiffToolResult,
     FetchFileHistoryToolResult,
+    FileEditResult,
     FileOperationRiskAnalysis,
     FileOperationRiskContext,
-    FileEditResult,
     FsGrepToolResult,
     FsListToolResult,
     FsReadToolResult,
-    PortCheckToolResult,
     IntentPermissionResult,
+    PortCheckToolResult,
+    ToolResult,
 )
-from app.models.tool_args import GrantIntentArgs, RevokeIntentArgs
-from app.models.command_request_payloads import (
-    FetchFileDiffRequestPayload,
-    FetchFileHistoryRequestPayload,
-    FileEditRequestPayload,
-    FsGrepRequestPayload,
-    FsListRequestPayload,
-    FsReadRequestPayload,
-    CheckPortRequestPayload,
-)
-from app.models.settings import G8eeAppSettings, G8eeUserSettings
-from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 from app.utils.validation.blacklist_validator import CommandBlacklistValidator
-from app.models.tool_results import ToolResult
-from app.constants.prompts import AgentMode
-from app.llm import llm_types as types
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 if TYPE_CHECKING:
     from app.clients.http_client import HTTPClient
@@ -128,7 +128,6 @@ class EventServiceProtocol(Protocol):
         """Publish a session or background event."""
         raise NotImplementedError
 
-
     async def publish_reputation_event(
         self,
         event_type: EventType,
@@ -152,9 +151,7 @@ class EventServiceProtocol(Protocol):
         """Publish an investigation-related event."""
         raise NotImplementedError
 
-    async def publish_agent_state(
-        self, request: ObserveProducerAgentStateRequest
-    ) -> None:
+    async def publish_agent_state(self, request: ObserveProducerAgentStateRequest) -> None:
         """Best-effort agent-state projection push to the gateway observe producer.
 
         Catches transport/network failures from the low-level client, logs one
@@ -165,9 +162,7 @@ class EventServiceProtocol(Protocol):
         """
         raise NotImplementedError
 
-    async def publish_run_state(
-        self, request: ObserveProducerRunStateRequest
-    ) -> None:
+    async def publish_run_state(self, request: ObserveProducerRunStateRequest) -> None:
         """Best-effort run-state projection push to the gateway observe producer.
 
         Same best-effort and targetless-skip semantics as publish_agent_state.
@@ -206,9 +201,6 @@ class KVServiceProtocol(Protocol):
     async def delete_pattern(self, pattern: str) -> int:
         """Delete all keys matching a pattern."""
         raise NotImplementedError
-
-
-
 
     def is_healthy(self) -> bool:
         """Check if the service is healthy."""
@@ -320,7 +312,6 @@ class DocumentServiceProtocol(Protocol):
         """Convenience method to append to an array field."""
         raise NotImplementedError
 
-
     async def close(self) -> None:
         """Close the underlying database and cache connections."""
         raise NotImplementedError
@@ -380,9 +371,7 @@ class MemoryDataServiceProtocol(Protocol):
     async def get_memory(self, investigation_id: str) -> InvestigationMemory | None:
         raise NotImplementedError
 
-    async def get_user_memories(
-        self, user_id: str, limit: int = 10
-    ) -> list[InvestigationMemory]:
+    async def get_user_memories(self, user_id: str, limit: int = 10) -> list[InvestigationMemory]:
         raise NotImplementedError
 
     async def get_case_memories(self, case_id: str, user_id: str) -> list[InvestigationMemory]:
@@ -617,7 +606,6 @@ class ApprovalServiceProtocol(Protocol):
     ) -> ApprovalResult:
         raise NotImplementedError
 
-
     async def handle_approval_response(self, response: OperatorApprovalResponse) -> None:
         raise NotImplementedError
 
@@ -632,11 +620,9 @@ class ApprovalServiceProtocol(Protocol):
 
 @runtime_checkable
 class ExecutionServiceProtocol(Protocol):
-
     @property
     def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
         raise NotImplementedError
-
 
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:

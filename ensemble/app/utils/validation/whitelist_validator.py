@@ -11,7 +11,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from app.constants import Platform, CommandCategory
+from app.constants import CommandCategory, Platform
 from app.errors import ConfigurationError
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.utils.config_loader import load_json_config

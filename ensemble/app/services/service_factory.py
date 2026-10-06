@@ -13,70 +13,77 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+from app.clients.gateway_operator_client import GatewayOperatorClient
+from app.db.blob_service import BlobService
+from app.db.db_service import DBService
+from app.db.kv_service import KVService
+from app.models.settings import G8eeAppSettings
+from app.models.state import G8eeAppState
 from app.services.ai.agent import g8eEnsemble
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.services.ai.grounding import GroundingService, WebSearchProvider
 from app.services.ai.memory_generation_service import MemoryGenerationService
+from app.services.ai.reputation_service import ReputationService
 from app.services.ai.request_builder import AIRequestBuilder
 from app.services.ai.response_analyzer import AIResponseAnalyzer
 from app.services.ai.ssh_inventory_service import SshInventoryService, default_ssh_inventory_service
 from app.services.ai.tool_service import AIToolService
-from app.services.cache.cache_aside import CacheAsideService
-from app.services.data.attachment_store_service import AttachmentService
-from app.services.evaluation.investigation_seed import InvestigationSeedService
-from app.services.investigation.investigation_service import InvestigationService
-from app.services.investigation.investigation_data_service import InvestigationDataService
-from app.services.investigation.memory_data_service import MemoryDataService
-from app.services.operator.approval_service import OperatorApprovalService
-from app.services.ai.reputation_service import ReputationService
-from app.services.data.agent_activity_data_service import AgentActivityDataService
-from app.services.data.reputation_data_service import ReputationDataService
-from app.services.data.stake_resolution_data_service import StakeResolutionDataService
-from app.services.infra.http_service import HTTPService
-from app.services.infra.internal_http_client import InternalHttpClient
-from app.services.infra.event_service import EventService
-from app.services.infra.settings_service import SettingsService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.auth_service import AuthService
-from app.services.auth.proxy_stamp import ProxyStampVerifier
-from app.services.auth.certificate_service import CertificateService
 from app.services.auth.certificate_data_service import CertificateDataService
-from app.services.protocols import (
-    HTTPServiceProtocol,
-    InvestigationServiceProtocol,
-    InvestigationDataServiceProtocol,
-    OperatorDataServiceProtocol,
-    MemoryDataServiceProtocol,
-    EventServiceProtocol,
-    AIResponseAnalyzerProtocol,
-    ToolExecutorProtocol,
-    ApprovalServiceProtocol,
-)
+from app.services.auth.certificate_service import CertificateService
+from app.services.auth.proxy_stamp import ProxyStampVerifier
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.data.agent_activity_data_service import AgentActivityDataService
+from app.services.data.attachment_store_service import AttachmentService
+from app.services.data.case_data_service import CaseDataService
+from app.services.data.reputation_data_service import ReputationDataService
+from app.services.data.stake_resolution_data_service import StakeResolutionDataService
+from app.services.evaluation.investigation_seed import InvestigationSeedService
+from app.services.infra.event_service import EventService
+from app.services.infra.http_service import HTTPService
+from app.services.infra.internal_http_client import InternalHttpClient
+from app.services.infra.settings_service import SettingsService
+from app.services.investigation.investigation_data_service import InvestigationDataService
+from app.services.investigation.investigation_service import InvestigationService
+from app.services.investigation.memory_data_service import MemoryDataService
+from app.services.operator.approval_service import OperatorApprovalService
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
-from app.clients.gateway_operator_client import GatewayOperatorClient
-from app.services.data.case_data_service import CaseDataService
-from app.models.settings import G8eeAppSettings
-from app.utils.validation.whitelist_validator import get_whitelist_validator, register_whitelist_validator
-from app.utils.validation.blacklist_validator import get_blacklist_validator, register_blacklist_validator
+from app.services.protocols import (
+    AIResponseAnalyzerProtocol,
+    ApprovalServiceProtocol,
+    EventServiceProtocol,
+    HTTPServiceProtocol,
+    InvestigationDataServiceProtocol,
+    InvestigationServiceProtocol,
+    MemoryDataServiceProtocol,
+    OperatorDataServiceProtocol,
+    ToolExecutorProtocol,
+)
 from app.utils.validation.auto_approved_validator import (
     get_auto_approved_validator,
     register_auto_approved_validator,
 )
-from app.db.db_service import DBService
-from app.db.kv_service import KVService
-from app.db.blob_service import BlobService
+from app.utils.validation.blacklist_validator import (
+    get_blacklist_validator,
+    register_blacklist_validator,
+)
+from app.utils.validation.whitelist_validator import (
+    get_whitelist_validator,
+    register_whitelist_validator,
+)
 
 if TYPE_CHECKING:
     from app.clients.blob_client import BlobClient
     from app.clients.governance_client import GovernanceClient
-    from app.services.investigation.investigation_service import InvestigationService
-    from app.services.investigation.investigation_data_service import InvestigationDataService
-    from app.services.operator.operator_data_service import OperatorDataService
-    from app.services.investigation.memory_data_service import MemoryDataService
     from app.services.ai.response_analyzer import AIResponseAnalyzer
+    from app.services.investigation.investigation_data_service import InvestigationDataService
+    from app.services.investigation.investigation_service import InvestigationService
+    from app.services.investigation.memory_data_service import MemoryDataService
     from app.services.operator.approval_service import OperatorApprovalService
+    from app.services.operator.operator_data_service import OperatorDataService
 
 
 @dataclass(frozen=True)
@@ -113,9 +120,6 @@ class OperatorServices:
     auth_service: AuthService
     api_key_service: APIKeyService
     certificate_service: CertificateService
-
-
-from app.models.state import G8eeAppState
 
 
 @dataclass(frozen=True)
@@ -159,8 +163,6 @@ class AllServices:
 
 
 class ServiceFactory:
-    """Factory for creating g8ee services with consistent dependency injection."""
-
     @staticmethod
     def create_core_services(
         settings: G8eeAppSettings, cache_aside_service: CacheAsideService
@@ -353,7 +355,6 @@ class ServiceFactory:
         )
 
         gateway_operator_client = data_services.gateway_operator_client
-
 
         whitelist_validator = get_whitelist_validator()
         blacklist_validator = get_blacklist_validator()

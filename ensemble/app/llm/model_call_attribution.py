@@ -13,6 +13,7 @@ import time
 from typing import Any
 
 from app.constants.chat_model_call_sites import classification_for_agent_role
+from app.decision.provider import DecisionProvider
 from app.llm.model_evidence import (
     recorded_declared_tool_names,
     recorded_governed_dispatch_evidence,
@@ -20,7 +21,6 @@ from app.llm.model_evidence import (
     recorded_model_boundary_privacy,
 )
 from app.llm.provider import LLMProvider
-from app.decision.provider import DecisionProvider
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 

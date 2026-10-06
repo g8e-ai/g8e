@@ -20,25 +20,22 @@ persistent backing store, pod-restart safe).
 import logging
 from collections.abc import Callable
 
-from app.errors import ExternalServiceError, ResourceNotFoundError, ValidationError
-from app.services.protocols import (
-    EventServiceProtocol,
-    InvestigationDataServiceProtocol,
-    OperatorDataServiceProtocol,
+from app.constants import EventType, FileOperation
+from app.constants.config import (
+    ApprovalErrorType,
 )
-from app.constants import FileOperation, EventType
 from app.constants.intents import (
     CLOUD_INTENT_QUESTIONS,
     CloudIntent,
 )
-from app.constants.config import (
-    ApprovalErrorType,
-)
+from app.errors import ExternalServiceError, ResourceNotFoundError, ValidationError
+from app.models.events import SessionEvent
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import (
     ApprovalMetadata,
-    FileEditMetadata,
     ConversationMessageMetadata,
+    FileEditMetadata,
 )
 from app.models.operators import (
     AgentContinueApprovalEvent,
@@ -56,8 +53,11 @@ from app.models.operators import (
     PendingApproval,
     TargetSystem,
 )
-from app.models.events import SessionEvent
-from app.models.http_context import G8eHttpContext, RequestContext
+from app.services.protocols import (
+    EventServiceProtocol,
+    InvestigationDataServiceProtocol,
+    OperatorDataServiceProtocol,
+)
 from app.utils.time_ids.ids import generate_approval_id, generate_intent_approval_id
 from app.utils.time_ids.timestamp import now
 
@@ -436,8 +436,6 @@ class OperatorApprovalService:
                 error_type=ApprovalErrorType.APPROVAL_EXCEPTION,
                 approval_id=approval_id,
             )
-
-
 
     async def _request_command_approval(
         self,

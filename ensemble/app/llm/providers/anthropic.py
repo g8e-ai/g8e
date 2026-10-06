@@ -13,26 +13,26 @@ from collections.abc import AsyncGenerator
 
 import anthropic
 
-from app.llm.thinking import translate_for_anthropic
-from ._capability import translate_capability_error
-from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
     Content,
+    GenerateContentResponse,
     LiteLLMSettings,
+    Part,
     PrimaryLLMSettings,
+    StreamChunkFromModel,
     ThinkingConfig,
     ToolCall,
-    GenerateContentResponse,
-    Part,
-    StreamChunkFromModel,
     ToolGroup,
     UsageMetadata,
 )
-from app.models.base import G8eBaseModel
-
 from app.llm.provider import LLMProvider
+from app.llm.thinking import translate_for_anthropic
+from app.models.base import G8eBaseModel
+from app.models.model_configs import get_model_config
+
+from ._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +164,7 @@ def _parse_response_blocks(blocks: list) -> list[Part]:
             args = block.input
             if not isinstance(args, dict):
                 from app.errors import ValidationError
+
                 raise ValidationError("Provider tool arguments must be a JSON object")
             parts.append(
                 Part(
@@ -181,7 +182,11 @@ def _cache_token_count(response_usage) -> int | None:
     if not hasattr(response_usage, "cache_read_input_tokens"):
         return None
     cache_tokens = getattr(response_usage, "cache_read_input_tokens", None)
-    return cache_tokens if isinstance(cache_tokens, int) and not isinstance(cache_tokens, bool) else None
+    return (
+        cache_tokens
+        if isinstance(cache_tokens, int) and not isinstance(cache_tokens, bool)
+        else None
+    )
 
 
 def _build_usage(response_usage) -> UsageMetadata:
@@ -491,10 +496,16 @@ class AnthropicProvider(LLMProvider):
                                 args = json.loads(raw_input)
                             except json.JSONDecodeError as exc:
                                 from app.errors import ValidationError
-                                raise ValidationError("Provider returned invalid tool arguments JSON") from exc
+
+                                raise ValidationError(
+                                    "Provider returned invalid tool arguments JSON"
+                                ) from exc
                             if not isinstance(args, dict):
                                 from app.errors import ValidationError
-                                raise ValidationError("Provider tool arguments must be a JSON object")
+
+                                raise ValidationError(
+                                    "Provider tool arguments must be a JSON object"
+                                )
                             yield StreamChunkFromModel(
                                 tool_calls=[
                                     ToolCall(

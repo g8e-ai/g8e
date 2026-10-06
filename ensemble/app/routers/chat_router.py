@@ -16,7 +16,16 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 
-from app.constants import ChatSessionStatus, InvestigationStatus, MessageSender, EventType
+from app.constants import ChatSessionStatus, EventType, InvestigationStatus, MessageSender
+from app.dependencies import (
+    get_g8ee_case_data_service,
+    get_g8ee_chat_pipeline,
+    get_g8ee_chat_task_manager,
+    get_g8ee_chat_user_settings,
+    get_g8ee_investigation_service,
+    get_request_context,
+    require_authenticated_context,
+)
 from app.errors import ResourceNotFoundError
 from app.models import InvestigationModel
 from app.models.chat_api import (
@@ -24,23 +33,14 @@ from app.models.chat_api import (
     ChatSessionResponse,
     LatestChatSessionResponse,
 )
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import ConversationMessageMetadata
+from app.models.settings import G8eeUserSettings
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
-from app.dependencies import (
-    get_g8ee_case_data_service,
-    get_g8ee_chat_user_settings,
-    get_g8ee_investigation_service,
-    require_authenticated_context,
-    get_g8ee_chat_pipeline,
-    get_g8ee_chat_task_manager,
-    get_request_context,
-)
-from app.services.investigation.investigation_service import InvestigationService
-from app.services.data.case_data_service import CaseDataService
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
-from app.models.http_context import G8eHttpContext, RequestContext
-from app.models.settings import G8eeUserSettings
+from app.services.data.case_data_service import CaseDataService
+from app.services.investigation.investigation_service import InvestigationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

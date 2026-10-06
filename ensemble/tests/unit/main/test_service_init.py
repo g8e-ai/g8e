@@ -19,10 +19,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants.generated_paths import PortConstants
 from app.errors import ConfigurationError
 from app.models.settings import G8eeAppSettings
 from app.utils.service_init import initialize_g8e_service
-from app.constants.generated_paths import PortConstants
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 

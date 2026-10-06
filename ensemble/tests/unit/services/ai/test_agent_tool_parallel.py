@@ -6,14 +6,16 @@
 # released under the Apache License, Version 2.0.
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.models.agent import ToolCall, StreamChunkData
-from app.models.settings import G8eeUserSettings, LLMSettings
-from app.services.ai import agent_tool_loop
-from app.services.ai.agent_tool_loop import execute_turn_tool_calls, ToolCallResult
+
+import pytest
+
+from app.models.agent import StreamChunkData, ToolCall
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.services.ai import agent_tool_loop
+from app.services.ai.agent_tool_loop import ToolCallResult, execute_turn_tool_calls
 
 
 @pytest.mark.asyncio

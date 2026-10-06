@@ -10,31 +10,31 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 
-from ollama import AsyncClient, Message as OllamaMessage
+from ollama import AsyncClient
+from ollama import Message as OllamaMessage
 
 from app.constants import (
     LLM_OLLAMA_DEFAULT_NUM_CTX,
     ThinkingLevel,
 )
-from app.llm.thinking import translate_for_ollama
-from app.models.model_configs import get_model_config
+from app.llm.endpoints import normalize_ollama_host
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
     Content,
-    LiteLLMSettings,
-    PrimaryLLMSettings,
-    ToolCall,
     GenerateContentResponse,
+    LiteLLMSettings,
     Part,
+    PrimaryLLMSettings,
     StreamChunkFromModel,
-    UsageMetadata,
+    ToolCall,
     ToolGroup,
+    UsageMetadata,
 )
-
-from app.llm.endpoints import normalize_ollama_host
 from app.llm.provider import LLMProvider
 from app.llm.providers._capability import translate_capability_error
+from app.llm.thinking import translate_for_ollama
+from app.models.model_configs import get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -402,8 +402,11 @@ class OllamaProvider(LLMProvider):
                 for tc in msg.tool_calls:
                     if not isinstance(tc.function.arguments, dict):
                         from app.errors import ValidationError
+
                         raise ValidationError("Provider tool arguments must be a JSON object")
-                    calls.append(ToolCall(name=tc.function.name, args=tc.function.arguments, id=None))
+                    calls.append(
+                        ToolCall(name=tc.function.name, args=tc.function.arguments, id=None)
+                    )
                 yield StreamChunkFromModel(tool_calls=calls)
             if chunk.done:
                 usage = _ollama_usage_metadata(chunk)

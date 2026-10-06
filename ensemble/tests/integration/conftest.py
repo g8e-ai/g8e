@@ -225,9 +225,9 @@ async def all_services(cache_aside_service, test_settings):
     Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
+    import os
     from unittest.mock import MagicMock
 
-    import os
     from app.clients.db_client import DBClient
     from app.constants.paths import get_paths
     from app.llm.factory import get_search_settings

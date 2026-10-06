@@ -190,9 +190,7 @@ class TestHandleUsageChunk:
                 eval_duration_seconds=0.04,
             )
         )
-        chunk2 = types.StreamChunkFromModel(
-            usage_metadata=UsageMetadata(prompt_token_count=10)
-        )
+        chunk2 = types.StreamChunkFromModel(usage_metadata=UsageMetadata(prompt_token_count=10))
 
         handle_usage_chunk(chunk1, state)
         handle_usage_chunk(chunk2, state)

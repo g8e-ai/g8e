@@ -15,39 +15,39 @@ All Google GenAI SDK calls are mocked.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 import httpx
+import pytest
 from google.genai import types as genai_types
 
 from app.llm.llm_types import (
+    AssistantLLMSettings,
     Content,
     GenerateContentResponse,
-    Part,
-    Role,
-    ThoughtSignature,
-    ToolCall,
-    ToolResponse,
-    ToolGroup,
-    ToolDeclaration,
-    ToolConfig,
-    ToolCallingConfig,
-    PrimaryLLMSettings,
-    StreamChunkFromModel,
-    AssistantLLMSettings,
     LiteLLMSettings,
+    Part,
+    PrimaryLLMSettings,
     ResponseFormat,
     ResponseJsonSchema,
+    Role,
     Schema,
+    StreamChunkFromModel,
+    ThoughtSignature,
+    ToolCall,
+    ToolCallingConfig,
+    ToolConfig,
+    ToolDeclaration,
+    ToolGroup,
+    ToolResponse,
     Type,
 )
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.providers.gemini import (
+    GeminiProvider,
     _content_to_genai,
-    _usage_from_sdk,
     _finish_reason_from_candidate,
     _grounding_from_sdk_candidate,
     _parts_from_sdk_candidate,
-    GeminiProvider,
+    _usage_from_sdk,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -403,8 +403,8 @@ class TestGeminiProvider:
             assert translation.enabled is True
 
     def test_build_thinking_config_gemini3_off(self):
-        from app.llm.llm_types import ThinkingConfig
         from app.constants import ThinkingLevel
+        from app.llm.llm_types import ThinkingConfig
 
         tc = ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False)
         with patch("app.llm.providers.gemini.translate_for_gemini") as mock_translate:

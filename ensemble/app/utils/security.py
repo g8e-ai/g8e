@@ -10,8 +10,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-from pathlib import Path
 import secrets
+from pathlib import Path
 
 # Standard password hashing parameters (PBKDF2-HMAC-SHA256)
 DEFAULT_PASSWORD_HASH_ITERATIONS = 600_000
@@ -170,4 +170,3 @@ def derive_key_identifier(
         "sha256", raw_material.encode("utf-8"), salt, iterations, dklen=dklen
     )
     return derived.hex()[:length]
-

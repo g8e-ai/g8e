@@ -10,17 +10,17 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-
-from app.constants.config import LLMProvider
-from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
-from app.llm.model_catalog import list_governed_models, list_models, parse_models
-from app.models.http_context import G8eHttpContext
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
     OllamaModelInventoryRequested,
     OllamaModelInventoryResult,
     ProviderModelInventoryEntry,
 )
+
+from app.constants.config import LLMProvider
+from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
+from app.llm.model_catalog import list_governed_models, list_models, parse_models
+from app.models.http_context import G8eHttpContext
 
 pytestmark = pytest.mark.unit
 
@@ -35,7 +35,8 @@ async def test_ollama_lists_tags_sorted_and_deduplicated():
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
         return httpx.Response(
-            200, json={"models": [{"name": "qwen3:4b"}, {"name": "gemma4:e4b"}, {"name": "qwen3:4b"}]}
+            200,
+            json={"models": [{"name": "qwen3:4b"}, {"name": "gemma4:e4b"}, {"name": "qwen3:4b"}]},
         )
 
     async with _client(handler) as client:

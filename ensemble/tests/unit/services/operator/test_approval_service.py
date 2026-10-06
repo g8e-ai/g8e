@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants import FileOperation
 from app.constants.generated_status import EventType
 from app.constants.intents import CloudIntent
-from app.constants import FileOperation
-from app.models.http_context import RequestContext, G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import ApprovalMetadata
 from app.models.operators import (
@@ -1142,10 +1142,7 @@ class TestApprovalPreRegistrationOrdering:
 
         assert result.approved is True
         assert approval_id in publish_log, "publish was never called"
-        assert (
-            publish_log[approval_id][0]
-            == EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED
-        )
+        assert publish_log[approval_id][0] == EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED
 
     @patch("app.services.operator.approval_service.generate_approval_id")
     @patch("app.services.operator.approval_service.PendingApproval")
@@ -1182,11 +1179,7 @@ class TestApprovalPreRegistrationOrdering:
 
         assert result.approved is True
         assert approval_id in publish_log, "publish was never called"
-        assert (
-            publish_log[approval_id][0]
-            == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED
-        )
-
+        assert publish_log[approval_id][0] == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED
 
     @patch("app.services.operator.approval_service.generate_approval_id")
     @patch("app.services.operator.approval_service.PendingApproval")
@@ -1270,7 +1263,6 @@ class TestApprovalPreRegistrationOrdering:
             "pending entry should be cleaned up on publish failure"
         )
 
-
     async def test_handle_approval_response_resolves_immediately_after_publish(self):
         """Simulates the CI/headless race: an auto-approver responds during
         event_service.publish (before publish returns). The pending entry must
@@ -1305,7 +1297,9 @@ class TestApprovalPreRegistrationOrdering:
 
         event_service.publish = AsyncMock(side_effect=_publish_then_auto_respond)
 
-        with patch("app.services.operator.approval_service.generate_approval_id", return_value=approval_id):
+        with patch(
+            "app.services.operator.approval_service.generate_approval_id", return_value=approval_id
+        ):
             request = FileEditApprovalRequest(
                 g8e_context=self._base_context(),
                 timeout_seconds=30,
@@ -1324,4 +1318,3 @@ class TestApprovalPreRegistrationOrdering:
             "response would have been rejected as 'unknown approval_id'"
         )
         assert result.approved is True
-

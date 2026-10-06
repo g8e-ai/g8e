@@ -30,6 +30,7 @@ resolve_pubsub_ssl_context(ssl_settings) and passes it to ws_connect().
 
 import os
 import ssl
+
 import aiohttp
 
 from app.utils.json_utils import _json_dumps

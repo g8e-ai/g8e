@@ -7,10 +7,12 @@
 
 import json
 import logging
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from app.models.http_context import RequestContext, G8eHttpContext
+
+from app.models.http_context import G8eHttpContext, RequestContext
 
 logger = logging.getLogger(__name__)
 

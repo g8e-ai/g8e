@@ -1,4 +1,3 @@
-from app.constants.message_sender import MessageSender
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -6,17 +5,13 @@ from app.constants.message_sender import MessageSender
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""
-Integration tests: AI Services Real LLM Calls
+"""Integration tests: AI Services Real LLM Calls.
 
 These tests exercise AI services with real LLM providers to verify end-to-end functionality.
 Tests use real g8ee services and LLM providers with an in-memory operator cache fake for app document setup.
 
-Segment 1: Memory Generation Service
-Segment 2: Title Generation Service
-Segment 3: Triage Service
-Segment 4: Command Generation Service
-Segment 5: Response Analysis Service
+Segments: Memory Generation Service, Title Generation Service, Triage Service,
+Command Generation Service, Response Analysis Service.
 """
 
 import uuid
@@ -31,6 +26,7 @@ from app.constants import (
     TriageComplexityClassification,
     TriageConfidence,
 )
+from app.constants.message_sender import MessageSender
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.http_context import RequestContext
@@ -647,6 +643,7 @@ class TestCommandGenerationIntegration:
 
         # Verify function signature uses TribunalGenerationRequest context object
         import inspect
+
         from app.models.tribunal_commands import TribunalGenerationRequest
 
         sig = inspect.signature(generate_command)

@@ -13,8 +13,8 @@ import pytest
 
 from app.constants import OperatorStatus
 from app.errors import ValidationError
-from app.models.sessions import CliSessionDocument
 from app.models.operators import OperatorDocument
+from app.models.sessions import CliSessionDocument
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import OperatorDataServiceProtocol
 

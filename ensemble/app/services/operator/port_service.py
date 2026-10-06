@@ -14,20 +14,19 @@ Dispatches through Gateway via ``OperatorExecutionService.execute()``.
 import logging
 from typing import cast
 
-from app.services.protocols import ExecutionServiceProtocol
-
-from app.constants import EventType, G8EE_COMPONENT, NetworkProtocol
+from app.constants import G8EE_COMPONENT, EventType, NetworkProtocol
+from app.constants.config import OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
 from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
 )
-from app.constants.config import OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.pubsub_messages import PortCheckResultPayload, G8eMessage
+from app.models.pubsub_messages import G8eMessage, PortCheckResultPayload
 from app.models.tool_results import PortCheckToolResult
+from app.services.protocols import ExecutionServiceProtocol
 
 logger = logging.getLogger(__name__)
 

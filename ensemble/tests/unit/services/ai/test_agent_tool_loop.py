@@ -37,9 +37,9 @@ from app.services.ai.generator import (
     TribunalDisabledError,
 )
 from app.services.ai.tool_service import AIToolService
+from app.utils.time_ids.ids import is_valid_command_execution_id
 from app.utils.validation.blacklist_validator import CommandBlacklistValidator
 from app.utils.validation.whitelist_validator import CommandWhitelistValidator
-from app.utils.time_ids.ids import is_valid_command_execution_id
 
 pytestmark = [pytest.mark.unit]
 
@@ -129,7 +129,9 @@ async def test_execute_turn_tool_calls_assigns_execution_id_when_orchestration_f
         chunks = [
             chunk
             async for chunk in execute_turn_tool_calls(
-                pending_tool_calls=[ToolCall(id="call-1", name="query_investigation_context", args={})],
+                pending_tool_calls=[
+                    ToolCall(id="call-1", name="query_investigation_context", args={})
+                ],
                 tool_executor=mock_tool_executor,
                 investigation=mock_investigation,
                 g8e_context=mock_g8e_context,

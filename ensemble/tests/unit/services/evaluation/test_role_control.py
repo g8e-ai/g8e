@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 from app.constants import ReasoningAgent, TriageComplexityClassification
 from app.llm.utils import ModelOverrideResolver
@@ -16,7 +17,6 @@ from app.services.evaluation.role_control import (
     resolve_role_outcome,
     resolve_scored_model_role,
 )
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 
 def _settings() -> G8eeUserSettings:

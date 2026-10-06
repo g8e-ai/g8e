@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     import aiohttp  # type: ignore
 
 from app.clients.http_client import HTTPClient
-from app.models.infra import HTTPClientStatus
 from app.errors import ValidationError
+from app.models.infra import HTTPClientStatus
 
 logger = logging.getLogger(__name__)
 

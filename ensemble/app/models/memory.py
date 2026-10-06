@@ -27,6 +27,7 @@ class InvestigationMemory(G8eIdentifiableModel):
             except ValueError as err:
                 raise ValueError(f"Invalid investigation status: {v}") from err
         return v
+
     case_title: str = Field(..., description="Title of the case")
     investigation_summary: str = Field(
         default="",

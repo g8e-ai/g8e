@@ -35,6 +35,32 @@ from collections.abc import AsyncGenerator
 from contextvars import ContextVar
 from uuid import uuid4
 
+from g8e.constants import PLATFORM
+from g8e.operator.v1.operator_pb2 import (
+    EXECUTION_STATUS_COMPLETED,
+    INFERENCE_MESSAGE_ROLE_ASSISTANT,
+    INFERENCE_MESSAGE_ROLE_SYSTEM,
+    INFERENCE_MESSAGE_ROLE_TOOL,
+    INFERENCE_MESSAGE_ROLE_USER,
+    INFERENCE_TOOL_CHOICE_MODE_AUTO,
+    INFERENCE_TOOL_CHOICE_MODE_NONE,
+    INFERENCE_TOOL_CHOICE_MODE_REQUIRED,
+    MODEL_ROLE_ASSISTANT,
+    MODEL_ROLE_LITE,
+    MODEL_ROLE_PRIMARY,
+    ExecutionStatus,
+    InferenceDispatchStreamFrame,
+    InferenceMessage,
+    InferenceMessagePart,
+    InferenceModelVariant,
+    InferenceResponseFormat,
+    InferenceThinkingControl,
+    InferenceToolCall,
+    InferenceToolChoice,
+    InferenceToolDeclaration,
+    InferenceToolResult,
+)
+
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
 from app.llm.llm_dataclasses import (
     Candidate,
@@ -60,38 +86,13 @@ from app.llm.providers._capability import (
     translate_governed_tool_rejection,
 )
 from app.llm.thinking import translate_for_ollama
-from app.models.model_configs import get_model_config
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (
     InferenceDispatchRequest,
     InferenceDispatchResponse,
 )
+from app.models.model_configs import get_model_config
 from app.models.model_telemetry import GovernedDispatchEvidence, ModelResponseArtifact
-from g8e.constants import PLATFORM
-from g8e.operator.v1.operator_pb2 import (
-    EXECUTION_STATUS_COMPLETED,
-    INFERENCE_MESSAGE_ROLE_ASSISTANT,
-    INFERENCE_MESSAGE_ROLE_SYSTEM,
-    INFERENCE_MESSAGE_ROLE_TOOL,
-    INFERENCE_MESSAGE_ROLE_USER,
-    INFERENCE_TOOL_CHOICE_MODE_AUTO,
-    INFERENCE_TOOL_CHOICE_MODE_NONE,
-    INFERENCE_TOOL_CHOICE_MODE_REQUIRED,
-    MODEL_ROLE_ASSISTANT,
-    MODEL_ROLE_LITE,
-    MODEL_ROLE_PRIMARY,
-    ExecutionStatus,
-    InferenceMessage,
-    InferenceMessagePart,
-    InferenceModelVariant,
-    InferenceDispatchStreamFrame,
-    InferenceResponseFormat,
-    InferenceThinkingControl,
-    InferenceToolCall,
-    InferenceToolChoice,
-    InferenceToolDeclaration,
-    InferenceToolResult,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -313,9 +314,7 @@ def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetad
             else None
         ),
         cache_token_count=(
-            inference_result.cache_tokens
-            if inference_result.HasField("cache_tokens")
-            else None
+            inference_result.cache_tokens if inference_result.HasField("cache_tokens") else None
         ),
         usage_reported=inference_result.usage_reported,
         time_to_first_token_seconds=(
@@ -746,7 +745,9 @@ class G8EProvider(LLMProvider):
                         continue
                     try:
                         if completion is not None:
-                            raise ValidationError("Governed inference stream continues after completion")
+                            raise ValidationError(
+                                "Governed inference stream continues after completion"
+                            )
                         if frame.HasField("failure"):
                             failure = ValidationError(frame.failure.reason)
                             self._raise_if_tool_declaration_rejected(
@@ -760,7 +761,9 @@ class G8EProvider(LLMProvider):
                                 progress.provider_attempt_id != request.provider_attempt_id
                                 or progress.sequence != len(progress_parts) + 1
                             ):
-                                raise ValidationError("Governed inference progress identity or sequence mismatch")
+                                raise ValidationError(
+                                    "Governed inference progress identity or sequence mismatch"
+                                )
                             progress_parts.append(list(progress.parts))
                             for chunk in _progress_parts_to_stream_chunks(progress):
                                 # Text is provisional; tools wait for the verified receipt.
@@ -782,7 +785,9 @@ class G8EProvider(LLMProvider):
             raise ValidationError("Governed inference stream ended without a completion frame")
         _validate_response_identity(request, completion)
         _response_parts(completion)
-        if [part for event_parts in progress_parts for part in event_parts] != list(completion.result.parts):
+        if [part for event_parts in progress_parts for part in event_parts] != list(
+            completion.result.parts
+        ):
             raise ValidationError("Governed inference progress differs from the terminal result")
         self._governed_dispatch_evidence.set(
             GovernedDispatchEvidence(
@@ -815,7 +820,8 @@ class G8EProvider(LLMProvider):
                 yield chunk
 
     async def _receive_dispatch_stream(
-        self, request: InferenceDispatchRequest,
+        self,
+        request: InferenceDispatchRequest,
     ) -> AsyncGenerator[InferenceDispatchStreamFrame]:
         """Capture bounded Gateway frames independently of their interpretation."""
         from app.errors import ValidationError

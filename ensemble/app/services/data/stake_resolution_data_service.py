@@ -22,9 +22,9 @@ import logging
 from app.clients.governance_client import GovernanceClient
 from app.constants import (
     DB_COLLECTION_STAKE_RESOLUTIONS,
+    G8EE_COMPONENT,
     ErrorCode,
     EventType,
-    G8EE_COMPONENT,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter

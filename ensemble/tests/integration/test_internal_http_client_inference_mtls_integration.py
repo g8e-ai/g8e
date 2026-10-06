@@ -6,15 +6,15 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
+from g8e.operator.v1.operator_pb2 import (
+    INFERENCE_MESSAGE_ROLE_USER,
+    MODEL_ROLE_ASSISTANT,
+)
 
 from app.errors import NetworkError
 from app.models.internal_api import InferenceDispatchRequest
 from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.settings_service import SettingsService
-from g8e.operator.v1.operator_pb2 import (
-    INFERENCE_MESSAGE_ROLE_USER,
-    MODEL_ROLE_ASSISTANT,
-)
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_operator]
 
@@ -45,7 +45,5 @@ async def test_dispatch_inference_reaches_gateway_validation_over_real_mtls():
     # Certificates are present, so the Gateway is a configured service: a
     # transport-level failure (no HTTP status) is a test failure, not a skip.
     details = exc_info.value.error_detail.details
-    assert "status_code" in details, (
-        f"Gateway did not answer over mTLS: {exc_info.value}"
-    )
+    assert "status_code" in details, f"Gateway did not answer over mTLS: {exc_info.value}"
     assert details["status_code"] == 400

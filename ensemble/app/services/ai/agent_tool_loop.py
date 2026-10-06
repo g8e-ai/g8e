@@ -1,22 +1,20 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
+"""
+Function call execution - tool display metadata, grounding merge, single
+tool call dispatch, and sequential turn-level execution loop.
+"""
+
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
 from __future__ import annotations
 
-"""
-Function call execution - tool display metadata, grounding merge, single
-tool call dispatch, and sequential turn-level execution loop.
-"""
-
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
-
-from app.models.base import BaseModel, ConfigDict, Field, ValidationError
 
 from app.constants import (
     CommandErrorType,
@@ -24,53 +22,52 @@ from app.constants import (
     OperatorToolName,
     ToolCallStatus,
 )
-from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.constants.config import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    ToolDisplayCategory,
     StreamChunkFromModelType,
+    ToolDisplayCategory,
 )
 from app.llm.llm_types import ToolCall
 from app.models.agent import (
     ExecutorCommandArgs,
     SageOperatorRequest,
-    ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
+    ToolCallResponse,
 )
-
-from app.services.ai.generator import generate_command
-from app.models.tribunal_commands import TribunalGenerationRequest
-from app.models.evaluation_trace import EvaluationPlayerStep
-from app.models.grounding import GroundingMetadata
-from app.models.http_context import G8eHttpContext, RequestContext
-from app.models.investigations import EnrichedInvestigationContext
-from app.models.reputation import StakeResolutionPayload
-from app.models.tool_results import (
-    CommandExecutionResult,
-    ToolResult,
-    SearchWebResult,
-)
-from app.models.settings import G8eeUserSettings
-
 from app.models.agents.tribunal import (
     CommandGenerationResult,
     TribunalError,
     TribunalObserver,
 )
+from app.models.base import BaseModel, ConfigDict, Field, ValidationError
+from app.models.evaluation_trace import EvaluationPlayerStep
+from app.models.grounding import GroundingMetadata
+from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.investigations import EnrichedInvestigationContext
+from app.models.reputation import StakeResolutionPayload
+from app.models.settings import G8eeUserSettings
+from app.models.tool_results import (
+    CommandExecutionResult,
+    SearchWebResult,
+    ToolResult,
+)
+from app.models.tribunal_commands import TribunalGenerationRequest
+from app.models.whitelist import WhitelistedCommand
+from app.services.ai.generator import generate_command
+from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
+from app.services.ai.tool_service import AIToolService
 from app.services.evaluation.player_steps import PlayerStepRecorder
+from app.services.infra.event_service import EventService
 from app.services.investigation.investigation_service import (
     extract_operator_context_by_target,
     extract_single_operator_context,
 )
-from app.services.ai.tool_service import AIToolService
-from app.services.infra.event_service import EventService
+from app.utils.csv_commands import parse_command_csv
 from app.utils.time_ids.ids import generate_command_execution_id
 from app.utils.validation.safety import map_os_string_to_platform
-from app.utils.csv_commands import parse_command_csv
-from app.models.whitelist import WhitelistedCommand
 
 
 class TribunalInvoker:
@@ -455,9 +452,7 @@ async def orchestrate_tool_execution(
     gen_result: CommandGenerationResult | None = None
     # A scored turn records what each Tribunal player produced; production
     # chat has no observer and the Tribunal runs exactly as before.
-    step_recorder = (
-        PlayerStepRecorder() if g8e_context.evaluation_context is not None else None
-    )
+    step_recorder = PlayerStepRecorder() if g8e_context.evaluation_context is not None else None
 
     if execution_id is None:
         execution_id = (

@@ -19,7 +19,6 @@ pattern belongs here, never at a consumer.
 
 from __future__ import annotations
 
-
 # Fingerprints (lowercased) that mean "model does not support thinking".
 _THINKING_PATTERNS: tuple[str, ...] = (
     "thinking_config",

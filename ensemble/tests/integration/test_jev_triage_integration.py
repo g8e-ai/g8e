@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from app.constants import OLLAMA_DEFAULT_ENDPOINT, AgentMode, JEV_DEFAULT_MODEL, LLMProvider
+from app.constants import JEV_DEFAULT_MODEL, OLLAMA_DEFAULT_ENDPOINT, AgentMode, LLMProvider
 from app.constants.env_vars import EnvVar
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.settings import G8eeUserSettings, LLMSettings

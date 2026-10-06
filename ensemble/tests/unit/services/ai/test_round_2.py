@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     CommandGenerationOutcome,
     EventType,
-    G8EE_COMPONENT,
     LLMProvider,
 )
 from app.models.http_context import G8eHttpContext
@@ -21,8 +21,8 @@ from app.services.ai.generator import (
     generate_command,
 )
 from tests.unit.services.ai.tribunal.conftest import (
-    make_tribunal_generation_request,
     _make_mock_provider,
+    make_tribunal_generation_request,
 )
 
 

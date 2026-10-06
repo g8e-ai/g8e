@@ -1,3 +1,5 @@
+"""Regression tests for Gateway-owned operator dispatch correlation."""
+
 from __future__ import annotations
 
 # Copyright (c) 2026 Lateralus Labs, LLC.
@@ -6,21 +8,17 @@ from __future__ import annotations
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
-
-"""Regression tests for Gateway-owned operator dispatch correlation."""
-
 import base64
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.operator.v1 import operator_pb2
 
-from app.constants.generated_status import EventType
-from app.constants.generated_status import AITaskId
-from app.constants import ExecutionStatus, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, ExecutionStatus
+from app.constants.generated_status import AITaskId, EventType
 from app.models.command_request_payloads import CommandRequestPayload, FileEditRequestPayload
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
-from g8e.operator.v1 import operator_pb2
 from tests.fakes.factories import build_g8e_http_context
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]

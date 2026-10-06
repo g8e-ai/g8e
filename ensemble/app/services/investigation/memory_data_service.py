@@ -7,15 +7,15 @@
 
 import logging
 
+from app.clients.governance_client import GovernanceClient
 from app.constants import DB_COLLECTION_MEMORIES, G8EE_COMPONENT
 from app.errors import DatabaseError
 from app.models.cache import FieldFilter
+from app.models.http_context import RequestContext
 from app.models.investigations import InvestigationModel
 from app.models.memory import InvestigationMemory
-from app.models.http_context import RequestContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import MemoryDataServiceProtocol
-from app.clients.governance_client import GovernanceClient
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,9 @@ class MemoryDataService(MemoryDataServiceProtocol):
             case_title=investigation.case_title,
         )
 
-        from app.models.pubsub_messages import G8eMessage
+        from app.constants import AITaskId, EventType
         from app.models.command_request_payloads import DocumentUpdateRequestPayload
-        from app.constants import EventType, AITaskId
+        from app.models.pubsub_messages import G8eMessage
 
         payload = DocumentUpdateRequestPayload(
             collection=self.memories_collection,
@@ -90,9 +90,9 @@ class MemoryDataService(MemoryDataServiceProtocol):
         from app.constants import EventType
 
         if is_new:
-            from app.models.pubsub_messages import G8eMessage
-            from app.models.command_request_payloads import DocumentUpdateRequestPayload
             from app.constants import AITaskId
+            from app.models.command_request_payloads import DocumentUpdateRequestPayload
+            from app.models.pubsub_messages import G8eMessage
 
             payload = DocumentUpdateRequestPayload(
                 collection=self.memories_collection,
@@ -139,9 +139,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
             return InvestigationMemory.model_validate(data)
         return None
 
-    async def get_user_memories(
-        self, user_id: str, limit: int = 10
-    ) -> list[InvestigationMemory]:
+    async def get_user_memories(self, user_id: str, limit: int = 10) -> list[InvestigationMemory]:
         try:
             docs = await self._cache_aside.query_documents(
                 collection=self.memories_collection,

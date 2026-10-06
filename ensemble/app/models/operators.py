@@ -1,3 +1,9 @@
+"""
+Operator models for g8e system.
+
+Defines data structures for tracking g8eo operators and their runtime configurations.
+"""
+
 from __future__ import annotations
 
 # Copyright (c) 2026 Lateralus Labs, LLC.
@@ -6,27 +12,9 @@ from __future__ import annotations
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
-
-"""
-Operator models for g8e system.
-
-Defines data structures for tracking g8eo operators and their runtime configurations.
-"""
-
 import asyncio
 import logging
 from typing import Any
-
-from app.models.base import (
-    ConfigDict,
-    Field,
-    PrivateAttr,
-    ValidationInfo,
-    field_validator,
-    model_validator,
-)
-
-from app.models.http_context import G8eHttpContext
 
 from app.constants import (
     ApprovalErrorType,
@@ -42,13 +30,22 @@ from app.constants import (
     OperatorType,
     VersionStability,
 )
+from app.models.base import (
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from app.models.http_context import G8eHttpContext
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,
     FileOperationRiskAnalysis,
 )
-from app.utils.time_ids.timestamp import now
 from app.utils.hashing.ledger_hash import compute_entry_hash
+from app.utils.time_ids.timestamp import now
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
@@ -201,15 +198,11 @@ class OperatorDocument(G8eIdentifiableModel):
     operator_role: str | None = Field(
         default=None, description="Operational role (inference, provenance, observer, data)"
     )
-    local_dir: str | None = Field(
-        default=None, description="Local runtime or working directory"
-    )
+    local_dir: str | None = Field(default=None, description="Local runtime or working directory")
     account: str | None = Field(
         default=None, description="OS user account that launched the operator"
     )
-    port: int | None = Field(
-        default=None, description="Port configured for operator"
-    )
+    port: int | None = Field(default=None, description="Port configured for operator")
     runtime_config: dict[str, Any] | None = Field(
         default=None, description="Active runtime configuration"
     )
@@ -493,6 +486,7 @@ class HeartbeatSnapshot(G8eBaseModel):
         default=False, description="True when LFAA ledger mirroring is active"
     )
 
+
 class PendingApproval(G8eBaseModel):
     """
     Typed state for a pending approval.
@@ -627,8 +621,6 @@ class CommandApprovalRequest(ApprovalRequestBase):
     task_id: str | None = Field(default=None, description="AI task identifier")
 
 
-
-
 class FileEditApprovalRequest(ApprovalRequestBase):
     """Typed request for file edit approval."""
 
@@ -719,8 +711,6 @@ class CommandApprovalEvent(ApprovalContext):
     def is_batch_execution(self) -> bool:
         """True if targeting multiple systems."""
         return len(self.target_systems) > 1
-
-
 
 
 class AgentContinueApprovalEvent(ApprovalContext):

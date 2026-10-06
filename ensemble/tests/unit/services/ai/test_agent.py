@@ -50,8 +50,8 @@ from app.services.ai.agent_tool_loop import ToolCallResponse
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
     make_agent_stream_state,
-    make_g8e_agent,
     make_event_service,
+    make_g8e_agent,
     make_gen_config,
     make_provider_chunk,
 )
@@ -435,8 +435,9 @@ class TestStreamWithToolLoop:
         assert any(c.type == StreamChunkFromModelType.COMPLETE for c in chunks)
 
     async def test_loop_continues_when_tool_calls_present(self):
-        from app.llm.llm_types import ToolCall
         from unittest.mock import AsyncMock
+
+        from app.llm.llm_types import ToolCall
 
         tool_executor = MagicMock()
         tool_executor.execute_tool_call = AsyncMock()
@@ -698,8 +699,8 @@ class TestMaxTurnLimitApproval:
         and the COMPLETE chunk must say the limit was reached."""
         from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.factories import build_g8e_http_context
+        from tests.fakes.fake_approval_service import FakeApprovalService
 
         approval_service = FakeApprovalService(approved=True)  # would approve if it were asked
         provider = self._make_tool_calling_provider()
@@ -808,7 +809,10 @@ class TestTokenAccumulation:
         assert complete_chunk.data.model_calls[0].thinking_tokens == 2
         assert len(complete_chunk.data.model_calls[0].input_artifact_hash) == 64
         assert len(complete_chunk.data.model_calls[0].output_artifact_hash) == 64
-        assert complete_chunk.data.model_calls[0].monotonic_end >= complete_chunk.data.model_calls[0].monotonic_start
+        assert (
+            complete_chunk.data.model_calls[0].monotonic_end
+            >= complete_chunk.data.model_calls[0].monotonic_start
+        )
 
     async def test_final_usage_equals_sum_of_recorded_calls_across_tool_turns(self):
         """The COMPLETE total is derived from the per-call records and nothing else.
@@ -837,7 +841,9 @@ class TestTokenAccumulation:
             async def _gen():
                 chunk = make_provider_chunk(
                     text=f"turn {turn}",
-                    tool_calls=[ToolCall(name="search_web", args={"query": "q"})] if first else None,
+                    tool_calls=[ToolCall(name="search_web", args={"query": "q"})]
+                    if first
+                    else None,
                     finish_reason="STOP",
                 )
                 chunk.usage_metadata = MagicMock()
@@ -1047,8 +1053,9 @@ class TestInterrogationGate:
 
     async def test_interrogation_gate_suppresses_tool_execution(self):
         """Gate fires when <interrogation> block present: drops tool calls, breaks loop."""
-        from app.llm.llm_types import ToolCall
         from unittest.mock import patch
+
+        from app.llm.llm_types import ToolCall
 
         tool_executor = MagicMock()
         provider = MagicMock()

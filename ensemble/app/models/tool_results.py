@@ -1,21 +1,19 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
-#
-# As of the Change Date listed in the LICENSE file, this software is
-# released under the Apache License, Version 2.0.
-
-from __future__ import annotations
-
 """
 Typed result models for AI tool operations.
 
 Canonical field definitions for tool results.
 """
 
-from typing import Any, Union
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
 
-from app.models.base import Field
+from __future__ import annotations
+
+from typing import Any, Union
 
 from app.constants import (
     CommandErrorType,
@@ -25,7 +23,7 @@ from app.constants import (
     NetworkProtocol,
     RiskLevel,
 )
-from app.models.base import G8eBaseModel, UTCDatetime
+from app.models.base import Field, G8eBaseModel, UTCDatetime
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.ssh_inventory import SshHost
 from app.models.whitelist import WhitelistedCommand

@@ -22,10 +22,10 @@ from urllib.parse import urlsplit
 
 from app.constants import (
     ANTHROPIC_DEFAULT_ENDPOINT,
-    LLMProvider,
     LLAMACPP_DEFAULT_ENDPOINT,
     OLLAMA_DEFAULT_ENDPOINT,
     OPENAI_DEFAULT_ENDPOINT,
+    LLMProvider,
 )
 from app.errors import ValidationError
 from app.models.internal_api import (
@@ -72,7 +72,9 @@ def provider_options(llm: LLMSettings) -> list[LLMProviderOption]:
                 label=label,
                 endpoint=endpoint,
                 api_key=api_key,
-                default_endpoint=_provider_default_endpoint(provider) if endpoint != "none" else None,
+                default_endpoint=_provider_default_endpoint(provider)
+                if endpoint != "none"
+                else None,
                 configured_endpoint=endpoint_value,
                 api_key_set=bool(provider_key),
                 lists_models=lists_models,
@@ -91,9 +93,7 @@ _PROVIDER_CONNECTION_FIELDS: dict[LLMProvider, tuple[str | None, str | None]] = 
 }
 
 
-def provider_connection(
-    llm: LLMSettings, provider: LLMProvider
-) -> tuple[str | None, str | None]:
+def provider_connection(llm: LLMSettings, provider: LLMProvider) -> tuple[str | None, str | None]:
     fields = _PROVIDER_CONNECTION_FIELDS.get(provider)
     if fields is None:
         raise ValidationError(
@@ -173,7 +173,9 @@ def apply_role_updates(llm: LLMSettings, request: LLMRoleSettingsUpdateRequest) 
         if update.provider is None:
             if role == "primary":
                 raise ValidationError(
-                    "The primary role needs a provider", field="primary.provider", constraint="required"
+                    "The primary role needs a provider",
+                    field="primary.provider",
+                    constraint="required",
                 )
             normalized[role] = (None, None)
             continue

@@ -19,16 +19,18 @@ for SSE transport, ensuring:
 from datetime import UTC, datetime
 
 import pytest
+from g8e.models.events import ChatThinkingPayload, _SSEEventBody
 
 from app.constants import EventType, ThinkingPhase
 from app.models.base import G8eBaseModel, UTCDatetime
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
-from g8e.models.events import ChatThinkingPayload, _SSEEventBody
 
 pytestmark = pytest.mark.unit
 
 
-def _thinking_payload(message: str = "test", timestamp: UTCDatetime | None = None) -> ChatThinkingPayload:
+def _thinking_payload(
+    message: str = "test", timestamp: UTCDatetime | None = None
+) -> ChatThinkingPayload:
     return ChatThinkingPayload(thinking=message, phase=ThinkingPhase.START, timestamp=timestamp)
 
 

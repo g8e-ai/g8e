@@ -6,19 +6,20 @@
 # released under the Apache License, Version 2.0.
 
 import logging
+
 from app.constants import EventType
 from app.models.agents.tribunal import (
     CandidateCommand,
-    VoteBreakdown,
     TribunalConsensusFailedPayload,
-    TribunalVotingCompletedPayload,
     TribunalDissentRecordedPayload,
+    TribunalVotingCompletedPayload,
+    VoteBreakdown,
 )
+from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.voter import (
     TRIBUNAL_MIN_CONSENSUS,
     weighted_vote,
 )
-from app.services.ai.tribunal.emitter import TribunalEmitter
 
 logger = logging.getLogger(__name__)
 

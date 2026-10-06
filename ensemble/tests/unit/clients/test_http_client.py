@@ -20,10 +20,10 @@ import pytest_asyncio
 from app.clients.http_client import (
     DEFAULT_RETRY_METHODS,
     DEFAULT_RETRY_STATUS_CODES,
+    GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
     AiohttpResponse,
     CircuitBreaker,
     CircuitBreakerConfig,
-    GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
     HTTPClient,
     RequestTrace,
     RetryConfig,
@@ -31,15 +31,17 @@ from app.clients.http_client import (
 )
 from app.constants import (
     CASE_ID,
-    CircuitBreakerState,
-    ComponentName,
-    DEFAULT_HTTP_CLIENT_TIMEOUT as DEFAULT_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BACKOFF_FACTOR,
     EXECUTION_ID,
     G8EE_COMPONENT,
     INVESTIGATION_ID,
     TASK_ID,
+    CircuitBreakerState,
+    ComponentName,
+)
+from app.constants import (
+    DEFAULT_HTTP_CLIENT_TIMEOUT as DEFAULT_TIMEOUT,
 )
 from app.errors import NetworkError, ValidationError
 from app.models.http_context import G8eHttpContext
@@ -190,9 +192,7 @@ class TestRequestTrace:
 
     def test_as_headers_empty(self):
         # Context moved to request body - RequestTrace.as_headers is now empty
-        trace = RequestTrace.from_headers(
-            {EXECUTION_ID: "req-abc"}, component_id=G8EE_COMPONENT
-        )
+        trace = RequestTrace.from_headers({EXECUTION_ID: "req-abc"}, component_id=G8EE_COMPONENT)
         headers = trace.as_headers
         assert headers == {}
 
@@ -1056,7 +1056,9 @@ class TestG8eHTTPClientRequest:
         c._session = session
 
         with pytest.raises(NetworkError):
-            await c.request("POST", "/api/v1/operators/validate", headers={}, json_data=None, context=None)
+            await c.request(
+                "POST", "/api/v1/operators/validate", headers={}, json_data=None, context=None
+            )
 
         cb = c._get_circuit_breaker("https://localhost:8443/api/v1/operators/validate")
         assert cb.state is CircuitBreakerState.CLOSED

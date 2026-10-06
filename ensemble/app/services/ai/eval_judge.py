@@ -26,21 +26,34 @@ import re
 import time
 from typing import Any
 
-from app.models.base import BaseModel, Field, field_validator
-
 from app.decision.provider import DecisionProvider
-from app.decision.types import EvaluateResponse, NoulAnswer, NoulQuestion, ScoreAnswer, ScoreQuestion
-from app.llm.llm_types import Content, GenerateContentResponse, Part, ResponseFormat, Role, LiteLLMSettings, UsageMetadata
-from app.llm.model_evidence import model_boundary_hash
-from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
-from app.models.http_context import G8eHttpContext
-from app.llm.provider import LLMProvider as LLMProviderBase
-from app.models.model_telemetry import ModelCallTelemetry
-from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.models.settings import EvalJudgeSettings
-from app.utils.agent_persona_loader import get_agent_persona
+from app.decision.types import (
+    EvaluateResponse,
+    NoulAnswer,
+    NoulQuestion,
+    ScoreAnswer,
+    ScoreQuestion,
+)
 from app.errors import ContextWindowExceededError, OllamaEmptyResponseError, RateLimitError
+from app.llm.llm_types import (
+    Content,
+    GenerateContentResponse,
+    LiteLLMSettings,
+    Part,
+    ResponseFormat,
+    Role,
+    UsageMetadata,
+)
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.provider import LLMProvider as LLMProviderBase
+from app.models.base import BaseModel, Field, field_validator
+from app.models.http_context import G8eHttpContext
 from app.models.model_configs import get_model_config
+from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import EvalJudgeSettings
+from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +283,9 @@ class EvalJudge:
             except EvalJudgeError:
                 raise
             except ContextWindowExceededError as exc:
-                logger.error("EvalJudge prompt exceeded the model context window, not retrying: %s", exc)
+                logger.error(
+                    "EvalJudge prompt exceeded the model context window, not retrying: %s", exc
+                )
                 raise EvalJudgeError(
                     f"Judge prompt exceeded the model's context window; the case was not scored: {exc}",
                     model_calls=model_calls,
@@ -310,11 +325,13 @@ class EvalJudge:
             g8e_context=self._g8e_context,
             retry_count=retry_count,
         )
-        input_artifact_hash = model_boundary_hash({
-            "model": self._model,
-            "contents": contents,
-            "settings": settings,
-        })
+        input_artifact_hash = model_boundary_hash(
+            {
+                "model": self._model,
+                "contents": contents,
+                "settings": settings,
+            }
+        )
         monotonic_start = time.monotonic()
         try:
             response = await self._provider.generate_content_lite(
@@ -323,14 +340,16 @@ class EvalJudge:
                 lite_llm_settings=settings,
             )
         except Exception as exc:
-            model_calls.append(self._model_call_telemetry(
-                response=None,
-                response_text="",
-                monotonic_start=monotonic_start,
-                retry_count=retry_count,
-                input_artifact_hash=input_artifact_hash,
-                error=exc,
-            ))
+            model_calls.append(
+                self._model_call_telemetry(
+                    response=None,
+                    response_text="",
+                    monotonic_start=monotonic_start,
+                    retry_count=retry_count,
+                    input_artifact_hash=input_artifact_hash,
+                    error=exc,
+                )
+            )
             raise
 
         response_text = ""
@@ -369,14 +388,16 @@ class EvalJudge:
         except Exception as exc:
             error = EvalJudgeError(str(exc))
             error.__cause__ = exc
-        model_calls.append(self._model_call_telemetry(
-            response=response,
-            response_text=response_text,
-            monotonic_start=monotonic_start,
-            retry_count=retry_count,
-            input_artifact_hash=input_artifact_hash,
-            error=error,
-        ))
+        model_calls.append(
+            self._model_call_telemetry(
+                response=response,
+                response_text=response_text,
+                monotonic_start=monotonic_start,
+                retry_count=retry_count,
+                input_artifact_hash=input_artifact_hash,
+                error=error,
+            )
+        )
         error.model_calls = list(model_calls)
         raise error
 
@@ -454,14 +475,16 @@ class EvalJudge:
             raise EvalJudgeError("Jev judge is not configured", model_calls=model_calls)
 
         provider.clear_input_artifact_hash()
-        input_artifact_hash = model_boundary_hash({
-            "model": self._model,
-            "state": state,
-            "questions": {
-                name: question.model_dump(mode="json", exclude_none=True)
-                for name, question in questions.items()
-            },
-        })
+        input_artifact_hash = model_boundary_hash(
+            {
+                "model": self._model,
+                "state": state,
+                "questions": {
+                    name: question.model_dump(mode="json", exclude_none=True)
+                    for name, question in questions.items()
+                },
+            }
+        )
         monotonic_start = time.monotonic()
 
         try:
@@ -471,34 +494,40 @@ class EvalJudge:
                 questions=questions,
             )
         except Exception as exc:
-            model_calls.append(self._jev_model_call_telemetry(
-                response=None,
-                monotonic_start=monotonic_start,
-                retry_count=retry_count,
-                input_artifact_hash=input_artifact_hash,
-                error=exc,
-            ))
+            model_calls.append(
+                self._jev_model_call_telemetry(
+                    response=None,
+                    monotonic_start=monotonic_start,
+                    retry_count=retry_count,
+                    input_artifact_hash=input_artifact_hash,
+                    error=exc,
+                )
+            )
             raise
 
         try:
             grade = self._map_jev_response_to_grade(response)
             monotonic_end = time.monotonic()
-            model_calls.append(self._jev_model_call_telemetry(
-                response=response,
-                monotonic_start=monotonic_start,
-                monotonic_end=monotonic_end,
-                retry_count=retry_count,
-                input_artifact_hash=input_artifact_hash,
-            ))
+            model_calls.append(
+                self._jev_model_call_telemetry(
+                    response=response,
+                    monotonic_start=monotonic_start,
+                    monotonic_end=monotonic_end,
+                    retry_count=retry_count,
+                    input_artifact_hash=input_artifact_hash,
+                )
+            )
             return grade.model_copy(update={"model_calls": model_calls})
         except EvalJudgeError as exc:
-            model_calls.append(self._jev_model_call_telemetry(
-                response=response,
-                monotonic_start=monotonic_start,
-                retry_count=retry_count,
-                input_artifact_hash=input_artifact_hash,
-                error=exc,
-            ))
+            model_calls.append(
+                self._jev_model_call_telemetry(
+                    response=response,
+                    monotonic_start=monotonic_start,
+                    retry_count=retry_count,
+                    input_artifact_hash=input_artifact_hash,
+                    error=exc,
+                )
+            )
             exc.model_calls = list(model_calls)
             raise
 
@@ -563,9 +592,7 @@ class EvalJudge:
     def _jev_score_to_rubric(score_answer: ScoreAnswer) -> int:
         index = round(score_answer.score)
         if index < 0 or index >= len(JEV_RUBRIC_CRITERIA):
-            raise EvalJudgeError(
-                f"Jev returned out-of-range score index: {score_answer.score}"
-            )
+            raise EvalJudgeError(f"Jev returned out-of-range score index: {score_answer.score}")
         rubric_score = int(JEV_RUBRIC_CRITERIA[index])
         if rubric_score < 1 or rubric_score > 5:
             raise EvalJudgeError(f"Jev mapped to out-of-range rubric score: {rubric_score}")
@@ -630,9 +657,7 @@ class EvalJudge:
             input_artifact_hash=input_artifact_hash,
             input_tokens=usage.input_tokens if usage else 0,
             output_tokens=usage.output_tokens if usage else 0,
-            total_tokens=(
-                (usage.input_tokens + usage.output_tokens) if usage else 0
-            ),
+            total_tokens=((usage.input_tokens + usage.output_tokens) if usage else 0),
             usage_reported=usage is not None,
             retry_count=retry_count,
             succeeded=error is None,
@@ -650,7 +675,9 @@ class EvalJudge:
         error: Exception | None = None,
     ) -> ModelCallTelemetry:
         usage = response.usage_metadata if response else UsageMetadata()
-        finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
+        finish_reason = (
+            response.candidates[0].finish_reason if response and response.candidates else None
+        )
         return build_model_call_telemetry(
             provider=self._provider,
             agent_role="judge",

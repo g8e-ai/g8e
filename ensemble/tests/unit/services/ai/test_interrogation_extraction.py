@@ -6,19 +6,21 @@
 # released under the Apache License, Version 2.0.
 
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.services.ai.chat_pipeline import ChatPipelineService
-from app.models.agent import AgentStreamState, AgentInputs
-from app.models.agents.triage import TriageResult
+
+import pytest
+
 from app.constants import (
+    EventType,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
     TriageRequestPosture,
-    EventType,
 )
+from app.models.agent import AgentInputs, AgentStreamState
+from app.models.agents.triage import TriageResult
 from app.models.http_context import G8eHttpContext
+from app.services.ai.chat_pipeline import ChatPipelineService
 from tests.fakes.fake_event_service import FakeEventService
 
 

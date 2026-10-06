@@ -13,18 +13,18 @@ import logging
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
-from app.constants.prompts import PromptFile
 from app.constants import FileOperation
 from app.constants.generated_status import OperatorToolName
+from app.constants.prompts import PromptFile
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
 from app.models.command_request_payloads import FileEditRequestPayload
-from app.services.ai.tools._base import convert_args_to_payload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eeUserSettings
 from app.models.tool_args import FileCreateArgs
 from app.models.tool_results import ToolResult
+from app.services.ai.tools._base import convert_args_to_payload
 
 if TYPE_CHECKING:
     from app.services.ai.tool_service import AIToolService

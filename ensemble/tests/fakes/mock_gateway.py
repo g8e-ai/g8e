@@ -55,10 +55,10 @@ from urllib.parse import unquote
 
 import aiohttp
 from aiohttp import web
+from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent, PubSubMessage
 
 from app.constants import GatewayAPIPaths, PubSubAction, PubSubWireEventType
 from app.models.settings import GatewaySettings, TLSConfig
-from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent, PubSubMessage
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +82,11 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
 
     # --- CA ---
     ca_key = ec.generate_private_key(ec.SECP256R1())
-    ca_subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, "g8e-test-mock-ca"),
-    ])
+    ca_subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "g8e-test-mock-ca"),
+        ]
+    )
     ca_cert = (
         x509.CertificateBuilder()
         .subject_name(ca_subject)
@@ -106,9 +108,11 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
 
     # --- Server cert signed by CA ---
     server_key = ec.generate_private_key(ec.SECP256R1())
-    server_subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
-    ])
+    server_subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+        ]
+    )
     server_cert = (
         x509.CertificateBuilder()
         .subject_name(server_subject)
@@ -118,10 +122,12 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
         .not_valid_before(now - datetime.timedelta(days=1))
         .not_valid_after(now + datetime.timedelta(days=365))
         .add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName("localhost"),
-                x509.IPAddress(__import__("ipaddress").ip_address("127.0.0.1")),
-            ]),
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(__import__("ipaddress").ip_address("127.0.0.1")),
+                ]
+            ),
             critical=False,
         )
         .sign(ca_key, hashes.SHA256())
@@ -456,8 +462,12 @@ class MockGateway:
         # DB endpoints (GatewayAPIPaths.DATA_DB = "/api/v1/data/")
         app.router.add_get(GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_get)
         app.router.add_put(GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_put)
-        app.router.add_patch(GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_patch)
-        app.router.add_delete(GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_delete)
+        app.router.add_patch(
+            GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_patch
+        )
+        app.router.add_delete(
+            GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_delete
+        )
         app.router.add_post(GatewayAPIPaths.DATA_DB + "{collection}/_query", self._handle_db_query)
 
         # KV endpoints (GatewayAPIPaths.KV_PREFIX = "/api/v1/kv/")
@@ -467,13 +477,23 @@ class MockGateway:
         app.router.add_put(GatewayAPIPaths.KV_PREFIX + "{key}/_expire", self._handle_kv_expire)
         app.router.add_get(GatewayAPIPaths.KV_PREFIX + "{key}/_ttl", self._handle_kv_ttl)
         app.router.add_post(GatewayAPIPaths.KV_PREFIX + "_keys", self._handle_kv_keys)
-        app.router.add_post(GatewayAPIPaths.KV_PREFIX + "_delete_pattern", self._handle_kv_delete_pattern)
+        app.router.add_post(
+            GatewayAPIPaths.KV_PREFIX + "_delete_pattern", self._handle_kv_delete_pattern
+        )
 
         # Blob endpoints (GatewayAPIPaths.DATA_BLOBS_PREFIX = "/api/v1/blobs/")
-        app.router.add_put(GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_put)
-        app.router.add_get(GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_get)
-        app.router.add_delete(GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_delete)
-        app.router.add_delete(GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}", self._handle_blob_delete_ns)
+        app.router.add_put(
+            GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_put
+        )
+        app.router.add_get(
+            GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_get
+        )
+        app.router.add_delete(
+            GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_delete
+        )
+        app.router.add_delete(
+            GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}", self._handle_blob_delete_ns
+        )
 
         # WebSocket pub/sub (GatewayAPIPaths.PUBSUB_STREAM = "/api/v1/pubsub/stream")
         app.router.add_get(GatewayAPIPaths.PUBSUB_STREAM, self._handle_ws_pubsub)

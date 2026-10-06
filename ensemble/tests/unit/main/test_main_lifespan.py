@@ -22,10 +22,9 @@ main.py responsibilities:
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from app.constants.generated_paths import PortConstants
 from fastapi import FastAPI
 
+from app.constants.generated_paths import PortConstants
 from app.main import lifespan
 
 pytestmark = [pytest.mark.unit]
@@ -75,19 +74,17 @@ def _build_mocks():
         key_path="/tmp/test-app-key.pem",
         ca_cert_path="/tmp/test-ca-bundle.pem",
     )
-    mocks["AppEnrollmentService"].return_value.load_identity.side_effect = (
-        ConfigurationError("no existing cert")
+    mocks["AppEnrollmentService"].return_value.load_identity.side_effect = ConfigurationError(
+        "no existing cert"
     )
-    mocks["AppEnrollmentService"].return_value.enroll = AsyncMock(
-        return_value=app_identity
-    )
+    mocks["AppEnrollmentService"].return_value.enroll = AsyncMock(return_value=app_identity)
 
     return mocks, patches
 
 
 def _configure_settings(mocks):
     """Wire up SettingsService + initialize_g8e_service to return a usable mock settings."""
-    from app.constants.paths import get_app_cert_paths, PATHS
+    from app.constants.paths import PATHS, get_app_cert_paths
     from app.models.settings import G8eeAppSettings
 
     settings = G8eeAppSettings()
@@ -275,9 +272,7 @@ class TestLifespanEnrollmentFailsClosed:
             for p in patches:
                 p.stop()
 
-    async def test_enrollment_failure_after_ca_bundle_fetch_failure_aborts_startup(
-        self, mock_app
-    ):
+    async def test_enrollment_failure_after_ca_bundle_fetch_failure_aborts_startup(self, mock_app):
         from app.errors import ConfigurationError
 
         mocks, patches = _build_mocks()

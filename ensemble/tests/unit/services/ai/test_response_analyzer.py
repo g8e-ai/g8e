@@ -9,11 +9,9 @@
 Unit tests for AIResponseAnalyzer.
 """
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from unittest.mock import AsyncMock
 
 from app.constants import ErrorAnalysisCategory, RiskLevel
 from app.errors import ContextWindowExceededError
@@ -65,7 +63,9 @@ def analyzer():
 async def test_analyze_command_risk_success(analyzer, fake_provider, mock_settings):
     fake_provider.add_response('{"risk_level": "LOW", "reasoning": "Read-only command"}')
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_command_risk(
             "ls -la", "Checking files", CommandRiskContext(), mock_settings
         )
@@ -87,7 +87,9 @@ async def test_analyze_command_risk_accepts_bare_enum_value(analyzer, fake_provi
     """
     fake_provider.add_response("LOW")
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_command_risk(
             "ls -la /tmp",
             "List /tmp",
@@ -103,7 +105,9 @@ async def test_analyze_command_risk_accepts_fenced_json(analyzer, fake_provider,
     """Some models wrap JSON in ```json ... ``` fences. Strip and parse."""
     fake_provider.add_response('```json\n{"risk_level": "MEDIUM"}\n```')
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_command_risk(
             "systemctl restart nginx",
             "Restart nginx",
@@ -121,7 +125,9 @@ async def test_analyze_command_risk_accepts_json_after_preamble(
     """Models sometimes prefix prose before the JSON object. Extract and parse."""
     fake_provider.add_response('Here is my classification:\n{"risk_level": "HIGH"}\nThanks.')
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_command_risk(
             "rm -rf /var/data",
             "Wipe",
@@ -142,7 +148,9 @@ async def test_analyze_command_risk_fallback_on_empty_response(
     )
     fake_provider.responses.append(response)
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_command_risk(
             "rm -rf /", "Destructive", CommandRiskContext(), mock_settings
         )
@@ -160,7 +168,9 @@ async def test_analyze_command_risk_with_investigation_context(
     """investigation_context in CommandRiskContext is passed to the template and does not break analysis."""
     fake_provider.add_response('{"risk_level": "MEDIUM"}')
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_command_risk(
             "sed -i 's/proxy_pass/;/' /etc/nginx/sites-available/default",
             "Fix nginx config syntax error",
@@ -177,7 +187,8 @@ async def test_analyze_command_risk_with_investigation_context(
 @pytest.mark.asyncio
 async def test_analyze_command_risk_fallback_on_exception(analyzer, fake_provider, mock_settings):
     with patch(
-        "app.services.ai.response_analyzer.get_generative_lite_provider", side_effect=Exception("LLM error")
+        "app.services.ai.response_analyzer.get_generative_lite_provider",
+        side_effect=Exception("LLM error"),
     ):
         result = await analyzer.analyze_command_risk(
             "ls", "List", CommandRiskContext(), mock_settings
@@ -221,7 +232,9 @@ async def test_analyze_error_success(analyzer, fake_provider, mock_settings):
             "user_message": "I'll install the missing package."
         }""")
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_error_and_suggest_fix(
             command="node app.js",
             exit_code=1,
@@ -253,7 +266,9 @@ async def test_analyze_error_enforces_escalation_at_retry_limit(
             "user_message": "Trying again"
         }""")
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_error_and_suggest_fix(
             command="node app.js",
             exit_code=1,
@@ -270,7 +285,8 @@ async def test_analyze_error_enforces_escalation_at_retry_limit(
 @pytest.mark.asyncio
 async def test_analyze_error_fallback_on_exception(analyzer, fake_provider, mock_settings):
     with patch(
-        "app.services.ai.response_analyzer.get_generative_lite_provider", side_effect=Exception("LLM fail")
+        "app.services.ai.response_analyzer.get_generative_lite_provider",
+        side_effect=Exception("LLM fail"),
     ):
         result = await analyzer.analyze_error_and_suggest_fix(
             command="ls",
@@ -308,7 +324,9 @@ async def test_analyze_command_risk_context_overflow_fails_closed_without_retry(
 ):
     fake_provider.generate_content_lite = AsyncMock(side_effect=_overflow_error())
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_command_risk(
             "ls -la", "Checking files", CommandRiskContext(), mock_settings
         )
@@ -326,7 +344,9 @@ async def test_analyze_error_context_overflow_reports_overflow_reason(
 ):
     fake_provider.generate_content_lite = AsyncMock(side_effect=_overflow_error())
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_error_and_suggest_fix(
             command="ls",
             exit_code=1,
@@ -354,7 +374,9 @@ async def test_analyze_file_operation_risk_context_overflow_blocks_with_overflow
 ):
     fake_provider.generate_content_lite = AsyncMock(side_effect=_overflow_error())
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_file_operation_risk(
             operation="delete",
             file_path="important.db",
@@ -385,7 +407,9 @@ async def test_analyze_file_operation_risk_success(analyzer, fake_provider, mock
             "approval_prompt": "Proceed with editing app.py?"
         }""")
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_file_operation_risk(
             operation="edit",
             file_path="app.py",
@@ -415,7 +439,9 @@ async def test_analyze_file_operation_risk_system_file_override(
             "approval_prompt": "Proceed?"
         }""")
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_file_operation_risk(
             operation="edit",
             file_path="/etc/passwd",
@@ -433,7 +459,8 @@ async def test_analyze_file_operation_risk_fallback_on_exception(
     analyzer, fake_provider, mock_settings
 ):
     with patch(
-        "app.services.ai.response_analyzer.get_generative_lite_provider", side_effect=Exception("LLM fail")
+        "app.services.ai.response_analyzer.get_generative_lite_provider",
+        side_effect=Exception("LLM fail"),
     ):
         result = await analyzer.analyze_file_operation_risk(
             operation="delete",
@@ -461,7 +488,9 @@ async def test_analyze_file_operation_risk_system_file_with_backup(
             "approval_prompt": "Proceed with backup?"
         }""")
 
-    with patch("app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider):
+    with patch(
+        "app.services.ai.response_analyzer.get_generative_lite_provider", return_value=fake_provider
+    ):
         result = await analyzer.analyze_file_operation_risk(
             operation="edit",
             file_path="/etc/nginx/nginx.conf",

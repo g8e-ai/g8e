@@ -10,8 +10,8 @@ import logging
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants.collections import DB_COLLECTION_CLI_SESSIONS, DB_COLLECTION_OPERATORS
 from app.errors import ValidationError
-from app.models.sessions import CliSessionDocument
 from app.models.operators import OperatorDocument
+from app.models.sessions import CliSessionDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
 from app.utils.gateway_decoding.gateway_operator_document import operator_document_from_gateway
@@ -120,9 +120,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         return docs[:limit]
 
     @staticmethod
-    def _matches_filters(
-        doc: OperatorDocument, field_filters: list[dict[str, object]]
-    ) -> bool:
+    def _matches_filters(doc: OperatorDocument, field_filters: list[dict[str, object]]) -> bool:
         payload = doc.model_dump(mode="json")
         for field_filter in field_filters:
             field = field_filter.get("field")

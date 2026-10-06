@@ -25,8 +25,8 @@ import os
 from pathlib import Path
 
 from app.errors import ConfigurationError
-from app.utils.security import validate_safe_path
 from app.models.ssh_inventory import SshHost, SshInventory
+from app.utils.security import validate_safe_path
 
 logger = logging.getLogger(__name__)
 

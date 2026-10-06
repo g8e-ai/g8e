@@ -5,7 +5,6 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from app.models.base import G8eBaseModel, Field
 from app.constants import (
     TriageComplexityClassification,
     TriageConfidence,
@@ -14,9 +13,10 @@ from app.constants import (
 )
 from app.constants.prompts import AgentMode
 from app.models.attachments import AttachmentMetadata
+from app.models.base import Field, G8eBaseModel
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import ConversationHistoryMessage
 from app.models.model_telemetry import ModelCallTelemetry
-from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeUserSettings
 
 

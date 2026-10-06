@@ -6,29 +6,27 @@
 # released under the Apache License, Version 2.0.
 
 import logging
-from typing import TypeVar
 from collections.abc import Awaitable
+from typing import TypeVar
 from uuid import uuid4
 
-T = TypeVar("T")
-
-from app.models.settings import G8eeAppSettings
+from app.clients.governance_client import GovernanceClient
 from app.constants import (
-    CaseStatus,
     DB_COLLECTION_CASES,
     DB_COLLECTION_TASKS,
+    G8EE_COMPONENT,
+    CaseStatus,
     EntityType,
     ErrorCode,
     EventType,
-    G8EE_COMPONENT,
     TaskStatus,
 )
 from app.errors import (
     BusinessLogicError,
     DatabaseError,
+    G8eError,
     ResourceNotFoundError,
     ValidationError,
-    G8eError,
 )
 from app.models import (
     CaseCreateRequest,
@@ -37,13 +35,15 @@ from app.models import (
 )
 from app.models.cache import FieldFilter
 from app.models.cases import CaseModel, HistoryEntry
-from app.models.events import SessionEvent
 from app.models.db_queries import CaseHistoryQuery
+from app.models.events import SessionEvent
 from app.models.http_context import RequestContext
+from app.models.settings import G8eeAppSettings
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.event_service import EventService
 from app.utils.time_ids.timestamp import now
-from app.clients.governance_client import GovernanceClient
+
+T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
@@ -136,9 +136,9 @@ class CaseDataService:
         )
 
         async def _create():
-            from app.models.pubsub_messages import G8eMessage
+            from app.constants import AITaskId, EventType
             from app.models.command_request_payloads import DocumentUpdateRequestPayload
-            from app.constants import EventType, AITaskId
+            from app.models.pubsub_messages import G8eMessage
 
             payload = DocumentUpdateRequestPayload(
                 collection=self.cases_collection,

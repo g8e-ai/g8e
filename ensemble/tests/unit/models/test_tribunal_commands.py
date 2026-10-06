@@ -5,19 +5,20 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
 
-from app.constants import CommandGenerationOutcome, AuditorReason, ConsensusMember
+from app.constants import AuditorReason, CommandGenerationOutcome, ConsensusMember
 from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
 from app.models.tribunal_commands import (
     TribunalCommand,
-    TribunalCommandRequestContext,
-    TribunalCommandGenerationResult,
     TribunalCommandAuditor,
-    TribunalCommandPipelineMetadata,
     TribunalCommandErrorContext,
+    TribunalCommandGenerationResult,
+    TribunalCommandPipelineMetadata,
+    TribunalCommandRequestContext,
 )
 
 pytestmark = [pytest.mark.unit]

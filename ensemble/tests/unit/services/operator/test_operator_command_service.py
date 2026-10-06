@@ -191,9 +191,7 @@ class TestExecuteCommandTargetSystems:
         """With a single operator, target_systems must contain that operator."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -219,9 +217,7 @@ class TestExecuteCommandTargetSystems:
         """When target_operators is set, target_systems must reflect all resolved operators."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -252,9 +248,7 @@ class TestExecuteCommandTargetSystems:
         """Batch execution dispatches one message per operator and aggregates per-host results."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -297,9 +291,7 @@ class TestExecuteCommandTargetSystems:
         """Providing only target_operators (no singular target_operator) must resolve cleanly."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -331,9 +323,7 @@ class TestExecuteCommandTargetSystems:
         """
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -363,9 +353,7 @@ class TestExecuteCommandTargetSystems:
         """enable_auto_approve + auto_approved_commands list bypasses human approval."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -393,9 +381,7 @@ class TestExecuteCommandTargetSystems:
         """A command whose base verb is NOT in auto_approved_commands still requires human approval."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -423,9 +409,7 @@ class TestExecuteCommandTargetSystems:
         """auto_approved_commands without enable_auto_approve is inert."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -454,9 +438,7 @@ class TestExecuteCommandTargetSystems:
         for commands that have already passed every hard safety gate."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -489,9 +471,7 @@ class TestExecuteCommandTargetSystems:
         """A command not present in the user CSV must be blocked by L1Doctrine safety."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -521,9 +501,7 @@ class TestExecuteCommandTargetSystems:
         """target_systems must never be empty when a valid operator is resolved."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )

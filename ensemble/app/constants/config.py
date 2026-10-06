@@ -24,8 +24,8 @@ from g8e.enums import (
     ToolDisplayCategory,
 )
 
-from app.constants.paths import PATHS
 from app.constants.models import SecurityConstraintsConstants
+from app.constants.paths import PATHS
 
 
 def _load_security_constraints() -> SecurityConstraintsConstants:
@@ -130,16 +130,12 @@ class NonceErrorCode(StrEnum):
     CHECK_FAILED = "NONCE_CHECK_FAILED"
 
 
-
-
 class APIKeyStatus(StrEnum):
     def __str__(self) -> str:
         return self.value
 
     ACTIVE = "active"
     REVOKED = "revoked"
-
-
 
 
 class EntityType(StrEnum):
@@ -239,8 +235,6 @@ class CommandGenerationOutcome(StrEnum):
     CONSENSUS_FAILED = "consensus_failed"
 
 
-
-
 class BatchWriteOpType(StrEnum):
     def __str__(self) -> str:
         return self.value
@@ -328,8 +322,6 @@ class ResponseType(StrEnum):
         return self.value
 
     ERROR_RESPONSE = "error.response"
-
-
 
 
 # OpenAI models

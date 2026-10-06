@@ -59,7 +59,8 @@ FORBIDDEN_PUBSUB_PATTERNS = (
 
 def _python_files_under(path: Path) -> list[Path]:
     return sorted(
-        p for p in path.rglob("*.py")
+        p
+        for p in path.rglob("*.py")
         if not any(part.startswith(".") for part in p.parts)
         and "venv" not in p.parts
         and "__pycache__" not in p.parts
@@ -162,6 +163,5 @@ class TestOperatorGatewayBoundary:
         )
         offenders = [marker for marker in write_markers if marker in text]
         assert offenders == [], (
-            "OperatorDataService must not write operator documents locally: "
-            f"found {offenders}"
+            f"OperatorDataService must not write operator documents locally: found {offenders}"
         )

@@ -16,6 +16,7 @@ import pytest
 from app.clients.blob_client import BlobClient
 from app.clients.db_client import DBClient
 from app.clients.kv_cache_client import KVCacheClient
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 
@@ -53,6 +54,7 @@ class TestMockGatewayHealth:
             assert ok
         finally:
             await blob.close()
+
 
 class TestMockGatewayKV:
     async def test_set_and_get(self, mock_gateway):
@@ -222,4 +224,3 @@ class TestMockGatewayBlob:
             assert count == 2
         finally:
             await blob.close()
-

@@ -289,8 +289,9 @@ class TestAgentRoleAttribution:
     """Every scored model call reports a persona the grader recognises."""
 
     def _inputs(self, *, scored: bool, active_agent):
-        from tests.fakes.agent_helpers import make_agent_inputs
         from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+
+        from tests.fakes.agent_helpers import make_agent_inputs
 
         inputs = make_agent_inputs()
         inputs.active_agent = active_agent

@@ -45,11 +45,11 @@ from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
     Content,
-    LiteLLMSettings,
-    PrimaryLLMSettings,
-    ToolCall,
     GenerateContentResponse,
+    LiteLLMSettings,
     Part,
+    PrimaryLLMSettings,
+    ResponseFormat,
     Role,
     SdkGroundingChunk,
     SdkGroundingRawData,
@@ -59,16 +59,15 @@ from app.llm.llm_types import (
     SdkSearchEntryPoint,
     StreamChunkFromModel,
     ThoughtSignature,
-    UsageMetadata,
+    ToolCall,
     ToolGroup,
-    ResponseFormat,
+    UsageMetadata,
 )
-from app.models.base import G8eBaseModel, Field
-from app.models.model_configs import get_model_config
-from app.llm.thinking import translate_for_gemini
-
 from app.llm.provider import LLMProvider
 from app.llm.providers._capability import translate_capability_error
+from app.llm.thinking import translate_for_gemini
+from app.models.base import Field, G8eBaseModel
+from app.models.model_configs import get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -371,11 +370,13 @@ class GeminiProvider(LLMProvider):
         logger.info("Gemini provider initialized")
 
     def _record_genai_boundary(self, model: str, contents: list[dict], config) -> str:
-        return self._record_model_boundary({
-            "model": model,
-            "contents": contents,
-            "config": config.model_dump(mode="json", exclude_none=True, by_alias=True),
-        })
+        return self._record_model_boundary(
+            {
+                "model": model,
+                "contents": contents,
+                "config": config.model_dump(mode="json", exclude_none=True, by_alias=True),
+            }
+        )
 
     async def _close_resources(self):
         """Clean up SDK client using public API."""

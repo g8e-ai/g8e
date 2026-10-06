@@ -16,14 +16,14 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 
 from app.constants import (
     DEFAULT_FINISH_REASON,
-    EventType,
-    ToolCallStatus,
     UNKNOWN_ERROR_MESSAGE,
+    EventType,
     StreamChunkFromModelType,
     ThinkingPhase,
+    ToolCallStatus,
 )
 from app.constants.generated_status import OperatorToolName
-from app.services.ai.tool_registry import AI_UNIVERSAL_TOOLS
+from app.errors import ValidationError
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
@@ -57,21 +57,21 @@ from app.models.tool_results import (
     SearchWebResult,
     SshInventoryToolResult,
 )
-from app.utils.time_ids.timestamp import now
-from app.utils.time_ids.ids import generate_command_execution_id
-from app.errors import ValidationError
-from app.services.infra.event_service import EventService
+from app.services.ai.tool_registry import AI_UNIVERSAL_TOOLS
 from app.services.evaluation.tool_evidence import (
     record_tool_call_completed,
     record_tool_call_started,
 )
 from app.services.evaluation.trace_service import EvaluationTraceService
+from app.services.infra.event_service import EventService
 from app.services.observe.payloads import (
     agent_state_sequence,
     build_agent_state_request,
     build_investigation_run_state_request,
     resolve_chat_persona_id,
 )
+from app.utils.time_ids.ids import generate_command_execution_id
+from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -268,9 +268,7 @@ async def deliver_via_sse(
 
             elif chunk.type == StreamChunkFromModelType.THINKING:
                 # Determine action type based on whether this is the first thinking chunk
-                phase = (
-                    ThinkingPhase.START if not _thinking_started else ThinkingPhase.UPDATE
-                )
+                phase = ThinkingPhase.START if not _thinking_started else ThinkingPhase.UPDATE
                 _thinking_started = True
 
                 await _publish(
@@ -332,7 +330,10 @@ async def deliver_via_sse(
                         event_type = EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED
                         if chunk.data.arguments and "query" in chunk.data.arguments:
                             query = str(chunk.data.arguments["query"])
-                        elif isinstance(chunk.data.result, SearchWebResult) and chunk.data.result.query:
+                        elif (
+                            isinstance(chunk.data.result, SearchWebResult)
+                            and chunk.data.result.query
+                        ):
                             query = chunk.data.result.query
                     elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
                         event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED
@@ -340,7 +341,10 @@ async def deliver_via_sse(
                         event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED
                         if chunk.data.arguments and "query" in chunk.data.arguments:
                             query = str(chunk.data.arguments["query"])
-                        elif isinstance(chunk.data.result, SearchWebResult) and chunk.data.result.query:
+                        elif (
+                            isinstance(chunk.data.result, SearchWebResult)
+                            and chunk.data.result.query
+                        ):
                             query = chunk.data.result.query
 
                     if event_type:
@@ -475,7 +479,12 @@ async def deliver_via_sse(
                             content = f"Port {result.port} on {result.host} is {'open' if result.is_open else 'closed'}"
                         elif isinstance(
                             result,
-                            (FsListToolResult, FsGrepToolResult, SshInventoryToolResult, SearchWebResult),
+                            (
+                                FsListToolResult,
+                                FsGrepToolResult,
+                                SshInventoryToolResult,
+                                SearchWebResult,
+                            ),
                         ):
                             content = str(result.model_dump(mode="json"))
 

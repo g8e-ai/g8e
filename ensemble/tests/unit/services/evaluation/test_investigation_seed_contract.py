@@ -14,6 +14,8 @@ makes either side drifting fail a test on that side.
 
 from __future__ import annotations
 
+from typing import get_args
+
 import pytest
 from g8e.models.internal_api import (
     EVALUATION_SEED_MAX_HISTORY_EVENTS,
@@ -24,7 +26,6 @@ from g8e.models.internal_api import (
     EvaluationSeedSender,
 )
 from pydantic import ValidationError
-from typing import get_args
 
 from app.services.evaluation.investigation_seed import SEEDABLE_HISTORY_EVENTS
 
@@ -59,7 +60,10 @@ def test_seedable_history_events_are_the_ones_the_go_catalog_is_checked_against(
 @pytest.mark.parametrize(
     "seed",
     [
-        {"case_title": "Checkout payment timeouts", "turns": [{"sender": "user", "content": "x" * 8000}]},
+        {
+            "case_title": "Checkout payment timeouts",
+            "turns": [{"sender": "user", "content": "x" * 8000}],
+        },
         {
             "case_title": "t" * 200,
             "history_events": [

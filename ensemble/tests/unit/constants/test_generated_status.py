@@ -16,7 +16,6 @@ Verifies:
 from enum import StrEnum
 
 import pytest
-
 from g8e.enums import EventType as G8eEventType
 from g8e.enums import SessionType as G8eSessionType
 

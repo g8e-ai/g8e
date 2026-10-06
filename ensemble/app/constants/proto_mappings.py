@@ -7,8 +7,9 @@
 
 # Hand-authored mapping functions for protobuf/Python enum conversion
 
-from app.constants import ExecutionStatus
 from g8e.operator.v1 import operator_pb2
+
+from app.constants import ExecutionStatus
 
 _PROTOBUF_EXECUTIONSTATUS_TO_PYTHON: dict[int, ExecutionStatus] = {
     operator_pb2.EXECUTION_STATUS_UNSPECIFIED: ExecutionStatus.PENDING,

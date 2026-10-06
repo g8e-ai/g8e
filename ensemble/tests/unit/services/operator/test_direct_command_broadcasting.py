@@ -10,14 +10,14 @@ import base64
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.operator.v1 import operator_pb2
 
-from app.constants.generated_status import EventType
 from app.constants import ExecutionStatus
+from app.constants.generated_status import EventType
 from app.models.http_context import RequestContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import DirectCommandResult
 from app.services.operator.execution_service import OperatorExecutionService
-from g8e.operator.v1 import operator_pb2
 from tests.fakes.factories import (
     build_bound_operator,
     build_g8e_http_context,

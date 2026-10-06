@@ -9,7 +9,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import AuditorReason, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, AuditorReason
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import TribunalGenerationFailedError
 from app.models.http_context import G8eHttpContext, RequestContext
@@ -157,7 +157,7 @@ class TestAuditorSafety:
         with patch("app.services.ai.auditor_service.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = False
 
-            from app.models.agents.tribunal import VoteBreakdown, TribunalAuditorFailedError
+            from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown
 
             vote_breakdown = VoteBreakdown(
                 candidates_by_member={},

@@ -20,12 +20,12 @@ import json
 from enum import Enum
 from pathlib import Path
 
+import g8e.constants as g8e_constants
+import g8e.enums as g8e_enums
 import pytest
 
 import app.constants as app_constants
 import app.models.base as app_base
-import g8e.constants as g8e_constants
-import g8e.enums as g8e_enums
 from app.constants import generated_status as gs
 
 pytestmark = pytest.mark.unit
@@ -245,38 +245,44 @@ class TestModelSubclassing:
     """Ensemble models that extend protocol models must subclass them."""
 
     def test_request_context_subclasses_protocol(self):
-        from app.models.http_context import RequestContext
         from g8e.models.context import RequestContext as Proto
+
+        from app.models.http_context import RequestContext
 
         assert issubclass(RequestContext, Proto)
 
     def test_chat_message_request_subclasses_protocol(self):
-        from app.models.internal_api import ChatMessageRequest
         from g8e.models.internal_api import ChatMessageRequest as Proto
+
+        from app.models.internal_api import ChatMessageRequest
 
         assert issubclass(ChatMessageRequest, Proto)
 
     def test_chat_started_response_is_protocol(self):
-        from app.models.internal_api import ChatStartedResponse
         from g8e.models.internal_api import ChatStartedResponse as Proto
+
+        from app.models.internal_api import ChatStartedResponse
 
         assert ChatStartedResponse is Proto
 
     def test_resource_creation_request_is_protocol(self):
-        from app.models.internal_api import ResourceCreationRequest
         from g8e.models.internal_api import ResourceCreationRequest as Proto
+
+        from app.models.internal_api import ResourceCreationRequest
 
         assert ResourceCreationRequest is Proto
 
     def test_session_event_wire_subclasses_protocol(self):
-        from app.models.events import SessionEventWire
         from g8e.models.events import SessionEventWire as Proto
+
+        from app.models.events import SessionEventWire
 
         assert issubclass(SessionEventWire, Proto)
 
     def test_background_event_wire_subclasses_protocol(self):
-        from app.models.events import BackgroundEventWire
         from g8e.models.events import BackgroundEventWire as Proto
+
+        from app.models.events import BackgroundEventWire
 
         assert issubclass(BackgroundEventWire, Proto)
 
@@ -290,8 +296,14 @@ class TestModelSubclassing:
             ("CommandValidationSettings", "g8e.models.settings:CommandValidationSettings"),
             ("EvalJudgeSettings", "g8e.models.settings:EvalJudgeSettings"),
         ],
-        ids=["G8eeUserSettings", "LLMSettings", "SearchSettings",
-             "BatchExecutionSettings", "CommandValidationSettings", "EvalJudgeSettings"],
+        ids=[
+            "G8eeUserSettings",
+            "LLMSettings",
+            "SearchSettings",
+            "BatchExecutionSettings",
+            "CommandValidationSettings",
+            "EvalJudgeSettings",
+        ],
     )
     def test_settings_model_subclasses_protocol(self, ensemble_name: str, protocol_path: str):
         from app.models import settings as ens_settings
@@ -300,9 +312,7 @@ class TestModelSubclassing:
         proto_mod = importlib.import_module(mod_path)
         proto_cls = getattr(proto_mod, cls_name)
         ens_cls = getattr(ens_settings, ensemble_name)
-        assert issubclass(ens_cls, proto_cls), (
-            f"{ensemble_name} must subclass {protocol_path}"
-        )
+        assert issubclass(ens_cls, proto_cls), f"{ensemble_name} must subclass {protocol_path}"
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +327,8 @@ class TestNoEnumDuplicates:
 
     def test_no_ensemble_enum_shadows_protocol_enum(self):
         protocol_enum_names = {
-            name for name in dir(g8e_enums)
+            name
+            for name in dir(g8e_enums)
             if isinstance(getattr(g8e_enums, name, None), type)
             and issubclass(getattr(g8e_enums, name), Enum)
         }
@@ -482,6 +493,5 @@ class TestSSEEventFixturesPresence:
                     f"{key}: fixture={actual!r} != EventType={expected_constant.value!r}"
                 )
         assert mismatches == [], (
-            "SSE fixture 'type' strings drifted from EventType constants: "
-            + "; ".join(mismatches)
+            "SSE fixture 'type' strings drifted from EventType constants: " + "; ".join(mismatches)
         )

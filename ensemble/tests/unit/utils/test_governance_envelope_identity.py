@@ -24,15 +24,15 @@ from pathlib import Path
 
 import pytest
 
-from app.constants import EventType, G8EE_COMPONENT
-from app.errors import ValidationError
-from app.models.command_request_payloads import CommandRequestPayload
-from app.models.pubsub_messages import G8eMessage
 from app.clients.governance_client import (
     _source_component_to_proto_enum,
     build_governance_envelope,
     build_governance_envelope_json,
 )
+from app.constants import G8EE_COMPONENT, EventType
+from app.errors import ValidationError
+from app.models.command_request_payloads import CommandRequestPayload
+from app.models.pubsub_messages import G8eMessage
 
 pytestmark = [pytest.mark.unit]
 
@@ -177,7 +177,9 @@ class TestHashParityVectors:
     def _load_vectors() -> list[dict]:
         # Resolve from the ensemble directory to the repo-root protocol dir.
         # ensemble/tests/unit/utils/ -> ../../../../protocol/conformance/
-        path = Path(__file__).resolve().parents[4] / "protocol" / "conformance" / "hash_vectors.json"
+        path = (
+            Path(__file__).resolve().parents[4] / "protocol" / "conformance" / "hash_vectors.json"
+        )
         data = json.loads(path.read_text())
         assert data["vectors"], "hash_vectors.json contains no vectors"
         return data["vectors"]

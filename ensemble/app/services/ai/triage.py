@@ -16,18 +16,11 @@ import logging
 import time
 
 import app.llm.llm_types as types
-from app.llm import Role, get_llm_provider
-from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
-from app.llm.model_evidence import (
-    model_boundary_hash,
-)
-from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
-from app.llm.structured import parse_structured_response
 from app.constants import (
-    LLMProvider,
     TRIAGE_CONVERSATION_TAIL_LIMIT,
     TRIAGE_EMPTY_CONVERSATION,
     TRIAGE_LOG_TRUNCATION_LENGTH,
+    LLMProvider,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
@@ -36,10 +29,17 @@ from app.constants import (
 from app.constants.message_sender import MessageSender
 from app.decision import get_decision_provider
 from app.decision.types import ChoiceAnswer, ChoiceQuestion, EvaluateResponse
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm import Role, get_llm_provider
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import (
+    model_boundary_hash,
+)
+from app.llm.structured import parse_structured_response
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.investigations import ConversationHistoryMessage
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
+from app.utils.agent_persona_loader import AgentPersona, get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -135,11 +135,13 @@ class TriageAgent:
             try:
                 prepare_provider_call(provider, g8e_context=request.g8e_context)
                 contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
-                input_artifact_hash = model_boundary_hash({
-                    "model": model,
-                    "contents": contents,
-                    "settings": config,
-                })
+                input_artifact_hash = model_boundary_hash(
+                    {
+                        "model": model,
+                        "contents": contents,
+                        "settings": config,
+                    }
+                )
                 monotonic_start = time.monotonic()
                 response = await provider.generate_content_lite(
                     model=model,
@@ -148,7 +150,9 @@ class TriageAgent:
                 )
                 monotonic_end = time.monotonic()
                 usage = response.usage_metadata
-                finish_reason = response.candidates[0].finish_reason if response.candidates else None
+                finish_reason = (
+                    response.candidates[0].finish_reason if response.candidates else None
+                )
                 model_call = build_model_call_telemetry(
                     provider=provider,
                     agent_role="triage",
@@ -174,15 +178,19 @@ class TriageAgent:
                     logger.warning(
                         "[TRIAGE] Empty response text from lite model, defaulting to complex"
                     )
-                    failed_call = model_call.model_copy(update={
-                        "succeeded": False,
-                        "error_type": "EmptyResponseError",
-                    })
+                    failed_call = model_call.model_copy(
+                        update={
+                            "succeeded": False,
+                            "error_type": "EmptyResponseError",
+                        }
+                    )
                     return self._escalation_result(
                         "Triage unavailable: lite model returned empty text. Check model availability and connectivity, then retry.",
                         error_code="MODEL_EMPTY_RESPONSE",
                     ).model_copy(update={"model_call": failed_call})
-                result = self._parse_response(response.text).model_copy(update={"model_call": model_call})
+                result = self._parse_response(response.text).model_copy(
+                    update={"model_call": model_call}
+                )
             except ContextWindowExceededError as exc:
                 logger.warning(
                     "[TRIAGE] Prompt exceeded the lite model context window, defaulting to complex without retry: %s",
@@ -256,10 +264,12 @@ class TriageAgent:
                 logger.warning(
                     "[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text
                 )
-                failed_call = model_call.model_copy(update={
-                    "succeeded": False,
-                    "error_type": type(e).__name__,
-                })
+                failed_call = model_call.model_copy(
+                    update={
+                        "succeeded": False,
+                        "error_type": type(e).__name__,
+                    }
+                )
                 return self._escalation_result(
                     f"Triage unavailable: failed to parse model response ({e}). Escalating to full LLM for complexity classification.",
                     error_code="PARSE_FAILURE",
@@ -343,14 +353,16 @@ class TriageAgent:
             )
 
         provider.clear_input_artifact_hash()
-        input_artifact_hash = model_boundary_hash({
-            "model": model,
-            "state": state,
-            "questions": {
-                name: question.model_dump(mode="json", exclude_none=True)
-                for name, question in questions.items()
-            },
-        })
+        input_artifact_hash = model_boundary_hash(
+            {
+                "model": model,
+                "state": state,
+                "questions": {
+                    name: question.model_dump(mode="json", exclude_none=True)
+                    for name, question in questions.items()
+                },
+            }
+        )
         monotonic_start = time.monotonic()
 
         try:
@@ -409,9 +421,7 @@ class TriageAgent:
     def _build_jev_state(self, conversation_tail: str, message: str) -> str:
         persona = get_agent_persona("triage")
         prompt_template = persona.get_system_prompt()
-        conversation_tail_xml = AgentPersona.format_xml_tag(
-            "conversation_tail", conversation_tail
-        )
+        conversation_tail_xml = AgentPersona.format_xml_tag("conversation_tail", conversation_tail)
         message_xml = AgentPersona.format_xml_tag("message", message)
         return f"{prompt_template}\n\n{conversation_tail_xml}\n\n{message_xml}"
 
@@ -475,15 +485,12 @@ class TriageAgent:
         intent = TriageIntentClassification(intent_answer.choice)
         posture = TriageRequestPosture(posture_answer.choice)
         intent_summary = (
-            f"{intent.value} intent with {complexity.value} complexity "
-            f"({posture.value} posture)"
+            f"{intent.value} intent with {complexity.value} complexity ({posture.value} posture)"
         )
 
         return TriageResult(
             complexity=complexity,
-            complexity_confidence=self._jev_confidence_to_triage(
-                complexity_answer.confidence
-            ),
+            complexity_confidence=self._jev_confidence_to_triage(complexity_answer.confidence),
             intent=intent,
             intent_confidence=self._jev_confidence_to_triage(intent_answer.confidence),
             intent_summary=intent_summary,

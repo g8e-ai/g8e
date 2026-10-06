@@ -5,17 +5,19 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import Request
 
 from app.constants import (
-    AuthMethod,
     G8EE_COMPONENT,
+    AuthMethod,
     HealthStatus,
 )
+from app.constants.generated_paths import PortConstants
 from app.dependencies import (
+    get_g8ee_app_settings,
     get_g8ee_attachment_service,
     get_g8ee_cache_aside_service,
     get_g8ee_case_data_service,
@@ -26,12 +28,10 @@ from app.dependencies import (
     get_g8ee_kv_cache_client,
     get_g8ee_operator_cache,
     get_g8ee_operator_command_service,
-    get_g8ee_app_settings,
     health_check_dependencies,
     require_authenticated_context,
     require_authenticated_user,
 )
-from app.constants.generated_paths import PortConstants
 from app.errors import (
     AuthenticationError,
     ConfigurationError,

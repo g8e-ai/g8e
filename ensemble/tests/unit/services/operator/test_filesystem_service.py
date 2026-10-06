@@ -6,13 +6,15 @@
 # released under the Apache License, Version 2.0.
 
 
-import pytest
 from unittest.mock import MagicMock
-from app.services.operator.filesystem_service import OperatorFilesystemService
+
+import pytest
+
+from app.constants.generated_status import ComponentName
 from app.models.command_request_payloads import FsGrepRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.constants.generated_status import ComponentName
+from app.services.operator.filesystem_service import OperatorFilesystemService
 
 
 @pytest.mark.asyncio

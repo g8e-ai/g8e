@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.constants import LLMProvider
 from app.constants.collections import (
     DB_COLLECTION_SETTINGS,
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
 )
-from app.constants import LLMProvider
 from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PortConstants
 from app.models.settings import G8eeAppSettings
@@ -217,7 +217,6 @@ class TestG8eeSettingsOverlayIntegration:
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
 
-
     async def test_get_user_settings_falls_back_to_empty_llm_when_missing(
         self, settings_service, cache_service
     ):
@@ -346,7 +345,6 @@ class TestG8eeSettingsOverlayIntegration:
                 f"overlay_platform_data; the auth merge has likely regressed "
                 f"to hand-listed fields."
             )
-
 
     async def test_overlay_propagates_auto_approve_from_platform(self, cache_service):
         """Platform-level auto_approve settings must flow through overlay_platform_data.

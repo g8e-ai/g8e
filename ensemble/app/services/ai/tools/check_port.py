@@ -13,8 +13,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
-from app.constants.prompts import PromptFile
 from app.constants.generated_status import OperatorToolName
+from app.constants.prompts import PromptFile
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
 from app.models.command_request_payloads import CheckPortRequestPayload

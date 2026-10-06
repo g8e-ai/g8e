@@ -9,17 +9,18 @@
 Unit tests for AIRequestBuilder.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from app.services.ai.request_builder import AIRequestBuilder, ToolExecutorProtocol
-from app.models.investigations import ConversationHistoryMessage, UserChatMetadata
-from app.constants.message_sender import MessageSender
-from app.constants import HISTORY_OMITTED_MARKER, AgentMode
-import app.llm.llm_types as types
-from app.errors import ConfigurationError
-from app.models.settings import G8eeUserSettings, LLMSettings
+import pytest
 from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+
+import app.llm.llm_types as types
+from app.constants import HISTORY_OMITTED_MARKER, AgentMode
+from app.constants.message_sender import MessageSender
+from app.errors import ConfigurationError
+from app.models.investigations import ConversationHistoryMessage, UserChatMetadata
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.services.ai.request_builder import AIRequestBuilder, ToolExecutorProtocol
 
 pytestmark = [pytest.mark.unit]
 
@@ -443,8 +444,8 @@ class TestFormatAttachmentParts:
     """Tests for format_attachment_parts logic."""
 
     def test_delegates_to_attachment_provider(self, builder):
-        from app.models.attachments import ProcessedAttachment
         from app.constants.config import AttachmentType
+        from app.models.attachments import ProcessedAttachment
 
         atts = [
             ProcessedAttachment(

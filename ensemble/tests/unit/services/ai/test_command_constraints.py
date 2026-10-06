@@ -36,7 +36,10 @@ from app.models.settings import CommandValidationSettings, G8eeUserSettings
 from app.models.tool_results import CommandConstraintsResult
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.services.ai.tools import get_command_constraints as gcc_tool
-from app.utils.validation.blacklist_validator import CommandBlacklistResult, CommandBlacklistValidator
+from app.utils.validation.blacklist_validator import (
+    CommandBlacklistResult,
+    CommandBlacklistValidator,
+)
 from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 pytestmark = [pytest.mark.unit]
@@ -712,8 +715,6 @@ async def test_get_tools_includes_get_command_constraints(
     assert OperatorToolName.GET_COMMAND_CONSTRAINTS in tool_names_operator
 
     # Test in unbound mode
-    tools_unbound = tool_service.get_tools(
-        agent_mode=AgentMode.G8E_NOT_BOUND, model_to_use=None
-    )
+    tools_unbound = tool_service.get_tools(agent_mode=AgentMode.G8E_NOT_BOUND, model_to_use=None)
     tool_names_unbound = [tool.name for group in tools_unbound for tool in group.tools]
     assert OperatorToolName.GET_COMMAND_CONSTRAINTS in tool_names_unbound

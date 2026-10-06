@@ -8,6 +8,10 @@
 import hashlib
 import json
 
+from g8e.eval.v1.trace_digest import marshal_canonical_json
+from g8e.models.context import BoundOperator
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+
 from app.constants import CommandErrorType, ErrorAnalysisCategory, ExecutionStatus
 from app.llm.llm_dataclasses import ToolCall
 from app.models.agent import AgentStreamState, StreamChunkData
@@ -23,9 +27,6 @@ from app.services.evaluation.tool_evidence import (
     record_tool_call_completed,
     record_tool_call_started,
 )
-from g8e.eval.v1.trace_digest import marshal_canonical_json
-from g8e.models.context import BoundOperator
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 
 def _evaluation_context() -> EvaluationInferenceContext:
@@ -77,7 +78,11 @@ def test_record_tool_call_started_and_completed_capture_evidence():
     call = state.tool_calls[0]
     assert call.success is True
     assert call.command == "AUTH_FAILURE"
-    assert json.loads(call.arguments_json) == {"pattern": "AUTH_FAILURE", "path": "logs", "max_results": 2.0}
+    assert json.loads(call.arguments_json) == {
+        "pattern": "AUTH_FAILURE",
+        "path": "logs",
+        "max_results": 2.0,
+    }
     assert call.arguments_json == marshal_canonical_json(json.loads(call.arguments_json)).decode()
     assert call.arguments_hash == hashlib.sha256(call.arguments_json.encode()).hexdigest()
     assert json.loads(call.result_json)["output"] == "auth.log:3: AUTH_FAILURE"
@@ -336,7 +341,12 @@ def test_requests_without_an_evaluation_context_record_nothing():
     record_tool_call_started(state, context, chunk)
     record_tool_call_completed(state, context, chunk)
 
-    assert (state.tool_decisions, state.tool_calls, state.policy_decisions, state.governed_actions) == (
+    assert (
+        state.tool_decisions,
+        state.tool_calls,
+        state.policy_decisions,
+        state.governed_actions,
+    ) == (
         [],
         [],
         [],

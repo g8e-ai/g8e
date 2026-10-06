@@ -16,12 +16,12 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+from proxy_stamp_support import KeySource, key_response, make_key, stamped_headers, verifier
 
 from app.errors import AuthenticationError
 from app.middleware.http_context import G8eHttpContextMiddleware
 from app.models.auth import AuthenticatedUser
 from app.services.auth.auth_service import AuthService
-from proxy_stamp_support import KeySource, key_response, make_key, stamped_headers, verifier
 
 BODY = b'{"message":"hi","context":{"user_id":"user-1","web_session_id":"web-1","source_component":"CLIENT"}}'
 
@@ -63,7 +63,9 @@ def test_signed_post_with_query_string_authenticates(stack):
     client, key = stack
     headers = stamped_headers(key, body=BODY, query="stream=1")
 
-    assert client.post("/api/v1/chat/send?stream=1", content=BODY, headers=headers).status_code == 200
+    assert (
+        client.post("/api/v1/chat/send?stream=1", content=BODY, headers=headers).status_code == 200
+    )
 
 
 def test_body_swapped_after_signing_is_rejected(stack):
@@ -81,7 +83,11 @@ def test_forged_identity_headers_without_a_signature_are_rejected(stack):
     response = client.post(
         "/api/v1/chat/send",
         content=BODY,
-        headers={"X-Proxy-User-Id": "admin", "X-Proxy-User-Email": "admin@g8e.local", "X-G8E-Gateway-Browser-Proxy": "1"},
+        headers={
+            "X-Proxy-User-Id": "admin",
+            "X-Proxy-User-Email": "admin@g8e.local",
+            "X-G8E-Gateway-Browser-Proxy": "1",
+        },
     )
 
     assert response.status_code == 401

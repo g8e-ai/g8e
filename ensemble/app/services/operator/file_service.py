@@ -12,42 +12,42 @@ Handles file-related operations (edit, read, write, update) on Operators.
 
 import logging
 
-from app.services.protocols import (
-    ApprovalServiceProtocol,
-    ExecutionServiceProtocol,
-    AIResponseAnalyzerProtocol,
-    InvestigationServiceProtocol,
-)
-from app.constants import EventType, FileOperation, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, EventType, FileOperation
+from app.constants.config import ApprovalErrorType, ExecutionStatus
 from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
 )
-from app.constants.config import ExecutionStatus, ApprovalErrorType
 from app.models.command_request_payloads import (
-    FileEditRequestPayload,
-    FetchFileHistoryRequestPayload,
     FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FileEditRequestPayload,
 )
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.tool_results import (
-    FileEditResult,
-    FileOperationRiskAnalysis,
-    FileOperationRiskContext,
-    FetchFileHistoryToolResult,
-    FetchFileDiffToolResult,
-)
 from app.models.operators import FileEditApprovalRequest
-from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.pubsub_messages import (
     FetchFileDiffByIdSuccessPayload,
     FetchFileDiffBySessionSuccessPayload,
     FetchFileDiffErrorPayload,
-    FetchFileHistorySuccessPayload,
     FetchFileHistoryErrorPayload,
+    FetchFileHistorySuccessPayload,
     FileEditResultPayload,
     G8eMessage,
+)
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.models.tool_results import (
+    FetchFileDiffToolResult,
+    FetchFileHistoryToolResult,
+    FileEditResult,
+    FileOperationRiskAnalysis,
+    FileOperationRiskContext,
+)
+from app.services.protocols import (
+    AIResponseAnalyzerProtocol,
+    ApprovalServiceProtocol,
+    ExecutionServiceProtocol,
+    InvestigationServiceProtocol,
 )
 
 logger = logging.getLogger(__name__)

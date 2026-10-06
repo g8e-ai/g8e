@@ -30,12 +30,12 @@ from google.api_core.exceptions import GoogleAPICallError, ResourceExhausted, Se
 from google.auth.api_key import Credentials as APIKeyCredentials
 from google.cloud import discoveryengine_v1 as discoveryengine
 
-from app.constants.config import GroundingSource
 from app.constants import (
     WEB_SEARCH_CLIENT_MAX_RETRIES,
     WEB_SEARCH_CLIENT_RETRY_BACKOFF,
     WEB_SEARCH_CLIENT_TIMEOUT,
 )
+from app.constants.config import GroundingSource
 from app.errors import NetworkError
 from app.models.grounding import GroundingChunk, GroundingMetadata, GroundingSourceInfo
 from app.models.tool_results import SearchWebResult, WebSearchResultItem

@@ -588,5 +588,3 @@ async def test_operator_tool_call_lifecycle_none_execution_id():
     assert isinstance(failed_events[0].payload.execution_id, str)
     assert len(failed_events[0].payload.execution_id) > 0
     assert failed_events[0].payload.status == ToolCallStatus.FAILED
-
-

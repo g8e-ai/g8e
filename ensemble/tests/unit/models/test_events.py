@@ -15,12 +15,12 @@ Coverage:
 """
 
 import pytest
+from g8e.models.events import ChatProcessingStartedPayload
 
 from app.constants import EventType
 from app.models.base import Field, G8eBaseModel
 from app.models.cases import CaseCreatedPayload
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
-from g8e.models.events import ChatProcessingStartedPayload
 
 pytestmark = pytest.mark.unit
 

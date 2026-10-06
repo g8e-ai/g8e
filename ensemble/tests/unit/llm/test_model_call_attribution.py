@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 from pydantic import ValidationError as PydanticValidationError
 
 from app.errors import ValidationError
@@ -16,7 +17,6 @@ from app.llm.model_call_attribution import (
 )
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import GovernedDispatchEvidence, ModelCallTelemetry
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 
 class _RecordingProvider:

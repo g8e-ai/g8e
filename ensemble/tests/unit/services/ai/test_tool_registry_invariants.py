@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.constants.generated_status import OperatorToolName
+from app.constants.tool_registry_pending import PENDING_RESTORATION as _PENDING_RESTORATION
 from app.errors import ConfigurationError
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tool_registry import (
@@ -48,7 +49,6 @@ def _build_tool_service(web_search_provider: WebSearchProvider | None = None) ->
 # an entry requires adding a ``ToolSpec`` in ``tool_registry.TOOL_SPECS``
 # and the corresponding per-tool module under ``app.services.ai.tools``.
 # See ``docs/architecture/ai_agents.md``.
-from app.constants.tool_registry_pending import PENDING_RESTORATION as _PENDING_RESTORATION
 
 
 def test_pending_restoration_tools_are_not_in_operator_tools():

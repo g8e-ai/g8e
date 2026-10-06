@@ -23,11 +23,10 @@ from app.constants import G8EE_COMPONENT
 from app.errors import NetworkError
 from app.models.internal_api import (
     ObserveProducerAgentStateRequest,
-    ObserveProducerRunStateRequest,
     ObserveProducerResponse,
+    ObserveProducerRunStateRequest,
 )
 from app.services.infra.internal_http_client import InternalHttpClient
-
 
 pytestmark = pytest.mark.unit
 

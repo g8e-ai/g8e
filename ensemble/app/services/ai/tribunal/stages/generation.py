@@ -9,41 +9,42 @@ import asyncio
 import logging
 import time
 from typing import Any
-from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
-from app.models.base import G8eBaseModel
-from app.models.agent import OperatorContext
+
 from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
     EventType,
 )
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm.llm_types import Content, GenerateContentResponse, Part, ResponseFormat, Role
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.prompts import (
     build_tribunal_generator_prompt,
     build_tribunal_prompt_fields,
 )
-from app.llm.llm_types import Content, GenerateContentResponse, Part, Role, ResponseFormat
-from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
-from app.llm.model_evidence import model_boundary_hash
 from app.llm.provider import LLMProvider
-from app.models.model_telemetry import ModelCallTelemetry
+from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
-    CandidateCommand,
     AuditorClusterInfo,
-    TribunalSystemError,
+    CandidateCommand,
     TribunalGenerationFailedError,
     TribunalPassCompletedPayload,
-    TribunalSessionSystemErrorPayload,
     TribunalSessionGenerationFailedPayload,
+    TribunalSessionSystemErrorPayload,
+    TribunalSystemError,
 )
+from app.models.base import G8eBaseModel
 from app.models.model_configs import get_model_config
+from app.models.model_telemetry import ModelCallTelemetry
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.utils.agent_persona_loader import get_agent_persona
-from app.utils.json_utils import extract_json_from_text
-from app.utils.command import normalise_command
-from app.utils.validation.safety import validate_command_safety
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.utils import is_system_error, member_for_pass
+from app.utils.agent_persona_loader import get_agent_persona
+from app.utils.command import normalise_command
+from app.utils.json_utils import extract_json_from_text
+from app.utils.validation.safety import validate_command_safety
 
 logger = logging.getLogger(__name__)
 
@@ -214,11 +215,13 @@ async def _run_generation_pass(
 
     contents = [Content(role=Role.USER, parts=[Part.from_text(prompt)])]
     prepare_provider_call(provider, g8e_context=emitter.g8e_context)
-    input_artifact_hash = model_boundary_hash({
-        "model": model,
-        "contents": contents,
-        "settings": settings,
-    })
+    input_artifact_hash = model_boundary_hash(
+        {
+            "model": model,
+            "contents": contents,
+            "settings": settings,
+        }
+    )
     monotonic_start = time.monotonic()
     response = None
     try:
@@ -232,8 +235,17 @@ async def _run_generation_pass(
             pass_errors.append(error_msg)
             logger.error("[TRIBUNAL-PASS] %s", error_msg)
             await _emit_pass_observation(
-                emitter, pass_index, member, provider, model, response,
-                monotonic_start, input_artifact_hash, None, error_msg, "EmptyResponseError",
+                emitter,
+                pass_index,
+                member,
+                provider,
+                model,
+                response,
+                monotonic_start,
+                input_artifact_hash,
+                None,
+                error_msg,
+                "EmptyResponseError",
             )
             return None
 
@@ -248,8 +260,17 @@ async def _run_generation_pass(
                 pass_errors.append(error_msg)
                 logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
                 await _emit_pass_observation(
-                    emitter, pass_index, member, provider, model, response,
-                    monotonic_start, input_artifact_hash, None, error_msg, "StructuredOutputError",
+                    emitter,
+                    pass_index,
+                    member,
+                    provider,
+                    model,
+                    response,
+                    monotonic_start,
+                    input_artifact_hash,
+                    None,
+                    error_msg,
+                    "StructuredOutputError",
                 )
                 return None
             raw_command = parsed["command"]
@@ -261,8 +282,17 @@ async def _run_generation_pass(
             pass_errors.append(error_msg)
             logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
             await _emit_pass_observation(
-                emitter, pass_index, member, provider, model, response,
-                monotonic_start, input_artifact_hash, None, error_msg, "NormalizationError",
+                emitter,
+                pass_index,
+                member,
+                provider,
+                model,
+                response,
+                monotonic_start,
+                input_artifact_hash,
+                None,
+                error_msg,
+                "NormalizationError",
             )
             return None
 
@@ -272,8 +302,17 @@ async def _run_generation_pass(
             pass_errors.append(error_msg)
             logger.error("[TRIBUNAL-PASS] %s", error_msg)
             await _emit_pass_observation(
-                emitter, pass_index, member, provider, model, response,
-                monotonic_start, input_artifact_hash, None, error_msg, "SafetyValidationError",
+                emitter,
+                pass_index,
+                member,
+                provider,
+                model,
+                response,
+                monotonic_start,
+                input_artifact_hash,
+                None,
+                error_msg,
+                "SafetyValidationError",
             )
             return None
 
@@ -308,8 +347,17 @@ async def _run_generation_pass(
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s, not retrying: %s", error_msg, exc)
         await _emit_pass_observation(
-            emitter, pass_index, member, provider, model, response,
-            monotonic_start, input_artifact_hash, None, error_msg, type(exc).__name__,
+            emitter,
+            pass_index,
+            member,
+            provider,
+            model,
+            response,
+            monotonic_start,
+            input_artifact_hash,
+            None,
+            error_msg,
+            type(exc).__name__,
         )
         return None
     except OllamaEmptyResponseError as exc:
@@ -317,8 +365,17 @@ async def _run_generation_pass(
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s", error_msg)
         await _emit_pass_observation(
-            emitter, pass_index, member, provider, model, response,
-            monotonic_start, input_artifact_hash, None, error_msg, type(exc).__name__,
+            emitter,
+            pass_index,
+            member,
+            provider,
+            model,
+            response,
+            monotonic_start,
+            input_artifact_hash,
+            None,
+            error_msg,
+            type(exc).__name__,
         )
         return None
     except Exception as exc:
@@ -326,8 +383,17 @@ async def _run_generation_pass(
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)
         await _emit_pass_observation(
-            emitter, pass_index, member, provider, model, response,
-            monotonic_start, input_artifact_hash, None, error_msg, type(exc).__name__,
+            emitter,
+            pass_index,
+            member,
+            provider,
+            model,
+            response,
+            monotonic_start,
+            input_artifact_hash,
+            None,
+            error_msg,
+            type(exc).__name__,
         )
         return None
 

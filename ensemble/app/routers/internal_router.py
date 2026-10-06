@@ -5,23 +5,21 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from __future__ import annotations
-
-"""
-Internal API Router for g8ee
+"""Internal API Router for g8ee.
 
 Cluster-internal HTTP endpoints for direct communication from other g8e components.
 NOT exposed via Ingress - only accessible from pods within the Kubernetes cluster.
-
 Note: g8eo Operator commands still use PubSub (external agent communication).
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from fastapi import APIRouter, Depends, status
-from app.models.http_context import G8eHttpContext, RequestContext
 
-from app.models.settings import G8eeAppSettings, G8eeUserSettings
+from fastapi import APIRouter, Depends, status
+
+from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants import (
     DB_COLLECTION_MEMORIES,
     EventType,
@@ -30,16 +28,41 @@ from app.constants import (
     OperatorStatus,
     Priority,
 )
-from app.errors import ResourceNotFoundError, ServiceUnavailableError, ValidationError
+from app.constants.message_sender import MessageSender
+from app.dependencies import (
+    get_g8ee_api_key_service,
+    get_g8ee_app_settings,
+    get_g8ee_approval_service,
+    get_g8ee_attachment_service,
+    get_g8ee_cache_aside_service,
+    get_g8ee_case_data_service,
+    get_g8ee_certificate_service,
+    get_g8ee_chat_pipeline,
+    get_g8ee_chat_task_manager,
+    get_g8ee_chat_user_settings,
+    get_g8ee_event_service,
+    get_g8ee_gateway_operator_client,
+    get_g8ee_investigation_seed_service,
+    get_g8ee_investigation_service,
+    get_g8ee_operator_command_service,
+    get_g8ee_settings_service_write,
+    get_request_context,
+    require_authenticated_context,
+)
+from app.errors import NetworkError, ResourceNotFoundError, ServiceUnavailableError, ValidationError
+from app.llm.model_catalog import list_governed_models, list_models
 from app.models import CaseCreateRequest
+from app.models.cache import FieldFilter
 from app.models.cases import (
     CaseCreatedPayload,
+    CaseDeleteRequest,
     CaseEventPayload,
     CaseGetRequest,
     CaseUpdateRequest,
-    CaseDeleteRequest,
 )
-from app.models.cache import FieldFilter
+from app.models.evaluation_trace import EvaluationSeedApplication
+from app.models.events import SessionEvent
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import (
     APIKeyGenerationRequest,
     APIKeyGenerationResponse,
@@ -47,22 +70,22 @@ from app.models.internal_api import (
     CaseResponse,
     ChatMessageRequest,
     ChatStartedResponse,
-    EvaluationTraceResponse,
     DirectCommandRequest,
     DirectCommandSentResponse,
-    OperatorApprovalResponse,
+    EvaluationTraceResponse,
     InternalOperatorAuthCall,
     LLMModelListRequest,
     LLMModelListResponse,
     LLMRoleSettingsResponse,
     LLMRoleSettingsUpdateRequest,
+    OperatorApprovalResponse,
     OperatorAuthenticateResponse,
-    OperatorDeviceLinkRegisterRequest,
-    OperatorDeviceLinkRegisterResponse,
     OperatorBindRequest,
     OperatorBindResponse,
     OperatorCertificateRevokeRequest,
     OperatorCertificateRevokeResponse,
+    OperatorDeviceLinkRegisterRequest,
+    OperatorDeviceLinkRegisterResponse,
     OperatorListenSessionAuthRequest,
     OperatorSessionRefreshRequest,
     OperatorSessionRefreshResponse,
@@ -80,81 +103,56 @@ from app.models.internal_api import (
     OperatorUpdateAPIKeyRequest,
     OperatorUpdateAPIKeyResponse,
     PendingApprovalsResponse,
+    SettingsGetRequest,
     StopAIRequest,
     StopAIResponse,
     StopOperatorRequest,
-    SettingsGetRequest,
 )
+from app.models.investigations import (
+    ConversationMessageMetadata,
+    InvestigationGetRequest,
+    InvestigationModel,
+    InvestigationQueryRequest,
+    InvestigationUpdateRequest,
+)
+from app.models.operators import (
+    HeartbeatSnapshot,
+    OperatorStatusUpdatedPayload,
+)
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.models.triage_api import (
     TriageAnswerRequest,
     TriageSkipRequest,
     TriageTimeoutRequest,
 )
-from app.models.investigations import (
-    ConversationMessageMetadata,
-    InvestigationModel,
-    InvestigationQueryRequest,
-    InvestigationUpdateRequest,
-    InvestigationGetRequest,
-)
+from app.services.ai.chat_pipeline import ChatPipelineService
+from app.services.ai.chat_task_manager import BackgroundTaskManager
+from app.services.ai.title_generator import generate_case_title
+from app.services.auth.api_key_service import APIKeyService
+from app.services.auth.certificate_service import CertificateService
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.data.attachment_store_service import AttachmentService
+from app.services.data.case_data_service import CaseDataService
+from app.services.evaluation.investigation_seed import InvestigationSeedService
+from app.services.evaluation.tool_gate import resolve_tool_gate
+from app.services.evaluation.trace_service import EvaluationTraceService, validated_trace_ids
+from app.services.infra.event_service import EventService
+from app.services.infra.llm_role_settings import provider_connection
+from app.services.infra.settings_service import SettingsService
+from app.services.investigation.investigation_service import InvestigationService
+from app.services.operator.approval_service import OperatorApprovalService
+from app.services.operator.command_service import OperatorCommandService
 
 InvestigationUpdateRequest.model_rebuild()
 InvestigationQueryRequest.model_rebuild()
 InvestigationGetRequest.model_rebuild()
-from app.models.events import SessionEvent
-from app.models.operators import (
-    HeartbeatSnapshot,
-    OperatorStatusUpdatedPayload,
-)
-from app.clients.gateway_operator_client import GatewayOperatorClient
-from app.errors import NetworkError
-from app.llm.model_catalog import list_governed_models, list_models
-from app.services.data.case_data_service import CaseDataService
-from app.services.data.attachment_store_service import AttachmentService
-from app.services.investigation.investigation_service import InvestigationService
-from app.services.ai.chat_pipeline import ChatPipelineService
-from app.services.ai.chat_task_manager import BackgroundTaskManager
-from app.services.ai.title_generator import generate_case_title
-from app.services.infra.event_service import EventService
-from app.services.cache.cache_aside import CacheAsideService
-from app.services.auth.api_key_service import APIKeyService
-from app.services.auth.certificate_service import CertificateService
-from app.services.infra.llm_role_settings import provider_connection
-from app.services.infra.settings_service import SettingsService
-from app.constants.message_sender import MessageSender
 
 _GATEWAY_OPERATOR_AUTHORITY_ERROR = (
     "Operator auth and session authority are Gateway-owned; use gateway enrollment "
     "and POST /api/v1/operators/reauth instead of g8ee local services."
 )
 
-from app.models.evaluation_trace import EvaluationSeedApplication
-from app.services.evaluation.investigation_seed import InvestigationSeedService
-from app.services.evaluation.tool_gate import resolve_tool_gate
-from app.services.evaluation.trace_service import EvaluationTraceService, validated_trace_ids
-from app.dependencies import (
-    get_g8ee_app_settings,
-    get_g8ee_approval_service,
-    get_g8ee_attachment_service,
-    get_g8ee_cache_aside_service,
-    get_g8ee_case_data_service,
-    get_g8ee_chat_pipeline,
-    get_g8ee_chat_task_manager,
-    get_g8ee_event_service,
-    get_g8ee_investigation_seed_service,
-    get_g8ee_investigation_service,
-    get_g8ee_operator_command_service,
-    get_g8ee_gateway_operator_client,
-    get_g8ee_api_key_service,
-    get_g8ee_certificate_service,
-    get_g8ee_settings_service_write,
-    get_g8ee_chat_user_settings,
-    get_request_context,
-    require_authenticated_context,
-)
-
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["internal"])
 _background_tasks: set[asyncio.Task] = set()
 
@@ -194,9 +192,7 @@ async def _publish_gateway_operator_status_events(
         return
     try:
         operators = await gateway_operator_client.list(user_id=g8e_context.user_id)
-        by_id = {
-            str(op.get("id")): op for op in operators if isinstance(op, dict) and op.get("id")
-        }
+        by_id = {str(op.get("id")): op for op in operators if isinstance(op, dict) and op.get("id")}
         for operator_id in operator_ids:
             operator_doc = by_id.get(operator_id)
             if not operator_doc:
@@ -219,7 +215,9 @@ def _per_operator_errors(
     failed_operator_ids: list[str], message: str | None
 ) -> list[dict[str, str]]:
     error_message = message or "Gateway operator request failed"
-    return [{"operator_id": operator_id, "error": error_message} for operator_id in failed_operator_ids]
+    return [
+        {"operator_id": operator_id, "error": error_message} for operator_id in failed_operator_ids
+    ]
 
 
 async def _generate_and_update_title(
@@ -1314,7 +1312,9 @@ async def register_device_link_operator(
         "[INTERNAL-HTTP] Rejected legacy device-link operator registration",
         extra={"operator_id": request.operator_id},
     )
-    return OperatorDeviceLinkRegisterResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
+    return OperatorDeviceLinkRegisterResponse(
+        success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR
+    )
 
 
 @router.post(

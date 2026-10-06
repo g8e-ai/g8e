@@ -13,9 +13,8 @@ import logging
 import re
 from pathlib import Path
 
-from app.models.base import BaseModel, ConfigDict
-
 from app.errors import ConfigurationError
+from app.models.base import BaseModel, ConfigDict
 from app.utils.config_loader import load_json_config
 from app.utils.path import resolve_config_path
 

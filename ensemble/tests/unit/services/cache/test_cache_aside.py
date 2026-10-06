@@ -12,14 +12,14 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.constants import (
-    BatchWriteOpType,
     CACHE_TTL_DEFAULT,
     CACHE_TTL_MEDIUM,
     CACHE_TTL_SHORT,
-    ComponentName,
     DB_COLLECTION_INVESTIGATIONS,
     DB_COLLECTION_USERS,
     G8EE_COMPONENT,
+    BatchWriteOpType,
+    ComponentName,
     KVKey,
     OperatorStatus,
 )

@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 
 from app.constants import (
+    G8EE_COMPONENT,
     AuthMethod,
     CaseStatus,
     ComponentName,
@@ -18,7 +19,6 @@ from app.constants import (
     ConsensusMember,
     EscalationRisk,
     EventType,
-    G8EE_COMPONENT,
     InvestigationStatus,
     OperatorStatus,
     OperatorType,

@@ -21,16 +21,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     AuditorReason,
     CommandGenerationOutcome,
     ConsensusMember,
     EventType,
-    G8EE_COMPONENT,
 )
 from app.models.agents.tribunal import (
     CandidateCommand,
-    VoteBreakdown,
     TribunalAuditResult,
+    VoteBreakdown,
 )
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.reputation import ReputationSignResponse, ReputationState
@@ -73,7 +73,9 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = _MagicMock()
-        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
+        gov.sign_reputation_commitment = AsyncMock(
+            return_value=ReputationSignResponse(signature="a" * 64)
+        )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
@@ -118,8 +120,8 @@ class TestCommandGeneratorWithCommitment:
             # Mock auditor to pass and emit event
             async def mock_audit_side_effect(*args, **kwargs):
                 # Simulate side effects that are now internal to TribunalAuditor.run
-                from app.models.reputation import ReputationCommitmentCreatedPayload
                 from app.models.events import SessionEvent
+                from app.models.reputation import ReputationCommitmentCreatedPayload
 
                 correlation_id = "mock-correlation-id"
 
@@ -210,7 +212,9 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = MagicMock()
-        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
+        gov.sign_reputation_commitment = AsyncMock(
+            return_value=ReputationSignResponse(signature="a" * 64)
+        )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through2)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
@@ -288,15 +292,17 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = MagicMock()
-        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
+        gov.sign_reputation_commitment = AsyncMock(
+            return_value=ReputationSignResponse(signature="a" * 64)
+        )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through3)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
         # Force commitment failure by mocking create_commitment to raise
         reputation_svc.create_commitment = AsyncMock(side_effect=RuntimeError("DB Offline"))
 
-        from app.models.reputation import ReputationCommitmentFailedPayload
         from app.constants import EventType
+        from app.models.reputation import ReputationCommitmentFailedPayload
 
         with (
             patch(

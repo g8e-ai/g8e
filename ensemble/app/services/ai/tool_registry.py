@@ -33,9 +33,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import app.llm.llm_types as types
-from app.constants.prompts import AgentMode
 from app.constants.config import ToolDisplayCategory
 from app.constants.generated_status import OperatorToolName, ToolScope
+from app.constants.prompts import AgentMode
 from app.models.tool_results import ToolResult
 from app.services.ai.tools import (
     check_port,
@@ -48,14 +48,13 @@ from app.services.ai.tools import (
     get_command_constraints,
     grant_intent,
     list_files,
-    recursive_grep,
     query_investigation_context,
+    recursive_grep,
     revoke_intent,
     run_commands,
     search_web,
     ssh_inventory,
 )
-
 
 _ALL_MODES: frozenset[AgentMode] = frozenset(AgentMode)
 _BOUND_MODES: frozenset[AgentMode] = frozenset(

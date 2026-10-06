@@ -37,7 +37,9 @@ class TestFakeProviderFileCreate:
     async def test_stream_primary_yields_file_create_tool_call(self, provider, settings):
         message = "Create a new file at /tmp/g8e-smoke-test.txt with the content: hello world"
         chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", _user_content(message), settings
+        ):
             chunks.append(chunk)
 
         assert len(chunks) == 1
@@ -54,7 +56,9 @@ class TestFakeProviderFileCreate:
     @pytest.mark.asyncio
     async def test_generate_primary_returns_file_create_tool_call(self, provider, settings):
         message = "Create a new file at /tmp/test.txt with the content: test content"
-        response = await provider.generate_content_primary("fake-model", _user_content(message), settings)
+        response = await provider.generate_content_primary(
+            "fake-model", _user_content(message), settings
+        )
 
         assert len(response.candidates) == 1
         tool_calls = response.tool_calls
@@ -114,7 +118,9 @@ class TestFakeProviderFileWrite:
     async def test_stream_primary_yields_file_write_tool_call(self, provider, settings):
         message = "Write the following content to the file at /tmp/output.txt: new data"
         chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", _user_content(message), settings
+        ):
             chunks.append(chunk)
 
         assert len(chunks) == 1
@@ -132,7 +138,9 @@ class TestFakeProviderNonToolCallResponses:
     async def test_delete_instruction_returns_text(self, provider, settings):
         message = "Delete the investigation note created in the previous run."
         chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", _user_content(message), settings
+        ):
             chunks.append(chunk)
 
         assert len(chunks) == 1
@@ -144,7 +152,9 @@ class TestFakeProviderNonToolCallResponses:
     async def test_investigation_note_returns_text(self, provider, settings):
         message = "Create a new investigation note documenting this smoke test run."
         chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", _user_content(message), settings
+        ):
             chunks.append(chunk)
 
         assert len(chunks) == 1
@@ -159,7 +169,9 @@ class TestFakeProviderDefaults:
     async def test_create_without_explicit_path_uses_default(self, provider, settings):
         message = "Create a file for the smoke test"
         chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", _user_content(message), settings
+        ):
             chunks.append(chunk)
 
         assert len(chunks[0].tool_calls) == 1
@@ -174,7 +186,9 @@ class TestFakeProviderCallLog:
     @pytest.mark.asyncio
     async def test_call_log_records_stream_primary(self, provider, settings):
         message = "Create a new file at /tmp/test.txt with the content: data"
-        async for _ in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
+        async for _ in provider.generate_content_stream_primary(
+            "fake-model", _user_content(message), settings
+        ):
             pass
 
         assert len(provider.call_log) == 1
@@ -259,9 +273,7 @@ class TestFakeProviderLiteStructuredResponse:
         from app.models.tool_results import FileOperationRiskAnalysis
 
         schema = FileOperationRiskAnalysis.model_json_schema()
-        settings = LiteLLMSettings(
-            response_format=ResponseFormat.from_pydantic_schema(schema)
-        )
+        settings = LiteLLMSettings(response_format=ResponseFormat.from_pydantic_schema(schema))
         response = await provider.generate_content_lite(
             "fake-model", _user_content("analyze risk"), settings
         )
@@ -281,9 +293,7 @@ class TestFakeProviderLiteStructuredResponse:
         from app.models.tool_results import ErrorAnalysisResult
 
         schema = ErrorAnalysisResult.model_json_schema()
-        settings = LiteLLMSettings(
-            response_format=ResponseFormat.from_pydantic_schema(schema)
-        )
+        settings = LiteLLMSettings(response_format=ResponseFormat.from_pydantic_schema(schema))
         response = await provider.generate_content_lite(
             "fake-model", _user_content("analyze error"), settings
         )
@@ -431,9 +441,7 @@ class TestFakeProviderTribunalToolCall:
         assert chunks[0].usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
-    async def test_stream_primary_creates_marker_after_tribunal_response(
-        self, provider, settings
-    ):
+    async def test_stream_primary_creates_marker_after_tribunal_response(self, provider, settings):
         message = (
             "Run a diagnostic through the Tribunal then create the marker file at "
             "/tmp/g8e-role-complete.txt."
@@ -461,9 +469,7 @@ class TestFakeProviderTribunalToolCall:
         assert chunks[0].usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
-    async def test_stream_primary_terminates_after_marker_response(
-        self, provider, settings
-    ):
+    async def test_stream_primary_terminates_after_marker_response(self, provider, settings):
         contents = _user_content(
             "Run a diagnostic through the Tribunal then create the marker file at "
             "/tmp/g8e-role-complete.txt."

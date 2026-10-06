@@ -5,26 +5,26 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from .base import AgentPersonaModel
-from .triage import TriagePersona
-from .sage import SagePersona
-from .dash import DashPersona
 from .auditor import AuditorPersona
 from .axiom import AxiomPersona
-from .concord import ConcordPersona
-from .variance import VariancePersona
-from .pragma import PragmaPersona
-from .nemesis import NemesisPersona
-from .scribe import ScribePersona
+from .base import AgentPersonaModel
 from .codex import CodexPersona
+from .concord import ConcordPersona
+from .dash import DashPersona
 from .judge import JudgePersona
 from .marshal import (
-    MarshalPersona,
     MarshalCommandPersona,
     MarshalErrorPersona,
     MarshalFilePersona,
+    MarshalPersona,
 )
+from .nemesis import NemesisPersona
+from .pragma import PragmaPersona
+from .sage import SagePersona
+from .scribe import ScribePersona
+from .triage import TriagePersona
 from .tribunal import TribunalPersona
+from .variance import VariancePersona
 
 PERSONA_REGISTRY: dict[str, AgentPersonaModel] = {
     "triage": TriagePersona(),

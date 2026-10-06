@@ -12,13 +12,13 @@ Unit tests for the Title Generator service.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.http_context import G8eHttpContext
 from app.services.ai.title_generator import _create_fallback_title, generate_case_title
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 pytestmark = [pytest.mark.unit]
 
@@ -54,7 +54,9 @@ def mock_provider():
     provider.input_artifact_hash = ""
     provider.model_boundary_privacy = None
     provider.governed_dispatch_evidence = None
-    with patch("app.services.ai.title_generator.get_generative_lite_provider", return_value=provider):
+    with patch(
+        "app.services.ai.title_generator.get_generative_lite_provider", return_value=provider
+    ):
         yield provider
 
 

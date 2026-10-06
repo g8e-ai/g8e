@@ -8,9 +8,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
-
 import os
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from app.constants import (
     ErrorCode,
@@ -25,18 +24,17 @@ from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PathConstants, PortConstants
 from app.constants.paths import PATHS
 from app.errors import ConfigurationError
+from app.models.base import G8eBaseModel
+from app.models.internal_api import LLMRoleSettingsResponse, LLMRoleSettingsUpdateRequest
 from app.models.settings import (
+    AppSettingsDocument,
     AuthSettings,
-    LLMSettings,
     G8eeAppSettings,
     G8eeUserSettings,
-    AppSettingsDocument,
-    UserSettingsDocument,
+    LLMSettings,
     SearchSettings,
+    UserSettingsDocument,
 )
-from app.models.base import G8eBaseModel
-
-from app.models.internal_api import LLMRoleSettingsResponse, LLMRoleSettingsUpdateRequest
 from app.services.infra.llm_role_settings import (
     apply_provider_updates,
     apply_role_updates,
@@ -62,7 +60,6 @@ class SettingsServiceProtocol(Protocol):
     def get_local_settings(self) -> G8eeAppSettings:
         """Retrieve local bootstrap settings (bootstrap)."""
         ...
-
 
 
 class SettingsService:

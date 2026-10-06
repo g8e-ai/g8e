@@ -6,7 +6,9 @@
 # released under the Apache License, Version 2.0.
 
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
+
 from app.constants import G8EE_COMPONENT
 from app.models.agent import OperatorContext
 from app.models.http_context import G8eHttpContext
@@ -14,8 +16,8 @@ from app.models.reputation import ReputationCommitment
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.whitelist import WhitelistedCommand
-from app.services.protocols import EventServiceProtocol, AIResponseAnalyzerProtocol
 from app.services.data.reputation_data_service import ReputationDataService
+from app.services.protocols import AIResponseAnalyzerProtocol, EventServiceProtocol
 
 
 def _make_mock_reputation_service() -> MagicMock:

@@ -7,23 +7,22 @@
 
 import logging
 
-from app.models.base import TypeAdapter
-
-from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
-
+from app.clients.governance_client import GovernanceClient
 from app.constants import (
-    ComponentStatus,
     DB_COLLECTION_INVESTIGATIONS,
+    G8EE_COMPONENT,
+    ComponentStatus,
     EscalationRisk,
     EventType,
     ExecutionStatus,
     FileOperation,
-    G8EE_COMPONENT,
     HistoryActor,
 )
 from app.constants.message_sender import MessageSender
 from app.errors import ResourceNotFoundError
+from app.models.base import TypeAdapter
 from app.models.cache import FieldFilter
+from app.models.http_context import RequestContext
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,
@@ -33,16 +32,13 @@ from app.models.investigations import (
     InvestigationModel,
     InvestigationQueryRequest,
 )
-
-from app.models.http_context import RequestContext
 from app.models.operators import CommandInternalResult
 from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
+from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
 from app.utils.keyed_lock import KeyedAsyncLock
 from app.utils.time_ids.timestamp import now
-from app.clients.governance_client import GovernanceClient
-
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +54,9 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
         """Low-level persistence for a new investigation document via governance envelope."""
+        from app.constants import AITaskId
         from app.models.command_request_payloads import DocumentUpdateRequestPayload
         from app.models.pubsub_messages import G8eMessage
-        from app.constants import AITaskId
 
         investigation = InvestigationModel(
             case_id=request.case_id,

@@ -12,9 +12,88 @@ Enums and constants are re-exported from the g8e protocol package
 duplicates that drift from the protocol.
 """
 
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
-from g8e.enums import OperatorToolName as _ProtocolOperatorToolName
+from g8e.constants import ComponentName
+from g8e.enums import (
+    ActionType,
+    AISource,
+    AITaskId,
+    AuditEventSource,
+    AuditEventType,
+    AuditorReason,
+    AuditSseEventType,
+    AuthAuditEventType,
+    AuthAuditResult,
+    AuthProvider,
+    CaseStatus,
+    CitationLayout,
+    CommandCategory,
+    CommandErrorType,
+    CommandStatus,
+    ComponentStatus,
+    ConnectionState,
+    ConsensusAuditMode,
+    ConsensusAuditStatus,
+    ConsensusMember,
+    DownloadAuditEventType,
+    Environment,
+    EventType,
+    G8eAvailability,
+    GatewayMode,
+    HeartbeatType,
+    HistoryActor,
+    InvestigationStatus,
+    LoginAuditEventType,
+    OperatorHistoryEventType,
+    OperatorStatus,
+    OperatorType,
+    Platform,
+    Priority,
+    ReasoningAgent,
+    RiskLevel,
+    RiskThreshold,
+    SentinelStatus,
+    SessionEndReason,
+    SessionEventType,
+    SessionKeyPrefix,
+    SessionSuspiciousReason,
+    SessionType,
+    Severity,
+    SlashTier,
+    StreamStatus,
+    SystemHealth,
+    TaskStatus,
+    ThinkingPhase,
+    TieBreakReason,
+    ToolCallDefaults,
+    ToolScope,
+    TriageComplexityClassification,
+    TriageConfidence,
+    TriageIntentClassification,
+    TriageRequestPosture,
+    UserRole,
+    UserStatus,
+    VaultMode,
+    VersionStability,
+    WorkflowType,
+)
+from g8e.enums import (
+    LlmModels as LLMs,
+)
+from g8e.enums import (
+    OperatorToolName as _ProtocolOperatorToolName,
+)
+
+
+class ScrubberPriority(IntEnum):
+    """Priority levels for Sentinel scrubber patterns. Lower values = higher priority."""
+
+    EXACT_CREDENTIAL = 1
+    URL_OR_CONNECTION = 2
+    CONTEXTUAL_CREDENTIAL = 3
+    GENERIC_PII = 4
+
 
 # OperatorToolName: re-export the protocol enum, extended with ensemble-specific
 # tools that are not yet in the Go protocol SSOT. The 19 protocol members are
@@ -34,146 +113,70 @@ OperatorToolName = StrEnum(  # type: ignore[misc]
     },
 )
 
-
-# ComponentName is now imported from g8e.constants
-from g8e.constants import ComponentName
-
-# Enums sourced from g8e protocol STATUS constants via g8e.enums
-from g8e.enums import (
-    SessionEndReason,
-    SessionEventType,
-    SessionKeyPrefix,
-    SessionSuspiciousReason,
-    SentinelStatus,
-    VaultMode,
-    CommandStatus,
-    ConnectionState,
-    StreamStatus,
-    SystemHealth,
-    Environment,
-    HistoryActor,
-    ActionType,
-    AISource,
-    AuditEventSource,
-    AuditEventType,
-    AuditSseEventType,
-    AuthAuditEventType,
-    AuthAuditResult,
-    AuthProvider,
-    CitationLayout,
-    DownloadAuditEventType,
-    G8eAvailability,
-    GatewayMode,
-    LoginAuditEventType,
-    ToolCallDefaults,
-    UserRole,
-    UserStatus,
-    HeartbeatType,
-    LlmModels as LLMs,
-    ThinkingPhase,
-)
-
-
-from enum import IntEnum
-
-
-class ScrubberPriority(IntEnum):
-    """Priority levels for Sentinel scrubber patterns. Lower values = higher priority."""
-
-    EXACT_CREDENTIAL = 1
-    URL_OR_CONNECTION = 2
-    CONTEXTUAL_CREDENTIAL = 3
-    GENERIC_PII = 4
-
-
-from g8e.enums import CommandErrorType
-
-
-from g8e.enums import ToolScope
-
-
-from g8e.enums import AITaskId
-
-
-from g8e.enums import OperatorStatus
-
-
-from g8e.enums import OperatorType
-
-
-from g8e.enums import Platform
-
-
-from g8e.enums import Priority
-
-
-from g8e.enums import RiskLevel
-
-
-from g8e.enums import RiskThreshold
-
-
-from g8e.enums import TaskStatus
-
-
-from g8e.enums import VersionStability
-
-
-from g8e.enums import ReasoningAgent
-
-
-from g8e.enums import WorkflowType
-
-
-from g8e.enums import ComponentStatus
-
-
-from g8e.enums import EventType
-
-
-from g8e.enums import InvestigationStatus
-
-
-from g8e.enums import Severity
-
-
-from g8e.enums import OperatorHistoryEventType
-
-
-from g8e.enums import CommandCategory
-
-
-from g8e.enums import TriageComplexityClassification
-
-
-from g8e.enums import TriageConfidence
-
-
-from g8e.enums import TriageIntentClassification
-
-
-from g8e.enums import TriageRequestPosture
-
-
-from g8e.enums import TieBreakReason
-
-
-from g8e.enums import ConsensusMember
-
-
-from g8e.enums import ConsensusAuditMode
-
-
-from g8e.enums import ConsensusAuditStatus
-
-
-from g8e.enums import AuditorReason
-
-
-from g8e.enums import CaseStatus
-
-
-from g8e.enums import SessionType
-
-
-from g8e.enums import SlashTier
+__all__ = [
+    "AISource",
+    "AITaskId",
+    "ActionType",
+    "AuditEventSource",
+    "AuditEventType",
+    "AuditSseEventType",
+    "AuditorReason",
+    "AuthAuditEventType",
+    "AuthAuditResult",
+    "AuthProvider",
+    "CaseStatus",
+    "CitationLayout",
+    "CommandCategory",
+    "CommandErrorType",
+    "CommandStatus",
+    "ComponentName",
+    "ComponentStatus",
+    "ConsensusMember",
+    "ConsensusAuditMode",
+    "ConsensusAuditStatus",
+    "ConnectionState",
+    "DownloadAuditEventType",
+    "Environment",
+    "EventType",
+    "G8eAvailability",
+    "GatewayMode",
+    "HistoryActor",
+    "HeartbeatType",
+    "InvestigationStatus",
+    "LLMs",
+    "LoginAuditEventType",
+    "OperatorHistoryEventType",
+    "OperatorStatus",
+    "OperatorToolName",
+    "OperatorType",
+    "Platform",
+    "Priority",
+    "ReasoningAgent",
+    "RiskLevel",
+    "RiskThreshold",
+    "ScrubberPriority",
+    "SessionEndReason",
+    "SessionEventType",
+    "SessionKeyPrefix",
+    "SessionSuspiciousReason",
+    "SessionType",
+    "SentinelStatus",
+    "Severity",
+    "SlashTier",
+    "StreamStatus",
+    "SystemHealth",
+    "TaskStatus",
+    "ThinkingPhase",
+    "TieBreakReason",
+    "ToolCallDefaults",
+    "ToolScope",
+    "TriageComplexityClassification",
+    "TriageConfidence",
+    "TriageIntentClassification",
+    "TriageRequestPosture",
+    "UserRole",
+    "UserStatus",
+    "VaultMode",
+    "VersionStability",
+    "WorkflowType",
+]

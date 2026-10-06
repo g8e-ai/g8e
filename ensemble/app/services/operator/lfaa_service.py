@@ -17,7 +17,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from app.constants import EventType, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, EventType
 from app.constants.generated_status import AITaskId
 from app.errors import NetworkError
 from app.models.command_request_payloads import DirectCommandAuditRequestPayload

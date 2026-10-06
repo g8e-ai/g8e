@@ -6,26 +6,24 @@
 # released under the Apache License, Version 2.0.
 
 from __future__ import annotations
-from app.constants.message_sender import MessageSender
-
-
-from app.models.base import ConfigDict, Field, field_validator, model_validator
 
 from app.constants import (
+    G8EE_COMPONENT,
     ComponentStatus,
     EscalationRisk,
     EventType,
     ExecutionStatus,
     FileOperation,
-    G8EE_COMPONENT,
     HistoryActor,
     InvestigationStatus,
     Priority,
     RiskThreshold,
     Severity,
 )
-from app.utils.time_ids.timestamp import now
+from app.constants.message_sender import MessageSender
+from app.models.base import ConfigDict, Field, field_validator, model_validator
 from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
+from app.utils.time_ids.timestamp import now
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 from .grounding import GroundingMetadata
@@ -74,7 +72,9 @@ class ConversationMessageMetadata(G8eBaseModel):
         default=None, description="Whether this message has embedded thinking content"
     )
     thinking_content: str | None = Field(default=None, description="Embedded AI thinking content")
-    response_source: MessageSender | None = Field(default=None, description="Source of the AI response")
+    response_source: MessageSender | None = Field(
+        default=None, description="Source of the AI response"
+    )
     approved: bool | None = Field(default=None, description="Whether the approval was granted")
     reason: str | None = Field(default=None, description="Approval decision reason or feedback")
     feedback_reason: str | None = Field(
@@ -172,7 +172,9 @@ class AIResponseMetadata(ConversationMessageMetadata):
     source: MessageSender | None = Field(
         default=None, description="AI response attribution (source_ai, source_tool_call)"
     )
-    response_source: MessageSender | None = Field(default=None, description="Source of the AI response")
+    response_source: MessageSender | None = Field(
+        default=None, description="Source of the AI response"
+    )
     model: str | None = Field(default=None, description="AI model that produced this response")
     tokens: int | None = Field(default=None, description="Token count for this response")
     has_thinking: bool | None = Field(

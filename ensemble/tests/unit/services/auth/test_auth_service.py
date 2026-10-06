@@ -5,27 +5,33 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from fastapi import Request
+from proxy_stamp_support import (
+    KeySource,
+    key_response,
+    make_key,
+    make_request,
+    stamped_headers,
+    verifier,
+)
 
 from app.constants import (
     AUTHORIZATION,
     CLI_SESSION_ID,
-    AuthMethod,
-    OperatorStatus,
     WEB_SESSION_ID,
     X_PROXY_CLI_SESSION_ID,
-    X_PROXY_ORGANIZATION_ID,
     X_PROXY_USER_EMAIL,
     X_PROXY_USER_ID,
-    X_PROXY_WEB_SESSION_ID,
+    AuthMethod,
+    OperatorStatus,
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser, OperatorSessionValidationResponse
 from app.models.http_context import BoundOperator, G8eHttpContext
 from app.services.auth.auth_service import AuthService
-from proxy_stamp_support import KeySource, key_response, make_key, make_request, stamped_headers, verifier
 
 
 @pytest.fixture
@@ -51,7 +57,9 @@ class TestAuthServiceProxyAuthentication:
         )
 
     @pytest.mark.asyncio
-    async def test_signed_proxy_auth_extracts_user_and_cli_session_id(self, stamped_auth_service, gateway_key):
+    async def test_signed_proxy_auth_extracts_user_and_cli_session_id(
+        self, stamped_auth_service, gateway_key
+    ):
         request = make_request(
             stamped_headers(
                 gateway_key,
@@ -72,7 +80,9 @@ class TestAuthServiceProxyAuthentication:
         assert user.auth_method == AuthMethod.PROXY
 
     @pytest.mark.asyncio
-    async def test_signed_proxy_auth_ignores_unsigned_session_headers(self, stamped_auth_service, gateway_key):
+    async def test_signed_proxy_auth_ignores_unsigned_session_headers(
+        self, stamped_auth_service, gateway_key
+    ):
         headers = stamped_headers(gateway_key)
         headers[WEB_SESSION_ID] = "web-forged"
         headers[CLI_SESSION_ID] = "cli-forged"
@@ -84,7 +94,9 @@ class TestAuthServiceProxyAuthentication:
 
     @pytest.mark.asyncio
     async def test_proxy_headers_without_a_signature_are_rejected(self, stamped_auth_service):
-        request = make_request({X_PROXY_USER_ID: "user-123", X_PROXY_USER_EMAIL: "user-123@g8e.local"})
+        request = make_request(
+            {X_PROXY_USER_ID: "user-123", X_PROXY_USER_EMAIL: "user-123@g8e.local"}
+        )
 
         with pytest.raises(AuthenticationError, match="Gateway signature"):
             await stamped_auth_service.authenticate_request(request, MagicMock())
@@ -110,7 +122,9 @@ class TestAuthServiceProxyAuthentication:
             await stamped_auth_service.authenticate_request(request, MagicMock())
 
     @pytest.mark.asyncio
-    async def test_replayed_stamp_is_rejected_on_a_second_request(self, stamped_auth_service, gateway_key):
+    async def test_replayed_stamp_is_rejected_on_a_second_request(
+        self, stamped_auth_service, gateway_key
+    ):
         headers = stamped_headers(gateway_key)
         await stamped_auth_service.authenticate_request(make_request(headers), MagicMock())
 

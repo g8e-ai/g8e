@@ -22,23 +22,23 @@ import pytest
 from app.constants import (
     AuditorReason,
     CommandGenerationOutcome,
-    RiskLevel,
     ConsensusMember,
+    RiskLevel,
 )
 from app.models.agents.tribunal import (
     CommandGenerationResult,
     VoteBreakdown,
 )
-from app.models.reputation import ReputationState, SlashTier, StakeResolution
 from app.models.http_context import RequestContext
+from app.models.reputation import ReputationState, SlashTier, StakeResolution
 from app.models.tool_results import CommandExecutionResult
 from app.services.ai.reputation_service import (
     AUDITOR_ID,
     BOOTSTRAP_SCALAR,
     DEFAULT_EMA_HALF_LIFE,
+    MARSHAL_ID,
     SAGE_ID,
     TRIBUNAL_HONEST_FOUR,
-    MARSHAL_ID,
     ClassifierInputs,
     ReputationService,
     apply_slash,

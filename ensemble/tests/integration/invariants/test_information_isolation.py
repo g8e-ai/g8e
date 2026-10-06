@@ -47,7 +47,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 def get_all_python_files(root: Path):
     app_root = root / "app" if (root / "app").exists() else root
     for path in app_root.rglob("*.py"):
-        if "tests" in path.parts or ".ruff_cache" in path.parts or ".venv" in path.parts or "venv" in path.parts:
+        if (
+            "tests" in path.parts
+            or ".ruff_cache" in path.parts
+            or ".venv" in path.parts
+            or "venv" in path.parts
+        ):
             continue
         if any(part.startswith(".") for part in path.parts):
             continue

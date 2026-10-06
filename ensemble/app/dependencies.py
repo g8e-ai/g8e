@@ -10,11 +10,8 @@ from typing import cast
 
 from fastapi import Depends, Request
 
-from app.clients.kv_cache_client import KVCacheClient
 from app.clients.blob_client import BlobClient
-from app.models.settings import G8eeAppSettings, G8eeUserSettings
-from app.models.state import G8eeAppState
-from app.services.service_factory import AllServices
+from app.clients.kv_cache_client import KVCacheClient
 from app.constants import (
     G8EE_COMPONENT,
     InternalAPIPaths,
@@ -26,36 +23,39 @@ from app.errors import (
 )
 from app.models.auth import AuthenticatedUser
 from app.models.health import HealthCheckResult
-from app.models.http_context import RequestContext, G8eHttpContext
-from app.services.cache.cache_aside import CacheAsideService
+from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
+from app.models.state import G8eeAppState
 from app.security.auth import (
     is_infrastructure_health_check_ip,
 )
+from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.health_service import HealthService
+from app.services.service_factory import AllServices
 
-from .services.data.case_data_service import CaseDataService
-from .services.investigation.investigation_service import InvestigationService
-from .services.investigation.investigation_data_service import InvestigationDataService
-from .services.investigation.memory_data_service import MemoryDataService
-from .services.ai.memory_generation_service import MemoryGenerationService
-from .services.evaluation.investigation_seed import InvestigationSeedService
-from .services.ai.grounding.grounding_service import GroundingService
-from .services.ai.grounding.web_search_provider import WebSearchProvider
+from .clients.gateway_operator_client import GatewayOperatorClient
+from .db.blob_service import BlobService
 from .services.ai.chat_pipeline import ChatPipelineService
 from .services.ai.chat_task_manager import BackgroundTaskManager
-from .services.data.attachment_store_service import AttachmentService
-from .db.blob_service import BlobService
-from .services.protocols import SettingsServiceProtocol
-from .services.infra.event_service import EventService
-from .services.infra.internal_http_client import InternalHttpClient
-from .services.operator.approval_service import OperatorApprovalService
-from .services.operator.command_service import OperatorCommandService
-from .services.operator.operator_data_service import OperatorDataService
-from .clients.gateway_operator_client import GatewayOperatorClient
+from .services.ai.grounding.grounding_service import GroundingService
+from .services.ai.grounding.web_search_provider import WebSearchProvider
+from .services.ai.memory_generation_service import MemoryGenerationService
 from .services.auth.api_key_service import APIKeyService
 from .services.auth.auth_service import AuthService
 from .services.auth.certificate_service import CertificateService
+from .services.data.attachment_store_service import AttachmentService
+from .services.data.case_data_service import CaseDataService
+from .services.evaluation.investigation_seed import InvestigationSeedService
+from .services.infra.event_service import EventService
+from .services.infra.internal_http_client import InternalHttpClient
 from .services.infra.settings_service import SettingsService
+from .services.investigation.investigation_data_service import InvestigationDataService
+from .services.investigation.investigation_service import InvestigationService
+from .services.investigation.memory_data_service import MemoryDataService
+from .services.operator.approval_service import OperatorApprovalService
+from .services.operator.command_service import OperatorCommandService
+from .services.operator.operator_data_service import OperatorDataService
+from .services.protocols import SettingsServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -212,9 +212,7 @@ async def get_g8ee_grounding_service(request: Request) -> GroundingService:
         logger.error(
             "Grounding service not found in app state - g8ee initialization may have failed"
         )
-        raise ServiceUnavailableError(
-            "Grounding service not available", component=G8EE_COMPONENT
-        )
+        raise ServiceUnavailableError("Grounding service not available", component=G8EE_COMPONENT)
 
     return service
 
@@ -231,9 +229,7 @@ async def get_g8ee_chat_task_manager(request: Request) -> BackgroundTaskManager:
         logger.error(
             "Chat Task Manager not found in app state - g8ee initialization may have failed"
         )
-        raise ServiceUnavailableError(
-            "Chat Task Manager not available", component=G8EE_COMPONENT
-        )
+        raise ServiceUnavailableError("Chat Task Manager not available", component=G8EE_COMPONENT)
 
     return service
 

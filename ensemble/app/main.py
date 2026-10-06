@@ -24,45 +24,34 @@ Bootstrap responsibilities (this file):
 """
 
 import logging
-from typing import cast
 from contextlib import asynccontextmanager
+from typing import cast
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-load_dotenv(override=False)
 
 from .clients.blob_client import BlobClient
 from .clients.db_client import DBClient
 from .clients.governance_client import GovernanceClient
 from .clients.kv_cache_client import KVCacheClient
 from .constants import (
-    AUTHORIZATION,
-    CORS_ALLOWED_ORIGIN_G8EE,
-    CORS_ALLOWED_ORIGIN_LOCALHOST,
-    CORS_ALLOWED_ORIGIN_CLIENT_HTTP,
-    CORS_ALLOWED_ORIGIN_CLIENT_HTTPS,
     ACCEPT,
     ACCEPT_LANGUAGE,
     ACCESS_CONTROL_ALLOW_CREDENTIALS,
     ACCESS_CONTROL_ALLOW_ORIGIN,
     ACCESS_CONTROL_REQUEST_HEADERS,
     ACCESS_CONTROL_REQUEST_METHOD,
+    AUTHORIZATION,
     CACHE_CONTROL,
     CONTENT_LANGUAGE,
     CONTENT_TYPE,
     COOKIE,
+    CORS_ALLOWED_ORIGIN_CLIENT_HTTP,
+    CORS_ALLOWED_ORIGIN_CLIENT_HTTPS,
+    CORS_ALLOWED_ORIGIN_G8EE,
+    CORS_ALLOWED_ORIGIN_LOCALHOST,
     EXECUTION_ID,
-    LAST_EVENT_ID,
-    HTTP_METHOD_DELETE,
-    HTTP_METHOD_GET,
-    HTTP_METHOD_OPTIONS,
-    HTTP_METHOD_POST,
-    HTTP_METHOD_PUT,
-    PRAGMA,
-    REQUESTED_WITH,
-    SET_COOKIE,
     G8EE_APP_CONTACT_EMAIL,
     G8EE_APP_CONTACT_NAME,
     G8EE_APP_CONTACT_URL,
@@ -70,28 +59,39 @@ from .constants import (
     G8EE_APP_LICENSE_NAME,
     G8EE_APP_LICENSE_URL,
     G8EE_APP_TITLE,
+    G8EE_COMPONENT,
+    HTTP_METHOD_DELETE,
+    HTTP_METHOD_GET,
+    HTTP_METHOD_OPTIONS,
+    HTTP_METHOD_POST,
+    HTTP_METHOD_PUT,
+    LAST_EVENT_ID,
+    PRAGMA,
+    REQUESTED_WITH,
+    SET_COOKIE,
 )
 from .constants.generated_paths import PortConstants
-from .models.state import G8eeAppState
-from .models.settings import TLSConfig
 from .db.blob_service import BlobService
 from .db.db_service import DBService
 from .db.kv_service import KVService
+from .errors import ConfigurationError
+from .llm import clear_provider_cache
+from .llm.factory import set_internal_http_client, set_settings
 from .logging import setup_logging
-from .routers import chat_router, health_router
-from .routers.internal_router import router as internal_router
 from .middleware.exception_handlers import setup_exception_handlers
 from .middleware.http_context import G8eHttpContextMiddleware
+from .models.settings import TLSConfig
+from .models.state import G8eeAppState
+from .routers import chat_router, health_router
+from .routers.internal_router import router as internal_router
 from .services.cache.cache_aside import CacheAsideService
-from .errors import ConfigurationError
 from .services.infra.app_enrollment_service import AppEnrollmentService
 from .services.infra.settings_service import SettingsService
 from .services.service_factory import ServiceFactory
-from .llm.factory import set_settings, set_internal_http_client
 from .utils.service_init import initialize_g8e_service
 from .utils.version import get_version
-from .llm import clear_provider_cache
-from app.constants import G8EE_COMPONENT
+
+load_dotenv(override=False)
 
 logger = logging.getLogger(__name__)
 

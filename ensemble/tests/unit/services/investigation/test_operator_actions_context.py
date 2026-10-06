@@ -17,9 +17,9 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.enums import HistoryActor
 
 from app.constants import EventType, ExecutionStatus
-from g8e.enums import HistoryActor
 from app.models.investigations import (
     ConversationMessageMetadata,
     InvestigationHistoryEntry,

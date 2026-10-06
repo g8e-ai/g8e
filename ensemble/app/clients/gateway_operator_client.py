@@ -186,9 +186,7 @@ class GatewayOperatorClient:
     def _ensure_mtls(self) -> None:
         self._internal_http_client._ensure_mtls()
 
-    async def _post(
-        self, path: str, body: dict[str, Any], operation: str
-    ) -> dict[str, Any]:
+    async def _post(self, path: str, body: dict[str, Any], operation: str) -> dict[str, Any]:
         self._ensure_mtls()
         response = await self._internal_http_client.client.post(
             path,

@@ -10,43 +10,43 @@ import time
 from typing import Literal
 
 from app.constants import (
-    CommandGenerationOutcome,
     AuditorReason,
+    CommandGenerationOutcome,
     ConsensusAuditMode,
     ConsensusAuditStatus,
+    EventType,
 )
-from app.constants import EventType
 from app.constants.generated_status import CommandErrorType
-from app.llm.provider import LLMProvider
 from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm.provider import LLMProvider
 from app.models.agent import OperatorContext
+from app.models.agents.tribunal import (
+    AuditorClusterInfo,
+    CandidateCommand,
+    TribunalAuditorCompletedPayload,
+    TribunalAuditorFailedError,
+    TribunalAuditorStartedPayload,
+    TribunalAuditResult,
+    VoteBreakdown,
+)
+from app.models.http_context import RequestContext
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.reputation import (
     ReputationCommitmentCreatedPayload,
     ReputationCommitmentFailedPayload,
 )
-from app.models.agents.tribunal import (
-    CandidateCommand,
-    AuditorClusterInfo,
-    VoteBreakdown,
-    TribunalAuditorStartedPayload,
-    TribunalAuditorCompletedPayload,
-    TribunalAuditorFailedError,
-    TribunalAuditResult,
+from app.services.ai.auditor_service import (
+    build_auditor_prompt,
+    call_auditor_llm,
+    commit_reputation,
+    fail_auditor,
+    parse_auditor_response,
 )
+from app.services.ai.tribunal.emitter import TribunalEmitter
+from app.services.data.reputation_data_service import ReputationDataService
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.command import normalise_command
 from app.utils.validation.safety import validate_command_safety
-from app.services.ai.auditor_service import (
-    commit_reputation,
-    build_auditor_prompt,
-    call_auditor_llm,
-    parse_auditor_response,
-    fail_auditor,
-)
-from app.models.http_context import RequestContext
-from app.models.model_telemetry import ModelCallTelemetry
-from app.services.data.reputation_data_service import ReputationDataService
-from app.services.ai.tribunal.emitter import TribunalEmitter
 
 logger = logging.getLogger(__name__)
 

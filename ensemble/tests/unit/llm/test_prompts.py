@@ -1,11 +1,9 @@
-from app.constants.message_sender import MessageSender
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
-
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +16,7 @@ from app.constants import (
     PromptSection,
     Severity,
 )
+from app.constants.message_sender import MessageSender
 from app.llm import prompts
 from app.models.agent import OperatorContext
 from app.models.investigations import (

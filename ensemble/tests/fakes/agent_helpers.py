@@ -10,7 +10,7 @@
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from app.constants import AgentMode, G8EE_COMPONENT, ReasoningAgent
+from app.constants import G8EE_COMPONENT, AgentMode, ReasoningAgent
 from app.llm.llm_types import ThoughtSignature
 from app.models.agent import (
     AgentInputs,

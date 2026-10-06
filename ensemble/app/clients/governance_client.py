@@ -24,24 +24,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-import logging
 import json
+import logging
 import secrets
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import aiohttp
-
-from g8e.registry import action_for
-from app.models.pubsub_messages import G8eMessage
-from app.models.reputation import ReputationSignRequest, ReputationSignResponse
-from app.models.settings import GatewaySettings, TLSConfig
-from app.services.infra.settings_service import SettingsService
-from app.constants import AUTHORIZATION, GatewayAPIPaths
-from app.constants.config import G8EE_COMPONENT
-from app.errors import G8eError, NetworkError, ValidationError, ErrorCode, ErrorCategory
-from app.utils.aiohttp_session import create_component_http_session
 from g8e.models.governance import (
     GovernanceEnvelope,
     GovernanceL2,
@@ -50,6 +40,16 @@ from g8e.models.governance import (
     GovernanceMetadata,
     compute_transaction_hash,
 )
+from g8e.registry import action_for
+
+from app.constants import AUTHORIZATION, GatewayAPIPaths
+from app.constants.config import G8EE_COMPONENT
+from app.errors import ErrorCategory, ErrorCode, G8eError, NetworkError, ValidationError
+from app.models.pubsub_messages import G8eMessage
+from app.models.reputation import ReputationSignRequest, ReputationSignResponse
+from app.models.settings import GatewaySettings, TLSConfig
+from app.services.infra.settings_service import SettingsService
+from app.utils.aiohttp_session import create_component_http_session
 
 logger = logging.getLogger(__name__)
 
@@ -633,10 +633,14 @@ class GovernanceClient:
                 component="g8ee",
             )
 
-    async def sign_reputation_commitment(self, request: ReputationSignRequest) -> ReputationSignResponse:
+    async def sign_reputation_commitment(
+        self, request: ReputationSignRequest
+    ) -> ReputationSignResponse:
         """Ask the Gateway to sign a reputation claim without exporting its key."""
         if not self._client_cert_path or not self._client_key_path:
-            raise ValidationError("app mTLS credentials required for reputation signing", component="g8ee")
+            raise ValidationError(
+                "app mTLS credentials required for reputation signing", component="g8ee"
+            )
         try:
             session = await self._get_http_session()
             async with session.post(
@@ -644,10 +648,14 @@ class GovernanceClient:
                 json=request.model_dump(mode="json"),
             ) as response:
                 if response.status != 200:
-                    raise NetworkError(f"Gateway reputation signing HTTP {response.status}", component="g8ee")
+                    raise NetworkError(
+                        f"Gateway reputation signing HTTP {response.status}", component="g8ee"
+                    )
                 return ReputationSignResponse.model_validate(await response.json())
         except aiohttp.ClientError as exc:
-            raise NetworkError("Gateway reputation signing failed", component="g8ee", cause=exc) from exc
+            raise NetworkError(
+                "Gateway reputation signing failed", component="g8ee", cause=exc
+            ) from exc
 
     async def update_governed_doc(
         self,
@@ -688,8 +696,8 @@ class GovernanceClient:
             NetworkError: If the HTTP request fails
             ValidationError: If the envelope is rejected by governance gates
         """
-        from app.models.pubsub_messages import G8eMessage
         from app.models.command_request_payloads import DocumentUpdateRequestPayload
+        from app.models.pubsub_messages import G8eMessage
 
         payload = DocumentUpdateRequestPayload(
             collection=collection,
@@ -749,8 +757,8 @@ class GovernanceClient:
             NetworkError: If the HTTP request fails
             ValidationError: If the envelope is rejected by governance gates
         """
-        from app.models.pubsub_messages import G8eMessage
         from app.models.command_request_payloads import DocumentDeleteRequestPayload
+        from app.models.pubsub_messages import G8eMessage
 
         payload = DocumentDeleteRequestPayload(
             collection=collection,

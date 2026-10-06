@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.services.auth.certificate_data_service import CertificateDataService
@@ -18,8 +18,8 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app.constants.paths import PATHS
 from app.constants.config import CLIENT_CERT_VALIDITY_DAYS, CRL_ISSUER
+from app.constants.paths import PATHS
 
 logger = logging.getLogger(__name__)
 

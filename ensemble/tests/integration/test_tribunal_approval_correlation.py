@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import CommandGenerationOutcome, EventType, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, CommandGenerationOutcome, EventType
 from app.models.agents.tribunal import (
     CandidateCommand,
 )

@@ -18,9 +18,9 @@ from datetime import UTC, datetime
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     AuthMethod,
     ComponentName,
-    G8EE_COMPONENT,
     HealthStatus,
     OperatorStatus,
 )

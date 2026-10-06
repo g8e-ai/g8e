@@ -5,8 +5,8 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import shlex
 import logging
+import shlex
 
 logger = logging.getLogger(__name__)
 

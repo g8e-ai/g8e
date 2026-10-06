@@ -18,6 +18,7 @@ from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown
 from app.models.http_context import G8eHttpContext
 from app.services.ai.auditor_service import run_auditor
 from app.services.ai.generator import TribunalEmitter
+from app.utils.agent_persona_loader import get_agent_persona
 
 
 def _make_mock_g8e_context() -> G8eHttpContext:

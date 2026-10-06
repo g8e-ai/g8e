@@ -31,4 +31,3 @@ def normalize_ollama_host(endpoint: str) -> str:
     if cleaned and not cleaned.startswith(("http://", "https://")):
         cleaned = OLLAMA_DEFAULT_PROTOCOL + cleaned
     return cleaned
-

@@ -13,15 +13,14 @@ All provider implementations must implement this interface.
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, AsyncIterable, Iterable
 from contextvars import ContextVar
-import time
 from typing import TYPE_CHECKING, TypeVar
 
 from google.protobuf import json_format
 from google.protobuf.message import Message
-from app.models.base import BaseModel
 
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -32,6 +31,7 @@ from app.llm.llm_types import (
     StreamChunkFromModel,
 )
 from app.llm.model_evidence import model_boundary_privacy_attestation
+from app.models.base import BaseModel
 from app.models.model_telemetry import ModelBoundaryPrivacyAttestation, ModelResponseArtifact
 
 TResponse = TypeVar("TResponse")
@@ -48,8 +48,8 @@ class LLMProvider(ABC):
         self._input_artifact_hash: ContextVar[str] = ContextVar(
             f"{type(self).__name__}_input_artifact_hash_{id(self)}", default=""
         )
-        self._model_boundary_privacy: ContextVar[ModelBoundaryPrivacyAttestation | None] = ContextVar(
-            f"{type(self).__name__}_model_boundary_privacy_{id(self)}", default=None
+        self._model_boundary_privacy: ContextVar[ModelBoundaryPrivacyAttestation | None] = (
+            ContextVar(f"{type(self).__name__}_model_boundary_privacy_{id(self)}", default=None)
         )
         self._declared_tool_names: ContextVar[tuple[str, ...] | None] = ContextVar(
             f"{type(self).__name__}_declared_tool_names_{id(self)}", default=None
@@ -83,9 +83,7 @@ class LLMProvider(ABC):
             artifact = ModelResponseArtifact()
             self._response_artifact.set(artifact)
             self._response_received_at.set(())
-        self._response_received_at.set(
-            (*self._response_received_at.get(), time.monotonic())
-        )
+        self._response_received_at.set((*self._response_received_at.get(), time.monotonic()))
         if isinstance(response, BaseModel):
             artifact.raw_frames.append(response.model_dump_json())
         elif isinstance(response, Message):

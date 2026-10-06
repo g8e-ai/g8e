@@ -62,7 +62,7 @@ import socket
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -178,13 +178,9 @@ class AppEnrollmentService:
         cert_path, key_path = get_app_cert_paths(self._app_name)
 
         if not Path(cert_path).exists():
-            raise ConfigurationError(
-                f"AppEnrollmentService: app cert not found at {cert_path}"
-            )
+            raise ConfigurationError(f"AppEnrollmentService: app cert not found at {cert_path}")
         if not Path(key_path).exists():
-            raise ConfigurationError(
-                f"AppEnrollmentService: app key not found at {key_path}"
-            )
+            raise ConfigurationError(f"AppEnrollmentService: app key not found at {key_path}")
 
         cert = self._load_cert(cert_path)
         expiry = cert.not_valid_after_utc
@@ -425,9 +421,7 @@ class AppEnrollmentService:
             raise ConfigurationError(
                 f"AppEnrollmentService: enrollment request rejected by gateway: {err_msg}"
             )
-        raise ConfigurationError(
-            "AppEnrollmentService: exhausted request submission retries"
-        )
+        raise ConfigurationError("AppEnrollmentService: exhausted request submission retries")
 
     async def _poll_until_approved(
         self,
@@ -479,9 +473,7 @@ class AppEnrollmentService:
 
             if not resp.is_success:
                 err_msg = data.get("error", f"HTTP {resp.status_code}")
-                raise ConfigurationError(
-                    f"AppEnrollmentService: status query failed: {err_msg}"
-                )
+                raise ConfigurationError(f"AppEnrollmentService: status query failed: {err_msg}")
 
             state = data.get("state")
             if state == "approved":
@@ -491,9 +483,7 @@ class AppEnrollmentService:
                     "AppEnrollmentService: enrollment request was denied by the owner"
                 )
             if state == "expired":
-                raise ConfigurationError(
-                    "AppEnrollmentService: enrollment request has expired"
-                )
+                raise ConfigurationError("AppEnrollmentService: enrollment request has expired")
             if state == "completed":
                 # Already completed (e.g. by a prior completion attempt).
                 # The caller should proceed to completion, which will return
@@ -662,7 +652,12 @@ class AppEnrollmentService:
         key_pem: str
         private_key: ec.EllipticCurvePrivateKey
 
-        if pending and pending.get("token") and pending.get("request_id") and pending.get("fingerprint"):
+        if (
+            pending
+            and pending.get("token")
+            and pending.get("request_id")
+            and pending.get("fingerprint")
+        ):
             # Resume the existing pending attempt. Do not generate new keys.
             token = pending["token"]
             request_id = pending["request_id"]
@@ -671,9 +666,7 @@ class AppEnrollmentService:
             if pending.get("instance_id"):
                 self._instance_id = pending["instance_id"]
             # Re-load the private key for proof signing.
-            private_key = serialization.load_pem_private_key(
-                key_pem.encode("utf-8"), password=None
-            )
+            private_key = serialization.load_pem_private_key(key_pem.encode("utf-8"), password=None)
             logger.info(
                 "AppEnrollmentService: resuming pending enrollment (request_id=%s)",
                 request_id,
@@ -685,9 +678,7 @@ class AppEnrollmentService:
 
             async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
                 try:
-                    create_resp = await self._submit_enrollment_request(
-                        client, base_url, csr_pem
-                    )
+                    create_resp = await self._submit_enrollment_request(client, base_url, csr_pem)
                 except ConfigurationError:
                     raise
                 except Exception as exc:
@@ -753,9 +744,7 @@ class AppEnrollmentService:
             proof = self._sign_transcript(private_key, transcript)
 
             try:
-                completion_resp = await self._submit_completion(
-                    client, base_url, token, proof
-                )
+                completion_resp = await self._submit_completion(client, base_url, token, proof)
             except ConfigurationError:
                 raise
             except Exception as exc:
@@ -771,9 +760,7 @@ class AppEnrollmentService:
                 "AppEnrollmentService: completion response missing app credentials"
             )
         if not app_creds.get("app_cert"):
-            raise ConfigurationError(
-                "AppEnrollmentService: completion response missing app_cert"
-            )
+            raise ConfigurationError("AppEnrollmentService: completion response missing app_cert")
         # Validate the certificate has the expected SPIFFE URI SAN.
         cert = x509.load_pem_x509_certificate(app_creds["app_cert"].encode("utf-8"))
         app_id = self._extract_app_id(cert)

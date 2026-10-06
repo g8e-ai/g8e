@@ -6,12 +6,14 @@
 # released under the Apache License, Version 2.0.
 
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
+
 from app.constants import EventType
 from app.models.agents.tribunal import (
-    TribunalSessionGenerationFailedPayload,
-    TribunalPassCompletedPayload,
     ConsensusMember,
+    TribunalPassCompletedPayload,
+    TribunalSessionGenerationFailedPayload,
 )
 from app.services.ai.tribunal.emitter import TribunalEmitter
 

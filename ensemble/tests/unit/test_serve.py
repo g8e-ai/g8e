@@ -24,12 +24,18 @@ def test_no_arguments_leave_bootstrap_defaults():
 def test_arguments_map_to_bootstrap_settings():
     parsed = serve.parse_args(
         [
-            "--gateway-http-url", "http://g8e.local:8080",
-            "--gateway-url", "https://g8e.local:8443",
-            "--gateway-https-url", "https://g8e.local:8443",
-            "--gateway-pubsub-url", "wss://g8e.local:8443",
-            "--runtime-dir", "/root/.g8e",
-            "--port", "9000",
+            "--gateway-http-url",
+            "http://g8e.local:8080",
+            "--gateway-url",
+            "https://g8e.local:8443",
+            "--gateway-https-url",
+            "https://g8e.local:8443",
+            "--gateway-pubsub-url",
+            "wss://g8e.local:8443",
+            "--runtime-dir",
+            "/root/.g8e",
+            "--port",
+            "9000",
         ]
     )
 

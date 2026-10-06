@@ -12,24 +12,43 @@ import os
 from pathlib import Path
 from typing import Any
 
+from g8e.models.settings import (
+    BatchExecutionSettings as _ProtocolBatchExecutionSettings,
+)
+from g8e.models.settings import (
+    CommandValidationSettings as _ProtocolCommandValidationSettings,
+)
+from g8e.models.settings import (
+    EvalJudgeSettings as _ProtocolEvalJudgeSettings,
+)
+from g8e.models.settings import (
+    G8eeUserSettings as _ProtocolG8eeUserSettings,
+)
+from g8e.models.settings import (
+    LLMSettings as _ProtocolLLMSettings,
+)
+from g8e.models.settings import (
+    SearchSettings as _ProtocolSearchSettings,
+)
+
 from app.constants import (
+    ANTHROPIC_DEFAULT_ENDPOINT,
     CACHE_TTL_DEFAULT,
     DB_COLLECTION_API_KEYS,
     DB_COLLECTION_CASES,
-    DB_COLLECTION_SETTINGS,
     DB_COLLECTION_INVESTIGATIONS,
     DB_COLLECTION_MEMORIES,
-    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_OPERATOR_SESSIONS,
+    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_ORGANIZATIONS,
+    DB_COLLECTION_SETTINGS,
     DB_COLLECTION_TASKS,
-    DB_COLLECTION_WEB_SESSIONS,
     DB_COLLECTION_USERS,
-    OPENAI_DEFAULT_ENDPOINT,
-    OLLAMA_DEFAULT_ENDPOINT,
-    ANTHROPIC_DEFAULT_ENDPOINT,
-    LLAMACPP_DEFAULT_ENDPOINT,
+    DB_COLLECTION_WEB_SESSIONS,
     JEV_DEFAULT_MODEL,
+    LLAMACPP_DEFAULT_ENDPOINT,
+    OLLAMA_DEFAULT_ENDPOINT,
+    OPENAI_DEFAULT_ENDPOINT,
     LLMProvider,
     LogLevel,
 )
@@ -37,16 +56,14 @@ from app.constants.bootstrap import get_bootstrap
 from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PortConstants
 from app.constants.paths import PATHS
-from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel, PrivateAttr, field_validator
-from g8e.models.settings import (
-    BatchExecutionSettings as _ProtocolBatchExecutionSettings,
-    CommandValidationSettings as _ProtocolCommandValidationSettings,
-    EvalJudgeSettings as _ProtocolEvalJudgeSettings,
-    LLMSettings as _ProtocolLLMSettings,
-    SearchSettings as _ProtocolSearchSettings,
-    G8eeUserSettings as _ProtocolG8eeUserSettings,
+from app.models.base import (
+    ConfigDict,
+    Field,
+    G8eBaseModel,
+    G8eIdentifiableModel,
+    PrivateAttr,
+    field_validator,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +101,6 @@ class AuthSettings(G8eBaseModel):
     internal_api_key: str | None = Field(None, repr=False)
 
 
-
 def _env_or(name: str, default: str) -> str:
     """Return the env var when set and non-empty, otherwise the default."""
     return os.environ.get(name) or default
@@ -104,10 +120,15 @@ class ComponentURLsSettings(G8eBaseModel):
     """
 
     g8ee_url: str = Field(
-        default_factory=lambda: f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
+        default_factory=lambda: (
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
+        )
     )
     client_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_url or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_url
+            or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
+        )
     )
 
 
@@ -235,13 +256,22 @@ class GatewaySettings(G8eBaseModel):
     """operator (Operator Gateway mode) configuration."""
 
     http_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_https_url
+            or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        )
     )
     pubsub_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_pubsub_url or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_pubsub_url
+            or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        )
     )
     blob_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_https_url
+            or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        )
     )
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
     enable_cache_read: bool = Field(False)
@@ -275,7 +305,9 @@ class LLMSettings(_ProtocolLLMSettings):
 
     model_config = ConfigDict(coerce_numbers_from_str=True)
 
-    primary_provider: LLMProvider | None = Field(default=LLMProvider.G8E, alias="llm_primary_provider")
+    primary_provider: LLMProvider | None = Field(
+        default=LLMProvider.G8E, alias="llm_primary_provider"
+    )
     assistant_provider: LLMProvider | None = Field(default=None, alias="llm_assistant_provider")
     lite_provider: LLMProvider | None = Field(default=None, alias="llm_lite_provider")
 
@@ -517,11 +549,12 @@ class G8eeAppSettings(G8eBaseModel):
     docs_dir: str = Field(PATHS["infra"]["docs_dir"])
 
     app_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_https_url
+            or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
+        )
     )
-    allowed_origins: str = Field(
-        default_factory=lambda: _env_or(EnvVar.ALLOWED_ORIGINS, "")
-    )
+    allowed_origins: str = Field(default_factory=lambda: _env_or(EnvVar.ALLOWED_ORIGINS, ""))
     passkey_rp_name: str = Field(
         default_factory=lambda: _env_or(EnvVar.PASSKEY_RP_NAME, PATHS.get("host", "localhost"))
     )
@@ -529,7 +562,10 @@ class G8eeAppSettings(G8eBaseModel):
         default_factory=lambda: _env_or(EnvVar.PASSKEY_RP_ID, PATHS.get("host", "localhost"))
     )
     passkey_origin: str = Field(
-        default_factory=lambda: _env_or(EnvVar.PASSKEY_ORIGIN, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}")
+        default_factory=lambda: _env_or(
+            EnvVar.PASSKEY_ORIGIN,
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
+        )
     )
 
     llm: LLMSettings = Field(default_factory=LLMSettings)

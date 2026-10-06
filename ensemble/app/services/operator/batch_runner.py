@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from app.models.settings import BatchExecutionSettings
 from app.models.tool_results import BatchExecutionMeta, PerOperatorResultBase

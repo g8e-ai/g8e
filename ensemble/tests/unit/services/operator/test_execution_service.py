@@ -6,20 +6,19 @@
 # released under the Apache License, Version 2.0.
 
 import base64
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.operator.v1 import operator_pb2
 
-from app.constants.generated_status import EventType
-from app.constants.generated_status import AITaskId, CommandErrorType
-from app.constants import ExecutionStatus, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, ExecutionStatus
+from app.constants.generated_status import AITaskId, CommandErrorType, EventType
 from app.errors import BusinessLogicError, NetworkError, ValidationError
-from app.models.http_context import RequestContext
 from app.models.command_request_payloads import CommandRequestPayload
-from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity
+from app.models.http_context import RequestContext
+from app.models.operators import HeartbeatSnapshot, HeartbeatSystemIdentity, OperatorDocument
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
-from g8e.operator.v1 import operator_pb2
 from tests.fakes.factories import build_g8e_http_context
 
 pytestmark = [pytest.mark.unit]
@@ -283,7 +282,9 @@ class TestOperatorExecutionServiceDispatch:
 
     @pytest.mark.asyncio
     async def test_dispatch_gateway_failure(self, execution_service, mock_gateway_client):
-        mock_gateway_client.dispatch = AsyncMock(side_effect=NetworkError("denied", component="g8ee"))
+        mock_gateway_client.dispatch = AsyncMock(
+            side_effect=NetworkError("denied", component="g8ee")
+        )
         msg = G8eMessage(
             id="exec-1",
             source_component=G8EE_COMPONENT,
@@ -314,7 +315,9 @@ class TestOperatorExecutionServiceDispatch:
                 "success": True,
                 "transaction_id": "tx-1",
                 "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
-                "result_payload": base64.b64encode(command_result.SerializeToString()).decode("ascii"),
+                "result_payload": base64.b64encode(command_result.SerializeToString()).decode(
+                    "ascii"
+                ),
             }
         )
         msg = G8eMessage(

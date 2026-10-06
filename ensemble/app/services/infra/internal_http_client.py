@@ -9,23 +9,23 @@ import codecs
 import logging
 from collections.abc import AsyncIterator
 
+from g8e.operator.v1.operator_pb2 import InferenceDispatchStreamFrame
 from google.protobuf import json_format
 
 from app.clients.http_client import (
-    CircuitBreakerConfig,
     GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
-    RetryConfig,
+    CircuitBreakerConfig,
     HTTPClient,
+    RetryConfig,
 )
-from app.models.settings import G8eeAppSettings, TLSConfig
 from app.constants import (
     DEFAULT_HTTP_CLIENT_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     G8EE_COMPONENT,
-    GatewayAPIPaths,
     INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
-    InternalAPIPaths,
     UNKNOWN_ERROR_MESSAGE,
+    GatewayAPIPaths,
+    InternalAPIPaths,
 )
 from app.errors import NetworkError
 from app.models.auth import (
@@ -37,19 +37,19 @@ from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (
     GrantIntentResponse,
-    IntentOperationResult,
-    IntentRequestPayload,
-    RevokeIntentResponse,
-    SSEPushResponse,
-    OperatorLinkResponse,
-    OperatorLinkRequestPayload,
-    ObserveProducerAgentStateRequest,
-    ObserveProducerRunStateRequest,
-    ObserveProducerResponse,
     InferenceDispatchRequest,
     InferenceDispatchResponse,
+    IntentOperationResult,
+    IntentRequestPayload,
+    ObserveProducerAgentStateRequest,
+    ObserveProducerResponse,
+    ObserveProducerRunStateRequest,
+    OperatorLinkRequestPayload,
+    OperatorLinkResponse,
+    RevokeIntentResponse,
+    SSEPushResponse,
 )
-from g8e.operator.v1.operator_pb2 import InferenceDispatchStreamFrame
+from app.models.settings import G8eeAppSettings, TLSConfig
 
 logger = logging.getLogger(__name__)
 

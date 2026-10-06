@@ -8,7 +8,7 @@
 
 from app.constants import AttachmentType
 
-from .base import G8eBaseModel, Field
+from .base import Field, G8eBaseModel
 
 
 class AttachmentMetadata(G8eBaseModel):

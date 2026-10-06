@@ -38,7 +38,9 @@ def gateway_client(internal_http_client: MagicMock) -> GatewayOperatorClient:
 
 
 async def test_list_reads_gateway_operator_documents(gateway_client, internal_http_client):
-    internal_http_client.client.get = AsyncMock(return_value=_response({"operators": [{"id": "op-1"}]}))
+    internal_http_client.client.get = AsyncMock(
+        return_value=_response({"operators": [{"id": "op-1"}]})
+    )
 
     result = await gateway_client.list(user_id="user-1")
 
@@ -86,7 +88,9 @@ async def test_gateway_failure_is_not_reinterpreted_as_local_operator_state(
 
 
 async def test_bind_sends_canonical_gateway_body(gateway_client, internal_http_client):
-    internal_http_client.client.post = AsyncMock(return_value=_response({"success": True, "bound_count": 1}))
+    internal_http_client.client.post = AsyncMock(
+        return_value=_response({"success": True, "bound_count": 1})
+    )
     context = G8eHttpContext(user_id="user-1", web_session_id="web-1")
 
     result = await gateway_client.bind(context=context, operator_ids=["op-1"])
@@ -101,7 +105,9 @@ async def test_bind_sends_canonical_gateway_body(gateway_client, internal_http_c
 
 
 async def test_validate_session_calls_gateway(gateway_client, internal_http_client):
-    internal_http_client.client.post = AsyncMock(return_value=_response({"valid": True, "operator_id": "op-1"}))
+    internal_http_client.client.post = AsyncMock(
+        return_value=_response({"valid": True, "operator_id": "op-1"})
+    )
     context = G8eHttpContext(user_id="user-1")
 
     result = await gateway_client.validate_session(
