@@ -467,8 +467,9 @@ DEFAULT_OPERATOR_CONFIG = {
 # Ollama-only: default context window passed as options.num_ctx.
 # Ollama's server default is 4096, which silently truncates real-world prompts
 # (system + chat history) and leaves thinking models with no budget for visible
-# output. 32768 matches common modern model context sizes.
-LLM_OLLAMA_DEFAULT_NUM_CTX = 32768
+# output. 65536 leaves room for the system prompt, tool schemas and a long
+# history; 32768 proved tight in practice.
+LLM_OLLAMA_DEFAULT_NUM_CTX = 65536
 
 # Share of the Ollama context window that cross-turn chat history may occupy.
 # The remainder is headroom for what history does not include: the system

@@ -70,7 +70,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-TEST-FIX-01 | `NewGatewayFixture` registers its own teardown via `t.Cleanup`. Callers MUST NOT close databases, stop the Gateway, or close downstream servers a second time. |
 | INV-TEST-FIX-02 | Temporary credentials and fixture resources MUST register cleanup with `t.Cleanup`. Setup helpers MUST NOT use helper-local `defer` statements that run before the test body. |
 | INV-TEST-FIX-03 | Tests MUST provide explicit cancellation contexts and join background goroutines before test completion. |
-| INV-TEST-FIX-04 | `./g8e test e2e-full` manages the Docker Compose stack lifecycle (`docker compose up -d` / `docker compose down -v`), waits up to 60 seconds for Gateway and Ensemble health, and executes Tier 3 tests against real local containers. |
+| INV-TEST-FIX-04 | `./g8e test e2e-docker` manages the Docker Compose stack lifecycle (`docker compose up -d` / `docker compose down -v`), waits up to 60 seconds for Gateway and Ensemble health, and executes Tier 3 tests against real local containers. |
 
 ## Owned surfaces
 
@@ -105,8 +105,8 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 # Tier 3: Live platform E2E (against a running stack)
 ./g8e test e2e
 
-# Tier 3: Full lifecycle E2E (Compose up, wait for health, test, compose down -v)
-./g8e test e2e-full
+# Tier 3: Docker-backed E2E (requires Docker; Compose up, wait for health, test, compose down -v)
+./g8e test e2e-docker
 
 # Static analysis and linting
 ./g8e test lint

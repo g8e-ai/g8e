@@ -348,8 +348,8 @@ class TestGradeTurnErrorPaths:
             "prompt filled the context window",
             model="gemini-3.1-pro-preview",
             service_name="ollama",
-            num_ctx=32768,
-            prompt_tokens=32768,
+            num_ctx=65536,
+            prompt_tokens=65536,
             channel="lite",
         )
         with pytest.raises(EvalJudgeError, match="context window") as exc_info:

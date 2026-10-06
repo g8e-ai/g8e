@@ -103,7 +103,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-TESTMAP-01 | This file maps test commands to tiers and directories. Selection, fixtures, `testutil` path rules, race, coverage, timeouts, and CI MUST be taken from [Testing](tests.md). Platform suites still enter through `./g8e test ...` or the owning Makefile target (INV-TEST-01). |
-| INV-TESTMAP-02 | `./g8e test e2e-full` MUST be described from `internal/cli/cmd/test/test.go`: it passes Compose profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds `cross-enrollment` (`constants.DockerCrossEnrollProfile`) when `--cross-enrollment` is set, then runs the same `go test` arguments as `./g8e test e2e`. `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Named `profiles:` keys are `cross-enrollment` and `g8ellama`. Unprofiled services start on `docker compose up -d`. Procedure detail is INV-TEST-12 and INV-TEST-13. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist in `internal/constants/paths.go`. |
+| INV-TESTMAP-02 | `./g8e test e2e-docker` MUST be described from `internal/cli/cmd/test/test.go`: it passes Compose profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds `cross-enrollment` (`constants.DockerCrossEnrollProfile`) when `--cross-enrollment` is set, then runs the same `go test` arguments as `./g8e test e2e`. `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Named `profiles:` keys are `cross-enrollment` and `g8ellama`. Unprofiled services start on `docker compose up -d`. Procedure detail is INV-TEST-12 and INV-TEST-13. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist in `internal/constants/paths.go`. |
 
 ## Owned surfaces
 
@@ -163,7 +163,7 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | `mcp` | `mcp` | `internal/cli/cmd/mcp/` | | MCP stdio serving and agent integration. |
 | `operator` | `operatorcmd` | `internal/cli/cmd/operator/` | `operators` | Operator discovery, startup, deploy, copy, and streams. |
 | `vault` | `vaultcmd` | `internal/cli/cmd/vault/` | | Local vault init, unlock, rekey, status, reset, export, and import. |
-| `test` | `testcmd` | `internal/cli/cmd/test/` | | Unit, integration, e2e, e2e-full, coverage, lint, chaos, summary, and `public-loop`. |
+| `test` | `testcmd` | `internal/cli/cmd/test/` | | Unit, integration, e2e, e2e-docker, coverage, lint, chaos, summary, and `public-loop`. |
 | `docker` | `docker` | `internal/cli/cmd/docker/` | | Unified Compose stack lifecycle. |
 | `ensemble` | `ensemblecmd` | `internal/cli/cmd/ensemble/` | | g8ee service lifecycle in the unified Compose stack. |
 | `audit` | `audit` | `internal/cli/cmd/audit/` | | Receipt, event, summary, export, and report queries against a running Gateway. |
@@ -386,14 +386,14 @@ Evidence scope and signed artifacts are owned by the [Release Process](release_p
 
 ### Test map
 
-Depth is [Testing](tests.md). `e2e-full` and Compose profiles: INV-TESTMAP-02, INV-TEST-12, INV-TEST-13.
+Depth is [Testing](tests.md). `e2e-docker` and Compose profiles: INV-TESTMAP-02, INV-TEST-12, INV-TEST-13.
 
 | Command | Tier | Where the work lives |
 | --- | --- | --- |
 | `./g8e test unit` | 1 | Delegates to `make test-unit` by default; supports `--pkg` and `--run` for targeted testing. Go tests sit beside packages. `make test-unit` depends on `constants-check`. |
 | `./g8e test integration` | 2 | `integration` build tag. Cross-package suites in `test/`. Reusable setup in `test/fixtures/`. |
 | `./g8e test e2e` | 3 | `e2e` build tag. Tests in `test/e2e/`. Expects an already running platform. |
-| `./g8e test e2e-full` | 3 | Same `go test` arguments as `e2e`, wrapped in `docker compose up -d` and `docker compose down -v`. Profile names: INV-TESTMAP-02. |
+| `./g8e test e2e-docker` | 3 | Same `go test` arguments as `e2e`, wrapped in `docker compose up -d` and `docker compose down -v`. Profile names: INV-TESTMAP-02. |
 | `./g8e test coverage` | | Coverage entry in `internal/cli/cmd/test/test.go`. Report layout: [Testing](tests.md). |
 | `./g8e test lint` | | CLI lint entry. Repository lint target is `make lint`. |
 | `./g8e test chaos` | | Chaos command in `internal/cli/cmd/test/chaos.go`. Engine: `internal/tools/chaos/`. |
@@ -470,12 +470,12 @@ make swagger-generate
 
 4. Do not hand-edit generated protobuf, constgen, or OpenAPI output (INV-GEN-01).
 
-### Confirm Compose profiles before describing `e2e-full`
+### Confirm Compose profiles before describing `e2e-docker`
 
 1. Read the live command text:
 
 ```bash
-./g8e test e2e-full --help
+./g8e test e2e-docker --help
 ```
 
 2. Read the profile slice in `internal/cli/cmd/test/test.go` and every `profiles:` key in `docker-compose.yml`.
@@ -494,7 +494,7 @@ make swagger-generate
 
 ## Links out
 
-- [Developer Guidelines](devs.md): coding invariants. CLI group placement is INV-CLI-01. Gateway construction is [Gateway governance construction](devs.md#gateway-governance-construction). `e2e-full` procedure is INV-TEST-12 and INV-TEST-13.
+- [Developer Guidelines](devs.md): coding invariants. CLI group placement is INV-CLI-01. Gateway construction is [Gateway governance construction](devs.md#gateway-governance-construction). `e2e-docker` procedure is INV-TEST-12 and INV-TEST-13.
 - [Testing](tests.md): tiers, fixtures, selection, race, coverage, and CI.
 - [Documentation Guide](docs.md): audit, catalog, style, generation, and this format.
 - [Release Process](release_process.md): versioning, native evaluation acceptance, and signed evidence.

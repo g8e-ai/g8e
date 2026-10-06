@@ -127,8 +127,8 @@ class TestRunGenerationPass:
                 "prompt filled the context window",
                 model="test-model",
                 service_name="ollama",
-                num_ctx=32768,
-                prompt_tokens=32768,
+                num_ctx=65536,
+                prompt_tokens=65536,
                 channel="lite",
             )
         )
@@ -155,7 +155,7 @@ class TestRunGenerationPass:
         assert "empty" not in pass_errors[0].lower()
         # Token counts in the exception must not leak into text that
         # is_system_error() scans for HTTP status codes.
-        assert "32768" not in pass_errors[0]
+        assert "65536" not in pass_errors[0]
         assert mock_provider.generate_content_lite.await_count == 1
         event = event_service.publish.await_args.args[0]
         assert event.payload.succeeded is False

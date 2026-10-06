@@ -201,8 +201,8 @@ async def test_generate_title_uses_fallback_on_context_overflow_without_retry(
         "prompt filled the context window",
         model="lite-model",
         service_name="ollama",
-        num_ctx=32768,
-        prompt_tokens=32768,
+        num_ctx=65536,
+        prompt_tokens=65536,
         channel="lite",
     )
 

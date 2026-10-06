@@ -822,7 +822,7 @@ test-docker:
 # Tier 3: Cross-Enrollment E2E Tests - a gateway enrolling as an operator of
 # another gateway. Requires the cross-enrollment profile, which starts a
 # secondary gateway container in operator mode against the primary gateway.
-# The full lifecycle variant (./g8e test e2e-full --cross-enrollment) manages
+# The full lifecycle variant (./g8e test e2e-docker --cross-enrollment) manages
 # the compose stack automatically; the manual variant below assumes the user
 # has already started the stack with the cross-enrollment profile and
 # bootstrapped the owner. See the comment block above test-docker for the

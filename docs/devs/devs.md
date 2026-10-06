@@ -170,7 +170,7 @@ Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing 
 | INV-TEST-09 | Assertions MUST use typed constants for statuses, reasons, paths, and permissions. |
 | INV-TEST-10 | The canonical trust bundle path is `.g8e/pki/trust/g8eg-ca-bundle.pem`. A test MUST NOT repair a failure by mutating developer PKI state. |
 | INV-TEST-11 | MUST NOT use `os.Chdir` to line up runtime state. A working-directory change is allowed only for behavior that discovers source-tree or configuration files, and that file MUST explain the change and clean it up. |
-| INV-TEST-12 | `./g8e test e2e-full` MUST be described from `internal/cli/cmd/test/test.go`: it runs `docker compose up -d` with profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds profile `cross-enrollment` when `--cross-enrollment` is set, waits up to 60 seconds for HTTP 200 from Gateway `http://localhost:8080/api/v1/health` and Ensemble `http://localhost:8000/health`, runs the same `go test` arguments as `./g8e test e2e`, and tears the stack down with `docker compose down -v`. |
+| INV-TEST-12 | `./g8e test e2e-docker` MUST be described from `internal/cli/cmd/test/test.go`: it runs `docker compose up -d` with profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds profile `cross-enrollment` when `--cross-enrollment` is set, waits up to 60 seconds for HTTP 200 from Gateway `http://localhost:8080/api/v1/health` and Ensemble `http://localhost:8000/health`, runs the same `go test` arguments as `./g8e test e2e`, and tears the stack down with `docker compose down -v`. |
 | INV-TEST-13 | `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Unprofiled services (gateway, data operator, inference operator, ensemble) start on `docker compose up -d`. Named profiles are `cross-enrollment` and `g8ellama`. MUST NOT describe `bootstrapped` as a Compose profile that selects those workloads. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist; the Compose file does not assign them. |
 
 ### Generated artifacts (`INV-GEN`)
@@ -236,7 +236,7 @@ The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full m
 | Doctrine flag and env | `internal/cli/cmd/gw/gateway.go`, `internal/constants/env_vars.go` | `--doctrine-dir` wins over `G8E_DOCTRINE_DIR` |
 | Native tool contract and registry | `internal/services/mcp/registry.go`, `internal/services/mcp/native_tool_registry.go`, `protocol/docs/mcp_tool_template.go` | `NativeTool`, `RegisterNativeTools` |
 | Compose profiles | `docker-compose.yml` | Header comment plus `profiles:` keys: `cross-enrollment`, `g8ellama` |
-| `e2e-full` | `internal/cli/cmd/test/test.go` | `./g8e test e2e-full --help` |
+| `e2e-docker` | `internal/cli/cmd/test/test.go` | `./g8e test e2e-docker --help` |
 
 ## Procedures
 
@@ -262,7 +262,7 @@ make lint
 ./g8e test unit
 ./g8e test integration
 ./g8e test e2e
-./g8e test e2e-full
+./g8e test e2e-docker
 ./g8e test coverage
 ./g8e test lint
 ./g8e test chaos
@@ -271,7 +271,7 @@ make lint
 
 2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
 3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make ensemble-test-external`, `make console-test`.
-4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-full` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
+4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-docker` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
 
 On native Windows, `make dev-setup` and `make ci` use Git for Windows Bash and
 GNU Make. Keep `/usr/bin` ahead of the Windows system PATH inside Bash so npm

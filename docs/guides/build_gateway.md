@@ -358,7 +358,7 @@ The CLI provides tiered test subcommands:
 ./g8e test unit         # Tier 1: unit tests (no external dependencies)
 ./g8e test integration  # Tier 2: in-process integration tests
 ./g8e test e2e          # Tier 3: tests against an already running, enrolled platform
-./g8e test e2e-full     # Tier 3: Compose lifecycle wrapper with volume teardown
+./g8e test e2e-docker     # Tier 3: Compose lifecycle wrapper with volume teardown
 ./g8e test coverage     # Integration-tagged tests with 75% coverage enforcement
 ./g8e test lint         # golangci-lint static analysis
 ./g8e test chaos        # Generate governance events for chaos testing

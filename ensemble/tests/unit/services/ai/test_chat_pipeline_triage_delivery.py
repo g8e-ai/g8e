@@ -404,8 +404,8 @@ async def test_prepare_chat_context_production_request_carries_no_evaluation_con
 @pytest.mark.parametrize(
     ("provider", "expected_budget"),
     [
-        ("ollama", 16384),
-        ("g8e", 16384),
+        ("ollama", 32768),
+        ("g8e", 32768),
         ("gemini", None),
         ("anthropic", None),
         (None, None),
@@ -414,7 +414,7 @@ async def test_prepare_chat_context_production_request_carries_no_evaluation_con
 async def test_prepare_chat_context_budgets_history_only_for_ollama_backed_providers(
     provider, expected_budget
 ):
-    """Only Ollama-backed providers send num_ctx=32768; others keep untrimmed history."""
+    """Only Ollama-backed providers send num_ctx=65536; others keep untrimmed history."""
     from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _pipeline_for_prepare_chat_context()

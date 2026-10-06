@@ -68,8 +68,8 @@ async def test_memory_generation_skips_update_on_context_overflow_without_retry(
             "prompt filled the context window",
             model="smollm2:135m",
             service_name="ollama",
-            num_ctx=32768,
-            prompt_tokens=32768,
+            num_ctx=65536,
+            prompt_tokens=65536,
             channel="lite",
         )
     )

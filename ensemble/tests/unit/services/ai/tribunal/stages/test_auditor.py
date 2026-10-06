@@ -311,8 +311,8 @@ def _context_overflow_error() -> ContextWindowExceededError:
         "prompt filled the context window",
         model="test-model",
         service_name="ollama",
-        num_ctx=32768,
-        prompt_tokens=32768,
+        num_ctx=65536,
+        prompt_tokens=65536,
         channel="lite",
     )
 
