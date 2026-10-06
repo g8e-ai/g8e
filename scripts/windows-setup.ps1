@@ -17,7 +17,7 @@ $ErrorActionPreference = "Stop"
 
 $Script:RepoRoot = (Resolve-Path "$PSScriptRoot\..").Path
 $Script:ExplorerDir = Join-Path $Script:RepoRoot "evaluation-explorer"
-$Script:ExplorerDist = Join-Path $Script:ExplorerDir "dist\index.html"
+$Script:ExplorerDist = Join-Path $Script:ExplorerDir "dist\runtime.json"
 $Script:NodeMinMajor = 22
 $Script:AutoYes = $false
 $Script:BuildOnly = $false
@@ -196,7 +196,8 @@ function Test-Uv {
         Write-Host "  uv: missing (need $NeedVersion; creates the Python venv and locks ensemble deps)" -ForegroundColor Yellow
         return $false
     }
-    $ver = (& $uv.FullName --version 2>&1)
+    $uvPath = if ($uv -is [System.Management.Automation.CommandInfo]) { $uv.Source } else { $uv.FullName }
+    $ver = (& $uvPath --version 2>&1)
     Write-Host "  uv: detected ($ver)" -ForegroundColor Green
     return $true
 }
@@ -237,8 +238,9 @@ function Install-WindowsPackages {
 
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     $choco = Get-Command choco -ErrorAction SilentlyContinue
-    if (-not $winget -and -not $choco) {
-        Write-Host "FATAL: install winget or Chocolatey, then rerun this script." -ForegroundColor Red
+    $needsPackageManager = @($Missing | Where-Object { $_ -ne "uv" }).Count -gt 0
+    if ($needsPackageManager -and -not $winget -and -not $choco) {
+        Write-Host "FATAL: install winget (App Installer from the Microsoft Store) or Chocolatey, then rerun this script." -ForegroundColor Red
         exit 1
     }
 
@@ -294,6 +296,40 @@ function Install-WindowsPackages {
     }
 }
 
+function Ensure-WritableGoPath {
+    # A GOPATH pointing at a read-only location (e.g. C:\Program Files\Go\bin) makes
+    # `go install` and the module checksum DB fail with "Access is denied".
+    $gopath = (go env GOPATH 2>$null)
+    $writable = $false
+    if ($gopath) {
+        try {
+            New-Item -ItemType Directory -Path $gopath -Force -ErrorAction Stop | Out-Null
+            $probe = Join-Path $gopath ".g8e-write-test"
+            [System.IO.File]::WriteAllText($probe, "x")
+            Remove-Item $probe -Force -ErrorAction SilentlyContinue
+            $writable = $true
+        } catch {
+            $writable = $false
+        }
+    }
+    $goRoot = (go env GOROOT 2>$null)
+    $insideGoRoot = $goRoot -and $gopath -and $gopath.StartsWith($goRoot, [System.StringComparison]::OrdinalIgnoreCase)
+    $parent = if ($gopath) { Split-Path $gopath -Leaf } else { "" }
+    if ($writable -and -not $insideGoRoot -and $parent -ne "bin") {
+        return
+    }
+    $newGoPath = Join-Path $env:USERPROFILE "go"
+    Write-Host "  GOPATH '$gopath' is not usable (read-only or inside the Go install); using $newGoPath." -ForegroundColor Yellow
+    $env:GOPATH = $newGoPath
+    Remove-Item Env:\GOBIN -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $newGoPath -Force | Out-Null
+    $userGoPath = [Environment]::GetEnvironmentVariable("GOPATH", "User")
+    if ($userGoPath -and $userGoPath -ne $newGoPath) {
+        [Environment]::SetEnvironmentVariable("GOPATH", $newGoPath, "User")
+        Write-Host "  updated user GOPATH (was '$userGoPath') to $newGoPath." -ForegroundColor Yellow
+    }
+}
+
 function Build-EvaluationExplorer {
     if (Test-Path $Script:ExplorerDist) {
         Write-Host "  evaluation-explorer dist already present — skipping frontend build" -ForegroundColor Green
@@ -302,13 +338,30 @@ function Build-EvaluationExplorer {
 
     Write-Host "  building evaluation-explorer assets (required by make build)..." -ForegroundColor Cyan
     Push-Location $Script:ExplorerDir
-    if (Test-Path "package-lock.json") {
-        npm.cmd ci
-    } else {
-        npm.cmd install
+    try {
+        $installed = $false
+        if (Test-Path "package-lock.json") {
+            npm.cmd ci
+            $installed = ($LASTEXITCODE -eq 0)
+            if (-not $installed) {
+                Write-Host "  npm ci failed (lockfile out of sync, e.g. missing Windows optional deps); falling back to npm install without touching package-lock.json..." -ForegroundColor Yellow
+            }
+        }
+        if (-not $installed) {
+            npm.cmd install --no-package-lock
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "FATAL: npm install failed in evaluation-explorer." -ForegroundColor Red
+                exit 1
+            }
+        }
+        npm.cmd run build
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "FATAL: evaluation-explorer build failed." -ForegroundColor Red
+            exit 1
+        }
+    } finally {
+        Pop-Location
     }
-    npm.cmd run build
-    Pop-Location
 }
 
 function Configure-Path {
@@ -450,13 +503,23 @@ if ($missing.Count -gt 0) {
 }
 
 Ensure-NpmBashShims
+Ensure-WritableGoPath
+
+function Invoke-Step {
+    param([string]$Label, [scriptblock]$Command)
+    & $Command
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "FATAL: $Label failed (exit code $LASTEXITCODE). Fix the error above and rerun: pwsh scripts/windows-setup.ps1" -ForegroundColor Red
+        exit 1
+    }
+}
 
 Write-Host "`n[STEP 2/$totalSteps] Building evaluation-explorer assets..." -ForegroundColor Yellow
 Build-EvaluationExplorer
 
 Write-Host "`n[STEP 3/$totalSteps] Building g8e..." -ForegroundColor Yellow
 Set-Location $Script:RepoRoot
-make build
+Invoke-Step "make build" { make build }
 Write-Host "Build successful." -ForegroundColor Green
 
 if ($Script:BuildOnly) {
@@ -467,11 +530,12 @@ if ($Script:BuildOnly) {
 }
 
 Write-Host "`n[STEP 4/$totalSteps] Installing the contributor toolchain (Go dev tools, Python venv, Node deps)..." -ForegroundColor Yellow
-make dev-setup
+Invoke-Step "make dev-setup" { make dev-setup }
 
 Write-Host "`n[STEP 5/$totalSteps] Adding repository root and dev tool directories to PATH..." -ForegroundColor Yellow
 Configure-Path -IncludeDevTools $true
 
 Write-Host "`n[STEP 6/$totalSteps] Verifying the toolchain (make dev-check)..." -ForegroundColor Yellow
-make dev-check
+Invoke-Step "make dev-check" { make dev-check }
 Show-NextSteps -BuildOnly $false
+

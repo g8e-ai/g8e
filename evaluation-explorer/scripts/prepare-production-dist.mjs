@@ -1,5 +1,6 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { extname, relative } from 'node:path';
+import { extname, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const projectRoot = new URL('../', import.meta.url);
 const distRoot = new URL('dist/', projectRoot);
@@ -32,7 +33,7 @@ await writeFile(new URL('runtime.json', distRoot), productionRuntime, 'utf8');
 
 const files = await filesUnder(distRoot);
 for (const file of files) {
-  const path = relative(distRoot.pathname, file.pathname);
+  const path = relative(fileURLToPath(distRoot), fileURLToPath(file)).split(sep).join('/');
   const topLevel = !path.includes('/');
   if (topLevel && !allowedRootFiles.has(path)) throw new Error(`unexpected dist root file: ${path}`);
   if (!topLevel && (!path.startsWith('assets/') || !allowedAssetExtensions.has(extname(path)))) {
