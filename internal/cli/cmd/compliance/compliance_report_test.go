@@ -16,7 +16,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"io"
 	"os"
 	"path"
@@ -24,6 +23,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"

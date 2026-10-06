@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -30,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/netutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 )
@@ -119,12 +119,9 @@ func (pm *ProcessManager) WriteNetworkIdentityFile(identityData []byte) (string,
 }
 
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
-	addr := fmt.Sprintf(":%d", port) // wildcard, matching the gateway bind
-	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
-	if err != nil {
-		return fmt.Errorf("%w: port %d (%s): %v", constants.ErrPortUnavailable, port, name, err)
+	if err := netutil.CheckTCPPortAvailable(port); err != nil {
+		return fmt.Errorf("port %d (%s): %w", port, name, err)
 	}
-	listener.Close()
 	return nil
 }
 
@@ -149,13 +146,7 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 		if _, reserved := constants.GatewayReservedLoopbackPorts[port]; reserved {
 			continue
 		}
-		// Probe the wildcard address the gateway binds (config.ResolveGatewayPorts
-		// does the same). A loopback-only probe succeeds next to a wildcard
-		// listener, so the CLI and child would pick different ports and the
-		// health check would hit the foreign listener.
-		listener, err := net.Listen(string(constants.NetworkProtocolTCP), fmt.Sprintf(":%d", port))
-		if err == nil {
-			listener.Close()
+		if err := netutil.CheckTCPPortAvailable(port); err == nil {
 			return port, nil
 		}
 

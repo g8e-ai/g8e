@@ -18,6 +18,7 @@ import (
 
 	latticeconfig "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/netutil"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 )
 
@@ -389,22 +390,13 @@ func ResolveGatewayPorts(httpPort, httpsPort int) (int, int) {
 			continue
 		}
 
-		if isPortAvailable(h) && isPortAvailable(s) {
+		if netutil.CheckTCPPortAvailable(h) == nil && netutil.CheckTCPPortAvailable(s) == nil {
 			return h, s
 		}
 	}
 
 	// Fallback to original if we can't find a free block (let it fail during bind)
 	return httpPort, httpsPort
-}
-
-func isPortAvailable(port int) bool {
-	ln, err := net.Listen(string(constants.NetworkProtocolTCP), fmt.Sprintf(":%d", port))
-	if err != nil {
-		return false
-	}
-	_ = ln.Close()
-	return true
 }
 
 // validateAndResolveGatewayPorts validates and resolves gateway port configuration.

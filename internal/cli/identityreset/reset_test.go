@@ -8,10 +8,11 @@
 package identityreset
 
 import (
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 
 	"github.com/stretchr/testify/require"
 )

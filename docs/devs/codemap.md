@@ -117,6 +117,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `internal/adapters/` | Optional external adapters. The current adapter is Anduril Lattice. |
 | `internal/constants/` | Go constants for paths, errors, protocol identifiers, permissions, runtime behavior, and Docker profile name constants. |
 | `internal/config/`, `internal/models/`, `internal/paths/` | Typed configuration, internal service models, and runtime paths derived from the project root. |
+| `internal/netutil/` | Wildcard TCP port availability probes shared by configuration and process startup; Windows binds without listening to avoid firewall prompts. |
 | `internal/governance/` | Envelope hash helpers over the canonical protobuf `GovernanceEnvelope`. L1 through L5 services live under `internal/services/governance/`. |
 | `internal/ollama/` | Minimal HTTP client for Ollama model-maintenance endpoints. |
 | `internal/infra/cloudflaredns/` | Cloudflare DNS client. |

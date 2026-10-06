@@ -10,9 +10,10 @@ package fs
 import (
 	"context"
 	"errors"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"io"
 	"testing"
+
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/stretchr/testify/assert"

@@ -109,9 +109,10 @@ func TestCatalogAndManifestValidationRejectsUnsupportedInputs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "g8e-linux-amd64", target.Filename)
 	hostTarget, err := HostTarget()
-	if runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" || runtime.GOARCH == "386") {
+	if _, targetErr := PlatformTarget(runtime.GOOS, runtime.GOARCH); targetErr == nil {
 		require.NoError(t, err)
 		assert.Equal(t, runtime.GOOS, hostTarget.OS)
+		assert.Equal(t, runtime.GOARCH, hostTarget.Arch)
 	} else {
 		assert.ErrorIs(t, err, constants.ErrG8eBinaryArtifact)
 	}

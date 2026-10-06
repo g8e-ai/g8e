@@ -61,6 +61,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-TEST-ISO-02 | Tests MUST use `testutil.TempDir(t)` for isolated runtime roots and pass the resulting base directory to `fs.NewRuntimeFileService` and `paths.InitWithBase`. MUST NOT append `.g8e` manually. |
 | INV-TEST-ISO-03 | Tests MUST NOT use `os.Chdir` to align runtime state. `os.Chdir` is permitted only for behavior requiring directory discovery (e.g. demos, Swagger source discovery), and MUST restore the original working directory with `t.Cleanup`. |
 | INV-TEST-ISO-04 | Tests MUST use typed constants from `internal/constants/` for statuses, paths, reason strings, and permissions instead of ad hoc string literals. |
+| INV-TEST-ISO-05 | Tests that discover user configuration MUST isolate both `HOME` and `USERPROFILE` with `t.Setenv`; Go's `os.UserHomeDir` reads `USERPROFILE` on Windows. Browser approval tests MUST inject a browser opener so automated suites do not launch a real browser. |
 
 ### Fixture lifecycle (`INV-TEST-FIX`)
 
@@ -80,6 +81,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Integration Gateway fixture | `test/fixtures/gateway_fixture.go` | `NewGatewayFixture` |
 | File service test isolation | `internal/testutil/paths.go`, `internal/services/fs/file_service.go` | `testutil.TempDir` |
 | Socket test tags and serial boundary tests | `internal/testutil/test_tiers_test.go` | `TestTestTiers_ListenersRequireIntegrationAndBoundaryTestsStaySerial` |
+| Windows port probes avoid listening and detect address conflicts | `internal/netutil/port_probe_windows.go` | `TestTCPPortProbe_BindsWithoutAcceptingConnectionsAndReleasesPort`, `TestTCPPortProbe_RejectsIPv4AndIPv6LoopbackConflicts` (Windows Tier 2) |
 | Live E2E suite | `test/e2e/` | `./g8e test e2e` |
 | Completion transcript wire contract (Go side) | `internal/services/gateway/platform_enrollment_validation_test.go` | `TestPlatformEnrollmentCompletionTranscriptGoldenVector` |
 
@@ -120,6 +122,41 @@ Hermetic command tests may use small, isolated file fixtures. `testutil.TempDir`
 returns an absolute base directory backed by `testing.T.TempDir`, outside the
 source tree by default; the owning test removes it regardless of later working
 directory changes. Pass the base directory directly to the runtime file service.
+
+### Native Windows Tests
+
+Run the root Makefile targets from PowerShell with Git for Windows Bash and GNU
+Make available. `make dev-setup` installs the pinned contributor tools, and
+`make dev-check` verifies prerequisites before `make ci`. Full local CI covers
+the Console and adapter, Go platform, protocol, Ensemble, website, and scripts.
+`make _ci-test` runs uncached unit tests across all Go packages followed by the
+integration suite with coverage; the coverage threshold is 75%.
+
+The Makefile omits `-race` on Windows. Run integration tests on Linux or macOS
+for race-detector verification. Windows file mode assertions use
+`testutil.FileMode`: Go exposes the read-only attribute, not Unix ownership or
+Windows ACL protection. `testutil.Symlink` skips a fixture only when Windows
+denies symlink privilege; enable Developer Mode or the symlink privilege to
+exercise those cases.
+
+For tests that discover user configuration, set both home variables to the same
+test-owned directory before constructing the command or service. Isolate
+`APPDATA` and `LOCALAPPDATA` too when exercising Windows application-config
+discovery. Setting only `HOME` can write into the developer's real profile.
+Fixtures passed to a runtime file service must share its drive when the test
+uses `filepath.Rel`; a temporary directory on another drive has no relative path.
+
+Browser approval tests inject their browser opener. Windows background Operator
+and helper processes set `HideWindow` so they do not open console windows.
+Assertions on process attributes verify that setup; automated suite success
+alone does not prove that every desktop interaction is invisible.
+
+Port-availability checks share `netutil.CheckTCPPortAvailable`. On Windows,
+the probe binds an exclusive wildcard TCP socket and closes it without calling
+`listen`, avoiding Windows Defender Firewall prompts for temporary test
+binaries. A dual-stack probe checks both IPv4 and IPv6; IPv4-only hosts use an
+IPv4 probe. This does not reserve the port for a later Gateway start. A real
+Gateway listening on network interfaces can still require firewall approval.
 
 ### Diagnose Slow Tests
 

@@ -1,5 +1,5 @@
 {
-  "description": "Environment variable names read by the Go binary. Every key has a category (INV-ENV-04): secret, user_endpoint, host, or violation. A violation is platform configuration that still arrives through the environment; that set may only shrink (see internal/constants/env_vars_registry_test.go).",
+  "description": "Environment variable names read by the Go binary and host launcher. Every key has a category (INV-ENV-04): secret, user_endpoint, host, or violation. A violation is platform configuration that still arrives through the environment; that set may only shrink (see internal/constants/env_vars_registry_test.go).",
   "categories": {
     "secret": "API keys, tokens, client secrets, encryption keys",
     "user_endpoint": "User-specific endpoint or identity with no correct universal default",
@@ -121,6 +121,12 @@
       "category": "host",
       "description": "SSH agent socket provided by the host session"
     },
+    "VirtualEnv": {
+      "_go_const": "EnvVar.VirtualEnv",
+      "value": "VIRTUAL_ENV",
+      "category": "host",
+      "description": "Active Python virtual environment reported by the shell"
+    },
     "LatticeEndpoint": {
       "_go_const": "EnvVar.LatticeEndpoint",
       "value": "LATTICE_ENDPOINT",
@@ -210,6 +216,42 @@
       "value": "G8E_TEST_REEXEC",
       "category": "violation",
       "description": "Test-binary switch that makes a re-executed test process serve a health endpoint"
+    },
+    "Hostname": {
+      "_go_const": "EnvVar.Hostname",
+      "value": "G8E_HOSTNAME",
+      "category": "user_endpoint",
+      "description": "Browser and host launcher Gateway hostname"
+    },
+    "OllamaEndpoint": {
+      "_go_const": "EnvVar.OllamaEndpoint",
+      "value": "G8E_OLLAMA_ENDPOINT",
+      "category": "user_endpoint",
+      "description": "Approved Ollama provider endpoint"
+    },
+    "ProvenanceHost": {
+      "_go_const": "EnvVar.ProvenanceHost",
+      "value": "G8E_PROVENANCE_HOST",
+      "category": "user_endpoint",
+      "description": "Host where the provenance Operator runs; remote hosts receive launch instructions"
+    },
+    "ObserverHost": {
+      "_go_const": "EnvVar.ObserverHost",
+      "value": "G8E_OBSERVER_HOST",
+      "category": "user_endpoint",
+      "description": "Host where the observer Operator runs; remote hosts receive launch instructions"
+    },
+    "InferenceHost": {
+      "_go_const": "EnvVar.InferenceHost",
+      "value": "G8E_INFERENCE_HOST",
+      "category": "user_endpoint",
+      "description": "Host where the inference Operator runs; remote hosts receive launch instructions"
+    },
+    "DataHost": {
+      "_go_const": "EnvVar.DataHost",
+      "value": "G8E_DATA_HOST",
+      "category": "user_endpoint",
+      "description": "Host where the data Operator runs; remote hosts receive launch instructions"
     }
   }
 }

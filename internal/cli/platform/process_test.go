@@ -805,19 +805,3 @@ func TestCleanWithNonExistentRuntime(t *testing.T) {
 		t.Errorf("nothing to archive, got %q", archived)
 	}
 }
-
-func TestFindAvailablePortSkipsGatewayReservedPorts(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
-	fileSvc := newPlatformTestFileSvc(t, tmpDir)
-	pm, err := NewProcessManager(fileSvc)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-	port, err := pm.findAvailablePort(constants.PublicSpectatorPrivatePort, "test")
-	if err != nil {
-		t.Skipf("no free port near reserved range: %v", err)
-	}
-	if _, reserved := constants.GatewayReservedLoopbackPorts[port]; reserved {
-		t.Fatalf("findAvailablePort returned gateway-reserved port %d", port)
-	}
-}

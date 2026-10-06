@@ -17,11 +17,12 @@ package serve
 import (
 	"context"
 	"encoding/json"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

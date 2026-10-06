@@ -84,19 +84,21 @@ func assertNoLiveChildAndNoPIDFile(t *testing.T, pm *ProcessManager, fileSvc fs.
 	assert.False(t, exists, "no stale PID file should remain after failed start")
 }
 
-// TestStartOperator_PIDWriteFailureTerminatesChildAndLeavesNoPIDFile
-// verifies that when writePID fails after cmd.Start() succeeds, stopFailedStart
-// terminates the child process and no stale PID file is left behind. The
-// .g8e/pids/ directory is made read-only so writePID fails, but
-// copyBinaryToBinDir and cmd.Start() succeed because .g8e/bin/ and .g8e/logs/
-// remain writable.
-func TestStartOperator_PIDWriteFailureTerminatesChildAndLeavesNoPIDFile(t *testing.T) {
-	fileSvc := newStartFailureFileSvc(t)
+type pidWriteFailingFileSvc struct {
+	fs.RuntimeFileService
+}
 
-	// Make .g8e/pids/ read-only so writePID fails after cmd.Start() succeeds.
-	pidsAbsPath := fileSvc.Resolve(constants.PidDirname)
-	require.NoError(t, os.Chmod(pidsAbsPath, 0500))
-	t.Cleanup(func() { _ = os.Chmod(pidsAbsPath, constants.PermDirStandard) })
+func (s *pidWriteFailingFileSvc) WriteFile(ctx context.Context, relPath string, data []byte, mode os.FileMode) error {
+	if relPath == pidRelPath() {
+		return os.ErrPermission
+	}
+	return s.RuntimeFileService.WriteFile(ctx, relPath, data, mode)
+}
+
+// Inject only the PID write failure: chmod on a directory does not prevent
+// writes on Windows. Binary copying, process creation, and cleanup stay real.
+func TestStartOperator_PIDWriteFailureTerminatesChildAndLeavesNoPIDFile(t *testing.T) {
+	fileSvc := &pidWriteFailingFileSvc{RuntimeFileService: newStartFailureFileSvc(t)}
 
 	pm, err := NewProcessManager(fileSvc)
 	require.NoError(t, err)

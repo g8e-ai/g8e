@@ -10,18 +10,19 @@
 package config
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 func TestResolveGatewayPorts(t *testing.T) {
 	// Try to bind to a port to make it unavailable
-	ln, err := net.Listen("tcp", ":0")
+	ln, err := net.Listen("tcp", net.JoinHostPort(constants.LocalhostIP, "0"))
 	require.NoError(t, err)
 	defer ln.Close()
 
@@ -51,7 +52,7 @@ func TestLoadGateway_IncrementalPorts(t *testing.T) {
 	var ln net.Listener
 	var err error
 	for i := 0; i < 10; i++ {
-		ln, err = net.Listen("tcp", fmt.Sprintf(":%d", basePort+i))
+		ln, err = net.Listen("tcp", net.JoinHostPort(constants.LocalhostIP, strconv.Itoa(basePort+i)))
 		if err == nil {
 			basePort = basePort + i
 			break

@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 // enrollStub is a gateway stand-in whose three enrollment endpoints are

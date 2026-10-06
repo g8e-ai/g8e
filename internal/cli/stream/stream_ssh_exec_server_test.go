@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -251,5 +252,6 @@ func TestDialSSH_ProxyCommandThatExitsImmediatelyFailsHandshake(t *testing.T) {
 }
 
 func proxyCommandViaTestBinary() string {
-	return fmt.Sprintf("%s -test.run TestSSHProxyHelperProcess -- %s %%h %%p", os.Args[0], proxyHelperMarker)
+	executable := strings.ReplaceAll(filepath.ToSlash(os.Args[0]), "'", "'\\''")
+	return fmt.Sprintf("'%s' -test.run TestSSHProxyHelperProcess -- %s %%h %%p", executable, proxyHelperMarker)
 }

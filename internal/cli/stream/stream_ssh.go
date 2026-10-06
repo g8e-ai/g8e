@@ -45,6 +45,13 @@ func isTransientError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if isTransientSocketError(err) {
+		return true
+	}
+	var networkError net.Error
+	if errors.As(err, &networkError) && networkError.Timeout() {
+		return true
+	}
 	errStr := strings.ToLower(err.Error())
 	for _, pattern := range constants.TransientNetworkErrorPatterns {
 		if strings.Contains(errStr, pattern) {

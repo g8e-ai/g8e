@@ -19,7 +19,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"

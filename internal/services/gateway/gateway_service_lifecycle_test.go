@@ -11,17 +11,22 @@ package gateway
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 func TestGatewayModeService_StartStop(t *testing.T) {
 	ls := newTestGatewayService(t, testGatewayOpts{httpPort: 0})
+	// Exercise real HTTP/TLS startup without exposing a test server to the LAN.
+	ls.server.Addr = net.JoinHostPort(constants.LocalhostIP, "0")
+	ls.publicServer.Addr = net.JoinHostPort(constants.LocalhostIP, "0")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

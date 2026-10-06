@@ -13,13 +13,13 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"

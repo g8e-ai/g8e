@@ -321,12 +321,15 @@ help:
 		'' \
 		'Run make help-legacy to list compatibility aliases.'
 
-.PHONY: protocol-python-build
-protocol-python-build:
-	@echo "Building Python protocol package..."
+.PHONY: protocol-python-data protocol-python-build
+protocol-python-data:
 	@mkdir -p protocol/python/g8e/_data
 	@cp protocol/constants/*.json protocol/python/g8e/_data/
 	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
+	@cp -r protocol/constants/compliance protocol/python/g8e/_data/
+
+protocol-python-build: protocol-python-data
+	@echo "Building Python protocol package..."
 	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
 
@@ -518,7 +521,7 @@ dev-tools:
 dev-uv:
 	@bash scripts/bootstrap-uv.sh
 
-ensemble-env: dev-uv
+ensemble-env: dev-uv protocol-python-data
 	@echo "Preparing .venv (Python $(PYTHON_VERSION)) with protocol and ensemble dependencies..."
 	@uv venv --python $(PYTHON_VERSION) --seed --allow-existing .venv
 	@# --no-sources: ensemble's [tool.uv.sources] pins g8e to a non-editable path, which
@@ -1235,7 +1238,7 @@ ci-console: dev-check
 	@echo "Console and adapter CI complete."
 
 .PHONY: ci-protocol
-ci-protocol: dev-check
+ci-protocol: dev-check protocol-python-data
 	@$(PYTHON) -m pytest protocol/python/tests/ protocol/conformance/
 	@$(PYTHON) examples/python/constants_example.py
 	@$(PYTHON) examples/python/models_example.py

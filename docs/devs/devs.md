@@ -274,6 +274,13 @@ make lint
 3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make ensemble-test-external`, `make console-test`.
 4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-full` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
 
+On native Windows, `make dev-setup` and `make ci` use Git for Windows Bash and
+GNU Make. Keep `/usr/bin` ahead of the Windows system PATH inside Bash so npm
+helpers resolve Git Bash. Test fixtures that discover user configuration must
+isolate both `HOME` and `USERPROFILE`; see [Native Windows Tests](tests.md#native-windows-tests)
+for application-data isolation, cross-drive fixtures, file modes, symlink
+privileges, browser stubs, and race-detector limits.
+
 ### Add a runtime-file CLI command
 
 1. Put the command in `internal/cli/cmd/<group>/` (INV-CLI-01).
