@@ -60,13 +60,7 @@ func (c *Client) DiscoverInferenceOperator(ctx context.Context, operatorSessionI
 	}
 	var matches []models.OperatorDocumentGo
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || (op.OperatorType != constants.OperatorTypeRemote && (op.OperatorType != constants.OperatorTypeEmbedded || op.RuntimeConfig == nil)) {
-			continue
-		}
-		if op.RuntimeConfig == nil || !operatorcapability.GetOperatorRoles(op).Has(constants.OperatorRoleInference) {
-			continue
-		}
-		if op.OperatorSessionID == "" {
+		if op.RuntimeConfig == nil || !operatorcapability.HasActiveRole(op, constants.OperatorRoleInference) {
 			continue
 		}
 		if operatorSessionID != "" && op.OperatorSessionID != operatorSessionID {

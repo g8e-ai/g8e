@@ -128,12 +128,16 @@ async def test_governed_models_use_owner_registered_inference_endpoint():
     operator_client = AsyncMock()
     operator_client.list.return_value = [
         {
+            "id": "data-operator",
+            "user_id": "owner-1",
             "status": "active",
             "operator_type": "remote",
             "operator_session_id": "data-session",
             "runtime_config": {"inference_enabled": False},
         },
         {
+            "id": "inference-operator",
+            "user_id": "owner-1",
             "status": "active",
             "operator_type": "remote",
             "operator_session_id": "inference-session",
@@ -165,6 +169,8 @@ async def test_governed_models_require_one_active_inference_operator(count):
     operator_client = AsyncMock()
     operator_client.list.return_value = [
         {
+            "id": f"inference-operator-{i}",
+            "user_id": "owner-1",
             "status": "active",
             "operator_type": "remote",
             "operator_session_id": f"inference-{i}",

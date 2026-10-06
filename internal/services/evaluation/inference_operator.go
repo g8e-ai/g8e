@@ -31,13 +31,7 @@ type InferenceOperatorStatus struct {
 func ActiveInferenceOperators(operators []models.OperatorDocumentGo) []InferenceOperatorStatus {
 	matches := make([]InferenceOperatorStatus, 0)
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || (op.OperatorType != constants.OperatorTypeRemote && op.OperatorType != constants.OperatorTypeEmbedded) {
-			continue
-		}
-		if op.RuntimeConfig == nil || !operatorcapability.GetOperatorRoles(op).Has(constants.OperatorRoleInference) {
-			continue
-		}
-		if op.OperatorSessionID == "" {
+		if op.RuntimeConfig == nil || !operatorcapability.HasActiveRole(op, constants.OperatorRoleInference) {
 			continue
 		}
 		matches = append(matches, InferenceOperatorStatus{

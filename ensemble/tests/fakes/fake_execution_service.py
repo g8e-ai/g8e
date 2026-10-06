@@ -9,7 +9,7 @@
 
 from typing import Any
 
-from app.constants import ExecutionStatus
+from app.constants import ExecutionStatus, OperatorType
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import DirectCommandResult, OperatorDocument, TargetSystem
@@ -26,6 +26,7 @@ from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 # Create a default operator for the protocol instance
 _default_operator = OperatorDocument(
+    operator_type=OperatorType.REMOTE,
     id="fake-operator",
     user_id="fake-user",
     operator_session_id="fake-session",

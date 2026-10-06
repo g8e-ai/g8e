@@ -29,13 +29,7 @@ type DataOperatorStatus struct {
 // IsDataOperator reports whether an active remote or configured embedded
 // session includes Data, even when other roles are enabled.
 func IsDataOperator(op models.OperatorDocumentGo) bool {
-	if op.Status != constants.OperatorStatusActive || (op.OperatorType != constants.OperatorTypeRemote && (op.OperatorType != constants.OperatorTypeEmbedded || op.RuntimeConfig == nil)) {
-		return false
-	}
-	if op.OperatorSessionID == "" {
-		return false
-	}
-	return GetOperatorRoles(op).Has(constants.OperatorRoleData)
+	return HasActiveRole(op, constants.OperatorRoleData)
 }
 
 // IsStackDataOperator reports whether op is the data-operator the unified

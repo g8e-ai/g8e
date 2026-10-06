@@ -11,7 +11,13 @@ Unit tests for OperatorPortService (port_service.py).
 
 import pytest
 
-from app.constants import CommandErrorType, EventType, ExecutionStatus, OperatorStatus
+from app.constants import (
+    CommandErrorType,
+    EventType,
+    ExecutionStatus,
+    OperatorStatus,
+    OperatorType,
+)
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.operators import (
@@ -47,6 +53,7 @@ def _make_operator(
     hostname: str = "host-1",
 ) -> OperatorDocument:
     return OperatorDocument(
+        operator_type=OperatorType.REMOTE,
         id=operator_id,
         user_id="user-1",
         bound_web_session_id="ws-1",

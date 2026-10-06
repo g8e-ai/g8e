@@ -53,6 +53,29 @@ func GetOperatorRoles(op models.OperatorDocumentGo) constants.OperatorRoles {
 	return roles
 }
 
+// IsActiveOperatorSession reports whether op is a live, session-bound Operator
+// that may serve governed work: an active remote Operator, or an active
+// embedded Operator that has reported its runtime configuration.
+func IsActiveOperatorSession(op models.OperatorDocumentGo) bool {
+	if op.Status != constants.OperatorStatusActive || op.OperatorSessionID == "" {
+		return false
+	}
+	switch op.OperatorType {
+	case constants.OperatorTypeRemote:
+		return true
+	case constants.OperatorTypeEmbedded:
+		return op.RuntimeConfig != nil
+	default:
+		return false
+	}
+}
+
+// HasActiveRole reports whether op is an active Operator session whose
+// resolved roles include role.
+func HasActiveRole(op models.OperatorDocumentGo, role constants.OperatorRole) bool {
+	return IsActiveOperatorSession(op) && GetOperatorRoles(op).Has(role)
+}
+
 // RoleResponsibilities returns a human-readable summary of the role's responsibilities.
 func RoleResponsibilities(role constants.OperatorRole) string {
 	switch role {

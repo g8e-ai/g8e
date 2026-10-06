@@ -639,7 +639,7 @@ def extract_operator_context_by_target(
 
     # Try to find operator by hostname
     for operator_doc in investigation.operator_documents:
-        if operator_doc.hostname == target_operator:
+        if operator_doc.current_hostname == target_operator:
             return extract_single_operator_context(operator_doc)
 
     # Try to parse as index (e.g., "0", "1", "2")

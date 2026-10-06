@@ -192,3 +192,42 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 		assert.Contains(t, reason, "identical")
 	})
 }
+
+func TestIsActiveOperatorSession(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		op   models.OperatorDocumentGo
+		want bool
+	}{
+		{"active remote", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "s"}, true},
+		{"active embedded with runtime config", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorSessionID: "s", RuntimeConfig: &models.RuntimeConfig{}}, true},
+		{"active embedded without runtime config", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorSessionID: "s"}, false},
+		{"stale remote", models.OperatorDocumentGo{Status: constants.OperatorStatusStale, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "s"}, false},
+		{"active remote without session", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote}, false},
+		{"active with unset type", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorSessionID: "s"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, IsActiveOperatorSession(tt.op))
+		})
+	}
+}
+
+func TestHasActiveRoleRequiresActiveSessionAndRole(t *testing.T) {
+	t.Parallel()
+
+	inference := models.OperatorDocumentGo{
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		OperatorSessionID: "s",
+		RuntimeConfig:     &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleInference}},
+	}
+	assert.True(t, HasActiveRole(inference, constants.OperatorRoleInference))
+	assert.False(t, HasActiveRole(inference, constants.OperatorRoleData))
+
+	inference.Status = constants.OperatorStatusStopped
+	assert.False(t, HasActiveRole(inference, constants.OperatorRoleInference))
+}
