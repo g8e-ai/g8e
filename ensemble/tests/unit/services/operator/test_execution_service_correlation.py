@@ -17,7 +17,7 @@ import pytest
 from app.constants.generated_status import EventType
 from app.constants.generated_status import AITaskId
 from app.constants import ExecutionStatus, G8EE_COMPONENT
-from app.models.command_request_payloads import CommandRequestPayload
+from app.models.command_request_payloads import CommandRequestPayload, FileEditRequestPayload
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
 from g8e.operator.v1 import operator_pb2
@@ -54,6 +54,107 @@ def _build_command_message(
 
 
 class TestGatewayDispatchCorrelation:
+    @pytest.mark.parametrize("failed", [False, True])
+    async def test_file_result_preserves_operator_status_and_error(self, failed):
+        result = operator_pb2.FileEditResult(
+            execution_id="read-1",
+            operation="read",
+            file_path="/tmp/status.txt",
+            status=(
+                operator_pb2.EXECUTION_STATUS_FAILED
+                if failed
+                else operator_pb2.EXECUTION_STATUS_COMPLETED
+            ),
+            error_message="path not found" if failed else "",
+            content="ready" if not failed else "",
+        )
+        gateway = MagicMock()
+        gateway.dispatch = AsyncMock(
+            return_value={
+                "success": True,
+                "event_type": EventType.OPERATOR_FILE_EDIT_FAILED
+                if failed
+                else EventType.OPERATOR_FILE_EDIT_COMPLETED,
+                "result_payload": base64.b64encode(result.SerializeToString()).decode("ascii"),
+            }
+        )
+        message = _build_command_message("read-1")
+        message.event_type = EventType.OPERATOR_FILE_EDIT_REQUESTED
+        message.payload = FileEditRequestPayload(
+            execution_id="read-1",
+            operation="read",
+            file_path="/tmp/status.txt",
+            justification="Read status",
+            target_operators=["all"],
+        )
+        internal, envelope = await _build_execution_service(gateway).dispatch_command(
+            message, build_g8e_http_context()
+        )
+        assert internal.status == (ExecutionStatus.FAILED if failed else ExecutionStatus.COMPLETED)
+        assert internal.error == ("path not found" if failed else "")
+        assert envelope is not None
+        assert envelope.payload.content == (None if failed else "ready")
+
+    async def test_missing_result_payload_is_not_success(self):
+        gateway = MagicMock()
+        gateway.dispatch = AsyncMock(return_value={"success": True, "transaction_id": "tx-1"})
+        internal, envelope = await _build_execution_service(gateway).dispatch_command(
+            _build_command_message("read-1"), build_g8e_http_context()
+        )
+        assert internal.status == ExecutionStatus.FAILED
+        assert "no operator result payload" in internal.error
+        assert envelope is None
+
+    @pytest.mark.parametrize(
+        ("result_type", "event_type"),
+        [
+            (operator_pb2.FsListResult, EventType.OPERATOR_FILESYSTEM_LIST_FAILED),
+            (operator_pb2.FsReadResult, EventType.OPERATOR_FILESYSTEM_READ_FAILED),
+            (operator_pb2.FsGrepResult, EventType.OPERATOR_FILESYSTEM_GREP_FAILED),
+        ],
+    )
+    async def test_filesystem_failure_preserves_operator_error(self, result_type, event_type):
+        result = result_type(
+            execution_id="fs-1",
+            status=operator_pb2.EXECUTION_STATUS_FAILED,
+            error_message="path not found",
+        )
+        gateway = MagicMock()
+        gateway.dispatch = AsyncMock(
+            return_value={
+                "success": True,
+                "event_type": event_type,
+                "result_payload": base64.b64encode(result.SerializeToString()).decode("ascii"),
+            }
+        )
+        internal, envelope = await _build_execution_service(gateway).dispatch_command(
+            _build_command_message("fs-1"), build_g8e_http_context()
+        )
+        assert internal.status == ExecutionStatus.FAILED
+        assert internal.error == "path not found"
+        assert envelope is not None
+
+    async def test_shell_failure_preserves_canonical_error(self):
+        result = operator_pb2.CommandResult(
+            execution_id="shell-1",
+            status=operator_pb2.EXECUTION_STATUS_FAILED,
+            error="execution denied",
+        )
+        gateway = MagicMock()
+        gateway.dispatch = AsyncMock(
+            return_value={
+                "success": True,
+                "event_type": EventType.OPERATOR_COMMAND_FAILED,
+                "result_payload": base64.b64encode(result.SerializeToString()).decode("ascii"),
+            }
+        )
+        internal, envelope = await _build_execution_service(gateway).dispatch_command(
+            _build_command_message("shell-1"), build_g8e_http_context()
+        )
+        assert internal.status == ExecutionStatus.FAILED
+        assert internal.error == "execution denied"
+        assert envelope is not None
+
     async def test_uses_payload_execution_id_not_http_request_id(self):
         mock_gateway = MagicMock()
         per_message_exec_id = "per-msg-exec-id"

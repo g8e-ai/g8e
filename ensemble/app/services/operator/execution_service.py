@@ -36,7 +36,16 @@ from app.models.operators import (
     OperatorDocument,
     TargetSystem,
 )
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, ExecutionResultsPayload
+from app.models.pubsub_messages import (
+    G8eMessage,
+    G8eoResultEnvelope,
+    ExecutionResultsPayload,
+    FileEditResultPayload,
+    FsListResultPayload,
+    FsReadResultPayload,
+    FsGrepResultPayload,
+    PortCheckResultPayload,
+)
 from app.models.tool_results import CommandInternalResult
 from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeAppSettings
@@ -303,11 +312,43 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             g8e_context=g8e_context,
         )
 
-        if envelope is None or not isinstance(envelope.payload, ExecutionResultsPayload):
+        if envelope is None:
             return CommandInternalResult(
                 execution_id=execution_id,
-                status=ExecutionStatus.COMPLETED,
-                output="",
+                status=ExecutionStatus.FAILED,
+                error="Gateway dispatch returned no operator result payload",
+                error_type=CommandErrorType.EXECUTION_FAILED,
+                operator_id=operator_id,
+            ), None
+
+        if isinstance(
+            envelope.payload,
+            (FileEditResultPayload, FsListResultPayload, FsReadResultPayload, FsGrepResultPayload),
+        ):
+            result_payload = envelope.payload
+            return CommandInternalResult(
+                execution_id=execution_id,
+                status=result_payload.status,
+                error=result_payload.error_message or "",
+                operator_id=operator_id,
+            ), envelope
+
+        if isinstance(envelope.payload, PortCheckResultPayload):
+            return CommandInternalResult(
+                execution_id=execution_id,
+                status=ExecutionStatus.FAILED
+                if envelope.payload.error
+                else ExecutionStatus.COMPLETED,
+                error=envelope.payload.error or "",
+                operator_id=operator_id,
+            ), envelope
+
+        if not isinstance(envelope.payload, ExecutionResultsPayload):
+            return CommandInternalResult(
+                execution_id=execution_id,
+                status=ExecutionStatus.FAILED,
+                error="Gateway dispatch returned an unsupported operator result payload",
+                error_type=CommandErrorType.EXECUTION_FAILED,
                 operator_id=operator_id,
             ), envelope
 
@@ -318,7 +359,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             status=status,
             output=result_payload.stdout or "",
             stderr=result_payload.stderr or "",
-            error=result_payload.error_message or "",
+            error=result_payload.error or "",
             exit_code=result_payload.return_code,
             execution_time_seconds=result_payload.duration_seconds or 0,
             operator_id=operator_id,
