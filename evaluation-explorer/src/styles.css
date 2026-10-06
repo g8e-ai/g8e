@@ -1684,8 +1684,10 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 }
 .campaign-evidence-title:hover { color: var(--accent); }
 .campaign-evidence-time { flex-shrink: 0; color: var(--fg-dim); font-size: var(--overview-label-size, var(--text-sm)); }
-.campaign-evidence-meta { margin-top: 3px; color: var(--fg-muted); font-size: var(--overview-meta-size, var(--text-md)); }
-.campaign-evidence-meta > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.campaign-evidence-meta { margin-top: 3px; justify-content: flex-start; color: var(--fg-muted); font-size: var(--overview-meta-size, var(--text-md)); }
+.campaign-evidence-meta > span { flex-shrink: 0; }
+.campaign-evidence-meta > span:first-child { min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.campaign-evidence-meta > span:not(:first-child)::before { content: '·'; margin-right: 12px; color: var(--fg-dim); }
 .campaign-evidence-state { display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; font-weight: 600; }
 .campaign-evidence-state .status-dot { width: 6px; height: 6px; }
 .campaign-outcome-track {
@@ -1695,6 +1697,15 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .campaign-outcome-track span { height: 100%; }
 .campaign-evidence-foot { margin-top: 5px; color: var(--fg-dim); font-size: var(--overview-label-size, var(--text-sm)); font-variant-numeric: tabular-nums; }
 .campaign-evidence-foot span:last-child { text-align: right; }
+.campaign-evidence-roles {
+  display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 5px 0 0; padding: 0; list-style: none;
+  color: var(--fg-muted); font-size: var(--overview-label-size, var(--text-sm));
+}
+.campaign-evidence-role { color: var(--fg-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--text-xs); }
+.campaign-evidence-times {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; margin-top: 6px;
+  color: var(--fg-dim); font-size: var(--overview-label-size, var(--text-sm)); font-variant-numeric: tabular-nums;
+}
 .campaign-evidence-foot-unavailable { margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--border); }
 
 /* Tasks catalog */

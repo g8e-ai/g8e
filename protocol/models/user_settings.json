@@ -18,7 +18,7 @@
     "settings": {
       "llm": {
         "_description": "Maps to LLMSettings. Roles select provider/model pairs; provider connections store one endpoint and API key per provider.",
-        "llm_primary_provider":   { "type": "string",  "required": false, "default": "g8e", "description": "Primary LLM provider (alias: primary_provider). Defaults to governed inference; unset assistant and lite roles inherit it." },
+        "llm_primary_provider":   { "type": "string",  "required": false, "default": "g8e", "description": "Primary LLM provider (alias: primary_provider). Defaults to governed inference; unset assistant inherits primary and unset lite inherits assistant then primary." },
         "llm_assistant_provider": { "type": "string",  "required": false, "description": "Assistant LLM provider (alias: assistant_provider)" },
         "llm_lite_provider":      { "type": "string",  "required": false, "description": "Lite LLM provider (alias: lite_provider)" },
         "llm_model":              { "type": "string",  "required": false, "description": "Primary LLM model name (alias: primary_model)" },

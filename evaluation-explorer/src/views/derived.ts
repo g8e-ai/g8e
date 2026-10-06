@@ -803,9 +803,22 @@ export function datasetLabel(datasetId: string): string {
   return datasetId.startsWith(prefix) ? datasetId.slice(prefix.length) : datasetId;
 }
 
+/** One role's model in a recent run, with the friendly display name when a model summary exists. */
+export interface RecentRunModel {
+  role: ModelRole;
+  variantId: string;
+  name: string;
+}
+
 export interface RecentCampaignRow extends ReleaseProvenance {
   datasetId: string;
   label: string;
+  /** Friendly name of the Primary model (or the first mapped role); undefined when the run maps no models. */
+  modelName?: string;
+  models: RecentRunModel[];
+  startedAt?: string;
+  endedAt?: string;
+  elapsedSeconds?: number;
   detail: string;
   observedAt: string;
   qualityState: QualityState;
@@ -821,10 +834,28 @@ function compareEvaluationRecency(a: EvaluationSummary, b: EvaluationSummary): n
   return (b.started_at ?? b.observed_at ?? '').localeCompare(a.started_at ?? a.observed_at ?? '');
 }
 
-/** Cross-dataset campaign rows for the overview, newest activity first. */
+function recentRunModels(
+  run: EvaluationSummary | undefined,
+  models: ModelSummary[],
+): RecentRunModel[] {
+  const mapping = run?.model_role_mapping ?? {};
+  const result: RecentRunModel[] = [];
+  for (const role of MODEL_ROLE_WIRE_ORDER) {
+    const variantId = mapping[role];
+    if (!variantId) continue;
+    const summary =
+      models.find((m) => m.dataset_id === run?.dataset_id && m.variant_id === variantId && m.role === role)
+      ?? models.find((m) => m.dataset_id === run?.dataset_id && m.variant_id === variantId);
+    result.push({ role, variantId, name: summary?.display_name ?? variantId });
+  }
+  return result;
+}
+
+/** Cross-dataset recent-run rows for the overview, newest activity first. */
 export function recentCampaignRows(
   catalogs: CatalogSnapshot[],
   evaluations: EvaluationSummary[],
+  models: ModelSummary[] = [],
   limit = 5,
 ): RecentCampaignRow[] {
   const byDataset = new Map<string, { catalog?: CatalogSnapshot; evals: EvaluationSummary[] }>();
@@ -851,8 +882,14 @@ export function recentCampaignRows(
       catalog?.generated_at ?? primary?.started_at ?? primary?.observed_at ?? '';
     if (!observedAt) continue;
 
+    const runModels = recentRunModels(primary, models);
     rows.push({
       datasetId,
+      models: runModels,
+      modelName: (runModels.find((m) => m.role === 'primary') ?? runModels[0])?.name,
+      startedAt: primary?.started_at,
+      endedAt: primary?.ended_at,
+      elapsedSeconds: primary?.elapsed_seconds,
       release: primary?.release ?? catalog?.release,
       release_basis: primary?.release_basis ?? catalog?.release_basis,
       source_revision: primary?.source_revision ?? catalog?.source_revision,

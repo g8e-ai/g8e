@@ -22,6 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -1388,4 +1389,48 @@ func TestOllamaBackend_GenerateStreamingReporterErrorDoesNotFailGeneration(t *te
 	require.NotNil(t, resp)
 	assert.Equal(t, "hello", resp.Parts[0].GetText())
 	assert.Equal(t, 1, reportedEvents)
+}
+
+func TestOllamaBackend_GeneratePreservesRawTailAfterParserOrReporterFailure(t *testing.T) {
+	for _, parserFailure := range []bool{false, true} {
+		t.Run(fmt.Sprintf("parser_failure_%t", parserFailure), func(t *testing.T) {
+			first := `{"model":"test-model","message":{"content":"hello"}}`
+			if parserFailure {
+				first = `{"model":"test-model","message":{"tool_calls":[{"function":{"name":"inspect","arguments":[]}}]}}`
+			}
+			raw := first + "\n" + `{"model":"test-model","message":{"content":"tail"},"done":true,"done_reason":"stop"}` + "\n"
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, raw)
+			}))
+			defer server.Close()
+			backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+			require.NoError(t, err)
+			store, err := NewAttemptStore(storagetest.NewTestFileSvc(t, testutil.TempDir(t)))
+			require.NoError(t, err)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			require.NoError(t, store.Begin(ctx, &operatorv1.InferenceProviderAttemptRecord{
+				ProviderAttemptId: "attempt-tail", TransactionId: "transaction-tail",
+			}))
+			ctx = WithAttemptStore(ctx, store)
+			ctx = WithProgressReporter(ctx, func(*operatorv1.InferenceProgressEvent) error {
+				return constants.ErrInferenceProgressBackpressure
+			})
+			response, err := backend.Generate(ctx, models.GenerateRequest{
+				Model: "test-model", Stream: true, ProviderAttemptID: "attempt-tail",
+				Messages: []*operatorv1.InferenceMessage{{Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+					Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "hi"}}}}},
+			})
+			if parserFailure {
+				require.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+				require.Nil(t, response)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, response.Parts, 2)
+			}
+			captured, err := store.RawResponse(ctx, "attempt-tail")
+			require.NoError(t, err)
+			assert.Equal(t, raw, string(captured))
+		})
+	}
 }

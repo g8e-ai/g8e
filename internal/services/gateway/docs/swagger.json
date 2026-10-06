@@ -852,7 +852,7 @@
                         }
                     },
                     "422": {
-                        "description": "Unprocessable Entity — target operator session is not inference-capable",
+                        "description": "Unprocessable Entity — context overflow, unsupported tools, or target operator session is not inference-capable",
                         "schema": {
                             "type": "string"
                         }

@@ -3,8 +3,8 @@ doc_id: agents
 title: AI Agents and the g8e Governance Boundary
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - internal/cli/agent/
   - internal/cli/cmd/mcp/
@@ -55,20 +55,21 @@ Describes three distinct meanings of "agent" in g8e: external coding agents (Cla
 | INV-AGT-05 | Agents retain native tools (shell, file, network access) outside their configured MCP server unless the agent's launcher or configuration options actively disable them. Governance covers only MCP-routed operations; side channels remain agent-native. |
 | INV-AGT-06 | Governed HTTP dispatch (`POST /api/v1/operators/commands`) cannot mint human L3 proofs and fails closed under `ratify` or `notary` postures when L3 proof is required. Direct envelopes and MCP/A2A submission paths support L3 suspension; HTTP dispatch does not. |
 | INV-AGT-07 | Third-party MCP servers (subprocess or HTTP) are governed exclusively through Gateway downstream egress with full L1–L5 governance, envelope construction, and signed receipts. `g8e mcp agent run` is launcher-only and does not provide an external MCP wrapper or CLI reverse proxy. |
-| INV-AGT-09 | Every agent the launcher supports is exactly one `agent.Integration` entry in [internal/cli/agent/registry.go](../../internal/cli/agent/registry.go). Config writing, launch arguments, tool-lockdown level, `agent list`, `agent run`, and `agent verify` are all driven from that entry; no other code switches on an agent name. An unknown agent name fails closed with `ErrAgentNotFound` before anything is executed. Adding an agent means adding one registry entry plus its verify hooks. |
 | INV-AGT-08 | The Go agent harness (`internal/tools/agent_harness/`) is a shared typed governed-client used by evaluation and integration workflows. It contains no model, Tribunal, or ReAct loop and is not g8ee. g8ee (`ensemble/`) MUST NOT import, invoke, or name the harness. Tribunal roles, including the Auditor (`protocol/models/agents/auditor.json`), belong to g8ee and MUST NOT use harness naming. |
+| INV-AGT-09 | Every agent the launcher supports is exactly one `agent.Integration` entry in [internal/cli/agent/registry.go](../../internal/cli/agent/registry.go). Config writing, launch arguments, tool-lockdown level, `agent list`, `agent run`, `agent show`, and `agent verify` are all driven from that entry; no other code switches on an agent name. An unknown agent name fails closed with `ErrAgentNotFound` before anything is executed. Adding an agent means adding one registry entry plus its verify hooks. |
 
 ## Owned surfaces
 
 | Surface | Path | Verify |
 | --- | --- | --- |
 | Agent integration registry | [internal/cli/agent/](../../internal/cli/agent/) (`registry.go`, `config.go`, `verify.go`) | Single source of truth for supported agents: config strategy, launch strategy, tool-lockdown level, verify hooks. `g8e mcp agent list` prints it |
-| Agent verification without the agent | `g8e mcp agent verify <agent>` | Writes the config into an isolated temporary home, computes launch args, and runs the verify hooks. Never starts the agent binary or touches the real agent config, so it runs in CI |
+| Agent verification without the agent | `g8e mcp agent verify <agent>`, [internal/cli/agent/verify.go](../../internal/cli/agent/verify.go) | Writes the config into an isolated temporary home, computes launch args, and runs the verify hooks. Never starts the agent binary or touches the real agent config, so it runs in CI |
 | Agent launcher and stdio | [internal/cli/cmd/mcp/mcp.go](../../internal/cli/cmd/mcp/mcp.go) (`runMCPAgentRun`, `launchAgentWithGovernance`, `mcpStdioCmd`) | Enrolls human CLI, enrolls the agent application through owner-approved platform enrollment when no valid identity exists, configures MCP, verifies tool disabling, starts agent |
-| MCP native tools | [internal/services/mcp/native_tool_registry.go](../../internal/services/mcp/native_tool_registry.go) | 32 tools across database, filesystem, system, cloud categories |
-| Tool interception config | [internal/services/mcp/config.go](../../internal/services/mcp/config.go), [`Integration.WriteConfig`](../../internal/cli/agent/config.go) | Per-agent disabling: Claude/Codex (flags), Goose (extensions), Gemini (settings), Devin (MCP server list) |
+| MCP client config templates | [internal/services/mcp/config.go](../../internal/services/mcp/config.go), `g8e mcp agent show <agent>` | Generates MCP client configuration templates (mTLS, direct IP, Stdio) for connecting external coding agents and IDEs to the Gateway |
+| MCP native tools | [internal/services/mcp/native_tool_registry.go](../../internal/services/mcp/native_tool_registry.go) | 32 tools across database, filesystem, system, network, cloud/ops, and audit categories |
+| Tool interception config | [internal/cli/agent/config.go](../../internal/cli/agent/config.go) ([`Integration.WriteConfig`](../../internal/cli/agent/config.go)) | Per-agent disabling: Claude/Codex (flags), Goose (extensions), Gemini (settings), Devin (MCP server list) |
 | g8ee ensemble | [ensemble/](../../ensemble/) (Python), [ensemble/app/main.py](../../ensemble/app/main.py) | Triage, Tribunal, ReAct tool loops, outbound dispatch, SSE events |
-| Go agent harness (not an agent, not g8ee) | [internal/tools/agent_harness/](../../internal/tools/agent_harness/) | Typed Gateway client and configuration helpers used by evaluation and integration code. `grep -ri agent_harness ensemble/` returns nothing |
+| Go agent harness (not an agent, not g8ee) | [internal/tools/agent_harness/](../../internal/tools/agent_harness/) | Typed Gateway client and configuration helpers used by evaluation and integration code. `git grep -i agent_harness ensemble/` returns nothing |
 
 ## Procedures
 
@@ -115,22 +116,31 @@ g8e mcp agent run claude --verify=false
 # Check an agent's launcher config and lockdown without installing or starting it (CI-safe):
 g8e mcp agent verify claude
 
+# Display MCP client configuration (mTLS, IP, Stdio) for manual setup:
+g8e mcp agent show claude
+
 # Govern external MCP server via Gateway downstream egress:
-g8e serve gateway --mcp-downstream-cmd npx --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/tmp'
-g8e serve gateway --mcp-downstream-url http://localhost:3000/mcp
+g8e gw start --mcp-downstream-cmd npx --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/tmp'
+g8e gw start --mcp-downstream-url http://localhost:3000/mcp
 ```
 
 ### Query agent audit trails
 
 ```bash
-# List audit events, optionally for one operator session:
+# List audit events for a specific operator session:
 g8e gw data audit list --operator-session-id <operator-session-id>
 
-# Summarize audit activity:
+# Summarize audit activity (optionally filtered by operator session):
 g8e gw data audit summary --operator-session-id <operator-session-id>
+
+# Query audit events filtered directly by agent application identity:
+g8e audit events --app spiffe://g8e.local/app/claude
+
+# List signed transaction receipts filtered directly by agent application identity:
+g8e audit receipts --app spiffe://g8e.local/app/claude
 ```
 
-The `--operator-session-id` filter selects an Operator session, not an application identity. The acting agent is recorded on each `ActionReceipt` record as `acting_app_id` (the app SPIFFE ID, for example `spiffe://g8e.local/app/claude`).
+The `--operator-session-id` flag scopes `gw data audit` queries to an Operator session. The acting agent application identity is recorded on each transaction and `ActionReceipt` as `acting_app_id` (the app SPIFFE ID, for example `spiffe://g8e.local/app/claude`). The top-level `g8e audit events` and `g8e audit receipts` commands accept `--app <spiffe-id>` to query directly by application identity without requiring an Operator session ID.
 
 ## Trust and Execution Boundaries
 
@@ -165,7 +175,7 @@ The launcher supports five external coding agents, each defined by one registry 
 
 - **Claude Code** (strict) — Receives a throwaway MCP configuration via `--mcp-config`; `--strict-mcp-config` ignores every other MCP server and `--disallowed-tools Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch` disables native tools. All I/O must traverse the g8e MCP server.
 - **Codex (OpenAI)** (strict) — Same flags and throwaway configuration as Claude Code.
-- **Goose** (strict) — Merges g8e as an extension into `~/.config/goose/config.yaml` (preserving other settings, backing up the previous file) and launches with `--no-profile --with-extension` to disable all profile extensions. All I/O must traverse g8e MCP.
+- **Goose** (strict) — Merges g8e as an extension into `~/.config/goose/config.yaml` (preserving other settings, backing up the previous file) and launches with `session --no-profile --with-extension` to disable all profile extensions. All I/O must traverse g8e MCP.
 - **Gemini CLI** (strict) — Merges the g8e MCP server into `~/.gemini/settings.json` and sets `tools.core: []` (empty allowlist) to disable built-in tools. All I/O must traverse g8e MCP.
 - **Devin CLI** (partial) — Configures `~/.config/devin/config.json` with g8e as the only MCP server. **Devin does not expose native-tool disabling flags**, so the launcher prints a warning on every launch. Only MCP-routed operations cross the governance boundary; Devin's native file, shell, and network access remain ungoverned side channels.
 
@@ -192,7 +202,7 @@ When L3 approval is required, the stdio bridge opens the approval page in the br
 | Not this | Why | Where it lives |
 | --- | --- | --- |
 | **g8ee** | g8ee is a first-party application that integrates over governed HTTP dispatch (`POST /api/v1/operators/commands`), never as an MCP stdio child of the launcher. | [First-Party Agentic Ensemble](#first-party-agentic-ensemble-g8ee), [Ensemble Architecture](./ensemble.md) |
-| **Agent harness personas** | Personas (`claude-desktop`, `cursor`, ...) impersonate MCP clients against a real Gateway to test Gateway behavior. They do not exercise launcher output. The `agent-launcher-config` scenario is the complement: it verifies the launcher's generated config for every registry entry, while `scenarios/ensemble.go` exercises the g8ee chat path. Neither duplicates the other. | [internal/tools/agent_harness/](../../internal/tools/agent_harness/), INV-AGT-08 |
+| **Agent harness personas** | Personas (`claude-desktop`, `cursor`, ...) impersonate MCP clients against a real Gateway to test Gateway behavior ([internal/tools/agent_harness/client/](../../internal/tools/agent_harness/client/)). They do not exercise launcher output. Launcher config and tool lockdown are verified by isolated unit tests ([internal/cli/agent/verify_test.go](../../internal/cli/agent/verify_test.go), [internal/cli/cmd/mcp/mcp_agent_proxy_test.go](../../internal/cli/cmd/mcp/mcp_agent_proxy_test.go)) and `g8e mcp agent verify <agent>`, while [test/e2e/ensemble_chat_e2e_test.go](../../test/e2e/ensemble_chat_e2e_test.go) exercises the g8ee chat path. Neither duplicates the other. | [internal/tools/agent_harness/](../../internal/tools/agent_harness/), INV-AGT-08 |
 | **Eval campaigns** | Campaigns score candidate models by driving the g8ee chat turn and importing its trace. They never validate external agent launcher configs. | [Evals](./evals.md) |
 
 ## Five-Layer Governance Enforcement
@@ -232,7 +242,7 @@ g8ee is an optional first-party Python 3.12 / FastAPI client application that im
 
 - **Triage and model selection** — Classifies each conversation turn and routes queries to either the Dash (fast-path) or Sage (primary reasoning) assistant.
 - **ReAct tool loops** — Executes sequential tool-calling loops. Each tool result returns to the model for the next turn; reaching the configured tool-turn limit requires an explicit user continuation decision.
-- **Tribunal command vetting** — Host-operation requests pass through a five-member Tribunal (analyst, architect, operator, security, lead) for independent analysis. Tribunal consensus is advisory only and does not produce protocol L2 signatures.
+- **Tribunal command vetting** — Host-operation requests pass through a five-member Tribunal (Axiom, Concord, Variance, Pragma, Nemesis) for independent analysis. Tribunal consensus is advisory only and does not produce protocol L2 signatures.
 - **Marshal risk analysis** — Aggregates Tribunal results, detects clustering, and performs threat assessment before dispatch to the Operator.
 - **Application approvals** — g8ee's own application-level approval service for auto-approved commands. This is application-owned policy, not protocol L3 authorization.
 - **Outbound dispatch** — For host operations, g8ee dispatches via `GatewayOperatorClient.dispatch()` to `POST /api/v1/operators/commands` with a registered request `event_type`. For designated application records (cases, investigations, memories), it constructs direct envelopes and submits to `POST /api/v1/governance/envelopes`. For audit trails, it posts to `POST /api/v1/audit/records`.
@@ -246,7 +256,7 @@ A completed Gateway MCP tool call returns tool content plus a cryptographic sign
 
 Governed file mutations record file-mutation evidence and ledger hashes when the file ledger is active. The SQL commitment chain covers all admitted executions independently of the file ledger.
 
-For audit queries, use `g8e gw data audit list` and `g8e gw data audit summary` with an optional `--operator-session-id` filter to scope results to one Operator session. See [Gateway Architecture](./gateway.md) for audit API details.
+For audit queries, use `g8e gw data audit list` and `g8e gw data audit summary` scoped by `--operator-session-id`, or `g8e audit events` and `g8e audit receipts` scoped by `--app <spiffe-id>`. See [Gateway Architecture](./gateway.md) for audit API details.
 
 ## Anti-patterns
 

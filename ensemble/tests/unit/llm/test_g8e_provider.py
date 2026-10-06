@@ -16,6 +16,7 @@ stub the InternalHttpClient; no network or gateway is contacted.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -599,6 +600,136 @@ class TestG8EProviderDispatch:
         assert chunks[0].text == "generated output"
         assert chunks[-1].finish_reason == "stop"
         assert chunks[-1].usage_metadata.total_token_count == 18
+
+    @pytest.mark.asyncio
+    async def test_stream_delivers_text_while_completion_is_pending(self):
+        release = asyncio.Event()
+        client = _client()
+
+        async def upstream(request):
+            async for frame in _dispatch_stream_response()(request):
+                if frame.HasField("completion"):
+                    await release.wait()
+                yield frame
+
+        client.dispatch_inference_stream = upstream
+        provider = G8EProvider(internal_http_client=client)
+        stream = provider.generate_content_stream_primary(
+            "gemma3:4b", _contents(), PrimaryLLMSettings()
+        )
+        try:
+            first = await asyncio.wait_for(anext(stream), timeout=1)
+            assert first.text == "generated output"
+            assert provider.governed_dispatch_evidence is None
+            release.set()
+            rest = [chunk async for chunk in stream]
+            assert len(rest) == 1
+            assert rest[0].finish_reason == "stop"
+            assert provider.response_artifact.received_complete is True
+        finally:
+            release.set()
+            await stream.aclose()
+
+    @pytest.mark.asyncio
+    async def test_stream_with_invalid_receipt_never_emits_tool_calls(self):
+        response = _tool_call_response()
+        response.receipt.result_summary = "invalid"
+        client = _client()
+        client.dispatch_inference_stream = _dispatch_stream_response(response)
+        provider = G8EProvider(internal_http_client=client)
+        emitted = []
+        with pytest.raises(ValidationError):
+            async for chunk in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            ):
+                emitted.append(chunk)
+        assert emitted == []
+        assert provider.response_artifact.received_complete is True
+
+    @pytest.mark.asyncio
+    async def test_stream_parser_failure_retains_later_frames(self):
+        client = _client()
+
+        async def upstream(request):
+            async for frame in _dispatch_stream_response()(request):
+                if frame.HasField("progress"):
+                    frame.progress.parts[0].ClearField("text")
+                yield frame
+                await asyncio.sleep(0)
+
+        client.dispatch_inference_stream = upstream
+        provider = G8EProvider(internal_http_client=client)
+        with pytest.raises(ValidationError, match="unspecified part"):
+            async for _ in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            ):
+                pass
+        artifact = provider.response_artifact
+        assert artifact is not None
+        assert artifact.received_complete is True
+        assert len(artifact.raw_frames) == 2
+        assert '"completion"' in artifact.raw_frames[-1]
+
+    @pytest.mark.asyncio
+    async def test_stream_rejects_progress_that_differs_from_verified_result(self):
+        client = _client()
+
+        async def upstream(request):
+            async for frame in _dispatch_stream_response()(request):
+                if frame.HasField("progress"):
+                    frame.progress.parts[0].text = "different"
+                yield frame
+
+        client.dispatch_inference_stream = upstream
+        provider = G8EProvider(internal_http_client=client)
+        with pytest.raises(ValidationError, match="differs from the terminal result"):
+            async for _ in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            ):
+                pass
+        assert provider.governed_dispatch_evidence is None
+
+    @pytest.mark.asyncio
+    async def test_closing_stream_cancels_and_joins_ingestion(self):
+        closed = asyncio.Event()
+        pending = asyncio.Event()
+        client = _client()
+
+        async def upstream(request):
+            try:
+                async for frame in _dispatch_stream_response()(request):
+                    if frame.HasField("completion"):
+                        await pending.wait()
+                    yield frame
+            finally:
+                closed.set()
+
+        client.dispatch_inference_stream = upstream
+        provider = G8EProvider(internal_http_client=client)
+        stream = provider.generate_content_stream_primary(
+            "gemma3:4b", _contents(), PrimaryLLMSettings()
+        )
+        first = await asyncio.wait_for(anext(stream), timeout=1)
+        assert first.text == "generated output"
+        await stream.aclose()
+        assert closed.is_set()
+        artifact = provider.response_artifact
+        assert artifact is not None
+        assert artifact.received_complete is False
+
+    @pytest.mark.asyncio
+    async def test_stream_capture_limit_fails_with_partial_evidence(self, monkeypatch):
+        monkeypatch.setattr("app.llm.providers.g8e._MAX_STREAM_CAPTURE_BYTES", 1)
+        provider = G8EProvider(internal_http_client=_client())
+        with pytest.raises(ValidationError, match="capture limit"):
+            async for _ in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            ):
+                pass
+        artifact = provider.response_artifact
+        assert artifact is not None
+        assert artifact.received_complete is False
+        assert artifact.raw_frames == []
 
     @pytest.mark.asyncio
     async def test_stream_failure_frame_fails_closed(self):

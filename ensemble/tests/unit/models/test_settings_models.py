@@ -152,10 +152,10 @@ class TestLLMSettingsResolveLiteFallback:
         assert provider == LLMProvider.FAKE.value
         assert model == "fake"
 
-    def test_resolve_lite_returns_none_when_nothing_configured(self):
+    def test_resolve_lite_defaults_to_governed_provider_without_selecting_a_model(self):
         llm = LLMSettings()
         provider, api_key, endpoint, model = llm.resolve("lite")
-        assert provider is None
+        assert provider == LLMProvider.G8E.value
         assert model is None
 
     def test_resolve_lite_uses_lite_provider_when_configured(self):

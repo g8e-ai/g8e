@@ -621,4 +621,29 @@ describe('recentCampaignRows', () => {
     expect(rows[0]?.detail).toBe('default-suite');
     expect(rows[0]?.runId).toBe('eval-init-qwen3-4b-1789657337');
   });
+
+  it('resolves friendly model names and run timing from the latest run', () => {
+    const run = evaluationSummary({
+      dataset_id: 'ds-live-qwen',
+      run_id: 'run-qwen',
+      campaign_id: 'eval-qwen3-5-0-8b-gguf-q4-k-m',
+      started_at: '2026-09-17T12:00:00Z',
+      ended_at: '2026-09-17T12:10:30Z',
+      elapsed_seconds: 630,
+      observed_at: '2026-09-17T12:10:30Z',
+      model_role_mapping: { primary: 'qwen3-5-0-8b', lite: 'unmapped-lite' },
+    });
+    const models = [
+      { dataset_id: 'ds-live-qwen', variant_id: 'qwen3-5-0-8b', role: 'primary', display_name: 'Qwen3.5 0.8B (Q4_K_M)' },
+    ] as ModelSummary[];
+
+    const [row] = recentCampaignRows([], [run], models);
+    expect(row?.modelName).toBe('Qwen3.5 0.8B (Q4_K_M)');
+    expect(row?.models).toEqual([
+      { role: 'primary', variantId: 'qwen3-5-0-8b', name: 'Qwen3.5 0.8B (Q4_K_M)' },
+      { role: 'lite', variantId: 'unmapped-lite', name: 'unmapped-lite' },
+    ]);
+    expect(row?.startedAt).toBe('2026-09-17T12:00:00Z');
+    expect(row?.elapsedSeconds).toBe(630);
+  });
 });

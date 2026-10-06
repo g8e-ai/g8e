@@ -155,15 +155,15 @@ describe('OverviewView', () => {
     expect(guide.getByRole('link', { name: /Tool selection/ })).toHaveAttribute('href', '/tasks#category-tool_selection');
   });
 
-  it('presents campaign coverage for engineers without duplicate public data section', () => {
+  it('presents recent runs with coverage for engineers without duplicate public data section', () => {
     render(
       <MemoryRouter initialEntries={['/?release=all']}>
         <OverviewView />
       </MemoryRouter>,
     );
 
-    const evidence = within(screen.getByRole('region', { name: 'Campaign evidence' }));
-    expect(evidence.getByText('Campaign evidence')).toBeInTheDocument();
+    const evidence = within(screen.getByRole('region', { name: 'Recent runs' }));
+    expect(evidence.getByRole('heading', { name: 'Recent Runs' })).toBeInTheDocument();
     expect(evidence.getByText('Completed')).toBeInTheDocument();
     expect(evidence.getByText('Failed')).toBeInTheDocument();
     expect(evidence.getByText('Remaining')).toBeInTheDocument();

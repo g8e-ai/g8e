@@ -144,7 +144,7 @@ func newInferenceDispatchController(d InferenceDispatchControllerDeps) *Inferenc
 // @Failure		405		{string}	string								"Method Not Allowed"
 // @Failure		409		{string}	string								"Conflict — multiple inference-capable operators; explicit target required"
 // @Failure		413		{string}	string								"Request Entity Too Large — body exceeds the payload limit"
-// @Failure		422		{string}	string								"Unprocessable Entity — target operator session is not inference-capable"
+// @Failure		422		{string}	string								"Unprocessable Entity — context overflow, unsupported tools, or target operator session is not inference-capable"
 // @Failure		502		{string}	string								"Bad Gateway — provider or receipt verification failure"
 // @Failure		503		{string}	string								"Service Unavailable — command delivered to no operator subscribers"
 // @Failure		504		{string}	string								"Gateway Timeout — request deadline exceeded; remote provider outcome unknown"

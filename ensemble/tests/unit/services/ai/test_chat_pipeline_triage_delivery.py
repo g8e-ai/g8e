@@ -408,7 +408,7 @@ async def test_prepare_chat_context_production_request_carries_no_evaluation_con
         ("g8e", 32768),
         ("gemini", None),
         ("anthropic", None),
-        (None, None),
+        (None, 32768),
     ],
 )
 async def test_prepare_chat_context_budgets_history_only_for_ollama_backed_providers(

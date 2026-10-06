@@ -14,6 +14,7 @@ from app.constants.collections import (
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
 )
+from app.constants import LLMProvider
 from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PortConstants
 from app.models.settings import G8eeAppSettings
@@ -294,7 +295,7 @@ class TestG8eeSettingsOverlayIntegration:
         user_settings = await settings_service.get_user_settings(user_id)
 
         # LLM settings are user-specific only; missing user doc returns empty LLMSettings with None provider
-        assert user_settings.llm.primary_provider is None
+        assert user_settings.llm.primary_provider is LLMProvider.G8E
         assert user_settings.llm.primary_model is None
         assert user_settings.llm.gemini_api_key is None
 

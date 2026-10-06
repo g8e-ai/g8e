@@ -27,6 +27,8 @@ The dispatch endpoint returns the complete ``InferenceResult`` after the Inferen
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -64,7 +66,7 @@ from app.models.internal_api import (
     InferenceDispatchRequest,
     InferenceDispatchResponse,
 )
-from app.models.model_telemetry import GovernedDispatchEvidence
+from app.models.model_telemetry import GovernedDispatchEvidence, ModelResponseArtifact
 from g8e.constants import PLATFORM
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
@@ -82,6 +84,7 @@ from g8e.operator.v1.operator_pb2 import (
     InferenceMessage,
     InferenceMessagePart,
     InferenceModelVariant,
+    InferenceDispatchStreamFrame,
     InferenceResponseFormat,
     InferenceThinkingControl,
     InferenceToolCall,
@@ -96,6 +99,8 @@ _ROLE_PRIMARY = MODEL_ROLE_PRIMARY
 _ROLE_ASSISTANT = MODEL_ROLE_ASSISTANT
 _ROLE_LITE = MODEL_ROLE_LITE
 _REQUEST_SCHEMA_VERSION = PLATFORM["platform"]["InferenceRequestSchemaVersion"]["value"]
+_MAX_STREAM_CAPTURE_BYTES = 32 << 20
+_MAX_STREAM_CAPTURE_FRAMES = 65536
 
 
 # The inference operator verifies canonical form by round-tripping through Go's
@@ -732,26 +737,53 @@ class G8EProvider(LLMProvider):
         self._record_declared_tools(tool.name for tool in request.tools)
 
         completion: InferenceDispatchResponse | None = None
+        progress_parts = []
+        processing_error: Exception | None = None
         try:
-            for frame in await self._receive_stream(self._client.dispatch_inference_stream(request)):
-                if frame.HasField("failure"):
-                    failure = ValidationError(frame.failure.reason)
-                    self._raise_if_tool_declaration_rejected(
-                        failure, model=model, request=request
-                    )
-                    self._raise_if_context_overflow(failure, model=model, request=request)
-                    raise failure
-                if frame.HasField("completion"):
-                    completion = frame.completion
+            async with contextlib.aclosing(self._receive_dispatch_stream(request)) as stream:
+                async for frame in stream:
+                    if processing_error is not None:
+                        continue
+                    try:
+                        if completion is not None:
+                            raise ValidationError("Governed inference stream continues after completion")
+                        if frame.HasField("failure"):
+                            failure = ValidationError(frame.failure.reason)
+                            self._raise_if_tool_declaration_rejected(
+                                failure, model=model, request=request
+                            )
+                            self._raise_if_context_overflow(failure, model=model, request=request)
+                            raise failure
+                        if frame.HasField("progress"):
+                            progress = frame.progress
+                            if (
+                                progress.provider_attempt_id != request.provider_attempt_id
+                                or progress.sequence != len(progress_parts) + 1
+                            ):
+                                raise ValidationError("Governed inference progress identity or sequence mismatch")
+                            progress_parts.append(list(progress.parts))
+                            for chunk in _progress_parts_to_stream_chunks(progress):
+                                # Text is provisional; tools wait for the verified receipt.
+                                if not chunk.tool_calls:
+                                    yield chunk
+                        if frame.HasField("completion"):
+                            completion = frame.completion
+                    except Exception as exc:
+                        # Drain the stream after parsing fails to retain its raw tail.
+                        processing_error = exc
         except NetworkError as exc:
             self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
             self._raise_if_context_overflow(exc, model=model, request=request)
             raise
 
+        if processing_error is not None:
+            raise processing_error
         if completion is None:
             raise ValidationError("Governed inference stream ended without a completion frame")
         _validate_response_identity(request, completion)
         _response_parts(completion)
+        if [part for event_parts in progress_parts for part in event_parts] != list(completion.result.parts):
+            raise ValidationError("Governed inference progress differs from the terminal result")
         self._governed_dispatch_evidence.set(
             GovernedDispatchEvidence(
                 transaction_id=completion.transaction_id,
@@ -778,7 +810,65 @@ class G8EProvider(LLMProvider):
             )
         )
         for chunk in _response_to_stream_chunks(completion):
-            yield chunk
+            # Text/thinking already crossed the stream; do not replay it.
+            if chunk.tool_calls or chunk.finish_reason is not None:
+                yield chunk
+
+    async def _receive_dispatch_stream(
+        self, request: InferenceDispatchRequest,
+    ) -> AsyncGenerator[InferenceDispatchStreamFrame]:
+        """Capture bounded Gateway frames independently of their interpretation."""
+        from app.errors import ValidationError
+
+        artifact = ModelResponseArtifact()
+        self._response_artifact.set(artifact)
+        frames: list[InferenceDispatchStreamFrame] = []
+        available = asyncio.Event()
+        finished = False
+        receive_error: Exception | None = None
+
+        async def receive() -> None:
+            nonlocal finished, receive_error
+            captured_bytes = 0
+            try:
+                async for frame in self._client.dispatch_inference_stream(request):
+                    if len(frames) >= _MAX_STREAM_CAPTURE_FRAMES:
+                        raise ValidationError("Governed inference stream exceeds the frame limit")
+                    self._record_response(frame)
+                    captured_bytes += len(artifact.raw_frames[-1].encode("utf-8"))
+                    if captured_bytes > _MAX_STREAM_CAPTURE_BYTES:
+                        artifact.raw_frames.pop()
+                        raise ValidationError("Governed inference stream exceeds the capture limit")
+                    frames.append(frame)
+                    available.set()
+                artifact.received_complete = True
+            except Exception as exc:
+                receive_error = exc
+            finally:
+                finished = True
+                available.set()
+
+        receiver = asyncio.create_task(receive())
+        cursor = 0
+        try:
+            while True:
+                if cursor < len(frames):
+                    frame = frames[cursor]
+                    cursor += 1
+                    yield frame
+                elif finished:
+                    if receive_error is not None:
+                        raise receive_error
+                    break
+                else:
+                    available.clear()
+                    await available.wait()
+        except (asyncio.CancelledError, GeneratorExit):
+            receiver.cancel()
+            raise
+        finally:
+            with contextlib.suppress(asyncio.CancelledError):
+                await receiver
 
     async def generate_content_stream_primary(
         self,
@@ -786,13 +876,15 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        async for chunk in self.generate_content_stream_scored_role(
+        stream = self.generate_content_stream_scored_role(
             "primary",
             model,
             contents,
             primary_llm_settings,
-        ):
-            yield chunk
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
+                yield chunk
 
     async def generate_content_stream_scored_role(
         self,
@@ -810,7 +902,7 @@ class G8EProvider(LLMProvider):
             from app.errors import ValidationError
 
             raise ValidationError(f"Unsupported scored model role: {model_role}")
-        async for chunk in self._dispatch_stream(
+        stream = self._dispatch_stream(
             role_map[model_role],
             model,
             contents,
@@ -825,8 +917,10 @@ class G8EProvider(LLMProvider):
             primary_llm_settings.parallel_tool_calls,
             primary_llm_settings.thinking_config,
             primary_llm_settings.tools,
-        ):
-            yield chunk
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
+                yield chunk
 
     async def generate_content_primary(
         self,
@@ -858,7 +952,7 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        async for chunk in self._dispatch_stream(
+        stream = self._dispatch_stream(
             _ROLE_ASSISTANT,
             model,
             contents,
@@ -872,8 +966,10 @@ class G8EProvider(LLMProvider):
             None,
             None,
             None,
-        ):
-            yield chunk
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
+                yield chunk
 
     async def generate_content_assistant(
         self,
@@ -904,7 +1000,7 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        async for chunk in self._dispatch_stream(
+        stream = self._dispatch_stream(
             _ROLE_LITE,
             model,
             contents,
@@ -918,8 +1014,10 @@ class G8EProvider(LLMProvider):
             None,
             None,
             None,
-        ):
-            yield chunk
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
+                yield chunk
 
     async def generate_content_lite(
         self,
