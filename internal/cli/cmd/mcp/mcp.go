@@ -1101,6 +1101,11 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
+	integration, err := agent.Lookup(agentID)
+	if err != nil {
+		return fmt.Errorf("mcp: launch agent: %w", err)
+	}
+
 	// Use the shared interactive enrollment coordinator. mcp agent run is an
 	// interactive user-facing caller, so it uses the same trust and passkey
 	// policy as `auth enroll user`. The coordinator inspects local state and
@@ -1143,11 +1148,6 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 	}
 	if cleanup != nil {
 		defer cleanup()
-	}
-
-	integration, err := agent.Lookup(agentID)
-	if err != nil {
-		return fmt.Errorf("mcp: launch agent: %w", err)
 	}
 	return launchAgentProcess(integration, extraArgs, launchArgs)
 }

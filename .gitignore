@@ -141,11 +141,7 @@ yarn-error.log*
 .vitest-cache/
 
 
-# --- Deployment ---
-/site
-
 # --- Claude Code ---
-CLAUDE.md
 .claude/
 .claude/*
 

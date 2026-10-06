@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -143,6 +144,23 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrGatewayNotReady)
 	})
+}
+
+func TestLaunchAgentWithGovernance_UnknownAgentReturnsBeforeEnrollment(t *testing.T) {
+	cmdtest.ChdirTemp(t)
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(constants.PidDirname, constants.OperatorPIDFilename), []byte(strconv.Itoa(os.Getpid())), constants.PermFilePrivate))
+
+	originalLoad := shared.ConfigLoad
+	shared.ConfigLoad = func(string) (*config.Config, error) {
+		return cfg, nil
+	}
+	t.Cleanup(func() { shared.ConfigLoad = originalLoad })
+
+	err := launchAgentWithGovernance("unknown-agent-xyz", nil, false, "", cmdtest.FileSvcFactoryFor(fileSvc), authcmd.PanickingEnrollerFactory())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrAgentNotFound)
+	assert.NotContains(t, err.Error(), "enrollerFactory should not be called on this code path")
 }
 
 // ─── proxySessionToGateway connection refused ────────────────────────────────
