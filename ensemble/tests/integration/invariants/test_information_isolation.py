@@ -96,7 +96,7 @@ def test_reputation_information_isolation_invariant():
     all_violations = {}
 
     for py_file in get_all_python_files(PROJECT_ROOT):
-        relative_path = str(py_file.relative_to(PROJECT_ROOT))
+        relative_path = py_file.relative_to(PROJECT_ROOT).as_posix()
 
         if relative_path in ALLOW_LIST:
             continue

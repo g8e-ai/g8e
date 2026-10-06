@@ -1256,7 +1256,7 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		}
 
 		// Update server Addr if it was dynamic
-		if s.Addr == "0.0.0.0:0" {
+		if _, port, _ := net.SplitHostPort(s.Addr); port == "0" {
 			s.Addr = ln.Addr().String()
 		}
 

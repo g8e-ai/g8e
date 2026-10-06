@@ -86,7 +86,7 @@ def list_prompts(subdirectory: str = "") -> dict[str, Path]:
         if any(part.startswith(".") for part in file_path.parts) or "venv" in file_path.parts:
             continue
         relative_path = file_path.relative_to(PROMPTS_DIR)
-        prompt_name = str(relative_path).replace(".txt", "").replace("/", "_")
+        prompt_name = relative_path.as_posix().replace(".txt", "").replace("/", "_")
         prompts[prompt_name] = file_path
 
     return prompts

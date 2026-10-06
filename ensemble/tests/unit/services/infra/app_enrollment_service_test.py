@@ -32,6 +32,7 @@ import datetime as _dt
 import json
 import os
 import stat
+import sys
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -495,10 +496,14 @@ class TestEnrollPlatformEnrollment:
 
         cert_path = str(pki_dir / "issued" / "apps" / "g8ee.crt")
         key_path = str(pki_dir / "issued" / "apps" / "g8ee.key")
-        assert _file_mode(cert_path) == 0o600
-        assert _file_mode(key_path) == 0o644 or _file_mode(key_path) == 0o600
-        # The key must be 0600 (private).
-        assert _file_mode(key_path) == 0o600
+        if sys.platform != "win32":
+            assert _file_mode(cert_path) == 0o600
+            assert _file_mode(key_path) == 0o644 or _file_mode(key_path) == 0o600
+            # The key must be 0600 (private).
+            assert _file_mode(key_path) == 0o600
+        else:
+            assert os.path.isfile(cert_path)
+            assert os.path.isfile(key_path)
 
     async def test_persists_pending_state_with_0600_during_enrollment(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -595,7 +600,8 @@ class TestEnrollPlatformEnrollment:
         await asyncio.sleep(0.05)
 
         assert Path(pending_path_str).exists(), "pending state file should exist during enrollment"
-        assert _file_mode(pending_path_str) == 0o600
+        if sys.platform != "win32":
+            assert _file_mode(pending_path_str) == 0o600
 
         # Let enrollment complete.
         identity = await asyncio.wait_for(enroll_task, timeout=10.0)

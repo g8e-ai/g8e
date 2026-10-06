@@ -869,7 +869,7 @@ def _atomic_write_file(file_path: str, data: str, mode: int) -> None:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(data)
         os.chmod(tmp_path, mode)
-        os.rename(tmp_path, file_path)
+        os.replace(tmp_path, file_path)
     except Exception:
         try:
             os.unlink(tmp_path)

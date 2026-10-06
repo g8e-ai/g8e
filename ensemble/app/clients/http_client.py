@@ -197,7 +197,7 @@ class CircuitBreaker:
             if self.state == CircuitBreakerState.CLOSED:
                 return True
             if self.state == CircuitBreakerState.OPEN:
-                if time.time() - self.last_failure_time > self.config.recovery_time:
+                if time.time() - self.last_failure_time >= self.config.recovery_time:
                     self.state = CircuitBreakerState.HALF_OPEN
                     self.successes = 0
                     logger.info(

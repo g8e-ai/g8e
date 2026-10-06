@@ -115,7 +115,7 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 
 	bootstrap, status, err := capacityGetJSON[bootstrapCapacityResponse](ctx, env.client, origin+"/bootstrap", clientIP)
 	if err != nil || status != http.StatusOK {
-		return "bootstrap", status == http.StatusTooManyRequests
+		return fmt.Sprintf("bootstrap (status=%d, error=%v)", status, err), status == http.StatusTooManyRequests
 	}
 	source := bootstrap.Snapshot.SourceID
 	if source == "" {
@@ -135,7 +135,7 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 				"limit":  {"500"},
 			}), clientIP)
 			if err != nil || status != http.StatusOK {
-				return "history", status == http.StatusTooManyRequests
+				return fmt.Sprintf("history (status=%d, error=%v)", status, err), status == http.StatusTooManyRequests
 			}
 			if len(history.Items) > 0 {
 				cursor = history.Items[len(history.Items)-1].Sequence
@@ -149,7 +149,7 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 		}
 		snapshot, status, err := capacityGetJSON[snapshotCapacityResponse](ctx, env.client, capacityEndpoint(origin, "/snapshot", url.Values{"source": {source}}), clientIP)
 		if err != nil || status != http.StatusOK {
-			return "snapshot", status == http.StatusTooManyRequests
+			return fmt.Sprintf("snapshot (status=%d, error=%v)", status, err), status == http.StatusTooManyRequests
 		}
 		if snapshot.HighWaterSequence == cursor {
 			survived, status, outcome := env.openStream(ctx, source, cursor, clientIP, 200*time.Millisecond)
@@ -179,7 +179,7 @@ func (env *capacityMirrorEnv) openStream(ctx context.Context, source string, cur
 	}
 	response, err := env.client.Do(request)
 	if err != nil {
-		return false, 0, "stream"
+		return false, 0, fmt.Sprintf("stream (error=%v)", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -361,17 +361,22 @@ func TestPublicSpectatorStreamHold_ThousandDistinctClientsSurvive(t *testing.T) 
 	const clients = constants.PublicFeedSSEMaxSubscribers
 	hold := 300 * time.Millisecond
 	results := make(chan bool, clients)
+	errors := make(chan string, clients)
 	var wg sync.WaitGroup
 	wg.Add(clients)
 	for index := range clients {
 		go func(clientIndex int) {
 			defer wg.Done()
-			survived, status, _ := env.openStream(ctx, env.sourceID, 0, capacitySyntheticClientAddress(clientIndex), hold)
+			survived, status, outcome := env.openStream(ctx, env.sourceID, 0, capacitySyntheticClientAddress(clientIndex), hold)
 			results <- survived && status == http.StatusOK
+			if !survived || status != http.StatusOK {
+				errors <- fmt.Sprintf("status=%d, %s", status, outcome)
+			}
 		}(index)
 	}
 	wg.Wait()
 	close(results)
+	close(errors)
 
 	survived := 0
 	for ok := range results {
@@ -379,5 +384,9 @@ func TestPublicSpectatorStreamHold_ThousandDistinctClientsSurvive(t *testing.T) 
 			survived++
 		}
 	}
-	assert.Equal(t, clients, survived)
+	outcomes := make(map[string]int)
+	for outcome := range errors {
+		outcomes[outcome]++
+	}
+	assert.Equal(t, clients, survived, "outcomes: %v", outcomes)
 }

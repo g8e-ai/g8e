@@ -6,6 +6,7 @@ from app.constants.message_sender import MessageSender
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -243,14 +244,21 @@ class TestGetLatestChatSessionForCase:
         case = build_case_model(case_id="case-789", user_id=user_id, title="Test Case")
         mock_case_service.get_case = AsyncMock(return_value=case)
 
+        now_dt = datetime.now(timezone.utc)
         inv_old = create_investigation_data(
-            investigation_id="inv-old", case_id="case-789", user_id=user_id
+            investigation_id="inv-old",
+            case_id="case-789",
+            user_id=user_id,
+            created_at=now_dt - timedelta(minutes=5),
         )
         inv_old.conversation_history = [
             create_conversation_message(sender=MessageSender.USER_CHAT, content="Old")
         ]
         inv_new = create_investigation_data(
-            investigation_id="inv-new", case_id="case-789", user_id=user_id
+            investigation_id="inv-new",
+            case_id="case-789",
+            user_id=user_id,
+            created_at=now_dt,
         )
         inv_new.conversation_history = [
             create_conversation_message(sender=MessageSender.USER_CHAT, content="New")
