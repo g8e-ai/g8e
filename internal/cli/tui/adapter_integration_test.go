@@ -31,7 +31,7 @@ func runAdapter(t *testing.T, session Session, sender messageSender) func() {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		NewAdapter(session, sender).Run(ctx)
+		NewAdapter(session, "test@example.com", sender).Run(ctx)
 		close(done)
 	}()
 	return func() {

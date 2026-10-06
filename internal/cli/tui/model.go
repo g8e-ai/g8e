@@ -12,25 +12,48 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
+
+// Identity is the enrolled CLI identity the TUI runs as: the same fields
+// 'g8e auth' reports.
+type Identity struct {
+	UserID       string
+	CLISessionID string
+	OperatorID   string // bound Operator, empty when the CLI session is unbound
+}
 
 // Options configures the TUI at launch.
 type Options struct {
 	Version  string
-	NodeName string
-	NetLabel string
-	Quorum   int
-	Total    int
+	Identity Identity
 
 	// Session is the CLI's authenticated Gateway session (*api.Client). When
 	// nil the TUI runs without a live event source.
 	Session Session
 
+	// ApprovalURL returns the browser WebAuthn approval page for a pending
+	// transaction (auth.ApprovalPageURL), and OpenBrowser opens it
+	// (platform.OpenBrowser) — the same flow as 'g8e auth approve'. When
+	// either is nil, approving from the TUI is disabled.
+	ApprovalURL func(txHash string) string
+	OpenBrowser func(url string) error
+
 	// ProgramOptions are appended to the default bubbletea program options
 	// (AltScreen, MouseCellMotion). Tests use this to inject headless options.
 	ProgramOptions []tea.ProgramOption
 }
+
+// pane identifies a focusable pane.
+type pane int
+
+const (
+	paneLedger pane = iota
+	paneApprovals
+	paneOperators
+	paneCount
+)
 
 // Model is the bubbletea state container for the Tactical Governance Console.
 type Model struct {
@@ -39,8 +62,14 @@ type Model struct {
 
 	// Configuration
 	version  string
-	nodeName string
-	netLabel string
+	identity Identity
+
+	// Gateway access and the approve flow. gw is nil without a session.
+	gw          *gateway
+	approvalURL func(string) string
+	openBrowser func(string) error
+
+	focus pane
 
 	// Pipeline state — 5 entries: L1-L5
 	pipeline []pipelineStageState
@@ -50,16 +79,24 @@ type Model struct {
 	ledger       []ledgerEntry
 	ledgerScroll int // 0 = auto-scroll to bottom; >0 = manual offset from bottom
 
-	// Consensus state
-	consensus     []consensusMemberState
-	quorum        int
-	total         int
-	result        ConsensusResult
-	consensusHash string
+	// Pending L3 approvals in Gateway order from the last successful refresh,
+	// the selected row, and the transactions whose browser approval page was
+	// opened from the TUI and are awaiting approval.completed.
+	pending          []models.SuspendedTxResponse
+	pendingSelected  int
+	awaitingApproval map[string]struct{}
 
-	// Pending L3 approvals, keyed by transaction hash, from the last
-	// successful pending-approval refresh.
-	pending map[string]struct{}
+	// Operators from the last successful refresh: connected ones only, plus
+	// the total the Gateway listed.
+	operators         []models.OperatorDocumentGo
+	operatorsTotal    int
+	operatorsLoaded   bool
+	operatorsErr      string
+	operatorsSelected int
+
+	// Gateway health: posture is nil until health is fetched.
+	posture        governance.GovernancePosture
+	gatewayVersion string
 
 	// Animation
 	blinkOn bool
@@ -72,30 +109,13 @@ type Model struct {
 	quitting bool
 }
 
-// NewModel constructs a Model with all pipeline stages idle and consensus
-// members in pending state.
+// NewModel constructs a Model with all pipeline stages idle.
 func NewModel(opts Options) Model {
-	members := []consensusMemberState{
-		{name: constants.ConsensusMemberAxiom},
-		{name: constants.ConsensusMemberConcord},
-		{name: constants.ConsensusMemberVariance},
-		{name: constants.ConsensusMemberPragma},
-		{name: constants.ConsensusMemberNemesis},
-	}
-
-	quorum := opts.Quorum
-	if quorum == 0 {
-		quorum = 3
-	}
-	total := opts.Total
-	if total == 0 {
-		total = 5
-	}
-
-	return Model{
-		version:  opts.Version,
-		nodeName: opts.NodeName,
-		netLabel: opts.NetLabel,
+	m := Model{
+		version:     opts.Version,
+		identity:    opts.Identity,
+		approvalURL: opts.ApprovalURL,
+		openBrowser: opts.OpenBrowser,
 		pipeline: []pipelineStageState{
 			{status: StatusIdle},
 			{status: StatusIdle},
@@ -103,12 +123,13 @@ func NewModel(opts Options) Model {
 			{status: StatusIdle},
 			{status: StatusIdle},
 		},
-		ledger:    make([]ledgerEntry, 0, 64),
-		consensus: members,
-		quorum:    quorum,
-		total:     total,
-		result:    ConsensusPending,
+		ledger:           make([]ledgerEntry, 0, 64),
+		awaitingApproval: make(map[string]struct{}),
 	}
+	if opts.Session != nil {
+		m.gw = &gateway{session: opts.Session, userID: opts.Identity.UserID}
+	}
+	return m
 }
 
 // Init implements tea.Model.

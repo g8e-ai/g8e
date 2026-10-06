@@ -74,10 +74,7 @@ func TestRun_QuitViaCtrlC(t *testing.T) {
 func TestRun_PassesOptionsToModel(t *testing.T) {
 	opts := Options{
 		Version:        "v1.3.6",
-		NodeName:       "node-alpha",
-		NetLabel:       "mTLS",
-		Quorum:         4,
-		Total:          7,
+		Identity:       Identity{UserID: "user-1", CLISessionID: "cli-1", OperatorID: "op-1"},
 		ProgramOptions: headlessProgramOptions("q"),
 	}
 
@@ -91,10 +88,7 @@ func TestRun_PassesOptionsToModel(t *testing.T) {
 	<-done
 
 	assert.Equal(t, "v1.3.6", capturedModel.version)
-	assert.Equal(t, "node-alpha", capturedModel.nodeName)
-	assert.Equal(t, "mTLS", capturedModel.netLabel)
-	assert.Equal(t, 4, capturedModel.quorum)
-	assert.Equal(t, 7, capturedModel.total)
+	assert.Equal(t, opts.Identity, capturedModel.identity)
 }
 
 type stubSession struct{}

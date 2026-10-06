@@ -8,6 +8,8 @@
 package tui
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
@@ -28,35 +31,18 @@ func TestNewModel(t *testing.T) {
 		}
 	})
 
-	t.Run("defaults quorum and total when zero", func(t *testing.T) {
-		m := NewModel(Options{})
-		assert.Equal(t, 3, m.quorum)
-		assert.Equal(t, 5, m.total)
-	})
-
-	t.Run("uses provided quorum and total", func(t *testing.T) {
-		m := NewModel(Options{Quorum: 4, Total: 7})
-		assert.Equal(t, 4, m.quorum)
-		assert.Equal(t, 7, m.total)
-	})
-
-	t.Run("initializes 5 consensus members", func(t *testing.T) {
-		m := NewModel(Options{})
-		assert.Len(t, m.consensus, 5)
-		for _, member := range m.consensus {
-			assert.False(t, member.signed, "member %s should be unsigned", member.name)
-			assert.False(t, member.decision, "member %s should not have decision", member.name)
-		}
-	})
-
-	t.Run("starts with empty ledger", func(t *testing.T) {
+	t.Run("starts with empty ledger, no posture, and ledger focus", func(t *testing.T) {
 		m := NewModel(Options{})
 		assert.Empty(t, m.ledger)
+		assert.Nil(t, m.posture)
+		assert.Equal(t, paneLedger, m.focus)
 	})
 
-	t.Run("consensus starts pending", func(t *testing.T) {
-		m := NewModel(Options{})
-		assert.Equal(t, ConsensusPending, m.result)
+	t.Run("has gateway access only with a session", func(t *testing.T) {
+		assert.Nil(t, NewModel(Options{}).gw)
+		m := NewModel(Options{Session: &testSession{}, Identity: Identity{UserID: "user-1"}})
+		require.NotNil(t, m.gw)
+		assert.Equal(t, "user-1", m.gw.userID)
 	})
 }
 
@@ -212,73 +198,225 @@ func TestApplyPendingApprovalsMsg(t *testing.T) {
 	assert.Equal(t, LevelWarn, m.ledger[1].level)
 }
 
-func TestApplyConsensusMsg(t *testing.T) {
-	t.Run("updates member vote to approve", func(t *testing.T) {
-		m := NewModel(Options{})
-		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   constants.ConsensusMemberAxiom,
-			Decision: true,
-			Signed:   true,
-		})
-		assert.Equal(t, constants.ConsensusMemberAxiom, m.consensus[0].name)
-		assert.True(t, m.consensus[0].decision)
-		assert.True(t, m.consensus[0].signed)
+func pendingTxs(hashes ...string) PendingApprovalsMsg {
+	msg := PendingApprovalsMsg{}
+	for _, h := range hashes {
+		msg.Transactions = append(msg.Transactions, models.SuspendedTxResponse{TransactionHash: h, ToolName: "run_command"})
+	}
+	return msg
+}
+
+func press(t *testing.T, m Model, key tea.KeyMsg) (Model, tea.Cmd) {
+	t.Helper()
+	model, cmd := m.Update(key)
+	return model.(Model), cmd
+}
+
+var (
+	keyTab   = tea.KeyMsg{Type: tea.KeyTab}
+	keyDown  = tea.KeyMsg{Type: tea.KeyDown}
+	keyEnter = tea.KeyMsg{Type: tea.KeyEnter}
+	keyA     = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	keyR     = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+)
+
+func TestPendingApprovalSelection(t *testing.T) {
+	t.Run("tab focuses approvals and j/k select within them", func(t *testing.T) {
+		m := NewModel(Options{}).applyPendingApprovalsMsg(pendingTxs("tx-1", "tx-2", "tx-3"))
+		m, _ = press(t, m, keyTab)
+		assert.Equal(t, paneApprovals, m.focus)
+
+		m, _ = press(t, m, keyDown)
+		m, _ = press(t, m, keyDown)
+		m, _ = press(t, m, keyDown)
+		assert.Equal(t, 2, m.pendingSelected, "selection stops at the last row")
+		assert.Equal(t, 0, m.ledgerScroll, "moving in approvals must not scroll the ledger")
 	})
 
-	t.Run("updates member vote to veto", func(t *testing.T) {
+	t.Run("tab cycles through every pane", func(t *testing.T) {
 		m := NewModel(Options{})
-		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   constants.ConsensusMemberPragma,
-			Decision: false,
-			Signed:   true,
-		})
-		assert.Equal(t, constants.ConsensusMemberPragma, m.consensus[3].name)
-		assert.False(t, m.consensus[3].decision)
-		assert.True(t, m.consensus[3].signed)
-	})
-
-	t.Run("updates quorum and total", func(t *testing.T) {
-		m := NewModel(Options{})
-		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: constants.ConsensusMemberAxiom,
-			Quorum: 4,
-			Total:  5,
-		})
-		assert.Equal(t, 4, m.quorum)
-		assert.Equal(t, 5, m.total)
-	})
-
-	t.Run("updates result to rejected", func(t *testing.T) {
-		m := NewModel(Options{})
-		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: constants.ConsensusMemberPragma,
-			Result: ConsensusRejected,
-			Hash:   "abcdef1234567890",
-		})
-		assert.Equal(t, ConsensusRejected, m.result)
-		assert.Equal(t, "abcdef1234567890", m.consensusHash)
-	})
-
-	t.Run("does not overwrite result with pending", func(t *testing.T) {
-		m := NewModel(Options{})
-		m.result = ConsensusReached
-		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: constants.ConsensusMemberAxiom,
-			Result: ConsensusPending,
-		})
-		assert.Equal(t, ConsensusReached, m.result)
-	})
-
-	t.Run("ignores unknown member name", func(t *testing.T) {
-		m := NewModel(Options{})
-		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   constants.ConsensusMember("unknown"),
-			Decision: true,
-			Signed:   true,
-		})
-		for _, member := range m.consensus {
-			assert.False(t, member.signed, "member %s should remain unsigned", member.name)
+		for range paneCount {
+			m, _ = press(t, m, keyTab)
 		}
+		assert.Equal(t, paneLedger, m.focus)
+		m, _ = press(t, m, tea.KeyMsg{Type: tea.KeyShiftTab})
+		assert.Equal(t, paneOperators, m.focus)
+	})
+
+	t.Run("selection follows the selected transaction across refreshes", func(t *testing.T) {
+		m := NewModel(Options{}).applyPendingApprovalsMsg(pendingTxs("tx-1", "tx-2"))
+		m.pendingSelected = 1
+		m = m.applyPendingApprovalsMsg(pendingTxs("tx-0", "tx-1", "tx-2"))
+		assert.Equal(t, 2, m.pendingSelected)
+		m = m.applyPendingApprovalsMsg(pendingTxs("tx-0"))
+		assert.Equal(t, 0, m.pendingSelected, "selection resets when the transaction is gone")
+	})
+}
+
+func TestApproveFlow(t *testing.T) {
+	t.Run("a opens the approval page for the selected transaction", func(t *testing.T) {
+		var opened string
+		m := NewModel(Options{
+			Session:     &testSession{},
+			ApprovalURL: func(tx string) string { return "https://gw/approve/" + tx },
+			OpenBrowser: func(url string) error { opened = url; return nil },
+		}).applyPendingApprovalsMsg(pendingTxs("tx-1", "tx-2"))
+		m.pendingSelected = 1
+
+		m, cmd := press(t, m, keyA)
+		require.NotNil(t, cmd)
+		msg := cmd()
+		assert.Equal(t, ApprovalOpenedMsg{TxHash: "tx-2", URL: "https://gw/approve/tx-2"}, msg)
+		assert.Equal(t, "https://gw/approve/tx-2", opened)
+
+		model, _ := m.Update(msg)
+		m = model.(Model)
+		assert.Contains(t, m.awaitingApproval, "tx-2")
+		assert.Contains(t, m.ledger[len(m.ledger)-1].message, "https://gw/approve/tx-2")
+	})
+
+	t.Run("enter approves only when the approvals pane has focus", func(t *testing.T) {
+		m := NewModel(Options{
+			ApprovalURL: func(tx string) string { return tx },
+			OpenBrowser: func(string) error { return nil },
+		}).applyPendingApprovalsMsg(pendingTxs("tx-1"))
+		_, cmd := press(t, m, keyEnter)
+		assert.Nil(t, cmd)
+		m, _ = press(t, m, keyTab)
+		_, cmd = press(t, m, keyEnter)
+		assert.NotNil(t, cmd)
+	})
+
+	t.Run("a browser failure points the user at the URL", func(t *testing.T) {
+		m := NewModel(Options{})
+		model, _ := m.Update(ApprovalOpenedMsg{TxHash: "tx-1", URL: "https://gw/approve/tx-1", Err: constants.ErrNotFound})
+		m = model.(Model)
+		last := m.ledger[len(m.ledger)-1]
+		assert.Equal(t, LevelWarn, last.level)
+		assert.Contains(t, last.message, "https://gw/approve/tx-1")
+	})
+
+	t.Run("without the approve flow, a points at the CLI command", func(t *testing.T) {
+		m := NewModel(Options{}).applyPendingApprovalsMsg(pendingTxs("tx-1"))
+		m, cmd := press(t, m, keyA)
+		assert.Nil(t, cmd)
+		assert.Contains(t, m.ledger[len(m.ledger)-1].message, "g8e auth approve tx-1")
+	})
+
+	t.Run("with nothing pending, a does nothing but say so", func(t *testing.T) {
+		m, cmd := press(t, NewModel(Options{}), keyA)
+		assert.Nil(t, cmd)
+		assert.Contains(t, m.ledger[0].message, "No pending approvals")
+	})
+
+	t.Run("approval.completed is verified over mTLS, then pending is re-listed", func(t *testing.T) {
+		session := &testSession{statusJSON: `{"status":"approved","tool_name":"run_command"}`}
+		m := NewModel(Options{Session: session})
+		m.awaitingApproval["tx-1"] = struct{}{}
+
+		model, cmd := m.Update(ApprovalCompletedMsg{TxHash: "tx-1"})
+		m = model.(Model)
+		assert.Equal(t, StatusPassed, m.pipeline[StageL3].status)
+		require.NotNil(t, cmd)
+		verified, ok := cmd().(ApprovalVerifiedMsg)
+		require.True(t, ok)
+		require.NoError(t, verified.Err)
+		assert.Contains(t, session.requestedPaths(), constants.APIPaths.ApprovalsCLIStatus+"tx-1")
+
+		model, cmd = m.Update(verified)
+		m = model.(Model)
+		assert.NotContains(t, m.awaitingApproval, "tx-1")
+		assert.Contains(t, m.ledger[len(m.ledger)-1].message, "approved (run_command)")
+		require.NotNil(t, cmd)
+		_, ok = cmd().(PendingApprovalsMsg)
+		assert.True(t, ok, "a verified approval re-lists pending approvals")
+	})
+
+	t.Run("a non-approved status is reported as a failure", func(t *testing.T) {
+		m := NewModel(Options{Session: &testSession{statusJSON: `{"status":"expired_or_not_found"}`}})
+		_, cmd := m.Update(ApprovalCompletedMsg{TxHash: "tx-1"})
+		verified := cmd().(ApprovalVerifiedMsg)
+		require.Error(t, verified.Err)
+
+		model, _ := m.Update(verified)
+		m = model.(Model)
+		last := m.ledger[len(m.ledger)-1]
+		assert.Equal(t, LevelWarn, last.level)
+		assert.Contains(t, last.message, "expired or not found")
+	})
+}
+
+func TestApplyOperatorsMsg(t *testing.T) {
+	m := NewModel(Options{})
+	m = m.applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+		{ID: "op-1", Status: constants.OperatorStatusActive},
+		{ID: "op-2", Status: constants.OperatorStatusOffline},
+		{ID: "slot", IsSlot: true, Status: constants.OperatorStatusAvailable},
+	}})
+	require.Len(t, m.operators, 1, "only connected Operators are listed, as in 'g8e gw status'")
+	assert.Equal(t, "op-1", m.operators[0].ID)
+	assert.Equal(t, 3, m.operatorsTotal)
+	assert.True(t, m.operatorsLoaded)
+
+	m = m.applyOperatorsMsg(OperatorsMsg{Err: constants.ErrHTTPStatusError})
+	assert.NotEmpty(t, m.operatorsErr)
+	assert.Len(t, m.operators, 1, "a failed refresh keeps the last list")
+}
+
+func TestApplyHealthMsg(t *testing.T) {
+	m := NewModel(Options{})
+	m = m.applyHealthMsg(HealthMsg{Health: models.HealthResponse{Posture: constants.PostureRatify, Version: "v2.3.2"}})
+	require.NotNil(t, m.posture)
+	assert.Equal(t, constants.PostureRatify, m.posture.Name())
+	assert.Equal(t, "v2.3.2", m.gatewayVersion)
+
+	m = m.applyHealthMsg(HealthMsg{Health: models.HealthResponse{Posture: "bogus"}})
+	assert.Nil(t, m.posture)
+	assert.Equal(t, LevelWarn, m.ledger[len(m.ledger)-1].level)
+}
+
+func TestSessionExpiry(t *testing.T) {
+	expired := &api.StatusError{StatusCode: http.StatusUnauthorized, Body: "CLI session expired"}
+	for name, msg := range map[string]tea.Msg{
+		"pending approvals": PendingApprovalsMsg{Err: expired},
+		"operators":         OperatorsMsg{Err: expired},
+		"health":            HealthMsg{Err: expired},
+	} {
+		t.Run(name, func(t *testing.T) {
+			model, _ := NewModel(Options{}).Update(msg)
+			m := model.(Model)
+			assert.Equal(t, ConnFailed, m.connStatus)
+			assert.Contains(t, m.connDetail, "g8e auth refresh")
+		})
+	}
+
+	t.Run("other errors leave the connection state alone", func(t *testing.T) {
+		m := NewModel(Options{})
+		m.connStatus = ConnConnected
+		model, _ := m.Update(PendingApprovalsMsg{Err: &api.StatusError{StatusCode: http.StatusInternalServerError}})
+		assert.Equal(t, ConnConnected, model.(Model).connStatus)
+	})
+}
+
+func TestRefreshKey(t *testing.T) {
+	t.Run("r re-fetches approvals, operators, and health", func(t *testing.T) {
+		session := &testSession{}
+		_, cmd := press(t, NewModel(Options{Session: session}), keyR)
+		require.NotNil(t, cmd)
+		batch, ok := cmd().(tea.BatchMsg)
+		require.True(t, ok)
+		for _, c := range batch {
+			c()
+		}
+		paths := session.requestedPaths()
+		assert.Contains(t, paths, constants.APIPaths.ApprovalsCLIList)
+		assert.Contains(t, paths, constants.APIPaths.Health)
+		assert.Contains(t, strings.Join(paths, " "), constants.APIPaths.Operators)
+	})
+
+	t.Run("r without a session does nothing", func(t *testing.T) {
+		_, cmd := press(t, NewModel(Options{}), keyR)
+		assert.Nil(t, cmd)
 	})
 }
 
@@ -445,16 +583,6 @@ func TestWindowSizeMsg(t *testing.T) {
 	m = model.(Model)
 	assert.Equal(t, 120, m.width)
 	assert.Equal(t, 40, m.height)
-}
-
-func TestCountAffirmative(t *testing.T) {
-	m := NewModel(Options{})
-	assert.Equal(t, 0, m.countAffirmative())
-
-	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.ConsensusMemberAxiom, Decision: true, Signed: true})
-	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.ConsensusMemberConcord, Decision: true, Signed: true})
-	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.ConsensusMemberVariance, Decision: false, Signed: true})
-	assert.Equal(t, 2, m.countAffirmative())
 }
 
 func TestShortHash(t *testing.T) {

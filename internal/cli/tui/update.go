@@ -8,10 +8,19 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/api"
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
+
+// requestTimeout bounds each Gateway request issued from a key press.
+const requestTimeout = 10 * time.Second
 
 // Update implements tea.Model. It routes messages to state transitions.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -22,26 +31,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			m.quitting = true
-			return m, tea.Quit
-		case "up", "k":
-			if m.ledgerScroll < len(m.ledger)-1 {
-				m.ledgerScroll++
-			}
-		case "down", "j":
-			if m.ledgerScroll > 0 {
-				m.ledgerScroll--
-			}
-		case "g":
-			m.ledgerScroll = len(m.ledger) - 1
-			if m.ledgerScroll < 0 {
-				m.ledgerScroll = 0
-			}
-		case "G":
-			m.ledgerScroll = 0
-		}
+		return m.handleKey(msg)
 
 	case PipelineMsg:
 		m = m.applyPipelineMsg(msg)
@@ -52,9 +42,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LedgerMsg:
 		m = m.applyLedgerMsg(msg)
 
-	case ConsensusMsg:
-		m = m.applyConsensusMsg(msg)
-
 	case ConnStatusMsg:
 		m.connStatus = msg.Status
 		m.connDetail = msg.Detail
@@ -64,6 +51,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.hasBlinkingState() {
 			return m, tick()
 		}
+
+	case OperatorsMsg:
+		m = m.applyOperatorsMsg(msg)
+
+	case HealthMsg:
+		m = m.applyHealthMsg(msg)
+
+	case ApprovalOpenedMsg:
+		m = m.applyApprovalOpenedMsg(msg)
+
+	case ApprovalCompletedMsg:
+		m = m.applyPipelineMsg(PipelineMsg{Stage: StageL3, Status: StatusPassed, TxID: msg.TxHash, Detail: "Approval completed"})
+		m = m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: "Approval completed for tx " + msg.TxHash + " — verifying"})
+		if m.gw != nil && msg.TxHash != "" {
+			return m, m.verifyApprovalCmd(msg.TxHash)
+		}
+
+	case ApprovalVerifiedMsg:
+		return m.applyApprovalVerifiedMsg(msg)
 
 	case ScenarioCompleteMsg:
 		level := LevelCritical
@@ -95,6 +101,115 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleKey applies a key press. Movement keys act on the focused pane.
+func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "tab":
+		m.focus = (m.focus + 1) % paneCount
+	case "shift+tab":
+		m.focus = (m.focus + paneCount - 1) % paneCount
+	case "up", "k":
+		m = m.moveSelection(-1)
+	case "down", "j":
+		m = m.moveSelection(1)
+	case "g":
+		if m.focus == paneLedger {
+			m.ledgerScroll = max(len(m.ledger)-1, 0)
+		}
+	case "G":
+		if m.focus == paneLedger {
+			m.ledgerScroll = 0
+		}
+	case "a":
+		return m.approveSelected()
+	case "enter":
+		if m.focus == paneApprovals {
+			return m.approveSelected()
+		}
+	case "r":
+		return m, m.refreshCmd()
+	}
+	return m, nil
+}
+
+// moveSelection moves within the focused pane: older/newer ledger lines, or
+// the previous/next pending approval or Operator.
+func (m Model) moveSelection(delta int) Model {
+	switch m.focus {
+	case paneLedger:
+		// Up (delta -1) scrolls toward older entries.
+		m.ledgerScroll = clamp(m.ledgerScroll-delta, 0, max(len(m.ledger)-1, 0))
+	case paneApprovals:
+		m.pendingSelected = clamp(m.pendingSelected+delta, 0, max(len(m.pending)-1, 0))
+	case paneOperators:
+		m.operatorsSelected = clamp(m.operatorsSelected+delta, 0, max(len(m.operators)-1, 0))
+	}
+	return m
+}
+
+// approveSelected starts the browser WebAuthn approval of the selected
+// pending transaction: the same page 'g8e auth approve' opens. Completion
+// arrives as approval.completed on the TUI's existing stream.
+func (m Model) approveSelected() (tea.Model, tea.Cmd) {
+	if len(m.pending) == 0 {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: "No pending approvals to approve"}), nil
+	}
+	if m.approvalURL == nil || m.openBrowser == nil {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Approving from the TUI is unavailable; run 'g8e auth approve " + m.pending[m.pendingSelected].TransactionHash + "'"}), nil
+	}
+	txHash := m.pending[m.pendingSelected].TransactionHash
+	url := m.approvalURL(txHash)
+	open := m.openBrowser
+	return m, func() tea.Msg {
+		return ApprovalOpenedMsg{TxHash: txHash, URL: url, Err: open(url)}
+	}
+}
+
+// refreshCmd re-fetches pending approvals, Operators, and Gateway health.
+func (m Model) refreshCmd() tea.Cmd {
+	if m.gw == nil {
+		return nil
+	}
+	gw := m.gw
+	return tea.Batch(
+		withTimeout(gw.fetchPendingApprovals),
+		withTimeout(gw.fetchOperators),
+		withTimeout(gw.fetchHealth),
+	)
+}
+
+// verifyApprovalCmd confirms a completed approval over mTLS.
+func (m Model) verifyApprovalCmd(txHash string) tea.Cmd {
+	gw := m.gw
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		return gw.verifyApproval(ctx, txHash)
+	}
+}
+
+// withTimeout adapts a Gateway fetch to a tea.Cmd bounded by requestTimeout.
+func withTimeout[T tea.Msg](fetch func(context.Context) T) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		return fetch(ctx)
+	}
+}
+
+// noteSessionError marks the connection failed when err is a Gateway 401, so
+// an expired CLI session shows the same recovery as the rest of the CLI.
+func (m Model) noteSessionError(err error) Model {
+	if api.IsUnauthorized(err) {
+		m.connStatus = ConnFailed
+		m.connDetail = sessionExpiredDetail
+	}
+	return m
+}
+
 // applyPipelineMsg updates a pipeline stage's status and detail.
 func (m Model) applyPipelineMsg(msg PipelineMsg) Model {
 	idx := int(msg.Stage)
@@ -109,30 +224,39 @@ func (m Model) applyPipelineMsg(msg PipelineMsg) Model {
 	return m
 }
 
-// applyPendingApprovalsMsg reconciles the pending L3 approval set: each newly
-// pending transaction is announced in the ledger with the CLI command that
-// approves it, and the L3 stage reflects whether anything is still waiting.
+// applyPendingApprovalsMsg reconciles the pending L3 approval queue: each
+// newly pending transaction is announced in the ledger with the CLI command
+// that approves it, the selection follows the previously selected
+// transaction, and the L3 stage reflects whether anything is still waiting.
 func (m Model) applyPendingApprovalsMsg(msg PendingApprovalsMsg) Model {
 	if msg.Err != nil {
+		m = m.noteSessionError(msg.Err)
 		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Pending approvals refresh failed: " + msg.Err.Error()})
 	}
 
-	next := make(map[string]struct{}, len(msg.Transactions))
-	for _, tx := range msg.Transactions {
-		next[tx.TransactionHash] = struct{}{}
-		if _, seen := m.pending[tx.TransactionHash]; seen {
-			continue
+	known := make(map[string]struct{}, len(m.pending))
+	for _, tx := range m.pending {
+		known[tx.TransactionHash] = struct{}{}
+	}
+	selectedHash := ""
+	if m.pendingSelected < len(m.pending) {
+		selectedHash = m.pending[m.pendingSelected].TransactionHash
+	}
+
+	m.pendingSelected = 0
+	for i, tx := range msg.Transactions {
+		if tx.TransactionHash == selectedHash {
+			m.pendingSelected = i
 		}
-		tool := tx.ToolName
-		if tool == "" {
-			tool = "transaction"
+		if _, seen := known[tx.TransactionHash]; seen {
+			continue
 		}
 		m = m.applyLedgerMsg(LedgerMsg{
 			Level:   LevelWarn,
-			Message: fmt.Sprintf("APPROVAL REQUIRED: %s (tx %s) — run 'g8e auth approve %s'", tool, shortHash(tx.TransactionHash), tx.TransactionHash),
+			Message: fmt.Sprintf("APPROVAL REQUIRED: %s (tx %s) — press 'a' or run 'g8e auth approve %s'", toolLabel(tx.ToolName), shortHash(tx.TransactionHash), tx.TransactionHash),
 		})
 	}
-	m.pending = next
+	m.pending = msg.Transactions
 
 	l3 := &m.pipeline[StageL3]
 	switch {
@@ -144,6 +268,68 @@ func (m Model) applyPendingApprovalsMsg(msg PendingApprovalsMsg) Model {
 		l3.status = StatusIdle
 		l3.detail = ""
 	}
+	return m
+}
+
+// applyApprovalOpenedMsg records a browser approval started from the TUI.
+func (m Model) applyApprovalOpenedMsg(msg ApprovalOpenedMsg) Model {
+	m.awaitingApproval[msg.TxHash] = struct{}{}
+	if msg.Err != nil {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: fmt.Sprintf("Could not open a browser (%s); approve tx %s at %s", msg.Err, shortHash(msg.TxHash), msg.URL)})
+	}
+	return m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: fmt.Sprintf("Opened browser for WebAuthn approval of tx %s: %s", shortHash(msg.TxHash), msg.URL)})
+}
+
+// applyApprovalVerifiedMsg reports the verified outcome and re-lists pending
+// approvals.
+func (m Model) applyApprovalVerifiedMsg(msg ApprovalVerifiedMsg) (tea.Model, tea.Cmd) {
+	delete(m.awaitingApproval, msg.TxHash)
+	if msg.Err != nil {
+		m = m.noteSessionError(msg.Err)
+		m = m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Approval verification failed: " + msg.Err.Error()})
+	} else {
+		m = m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: fmt.Sprintf("✓ Transaction %s approved (%s)", shortHash(msg.TxHash), toolLabel(msg.Status.ToolName))})
+	}
+	if m.gw == nil {
+		return m, nil
+	}
+	return m, withTimeout(m.gw.fetchPendingApprovals)
+}
+
+// applyOperatorsMsg keeps the connected Operators, using the same
+// connectivity rule as 'g8e gw status'.
+func (m Model) applyOperatorsMsg(msg OperatorsMsg) Model {
+	if msg.Err != nil {
+		m = m.noteSessionError(msg.Err)
+		m.operatorsErr = msg.Err.Error()
+		return m
+	}
+	m.operatorsErr = ""
+	m.operatorsLoaded = true
+	m.operatorsTotal = len(msg.Operators)
+	m.operators = m.operators[:0:0]
+	for _, op := range msg.Operators {
+		if clioperator.IsConnected(op) {
+			m.operators = append(m.operators, op)
+		}
+	}
+	m.operatorsSelected = clamp(m.operatorsSelected, 0, max(len(m.operators)-1, 0))
+	return m
+}
+
+// applyHealthMsg records the Gateway's governance posture.
+func (m Model) applyHealthMsg(msg HealthMsg) Model {
+	if msg.Err != nil {
+		m = m.noteSessionError(msg.Err)
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Gateway health unavailable: " + msg.Err.Error()})
+	}
+	m.gatewayVersion = msg.Health.Version
+	posture, err := governance.ParseGovernancePosture(msg.Health.Posture)
+	if err != nil {
+		m.posture = nil
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Gateway reported an unknown posture: " + err.Error()})
+	}
+	m.posture = posture
 	return m
 }
 
@@ -161,27 +347,15 @@ func (m Model) applyLedgerMsg(msg LedgerMsg) Model {
 	return m
 }
 
-// applyConsensusMsg updates a consensus member's vote state and the overall
-// consensus result.
-func (m Model) applyConsensusMsg(msg ConsensusMsg) Model {
-	for i, member := range m.consensus {
-		if member.name == msg.Member {
-			m.consensus[i].decision = msg.Decision
-			m.consensus[i].signed = msg.Signed
-			break
-		}
+// toolLabel names a suspended transaction's tool for display.
+func toolLabel(tool string) string {
+	if tool == "" {
+		return "transaction"
 	}
-	if msg.Quorum > 0 {
-		m.quorum = msg.Quorum
-	}
-	if msg.Total > 0 {
-		m.total = msg.Total
-	}
-	if msg.Result != ConsensusPending {
-		m.result = msg.Result
-	}
-	if msg.Hash != "" {
-		m.consensusHash = msg.Hash
-	}
-	return m
+	return tool
+}
+
+// clamp bounds v to [lo, hi].
+func clamp(v, lo, hi int) int {
+	return min(max(v, lo), hi)
 }

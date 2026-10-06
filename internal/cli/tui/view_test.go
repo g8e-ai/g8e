@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestView_QuittingReturnsEmpty(t *testing.T) {
@@ -51,8 +53,9 @@ func TestView_ContainsAllPaneHeaders(t *testing.T) {
 	out := m.View()
 	assert.Contains(t, out, "EXECUTION PIPELINE")
 	assert.Contains(t, out, "SOVEREIGN AUDIT LEDGER")
-	assert.Contains(t, out, "L2 CONSENSUS")
-	assert.Contains(t, out, "g8e OPERATOR CONSOLE")
+	assert.Contains(t, out, "PENDING APPROVALS")
+	assert.Contains(t, out, "OPERATORS")
+	assert.Contains(t, out, "g8e TACTICAL GOVERNANCE CONSOLE")
 }
 
 func TestView_ContainsAllPipelineStages(t *testing.T) {
@@ -67,18 +70,6 @@ func TestView_ContainsAllPipelineStages(t *testing.T) {
 	assert.Contains(t, out, "L5: Actuator")
 }
 
-func TestView_ContainsAllConsensusMembers(t *testing.T) {
-	m := NewModel(Options{})
-	m.width = 120
-	m.height = 40
-	out := m.View()
-	upper := strings.ToUpper(out)
-	assert.Contains(t, upper, "AXIOM")
-	assert.Contains(t, upper, "CONCORD")
-	assert.Contains(t, upper, "VARIANCE")
-	assert.Contains(t, upper, "PRAGMA")
-	assert.Contains(t, upper, "NEMESIS")
-}
 
 func TestRenderPipeline_AllStatusesRender(t *testing.T) {
 	tests := []struct {
@@ -257,68 +248,6 @@ func TestRenderLedger_TruncatesToMaxLines(t *testing.T) {
 	assert.NotEmpty(t, out)
 }
 
-func TestRenderConsensus_PendingState(t *testing.T) {
-	m := NewModel(Options{})
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "PENDING")
-	assert.Contains(t, out, "AWAITING VOTES")
-	assert.Contains(t, out, "0/5 signed")
-}
-
-func TestRenderConsensus_ConsensusReached(t *testing.T) {
-	m := NewModel(Options{})
-	m.result = ConsensusReached
-	m.consensusHash = "abcdef1234567890abcdef"
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "CONSENSUS REACHED")
-	assert.Contains(t, out, "abcdef12...")
-}
-
-func TestRenderConsensus_ConsensusRejected(t *testing.T) {
-	m := NewModel(Options{})
-	m.result = ConsensusRejected
-	m.consensusHash = "deadbeef12345678"
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "CONSENSUS REJECTED")
-}
-
-func TestRenderConsensus_MemberApproved(t *testing.T) {
-	m := NewModel(Options{})
-	m.consensus[0].signed = true
-	m.consensus[0].decision = true
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "[YES]")
-}
-
-func TestRenderConsensus_MemberVetoed(t *testing.T) {
-	m := NewModel(Options{})
-	m.consensus[0].signed = true
-	m.consensus[0].decision = false
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "[NO ")
-}
-
-func TestRenderConsensus_MemberPending(t *testing.T) {
-	m := NewModel(Options{})
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "[...]")
-}
-
-func TestRenderConsensus_QuorumDisplay(t *testing.T) {
-	m := NewModel(Options{Quorum: 4, Total: 7})
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "4/7 required")
-}
-
-func TestRenderConsensus_AffirmativeCountInPending(t *testing.T) {
-	m := NewModel(Options{})
-	m.consensus[0].signed = true
-	m.consensus[0].decision = true
-	m.consensus[1].signed = true
-	m.consensus[1].decision = true
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "2/5 signed")
-}
 
 func TestRenderStatusBar_ConnectionStates(t *testing.T) {
 	tests := []struct {
@@ -359,23 +288,14 @@ func TestRenderStatusBar_NoConnDetailOmitsParens(t *testing.T) {
 	assert.NotContains(t, out, "()")
 }
 
-func TestRenderStatusBar_VersionNodeNetDisplayed(t *testing.T) {
-	m := NewModel(Options{
-		Version:  "v1.2.3",
-		NodeName: "node-alpha",
-		NetLabel: "mainnet",
-	})
-	out := m.renderStatusBar(120)
-	assert.Contains(t, out, "v1.2.3")
-	assert.Contains(t, out, "node-alpha")
-	assert.Contains(t, out, "mainnet")
-}
-
 func TestRenderStatusBar_QuitAndScrollHints(t *testing.T) {
 	m := NewModel(Options{})
 	out := m.renderStatusBar(120)
 	assert.Contains(t, out, "q: quit")
-	assert.Contains(t, out, "j/k: scroll")
+	assert.Contains(t, out, "j/k: move")
+	assert.Contains(t, out, "a: approve")
+	assert.Contains(t, out, "r: refresh")
+	assert.Contains(t, out, "tab: focus")
 }
 
 func TestRenderStatusBar_NarrowWidthDoesNotPanic(t *testing.T) {
@@ -388,9 +308,11 @@ func TestRenderStatusBar_NarrowWidthDoesNotPanic(t *testing.T) {
 
 func TestRenderStatusBar_GapPadding(t *testing.T) {
 	m := NewModel(Options{
-		Version:  "v1.0.0",
-		NodeName: "n",
-		NetLabel: "net",
+		Version: "v1.0.0",
+		Identity: Identity{
+			UserID:       "user@example.com",
+			CLISessionID: "session123456789",
+		},
 	})
 	m.connStatus = ConnIdle
 	out := m.renderStatusBar(200)
@@ -422,16 +344,6 @@ func TestView_LedgerEntriesAppearInOutput(t *testing.T) {
 	assert.Contains(t, out, "PII EGRESS BLOCKED")
 }
 
-func TestView_ConsensusResultDisplayedInConsensus(t *testing.T) {
-	m := NewModel(Options{})
-	m.width = 120
-	m.height = 40
-	m.result = ConsensusReached
-	m.consensusHash = "abcdef1234567890"
-	out := m.View()
-	assert.Contains(t, out, "CONSENSUS REACHED")
-}
-
 func TestView_PipelineStatusDetailAppearsInOutput(t *testing.T) {
 	m := NewModel(Options{})
 	m.width = 120
@@ -443,7 +355,13 @@ func TestView_PipelineStatusDetailAppearsInOutput(t *testing.T) {
 }
 
 func TestView_StatusBarPresentAtBottom(t *testing.T) {
-	m := NewModel(Options{Version: "v9.9.9"})
+	m := NewModel(Options{
+		Version: "v9.9.9",
+		Identity: Identity{
+			UserID:       "test@example.com",
+			CLISessionID: "test-session",
+		},
+	})
 	m.width = 120
 	m.height = 40
 	out := m.View()
@@ -482,30 +400,6 @@ func TestRenderLedger_MixedLevelsRendered(t *testing.T) {
 	assert.Contains(t, out, "[CRIT]")
 }
 
-func TestRenderConsensus_AllMembersRendered(t *testing.T) {
-	m := NewModel(Options{})
-	out := m.renderConsensus(120)
-	upper := strings.ToUpper(out)
-	assert.Contains(t, upper, "AXIOM")
-	assert.Contains(t, upper, "CONCORD")
-	assert.Contains(t, upper, "VARIANCE")
-	assert.Contains(t, upper, "PRAGMA")
-	assert.Contains(t, upper, "NEMESIS")
-}
-
-func TestRenderConsensus_MixedVoteStates(t *testing.T) {
-	m := NewModel(Options{})
-	m.consensus[0].signed = true
-	m.consensus[0].decision = true
-	m.consensus[1].signed = true
-	m.consensus[1].decision = false
-	m.consensus[2].signed = false
-	out := m.renderConsensus(120)
-	assert.Contains(t, out, "[YES]")
-	assert.Contains(t, out, "[NO ")
-	assert.Contains(t, out, "[...]")
-}
-
 func TestRenderPipeline_HeaderPresent(t *testing.T) {
 	m := NewModel(Options{})
 	out := m.renderPipeline(60, 20)
@@ -521,9 +415,11 @@ func TestRenderLedger_HeaderPresent(t *testing.T) {
 func TestView_FullLayoutIntegration(t *testing.T) {
 	fixedTime := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
 	m := NewModel(Options{
-		Version:  "v1.2.3",
-		NodeName: "node-1",
-		NetLabel: "testnet",
+		Version: "v1.2.3",
+		Identity: Identity{
+			UserID:       "user@example.com",
+			CLISessionID: "session123456789",
+		},
 	})
 	m.width = 120
 	m.height = 40
@@ -536,8 +432,6 @@ func TestView_FullLayoutIntegration(t *testing.T) {
 		message: "rate limit approaching",
 		time:    fixedTime,
 	})
-	m.consensus[0].signed = true
-	m.consensus[0].decision = true
 	m.connStatus = ConnConnected
 
 	out := m.View()
@@ -547,8 +441,208 @@ func TestView_FullLayoutIntegration(t *testing.T) {
 	assert.Contains(t, out, "consensus deliberating")
 	assert.Contains(t, out, "SOVEREIGN AUDIT LEDGER")
 	assert.Contains(t, out, "rate limit approaching")
-	assert.Contains(t, out, "L2 CONSENSUS")
-	assert.Contains(t, out, "[YES]")
+	assert.Contains(t, out, "PENDING APPROVALS")
+	assert.Contains(t, out, "OPERATORS")
 	assert.Contains(t, out, "v1.2.3")
 	assert.Contains(t, out, "SSE: CONNECTED")
+}
+
+func TestRenderHeader_ContainsIdentity(t *testing.T) {
+	m := NewModel(Options{
+		Version: "v1.0.0",
+		Identity: Identity{
+			UserID:       "alice@example.com",
+			CLISessionID: "abcdef1234567890",
+			OperatorID:   "",
+		},
+	})
+	m.width = 120
+	out := m.renderHeader(120)
+	assert.Contains(t, out, "alice@example.com")
+	assert.Contains(t, out, "abcdef12...")
+	assert.Contains(t, out, "OPERATOR: unbound")
+	assert.Contains(t, out, "v1.0.0")
+}
+
+func TestRenderHeader_BoundOperatorShown(t *testing.T) {
+	m := NewModel(Options{
+		Version: "v1.0.0",
+		Identity: Identity{
+			UserID:       "alice@example.com",
+			CLISessionID: "abcdef1234567890",
+			OperatorID:   "op-12345",
+		},
+	})
+	m.width = 120
+	out := m.renderHeader(120)
+	assert.Contains(t, out, "OPERATOR: op-12345")
+	assert.NotContains(t, out, "unbound")
+}
+
+func TestRenderHeader_PostureUnknownBeforeHealth(t *testing.T) {
+	m := NewModel(Options{
+		Version: "v1.0.0",
+		Identity: Identity{
+			UserID:       "alice@example.com",
+			CLISessionID: "test123",
+		},
+	})
+	m.width = 120
+	m.posture = nil
+	out := m.renderHeader(120)
+	assert.Contains(t, out, "POSTURE: UNKNOWN")
+}
+
+func TestRenderApprovals_EmptyState(t *testing.T) {
+	m := NewModel(Options{})
+	m.pending = []models.SuspendedTxResponse{}
+	out := m.renderApprovals(60)
+	assert.Contains(t, out, "PENDING APPROVALS (0)")
+	assert.Contains(t, out, "(no pending approvals)")
+}
+
+func TestRenderApprovals_ShowsToolAndHash(t *testing.T) {
+	m := NewModel(Options{})
+	fixedTime := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
+	m.pending = []models.SuspendedTxResponse{
+		{
+			ToolName:        "file_write",
+			TransactionHash: "abcdef1234567890",
+			ExpiresAt:       fixedTime.Add(5 * time.Minute),
+		},
+	}
+	timeNow = func() time.Time { return fixedTime }
+	defer func() { timeNow = time.Now }()
+
+	out := m.renderApprovals(60)
+	assert.Contains(t, out, "PENDING APPROVALS (1)")
+	assert.Contains(t, out, "file_write")
+	assert.Contains(t, out, "abcdef12...")
+	assert.Contains(t, out, "expires")
+}
+
+func TestRenderApprovals_AwaitingBrowserMarked(t *testing.T) {
+	m := NewModel(Options{})
+	m.pending = []models.SuspendedTxResponse{
+		{
+			ToolName:        "file_write",
+			TransactionHash: "abcdef1234567890",
+		},
+	}
+	m.awaitingApproval["abcdef1234567890"] = struct{}{}
+	out := m.renderApprovals(60)
+	assert.Contains(t, out, "[awaiting browser]")
+}
+
+func TestRenderApprovals_SelectionMarkerWhenFocused(t *testing.T) {
+	m := NewModel(Options{})
+	m.pending = []models.SuspendedTxResponse{
+		{ToolName: "file_write", TransactionHash: "abc123"},
+	}
+	m.focus = paneApprovals
+	m.pendingSelected = 0
+	out := m.renderApprovals(60)
+	assert.Contains(t, out, "> ")
+}
+
+func TestRenderOperators_LoadingState(t *testing.T) {
+	m := NewModel(Options{})
+	m.operatorsLoaded = false
+	out := m.renderOperators(60)
+	assert.Contains(t, out, "OPERATORS")
+	assert.Contains(t, out, "(loading...)")
+}
+
+func TestRenderOperators_ConnectedCount(t *testing.T) {
+	m := NewModel(Options{})
+	m.operators = []models.OperatorDocumentGo{
+		{ID: "op1", Status: "healthy"},
+		{ID: "op2", Status: "healthy"},
+	}
+	m.operatorsTotal = 5
+	m.operatorsLoaded = true
+	out := m.renderOperators(60)
+	assert.Contains(t, out, "OPERATORS (2 connected / 5)")
+}
+
+func TestRenderOperators_ErrorState(t *testing.T) {
+	m := NewModel(Options{})
+	m.operatorsErr = "connection timeout"
+	m.operatorsLoaded = true
+	out := m.renderOperators(60)
+	assert.Contains(t, out, "unavailable: connection timeout")
+}
+
+func TestRenderOperators_BoundMarked(t *testing.T) {
+	m := NewModel(Options{})
+	m.identity.OperatorID = "bound-op"
+	m.operators = []models.OperatorDocumentGo{
+		{ID: "bound-op", Status: "healthy"},
+	}
+	m.operatorsLoaded = true
+	out := m.renderOperators(60)
+	assert.Contains(t, out, "[bound]")
+}
+
+func TestListWindow_SelectionVisibleAtStart(t *testing.T) {
+	start, end := listWindow(10, 0)
+	assert.Equal(t, 0, start)
+	assert.True(t, end > 0)
+	assert.True(t, 0 < end)
+}
+
+func TestListWindow_SelectionVisibleWhenScrolled(t *testing.T) {
+	start, end := listWindow(10, 8)
+	assert.True(t, start <= 8)
+	assert.True(t, 8 < end)
+}
+
+func TestListWindow_BoundsListLength(t *testing.T) {
+	start, end := listWindow(5, 0)
+	assert.Equal(t, 0, start)
+	assert.LessOrEqual(t, end, 5)
+}
+
+func TestStageAnnotation_NoAuditWhenPostureNil(t *testing.T) {
+	m := NewModel(Options{})
+	m.posture = nil
+	result := m.stageAnnotation(StageL2)
+	assert.Equal(t, "", result)
+}
+
+func TestStageAnnotation_AuditedWhenNotEnforced(t *testing.T) {
+	m := NewModel(Options{})
+	// Create a mock posture that doesn't enforce L2
+	m.posture = &mockPosture{requiresL2: false, requiresL3: true}
+	result := m.stageAnnotation(StageL2)
+	assert.Equal(t, " (audited)", result)
+}
+
+func TestStageAnnotation_NoMarkingWhenEnforced(t *testing.T) {
+	m := NewModel(Options{})
+	// Create a mock posture that enforces L2
+	m.posture = &mockPosture{requiresL2: true, requiresL3: true}
+	result := m.stageAnnotation(StageL2)
+	assert.Equal(t, "", result)
+}
+
+type mockPosture struct {
+	requiresL2 bool
+	requiresL3 bool
+}
+
+func (mp *mockPosture) Name() string {
+	return "DOCTRINE"
+}
+
+func (mp *mockPosture) Description() string {
+	return "mock posture"
+}
+
+func (mp *mockPosture) RequiresL2Signature() bool {
+	return mp.requiresL2
+}
+
+func (mp *mockPosture) RequiresL3Proof() bool {
+	return mp.requiresL3
 }

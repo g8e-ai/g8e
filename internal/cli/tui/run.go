@@ -32,7 +32,7 @@ func Run(ctx context.Context, opts Options) error {
 
 	var wg sync.WaitGroup
 	if opts.Session != nil {
-		adapter := NewAdapter(opts.Session, p)
+		adapter := NewAdapter(opts.Session, opts.Identity.UserID, p)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

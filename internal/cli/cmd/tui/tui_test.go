@@ -45,8 +45,8 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 		inspectDockerGateway: func(context.Context) (dockerContainerState, error) {
 			return dockerContainerState{}, constants.ErrNotFound
 		},
-		loadCredentials: func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
-			return &auth.Credentials{
+		loadAuthContext: func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
+			return &auth.ClientAuthContext{
 				OperatorSessionID: "op-sess-test",
 				UserID:            "user-test",
 				OperatorID:        "operator-test",
@@ -56,6 +56,7 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 		newSession: func(fs.RuntimeFileService, *config.Config) (tui.Session, error) {
 			return &stubSession{}, nil
 		},
+		openBrowser: func(string) error { return nil },
 		tuiRun: func(ctx context.Context, opts tui.Options) error {
 			return nil
 		},
@@ -98,11 +99,13 @@ func TestTUICmdStructure(t *testing.T) {
 		cmd := Cmd()
 		assert.Contains(t, cmd.Long, "SSE")
 		assert.Contains(t, cmd.Long, "g8e auth enroll user")
+		assert.Contains(t, cmd.Long, "g8e auth refresh")
 		assert.Contains(t, cmd.Long, "Quit")
-		assert.Contains(t, cmd.Long, "Scroll ledger down")
-		assert.Contains(t, cmd.Long, "Scroll ledger up")
+		assert.Contains(t, cmd.Long, "Focus the next / previous pane")
+		assert.Contains(t, cmd.Long, "Move in the focused pane")
 		assert.Contains(t, cmd.Long, "Jump to ledger bottom")
-		assert.Contains(t, cmd.Long, "Jump to ledger top")
+		assert.Contains(t, cmd.Long, "Approve the selected pending transaction")
+		assert.Contains(t, cmd.Long, "Refresh approvals, operators, and posture")
 	})
 
 	t.Run("command has a RunE function", func(t *testing.T) {
@@ -188,15 +191,18 @@ func TestTUICmdSuppressesUsageForRuntimeFailures(t *testing.T) {
 	assert.True(t, cmd.SilenceUsage, cmdtest.RegressionMarkerAfterFix)
 }
 
-// --- credential loading ---
+// --- CLI identity loading ---
 
-func TestTUI_CredentialLoadFailure(t *testing.T) {
-	t.Run("returns wrapped ErrFailedToLoadCredentials when loadCredentials errors", func(t *testing.T) {
+func TestTUI_AuthContextLoadFailure(t *testing.T) {
+	t.Run("returns the CLI's identity error unchanged in the chain", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
-		credErr := fmt.Errorf("corrupt credentials file")
-		deps.loadCredentials = func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
+		credErr := fmt.Errorf("%w: corrupt credentials file", constants.ErrFailedToLoadCredentials)
+		deps.loadAuthContext = func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
 			return nil, credErr
+		}
+		deps.newSession = func(fs.RuntimeFileService, *config.Config) (tui.Session, error) {
+			panic("newSession should not be called when the identity fails to load")
 		}
 		cmd := tuiCmdWithDeps(deps)
 		cmd.SetArgs([]string{})
@@ -204,22 +210,6 @@ func TestTUI_CredentialLoadFailure(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToLoadCredentials)
 		assert.ErrorIs(t, err, credErr)
-	})
-}
-
-func TestTUI_NotEnrolled(t *testing.T) {
-	t.Run("returns enrollment error when credentials are nil", func(t *testing.T) {
-		cfg := setupTUITestConfig(t)
-		deps := stubTUIDeps(t, cfg)
-		deps.loadCredentials = func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
-			return nil, nil
-		}
-		cmd := tuiCmdWithDeps(deps)
-		cmd.SetArgs([]string{})
-		err := cmd.Execute()
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrNotEnrolled)
-		assert.Contains(t, err.Error(), "g8e auth enroll user")
 	})
 }
 
@@ -244,7 +234,7 @@ func TestTUI_NewSessionFailure(t *testing.T) {
 // --- tui.Run invocation ---
 
 func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
-	t.Run("passes correct version, node name, net label, and CLI session to tui.Run", func(t *testing.T) {
+	t.Run("passes version, CLI identity, CLI session, and the approve flow to tui.Run", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
 
@@ -262,9 +252,11 @@ func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "v9.9.9", capturedOpts.Version)
-		assert.Equal(t, "operator-test", capturedOpts.NodeName)
-		assert.Equal(t, "mTLS", capturedOpts.NetLabel)
+		assert.Equal(t, tui.Identity{UserID: "user-test", CLISessionID: "cli-sess-test", OperatorID: "operator-test"}, capturedOpts.Identity)
 		assert.IsType(t, &stubSession{}, capturedOpts.Session, "the CLI API session must be threaded into tui.Options")
+		require.NotNil(t, capturedOpts.ApprovalURL)
+		assert.Equal(t, auth.ApprovalPageURL(cfg, "tx-1"), capturedOpts.ApprovalURL("tx-1"), "the TUI must open the same page as 'g8e auth approve'")
+		assert.NotNil(t, capturedOpts.OpenBrowser)
 	})
 
 	t.Run("defaults version to dev when root version is empty", func(t *testing.T) {
@@ -285,6 +277,26 @@ func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "dev", capturedOpts.Version)
+	})
+
+	t.Run("derives the run context from the command context", func(t *testing.T) {
+		cfg := setupTUITestConfig(t)
+		deps := stubTUIDeps(t, cfg)
+
+		parent, cancel := context.WithCancel(context.Background())
+		var runCtx context.Context
+		deps.tuiRun = func(ctx context.Context, _ tui.Options) error {
+			runCtx = ctx
+			return nil
+		}
+		cmd := tuiCmdWithDeps(deps)
+		cmd.SetArgs([]string{})
+		require.NoError(t, cmd.ExecuteContext(parent))
+
+		require.NotNil(t, runCtx)
+		require.NoError(t, runCtx.Err())
+		cancel()
+		assert.ErrorIs(t, runCtx.Err(), context.Canceled, "cancelling the command context must cancel the TUI")
 	})
 
 	t.Run("returns error from tui.Run", func(t *testing.T) {
@@ -326,7 +338,7 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 			inspectDockerGateway: func(context.Context) (dockerContainerState, error) {
 				return dockerContainerState{}, constants.ErrNotFound
 			},
-			loadCredentials: auth.LoadCredentials,
+			loadAuthContext: auth.LoadClientAuthContext,
 			newSession:      newAPISession,
 			tuiRun:          func(context.Context, tui.Options) error { return nil },
 		}
@@ -342,7 +354,7 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 // --- real credentials file: not enrolled ---
 
 func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
-	t.Run("fails with not enrolled when credentials file does not exist", func(t *testing.T) {
+	t.Run("fails with not authenticated when credentials file does not exist", func(t *testing.T) {
 		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 		// Ensure no credentials file exists
@@ -354,7 +366,7 @@ func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
 			fileSvcFactory:       cmdtest.FileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return nil },
-			loadCredentials:      auth.LoadCredentials,
+			loadAuthContext:      auth.LoadClientAuthContext,
 			newSession:           newAPISession,
 			tuiRun:               func(context.Context, tui.Options) error { return nil },
 		}
@@ -363,14 +375,15 @@ func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 		cmd.SetArgs([]string{})
 		err = cmd.Execute()
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrNotEnrolled)
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+		assert.Contains(t, err.Error(), "g8e auth enroll user")
 	})
 }
 
 // --- real credentials file: corrupt JSON ---
 
 func TestTUI_RealCredentialsCorruptJSON(t *testing.T) {
-	t.Run("fails with ErrFailedToLoadCredentials when credentials file is corrupt", func(t *testing.T) {
+	t.Run("fails with ErrInvalidJSONBody when credentials file is corrupt", func(t *testing.T) {
 		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 		require.NoError(t, fileSvc.WriteFile(context.Background(), cmdtest.MustRel(t, fileSvc, cfg.CredentialsFile()), []byte("{invalid json"), constants.PermFilePrivate))
@@ -379,7 +392,7 @@ func TestTUI_RealCredentialsCorruptJSON(t *testing.T) {
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
 			fileSvcFactory:       cmdtest.FileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return nil },
-			loadCredentials:      auth.LoadCredentials,
+			loadAuthContext:      auth.LoadClientAuthContext,
 			newSession:           newAPISession,
 			tuiRun:               func(context.Context, tui.Options) error { return nil },
 		}
@@ -388,7 +401,7 @@ func TestTUI_RealCredentialsCorruptJSON(t *testing.T) {
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrFailedToLoadCredentials)
+		assert.ErrorIs(t, err, constants.ErrInvalidJSONBody)
 	})
 }
 
