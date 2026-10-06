@@ -958,8 +958,12 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	// Browser clients (console, WebAuthn flows) reach public routes without a client cert.
 	tlsConfig := pki.TLSConfig()
 	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
+	listenHost := cfg.Gateway.ListenHost
+	if listenHost == "" {
+		listenHost = "0.0.0.0"
+	}
 	ls.server = &http.Server{
-		Addr:              fmt.Sprintf("0.0.0.0:%d", cfg.Gateway.HTTPPort),
+		Addr:              net.JoinHostPort(listenHost, strconv.Itoa(cfg.Gateway.HTTPPort)),
 		Handler:           ls.handler.buildHTTPRouter(),
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
@@ -970,7 +974,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 
 	// HTTPS server: mTLS for all routes (API, public, enrollment)
 	ls.publicServer = &http.Server{
-		Addr:              fmt.Sprintf("0.0.0.0:%d", cfg.Gateway.HTTPSPort),
+		Addr:              net.JoinHostPort(listenHost, strconv.Itoa(cfg.Gateway.HTTPSPort)),
 		Handler:           ls.handler,
 		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,

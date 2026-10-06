@@ -103,6 +103,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 		Posture: config.PostureNotary,
 		Gateway: config.GatewayConfig{
 			MaxPayloadBytes: 10 * 1024 * 1024,
+			ListenHost:      "127.0.0.1",
 			CertMode:        "localhost",
 			PasskeyRpID:     "localhost",
 			PasskeyRpName:   "g8e",

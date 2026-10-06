@@ -192,7 +192,9 @@ func TestStreamToHost_FailsWhenKnownHostsFileIsMissing(t *testing.T) {
 }
 
 func TestStreamToHost_FailsWithoutAnyAuthMethod(t *testing.T) {
-	t.Setenv("HOME", testutil.TempDir(t))
+	testHome := testutil.TempDir(t)
+	t.Setenv("HOME", testHome)
+	t.Setenv("USERPROFILE", testHome)
 	server := startExecSSHServer(t, false, exitReply(0, "", ""))
 	fixture := newStreamFixture(t, server)
 	fixture.identityFile = ""

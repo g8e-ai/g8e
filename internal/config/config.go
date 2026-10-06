@@ -122,6 +122,7 @@ type GatewayConfig struct {
 	Posture             GatewayPosture // Governance enforcement posture (doctrine, consensus, ratify, notary)
 	HTTPPort            int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
 	HTTPSPort           int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
+	ListenHost          string         // Bind host for HTTP and HTTPS; empty preserves the all-interface default
 	DataDir             string         // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir              string         // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir          string         // Directory for platform secrets (default: .g8e/secrets)

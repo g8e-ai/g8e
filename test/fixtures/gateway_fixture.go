@@ -214,6 +214,9 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		Posture:           posture,
 	})
 	require.NoError(t, err)
+	// Integration fixtures serve only local test clients. Keep both Gateway
+	// listeners on loopback so Windows test binaries never request firewall access.
+	cfg.Gateway.ListenHost = "127.0.0.1"
 	cfg.Gateway.MCPDownstreamURL = downstreamURL
 	cfg.Gateway.MCPDownstreamCmd = opts.DownstreamCmd
 	cfg.Gateway.MCPDownstreamArgs = opts.DownstreamArgs

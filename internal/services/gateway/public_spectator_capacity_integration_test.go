@@ -15,16 +15,20 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -37,6 +41,9 @@ import (
 )
 
 const capacityTrustedProxyCIDR = "127.0.0.0/8"
+
+const capacityDialMaxAttempts = 16
+const capacityDialConcurrency = 64
 
 type capacityMirrorEnv struct {
 	helper   *mirrorTestEnv
@@ -83,14 +90,68 @@ func newCapacityMirrorEnv(t *testing.T, recordCount int) *capacityMirrorEnv {
 	server := httptest.NewServer(mirror.Handler())
 	t.Cleanup(server.Close)
 	helper.server = server
-	helper.client = server.Client()
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 2000
+	transport.MaxIdleConnsPerHost = 2000
+	dialSlots := make(chan struct{}, capacityDialConcurrency)
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		select {
+		case dialSlots <- struct{}{}:
+			defer func() { <-dialSlots }()
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		return capacityDialWithRetry(ctx, network, address)
+	}
+	client := &http.Client{Transport: transport}
+	t.Cleanup(func() { transport.CloseIdleConnections() })
+	helper.client = client
 
 	return &capacityMirrorEnv{
 		helper:   helper,
 		baseURL:  server.URL,
 		sourceID: sourceID,
-		client:   server.Client(),
+		client:   client,
 	}
+}
+
+func capacityDialWithRetry(ctx context.Context, network, address string) (net.Conn, error) {
+	dialer := net.Dialer{}
+	var err error
+	for attempt := 0; attempt < capacityDialMaxAttempts; attempt++ {
+		var conn net.Conn
+		conn, err = dialer.DialContext(ctx, network, address)
+		if err == nil || !isCapacityConnectionRefusal(err) || attempt+1 == capacityDialMaxAttempts {
+			return conn, err
+		}
+
+		// Spread retries across a short window so a refused SYN burst does not
+		// immediately refill the listener backlog with another synchronized wave.
+		delay := 5*time.Millisecond + time.Duration(rand.Intn(11))*time.Millisecond
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, err
+}
+
+func isCapacityConnectionRefusal(err error) bool {
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return true
+	}
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	// Windows returns the Winsock error value directly. syscall.ECONNREFUSED
+	// is a separate, synthesized POSIX-compatible value on Windows.
+	var errno syscall.Errno
+	return errors.As(err, &errno) && errno == syscall.Errno(10061) // WSAECONNREFUSED
 }
 
 func sendIngestToHandler(t *testing.T, handler http.Handler, batch models.PublicFeedBatch) (int, models.PublicIngestResponse) {
