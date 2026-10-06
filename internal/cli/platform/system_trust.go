@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -54,6 +55,9 @@ type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, env map[string]string, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if runtime.GOOS == "windows" {
+		setProcessGroup(cmd)
+	}
 	if len(env) > 0 {
 		base := os.Environ()
 		merged := make([]string, 0, len(base)+len(env))

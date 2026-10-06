@@ -10,6 +10,7 @@ package fs
 import (
 	"context"
 	"errors"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"os"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestCreateRuntimeTree_DataDirIsStandard(t *testing.T) {
 
 	info, err := os.Stat(paths.Infra.DataDir)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermDirStandard), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermDirStandard, info.IsDir()), info.Mode().Perm())
 }
 
 func TestCreateRuntimeTree_LogDirIsStandard(t *testing.T) {
@@ -54,7 +55,7 @@ func TestCreateRuntimeTree_LogDirIsStandard(t *testing.T) {
 
 	info, err := os.Stat(paths.Infra.LogDir)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermDirStandard), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermDirStandard, info.IsDir()), info.Mode().Perm())
 }
 
 func TestCreateRuntimeTree_PidDirIsStandard(t *testing.T) {
@@ -65,5 +66,5 @@ func TestCreateRuntimeTree_PidDirIsStandard(t *testing.T) {
 
 	info, err := os.Stat(paths.Infra.PidDir)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermDirStandard), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermDirStandard, info.IsDir()), info.Mode().Perm())
 }

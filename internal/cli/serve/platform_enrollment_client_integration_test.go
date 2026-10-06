@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -98,16 +99,16 @@ func TestOperatorEnroll_FullFlowWithApproval(t *testing.T) {
 	// Verify credential permissions are 0600.
 	opCertInfo, err := fileSvc.Stat(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), opCertInfo.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, opCertInfo.IsDir()), opCertInfo.Mode().Perm())
 
 	opKeyInfo, err := fileSvc.Stat(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), opKeyInfo.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, opKeyInfo.IsDir()), opKeyInfo.Mode().Perm())
 
 	// Trust bundle is 0644 (public).
 	bundleInfo, err := fileSvc.Stat(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePublic), bundleInfo.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermFilePublic, bundleInfo.IsDir()), bundleInfo.Mode().Perm())
 }
 
 // TestOperatorEnroll_ResumeFromPendingState verifies that when a

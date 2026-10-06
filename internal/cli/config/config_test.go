@@ -178,10 +178,11 @@ func TestConfig_CustomTrustBundlePath(t *testing.T) {
 	})
 
 	t.Run("returns empty when CACertPath matches default runtime location", func(t *testing.T) {
-		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		projectRoot := testutil.TempDir(t)
+		runtimeDir := filepath.Join(projectRoot, constants.RuntimeDirname)
 		defaultPath := filepath.Join(runtimeDir, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 		config := &Config{
-			ProjectRoot: "/project/root",
+			ProjectRoot: projectRoot,
 			RuntimeDir:  runtimeDir,
 			Paths: &PathsConfig{
 				Infra: struct {
@@ -238,9 +239,10 @@ func TestConfig_ResolvedTrustBundlePath(t *testing.T) {
 	})
 
 	t.Run("returns default runtime path when no custom path", func(t *testing.T) {
-		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		projectRoot := testutil.TempDir(t)
+		runtimeDir := filepath.Join(projectRoot, constants.RuntimeDirname)
 		config := &Config{
-			ProjectRoot: "/project/root",
+			ProjectRoot: projectRoot,
 			RuntimeDir:  runtimeDir,
 			Paths:       &PathsConfig{},
 		}
@@ -485,9 +487,10 @@ func TestConfig_CustomTrustBundlePath_NilPaths(t *testing.T) {
 
 func TestConfig_ResolvedTrustBundlePath_NilPaths(t *testing.T) {
 	t.Run("returns default runtime path when Paths is nil", func(t *testing.T) {
-		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		projectRoot := testutil.TempDir(t)
+		runtimeDir := filepath.Join(projectRoot, constants.RuntimeDirname)
 		config := &Config{
-			ProjectRoot: "/project/root",
+			ProjectRoot: projectRoot,
 			RuntimeDir:  runtimeDir,
 			Paths:       nil,
 		}

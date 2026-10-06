@@ -306,7 +306,7 @@ func TestBuildProofPackage_RejectsSymlinkArtifact(t *testing.T) {
 	target := filepath.Join(proofsDir, "target.json")
 	require.NoError(t, os.WriteFile(target, []byte("target"), constants.PermFilePrivate))
 	linkPath := filepath.Join(proofsDir, "link.json")
-	require.NoError(t, os.Symlink(target, linkPath))
+	testutil.Symlink(t, target, linkPath)
 
 	artifacts := []ProofArtifactInput{
 		{
@@ -464,7 +464,7 @@ func TestStreamProof_RejectsSymlink(t *testing.T) {
 	require.NoError(t, os.Remove(absPath))
 	target := absPath + ".target"
 	require.NoError(t, os.WriteFile(target, []byte("target"), constants.PermFilePrivate))
-	require.NoError(t, os.Symlink(target, absPath))
+	testutil.Symlink(t, target, absPath)
 
 	w := httptestResponseWriter()
 	err = publisher.StreamProof(context.Background(), artifactID, w)

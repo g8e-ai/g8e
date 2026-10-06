@@ -131,7 +131,7 @@ func TestEvalBackup_CreateRejectsDestinationInsideRuntime(t *testing.T) {
 func TestEvalBackup_CreateRejectsSymlinkedDestinationIntoRuntime(t *testing.T) {
 	f := newEvalBackupFixture(t)
 	link := filepath.Join(testutil.TempDir(t), "link")
-	require.NoError(t, os.Symlink(f.files.Resolve(""), link))
+	testutil.Symlink(t, f.files.Resolve(""), link)
 
 	_, err := f.backup.Create(context.Background(), filepath.Join(link, "backups"))
 

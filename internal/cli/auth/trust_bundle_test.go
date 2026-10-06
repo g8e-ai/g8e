@@ -129,7 +129,7 @@ func TestWriteTrustBundleFS_DefaultPath(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(filepath.Join(runtimeDir, cfg.DefaultTrustBundleRelPath()))
 		require.NoError(t, err)
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm())
 	}
 }
 
@@ -157,7 +157,7 @@ func TestWriteTrustBundleFS_CustomPath(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(customPath)
 		require.NoError(t, err)
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm())
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -245,7 +246,7 @@ func TestOperatorPendingState_PersistAndLoad(t *testing.T) {
 	absPath := fileSvc.Resolve(pendingPath)
 	info, err := fileSvc.Stat(context.Background(), pendingPath)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "pending state must be 0600 at %s", absPath)
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "pending state must be 0600 at %s", absPath)
 
 	// Load and verify round-trip.
 	loaded, err := client.loadPendingState(pendingPath)

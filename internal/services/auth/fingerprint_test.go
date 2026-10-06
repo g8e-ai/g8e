@@ -352,7 +352,7 @@ func TestGenerateOperatorFingerprint_DifferentiationOnSameSystem(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		assert.Equal(t, "/data/g8e/operators/inference", fpFull.LocalDir)
+		assert.Equal(t, filepath.Clean("/data/g8e/operators/inference"), fpFull.LocalDir)
 		assert.Equal(t, "service-inference", fpFull.Account)
 		assert.Equal(t, 9090, fpFull.Port)
 		assert.Equal(t, string(constants.OperatorRoleInference), fpFull.Role)

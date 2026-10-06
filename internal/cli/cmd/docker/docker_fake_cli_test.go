@@ -11,6 +11,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"errors"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -621,7 +622,7 @@ func TestDockerBuildCmd_BuildsImagesAndExportsTheRuntimeBinaryToBothLocations(t 
 		assert.Equal(t, "exported-runtime-binary", string(data), rel)
 		info, statErr := os.Stat(path)
 		require.NoError(t, statErr)
-		assert.Equal(t, os.FileMode(constants.PermFileExecutable), info.Mode().Perm(), "%s must be executable", rel)
+		assert.Equal(t, testutil.FileMode(constants.PermFileExecutable, info.IsDir()), info.Mode().Perm(), "%s must be executable", rel)
 	}
 	assert.Contains(t, out, "Docker images built and runtime binary exported to ./g8e.")
 }

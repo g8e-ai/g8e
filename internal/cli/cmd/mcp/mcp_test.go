@@ -704,7 +704,7 @@ func TestRunMCPAgentRun_NoArgs(t *testing.T) {
 		// Devin is a local CLI agent and goes through launchAgentWithGovernance.
 		// We can't test the full launch path here (requires gateway), but we verify
 		// it does NOT return the old cloud-based error.
-		err := runMCPAgentRun([]string{"devin"}, false, "", shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+		err := runMCPAgentRun([]string{"devin"}, false, "", cmdtest.FailingFileSvcFactory(constants.ErrNotAuthenticated), authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.NotContains(t, err.Error(), "cloud-based agent")
 	})

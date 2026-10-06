@@ -13,7 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -50,9 +50,9 @@ func newComposeTargetReader(projectDir string, run observerCommandRunner, now fu
 }
 
 func (o *composeTargetReader) Observe(ctx context.Context, targetResource string) (*TargetState, error) {
-	cleanTarget := filepath.Clean(targetResource)
-	filename := filepath.Base(cleanTarget)
-	if o == nil || o.projectDir == "" || o.run == nil || o.now == nil || !filepath.IsAbs(cleanTarget) || filepath.Dir(cleanTarget) != constants.EvaluationTargetContainerDir || !complianceevidence.ValidPathElement(filename) {
+	cleanTarget := path.Clean(targetResource)
+	filename := path.Base(cleanTarget)
+	if o == nil || o.projectDir == "" || o.run == nil || o.now == nil || !path.IsAbs(cleanTarget) || path.Dir(cleanTarget) != constants.EvaluationTargetContainerDir || !complianceevidence.ValidPathElement(filename) {
 		return nil, fmt.Errorf("%w: controlled target path and observer dependencies are required", constants.ErrEvaluationObservationUnavailable)
 	}
 	result := o.run(ctx, o.projectDir, constants.DockerExecutable,

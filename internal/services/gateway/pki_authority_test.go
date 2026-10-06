@@ -226,7 +226,7 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 		certInfo, err := ctx.fileSvc.Stat(context.Background(), rootCARelPath)
 		require.NoError(t, err)
 		if runtime.GOOS != "windows" {
-			assert.Equal(t, os.FileMode(constants.PermFilePublic), certInfo.Mode().Perm())
+			assert.Equal(t, testutil.FileMode(constants.PermFilePublic, certInfo.IsDir()), certInfo.Mode().Perm())
 		}
 	})
 
@@ -812,7 +812,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		for _, file := range publicFiles {
 			info, err := fileSvc.Stat(context.Background(), file)
 			require.NoError(t, err, "file should exist: "+file)
-			assert.Equal(t, os.FileMode(constants.PermFilePublic), info.Mode().Perm(), "public file should have 0644 permissions: "+file)
+			assert.Equal(t, testutil.FileMode(constants.PermFilePublic, info.IsDir()), info.Mode().Perm(), "public file should have 0644 permissions: "+file)
 		}
 	})
 
@@ -835,7 +835,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		chainRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
 		info, err := fileSvc.Stat(context.Background(), chainRelPath)
 		require.NoError(t, err, "chain file should exist")
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "chain file should have 0600 permissions")
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "chain file should have 0600 permissions")
 	})
 
 	t.Run("Phase5: issued/apps directory is created by CreateRuntimeTree", func(t *testing.T) {
@@ -888,7 +888,7 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		for _, file := range publicFiles {
 			info, err := fileSvc.Stat(context.Background(), file)
 			require.NoError(t, err, "file should exist: "+file)
-			assert.Equal(t, os.FileMode(constants.PermFilePublic), info.Mode().Perm(), "public file should have 0644 permissions: "+file)
+			assert.Equal(t, testutil.FileMode(constants.PermFilePublic, info.IsDir()), info.Mode().Perm(), "public file should have 0644 permissions: "+file)
 		}
 	})
 
@@ -911,7 +911,7 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		chainRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
 		info, err := fileSvc.Stat(context.Background(), chainRelPath)
 		require.NoError(t, err, "chain file should exist")
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "chain file should have 0600 permissions")
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "chain file should have 0600 permissions")
 	})
 }
 

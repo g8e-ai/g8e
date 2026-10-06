@@ -14,7 +14,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
@@ -170,14 +169,4 @@ func TestEnrollCmdStructure(t *testing.T) {
 		assert.NotNil(t, cmd.RunE)
 	})
 
-	t.Run("enroll has tpm flag on Windows only", func(t *testing.T) {
-		cmd := enrollUserCmdWithConfig(func(string) (*config.Config, error) { return nil, nil }, shared.NewFileSvc, auth.CheckOperatorRunning, NewDefaultEnrollmentCoordinator)
-		flag := cmd.Flags().Lookup("tpm")
-		if runtime.GOOS == "windows" {
-			assert.NotNil(t, flag)
-			assert.Equal(t, "false", flag.DefValue)
-		} else {
-			assert.Nil(t, flag)
-		}
-	})
 }

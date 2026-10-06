@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -109,7 +110,7 @@ func TestPublicInitCmd_PersistsPrivateConfigurationAndSecrets(t *testing.T) {
 	for _, relPath := range []string{constants.PublicFeedExportConfigPath, constants.PublicFeedSigningKeyPath, constants.PublicFeedIngestTokenPath} {
 		info, statErr := fileSvc.Stat(context.Background(), relPath)
 		require.NoError(t, statErr)
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm())
 	}
 }
 

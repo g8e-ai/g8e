@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -63,9 +63,9 @@ type deployDocker struct {
 }
 
 func newDeployDocker(contextName, image, root string, mounts []string, stderr io.Writer) *deployDocker {
-	sum := sha256.Sum256([]byte(contextName + "\x00" + filepath.Clean(root)))
+	sum := sha256.Sum256([]byte(contextName + "\x00" + path.Clean(root)))
 	return &deployDocker{
-		context: contextName, image: image, root: filepath.Clean(root),
+		context: contextName, image: image, root: path.Clean(root),
 		deployment: hex.EncodeToString(sum[:8]), mounts: mounts,
 		runner: execDockerRunner{}, operators: make(map[string]*dockerOperatorSpec),
 	}
@@ -142,10 +142,10 @@ func (d *deployDocker) validateMounts() error {
 			}
 			values[k] = v
 		}
-		if values["type"] != "bind" || !filepath.IsAbs(values["source"]) || !filepath.IsAbs(values["target"]) || !readonly {
+		if values["type"] != "bind" || !path.IsAbs(values["source"]) || !path.IsAbs(values["target"]) || !readonly {
 			return fmt.Errorf("%w: --docker-mount must be an absolute read-only bind mount (type=bind,source=/...,target=/...,readonly)", constants.ErrPathValidation)
 		}
-		target := filepath.Clean(values["target"])
+		target := path.Clean(values["target"])
 		if pathContains(target, d.root) || pathContains(target, "/g8e") {
 			return fmt.Errorf("%w: mount target %q covers the Operator runtime or executable", constants.ErrPathValidation, target)
 		}
@@ -154,8 +154,8 @@ func (d *deployDocker) validateMounts() error {
 }
 
 func pathContains(parent, child string) bool {
-	rel, err := filepath.Rel(parent, child)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	parent, child = path.Clean(parent), path.Clean(child)
+	return parent == child || strings.HasPrefix(child, strings.TrimSuffix(parent, "/")+"/")
 }
 
 func (d *deployDocker) spec(dir string, startArgs []string) *dockerOperatorSpec {
@@ -184,7 +184,7 @@ func (d *deployDocker) ensureOwnedVolume(ctx context.Context, op *dockerOperator
 	if !dockerNotFound(err) {
 		return err
 	}
-	_, err = d.docker(ctx, "volume", "create", "--label", dockerManagedLabel+"=true", "--label", dockerDeploymentLabel+"="+d.deployment, "--label", dockerDirectoryLabel+"="+op.dir, "--label", dockerIndexLabel+"="+filepath.Base(op.dir), op.volume)
+	_, err = d.docker(ctx, "volume", "create", "--label", dockerManagedLabel+"=true", "--label", dockerDeploymentLabel+"="+d.deployment, "--label", dockerDirectoryLabel+"="+op.dir, "--label", dockerIndexLabel+"="+path.Base(op.dir), op.volume)
 	return err
 }
 
@@ -207,7 +207,7 @@ func (d *deployDocker) removeOwnedContainer(ctx context.Context, op *dockerOpera
 func (d *deployDocker) createContainer(ctx context.Context, op *dockerOperatorSpec, endpoint string) error {
 	args := []string{"container", "create", "--name", op.container, "--hostname", op.hostname,
 		"--label", dockerManagedLabel + "=true", "--label", dockerDeploymentLabel + "=" + d.deployment,
-		"--label", dockerDirectoryLabel + "=" + op.dir, "--label", dockerIndexLabel + "=" + filepath.Base(op.dir), "--restart", "no",
+		"--label", dockerDirectoryLabel + "=" + op.dir, "--label", dockerIndexLabel + "=" + path.Base(op.dir), "--restart", "no",
 		"--mount", "type=volume,source=" + op.volume + ",target=" + op.dir, "--workdir", op.dir}
 	for _, mount := range d.mounts {
 		args = append(args, "--mount", mount)

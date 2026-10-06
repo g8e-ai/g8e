@@ -125,7 +125,7 @@ func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 	info, err := fileSvc.Stat(context.Background(), keyPath)
 	require.NoError(t, err)
 	if runtime.GOOS != "windows" {
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "key file should have private permissions")
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "key file should have private permissions")
 	}
 
 	seedHex, err := fileSvc.ReadFile(context.Background(), keyPath)

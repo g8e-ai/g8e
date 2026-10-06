@@ -10,8 +10,8 @@ package fs
 import (
 	"context"
 	"errors"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"io"
-	"os"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -75,7 +75,7 @@ func TestOpenForAppend_RespectsMode(t *testing.T) {
 
 	info, err := svc.Stat(ctx, "mode.log")
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm())
 }
 
 func TestOpenForRead_ReturnsErrNotFoundForMissingFile(t *testing.T) {

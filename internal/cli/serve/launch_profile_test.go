@@ -17,6 +17,7 @@ package serve
 import (
 	"context"
 	"encoding/json"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -91,7 +92,7 @@ func TestWriteLaunchProfile_PrivatePermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	if runtime.GOOS != "windows" {
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(),
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(),
 			"launch profile must have private permissions (0600)")
 	}
 }

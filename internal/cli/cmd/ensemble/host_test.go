@@ -12,6 +12,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -49,8 +50,11 @@ func TestEnsembleDefaultsToHost(t *testing.T) {
 
 func TestLocalPythonPrefersActiveEnvironment(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "bin"), 0700))
 	python := filepath.Join(dir, "bin", "python")
+	if runtime.GOOS == "windows" {
+		python = filepath.Join(dir, "Scripts", "python.exe")
+	}
+	require.NoError(t, os.MkdirAll(filepath.Dir(python), 0700))
 	require.NoError(t, os.WriteFile(python, []byte("#!/bin/sh\n"), 0700))
 	t.Setenv("VIRTUAL_ENV", dir)
 	got, err := localPython()

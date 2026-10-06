@@ -364,7 +364,7 @@ func TestAppEnrollment_PendingStateLoading(t *testing.T) {
 		assert.Equal(t, want, got)
 		info, err := client.fileSvc.Stat(t.Context(), path)
 		require.NoError(t, err)
-		assert.Equal(t, constants.PermFilePrivate, int(info.Mode().Perm()), "the pending state holds a private key and requester token")
+		assert.Equal(t, int(testutil.FileMode(constants.PermFilePrivate, info.IsDir())), int(info.Mode().Perm()), "the pending state holds a private key and requester token")
 
 		require.NoError(t, client.removePendingState(path))
 		gone, err := client.loadPendingState(path)

@@ -10,6 +10,7 @@ package mcp
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -25,6 +26,9 @@ import (
 func createFakeAgentBinary(t *testing.T, agentName string) string {
 	t.Helper()
 	binDir := testutil.TempDir(t)
+	if runtime.GOOS == "windows" {
+		agentName += ".exe"
+	}
 	binPath := filepath.Join(binDir, agentName)
 	require.NoError(t, os.WriteFile(binPath, []byte("#!/bin/sh\nexit 0\n"), 0755))
 

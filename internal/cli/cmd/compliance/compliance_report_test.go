@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"io"
 	"os"
 	"path"
@@ -1309,7 +1310,7 @@ func TestComplianceBundleRootReader_RejectsSymlinkEntries(t *testing.T) {
 	rootPath := t.TempDir()
 	targetPath := filepath.Join(rootPath, constants.ComplianceBundleAnalysisPath)
 	require.NoError(t, os.WriteFile(targetPath, []byte(`{}`), constants.PermFilePublic))
-	require.NoError(t, os.Symlink(constants.ComplianceBundleAnalysisPath, filepath.Join(rootPath, constants.ComplianceBundleUnexpectedTestPath)))
+	testutil.Symlink(t, constants.ComplianceBundleAnalysisPath, filepath.Join(rootPath, constants.ComplianceBundleUnexpectedTestPath))
 	root, err := os.OpenRoot(rootPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, root.Close()) })

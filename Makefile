@@ -53,16 +53,6 @@ LDFLAGS = -X main.version=$(VERSION) -X main.buildID=$(BUILD_ID) -X main.buildTi
 HOST_OS := $(shell go env GOOS)
 HOST_ARCH := $(shell go env GOARCH)
 
-# Go's os.TempDir uses %TMP%/%TEMP% on Windows. Keep test fixtures on the
-# checkout's volume so filepath.Rel and atomic rename tests work when the
-# workspace and the user's system temp directory are on different drives.
-ifeq ($(HOST_OS),windows)
-GO_TEST_TMP := $(shell cygpath -m "$(CURDIR)/.local.dev/tmp")
-GO_TEST_TMP_ENV := TMP='$(GO_TEST_TMP)' TEMP='$(GO_TEST_TMP)'
-else
-GO_TEST_TMP_ENV :=
-endif
-
 # Platform and architecture lists are emitted by the typed g8e-binary catalog.
 PLATFORMS := $(shell go run ./internal/tools/g8ebinaries -list-targets 2>/dev/null)
 LINUX_ARCHS := $(patsubst linux/%,%,$(filter linux/%,$(PLATFORMS)))
@@ -792,16 +782,14 @@ test: test-unit test-integration
 .PHONY: test-unit
 test-unit: constants-check
 	@echo "Running Tier 1 (Unit) tests..."
-	@mkdir -p .local.dev/tmp
-	@$(GO_TEST_TMP_ENV) go test -tags=!integration $(TEST_UNIT_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
+	@go test -tags=!integration $(TEST_UNIT_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
 
 # Tier 2: In-Process Integration Tests - no external dependencies
 .PHONY: test-integration
 test-integration:
 	@echo "Running Tier 2 (In-Process Integration) tests..."
-	@mkdir -p .local.dev/tmp
-	@$(GO_TEST_TMP_ENV) go test $(if $(TEST_P),-p=$(TEST_P),) -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) $(TEST_PKGS)
+	@go test $(if $(TEST_P),-p=$(TEST_P),) -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) $(TEST_PKGS)
 
 # Tier 3: Docker E2E Tests - requires a running platform.
 # Start the platform first (docker compose up or ./g8e gw start), approve all
@@ -959,8 +947,7 @@ console-embed-check: console-build
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage (threshold: $(COVERAGE_THRESHOLD)%)..."
-	@mkdir -p .local.dev/tmp
-	@$(GO_TEST_TMP_ENV) go test -tags=integration $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
+	@go test -tags=integration $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
 		-coverprofile=coverage.out -covermode=atomic \
 		$(if $(VERBOSE),-v,) \
 		$(if $(PKG),$(PKG),$(TEST_PKGS))
