@@ -265,6 +265,37 @@ def _thinking_control(model: str, config: ThinkingConfig | None) -> InferenceThi
     )
 
 
+def _apply_optional_request_options(
+    request: InferenceDispatchRequest,
+    model: str,
+    top_p: float | None,
+    top_k: int | None,
+    random_seed: int | None,
+    parallel_tool_calls: bool | None,
+    tool_config: ToolConfig | None,
+    thinking_config: ThinkingConfig | None,
+    response_format: ResponseFormat | None,
+) -> None:
+    """Copy optional generation settings into a dispatch request."""
+    if top_p is not None:
+        request.top_p = top_p
+    if top_k is not None:
+        request.top_k = top_k
+    if random_seed is not None:
+        request.seed = random_seed
+    if parallel_tool_calls is not None:
+        request.parallel_tool_calls = parallel_tool_calls
+    normalized_tool_choice = _tool_choice(tool_config)
+    if normalized_tool_choice is not None:
+        request.tool_choice.CopyFrom(normalized_tool_choice)
+    normalized_thinking = _thinking_control(model, thinking_config)
+    if normalized_thinking is not None:
+        request.thinking.CopyFrom(normalized_thinking)
+    normalized_response_format = _response_format(response_format)
+    if normalized_response_format is not None:
+        request.response_format.CopyFrom(normalized_response_format)
+
+
 def _apply_evaluation_context(
     request: InferenceDispatchRequest, context: G8eHttpContext | None, model: str
 ) -> None:
@@ -550,6 +581,83 @@ class G8EProvider(LLMProvider):
             num_ctx=request.context_limit if request.HasField("context_limit") else None,
         )
 
+    def _process_stream_frame(
+        self,
+        frame: InferenceDispatchStreamFrame,
+        request: InferenceDispatchRequest,
+        model: str,
+        completion: InferenceDispatchResponse | None,
+        progress_parts: list,
+    ) -> tuple[InferenceDispatchResponse | None, list[StreamChunkFromModel]]:
+        """Validate one stream frame and return any provisional text chunks."""
+        if completion is not None:
+            raise ValidationError("Governed inference stream continues after completion")
+        if frame.HasField("failure"):
+            failure = ValidationError(frame.failure.reason)
+            self._raise_if_tool_declaration_rejected(failure, model=model, request=request)
+            self._raise_if_context_overflow(failure, model=model, request=request)
+            raise failure
+
+        chunks: list[StreamChunkFromModel] = []
+        if frame.HasField("progress"):
+            progress = frame.progress
+            if (
+                progress.provider_attempt_id != request.provider_attempt_id
+                or progress.sequence != len(progress_parts) + 1
+            ):
+                raise ValidationError(
+                    "Governed inference progress identity or sequence mismatch"
+                )
+            progress_parts.append(list(progress.parts))
+            chunks.extend(
+                chunk
+                for chunk in _progress_parts_to_stream_chunks(progress)
+                if not chunk.tool_calls
+            )
+        if frame.HasField("completion"):
+            completion = frame.completion
+        return completion, chunks
+
+    def _verify_stream_completion(
+        self,
+        request: InferenceDispatchRequest,
+        completion: InferenceDispatchResponse,
+        progress_parts: list,
+    ) -> None:
+        """Verify terminal stream data and record its governed evidence."""
+        _validate_response_identity(request, completion)
+        _response_parts(completion)
+        if [part for event_parts in progress_parts for part in event_parts] != list(
+            completion.result.parts
+        ):
+            raise ValidationError("Governed inference progress differs from the terminal result")
+        self._record_response_evidence(completion)
+
+    def _record_response_evidence(self, response: InferenceDispatchResponse) -> None:
+        self._governed_dispatch_evidence.set(
+            GovernedDispatchEvidence(
+                transaction_id=response.transaction_id,
+                result_digest=response.result.result_digest if response.HasField("result") else "",
+                receipt_status=(
+                    ExecutionStatus.Name(response.receipt.status)
+                    if response.HasField("receipt")
+                    else ""
+                ),
+                provider_attempt_id=response.result.provider_attempt_id,
+                requested_model=response.result.requested_model,
+                served_model=response.result.model,
+                model_digest=response.result.served_model_digest,
+                normalized_request_hash=response.result.normalized_request_hash,
+                output_hash=response.result.output_hash,
+                campaign_id=response.result.campaign_id,
+                run_id=response.result.run_id,
+                assignment_id=response.result.assignment_id,
+                evaluation_attempt_id=response.result.evaluation_attempt_id,
+                scenario_id=response.result.scenario_id,
+                model_registry_digest=response.result.model_registry_digest,
+            )
+        )
+
     async def _close_resources(self):
         """Clean up provider resources. The HTTP client is owned by the
         application lifecycle, not by this provider, so close is a no-op."""
@@ -604,23 +712,17 @@ class G8EProvider(LLMProvider):
             cli_session_id=(context.cli_session_id or "") if context else "",
         )
         _apply_evaluation_context(request, context, model)
-        if top_p is not None:
-            request.top_p = top_p
-        if top_k is not None:
-            request.top_k = top_k
-        if random_seed is not None:
-            request.seed = random_seed
-        if parallel_tool_calls is not None:
-            request.parallel_tool_calls = parallel_tool_calls
-        normalized_tool_choice = _tool_choice(tool_config)
-        if normalized_tool_choice is not None:
-            request.tool_choice.CopyFrom(normalized_tool_choice)
-        normalized_thinking = _thinking_control(model, thinking_config)
-        if normalized_thinking is not None:
-            request.thinking.CopyFrom(normalized_thinking)
-        normalized_response_format = _response_format(response_format)
-        if normalized_response_format is not None:
-            request.response_format.CopyFrom(normalized_response_format)
+        _apply_optional_request_options(
+            request,
+            model,
+            top_p,
+            top_k,
+            random_seed,
+            parallel_tool_calls,
+            tool_config,
+            thinking_config,
+            response_format,
+        )
         self._record_model_boundary(request)
         self._record_declared_tools(tool.name for tool in request.tools)
         try:
@@ -632,31 +734,7 @@ class G8EProvider(LLMProvider):
         self._record_response(response, complete=True)
         _validate_response_identity(request, response)
         _response_parts(response)
-        self._governed_dispatch_evidence.set(
-            GovernedDispatchEvidence(
-                transaction_id=response.transaction_id,
-                result_digest=(
-                    response.result.result_digest if response.HasField("result") else ""
-                ),
-                receipt_status=(
-                    ExecutionStatus.Name(response.receipt.status)
-                    if response.HasField("receipt")
-                    else ""
-                ),
-                provider_attempt_id=response.result.provider_attempt_id,
-                requested_model=response.result.requested_model,
-                served_model=response.result.model,
-                model_digest=response.result.served_model_digest,
-                normalized_request_hash=response.result.normalized_request_hash,
-                output_hash=response.result.output_hash,
-                campaign_id=response.result.campaign_id,
-                run_id=response.result.run_id,
-                assignment_id=response.result.assignment_id,
-                evaluation_attempt_id=response.result.evaluation_attempt_id,
-                scenario_id=response.result.scenario_id,
-                model_registry_digest=response.result.model_registry_digest,
-            )
-        )
+        self._record_response_evidence(response)
         return response
 
     async def _dispatch_stream(
@@ -698,23 +776,17 @@ class G8EProvider(LLMProvider):
             cli_session_id=(context.cli_session_id or "") if context else "",
         )
         _apply_evaluation_context(request, context, model)
-        if top_p is not None:
-            request.top_p = top_p
-        if top_k is not None:
-            request.top_k = top_k
-        if random_seed is not None:
-            request.seed = random_seed
-        if parallel_tool_calls is not None:
-            request.parallel_tool_calls = parallel_tool_calls
-        normalized_tool_choice = _tool_choice(tool_config)
-        if normalized_tool_choice is not None:
-            request.tool_choice.CopyFrom(normalized_tool_choice)
-        normalized_thinking = _thinking_control(model, thinking_config)
-        if normalized_thinking is not None:
-            request.thinking.CopyFrom(normalized_thinking)
-        normalized_response_format = _response_format(response_format)
-        if normalized_response_format is not None:
-            request.response_format.CopyFrom(normalized_response_format)
+        _apply_optional_request_options(
+            request,
+            model,
+            top_p,
+            top_k,
+            random_seed,
+            parallel_tool_calls,
+            tool_config,
+            thinking_config,
+            response_format,
+        )
         self._record_model_boundary(request)
         self._record_declared_tools(tool.name for tool in request.tools)
 
@@ -727,33 +799,12 @@ class G8EProvider(LLMProvider):
                     if processing_error is not None:
                         continue
                     try:
-                        if completion is not None:
-                            raise ValidationError(
-                                "Governed inference stream continues after completion"
-                            )
-                        if frame.HasField("failure"):
-                            failure = ValidationError(frame.failure.reason)
-                            self._raise_if_tool_declaration_rejected(
-                                failure, model=model, request=request
-                            )
-                            self._raise_if_context_overflow(failure, model=model, request=request)
-                            raise failure
-                        if frame.HasField("progress"):
-                            progress = frame.progress
-                            if (
-                                progress.provider_attempt_id != request.provider_attempt_id
-                                or progress.sequence != len(progress_parts) + 1
-                            ):
-                                raise ValidationError(
-                                    "Governed inference progress identity or sequence mismatch"
-                                )
-                            progress_parts.append(list(progress.parts))
-                            for chunk in _progress_parts_to_stream_chunks(progress):
-                                # Text is provisional; tools wait for the verified receipt.
-                                if not chunk.tool_calls:
-                                    yield chunk
-                        if frame.HasField("completion"):
-                            completion = frame.completion
+                        completion, chunks = self._process_stream_frame(
+                            frame, request, model, completion, progress_parts
+                        )
+                        # Text is provisional; tools wait for the verified receipt.
+                        for chunk in chunks:
+                            yield chunk
                     except Exception as exc:
                         # Drain the stream after parsing fails to retain its raw tail.
                         processing_error = exc
@@ -766,37 +817,7 @@ class G8EProvider(LLMProvider):
             raise processing_error
         if completion is None:
             raise ValidationError("Governed inference stream ended without a completion frame")
-        _validate_response_identity(request, completion)
-        _response_parts(completion)
-        if [part for event_parts in progress_parts for part in event_parts] != list(
-            completion.result.parts
-        ):
-            raise ValidationError("Governed inference progress differs from the terminal result")
-        self._governed_dispatch_evidence.set(
-            GovernedDispatchEvidence(
-                transaction_id=completion.transaction_id,
-                result_digest=(
-                    completion.result.result_digest if completion.HasField("result") else ""
-                ),
-                receipt_status=(
-                    ExecutionStatus.Name(completion.receipt.status)
-                    if completion.HasField("receipt")
-                    else ""
-                ),
-                provider_attempt_id=completion.result.provider_attempt_id,
-                requested_model=completion.result.requested_model,
-                served_model=completion.result.model,
-                model_digest=completion.result.served_model_digest,
-                normalized_request_hash=completion.result.normalized_request_hash,
-                output_hash=completion.result.output_hash,
-                campaign_id=completion.result.campaign_id,
-                run_id=completion.result.run_id,
-                assignment_id=completion.result.assignment_id,
-                evaluation_attempt_id=completion.result.evaluation_attempt_id,
-                scenario_id=completion.result.scenario_id,
-                model_registry_digest=completion.result.model_registry_digest,
-            )
-        )
+        self._verify_stream_completion(request, completion, progress_parts)
         for chunk in _response_to_stream_chunks(completion):
             # Text/thinking already crossed the stream; do not replay it.
             if chunk.tool_calls or chunk.finish_reason is not None:

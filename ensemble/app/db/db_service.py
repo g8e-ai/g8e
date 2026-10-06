@@ -6,8 +6,8 @@
 # released under the Apache License, Version 2.0.
 
 import logging
+from typing import Protocol
 
-from app.clients.db_client import DBClient
 from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,
@@ -20,10 +20,46 @@ from app.models.cache import (
 logger = logging.getLogger(__name__)
 
 
+class DBClientProtocol(Protocol):
+    async def create_document(
+        self, collection: str, document_id: str, data: dict[str, object]
+    ) -> CacheOperationResult: ...
+
+    async def get_document(self, collection: str, document_id: str) -> DocumentResult: ...
+
+    async def update_document(
+        self, collection: str, document_id: str, data: dict[str, object], merge: bool = True
+    ) -> CacheOperationResult: ...
+
+    async def delete_document(self, collection: str, document_id: str) -> CacheOperationResult: ...
+
+    async def query_collection(
+        self,
+        collection: str,
+        field_filters: list[dict[str, object]],
+        order_by: dict[str, str],
+        limit: int,
+        select_fields: list[str],
+    ) -> QueryResult: ...
+
+    async def update_with_array_union(
+        self,
+        collection: str,
+        document_id: str,
+        array_field: str,
+        items_to_add: list[object],
+        additional_updates: dict[str, object],
+    ) -> CacheOperationResult: ...
+
+    async def batch_write(self, operations: list[BatchWriteOperation]) -> CacheOperationResult: ...
+
+    async def close(self) -> None: ...
+
+
 class DBService:
     """Authoritative database service. The sole user of DBClient."""
 
-    def __init__(self, client: DBClient):
+    def __init__(self, client: DBClientProtocol):
         self.client = client
 
     async def create_document(

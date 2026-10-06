@@ -13,7 +13,7 @@ import logging
 from app.constants import G8EE_COMPONENT, EventType
 from app.models.events import AiProcessingStoppedPayload, SessionEvent
 from app.models.http_context import RequestContext
-from app.services.infra.event_service import EventService
+from app.services.protocols import EventServiceProtocol
 from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class BackgroundTaskManager:
         cli_session_id: str | None = None,
         user_id: str | None = None,
         case_id: str | None = None,
-        event_service: EventService | None = None,
+        event_service: EventServiceProtocol | None = None,
     ) -> bool:
         """Cancel active task for the given ID.
 

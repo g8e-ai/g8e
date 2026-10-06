@@ -41,7 +41,7 @@ from app.models.pubsub_messages import (
     PortCheckResultPayload,
 )
 from app.models.settings import G8eeAppSettings
-from app.models.tool_results import CommandExecutionResult, CommandInternalResult
+from app.models.tool_results import CommandInternalResult
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ApprovalServiceProtocol,
@@ -86,37 +86,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
         return self._investigation_service
-
-    # -------------------------------------------------------------------------
-    # Failure helper
-    # -------------------------------------------------------------------------
-
-    async def _fail_command(
-        self,
-        error_msg: str,
-        error_type: CommandErrorType,
-        command: str,
-        g8e_context: G8eHttpContext,
-        *,
-        execution_id: str,
-        operator_session_id: str,
-        status: ExecutionStatus,
-        approval_id: str,
-        rule: str,
-        violations: list[str],
-        denial_reason: str,
-        feedback_reason: str,
-    ) -> CommandExecutionResult:
-
-        return CommandExecutionResult(
-            success=False,
-            error=error_msg,
-            error_type=error_type,
-            execution_id=execution_id,
-            rule=rule,
-            denial_reason=denial_reason,
-            feedback_reason=feedback_reason,
-        )
 
     # -------------------------------------------------------------------------
     # Operator resolution
@@ -388,14 +357,18 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 payload=cancel_payload.to_protobuf().SerializeToString(),
             )
         except NetworkError as exc:
-            logger.exception("[EXECUTION] Cancel command failed: %s", exc)
+            logger.exception(
+                "[EXECUTION] Cancel command failed: %s", exc, extra={"operator_id": operator_id}
+            )
             return CancelCommandResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.FAILED,
                 error=f"Command cancellation failed: {exc}. Check operator status and retry.",
             )
         except Exception as e:
-            logger.exception("[EXECUTION] Cancel command failed: %s", e)
+            logger.exception(
+                "[EXECUTION] Cancel command failed: %s", e, extra={"operator_id": operator_id}
+            )
             return CancelCommandResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.FAILED,
@@ -476,6 +449,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             logger.warning(
                 "[EXECUTION] Direct command timed out waiting for Gateway result for %s",
                 execution_id,
+                extra={"operator_id": operator_id},
             )
             return
         except NetworkError as exc:
@@ -483,6 +457,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 "[EXECUTION] Direct command Gateway dispatch failed for %s: %s",
                 execution_id,
                 exc,
+                extra={"operator_id": operator_id},
             )
             return
         except Exception as e:
@@ -490,6 +465,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 "[EXECUTION] Direct command dispatch failed for %s: %s",
                 execution_id,
                 e,
+                extra={"operator_id": operator_id},
             )
             return
 
@@ -498,7 +474,12 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 "[EXECUTION] Direct command Gateway dispatch failed for %s: %s",
                 execution_id,
                 dispatch_result.get("error"),
+                extra={"operator_id": operator_id},
             )
             return
 
-        logger.info("[EXECUTION] Direct command dispatched successfully for %s", execution_id)
+        logger.info(
+            "[EXECUTION] Direct command dispatched successfully for %s",
+            execution_id,
+            extra={"operator_id": operator_id},
+        )

@@ -143,20 +143,13 @@ async def _emit_pass_observation(
     )
 
 
-async def _run_generation_pass(
-    provider: LLMProvider,
-    model: str,
-    request: str,
-    guidelines: str,
-    operator_context: OperatorContext | None,
-    pass_index: int,
-    emitter: TribunalEmitter,
-    pass_errors: list[str],
-    command_constraints_message: str,
-    round_num: int = 1,
-    r1_clusters: list[Any] | None = None,
-) -> str | None:
-    """Run a single Tribunal generation pass."""
+
+def _generation_prompt(
+    request: str, guidelines: str, operator_context: OperatorContext | None,
+    pass_index: int, command_constraints_message: str, round_num: int,
+    r1_clusters: list[Any] | None,
+) -> tuple[Any, Any, str]:
+    """Build a member-specific prompt for one generation pass."""
     member = member_for_pass(pass_index)
     member_persona = get_agent_persona(member.value)
     fields = build_tribunal_prompt_fields(
@@ -190,6 +183,14 @@ async def _run_generation_pass(
         member=member.value if round_num == 2 else None,
     )
 
+    return member, member_persona, prompt
+
+
+def _prepare_generation_call(
+    provider: LLMProvider, model: str, request: str, member_persona: Any,
+    prompt: str, emitter: TribunalEmitter, pass_index: int, member: Any,
+) -> tuple[Any, list[Content], Any, str]:
+    """Build and fingerprint the provider request for one generation pass."""
     logger.info(
         "[TRIBUNAL-PASS] pass=%d member=%s model=%s request_len=%d",
         pass_index,
@@ -221,6 +222,30 @@ async def _run_generation_pass(
             "contents": contents,
             "settings": settings,
         }
+    )
+    return model_config, contents, settings, input_artifact_hash
+
+async def _run_generation_pass(
+    provider: LLMProvider,
+    model: str,
+    request: str,
+    guidelines: str,
+    operator_context: OperatorContext | None,
+    pass_index: int,
+    emitter: TribunalEmitter,
+    pass_errors: list[str],
+    command_constraints_message: str,
+    round_num: int = 1,
+    r1_clusters: list[Any] | None = None,
+) -> str | None:
+    """Run a single Tribunal generation pass."""
+    member, member_persona, prompt = _generation_prompt(
+        request, guidelines, operator_context, pass_index, command_constraints_message,
+        round_num, r1_clusters
+    )
+
+    model_config, contents, settings, input_artifact_hash = _prepare_generation_call(
+        provider, model, request, member_persona, prompt, emitter, pass_index, member
     )
     monotonic_start = time.monotonic()
     response = None
@@ -316,12 +341,7 @@ async def _run_generation_pass(
             )
             return None
 
-        logger.info(
-            "[TRIBUNAL-PASS] pass=%d member=%s success: cmd=%r",
-            pass_index,
-            member.value,
-            normalised[:80],
-        )
+        _log_pass_success(pass_index, member.value, normalised)
 
         await _emit_pass_observation(
             emitter,
@@ -344,58 +364,68 @@ async def _run_generation_pass(
             f"Pass {pass_index} ({member.value}): "
             "the conversation exceeded the model's context window"
         )
-        pass_errors.append(error_msg)
-        logger.error("[TRIBUNAL-PASS] %s, not retrying: %s", error_msg, exc)
-        await _emit_pass_observation(
-            emitter,
-            pass_index,
-            member,
-            provider,
-            model,
-            response,
-            monotonic_start,
-            input_artifact_hash,
-            None,
-            error_msg,
-            type(exc).__name__,
+        await _record_generation_failure(
+            emitter, pass_index, member, provider, model, response, monotonic_start,
+            input_artifact_hash, pass_errors, error_msg, type(exc).__name__, exc
         )
-        return None
+
     except OllamaEmptyResponseError as exc:
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
-        pass_errors.append(error_msg)
-        logger.error("[TRIBUNAL-PASS] %s", error_msg)
-        await _emit_pass_observation(
-            emitter,
-            pass_index,
-            member,
-            provider,
-            model,
-            response,
-            monotonic_start,
-            input_artifact_hash,
-            None,
-            error_msg,
-            type(exc).__name__,
+        await _record_generation_failure(
+            emitter, pass_index, member, provider, model, response, monotonic_start,
+            input_artifact_hash, pass_errors, error_msg, type(exc).__name__
         )
-        return None
     except Exception as exc:
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
-        pass_errors.append(error_msg)
-        logger.error("[TRIBUNAL-PASS] %s", error_msg)
-        await _emit_pass_observation(
-            emitter,
-            pass_index,
-            member,
-            provider,
-            model,
-            response,
-            monotonic_start,
-            input_artifact_hash,
-            None,
-            error_msg,
-            type(exc).__name__,
+        await _record_generation_failure(
+            emitter, pass_index, member, provider, model, response, monotonic_start,
+            input_artifact_hash, pass_errors, error_msg, type(exc).__name__
         )
-        return None
+
+    return None
+
+
+def _log_pass_success(pass_index: int, member: str, command: str) -> None:
+    logger.info(
+        "[TRIBUNAL-PASS] pass=%d member=%s success: cmd=%r",
+        pass_index,
+        member,
+        command[:80],
+    )
+
+
+async def _record_generation_failure(
+    emitter: TribunalEmitter,
+    pass_index: int,
+    member: Any,
+    provider: LLMProvider,
+    model: str,
+    response: GenerateContentResponse | None,
+    monotonic_start: float,
+    input_artifact_hash: str,
+    pass_errors: list[str],
+    error_msg: str,
+    error_type: str,
+    context_error: Exception | None = None,
+) -> None:
+    pass_errors.append(error_msg)
+    if context_error:
+        logger.error("[TRIBUNAL-PASS] %s, not retrying: %s", error_msg, context_error)
+    else:
+        logger.error("[TRIBUNAL-PASS] %s", error_msg)
+    await _emit_pass_observation(
+        emitter,
+        pass_index,
+        member,
+        provider,
+        model,
+        response,
+        monotonic_start,
+        input_artifact_hash,
+        None,
+        error_msg,
+        error_type,
+    )
 
 
 def _anonymize_clusters(

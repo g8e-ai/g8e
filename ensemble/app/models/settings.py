@@ -22,12 +22,6 @@ from g8e.models.settings import (
     EvalJudgeSettings as _ProtocolEvalJudgeSettings,
 )
 from g8e.models.settings import (
-    G8eeUserSettings as _ProtocolG8eeUserSettings,
-)
-from g8e.models.settings import (
-    LLMSettings as _ProtocolLLMSettings,
-)
-from g8e.models.settings import (
     SearchSettings as _ProtocolSearchSettings,
 )
 
@@ -291,19 +285,13 @@ class GatewaySettings(G8eBaseModel):
 class EvalJudgeSettings(_ProtocolEvalJudgeSettings):
     """Evaluation judge configuration for grading agent performance."""
 
-    model_config = ConfigDict(coerce_numbers_from_str=True)
 
+class LLMSettings(G8eBaseModel):
+    """LLM provider configuration with application enum values."""
 
-class LLMSettings(_ProtocolLLMSettings):
-    """LLM provider configuration.
-
-    Enum fields (primary_provider, assistant_provider, lite_provider) stay
-    as ``LLMProvider`` enum instances inside the application boundary - the
-    G8eBaseModel contract. Wire/DB serialization runs through
-    ``flatten_for_*`` which uses ``mode="json"`` and emits string values.
-    """
-
-    model_config = ConfigDict(coerce_numbers_from_str=True)
+    primary_model: str | None = Field(default=None, alias="llm_model")
+    assistant_model: str | None = Field(default=None, alias="llm_assistant_model")
+    lite_model: str | None = Field(default=None, alias="llm_lite_model")
 
     primary_provider: LLMProvider | None = Field(
         default=LLMProvider.G8E, alias="llm_primary_provider"
@@ -573,7 +561,9 @@ class G8eeAppSettings(G8eBaseModel):
         default_factory=lambda: CommandValidationSettings.model_validate({})
     )
     search: SearchSettings = Field(default_factory=lambda: SearchSettings.model_validate({}))
-    eval_judge: EvalJudgeSettings = Field(default_factory=lambda: EvalJudgeSettings.model_validate({}))
+    eval_judge: EvalJudgeSettings = Field(
+        default_factory=lambda: EvalJudgeSettings.model_validate({})
+    )
     reputation: ReputationSettings = Field(default_factory=lambda: ReputationSettings.model_validate({}))
     batch_execution: BatchExecutionSettings = Field(
         default_factory=lambda: BatchExecutionSettings.model_validate({})
@@ -636,12 +626,19 @@ class G8eeAppSettings(G8eBaseModel):
         return await settings_service.get_app_settings()
 
 
-class G8eeUserSettings(_ProtocolG8eeUserSettings):
+class G8eeUserSettings(G8eBaseModel):
     """Per-user settings, overlaid on platform settings."""
 
     llm: LLMSettings = Field(default_factory=lambda: LLMSettings.model_validate({}))
+    search: SearchSettings = Field(default_factory=lambda: SearchSettings.model_validate({}))
+    eval_judge: EvalJudgeSettings = Field(
+        default_factory=lambda: EvalJudgeSettings.model_validate({})
+    )
     command_validation: CommandValidationSettings = Field(
         default_factory=lambda: CommandValidationSettings.model_validate({})
+    )
+    batch_execution: BatchExecutionSettings = Field(
+        default_factory=lambda: BatchExecutionSettings.model_validate({})
     )
 
     @classmethod

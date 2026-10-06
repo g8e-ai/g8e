@@ -138,37 +138,43 @@ def parse_auditor_response(
         revised_cmd = str(revised_raw) if revised_raw is not None else None
         swap_id = str(swap_to_cluster) if swap_to_cluster is not None else None
 
-        # Mode-specific validation
-        if mode == ConsensusAuditMode.UNANIMOUS:
-            if status not in (ConsensusAuditStatus.OK, ConsensusAuditStatus.REVISED):
-                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
-            if swap_to_cluster:
-                raise ValueError(f"Auditor returned swap_to_cluster in {mode!r} mode")
-        elif mode == ConsensusAuditMode.TIED:
-            if status == ConsensusAuditStatus.OK:
-                raise ValueError(f"invalid status {status!r} for mode {mode!r} (must disambiguate)")
-            if status not in (ConsensusAuditStatus.SWAP, ConsensusAuditStatus.REVISED):
-                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
-        elif mode == ConsensusAuditMode.MAJORITY:
-            if status not in (
-                ConsensusAuditStatus.OK,
-                ConsensusAuditStatus.SWAP,
-                ConsensusAuditStatus.REVISED,
-            ):
-                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
-
-        if status == ConsensusAuditStatus.SWAP:
-            if not swap_to_cluster:
-                raise ValueError("Auditor returned status='swap' but no swap_to_cluster")
-            if swap_to_cluster not in cluster_ids:
-                raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
-
-        if status == ConsensusAuditStatus.REVISED and not revised_cmd:
-            raise ValueError("Auditor returned status='revised' but no revised_command")
+        _validate_auditor_status(mode, status, swap_to_cluster, revised_cmd, cluster_ids)
 
         return status, revised_cmd, swap_id
     except (AttributeError, TypeError) as exc:
         raise ValueError(f"Auditor returned malformed JSON structure: {exc!s}") from exc
+
+
+def _validate_auditor_status(
+    mode: ConsensusAuditMode,
+    status: ConsensusAuditStatus,
+    swap_to_cluster: str | None,
+    revised_command: str | None,
+    cluster_ids: list[str],
+) -> None:
+    """Validate parsed actions against the consensus mode and cluster set."""
+    allowed_statuses = {
+        ConsensusAuditMode.UNANIMOUS: (ConsensusAuditStatus.OK, ConsensusAuditStatus.REVISED),
+        ConsensusAuditMode.TIED: (ConsensusAuditStatus.SWAP, ConsensusAuditStatus.REVISED),
+        ConsensusAuditMode.MAJORITY: (
+            ConsensusAuditStatus.OK,
+            ConsensusAuditStatus.SWAP,
+            ConsensusAuditStatus.REVISED,
+        ),
+    }
+    if mode == ConsensusAuditMode.TIED and status == ConsensusAuditStatus.OK:
+        raise ValueError(f"invalid status {status!r} for mode {mode!r} (must disambiguate)")
+    if status not in allowed_statuses[mode]:
+        raise ValueError(f"invalid status {status!r} for mode {mode!r}")
+    if mode == ConsensusAuditMode.UNANIMOUS and swap_to_cluster:
+        raise ValueError(f"Auditor returned swap_to_cluster in {mode!r} mode")
+    if status == ConsensusAuditStatus.SWAP:
+        if not swap_to_cluster:
+            raise ValueError("Auditor returned status='swap' but no swap_to_cluster")
+        if swap_to_cluster not in cluster_ids:
+            raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
+    if status == ConsensusAuditStatus.REVISED and not revised_command:
+        raise ValueError("Auditor returned status='revised' but no revised_command")
 
 
 def build_auditor_prompt(

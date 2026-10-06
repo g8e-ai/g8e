@@ -12,6 +12,7 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from app.clients.http_client import HTTPClient
 from app.models.cache import BatchWriteOperation, CacheOperationResult, DocumentResult, QueryResult
 
 
@@ -238,6 +239,7 @@ class FakeG8eClient:
     """In-memory fake for g8e operator HTTP client."""
 
     def __init__(self):
+        self.client: HTTPClient = MagicMock(spec=HTTPClient)
         self.push_sse_event = AsyncMock()
         self.grant_intent = AsyncMock()
         self.revoke_intent = AsyncMock()
@@ -249,6 +251,9 @@ class FakeG8eClient:
         self.put = AsyncMock()
         self.delete = AsyncMock()
         self.close = AsyncMock()
+
+    def ensure_mtls(self) -> None:
+        return None
 
     def is_healthy(self):
         return True

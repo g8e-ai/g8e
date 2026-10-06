@@ -57,6 +57,19 @@ async def generate_case_title(
             generated_title=_create_fallback_title(description, max_length), fallback=True
         )
 
+    return await _generate_title_with_provider(
+        description, max_length=max_length, settings=settings, g8e_context=g8e_context
+    )
+
+
+
+async def _generate_title_with_provider(
+    description: str,
+    *,
+    max_length: int,
+    settings: G8eeUserSettings,
+    g8e_context: G8eHttpContext | None,
+) -> CaseTitleResult:
     try:
         provider = get_generative_lite_provider(settings.llm)
         model = settings.llm.resolved_generative_lite_model

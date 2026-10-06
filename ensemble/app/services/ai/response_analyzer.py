@@ -334,8 +334,8 @@ class AIResponseAnalyzer:
     ) -> CommandRiskAnalysis:
         analysis_start_time = time.time()
         context = context or CommandRiskContext()
-        working_dir = context.working_directory
-        investigation_context = context.investigation_context
+        working_dir = context.working_directory or ""
+        investigation_context = context.investigation_context or ""
         resolved_settings = settings
 
         prompt_build_start = time.time()
@@ -391,7 +391,7 @@ class AIResponseAnalyzer:
         analysis_start_time = time.time()
         context = context or ErrorAnalysisContext()
         retry_count = context.retry_count
-        working_dir = context.working_directory
+        working_dir = context.working_directory or ""
         resolved_settings = settings
 
         if retry_count >= 2:
@@ -499,7 +499,7 @@ class AIResponseAnalyzer:
     ) -> FileOperationRiskAnalysis:
         analysis_start_time = time.time()
         context = context or FileOperationRiskContext()
-        git_status = context.git_status
+        git_status = context.git_status or ""
         backup_available = context.backup_available
         resolved_settings = settings
 

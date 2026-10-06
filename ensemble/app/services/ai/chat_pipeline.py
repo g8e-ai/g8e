@@ -79,12 +79,12 @@ from app.services.evaluation.role_control import (
 from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
 from app.services.evaluation.tool_gate import resolve_tool_gate
 from app.services.evaluation.trace_service import EvaluationTraceService
-from app.services.infra.event_service import EventService
 from app.services.investigation.investigation_service import (
     InvestigationService,
     extract_all_operators_context,
 )
 from app.services.investigation.memory_data_service import MemoryDataService
+from app.services.protocols import EventServiceProtocol
 from app.utils.interrogation import extract_interrogation_questions
 
 from .agent import g8eEnsemble
@@ -108,7 +108,7 @@ class ChatPipelineService:
 
     def __init__(
         self,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         investigation_service: InvestigationService,
         request_builder: AIRequestBuilder,
         g8e_agent: g8eEnsemble,

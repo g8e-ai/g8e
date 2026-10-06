@@ -60,7 +60,7 @@ from app.services.ai.generator import generate_command
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.services.ai.tool_service import AIToolService
 from app.services.evaluation.player_steps import PlayerStepRecorder
-from app.services.infra.event_service import EventService
+from app.services.protocols import EventServiceProtocol
 from app.services.investigation.investigation_service import (
     extract_operator_context_by_target,
     extract_single_operator_context,
@@ -137,7 +137,7 @@ class TribunalInvoker:
         sage_request: SageOperatorRequest,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         request_settings: G8eeUserSettings,
         tool_executor: AIToolService,
         step_observer: TribunalObserver | None = None,
@@ -200,7 +200,7 @@ class TribunalInvoker:
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             whitelisted_commands=whitelisted_commands,
-            blacklisted_commands=blacklisted_commands,
+            blacklisted_commands=[item["command"] for item in blacklisted_commands],
             step_observer=step_observer,
         )
         gen_result = await generate_command(tribunal_request)
@@ -211,8 +211,15 @@ class TribunalInvoker:
             gen_result.final_command[:80] if gen_result.final_command else None,
         )
 
+        final_command = gen_result.final_command
+        if final_command is None:
+            raise TribunalError(
+                request=request,
+                user_message="The Tribunal completed without producing a command.",
+            )
+
         executor_args = ExecutorCommandArgs(
-            command=gen_result.final_command,
+            command=final_command,
             request=request,
             guidelines=guidelines,
             target_operators=sage_request.target_operators,
@@ -432,7 +439,7 @@ async def orchestrate_tool_execution(
     tool_executor: AIToolService,
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
     request_settings: G8eeUserSettings,
     execution_id: str | None = None,
     call_info: StreamChunkData | None = None,
@@ -617,14 +624,18 @@ async def _resolve_and_emit(
     result: CommandExecutionResult,
     tool_executor: AIToolService,
     investigation: EnrichedInvestigationContext,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
     g8e_context: G8eHttpContext,
 ) -> None:
     """Resolve command reputation stakes and publish the resulting events."""
     try:
+        tribunal_command_id = gen_result.correlation_id
+        if tribunal_command_id is None:
+            logger.error("[REPUTATION] Cannot resolve stakes without a Tribunal command ID")
+            return
         marshal_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
         resolution = await tool_executor.reputation_service.resolve_stakes(
-            tribunal_command_id=gen_result.correlation_id,
+            tribunal_command_id=tribunal_command_id,
             investigation_id=investigation.id,
             gen_result=gen_result,
             execution_result=result,
@@ -654,7 +665,7 @@ async def execute_turn_tool_calls(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """
     Execute all tool calls from one turn.
@@ -702,7 +713,7 @@ async def _process_single_tool_call(
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,
     request_settings: G8eeUserSettings,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
     execution_id: str | None = None,
     call_info: StreamChunkData | None = None,
 ) -> ToolCallResult:
@@ -783,7 +794,7 @@ async def _execute_sequential(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Execute tool calls one by one."""
     responses: list[ToolCallResponse] = []
@@ -832,7 +843,7 @@ async def _execute_parallel(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Execute tool calls concurrently using asyncio.gather."""
     prepared: list[tuple[str, StreamChunkData]] = [

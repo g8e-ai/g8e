@@ -36,7 +36,7 @@ from __future__ import annotations
 import importlib
 import logging
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, cast
 
 from app.constants import LLMProvider
 from app.models.settings import G8eeAppSettings, LLMSettings, SearchSettings
@@ -237,12 +237,12 @@ def _construct_provider(
                 "G8E provider requires the InternalHttpClient to be injected "
                 "at startup via set_internal_http_client()"
             )
-        governed_class: _GovernedProviderClass = provider_class
+        governed_class = cast(_GovernedProviderClass, provider_class)
         return governed_class(internal_http_client=_state.internal_http_client)
     if provider_type == LLMProvider.GEMINI:
-        api_key_class: _ApiKeyProviderClass = provider_class
+        api_key_class = cast(_ApiKeyProviderClass, provider_class)
         return api_key_class(api_key=api_key)
-    endpoint_class: _EndpointProviderClass = provider_class
+    endpoint_class = cast(_EndpointProviderClass, provider_class)
     return endpoint_class(endpoint=endpoint, api_key=api_key)
 
 

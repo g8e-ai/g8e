@@ -23,6 +23,7 @@ which is processed by GroundingService.extract_provider_grounding().
 import asyncio
 import logging
 import re
+from collections.abc import Sequence
 from typing import Any, Protocol, runtime_checkable
 
 from google.api_core.client_options import ClientOptions
@@ -52,11 +53,11 @@ class SearchClientProtocol(Protocol):
 
     def search_lite(
         self,
-        request: discoveryengine.SearchRequest,
+        request: discoveryengine.SearchRequest | dict[object, object] | None = None,
         *,
         retry: object | None = None,
-        timeout: float | None = None,
-        metadata: object | None = None,
+        timeout: float | object = None,
+        metadata: Sequence[tuple[str, str | bytes]] = (),
     ) -> object:
         """Execute a search_lite request."""
         ...

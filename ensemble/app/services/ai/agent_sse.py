@@ -242,9 +242,6 @@ async def deliver_via_sse(
     await _push_agent_state("running")
     await _push_run_state("running")
 
-    # Initialize grounding and token_usage to avoid UnboundLocalError
-    grounding_metadata = None
-    token_usage = None
     await _run_sse_delivery(
         stream, inputs, state, _publish, _push_agent_state, _push_run_state,
         on_iteration_text, investigation_id, agent_mode, has_sse, case_id
@@ -258,7 +255,7 @@ async def _run_sse_delivery(
     """Consume a stream and publish its completion or terminal error event."""
     try:
         error_occurred = await _consume_sse_stream(
-            stream, inputs, state, _publish, _push_agent_state, _push_run_state,
+            stream, inputs, state, publish, push_agent_state, push_run_state,
             on_iteration_text, investigation_id, agent_mode, has_sse, case_id
         )
 
@@ -271,7 +268,7 @@ async def _run_sse_delivery(
         if error_occurred:
             logger.info("[SSE] Skipping completion event due to prior error")
         else:
-            await _publish(
+            await publish(
                 EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
                 ChatResponseCompletePayload(
                     content=state.response_text,
@@ -289,8 +286,8 @@ async def _run_sse_delivery(
             # Agent and run complete when the persona's turn work finishes.
             # The investigation run is NOT marked terminal here; a later chat
             # turn on the same investigation refreshes it as running.
-            await _push_agent_state("completed")
-            await _push_run_state("running")
+            await push_agent_state("completed")
+            await push_run_state("running")
 
         logger.info(
             "[SSE] Complete: investigation_id=%s has_citations=%s "
@@ -305,7 +302,7 @@ async def _run_sse_delivery(
     except asyncio.CancelledError:
         logger.info("[SSE] Cancelled for investigation %s", investigation_id)
         # Emit STOPPED event instead of FAILED when processing is cancelled
-        await _publish(
+        await publish(
             EventType.AI_LLM_CHAT_ITERATION_STOPPED,
             AiProcessingStoppedPayload(
                 reason="AI processing stopped",
@@ -313,19 +310,19 @@ async def _run_sse_delivery(
             ),
         )
         # Agent enters idle on cancellation; the run stays non-terminal.
-        await _push_agent_state("idle")
+        await push_agent_state("idle")
         raise
 
     except Exception as e:
         logger.error("[SSE] Error: %s", e)
-        await _publish(
+        await publish(
             EventType.AI_LLM_CHAT_ITERATION_FAILED,
             ChatErrorPayload(error=str(e)),
         )
         # Agent enters failed on an unexpected terminal exception.
         state.stream_failed = True
         state.error = str(e)
-        await _push_agent_state("failed")
+        await push_agent_state("failed")
 
 
 async def _handle_tool_call_chunk(
@@ -561,6 +558,83 @@ async def _handle_tool_result_chunk(
     state.response_text = ""
 
     return _turn
+
+
+async def _handle_stream_update_chunk(chunk, inputs, state, publish, thinking_started: bool) -> bool:
+    """Handle text, thinking, retry, citation, and completion chunks."""
+    if chunk.type == StreamChunkFromModelType.TEXT:
+        state.response_text += chunk.data.content or ""
+        await publish(
+            EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            ChatResponseChunkPayload(content=chunk.data.content or ""),
+        )
+    elif chunk.type == StreamChunkFromModelType.THINKING:
+        phase = ThinkingPhase.START if not thinking_started else ThinkingPhase.UPDATE
+        thinking_started = True
+        await publish(
+            EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
+            ChatThinkingPayload(thinking=chunk.data.thinking, phase=phase),
+        )
+    elif chunk.type == StreamChunkFromModelType.THINKING_END:
+        thinking_started = False
+        await publish(
+            EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
+            ChatThinkingPayload(thinking=None, phase=ThinkingPhase.END),
+        )
+    elif chunk.type == StreamChunkFromModelType.RETRY:
+        attempt = chunk.data.attempt or 0
+        max_attempts = chunk.data.max_attempts or 0
+        logger.info("[SSE] RETRY chunk: attempt=%d max_attempts=%d", attempt, max_attempts)
+        await publish(
+            EventType.AI_LLM_CHAT_ITERATION_RETRY,
+            ChatRetryPayload(attempt=attempt, max_attempts=max_attempts),
+        )
+    elif chunk.type == StreamChunkFromModelType.CITATIONS:
+        grounding_metadata = chunk.data.grounding_metadata
+        state.grounding_metadata = grounding_metadata
+        if grounding_metadata and grounding_metadata.grounding_used:
+            await publish(
+                EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
+                ChatCitationsReadyPayload(
+                    grounding_metadata=grounding_metadata.model_dump(mode="json")
+                ),
+            )
+    elif chunk.type == StreamChunkFromModelType.COMPLETE:
+        state.token_usage = chunk.data.token_usage
+        state.model_calls = chunk.data.model_calls
+        state.finish_reason = chunk.data.finish_reason
+        state.tool_turn_limit_reached = bool(chunk.data.tool_turn_limit_reached)
+        if chunk.data.tool_response_sizes:
+            state.tool_response_sizes = chunk.data.tool_response_sizes
+        logger.info(
+            "[SSE] COMPLETE chunk received: finish_reason=%s response_chars=%d",
+            chunk.data.finish_reason,
+            len(state.response_text),
+        )
+        if chunk.data.token_usage:
+            logger.info("[TOKEN_USAGE] SSE final: %s", chunk.data.token_usage)
+    return thinking_started
+
+
+async def _handle_model_error_chunk(
+    chunk, inputs, state, publish, push_agent_state, investigation_id, agent_mode, has_sse, case_id
+) -> None:
+    """Record and publish a terminal model error chunk."""
+    error_message = chunk.data.error or UNKNOWN_ERROR_MESSAGE
+    error_extra = {"investigation_id": investigation_id, "agent_mode": agent_mode}
+    if has_sse:
+        error_extra["case_id"] = case_id
+    logger.exception("[SSE] LLM provider error: %s", error_message, extra=error_extra)
+    if chunk.data.model_calls:
+        state.model_calls = chunk.data.model_calls
+    if chunk.data.provider_tool_rejection and inputs.model_to_use:
+        state.provider_tool_rejection = EvaluationProviderToolRejection(
+            model=inputs.model_to_use, reason=error_message
+        )
+    await publish(EventType.AI_LLM_CHAT_ITERATION_FAILED, ChatErrorPayload(error=error_message))
+    await push_agent_state("failed")
+    state.stream_failed = True
+    state.error = error_message
 
 
 async def _consume_sse_stream(

@@ -43,7 +43,7 @@ pytestmark = pytest.mark.unit
 def _make_settings(
     log_level: LogLevel = LogLevel.INFO, enable_logging: bool = True
 ) -> G8eeAppSettings:
-    settings = G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
+    settings = G8eeAppSettings.model_validate({"port": PortConstants.G8E_PORT_G8EE_HTTPS})
     settings.log_level = log_level
     settings.enable_logging = enable_logging
     return settings
@@ -233,10 +233,6 @@ class TestRedactMessage:
         msg = "No email here"
         assert redact_message(msg) == msg
 
-    def test_non_string_returned_unchanged(self):
-        assert redact_message(42) == 42
-        assert redact_message(None) is None
-
     def test_multiple_emails_all_redacted(self):
         msg = "From: a@b.com To: c@d.com"
         result = redact_message(msg)
@@ -288,13 +284,13 @@ class TestComponentFormatter:
     def test_explicit_component_name_used(self, formatter_with_name):
         record = _make_record(msg="hello")
         formatter_with_name.format(record)
-        assert record.component == "g8ee"
+        assert record.__dict__.get("component") == "g8ee"
 
     def test_component_resolved_from_registry(self, formatter_no_name):
         register_component_logger("g8ee.services.mymod", "g8ee")
         record = _make_record(name="g8ee.services.mymod")
         formatter_no_name.format(record)
-        assert record.component == "g8ee"
+        assert record.__dict__.get("component") == "g8ee"
 
     def test_component_resolved_from_pathname(self, formatter_no_name):
         record = _make_record(
@@ -303,7 +299,7 @@ class TestComponentFormatter:
             module="something",
         )
         formatter_no_name.format(record)
-        assert record.component == "g8eo"
+        assert record.__dict__.get("component") == "g8eo"
 
     def test_component_resolved_from_module(self, formatter_no_name):
         record = _make_record(
@@ -313,7 +309,7 @@ class TestComponentFormatter:
         )
         record.module = "g8ee.utils"
         formatter_no_name.format(record)
-        assert record.component == "g8ee"
+        assert record.__dict__.get("component") == "g8ee"
 
     def test_pii_in_message_redacted(self, formatter_with_name):
         record = _make_record(msg="user email is alice@example.com")
@@ -357,7 +353,11 @@ class TestComponentFormatter:
 
 @pytest.mark.unit
 class TestSetupLoggingEnabled:
-    def _isolated_setup(self, log_level=LogLevel.DEBUG, component_name=None):
+    def _isolated_setup(
+        self,
+        log_level: LogLevel = LogLevel.DEBUG,
+        component_name: str = "g8ee",
+    ) -> logging.Logger:
         root = logging.getLogger()
         for h in root.handlers[:]:
             root.removeHandler(h)

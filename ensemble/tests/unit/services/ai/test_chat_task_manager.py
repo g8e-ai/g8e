@@ -24,7 +24,7 @@ def manager():
     return ChatTaskManager()
 
 
-def _make_event_service() -> EventService:
+def _make_event_service() -> MagicMock:
     svc = MagicMock(spec=EventService)
     svc.publish = AsyncMock()
     return svc

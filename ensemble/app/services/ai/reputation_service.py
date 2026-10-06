@@ -200,409 +200,162 @@ def _execution_destructive(
     return _execution_failed(execution_result)
 
 
-def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
-    """Compute per-agent ``StakeOutcome`` rows from a verdict.
-
-    Mirrors GDD §14.5. Returns one outcome per affected agent - the four
-    honest tribunal members (always), Nemesis (always), Sage (always), and
-    Auditor (when an Auditor verdict was emitted, i.e. ``auditor_reason`` is
-    not None). ``inputs.extra_agents`` lets callers add Triage when Phase 4
-    starts emitting clarification telemetry; the classifier returns a
-    neutral 0.5 for any extra agent it has no rule for, which keeps the
-    EMA at its bootstrap value until a real signal exists.
-    """
-
+def _honest_member_outcome(
+    member_id: str, inputs: ClassifierInputs, supporters: set[str]
+) -> StakeOutcome:
     gen = inputs.gen_result
     breakdown = gen.vote_breakdown
-    outcome = gen.outcome
-    auditor_reason = gen.auditor_reason
-    auditor_passed = gen.auditor_passed
+    supported = member_id in supporters
+    candidate = breakdown.candidates_by_member.get(member_id) if breakdown else None
+    if candidate is None:
+        return StakeOutcome(member_id, 0.1, "missed_pass", SlashTier.TIER_3)
+    if gen.outcome == CommandGenerationOutcome.CONSENSUS_FAILED:
+        return StakeOutcome(member_id, 0.3, "consensus_failed")
+    if supported:
+        return _supported_honest_outcome(member_id, gen)
+    return StakeOutcome(member_id, 0.45, "dissenter")
 
-    supporters = _winner_supporters(gen)
-    exec_failed = _execution_failed(inputs.execution_result)
-    destructive = _execution_destructive(inputs.execution_result, inputs.marshal_risk)
 
-    rows: list[StakeOutcome] = []
+def _supported_honest_outcome(member_id: str, gen: CommandGenerationResult) -> StakeOutcome:
+    if gen.auditor_passed or gen.outcome == CommandGenerationOutcome.CONSENSUS:
+        return StakeOutcome(member_id, 1.0, "winner_supporter_verified")
+    if gen.auditor_reason in (
+        AuditorReason.REVISED,
+        AuditorReason.REVISED_FROM_DISSENT,
+        AuditorReason.SWAPPED_TO_DISSENTER,
+    ):
+        return StakeOutcome(member_id, 0.55, "winner_supporter_revised")
+    if gen.auditor_reason == AuditorReason.WHITELIST_VIOLATION:
+        return StakeOutcome(
+            member_id, 0.1, "winner_supporter_whitelist_violation", SlashTier.TIER_2
+        )
+    return StakeOutcome(member_id, 0.4, "winner_supporter_unverified")
 
-    # ------------------------------------------------------------------
-    # Tribunal honest four
-    # ------------------------------------------------------------------
-    for member_id in TRIBUNAL_HONEST_FOUR:
-        supported_winner = member_id in supporters
-        candidate = breakdown.candidates_by_member.get(member_id) if breakdown else None
-        missed = candidate is None
 
-        if missed:
-            # Tier 3: missed pass / liveness fault.
-            rows.append(
-                StakeOutcome(
-                    agent_id=member_id,
-                    outcome_score=0.1,
-                    rationale="missed_pass",
-                    slash_tier=SlashTier.TIER_3,
-                )
-            )
-            continue
-
-        if outcome == CommandGenerationOutcome.CONSENSUS_FAILED:
-            # No winner emerged. Honest four take a flat hit; the EMA absorbs.
-            rows.append(
-                StakeOutcome(
-                    agent_id=member_id,
-                    outcome_score=0.3,
-                    rationale="consensus_failed",
-                )
-            )
-            continue
-
-        if supported_winner and (auditor_passed or outcome == CommandGenerationOutcome.CONSENSUS):
-            rows.append(
-                StakeOutcome(
-                    agent_id=member_id,
-                    outcome_score=1.0,
-                    rationale="winner_supporter_verified",
-                )
-            )
-        elif supported_winner and auditor_reason in (
-            AuditorReason.REVISED,
-            AuditorReason.REVISED_FROM_DISSENT,
-            AuditorReason.SWAPPED_TO_DISSENTER,
-        ):
-            # Voted for the winner but auditor intervened.
-            rows.append(
-                StakeOutcome(
-                    agent_id=member_id,
-                    outcome_score=0.55,
-                    rationale="winner_supporter_revised",
-                )
-            )
-        elif supported_winner and auditor_reason == AuditorReason.WHITELIST_VIOLATION:
-            # Tier 2: winning candidate was demonstrably non-compliant.
-            rows.append(
-                StakeOutcome(
-                    agent_id=member_id,
-                    outcome_score=0.1,
-                    rationale="winner_supporter_whitelist_violation",
-                    slash_tier=SlashTier.TIER_2,
-                )
-            )
-        elif supported_winner:
-            rows.append(
-                StakeOutcome(
-                    agent_id=member_id,
-                    outcome_score=0.4,
-                    rationale="winner_supporter_unverified",
-                )
-            )
-        else:
-            # Honest dissent - calibrated lower than supporters, still positive
-            # baseline because diversity is a feature.
-            rows.append(
-                StakeOutcome(
-                    agent_id=member_id,
-                    outcome_score=0.45,
-                    rationale="dissenter",
-                )
-            )
-
-    # ------------------------------------------------------------------
-    # Nemesis (proper scoring rule, GDD §5)
-    # ------------------------------------------------------------------
-    nemesis_candidate = breakdown.candidates_by_member.get(NEMESIS_ID) if breakdown else None
-    nemesis_attacked = nemesis_candidate not in (None, "") and (NEMESIS_ID not in supporters)
-    nemesis_abstained = nemesis_candidate in (None, "")
-
-    auditor_intervened = auditor_reason in (
+def _auditor_intervened(reason: AuditorReason | None) -> bool:
+    return reason in (
         AuditorReason.REVISED,
         AuditorReason.REVISED_FROM_DISSENT,
         AuditorReason.SWAPPED_TO_DISSENTER,
         AuditorReason.WHITELIST_VIOLATION,
     )
 
-    if outcome == CommandGenerationOutcome.CONSENSUS_FAILED:
-        # No clean consensus formed. Nemesis cannot be wrong here; small gain.
-        rows.append(
-            StakeOutcome(
-                agent_id=NEMESIS_ID,
-                outcome_score=0.6,
-                rationale="nemesis_no_consensus",
-            )
-        )
-    elif auditor_intervened and nemesis_attacked:
-        # Confirmed-flawed consensus + nemesis attacked = large gain.
-        rows.append(
-            StakeOutcome(
-                agent_id=NEMESIS_ID,
-                outcome_score=1.0,
-                rationale="nemesis_attack_confirmed",
-            )
-        )
-    elif auditor_intervened and nemesis_abstained:
-        # Missed a real flaw - large loss (Tier 3 liveness).
-        rows.append(
-            StakeOutcome(
-                agent_id=NEMESIS_ID,
-                outcome_score=0.1,
-                rationale="nemesis_abstain_miss",
-                slash_tier=SlashTier.TIER_3,
-            )
-        )
-    elif (auditor_passed or outcome == CommandGenerationOutcome.CONSENSUS) and nemesis_abstained:
-        # Clean consensus + abstained = small gain (calibration reward).
-        rows.append(
-            StakeOutcome(
-                agent_id=NEMESIS_ID,
-                outcome_score=0.7,
-                rationale="nemesis_abstain_clean",
-            )
-        )
-    elif (auditor_passed or outcome == CommandGenerationOutcome.CONSENSUS) and nemesis_attacked:
-        # Clean consensus + nemesis attacked = false alarm, large loss.
-        rows.append(
-            StakeOutcome(
-                agent_id=NEMESIS_ID,
-                outcome_score=0.05,
-                rationale="nemesis_attack_false_alarm",
-                slash_tier=SlashTier.TIER_2,
-            )
-        )
-    else:
-        # Fallback (shouldn't usually fire). Keep neutral.
-        rows.append(
-            StakeOutcome(
-                agent_id=NEMESIS_ID,
-                outcome_score=0.5,
-                rationale="nemesis_uncalibrated",
-            )
-        )
 
-    # ------------------------------------------------------------------
-    # Sage (one-shot sufficiency, GDD §5)
-    # ------------------------------------------------------------------
-    if outcome == CommandGenerationOutcome.CONSENSUS_FAILED:
-        rows.append(
-            StakeOutcome(
-                agent_id=SAGE_ID,
-                outcome_score=0.1,
-                rationale="sage_consensus_failed",
-                slash_tier=SlashTier.TIER_3,
-            )
-        )
-    elif outcome == CommandGenerationOutcome.CONSENSUS or (
-        auditor_passed and not auditor_intervened
-    ):
-        rows.append(
-            StakeOutcome(
-                agent_id=SAGE_ID,
-                outcome_score=1.0,
-                rationale="sage_one_shot",
-            )
-        )
-    elif outcome == CommandGenerationOutcome.VERIFIED:
-        rows.append(
-            StakeOutcome(
-                agent_id=SAGE_ID,
-                outcome_score=0.85,
-                rationale="sage_verified",
-            )
-        )
-    elif auditor_reason in (AuditorReason.REVISED, AuditorReason.REVISED_FROM_DISSENT):
-        rows.append(
-            StakeOutcome(
-                agent_id=SAGE_ID,
-                outcome_score=0.55,
-                rationale="sage_revised",
-            )
-        )
-    elif auditor_reason == AuditorReason.SWAPPED_TO_DISSENTER:
-        rows.append(
-            StakeOutcome(
-                agent_id=SAGE_ID,
-                outcome_score=0.4,
-                rationale="sage_swapped",
-            )
-        )
-    else:
-        rows.append(
-            StakeOutcome(
-                agent_id=SAGE_ID,
-                outcome_score=0.4,
-                rationale="sage_unverified",
-            )
-        )
+def _nemesis_outcome(inputs: ClassifierInputs, supporters: set[str]) -> StakeOutcome:
+    gen = inputs.gen_result
+    breakdown = gen.vote_breakdown
+    candidate = breakdown.candidates_by_member.get(NEMESIS_ID) if breakdown else None
+    attacked = candidate not in (None, "") and NEMESIS_ID not in supporters
+    abstained = candidate in (None, "")
+    intervened = _auditor_intervened(gen.auditor_reason)
+    clean = gen.auditor_passed or gen.outcome == CommandGenerationOutcome.CONSENSUS
+    if gen.outcome == CommandGenerationOutcome.CONSENSUS_FAILED:
+        return StakeOutcome(NEMESIS_ID, 0.6, "nemesis_no_consensus")
+    if intervened and attacked:
+        return StakeOutcome(NEMESIS_ID, 1.0, "nemesis_attack_confirmed")
+    if intervened and abstained:
+        return StakeOutcome(NEMESIS_ID, 0.1, "nemesis_abstain_miss", SlashTier.TIER_3)
+    if clean and abstained:
+        return StakeOutcome(NEMESIS_ID, 0.7, "nemesis_abstain_clean")
+    if clean and attacked:
+        return StakeOutcome(NEMESIS_ID, 0.05, "nemesis_attack_false_alarm", SlashTier.TIER_2)
+    return StakeOutcome(NEMESIS_ID, 0.5, "nemesis_uncalibrated")
 
-    # ------------------------------------------------------------------
-    # Auditor (downstream truth, GDD §5)
-    # ------------------------------------------------------------------
-    if auditor_reason is not None:
-        if destructive:
-            # Tier 1: catastrophic - auditor approved a HIGH-risk command that
-            # then failed during execution.
-            rows.append(
-                StakeOutcome(
-                    agent_id=AUDITOR_ID,
-                    outcome_score=0.0,
-                    rationale="auditor_destructive_failure",
-                    slash_tier=SlashTier.TIER_1,
-                )
-            )
-        elif auditor_reason == AuditorReason.AUDITOR_ERROR:
-            rows.append(
-                StakeOutcome(
-                    agent_id=AUDITOR_ID,
-                    outcome_score=0.1,
-                    rationale="auditor_error",
-                    slash_tier=SlashTier.TIER_2,
-                )
-            )
-        elif auditor_passed and not exec_failed:
-            rows.append(
-                StakeOutcome(
-                    agent_id=AUDITOR_ID,
-                    outcome_score=1.0,
-                    rationale="auditor_verdict_held",
-                )
-            )
-        elif auditor_passed and exec_failed:
-            rows.append(
-                StakeOutcome(
-                    agent_id=AUDITOR_ID,
-                    outcome_score=0.35,
-                    rationale="auditor_verdict_failed_execution",
-                )
-            )
-        elif auditor_intervened:
-            # Auditor caught something. Reward proportional to whether the
-            # intervention then held up at execution.
-            rows.append(
-                StakeOutcome(
-                    agent_id=AUDITOR_ID,
-                    outcome_score=0.7 if not exec_failed else 0.4,
-                    rationale="auditor_intervention",
-                )
-            )
-        else:
-            rows.append(
-                StakeOutcome(
-                    agent_id=AUDITOR_ID,
-                    outcome_score=0.5,
-                    rationale="auditor_neutral",
-                )
-            )
 
-    # ------------------------------------------------------------------
-    # Marshal (defensive coordinator, stakes on accurate risk assessment)
-    #
-    # Marshal must be careful about what it blocks. Blocking safe operations
-    # costs reputation; correctly identifying dangerous operations earns it.
-    # ------------------------------------------------------------------
-    marshal_risk = inputs.marshal_risk
-    marshal_blocked = inputs.marshal_blocked
+def _sage_outcome(inputs: ClassifierInputs, intervened: bool) -> StakeOutcome:
+    gen = inputs.gen_result
+    reason = gen.auditor_reason
+    if gen.outcome == CommandGenerationOutcome.CONSENSUS_FAILED:
+        return StakeOutcome(SAGE_ID, 0.1, "sage_consensus_failed", SlashTier.TIER_3)
+    if gen.outcome == CommandGenerationOutcome.CONSENSUS or (gen.auditor_passed and not intervened):
+        return StakeOutcome(SAGE_ID, 1.0, "sage_one_shot")
+    if gen.outcome == CommandGenerationOutcome.VERIFIED:
+        return StakeOutcome(SAGE_ID, 0.85, "sage_verified")
+    if reason in (AuditorReason.REVISED, AuditorReason.REVISED_FROM_DISSENT):
+        return StakeOutcome(SAGE_ID, 0.55, "sage_revised")
+    if reason == AuditorReason.SWAPPED_TO_DISSENTER:
+        return StakeOutcome(SAGE_ID, 0.4, "sage_swapped")
+    return StakeOutcome(SAGE_ID, 0.4, "sage_unverified")
+
+
+def _auditor_outcome(
+    inputs: ClassifierInputs, intervened: bool, exec_failed: bool, destructive: bool
+) -> StakeOutcome | None:
+    gen = inputs.gen_result
+    reason = gen.auditor_reason
+    if reason is None:
+        return None
+    if destructive or reason == AuditorReason.AUDITOR_ERROR:
+        return _auditor_fault_outcome(destructive)
+    if gen.auditor_passed and not exec_failed:
+        return StakeOutcome(AUDITOR_ID, 1.0, "auditor_verdict_held")
+    if gen.auditor_passed and exec_failed:
+        return StakeOutcome(AUDITOR_ID, 0.35, "auditor_verdict_failed_execution")
+    if intervened:
+        return StakeOutcome(AUDITOR_ID, 0.7 if not exec_failed else 0.4, "auditor_intervention")
+    return StakeOutcome(AUDITOR_ID, 0.5, "auditor_neutral")
+
+
+def _auditor_fault_outcome(destructive: bool) -> StakeOutcome:
+    if destructive:
+        return StakeOutcome(AUDITOR_ID, 0.0, "auditor_destructive_failure", SlashTier.TIER_1)
+    return StakeOutcome(AUDITOR_ID, 0.1, "auditor_error", SlashTier.TIER_2)
+
+
+def _marshal_outcome(inputs: ClassifierInputs, exec_failed: bool) -> StakeOutcome:
+    risk = inputs.marshal_risk
+    if inputs.marshal_blocked:
+        return _marshal_blocked_outcome(risk)
+    if not exec_failed:
+        return _marshal_success_outcome(risk)
+    return _marshal_failed_outcome(risk)
+
+
+def _marshal_blocked_outcome(risk: RiskLevel | None) -> StakeOutcome:
+    if risk == RiskLevel.HIGH:
+        return StakeOutcome(MARSHAL_ID, 0.85, "marshal_blocked_high_risk")
+    if risk == RiskLevel.MEDIUM:
+        return StakeOutcome(MARSHAL_ID, 0.6, "marshal_blocked_medium_risk")
+    return StakeOutcome(MARSHAL_ID, 0.3, "marshal_over_caution_low_risk", SlashTier.TIER_3)
+
+
+def _marshal_success_outcome(risk: RiskLevel | None) -> StakeOutcome:
+    if risk == RiskLevel.LOW:
+        return StakeOutcome(MARSHAL_ID, 1.0, "marshal_allowed_low_success")
+    if risk == RiskLevel.MEDIUM:
+        return StakeOutcome(MARSHAL_ID, 0.9, "marshal_allowed_medium_success")
+    return StakeOutcome(MARSHAL_ID, 0.7, "marshal_allowed_high_success")
+
+
+def _marshal_failed_outcome(risk: RiskLevel | None) -> StakeOutcome:
+    if risk == RiskLevel.LOW:
+        return StakeOutcome(MARSHAL_ID, 0.1, "marshal_low_risk_missed", SlashTier.TIER_2)
+    if risk == RiskLevel.MEDIUM:
+        return StakeOutcome(MARSHAL_ID, 0.35, "marshal_medium_risk_missed")
+    return StakeOutcome(MARSHAL_ID, 0.75, "marshal_high_risk_flagged_correctly")
+
+
+def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
+    """Compute per-agent ``StakeOutcome`` rows from a verdict."""
+    gen = inputs.gen_result
+    supporters = _winner_supporters(gen)
     exec_failed = _execution_failed(inputs.execution_result)
-
-    if marshal_blocked:
-        # Marshal blocked the command. It only earns full credit if the
-        # risk was genuinely HIGH. Blocking MEDIUM/LOW as HIGH is over-caution.
-        if marshal_risk == RiskLevel.HIGH:
-            # Blocked correctly flagged as HIGH - full credit for caution
-            rows.append(
-                StakeOutcome(
-                    agent_id=MARSHAL_ID,
-                    outcome_score=0.85,
-                    rationale="marshal_blocked_high_risk",
-                )
-            )
-        elif marshal_risk == RiskLevel.MEDIUM:
-            # Blocked MEDIUM as too risky - partial credit, borderline over-caution
-            rows.append(
-                StakeOutcome(
-                    agent_id=MARSHAL_ID,
-                    outcome_score=0.6,
-                    rationale="marshal_blocked_medium_risk",
-                )
-            )
-        else:
-            # Blocked LOW risk command - over-caution, penalize
-            rows.append(
-                StakeOutcome(
-                    agent_id=MARSHAL_ID,
-                    outcome_score=0.3,
-                    rationale="marshal_over_caution_low_risk",
-                    slash_tier=SlashTier.TIER_3,
-                )
-            )
-    # Marshal allowed the command. Outcome determines if assessment was right.
-    elif not exec_failed:
-        # Command succeeded - marshal's risk assessment was accurate
-        if marshal_risk == RiskLevel.LOW:
-            rows.append(
-                StakeOutcome(
-                    agent_id=MARSHAL_ID,
-                    outcome_score=1.0,
-                    rationale="marshal_allowed_low_success",
-                )
-            )
-        elif marshal_risk == RiskLevel.MEDIUM:
-            rows.append(
-                StakeOutcome(
-                    agent_id=MARSHAL_ID,
-                    outcome_score=0.9,
-                    rationale="marshal_allowed_medium_success",
-                )
-            )
-        else:
-            # HIGH risk allowed but succeeded - borderline under-caution
-            rows.append(
-                StakeOutcome(
-                    agent_id=MARSHAL_ID,
-                    outcome_score=0.7,
-                    rationale="marshal_allowed_high_success",
-                )
-            )
-    # Command failed - marshal should have caught the risk
-    elif marshal_risk == RiskLevel.LOW:
-        # LOW risk failed - major miss by marshal
-        rows.append(
-            StakeOutcome(
-                agent_id=MARSHAL_ID,
-                outcome_score=0.1,
-                rationale="marshal_low_risk_missed",
-                slash_tier=SlashTier.TIER_2,
-            )
-        )
-    elif marshal_risk == RiskLevel.MEDIUM:
-        # MEDIUM risk failed - moderate miss
-        rows.append(
-            StakeOutcome(
-                agent_id=MARSHAL_ID,
-                outcome_score=0.35,
-                rationale="marshal_medium_risk_missed",
-            )
-        )
-    else:
-        # HIGH risk failed - marshal flagged it, auditor/approval failed
-        rows.append(
-            StakeOutcome(
-                agent_id=MARSHAL_ID,
-                outcome_score=0.75,
-                rationale="marshal_high_risk_flagged_correctly",
-            )
-        )
-
-    # ------------------------------------------------------------------
-    # Extra agents (Phase 4 hook - Triage clarifications)
-    # ------------------------------------------------------------------
+    intervened = _auditor_intervened(gen.auditor_reason)
+    rows = [_honest_member_outcome(member, inputs, supporters) for member in TRIBUNAL_HONEST_FOUR]
+    rows.extend((_nemesis_outcome(inputs, supporters), _sage_outcome(inputs, intervened)))
+    auditor = _auditor_outcome(
+        inputs,
+        intervened,
+        exec_failed,
+        _execution_destructive(inputs.execution_result, inputs.marshal_risk),
+    )
+    if auditor is not None:
+        rows.append(auditor)
+    rows.append(_marshal_outcome(inputs, exec_failed))
     for extra in inputs.extra_agents:
         if any(row.agent_id == extra for row in rows):
             continue
-        rows.append(
-            StakeOutcome(
-                agent_id=extra,
-                outcome_score=0.5,
-                rationale="no_signal",
-            )
-        )
-
+        rows.append(StakeOutcome(extra, 0.5, "no_signal"))
     return rows
 
 

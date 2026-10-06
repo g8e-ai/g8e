@@ -110,7 +110,7 @@ class InMemoryOperator:
 @pytest.fixture
 def db_client():
     store = InMemoryOperator()
-    tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
+    tls_config = TLSConfig.model_validate({"ca_cert_path": "/mock/ca.crt"})
     client = DBClient(tls_config=tls_config, operator_session_id="mock-session")
     client._request_json = store.handle_json
     client._request_list = store.handle_list
@@ -120,7 +120,7 @@ def db_client():
 
 @pytest.fixture
 def db_client_http_error():
-    tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
+    tls_config = TLSConfig.model_validate({"ca_cert_path": "/mock/ca.crt"})
     client = DBClient(tls_config=tls_config, operator_session_id="mock-session")
 
     async def raise_network_error(method, path, **kwargs):

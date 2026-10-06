@@ -12,6 +12,7 @@ import pytest
 from app.constants import G8EE_COMPONENT
 from app.models.agent import OperatorContext
 from app.models.http_context import G8eHttpContext
+from app.models.investigations import InvestigationCurrentState
 from app.models.reputation import ReputationCommitment
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tribunal_commands import TribunalGenerationRequest
@@ -99,7 +100,7 @@ def make_tribunal_generation_request(
     settings: G8eeUserSettings | None = None,
     reputation_data_service: ReputationDataService | None = None,
     ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
-    investigation_state: str = "",
+    investigation_state: InvestigationCurrentState | None = None,
     investigation_context: str = "",
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,

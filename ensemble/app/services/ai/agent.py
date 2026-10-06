@@ -70,8 +70,7 @@ from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
 from app.services.evaluation.role_control import resolve_scored_model_role
 from app.services.evaluation.trace_service import EvaluationTraceService
-from app.services.infra.event_service import EventService
-from app.services.protocols import ApprovalServiceProtocol
+from app.services.protocols import ApprovalServiceProtocol, EventServiceProtocol
 from app.utils.time_ids.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
@@ -198,7 +197,7 @@ class g8eEnsemble:
     async def stream_response(
         self,
         inputs: AgentInputs,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         llm_provider: LLMProvider,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """
@@ -290,7 +289,7 @@ class g8eEnsemble:
         self,
         inputs: AgentInputs,
         state: AgentStreamState,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         llm_provider: LLMProvider,
         on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
         evaluation_trace_service: EvaluationTraceService | None = None,
@@ -358,7 +357,7 @@ class g8eEnsemble:
         self,
         inputs: AgentInputs,
         llm_provider: LLMProvider,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         model_calls: list[ModelCallTelemetry] | None = None,
         retry_count: int = 0,
     ) -> AsyncGenerator[StreamChunkFromModel]:

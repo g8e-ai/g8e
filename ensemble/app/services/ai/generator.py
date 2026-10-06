@@ -211,7 +211,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         whitelisting_enabled=request.whitelisting_enabled,
         blacklisting_enabled=request.blacklisting_enabled,
         whitelisted_commands=request.whitelisted_commands,
-        blacklisted_commands=request.blacklisted_commands,
+        blacklisted_commands=[{"command": command} for command in request.blacklisted_commands],
     )
 
     correlation_id = generate_tribunal_correlation_id()
@@ -233,6 +233,11 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         )
         await _push_tribunal_agent_state(emitter, "offline", run_id=investigation_id)
         raise TribunalDisabledError(request=request.request)
+
+    g8e_context = request.g8e_context
+    if g8e_context is None or not g8e_context.investigation_id:
+        raise ConfigurationError("A g8e context with an investigation ID is required")
+    investigation_id = g8e_context.investigation_id
 
     try:
         generation_model = resolve_model(request.settings.llm, tier="lite", request=request.request)
@@ -283,7 +288,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         )
         await _push_tribunal_agent_state(emitter, "failed", run_id=investigation_id)
         raise TribunalProviderUnavailableError(
-            provider=lite_provider,
+            provider=provider_name,
             error=str(exc),
             request=request.request,
         ) from exc
@@ -292,6 +297,10 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         lite_provider = request.settings.llm.lite_provider
         provider_name = lite_provider.value if lite_provider else "not_configured"
         raise ConfigurationError(f"Failed to initialize generation provider for {provider_name}")
+
+    reputation_data_service = request.reputation_data_service
+    if reputation_data_service is None:
+        raise ConfigurationError("Reputation data service is required for Tribunal auditing")
 
     prepare_provider_call(generation_provider, g8e_context=request.g8e_context)
 
@@ -462,7 +471,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
 
     auditor = TribunalAuditor(
         emitter=emitter,
-        reputation_data_service=request.reputation_data_service,
+        reputation_data_service=reputation_data_service,
     )
     audit_result = await auditor.run(
         provider=auditor_provider or generation_provider,
@@ -476,7 +485,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         auditor_enabled=request.settings.llm.llm_command_gen_auditor,
         command_constraints_message=command_constraints_message,
         investigation_id=investigation_id,
-        context=RequestContext.from_app_context(request.g8e_context),
+        context=RequestContext.from_app_context(g8e_context),
         whitelisting_enabled=request.whitelisting_enabled,
         blacklisting_enabled=request.blacklisting_enabled,
         model_role="primary" if auditor_provider else "lite",

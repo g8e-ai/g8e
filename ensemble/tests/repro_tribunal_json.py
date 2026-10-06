@@ -13,6 +13,7 @@ import pytest
 
 from app.constants import (
     G8EE_COMPONENT,
+    ConsensusAuditMode,
 )
 from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown
 from app.models.http_context import G8eHttpContext
@@ -60,7 +61,7 @@ async def test_auditor_repro_json_failure():
             model="test-model",
             request="list files",
             guidelines="",
-            mode="unanimous",
+            mode=ConsensusAuditMode.UNANIMOUS,
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
             tied_candidates=None,

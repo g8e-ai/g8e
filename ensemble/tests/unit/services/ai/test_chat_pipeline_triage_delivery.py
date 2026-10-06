@@ -15,6 +15,7 @@ Verifies that when triage returns LOW confidence, the pipeline:
 """
 
 import asyncio
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -46,6 +47,7 @@ from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.request_builder import BuiltContents
+from app.services.infra.event_service import EventService
 from tests.fakes.factories import (
     build_enriched_context,
     build_g8e_http_context,
@@ -73,7 +75,8 @@ LOW_CONFIDENCE_TRIAGE_RESULT = TriageResult(
 
 def _make_pipeline() -> ChatPipelineService:
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.event_service = FakeEventService()
+    fake_event_service = FakeEventService()
+    svc.event_service = cast(EventService, fake_event_service)
     svc.g8e_agent = MagicMock()
     svc.g8e_agent.run_with_sse = AsyncMock()
     svc.investigation_service = MagicMock()
@@ -173,7 +176,7 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
     )
 
     # Verify ITERATION_FAILED was published
-    events = svc.event_service.published
+    events = cast(FakeEventService, svc.event_service).published
     failed_events = [
         e
         for e in events
@@ -378,7 +381,7 @@ async def test_prepare_chat_context_hands_the_evaluation_context_to_generation_c
 
     await _prepare(svc, g8e_ctx)
 
-    kwargs = svc.request_builder.get_generation_config.call_args.kwargs
+    kwargs = cast(MagicMock, svc.request_builder.get_generation_config).call_args.kwargs
     assert kwargs["evaluation_context"] is evaluation_context
     assert kwargs["model_override"] == "qwen3.5:4b"
 
@@ -391,7 +394,7 @@ async def test_prepare_chat_context_production_request_carries_no_evaluation_con
 
     await _prepare(svc, g8e_ctx)
 
-    assert svc.request_builder.get_generation_config.call_args.kwargs["evaluation_context"] is None
+    assert cast(MagicMock, svc.request_builder.get_generation_config).call_args.kwargs["evaluation_context"] is None
 
 
 @pytest.mark.parametrize(
@@ -429,7 +432,7 @@ async def test_prepare_chat_context_budgets_history_only_for_ollama_backed_provi
             ),
         )
 
-    kwargs = svc.request_builder.build_contents_from_history.call_args.kwargs
+    kwargs = cast(MagicMock, svc.request_builder.build_contents_from_history).call_args.kwargs
     assert kwargs["history_token_budget"] == expected_budget
 
 
@@ -471,8 +474,8 @@ async def test_prepare_chat_context_scored_request_reads_case_memories_but_not_u
 
     inputs = await _prepare(svc, _scored_context())
 
-    svc.memory_service.get_user_memories.assert_not_awaited()
-    svc.memory_service.get_case_memories.assert_awaited_once()
+    cast(AsyncMock, svc.memory_service.get_user_memories).assert_not_awaited()
+    cast(AsyncMock, svc.memory_service.get_case_memories).assert_awaited_once()
     assert inputs.case_memories == [case_memory]
     assert inputs.user_memories == []
     assert inputs.user_memories_suppressed is True
@@ -488,8 +491,8 @@ async def test_prepare_chat_context_production_request_still_reads_user_memories
 
     inputs = await _prepare(svc, g8e_ctx)
 
-    svc.memory_service.get_user_memories.assert_awaited_once()
-    svc.memory_service.get_case_memories.assert_awaited_once()
+    cast(AsyncMock, svc.memory_service.get_user_memories).assert_awaited_once()
+    cast(AsyncMock, svc.memory_service.get_case_memories).assert_awaited_once()
     assert inputs.user_memories_suppressed is False
 
 

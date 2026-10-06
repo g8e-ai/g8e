@@ -236,7 +236,7 @@ async def all_services(cache_aside_service, test_settings):
     get_paths = import_module("app.constants.paths").get_paths
     get_search_settings = import_module("app.llm.factory").get_search_settings
     tls_config = import_module("app.models.settings").TLSConfig
-    web_search_provider = import_module(
+    web_search_provider_type = import_module(
         "app.services.ai.grounding.web_search_provider"
     ).WebSearchProvider
     settings_service = import_module("app.services.infra.settings_service").SettingsService
@@ -267,7 +267,7 @@ async def all_services(cache_aside_service, test_settings):
     web_search_provider = None
     search_settings = get_search_settings()
     if search_settings and search_settings.enabled:
-        web_search_provider = web_search_provider(
+        web_search_provider = web_search_provider_type(
             project_id=search_settings.project_id,
             engine_id=search_settings.engine_id,
             api_key=search_settings.api_key,

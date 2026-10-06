@@ -168,13 +168,16 @@ class CommandAutoApprovedValidator:
         return [entry["value"] for entry in self._entries]
 
 
-_validator: CommandAutoApprovedValidator | None = None
+class _ValidatorState:
+    instance: CommandAutoApprovedValidator | None = None
+
+
+_validator_state = _ValidatorState()
 
 
 def register_auto_approved_validator(validator: CommandAutoApprovedValidator) -> None:
     """Explicitly register the global auto-approved validator instance."""
-    global _validator
-    _validator = validator
+    _validator_state.instance = validator
 
 
 def get_auto_approved_validator(
@@ -186,14 +189,13 @@ def get_auto_approved_validator(
     the default path (or the provided path). This backward-compatibility mode
     is deprecated; new code should use register_auto_approved_validator().
     """
-    global _validator
-    if _validator is None:
+    if _validator_state.instance is None:
         logger.warning(
             "get_auto_approved_validator() called without explicit registration; "
             "creating validator implicitly. Use register_auto_approved_validator() for explicit DI."
         )
-        _validator = CommandAutoApprovedValidator(auto_approved_path=auto_approved_path or "")
-    return _validator
+        _validator_state.instance = CommandAutoApprovedValidator(auto_approved_path=auto_approved_path or "")
+    return _validator_state.instance
 
 
 def is_command_auto_approved(

@@ -53,7 +53,7 @@ def make_gen_config(
 def make_agent_inputs(
     case_id: str = "case-test-001",
     investigation_id: str = "inv-test-001",
-    web_session_id: str = "web-test-001",
+    web_session_id: str | None = "web-test-001",
     user_id: str = "user-test-001",
     agent_mode: AgentMode = AgentMode.G8E_BOUND,
     sentinel_mode: bool = True,
@@ -80,7 +80,7 @@ def make_agent_inputs(
 
     if g8e_context is None:
         g8e_context = build_g8e_http_context(
-            web_session_id=web_session_id,
+            web_session_id=web_session_id or "web-test-001",
             user_id=user_id,
         )
 
@@ -132,7 +132,7 @@ def make_agent_stream_state() -> AgentStreamState:
 def make_agent_run_args(
     case_id: str = "case-test-001",
     investigation_id: str = "inv-test-001",
-    web_session_id: str = "web-test-001",
+    web_session_id: str | None = "web-test-001",
     user_id: str = "user-test-001",
     agent_mode: AgentMode = AgentMode.G8E_BOUND,
     sentinel_mode: bool = True,

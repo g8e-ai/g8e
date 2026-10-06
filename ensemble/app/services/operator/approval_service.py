@@ -217,8 +217,12 @@ class OperatorApprovalService:
         metadata.event_type = event_type
 
         try:
+            investigation_id = context.investigation_id
+            if investigation_id is None:
+                logger.info("[%s] Skipping audit without an investigation ID", log_tag)
+                return
             await self.investigation_data_service.add_approval_record(
-                investigation_id=context.investigation_id,
+                investigation_id=investigation_id,
                 event_type=event_type,
                 metadata=metadata,
                 context=context,
@@ -234,12 +238,15 @@ class OperatorApprovalService:
 
     async def request_command_approval(self, request: CommandApprovalRequest) -> ApprovalResult:
         """Request operator approval for a command execution."""
+        user_id = request.g8e_context.user_id
+        if user_id is None:
+            raise ValidationError("An authenticated user ID is required for approval")
         return await self._request_command_approval(
             command=request.command,
             justification=request.justification,
             g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.g8e_context.user_id,
+            user_id=user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
@@ -252,13 +259,16 @@ class OperatorApprovalService:
 
     async def request_file_edit_approval(self, request: FileEditApprovalRequest) -> ApprovalResult:
         """Request operator approval for a file edit operation."""
+        user_id = request.g8e_context.user_id
+        if user_id is None:
+            raise ValidationError("An authenticated user ID is required for approval")
         return await self._request_file_edit_approval(
             file_path=request.file_path,
             operation=request.operation,
             justification=request.justification,
             g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.g8e_context.user_id,
+            user_id=user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
@@ -268,12 +278,15 @@ class OperatorApprovalService:
 
     async def request_intent_approval(self, request: IntentApprovalRequest) -> ApprovalResult:
         """Request operator approval for an intent (IAM) permission grant."""
+        user_id = request.g8e_context.user_id
+        if user_id is None:
+            raise ValidationError("An authenticated user ID is required for approval")
         return await self._grant_intent_permission(
             intent_name=request.intent_name,
             justification=request.justification,
             g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.g8e_context.user_id,
+            user_id=user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,

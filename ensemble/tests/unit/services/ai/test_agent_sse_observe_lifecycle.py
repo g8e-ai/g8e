@@ -20,6 +20,7 @@ import asyncio
 from itertools import pairwise
 
 import pytest
+from g8e.models.events import AIToolLifecyclePayload
 
 from app.constants import (
     EventType,
@@ -29,6 +30,7 @@ from app.constants import (
     ToolCallStatus,
 )
 from app.models.agent import StreamChunkData, StreamChunkFromModel
+from app.models.events import SessionEvent
 from app.models.personas import get_persona
 from app.models.tool_results import CommandExecutionResult, InvestigationContextResult
 from app.services.ai.agent_sse import deliver_via_sse
@@ -78,11 +80,11 @@ async def _stream(*chunks: StreamChunkFromModel):
         yield chunk
 
 
-def _agent_state_statuses(event_svc) -> list[str]:
+def _agent_state_statuses(event_svc: FakeEventService) -> list[str]:
     return [req.status for req in event_svc.agent_state_requests]
 
 
-def _run_state_statuses(event_svc) -> list[str]:
+def _run_state_statuses(event_svc: FakeEventService) -> list[str]:
     return [req.status for req in event_svc.run_state_requests]
 
 
@@ -253,7 +255,7 @@ async def test_targetless_flow_skips_projections():
     inputs, state = make_agent_run_args(
         case_id="case-obs-6",
         investigation_id="inv-obs-6",
-        web_session_id=None,
+        web_session_id="web-obs-6",
         user_id="user-obs-6",
         active_agent=ReasoningAgent.SAGE,
     )
@@ -405,6 +407,8 @@ async def test_operator_tool_call_lifecycle_completed():
         e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_COMPLETED
     ]
     assert len(completed_events) == 1
+    assert isinstance(completed_events[0], SessionEvent)
+    assert isinstance(completed_events[0].payload, AIToolLifecyclePayload)
     assert completed_events[0].payload.status == ToolCallStatus.COMPLETED
 
 
@@ -447,6 +451,7 @@ async def test_operator_tool_call_lifecycle_failed():
         e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_FAILED
     ]
     assert len(failed_events) == 1
+    assert isinstance(failed_events[0].payload, AIToolLifecyclePayload)
     assert failed_events[0].payload.status == ToolCallStatus.FAILED
 
 
@@ -489,6 +494,7 @@ async def test_operator_tool_call_lifecycle_typed_result():
         e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_COMPLETED
     ]
     assert len(completed_events) == 1
+    assert isinstance(completed_events[0].payload, AIToolLifecyclePayload)
     assert completed_events[0].payload.status == ToolCallStatus.COMPLETED
     assert completed_events[0].payload.content == "system status ok"
 
@@ -534,6 +540,7 @@ async def test_universal_tool_call_lifecycle_typed_result():
         if e.event_type == EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
     ]
     assert len(completed_events) == 1
+    assert isinstance(completed_events[0].payload, AIToolLifecyclePayload)
     assert completed_events[0].payload.status == ToolCallStatus.COMPLETED
     assert completed_events[0].payload.content == "enriched context data"
 
@@ -583,10 +590,12 @@ async def test_operator_tool_call_lifecycle_none_execution_id():
         e for e in event_svc.published if e.event_type == EventType.OPERATOR_COMMAND_FAILED
     ]
     assert len(started_events) == 1
+    assert isinstance(started_events[0].payload, AIToolLifecyclePayload)
     assert isinstance(started_events[0].payload.execution_id, str)
     assert len(started_events[0].payload.execution_id) > 0
 
     assert len(failed_events) == 1
+    assert isinstance(failed_events[0].payload, AIToolLifecyclePayload)
     assert isinstance(failed_events[0].payload.execution_id, str)
     assert len(failed_events[0].payload.execution_id) > 0
     assert failed_events[0].payload.status == ToolCallStatus.FAILED

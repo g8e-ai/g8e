@@ -402,7 +402,7 @@ class ServiceFactory:
         )
 
         chat_pipeline = ChatPipelineService(
-            event_service=core_services.event_service,  # type: ignore[arg-type]
+            event_service=core_services.event_service,
             investigation_service=domain_services.investigation_service,  # type: ignore[arg-type]
             request_builder=request_builder,
             g8e_agent=g8e_agent,

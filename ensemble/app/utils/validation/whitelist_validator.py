@@ -278,7 +278,7 @@ class CommandWhitelistValidator:
             option_matched = False
 
             for safe_option in platform_options:
-                if self._matches_safe_option(arg, args[i:], safe_option):
+                if self._matches_safe_option(arg, safe_option):
                     safe_options_used.append(safe_option)
                     option_matched = True
 
@@ -353,7 +353,7 @@ class CommandWhitelistValidator:
         unsafe_chars = [";", "&", "`", "$", "(", ")", "{", "}", "<", ">", "\\", "\n", "\r", "\t"]
         return all(char not in value for char in unsafe_chars)
 
-    def _matches_safe_option(self, arg: str, remaining_args: list[str], safe_option: str) -> bool:
+    def _matches_safe_option(self, arg: str, safe_option: str) -> bool:
         """Check if argument matches a safe option pattern."""
         if "<" not in safe_option:
             return arg == safe_option

@@ -7,8 +7,8 @@
 
 from typing import Literal
 
-from g8e.models.internal_api import ChatMessageRequest as _G8eChatMessageRequest
 from g8e.models.internal_api import ChatStartedResponse as _G8eChatStartedResponse
+from g8e.models.internal_api import EvaluationInferenceContext
 from g8e.models.internal_api import EvaluationTraceResponse as _G8eEvaluationTraceResponse
 from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
 from g8e.models.observe_api import (
@@ -168,19 +168,16 @@ class LLMModelListResponse(G8eBaseModel):
     models: list[str]
 
 
-class ChatMessageRequest(_G8eChatMessageRequest, RequestOverrides):
-    """g8ee-specific ChatMessageRequest extending the protocol base.
-
-    Subclasses g8e's ChatMessageRequest (which provides context, message,
-    attachments, sentinel_mode, resource_creation, and LLM override fields)
-    and RequestOverrides (which adds web_search override fields).
-
-    Overrides attachments to use typed AttachmentMetadata list.
-    """
+class ChatMessageRequest(RequestOverrides):
+    """g8ee chat request with typed attachments and web-search overrides."""
 
     context: RequestContext = Field(
         ..., description="Request context with session/case/investigation identity"
     )
+    evaluation_context: EvaluationInferenceContext | None = Field(default=None)
+    message: str = Field(...)
+    sentinel_mode: bool = Field(default=True)
+    resource_creation: _G8eResourceCreationRequest | None = Field(default=None)
     attachments: list[AttachmentMetadata] | None = Field(
         default_factory=list, description="File attachments"
     )

@@ -187,13 +187,16 @@ class CommandBlacklistValidator:
         ]
 
 
-_validator: CommandBlacklistValidator | None = None
+class _ValidatorState:
+    instance: CommandBlacklistValidator | None = None
+
+
+_validator_state = _ValidatorState()
 
 
 def register_blacklist_validator(validator: CommandBlacklistValidator) -> None:
     """Explicitly register the global blacklist validator instance."""
-    global _validator
-    _validator = validator
+    _validator_state.instance = validator
 
 
 def get_blacklist_validator(blacklist_path: str | None = None) -> CommandBlacklistValidator:
@@ -203,14 +206,13 @@ def get_blacklist_validator(blacklist_path: str | None = None) -> CommandBlackli
     the default path (or the provided path). This backward-compatibility mode
     is deprecated; new code should use register_blacklist_validator().
     """
-    global _validator
-    if _validator is None:
+    if _validator_state.instance is None:
         logger.warning(
             "get_blacklist_validator() called without explicit registration; "
             "creating validator implicitly. Use register_blacklist_validator() for explicit DI."
         )
-        _validator = CommandBlacklistValidator(blacklist_path=blacklist_path or "")
-    return _validator
+        _validator_state.instance = CommandBlacklistValidator(blacklist_path=blacklist_path or "")
+    return _validator_state.instance
 
 
 def validate_command_against_blacklist(command: str) -> CommandBlacklistResult:
