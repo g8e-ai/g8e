@@ -353,13 +353,8 @@ jobs:
         working-directory: ensemble
         run: make proto
 
-      - name: Run ruff
-        working-directory: ensemble
-        run: ruff check app
-
-      - name: Run pyright
-        working-directory: ensemble
-        run: pyright app
+      - name: Lint and typecheck ensemble
+        run: make ensemble-lint
 
       - name: Run ensemble unit + in-process integration tests
         working-directory: ensemble

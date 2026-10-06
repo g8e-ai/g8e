@@ -96,7 +96,7 @@ def _first_token_seen(msg) -> bool:
 
 def _contents_to_messages(
     contents: list[Content],
-    system_instructions: str,
+    system_instructions: str | None,
 ) -> list[OllamaMessage]:
     messages = []
 

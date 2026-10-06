@@ -11,9 +11,11 @@ owners:
   - docker-compose.yml
   - internal/cli/cmd/main.go
   - internal/cli/cmd/test/test.go
+  - internal/cli/config/config.go
   - internal/constants/errors.go
   - internal/constants/paths.go
   - internal/services/fs/file_service.go
+  - internal/services/g8eo.go
   - internal/services/pubsub/mode_deps.go
   - internal/services/pubsub/pubsub_commands.go
   - internal/services/gateway/gateway_service.go
@@ -267,18 +269,14 @@ make lint
 ./g8e test lint
 ./g8e test chaos
 ./g8e test summary
+./g8e test public-loop --candidate candidate.json --output evidence.json
 ```
 
-2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
+2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI (`./g8e test public-loop` requires `--candidate` and `--output`). Reproduce a CI failure through the same entry point.
 3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make ensemble-test-external`, `make console-test`.
 4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-docker` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
 
-On native Windows, `make dev-setup` and `make ci` use Git for Windows Bash and
-GNU Make. Keep `/usr/bin` ahead of the Windows system PATH inside Bash so npm
-helpers resolve Git Bash. Test fixtures that discover user configuration must
-isolate both `HOME` and `USERPROFILE`; see [Native Windows Tests](tests.md#native-windows-tests)
-for application-data isolation, cross-drive fixtures, file modes, symlink
-privileges, browser stubs, and race-detector limits.
+On native Windows, `make dev-setup` and `make ci` use Git for Windows Bash and GNU Make. Keep `/usr/bin` ahead of the Windows system PATH inside Bash so npm helpers resolve Git Bash. Test fixtures that discover user configuration must isolate both `HOME` and `USERPROFILE`; see [Native Windows Tests](tests.md#native-windows-tests) for application-data isolation, cross-drive fixtures, file modes, symlink privileges, browser stubs, and race-detector limits.
 
 ### Add a runtime-file CLI command
 
@@ -318,6 +316,7 @@ privileges, browser stubs, and race-detector limits.
 
 - A compatibility shim that keeps a broken path alive (INV-CODE-01).
 - An `ensure*` or `getOrCreate*` helper (INV-CODE-12).
+- Panicking in production code or constructors for recoverable failures (INV-CODE-06, INV-CODE-16).
 - `errors.New` or a package-level sentinel outside `internal/constants/errors.go` (INV-ERR-01, INV-ERR-02).
 - Protobuf `Any` or `map[string]interface{}` for a known contract (INV-TYPE-02).
 - `os.ReadFile`, `os.WriteFile`, or a hardcoded `.g8e/` path outside `internal/services/fs` (INV-FS-01).

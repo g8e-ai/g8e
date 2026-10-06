@@ -130,6 +130,9 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `console/` | Gateway-embedded browser console (React + TypeScript). Docs: [Console Architecture & Development](../architecture/console.md). |
 | `g8e-adapter/` | Audited browser adapter and deterministic contract pack for generated observe frontends. |
 | `evaluation-explorer/` | Evaluation explorer SPA; its build is embedded in `internal/services/gateway/explorer/static`. |
+| `examples/` | Runnable Go and Python platform examples, external console app, and MCP client configuration templates. |
+| `deploy/` | Standalone operator container build and preflight deployment assets (`deploy/operator-runtime/`). |
+| `release-evidence/` | Immutable release compliance evidence bundles and signatures. |
 | `docs/` | Architecture, guides, references, developer docs, and release notes. |
 | `scripts/` | Validation, generation, release, and build support scripts. |
 | `website/` | Static site generator and Cloudflare Worker packaging. Source overview is the root `README.md`. |
@@ -165,15 +168,15 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | `vault` | `vaultcmd` | `internal/cli/cmd/vault/` | | Local vault init, unlock, rekey, status, reset, export, and import. |
 | `test` | `testcmd` | `internal/cli/cmd/test/` | | Unit, integration, e2e, e2e-docker, coverage, lint, chaos, summary, and `public-loop`. |
 | `docker` | `docker` | `internal/cli/cmd/docker/` | | Unified Compose stack lifecycle. |
-| `ensemble` | `ensemblecmd` | `internal/cli/cmd/ensemble/` | | g8ee service lifecycle in the unified Compose stack. |
-| `audit` | `audit` | `internal/cli/cmd/audit/` | | Receipt, event, summary, export, and report queries against a running Gateway. |
+| `ensemble` | `ensemble` | `internal/cli/cmd/ensemble/` | | Local host Python g8ee service lifecycle (start, stop, restart, status, logs, and reset-identity). |
+| `audit` | `audit` | `internal/cli/cmd/audit/` | | Receipt, event, summary, export, report, and verify queries against a running Gateway. |
 | `report` | `report` | `internal/cli/cmd/report/` | | Deterministic CSV evidence generation and offline verification. |
 | `public` | `public` | `internal/cli/cmd/public/` | | Public spectator feed. `restore` is constructed in the eval package (INV-PKG-02). |
 | `swagger` | `swagger` | `internal/cli/cmd/swagger/` | | OpenAPI generation, serving, and validation. |
 | `tui` | `tuicmd` | `internal/cli/cmd/tui/` | | Tactical Governance Console. |
 | `version` | `version` | `internal/cli/cmd/version/` | | Build metadata. Optional FIPS module status is `./g8e version --help`. |
 | `compliance` | `compliancecmd` | `internal/cli/cmd/compliance/` | | `ksi`, `ksi-history`, `overlay`, `release-evidence`, `release-prepare`, `evidence`, `evidence-graph`, and `report`. |
-| `eval` | `eval` | `internal/cli/cmd/eval/` | `evals` | `models`, `campaigns`, `runs`, `rollout`, `formations`, `gates`, `boundary`, `suites`, `backup`, and `restore`. Also constructs `public restore`. |
+| `eval` | `eval` | `internal/cli/cmd/eval/` | | `models`, `campaigns`, `runs`, `rollout`, `formations`, `gates`, `boundary`, `suites`, `backup`, and `restore`. Also constructs `public restore`. |
 
 Files at `internal/cli/cmd/` root are the root command, its tests, and shared file-service and config-load tests. Factory-error tests live beside the group they cover (`factory_error_<group>_test.go`). The factory rule is INV-FS-08.
 
@@ -182,12 +185,14 @@ Files at `internal/cli/cmd/` root are the root command, its tests, and shared fi
 | `internal/cli/cmd/shared/` | `shared` | Config load, `NewFileSvc` (`fs.NewRuntimeFileService`), source-root lookup, command context, and version-info context. Exists so group packages do not import the root `cmd` package. |
 | `internal/cli/cmd/gwremote/` | `gwremote` | Gateway HTTP publication, model provenance, provider observation, and health hook used by `eval`, `public`, and `docker`. Exists so those packages do not import `gw`. |
 | `internal/cli/cmd/cmdtest/` | `cmdtest` | Cross-package test helpers. Not a Cobra group. |
-| `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/verify`. |
+| `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/show/verify`. |
 | `internal/cli/api/` | | Typed CLI HTTP client. |
 | `internal/cli/auth/` | | CLI enrollment, credential staging, key generation, passkey registration, trust bundles, and mTLS clients. |
 | `internal/cli/browserorigin/` | | Frontend-origin validation and normalization. |
 | `internal/cli/config/` | | CLI configuration resolution and endpoint overrides. |
 | `internal/cli/frontendverify/` | | Frontend connection and running-Gateway verification. |
+| `internal/cli/identityreset/` | `identityreset` | Workload enrollment identity removal for operator and ensemble (`Reset`). Consumed by `operator reset-identity` and `ensemble reset-identity`. |
+| `internal/cli/mcptransport/` | `mcptransport` | Standard JSON-RPC 2.0 stdio framing, dispatch handler, and transport for CLI MCP serving (`mcp stdio`). |
 | `internal/cli/operator/` | | Operator discovery and management helpers. |
 | `internal/cli/output/` | | Human-readable and JSON command output. |
 | `internal/cli/platform/` | | Cross-platform process, browser, and system trust operations. |
@@ -307,7 +312,7 @@ Route and auth inventories stay in the router and `gateway_auth.go`. This map do
 | `internal/services/gateway/` | Gateway HTTP and control plane, including the child packages in the HTTP boundary table. |
 | `internal/services/gateway/embedded/` | In-process Operator substrate (INV-MODE-02). |
 | `internal/services/governance/` | L1, L3, L4, L5, governance interfaces, state-root providers, signer stores, and public-key export. |
-| `internal/services/inference/` | Inference dispatch (`inference/dispatch/`), provider backends, and attempt storage. |
+| `internal/services/inference/` | Inference dispatch (`internal/services/inference/dispatch/`), provider backends, and attempt storage. |
 | `internal/services/inference/provider_observer/` | Provider-boundary GPU and RAM sampling. |
 | `internal/services/inference/model_provenance/` | Storage-side model weight attestation. |
 | `internal/services/keystore/` | Encrypted key storage for Gateway secrets and PKI. |
@@ -357,6 +362,7 @@ Schemas live under `protocol/proto/g8e/`. Wire requirements: [Protocol Specifica
 | `examples/` | Runnable Go/Python examples, external-console app, and MCP client configuration templates. |
 | `protocol/docs/` | Protocol specifications and generated API references. |
 | `internal/tools/constgen/` | Regenerates event and action-type constants from `protocol/constants/events.json` and `protocol/constants/status.json`. `make constants-generate` writes. `make constants-check` verifies. Outputs include `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `console/src/generated/events.ts`, and `protocol/python/g8e/_data/events.json`. |
+| `protocol/constants/agenttools/` | Frozen agent tool schemas and model guidance vectors. Regenerated from g8ee via `make agent-tool-registry-generate` and checked via `make agent-tool-registry-check`. |
 
 ### Adapters and native tools
 
@@ -411,6 +417,8 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 | `make build` | Host binary. Writes `bin/g8e-<os>-<arch>` and a repo-root copy. Refreshes the explorer and console embeds from `dist/` when built, else uses the committed embeds. |
 | `make proto-generate` | Go, Python, TypeScript, and Ensemble lockfile refresh (INV-PROTO-01). |
 | `make constants-generate`, `make constants-check` | `internal/tools/constgen` write and verify. |
+| `make agent-tool-registry-generate`, `make agent-tool-registry-check` | `protocol/constants/agenttools/agent-tool-registry.json` export and verification from g8ee. |
+| `make explorer-catalog-generate`, `make explorer-catalog-check` | `evaluation-explorer/src/content/scenario-catalog.generated.ts` generation and verification via `internal/tools/explorercatalog`. |
 | `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `doctrines-validate`, then `golangci-lint run`. |
 | `make test`, `make test-unit`, `make test-integration`, `make test-docker` | Platform tiers. `make test` is unit plus integration. |
 | `make protocol-python-build` | Python protocol distribution with bundled registries. |

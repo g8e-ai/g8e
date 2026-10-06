@@ -869,10 +869,7 @@ ensemble-test-external:
 
 .PHONY: ensemble-lint
 ensemble-lint:
-	@echo "Running ruff on ensemble..."
-	@cd ensemble && $(ENSEMBLE_RUFF) check app
-	@echo "Running pyright on ensemble..."
-	@cd ensemble && $(ENSEMBLE_PYRIGHT) app
+	@$(MAKE) -C ensemble lint RUFF="$(ENSEMBLE_RUFF)" PYRIGHT="$(ENSEMBLE_PYRIGHT)"
 
 .PHONY: ensemble-build
 ensemble-build:

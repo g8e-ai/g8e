@@ -19,9 +19,9 @@ TEST_DIR := tests
 # =============================================================================
 # TOOLS
 # =============================================================================
-PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; elif [ -f .venv/Scripts/python.exe ]; then echo $(CURDIR)/.venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo $(CURDIR)/.venv/Scripts/python; else echo python3; fi)
-RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; elif [ -f .venv/Scripts/ruff.exe ]; then echo $(CURDIR)/.venv/Scripts/ruff.exe; elif [ -f .venv/Scripts/ruff ]; then echo $(CURDIR)/.venv/Scripts/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
-PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; elif [ -f .venv/Scripts/pyright.exe ]; then echo $(CURDIR)/.venv/Scripts/pyright.exe; elif [ -f .venv/Scripts/pyright ]; then echo $(CURDIR)/.venv/Scripts/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
+PYTHON := $(shell if [ -f ../.venv/bin/python ]; then echo $(abspath ../.venv/bin/python); elif [ -f ../.venv/Scripts/python.exe ]; then echo $(abspath ../.venv/Scripts/python.exe); elif [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; elif [ -f .venv/Scripts/python.exe ]; then echo $(CURDIR)/.venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo $(CURDIR)/.venv/Scripts/python; else echo python3; fi)
+RUFF := $(shell if [ -f ../.venv/bin/ruff ]; then echo $(abspath ../.venv/bin/ruff); elif [ -f ../.venv/Scripts/ruff.exe ]; then echo $(abspath ../.venv/Scripts/ruff.exe); elif [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; elif [ -f .venv/Scripts/ruff.exe ]; then echo $(CURDIR)/.venv/Scripts/ruff.exe; elif [ -f .venv/Scripts/ruff ]; then echo $(CURDIR)/.venv/Scripts/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
+PYRIGHT := $(shell if [ -f ../.venv/bin/pyright ]; then echo $(abspath ../.venv/bin/pyright); elif [ -f ../.venv/Scripts/pyright.exe ]; then echo $(abspath ../.venv/Scripts/pyright.exe); elif [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; elif [ -f .venv/Scripts/pyright.exe ]; then echo $(CURDIR)/.venv/Scripts/pyright.exe; elif [ -f .venv/Scripts/pyright ]; then echo $(CURDIR)/.venv/Scripts/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
 
 # =============================================================================
 # HELP
@@ -51,10 +51,12 @@ test:
 
 .PHONY: lint
 lint:
-	@echo "Running ruff..."
-	@$(RUFF) check $(APP_DIR)
-	@echo "Running pyright..."
-	@$(PYRIGHT) $(APP_DIR)
+	@lint_status=0; \
+	echo "Running ruff on application and tests..."; \
+	$(RUFF) check $(APP_DIR) $(TEST_DIR) || lint_status=1; \
+	echo "Running pyright on application and tests..."; \
+	$(PYRIGHT) --project pyrightconfig.json || lint_status=1; \
+	exit $$lint_status
 
 .PHONY: format
 format:
