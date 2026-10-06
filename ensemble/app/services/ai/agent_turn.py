@@ -41,13 +41,21 @@ from app.utils.interrogation import extract_interrogation_questions
 logger = logging.getLogger(__name__)
 
 
+def _empty_model_response_parts() -> list[types.Part]:
+    return []
+
+
+def _empty_pending_tool_calls() -> list[types.ToolCall]:
+    return []
+
+
 class TurnState(BaseModel):
     """Mutable state for a single LLM stream turn."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
-    model_response_parts: list[types.Part] = Field(default_factory=list)
-    pending_tool_calls: list[types.ToolCall] = Field(default_factory=list)
+    model_response_parts: list[types.Part] = Field(default_factory=_empty_model_response_parts)
+    pending_tool_calls: list[types.ToolCall] = Field(default_factory=_empty_pending_tool_calls)
     thinking_active: bool = False
     thinking_text_parts: list[str] = Field(default_factory=list)
     thinking_signature: types.ThoughtSignature | None = None

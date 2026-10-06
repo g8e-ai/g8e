@@ -40,6 +40,7 @@ from app.models.settings import (
     G8eeUserSettings,
     LLMSettings,
 )
+from app.services.operator.command_service import OperatorCommandService
 from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
 from tests.fakes.builder import build_command_service
 from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
@@ -105,7 +106,7 @@ def _write_auto_approved_json(tmp_path: Path, base_commands: list[str]) -> Path:
 def _build_service(
     auto_approved_path: Path,
 ) -> tuple[
-    object,  # OperatorCommandService
+    OperatorCommandService,
     FakeApprovalService,
     FakeEventService,
 ]:
@@ -148,6 +149,9 @@ class TestAutoApproveJsonIntegration:
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
             command_validation=CommandValidationSettings(
+                enable_whitelisting=False,
+                whitelisted_commands="",
+                enable_blacklisting=True,
                 enable_auto_approve=True,
                 auto_approved_commands="",  # CSV intentionally empty
             ),
@@ -180,6 +184,9 @@ class TestAutoApproveJsonIntegration:
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
             command_validation=CommandValidationSettings(
+                enable_whitelisting=False,
+                whitelisted_commands="",
+                enable_blacklisting=True,
                 enable_auto_approve=True,
                 auto_approved_commands="uptime",
             ),
@@ -206,6 +213,9 @@ class TestAutoApproveJsonIntegration:
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
             command_validation=CommandValidationSettings(
+                enable_whitelisting=False,
+                whitelisted_commands="",
+                enable_blacklisting=True,
                 enable_auto_approve=True,
                 auto_approved_commands="",
             ),

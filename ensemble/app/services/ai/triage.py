@@ -132,17 +132,17 @@ class TriageAgent:
                 ),
             )
 
+            contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
+            input_artifact_hash = model_boundary_hash(
+                {
+                    "model": model,
+                    "contents": contents,
+                    "settings": config,
+                }
+            )
+            monotonic_start = time.monotonic()
             try:
                 prepare_provider_call(provider, g8e_context=request.g8e_context)
-                contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
-                input_artifact_hash = model_boundary_hash(
-                    {
-                        "model": model,
-                        "contents": contents,
-                        "settings": config,
-                    }
-                )
-                monotonic_start = time.monotonic()
                 response = await provider.generate_content_lite(
                     model=model,
                     contents=contents,

@@ -22,6 +22,7 @@ Does NOT own:
 import asyncio
 import logging
 import time
+from collections.abc import Sequence
 
 import app.llm.llm_types as types
 from app.constants import (
@@ -47,7 +48,7 @@ from app.llm.utils import ModelOverrideResolver, resolve_model
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.agent_activity import AgentActivityMetadata
 from app.models.agents.triage import TriageRequest
-from app.models.attachments import AttachmentMetadata, ProcessedAttachment
+from app.models.attachments import AttachmentMetadata, ChatAttachment, ProcessedAttachment
 from app.models.evaluation_trace import EvaluationSeedApplication
 from app.models.events import (
     ChatErrorPayload,
@@ -251,7 +252,7 @@ class ChatPipelineService:
         message: str,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        attachments: list[AttachmentMetadata],
+        attachments: Sequence[ChatAttachment],
         sentinel_mode: bool,
         model_overrides: ModelOverrideResolver,
     ) -> AgentInputs:
@@ -337,7 +338,7 @@ class ChatPipelineService:
             message=message,
             agent_mode=agent_mode,
             conversation_history=prior_history,
-            attachments=attachments,
+            attachments=list(attachments),
             settings=request_settings,
             model_override=model_overrides.for_triage(),
             g8e_context=g8e_context,
@@ -452,12 +453,14 @@ class ChatPipelineService:
 
         attachment_parts: list[types.Part] = []
         if attachments:
-            processed: list[ProcessedAttachment] = [
-                ProcessedAttachment(
-                    filename=a.filename,
-                    content_type=a.content_type,
+            processed = [
+                attachment
+                if isinstance(attachment, ProcessedAttachment)
+                else ProcessedAttachment(
+                    filename=attachment.filename,
+                    content_type=attachment.content_type,
                 )
-                for a in attachments
+                for attachment in attachments
             ]
             attachment_parts = self.request_builder.format_attachment_parts(processed)
 
@@ -610,7 +613,7 @@ class ChatPipelineService:
         inputs: AgentInputs,
         state: AgentStreamState,
         start_time: float,
-        attachments: list[AttachmentMetadata],
+        attachments: Sequence[ChatAttachment],
         context_sizes: dict[str, int] | None = None,
         error: str | None = None,
     ) -> None:
@@ -931,14 +934,14 @@ class ChatPipelineService:
         self,
         message: str,
         g8e_context: G8eHttpContext,
-        attachments: list[AttachmentMetadata],
+        attachments: Sequence[ChatAttachment],
         sentinel_mode: bool,
         llm_primary_provider: str | None,
         llm_assistant_provider: str | None,
         llm_lite_provider: str | None,
-        llm_primary_model: str,
-        llm_assistant_model: str,
-        llm_lite_model: str,
+        llm_primary_model: str | None,
+        llm_assistant_model: str | None,
+        llm_lite_model: str | None,
         _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
         _track_task: bool = True,
@@ -1030,14 +1033,14 @@ class ChatPipelineService:
         self,
         message: str,
         g8e_context: G8eHttpContext,
-        attachments: list[AttachmentMetadata],
+        attachments: Sequence[ChatAttachment],
         sentinel_mode: bool,
         llm_primary_provider: str | None,
         llm_assistant_provider: str | None,
         llm_lite_provider: str | None,
-        llm_primary_model: str,
-        llm_assistant_model: str,
-        llm_lite_model: str,
+        llm_primary_model: str | None,
+        llm_assistant_model: str | None,
+        llm_lite_model: str | None,
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None = None,
         seed_application: EvaluationSeedApplication | None = None,

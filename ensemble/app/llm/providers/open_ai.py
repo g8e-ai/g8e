@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def _contents_to_messages(
     contents: list[Content],
-    system_instructions: str,
+    system_instructions: str | None,
 ) -> list[dict]:
     messages = []
 
@@ -406,7 +406,7 @@ class OpenAIProvider(LLMProvider):
             candidates=[
                 Candidate(
                     content=Content(role="model", parts=parts),
-                    finish_reason=choice.finish_reason if choice else None,
+                    finish_reason=(choice.finish_reason if choice else None) or "stop",
                 )
             ],
             usage_metadata=usage,
@@ -532,7 +532,7 @@ class OpenAIProvider(LLMProvider):
             candidates=[
                 Candidate(
                     content=Content(role="model", parts=parts),
-                    finish_reason=choice.finish_reason if choice else None,
+                    finish_reason=(choice.finish_reason if choice else None) or "stop",
                 )
             ],
             usage_metadata=usage,
@@ -656,7 +656,7 @@ class OpenAIProvider(LLMProvider):
             candidates=[
                 Candidate(
                     content=Content(role="model", parts=parts),
-                    finish_reason=choice.finish_reason if choice else None,
+                    finish_reason=(choice.finish_reason if choice else None) or "stop",
                 )
             ],
             usage_metadata=usage,

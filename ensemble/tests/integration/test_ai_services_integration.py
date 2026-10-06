@@ -25,6 +25,7 @@ import pytest_asyncio
 from app.constants import (
     FORBIDDEN_COMMAND_PATTERNS,
     AgentMode,
+    CommandCategory,
     InvestigationStatus,
     TriageComplexityClassification,
     TriageConfidence,
@@ -38,6 +39,7 @@ from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.http_context import RequestContext
 from app.models.investigations import ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
+from app.models.settings import G8eeUserSettings
 from app.models.tool_results import CommandRiskContext
 from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.whitelist import WhitelistedCommand
@@ -156,7 +158,6 @@ class TestMemoryGenerationServiceIntegration:
                 web_session_id="test-session",
                 user_id=created_investigation.user_id,
                 source_component="test",
-                request_id="test-request",
             ),
         )
 
@@ -274,7 +275,6 @@ class TestMemoryGenerationServiceIntegration:
                 web_session_id="test-session",
                 user_id=created_investigation.user_id,
                 source_component="test",
-                request_id="test-request",
             ),
         )
 
@@ -370,7 +370,6 @@ class TestMemoryGenerationServiceIntegration:
                 web_session_id="test-session",
                 user_id=created_investigation.user_id,
                 source_component="test",
-                request_id="test-request",
             ),
         )
 
@@ -456,13 +455,13 @@ class TestTitleGenerationIntegration:
         assert "kubernetes" in title.generated_title.lower()
 
     async def test_generate_case_title_fallback_handling(self):
-        """generate_case_title returns fallback when no settings provided."""
+        """generate_case_title returns a fallback when no model is configured."""
         description = "Complex technical issue that needs a good title"
 
         title = await generate_case_title(
             description=description,
             max_length=80,
-            settings=None,  # No settings to trigger fallback
+            settings=G8eeUserSettings(),
         )
 
         # Verify fallback behavior
@@ -474,13 +473,13 @@ class TestTitleGenerationIntegration:
         assert title.generated_title.lower().startswith("complex technical")
 
     async def test_generate_case_title_empty_description(self, user_settings):
-        """generate_case_title handles empty/None descriptions."""
+        """generate_case_title handles empty descriptions."""
         if not user_settings.llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
-        # Test with None description
+        # Empty descriptions return the fallback without a model call.
         title = await generate_case_title(
-            description=None,
+            description="",
             max_length=80,
             settings=user_settings,
         )
@@ -693,13 +692,13 @@ class TestCommandGenerationIntegration:
         whitelisted_metadata = [
             WhitelistedCommand(
                 command="ping",
-                category="network_diagnostics",
+                category=CommandCategory.NETWORK_DIAGNOSTICS,
                 safe_options=["-c <count>", "-W <timeout>"],
                 validation={"count": r"^\d+$", "timeout": r"^\d+$"},
             ),
             WhitelistedCommand(
                 command="ls",
-                category="system_diagnostics",
+                category=CommandCategory.SYSTEM_DIAGNOSTICS,
                 safe_options=["-la", "-lh"],
                 validation={},
             ),
@@ -795,6 +794,7 @@ class TestCommandGenerationIntegration:
             operator_context=operator_context,
         )
         assert not result.is_safe, "sudo command should be blocked by forbidden patterns"
+        assert result.error_message is not None
         assert "forbidden" in result.error_message.lower() or "sudo" in result.error_message.lower()
 
         # Test 3: Platform mapping works correctly
@@ -829,8 +829,6 @@ class TestResponseAnalysisIntegration:
 
         context = CommandRiskContext(
             working_directory="/home/user/Alpine-Delta",
-            hostname="Alpine-Delta",
-            username="dc-tech",
         )
 
         result = await analyzer.analyze_command_risk(
@@ -859,8 +857,6 @@ class TestResponseAnalysisIntegration:
 
         context = CommandRiskContext(
             working_directory="/",
-            hostname="dc-manager-bunker",
-            username="root",
         )
 
         result = await analyzer.analyze_command_risk(

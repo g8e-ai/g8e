@@ -129,6 +129,10 @@ class LLMProvider(ABC):
     def clear_declared_tools(self) -> None:
         self._declared_tool_names.set(None)
 
+    def mark_cached_singleton(self) -> None:
+        """Mark this provider as owned by the process-wide provider cache."""
+        self._is_cached_singleton = True
+
     def _record_declared_tools(self, names: Iterable[str]) -> None:
         """Record the tool names crossing the provider boundary on this call."""
         self._declared_tool_names.set(tuple(names))
@@ -160,7 +164,8 @@ class LLMProvider(ABC):
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """Stream a response from the primary LLM (agent main loop)."""
-        yield
+        if False:
+            yield StreamChunkFromModel()
 
     @abstractmethod
     async def generate_content_primary(
@@ -182,7 +187,8 @@ class LLMProvider(ABC):
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """Stream a response from the assistant LLM (analysis, memory, title)."""
-        yield
+        if False:
+            yield StreamChunkFromModel()
 
     @abstractmethod
     async def generate_content_assistant(
@@ -204,7 +210,8 @@ class LLMProvider(ABC):
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """Stream a response from the lite LLM (triage, eval)."""
-        yield
+        if False:
+            yield StreamChunkFromModel()
 
     @abstractmethod
     async def generate_content_lite(

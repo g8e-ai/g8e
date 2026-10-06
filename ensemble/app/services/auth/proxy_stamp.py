@@ -27,6 +27,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import NoReturn
 
 from fastapi import Request
 from nacl.exceptions import BadSignatureError
@@ -217,6 +218,6 @@ class ProxyStampVerifier:
         self._nonces[nonce] = now
 
     @staticmethod
-    def _reject(reason: str):
+    def _reject(reason: str) -> NoReturn:
         logger.warning("[ProxyStamp] rejected: %s", reason)
         raise AuthenticationError(_REJECTED, component=G8EE_COMPONENT)

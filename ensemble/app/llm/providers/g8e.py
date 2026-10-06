@@ -59,6 +59,7 @@ from g8e.operator.v1.operator_pb2 import (
     InferenceToolChoice,
     InferenceToolDeclaration,
     InferenceToolResult,
+    ModelRole,
 )
 
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
@@ -565,7 +566,7 @@ class G8EProvider(LLMProvider):
 
     async def _dispatch(
         self,
-        role: int,
+        role: ModelRole,
         model: str,
         contents: list[Content],
         system_instructions: str | None,
@@ -660,7 +661,7 @@ class G8EProvider(LLMProvider):
 
     async def _dispatch_stream(
         self,
-        role: int,
+        role: ModelRole,
         model: str,
         contents: list[Content],
         system_instructions: str | None,

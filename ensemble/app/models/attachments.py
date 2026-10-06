@@ -61,3 +61,6 @@ class ProcessedAttachment(G8eBaseModel):
     content: str | None = Field(
         default=None, description="Pre-decoded UTF-8 text content (text files only)"
     )
+
+
+ChatAttachment = AttachmentMetadata | ProcessedAttachment

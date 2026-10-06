@@ -12,6 +12,13 @@ import logging
 from collections.abc import AsyncGenerator
 
 import anthropic
+from anthropic.types import (
+    ContentBlockDeltaEvent,
+    ContentBlockStartEvent,
+    ContentBlockStopEvent,
+    MessageDeltaEvent,
+    MessageStartEvent,
+)
 
 from app.errors import ConfigurationError, ValidationError
 from app.llm.llm_types import (
@@ -24,6 +31,7 @@ from app.llm.llm_types import (
     PrimaryLLMSettings,
     StreamChunkFromModel,
     ThinkingConfig,
+    ThoughtSignature,
     ToolCall,
     ToolGroup,
     UsageMetadata,
@@ -247,7 +255,7 @@ class AnthropicProvider(LLMProvider):
         messages: list[dict],
         max_tokens: int | None,
         top_k: int | None,
-        system_instructions: str,
+        system_instructions: str | None,
         anthropic_tools: list[dict] | None = None,
         thinking_config: ThinkingConfig | None = None,
     ) -> AnthropicMessageRequest:
@@ -323,7 +331,7 @@ class AnthropicProvider(LLMProvider):
             model,
             request.max_tokens,
             request.top_k,
-            len(system_instructions),
+            len(system_instructions or ""),
             len(anthropic_tools) if anthropic_tools else 0,
             thinking_enabled,
         )
@@ -350,16 +358,14 @@ class AnthropicProvider(LLMProvider):
         async with self._client.messages.stream(**kwargs) as stream:
             try:
                 for event in await self._receive_stream(stream):
-                    event_type = event.type
-
-                    if event_type == "content_block_delta":
+                    if isinstance(event, ContentBlockDeltaEvent):
                         delta = event.delta
                         if delta.type == "text_delta":
                             yield StreamChunkFromModel(text=delta.text or "")
 
-                    elif event_type == "message_delta":
-                        stop_reason = getattr(event.delta, "stop_reason", None)
-                        usage = getattr(event, "usage", None)
+                    elif isinstance(event, MessageDeltaEvent):
+                        stop_reason = event.delta.stop_reason
+                        usage = event.usage
                         um = None
                         if usage:
                             um = UsageMetadata(
@@ -373,18 +379,15 @@ class AnthropicProvider(LLMProvider):
                                 usage_metadata=um or UsageMetadata(),
                             )
 
-                    elif event_type == "message_start":
-                        msg = getattr(event, "message", None)
-                        if msg:
-                            usage = getattr(msg, "usage", None)
-                            if usage:
-                                yield StreamChunkFromModel(
-                                    usage_metadata=UsageMetadata(
-                                        prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
-                                        cache_token_count=_cache_token_count(usage),
-                                        usage_reported=True,
-                                    )
-                                )
+                    elif isinstance(event, MessageStartEvent):
+                        usage = event.message.usage
+                        yield StreamChunkFromModel(
+                            usage_metadata=UsageMetadata(
+                                prompt_token_count=usage.input_tokens or 0,
+                                cache_token_count=_cache_token_count(usage),
+                                usage_reported=True,
+                            )
+                        )
                 stream_exhausted = True
             except Exception as e:
                 logger.exception("[ANTHROPIC] Exception during streaming: %s", e)
@@ -417,7 +420,7 @@ class AnthropicProvider(LLMProvider):
             primary_llm_settings.top_p_nucleus_sampling
             if primary_llm_settings.top_p_nucleus_sampling is not None
             else "None",
-            len(primary_llm_settings.system_instructions),
+            len(primary_llm_settings.system_instructions or ""),
             len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
         )
 
@@ -444,9 +447,7 @@ class AnthropicProvider(LLMProvider):
         async with self._client.messages.stream(**payload) as stream:
             try:
                 for event in await self._receive_stream(stream):
-                    event_type = event.type
-
-                    if event_type == "content_block_start":
+                    if isinstance(event, ContentBlockStartEvent):
                         idx = event.index
                         block = event.content_block
                         block_types[idx] = block.type
@@ -459,7 +460,7 @@ class AnthropicProvider(LLMProvider):
                             if sig:
                                 accumulated_thinking_sig[idx] = sig
 
-                    elif event_type == "content_block_delta":
+                    elif isinstance(event, ContentBlockDeltaEvent):
                         idx = event.index
                         delta = event.delta
 
@@ -479,12 +480,15 @@ class AnthropicProvider(LLMProvider):
                                 delta.partial_json or ""
                             )
 
-                    elif event_type == "content_block_stop":
+                    elif isinstance(event, ContentBlockStopEvent):
                         idx = event.index
                         if block_types.get(idx) == "thinking":
                             sig = accumulated_thinking_sig.pop(idx, None)
                             if sig:
-                                yield StreamChunkFromModel(thought=True, thought_signature=sig)
+                                yield StreamChunkFromModel(
+                                    thought=True,
+                                    thought_signature=ThoughtSignature.from_sdk(sig),
+                                )
                         elif block_types.get(idx) == "tool_use":
                             raw_input = accumulated_tool_input.get(idx, "{}")
                             try:
@@ -507,9 +511,9 @@ class AnthropicProvider(LLMProvider):
                                 ]
                             )
 
-                    elif event_type == "message_delta":
-                        stop_reason = getattr(event.delta, "stop_reason", None)
-                        usage = getattr(event, "usage", None)
+                    elif isinstance(event, MessageDeltaEvent):
+                        stop_reason = event.delta.stop_reason
+                        usage = event.usage
                         um = None
                         if usage:
                             um = UsageMetadata(
@@ -523,18 +527,15 @@ class AnthropicProvider(LLMProvider):
                                 usage_metadata=um or UsageMetadata(),
                             )
 
-                    elif event_type == "message_start":
-                        msg = getattr(event, "message", None)
-                        if msg:
-                            usage = getattr(msg, "usage", None)
-                            if usage:
-                                yield StreamChunkFromModel(
-                                    usage_metadata=UsageMetadata(
-                                        prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
-                                        cache_token_count=_cache_token_count(usage),
-                                        usage_reported=True,
-                                    )
-                                )
+                    elif isinstance(event, MessageStartEvent):
+                        usage = event.message.usage
+                        yield StreamChunkFromModel(
+                            usage_metadata=UsageMetadata(
+                                prompt_token_count=usage.input_tokens or 0,
+                                cache_token_count=_cache_token_count(usage),
+                                usage_reported=True,
+                            )
+                        )
                 stream_exhausted = True
             except Exception as e:
                 logger.exception("[ANTHROPIC] Exception during primary streaming: %s", e)
@@ -612,7 +613,7 @@ class AnthropicProvider(LLMProvider):
             assistant_llm_settings.top_p_nucleus_sampling
             if assistant_llm_settings.top_p_nucleus_sampling is not None
             else "None",
-            len(assistant_llm_settings.system_instructions),
+            len(assistant_llm_settings.system_instructions or ""),
             assistant_llm_settings.response_format is not None,
         )
 
@@ -650,7 +651,7 @@ class AnthropicProvider(LLMProvider):
             assistant_llm_settings.top_p_nucleus_sampling
             if assistant_llm_settings.top_p_nucleus_sampling is not None
             else "None",
-            len(assistant_llm_settings.system_instructions),
+            len(assistant_llm_settings.system_instructions or ""),
             assistant_llm_settings.response_format is not None,
         )
 
@@ -689,7 +690,7 @@ class AnthropicProvider(LLMProvider):
             lite_llm_settings.top_p_nucleus_sampling
             if lite_llm_settings.top_p_nucleus_sampling is not None
             else "None",
-            len(lite_llm_settings.system_instructions),
+            len(lite_llm_settings.system_instructions or ""),
             lite_llm_settings.response_format is not None,
         )
 
@@ -727,7 +728,7 @@ class AnthropicProvider(LLMProvider):
             lite_llm_settings.top_p_nucleus_sampling
             if lite_llm_settings.top_p_nucleus_sampling is not None
             else "None",
-            len(lite_llm_settings.system_instructions),
+            len(lite_llm_settings.system_instructions or ""),
             lite_llm_settings.response_format is not None,
         )
 

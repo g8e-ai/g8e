@@ -76,17 +76,33 @@ def parse_models(provider: LLMProvider, body: Any) -> list[str]:
     names: list[str] = []
     if isinstance(body, dict):
         if provider is LLMProvider.OLLAMA:
-            names = [m.get("name") for m in body.get("models") or [] if isinstance(m, dict)]
+            names = _string_field_values(body.get("models"), "name")
         elif provider is LLMProvider.GEMINI:
-            names = [
-                str(m.get("name", "")).removeprefix("models/")
-                for m in body.get("models") or []
-                if isinstance(m, dict)
-                and "generateContent" in (m.get("supportedGenerationMethods") or [])
-            ]
+            models = body.get("models")
+            if isinstance(models, list):
+                for model in models:
+                    if not isinstance(model, dict):
+                        continue
+                    methods = model.get("supportedGenerationMethods")
+                    if isinstance(methods, list) and "generateContent" in methods:
+                        name = model.get("name")
+                        if isinstance(name, str):
+                            names.append(name.removeprefix("models/"))
         else:
-            names = [m.get("id") for m in body.get("data") or [] if isinstance(m, dict)]
-    return sorted({n for n in names if isinstance(n, str) and n})
+            names = _string_field_values(body.get("data"), "id")
+    return sorted({name for name in names if name})
+
+
+def _string_field_values(items: object, field: str) -> list[str]:
+    if not isinstance(items, list):
+        return []
+    values: list[str] = []
+    for item in items:
+        if isinstance(item, dict):
+            value = item.get(field)
+            if isinstance(value, str):
+                values.append(value)
+    return values
 
 
 async def list_models(

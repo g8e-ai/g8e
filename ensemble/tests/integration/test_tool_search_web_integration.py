@@ -215,6 +215,7 @@ class TestSearchWebRouting:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         assert result.query == "docker container logs"
 
     async def test_result_success_true_on_happy_path(self):
@@ -229,6 +230,7 @@ class TestSearchWebRouting:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         assert result.success is True
 
 
@@ -261,6 +263,7 @@ class TestSearchWebResponseShape:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         assert len(result.results) == 2
 
     async def test_result_items_are_web_search_result_item_type(self):
@@ -276,6 +279,7 @@ class TestSearchWebResponseShape:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         assert isinstance(result.results[0], WebSearchResultItem)
 
     async def test_result_item_fields_preserved(self):
@@ -297,6 +301,7 @@ class TestSearchWebResponseShape:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         item = result.results[0]
         assert item.title == "Prometheus docs"
         assert item.link == "https://prometheus.io/docs/"

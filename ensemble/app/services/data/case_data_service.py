@@ -12,10 +12,10 @@ from uuid import uuid4
 
 from app.clients.governance_client import GovernanceClient
 from app.constants import (
-    AITaskId,
     DB_COLLECTION_CASES,
     DB_COLLECTION_TASKS,
     G8EE_COMPONENT,
+    AITaskId,
     CaseStatus,
     EntityType,
     ErrorCode,
@@ -35,8 +35,8 @@ from app.models import (
     CaseUpdateRequest,
 )
 from app.models.cache import FieldFilter
-from app.models.command_request_payloads import DocumentUpdateRequestPayload
 from app.models.cases import CaseModel, HistoryEntry
+from app.models.command_request_payloads import DocumentUpdateRequestPayload
 from app.models.db_queries import CaseHistoryQuery
 from app.models.events import SessionEvent
 from app.models.http_context import RequestContext
@@ -69,7 +69,7 @@ class CaseDataService:
         self.tasks_collection = settings.database.tasks_collection or DB_COLLECTION_TASKS
 
     async def _with_error_handling(
-        self, coro: Awaitable[T], action_msg: str, case_id: str, error_code: str
+        self, coro: Awaitable[T], action_msg: str, case_id: str, error_code: ErrorCode
     ) -> T:
         """Helper to centralize database error handling boilerplate."""
         try:

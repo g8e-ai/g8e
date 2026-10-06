@@ -9,9 +9,9 @@ import logging
 
 from app.clients.governance_client import GovernanceClient
 from app.constants import (
-    AITaskId,
     DB_COLLECTION_INVESTIGATIONS,
     G8EE_COMPONENT,
+    AITaskId,
     ComponentStatus,
     EscalationRisk,
     EventType,

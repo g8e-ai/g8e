@@ -42,8 +42,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
         operators = await self._gateway_operator_client.list(user_id=user_id)
         for operator_doc in operators:
-            if not isinstance(operator_doc, dict):
-                continue
             doc_id = operator_doc.get("id") or operator_doc.get("operator_id")
             if str(doc_id) == operator_id:
                 return operator_document_from_gateway(operator_doc)
@@ -56,8 +54,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
         operator_doc = await self._gateway_operator_client.get_by_session(session_id=session_id)
         if not operator_doc:
-            return None
-        if not isinstance(operator_doc, dict):
             return None
         return operator_document_from_gateway(operator_doc)
 
@@ -111,7 +107,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         docs = [
             operator_document_from_gateway(operator_doc)
             for operator_doc in operators
-            if isinstance(operator_doc, dict)
         ]
 
         if field_filters:

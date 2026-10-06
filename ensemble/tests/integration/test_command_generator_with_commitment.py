@@ -66,6 +66,8 @@ class TestCommandGeneratorWithCommitment:
             web_session_id="commitment-test-sess-001",
             user_id="commitment-test-user-001",
         )
+        assert inputs.investigation_id is not None
+        investigation_id = inputs.investigation_id
         event_svc = make_event_service()
 
         # Use real ReputationDataService with fake cache/db
@@ -132,7 +134,7 @@ class TestCommandGeneratorWithCommitment:
                 payload = ReputationCommitmentCreatedPayload(
                     commitment_id="mock-commitment-id",
                     tribunal_command_id=correlation_id,
-                    investigation_id=inputs.investigation_id,
+                    investigation_id=investigation_id,
                     merkle_root="a" * 64,
                     prev_root="b" * 64,
                     leaves_count=1,
@@ -143,7 +145,7 @@ class TestCommandGeneratorWithCommitment:
                     web_session_id=inputs.web_session_id,
                     user_id=inputs.user_id,
                     case_id=inputs.case_id,
-                    investigation_id=inputs.investigation_id,
+                    investigation_id=investigation_id,
                     source_component=G8EE_COMPONENT,
                 )
                 event = SessionEvent.from_context(
@@ -175,7 +177,7 @@ class TestCommandGeneratorWithCommitment:
                         web_session_id=inputs.web_session_id,
                         user_id=inputs.user_id,
                         case_id=inputs.case_id,
-                        investigation_id=inputs.investigation_id,
+                        investigation_id=investigation_id,
                         source_component=G8EE_COMPONENT,
                     ),
                     settings=inputs.request_settings,
@@ -204,6 +206,8 @@ class TestCommandGeneratorWithCommitment:
             case_id="commitment-fail-case-001",
             investigation_id="commitment-fail-inv-001",
         )
+        assert inputs.investigation_id is not None
+        investigation_id = inputs.investigation_id
         event_svc = make_event_service()
 
         async def _write_through2(collection, document_id, updates, **kwargs):
@@ -261,7 +265,7 @@ class TestCommandGeneratorWithCommitment:
                         web_session_id=inputs.web_session_id,
                         user_id=inputs.user_id,
                         case_id=inputs.case_id,
-                        investigation_id=inputs.investigation_id,
+                        investigation_id=investigation_id,
                         source_component=G8EE_COMPONENT,
                     ),
                     settings=inputs.request_settings,
@@ -284,6 +288,8 @@ class TestCommandGeneratorWithCommitment:
     ):
         """A failure in the commitment step should crash the generator (prevents ghost verdicts)."""
         inputs, _ = make_agent_run_args()
+        assert inputs.investigation_id is not None
+        investigation_id = inputs.investigation_id
         event_svc = make_event_service()
 
         async def _write_through3(collection, document_id, updates, **kwargs):
@@ -331,7 +337,7 @@ class TestCommandGeneratorWithCommitment:
 
                 payload = ReputationCommitmentFailedPayload(
                     tribunal_command_id=correlation_id,
-                    investigation_id=inputs.investigation_id,
+                    investigation_id=investigation_id,
                     error="DB Offline",
                     correlation_id=correlation_id,
                 )
@@ -340,7 +346,7 @@ class TestCommandGeneratorWithCommitment:
                     web_session_id=inputs.web_session_id,
                     user_id=inputs.user_id,
                     case_id=inputs.case_id,
-                    investigation_id=inputs.investigation_id,
+                    investigation_id=investigation_id,
                     source_component=G8EE_COMPONENT,
                 )
                 event = SessionEvent.from_context(
@@ -367,7 +373,7 @@ class TestCommandGeneratorWithCommitment:
                             web_session_id=inputs.web_session_id,
                             user_id=inputs.user_id,
                             case_id=inputs.case_id,
-                            investigation_id=inputs.investigation_id,
+                            investigation_id=investigation_id,
                             source_component=G8EE_COMPONENT,
                         ),
                         settings=inputs.request_settings,

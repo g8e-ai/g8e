@@ -137,8 +137,8 @@ class TestTribunalApprovalCorrelation:
             patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class,
         ):
             mock_gen.return_value = [
-                CandidateCommand(command="ls", pass_index=0, member="axiom"),
-                CandidateCommand(command="ls", pass_index=1, member="concord"),
+                CandidateCommand(command="ls", pass_index=0, member=ConsensusMember.AXIOM),
+                CandidateCommand(command="ls", pass_index=1, member=ConsensusMember.CONCORD),
             ]
             # Mock auditor to pass
             mock_auditor = mock_auditor_class.return_value

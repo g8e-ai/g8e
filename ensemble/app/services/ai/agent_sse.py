@@ -256,7 +256,7 @@ async def deliver_via_sse(
                 state.response_text += chunk.data.content or ""
                 await _publish(
                     EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    ChatResponseChunkPayload(content=chunk.data.content),
+                    ChatResponseChunkPayload(content=chunk.data.content or ""),
                 )
 
             elif chunk.type == StreamChunkFromModelType.THINKING:
@@ -308,8 +308,7 @@ async def deliver_via_sse(
                 state.tool_call_count += 1
                 if fn and fn not in state.tool_types_used:
                     state.tool_types_used.append(fn)
-                if inputs.g8e_context is not None:
-                    record_tool_call_started(state, inputs.g8e_context, chunk.data)
+                record_tool_call_started(state, inputs.g8e_context, chunk.data)
 
                 # For universal tools, emit the new native lifecycle event.
                 # Operator-gated tools are handled by their respective services.
@@ -381,8 +380,7 @@ async def deliver_via_sse(
                 exec_id = chunk.data.execution_id or generate_command_execution_id()
                 chunk.data.execution_id = exec_id
                 fn = chunk.data.tool_name or ""
-                if inputs.g8e_context is not None:
-                    record_tool_call_completed(state, inputs.g8e_context, chunk.data)
+                record_tool_call_completed(state, inputs.g8e_context, chunk.data)
 
                 # For universal tools, emit the new native lifecycle event.
                 if fn in AI_UNIVERSAL_TOOLS:
@@ -463,7 +461,7 @@ async def deliver_via_sse(
                         elif isinstance(result, FetchLogsToolResult):
                             content = result.stdout
                         elif isinstance(result, FetchFileDiffToolResult):
-                            content = result.diff
+                            content = result.diff.diff_content if result.diff else None
                         elif isinstance(result, InvestigationContextResult):
                             content = str(result.data) if result.data is not None else None
                         elif isinstance(result, CommandConstraintsResult):

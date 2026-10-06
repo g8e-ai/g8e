@@ -15,7 +15,7 @@ testing a sub-service in isolation.
 from unittest.mock import AsyncMock, MagicMock
 
 from app.clients.gateway_operator_client import GatewayOperatorClient
-from app.constants import G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, LogLevel
 from app.constants.generated_paths import PortConstants
 from app.db.db_service import DBService
 from app.db.kv_service import KVService
@@ -147,7 +147,15 @@ def build_command_service(
     event_service = event_service or FakeEventService()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
-    settings = settings or G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
+    settings = settings or G8eeAppSettings(
+        port=PortConstants.G8E_PORT_G8EE_HTTPS,
+        host="0.0.0.0",
+        log_level=LogLevel.INFO,
+        enable_logging=True,
+        session_ttl=28800,
+        absolute_session_timeout=86400,
+        docs_dir="docs",
+    )
 
     gateway_operator_client = GatewayOperatorClient(internal_http_client)
 

@@ -244,7 +244,7 @@ class AIToolService:
     @property
     def ai_response_analyzer(self):
         """The AIResponseAnalyzerProtocol from the wired execution service."""
-        return self.operator_command_service._execution_service.ai_response_analyzer
+        return self.operator_command_service.ai_response_analyzer
 
     def get_tools(
         self,

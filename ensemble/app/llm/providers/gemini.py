@@ -446,11 +446,12 @@ class GeminiProvider(LLMProvider):
             )
 
             tool_config = None
+            fc_cfg = None
             if settings.tool_config and settings.tool_config.tool_calling_config:
                 fc_cfg = settings.tool_config.tool_calling_config
                 tool_config = genai_types.ToolConfig(
                     function_calling_config=genai_types.FunctionCallingConfig(
-                        mode=fc_cfg.mode,
+                        mode=genai_types.FunctionCallingConfigMode(fc_cfg.mode),
                         allowed_function_names=fc_cfg.allowed_tool_names,
                     )
                 )
@@ -480,7 +481,7 @@ class GeminiProvider(LLMProvider):
                     f"tools_count={len(genai_tools) if genai_tools else 0}",
                     f"thinking_level={logged_thinking_level}",
                     f"include_thoughts={logged_include_thoughts}",
-                    f"tool_calling_mode={fc_cfg.mode if settings.tool_config and settings.tool_config.tool_calling_config else None}",
+                    f"tool_calling_mode={fc_cfg.mode if fc_cfg is not None else None}",
                     f"allowed_tools={len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0}",
                 ]
             )
@@ -582,7 +583,7 @@ class GeminiProvider(LLMProvider):
             result.append(
                 StreamChunkFromModel(
                     usage_metadata=_usage_from_sdk(chunk.usage_metadata),
-                    finish_reason=finish_reason,
+                    finish_reason=finish_reason or "STOP",
                 )
             )
         elif finish_reason:
@@ -619,11 +620,11 @@ class GeminiProvider(LLMProvider):
             candidates=[
                 Candidate(
                     content=Content(role="model", parts=parts),
-                    finish_reason=finish_reason,
+                    finish_reason=finish_reason or "STOP",
                 )
             ],
             usage_metadata=usage or UsageMetadata(),
-            grounding_raw=grounding_raw,
+            grounding_raw=grounding_raw or SdkGroundingRawData(),
         )
 
     def _sync_generate(self, model: str, contents: list[dict], config):

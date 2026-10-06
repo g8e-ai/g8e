@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Literal
 
 from app.constants.chat_model_call_sites import classification_for_agent_role
 from app.decision.provider import DecisionProvider
@@ -75,7 +75,7 @@ def build_model_call_telemetry(
     model: str,
     monotonic_start: float,
     input_artifact_hash: str,
-    model_role: str | None = None,
+    model_role: Literal["primary", "assistant", "lite"] | None = None,
     monotonic_end: float | None = None,
     input_tokens: int = 0,
     output_tokens: int = 0,
@@ -126,6 +126,6 @@ def build_model_call_telemetry(
         response_artifact=provider.response_artifact if isinstance(provider, LLMProvider) else None,
         model_boundary_privacy=recorded_model_boundary_privacy(provider),
         tools_declared=recorded_declared_tool_names(provider),
-        **governed_telemetry_fields(provider),
+        **governed_telemetry_fields(provider) if isinstance(provider, LLMProvider) else {},
         **extra,
     )

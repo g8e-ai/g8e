@@ -18,6 +18,7 @@ without conditional branching.
 from __future__ import annotations
 
 from app.constants import InvestigationStatus, ReasoningAgent
+from app.models.base import UTCDatetime
 from app.models.internal_api import (
     ObserveProducerAgentStateRequest,
     ObserveProducerRunStateRequest,
@@ -134,8 +135,8 @@ def build_investigation_run_state_request(
     user_id: str,
     web_session_id: str | None = None,
     cli_session_id: str | None = None,
-    started_at=None,
-    ended_at=None,
+    started_at: UTCDatetime | None = None,
+    ended_at: UTCDatetime | None = None,
 ) -> ObserveProducerRunStateRequest | None:
     """Build a typed investigation run-state producer request.
 

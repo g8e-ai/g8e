@@ -127,6 +127,7 @@ from app.models.operators import (
     OperatorStatusUpdatedPayload,
 )
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
+from app.utils.time_ids.timestamp import now
 from app.models.triage_api import (
     TriageAnswerRequest,
     TriageSkipRequest,
@@ -164,12 +165,21 @@ router = APIRouter(tags=["internal"])
 _background_tasks: set[asyncio.Task] = set()
 
 
+def _require_context_value(value: str | None, field: str) -> str:
+    if not value:
+        raise ValidationError(
+            f"Request context requires {field}", field=field, constraint="required"
+        )
+    return value
+
+
 def _status_payload_from_gateway_doc(
     operator_doc: dict[str, object], status: OperatorStatus
 ) -> OperatorStatusUpdatedPayload:
     snapshot_raw = operator_doc.get("latest_heartbeat_snapshot")
     snapshot: HeartbeatSnapshot | None = None
-    hostname = operator_doc.get("current_hostname")
+    hostname_raw = operator_doc.get("current_hostname")
+    hostname = hostname_raw if isinstance(hostname_raw, str) else None
     if isinstance(snapshot_raw, dict):
         try:
             snapshot = HeartbeatSnapshot.model_validate(snapshot_raw)
@@ -177,10 +187,11 @@ def _status_payload_from_gateway_doc(
                 hostname = snapshot.system_identity.hostname
         except Exception:
             snapshot = None
+    operator_name = operator_doc.get("name")
     return OperatorStatusUpdatedPayload(
         operator_id=str(operator_doc.get("id", "")),
         status=status,
-        name=operator_doc.get("name") if isinstance(operator_doc.get("name"), str) else None,
+        name=operator_name if isinstance(operator_name, str) else None,
         hostname=hostname if isinstance(hostname, str) else None,
         system_fingerprint=snapshot.system_fingerprint if snapshot else None,
         metrics=snapshot,
@@ -198,7 +209,9 @@ async def _publish_gateway_operator_status_events(
     if not operator_ids:
         return
     try:
-        operators = await gateway_operator_client.list(user_id=g8e_context.user_id)
+        operators = await gateway_operator_client.list(
+            user_id=_require_context_value(g8e_context.user_id, "user_id")
+        )
         by_id = {str(op.get("id")): op for op in operators if isinstance(op, dict) and op.get("id")}
         for operator_id in operator_ids:
             operator_doc = by_id.get(operator_id)
@@ -255,10 +268,10 @@ async def _generate_and_update_title(
                 case_id=case_id,
                 web_session_id=context.web_session_id,
                 payload=CaseEventPayload(
-                    updated_at=updated_case.updated_at,
+                    updated_at=updated_case.updated_at or now(),
                     title=ai_title,
                 ),
-                user_id=context.user_id,
+                user_id=_require_context_value(context.user_id, "user_id"),
             )
     except Exception as e:
         logger.exception(
@@ -301,7 +314,7 @@ async def _create_investigation_for_case(
             web_session_id=g8e_context.web_session_id,
             priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
             user_email=case.user_email,
-            user_id=case.user_id,
+            user_id=_require_context_value(case.user_id, "user_id"),
             operator_id=g8e_context.operator_id,
             operator_session_id=g8e_context.operator_session_id,
             sentinel_mode=sentinel_mode,
@@ -419,7 +432,7 @@ async def internal_chat(
             initial_message=request.message,
             attachments=request.attachments or [],
             sentinel_mode=request.sentinel_mode,
-            user_id=g8e_context.user_id,
+            user_id=_require_context_value(g8e_context.user_id, "user_id"),
             web_session_id=g8e_context.web_session_id,
             organization_id=g8e_context.organization_id,
             operator_id=g8e_context.operator_id,
@@ -434,7 +447,7 @@ async def internal_chat(
             web_session_id=g8e_context.web_session_id,
             priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
             user_email=case.user_email,
-            user_id=case.user_id,
+            user_id=_require_context_value(case.user_id, "user_id"),
             operator_id=g8e_context.operator_id,
             operator_session_id=g8e_context.operator_session_id,
             sentinel_mode=request.sentinel_mode,
@@ -484,8 +497,10 @@ async def internal_chat(
             task = asyncio.create_task(
                 _generate_and_update_title(
                     message=request.message,
-                    case_id=g8e_context.case_id,
-                    investigation_id=g8e_context.investigation_id,
+                    case_id=_require_context_value(g8e_context.case_id, "case_id"),
+                    investigation_id=_require_context_value(
+                        g8e_context.investigation_id, "investigation_id"
+                    ),
                     context=RequestContext.from_app_context(g8e_context),
                     user_settings=user_settings,
                     case_service=case_service,
@@ -545,15 +560,21 @@ async def internal_chat(
     # Track the task - run_chat will also track it internally, but we track it here
     # to ensure it's in the registry before we return
     _t = asyncio.create_task(
-        chat_task_manager.track(g8e_context.investigation_id, chat_task, auto_cancel_previous=False)
+        chat_task_manager.track(
+            _require_context_value(g8e_context.investigation_id, "investigation_id"),
+            chat_task,
+            auto_cancel_previous=False,
+        )
     )
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
 
     return ChatStartedResponse(
         success=True,
-        case_id=g8e_context.case_id,
-        investigation_id=g8e_context.investigation_id,
+        case_id=_require_context_value(g8e_context.case_id, "case_id"),
+        investigation_id=_require_context_value(
+            g8e_context.investigation_id, "investigation_id"
+        ),
     )
 
 
@@ -590,11 +611,14 @@ async def internal_triage_answer(
         },
     )
 
-    investigation = await investigation_service.get_investigation(g8e_context.investigation_id)
+    investigation_id = _require_context_value(
+        g8e_context.investigation_id, "investigation_id"
+    )
+    investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation:
         raise ResourceNotFoundError(
             "Investigation not found",
-            resource_id=g8e_context.investigation_id,
+            resource_id=investigation_id,
             resource_type="investigation",
             component="g8ee",
         )
@@ -602,7 +626,7 @@ async def internal_triage_answer(
     # Store answer as user.chat message with structured metadata
     answer_text = f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}"
     await investigation_service.investigation_data_service.add_chat_message(
-        investigation_id=g8e_context.investigation_id,
+        investigation_id=investigation_id,
         sender=MessageSender.USER_CHAT,
         content=answer_text,
         metadata=ConversationMessageMetadata(
@@ -664,18 +688,21 @@ async def internal_triage_skip(
         },
     )
 
-    investigation = await investigation_service.get_investigation(g8e_context.investigation_id)
+    investigation_id = _require_context_value(
+        g8e_context.investigation_id, "investigation_id"
+    )
+    investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation:
         raise ResourceNotFoundError(
             "Investigation not found",
-            resource_id=g8e_context.investigation_id,
+            resource_id=investigation_id,
             resource_type="investigation",
             component="g8ee",
         )
 
     skip_text = "Skipped clarifying questions"
     await investigation_service.investigation_data_service.add_chat_message(
-        investigation_id=g8e_context.investigation_id,
+        investigation_id=investigation_id,
         sender=MessageSender.USER_CHAT,
         content=skip_text,
         metadata=ConversationMessageMetadata(event_type=EventType.AI_TRIAGE_CLARIFICATION_SKIPPED),
@@ -747,7 +774,9 @@ async def stop_ai_processing(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    investigation_id = g8e_context.investigation_id
+    investigation_id = _require_context_value(
+        g8e_context.investigation_id, "investigation_id"
+    )
     reason = request.reason
     web_session_id = g8e_context.web_session_id
 
@@ -937,13 +966,13 @@ async def update_case(
             case_id=case_id,
             web_session_id=g8e_context.web_session_id,
             payload=CaseEventPayload(
-                updated_at=case.updated_at,
+                updated_at=case.updated_at or now(),
                 title=case.title,
                 status=case.status,
                 priority=case.priority,
                 severity=case.severity,
             ),
-            user_id=g8e_context.user_id,
+            user_id=_require_context_value(g8e_context.user_id, "user_id"),
         )
     return CaseResponse(success=True, case=case)
 
@@ -1069,7 +1098,7 @@ async def listen_session_auth(
     """Removed: operators bootstrap via Gateway POST /api/v1/operators/reauth."""
     logger.warning(
         "[INTERNAL-HTTP] Rejected legacy session auth gateway request",
-        extra={"operator_id": request.operator_id, "user_id": request.user_id},
+        extra={"operator_id": request.operator_id, "user_id": g8e_context.user_id},
     )
     return {"success": False, "error": _GATEWAY_OPERATOR_AUTHORITY_ERROR}
 

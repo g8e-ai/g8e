@@ -26,7 +26,7 @@ from app.dependencies import (
     get_request_context,
     require_authenticated_context,
 )
-from app.errors import ResourceNotFoundError
+from app.errors import ResourceNotFoundError, ValidationError
 from app.models import InvestigationModel
 from app.models.chat_api import (
     ChatSessionDetailsResponse,
@@ -50,6 +50,16 @@ def _is_chat_session_active(status: InvestigationStatus) -> bool:
     return status == InvestigationStatus.OPEN
 
 
+def _require_investigation_id(investigation_id: str | None) -> str:
+    if investigation_id is None:
+        raise ValidationError(
+            "Triage requests require context.investigation_id",
+            field="context.investigation_id",
+            constraint="required",
+        )
+    return investigation_id
+
+
 @router.post("/chat/triage/answer")
 async def answer_triage_question(
     request: TriageAnswerRequest,
@@ -70,7 +80,7 @@ async def answer_triage_question(
         lite_model_override=None,
     )
 
-    investigation_id = request.context.investigation_id
+    investigation_id = _require_investigation_id(request.context.investigation_id)
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError(
@@ -134,7 +144,7 @@ async def skip_triage_questions(
         lite_model_override=None,
     )
 
-    investigation_id = request.context.investigation_id
+    investigation_id = _require_investigation_id(request.context.investigation_id)
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError(
@@ -184,7 +194,7 @@ async def timeout_triage_questions(
     """
     # Keep the typed request body in the route contract; validation happens in FastAPI.
     _ = request
-    investigation_id = g8e_context.investigation_id
+    investigation_id = _require_investigation_id(g8e_context.investigation_id)
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError(

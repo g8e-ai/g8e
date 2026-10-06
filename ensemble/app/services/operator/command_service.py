@@ -135,6 +135,10 @@ class OperatorCommandService:
     def investigation_service(self) -> InvestigationServiceProtocol:
         return self._investigation_service
 
+    @property
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        return self._execution_service.ai_response_analyzer
+
     def _init_logic(self, settings: G8eeAppSettings) -> None:
         self._cv = settings.command_validation
         self._be = settings.batch_execution
@@ -419,10 +423,6 @@ class OperatorCommandService:
                         g8e_context=g8e_context,
                         timeout_seconds=args.timeout_seconds,
                     )
-                    if internal_result is None:
-                        raise BusinessLogicError(
-                            "Execution service returned None for internal_result", component="g8ee"
-                        )
                 except Exception as e:
                     logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
                     if fail_fast:

@@ -40,6 +40,7 @@ from app.models.cases import CaseCreateRequest
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
 from app.models.settings import G8eeUserSettings
+from app.models.tool_results import InvestigationContextResult
 from app.services.ai.tools import query_investigation_context
 from app.services.service_factory import ServiceFactory
 from tests.fakes.factories import build_enriched_context
@@ -142,6 +143,7 @@ async def _query(all_services, investigation, g8e_context, data_type: str):
         G8eeUserSettings(),
         "exec-seed-query",
     )
+    assert isinstance(result, InvestigationContextResult)
     assert result.success, result.error
     return result
 
@@ -169,7 +171,8 @@ class TestSeededFactsAreReachableThroughTheRealHandler:
 
         result = await _query(all_services, investigation, g8e_context, "operator_actions")
 
-        assert FACT in result.data
+        assert isinstance(result.data, list)
+        assert FACT in json.dumps(result.data)
 
     async def test_the_seeded_turn_is_part_of_the_conversation(
         self, all_services, seeded_investigation
@@ -178,6 +181,7 @@ class TestSeededFactsAreReachableThroughTheRealHandler:
 
         result = await _query(all_services, investigation, g8e_context, "conversation_history")
 
+        assert isinstance(result.data, list)
         assert [m["content"] for m in result.data] == ["Checkout is failing after deploys."]
 
 

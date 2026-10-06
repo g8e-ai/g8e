@@ -75,6 +75,8 @@ class ConversationMessageMetadata(G8eBaseModel):
     response_source: MessageSender | None = Field(
         default=None, description="Source of the AI response"
     )
+    old_status: InvestigationStatus | None = Field(default=None, description="Prior investigation status")
+    new_status: InvestigationStatus | None = Field(default=None, description="Updated investigation status")
     approved: bool | None = Field(default=None, description="Whether the approval was granted")
     reason: str | None = Field(default=None, description="Approval decision reason or feedback")
     feedback_reason: str | None = Field(
@@ -636,7 +638,7 @@ class InvestigationModel(G8eIdentifiableModel):
             event_type=_status_event[new_status],
             actor=actor,
             summary=summary,
-            details={"old_status": old_status, "new_status": new_status},
+            details=ConversationMessageMetadata(old_status=old_status, new_status=new_status),
         )
 
 
@@ -703,7 +705,7 @@ class InvestigationUpdateRequest(G8eBaseModel):
         default=None, description="Updated technical context"
     )
     sentinel_mode: bool | None = Field(
-        None,
+        default=None,
         description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data.",
     )
 
