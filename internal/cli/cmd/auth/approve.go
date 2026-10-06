@@ -51,13 +51,14 @@ func DockerInitAPIClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Confi
 }
 
 func approveCmd() *cobra.Command {
-	return approveCmdWithConfig(shared.LoadConfig, DefaultAPIClientFactory, shared.NewFileSvc)
+	return approveCmdWithConfig(shared.LoadConfig, DefaultAPIClientFactory, shared.NewFileSvc, platform.OpenBrowser)
 }
 
 func approveCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	clientFactory APIClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+	openBrowser func(string) error,
 ) *cobra.Command {
 	var yesFlag bool
 	cmd := &cobra.Command{
@@ -115,7 +116,7 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 			cmd.Printf("  Transaction: %s\n", txHash)
 			cmd.Printf("  URL: %s\n", approvalURL)
 
-			if err := platform.OpenBrowser(approvalURL); err != nil {
+			if err := openBrowser(approvalURL); err != nil {
 				cmd.Printf("Failed to auto-open browser: %v\n", err)
 				fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 			}

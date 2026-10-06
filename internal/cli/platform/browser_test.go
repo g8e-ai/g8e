@@ -188,12 +188,7 @@ func TestOpenBrowser(t *testing.T) {
 		assert.Equal(t, 1, mock.callCount)
 	})
 
-	t.Run("OpenBrowser uses default executor", func(t *testing.T) {
-		// This test verifies the public function uses the default executor
-		// We can't easily test the actual execution without side effects,
-		// but we can verify it doesn't panic with valid input
-		urlStr := "https://example.com"
-		// Call will likely fail in test environment, but should not panic
-		_ = OpenBrowser(urlStr)
+	t.Run("OpenBrowser rejects empty URL before executing a command", func(t *testing.T) {
+		require.ErrorIs(t, OpenBrowser(""), constants.ErrBrowserURLEmpty)
 	})
 }

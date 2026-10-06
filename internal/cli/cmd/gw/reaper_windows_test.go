@@ -41,4 +41,3 @@ func reapRemainingChild(t *testing.T, fileSvc fs.RuntimeFileService) {
 	}
 	_ = fileSvc.Remove(context.Background(), pidRel)
 }
-

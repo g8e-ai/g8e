@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
@@ -66,7 +67,28 @@ func (fs *localFS) WriteFile(ctx context.Context, relPath string, data []byte, m
 		return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 	}
 
+	// Windows prevents replacement of a file with its read-only attribute set.
+	// Clear that attribute on the old file; the replacement keeps the requested
+	// mode. Restore the old mode if replacement fails.
+	var previousMode os.FileMode
+	if runtime.GOOS == "windows" {
+		info, err := os.Stat(absPath)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%w: stat destination: %w", constants.ErrFileRenameFailed, err)
+		}
+		if err == nil && info.Mode().Perm()&0200 == 0 {
+			previousMode = info.Mode().Perm()
+			if err := os.Chmod(absPath, previousMode|0200); err != nil {
+				return fmt.Errorf("%w: clear read-only destination: %w", constants.ErrFileRenameFailed, err)
+			}
+		}
+	}
 	if err := os.Rename(tmpPath, absPath); err != nil {
+		if previousMode != 0 {
+			if restoreErr := os.Chmod(absPath, previousMode); restoreErr != nil {
+				return fmt.Errorf("%w: %w; restore destination mode: %w", constants.ErrFileRenameFailed, err, restoreErr)
+			}
+		}
 		return fmt.Errorf("%w: %w", constants.ErrFileRenameFailed, err)
 	}
 

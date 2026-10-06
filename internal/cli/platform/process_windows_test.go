@@ -120,11 +120,10 @@ func (m *mockCommandExecutor) Run(cmd *exec.Cmd) error {
 }
 
 func TestSetProcessGroup(t *testing.T) {
-	// setProcessGroup is a no-op on Windows
-	// This test ensures it doesn't panic or cause issues
 	cmd := exec.Command("echo", "test")
 	setProcessGroup(cmd)
-	// If we get here without panic, the test passes
+	require.NotNil(t, cmd.SysProcAttr)
+	assert.True(t, cmd.SysProcAttr.HideWindow)
 }
 
 func TestIsProcessRunning_ZeroPID(t *testing.T) {

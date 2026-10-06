@@ -142,7 +142,8 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 		if err != nil {
 			return nil, fmt.Errorf("%w: canonicalize framework profile %d: %w", constants.ErrBundleAssemblyFailed, i, err)
 		}
-		profilePath := fmt.Sprintf("%s/%s.json", constants.ComplianceBundleProfilesDirname, profile.GetProfileId())
+		profileDigest := sha256.Sum256(profileBytes)
+		profilePath := fmt.Sprintf("%s/%x.json", constants.ComplianceBundleProfilesDirname, profileDigest)
 		if err := addArtifact(&artifacts, &checksumEntries, profilePath, profileBytes, constants.MediaTypeJSON, constants.ComplianceBundleProfilePublic); err != nil {
 			return nil, err
 		}

@@ -209,8 +209,9 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 // validates against the CLI session ID, so cliSessionID must be sent as the
 // X-G8E-CLI-Session-ID header on every proxied request.
 type gatewayConn struct {
-	client     *http.Client
-	gatewayURL string
+	client      *http.Client
+	gatewayURL  string
+	openBrowser func(string) error
 
 	// cliSessionID is set when the resolved credential tier is a CLI cert (client
 	// flags or enrolled CLI disk cert). When non-empty, it is attached
@@ -353,6 +354,7 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 	}
 
 	session := &gatewayConn{
+		openBrowser: platform.OpenBrowser,
 		client: &http.Client{
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
 			Timeout:   30 * time.Second,
@@ -528,15 +530,18 @@ func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gateway
 		logger.Info("L3 approval required, waiting for user to authorize...", "url", approvalURL)
 	}
 
-	if err := platform.OpenBrowser(approvalURL); err != nil {
+	if session.sseClient == nil || session.sseBaseURL == "" || session.cliSessionID == "" {
+		return resp, fmt.Errorf("L3 approval: %w", constants.ErrNotAuthenticated)
+	}
+	if session.openBrowser == nil {
+		return resp, fmt.Errorf("L3 approval: browser opener: %w", constants.ErrMissingRequiredField)
+	}
+
+	if err := session.openBrowser(approvalURL); err != nil {
 		if logger != nil {
 			logger.Warn("Failed to auto-open browser", "error", err)
 		}
 		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
-	}
-
-	if session.sseClient == nil || session.sseBaseURL == "" || session.cliSessionID == "" {
-		return resp, fmt.Errorf("L3 approval: %w", constants.ErrNotAuthenticated)
 	}
 
 	txHash := extractTxHashFromApprovalURL(approvalURL)

@@ -68,7 +68,7 @@ func TestApproveCmd_APIInjection_ClientFactoryError(t *testing.T) {
 		return nil, constants.ErrNotAuthenticated
 	}
 
-	cmd := approveCmdWithConfig(loader, factory, cmdtest.FileSvcFactoryFor(fileSvc))
+	cmd := approveCmdWithConfig(loader, factory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -85,7 +85,7 @@ func TestApproveCmd_NoCredentials_Error(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (APIClient, error) { return &cmdtest.MockAPIClient{}, nil }
 
-	cmd := approveCmdWithConfig(loader, factory, cmdtest.FileSvcFactoryFor(fileSvc))
+	cmd := approveCmdWithConfig(loader, factory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

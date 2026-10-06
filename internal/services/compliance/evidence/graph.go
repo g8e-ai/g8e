@@ -581,15 +581,5 @@ func sameScopeBinding(a, b *EvidenceNode) bool {
 // bundle paths. Bundle paths must be relative and must not escape the bundle
 // root.
 func validBundlePath(path string) bool {
-	if path == "" || filepath.IsAbs(path) {
-		return false
-	}
-	clean := filepath.Clean(path)
-	if clean == "." || clean == ".." {
-		return false
-	}
-	if strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return false
-	}
-	return true
+	return ValidRelativePath(path)
 }

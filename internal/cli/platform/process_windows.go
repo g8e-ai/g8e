@@ -42,7 +42,9 @@ func (r realWindowsProcessChecker) GetExitCodeProcess(handle uintptr, exitCode *
 type realCommandExecutor struct{}
 
 func (r realCommandExecutor) Command(name string, args ...string) *exec.Cmd {
-	return exec.Command(name, args...)
+	cmd := exec.Command(name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd
 }
 
 func (r realCommandExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
@@ -53,10 +55,9 @@ func (r realCommandExecutor) Run(cmd *exec.Cmd) error {
 	return cmd.Run()
 }
 
-// setProcessGroup is a no-op on Windows
+// setProcessGroup keeps background Operators from opening a console window.
 func setProcessGroup(cmd *exec.Cmd) {
-	// Windows doesn't have process groups in the Unix sense
-	// Process management is handled differently
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 }
 
 // isProcessRunning checks if a process with the given PID is running on Windows.

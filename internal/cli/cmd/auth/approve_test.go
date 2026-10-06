@@ -52,7 +52,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		failLoader := func(string) (*config.Config, error) {
 			return nil, fmt.Errorf("config load error")
 		}
-		cmd := approveCmdWithConfig(failLoader, DefaultAPIClientFactory, shared.NewFileSvc)
+		cmd := approveCmdWithConfig(failLoader, DefaultAPIClientFactory, shared.NewFileSvc, func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -66,7 +66,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd := approveCmdWithConfig(loader, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -82,7 +82,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd := approveCmdWithConfig(loader, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -99,7 +99,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd := approveCmdWithConfig(loader, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -122,7 +122,7 @@ func TestApproveCmdWithValidKeyFile(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd := approveCmdWithConfig(loader, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)

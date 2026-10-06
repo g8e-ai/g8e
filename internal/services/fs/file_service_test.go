@@ -69,6 +69,16 @@ func TestWriteFile_CreatesFileWithCorrectContent(t *testing.T) {
 	assert.Equal(t, data, got)
 }
 
+func TestWriteFile_ReplacesReadOnlyFile(t *testing.T) {
+	svc := setupTestFS(t)
+	ctx := context.Background()
+	require.NoError(t, svc.WriteFile(ctx, "report.json", []byte("original"), constants.PermFileReadOnly))
+	require.NoError(t, svc.WriteFile(ctx, "report.json", []byte("updated"), constants.PermFileReadOnly))
+	body, err := svc.ReadFile(ctx, "report.json")
+	require.NoError(t, err)
+	assert.Equal(t, "updated", string(body))
+}
+
 func TestWriteFile_CreatesParentDirectories(t *testing.T) {
 	svc := setupTestFS(t)
 	ctx := context.Background()

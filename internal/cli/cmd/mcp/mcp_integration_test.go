@@ -78,6 +78,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		defer sseServer.Close()
 
 		conn := &gatewayConn{
+			openBrowser:  func(string) error { return nil },
 			client:       &http.Client{Timeout: 5 * time.Second},
 			gatewayURL:   gatewayServer.URL,
 			sseClient:    &http.Client{Timeout: 5 * time.Second},
@@ -128,6 +129,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		defer sseServer.Close()
 
 		conn := &gatewayConn{
+			openBrowser:  func(string) error { return nil },
 			client:       &http.Client{Timeout: 5 * time.Second},
 			gatewayURL:   gatewayServer.URL,
 			sseClient:    &http.Client{Timeout: 5 * time.Second},
@@ -173,8 +175,9 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		defer gatewayServer.Close()
 
 		conn := &gatewayConn{
-			client:     &http.Client{Timeout: 5 * time.Second},
-			gatewayURL: gatewayServer.URL,
+			openBrowser: func(string) error { return nil },
+			client:      &http.Client{Timeout: 5 * time.Second},
+			gatewayURL:  gatewayServer.URL,
 		}
 
 		req := JSONRPCRequest{

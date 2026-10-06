@@ -250,7 +250,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 func writeOperationalArtifact(outputDir, directory string, artifactType ArtifactType, transactionID string, sequence int64, producedAt time.Time, body []byte) (string, OperationalExportArtifact, error) {
 	digest := sha256.Sum256(body)
 	digestHex := hex.EncodeToString(digest[:])
-	relativePath := filepath.Join(directory, digestHex+constants.FileExtJSON)
+	relativePath := filepath.ToSlash(filepath.Join(directory, digestHex+constants.FileExtJSON))
 	absolutePath := filepath.Join(outputDir, relativePath)
 	if err := os.MkdirAll(filepath.Dir(absolutePath), constants.PermDirPrivate); err != nil {
 		return "", OperationalExportArtifact{}, fmt.Errorf("%w: create operational artifact directory: %w", constants.ErrDirCreateFailed, err)

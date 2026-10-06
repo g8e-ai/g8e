@@ -153,8 +153,9 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 	t.Run("returns error when gateway is unreachable", func(t *testing.T) {
 		session := &gatewayConn{
-			client:     &http.Client{Timeout: 1 * time.Second},
-			gatewayURL: "http://127.0.0.1:1/mcp", // port 1 should refuse connections
+			openBrowser: func(string) error { return nil },
+			client:      &http.Client{Timeout: 1 * time.Second},
+			gatewayURL:  "http://127.0.0.1:1/mcp", // port 1 should refuse connections
 		}
 
 		req := JSONRPCRequest{

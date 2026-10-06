@@ -89,24 +89,24 @@ func (d *deployDocker) prepare(ctx context.Context, endpoint string) error {
 	}
 	daemon, err := d.docker(ctx, "info", "--format", "{{.OSType}}/{{.Architecture}}")
 	if err != nil {
-		return fmt.Errorf("Docker context %q is unavailable: %w", d.context, err)
+		return fmt.Errorf("docker context %q is unavailable: %w", d.context, err)
 	}
 	image, err := d.docker(ctx, "image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", d.image)
 	if err != nil {
-		return fmt.Errorf("Docker image %q is unavailable on context %q: %w", d.image, d.context, err)
+		return fmt.Errorf("docker image %q is unavailable on context %q: %w", d.image, d.context, err)
 	}
 	parts := strings.Fields(string(image))
 	if len(parts) != 2 {
 		return fmt.Errorf("unexpected Docker image inspection output %q", strings.TrimSpace(string(image)))
 	}
 	if got, want := normalizeDockerPlatform(parts[1]), normalizeDockerPlatform(strings.TrimSpace(string(daemon))); got != want || !strings.HasPrefix(got, "linux/") {
-		return fmt.Errorf("Docker image platform %s is incompatible with daemon platform %s", got, want)
+		return fmt.Errorf("docker image platform %s is incompatible with daemon platform %s", got, want)
 	}
 	d.imageID = parts[0]
 	if endpoint != "" {
 		_, err = d.docker(ctx, "run", "--rm", "--entrypoint", "/gateway-preflight.sh", d.imageID, endpoint)
 		if err != nil {
-			return fmt.Errorf("Docker context %q cannot verify Gateway HTTP/TLS connectivity at %s on ports 8080/8443: %w", d.context, endpoint, err)
+			return fmt.Errorf("docker context %q cannot verify Gateway HTTP/TLS connectivity at %s on ports 8080/8443: %w", d.context, endpoint, err)
 		}
 	}
 	return nil
@@ -241,7 +241,7 @@ func (d *deployDocker) operator(dir string) (*dockerOperatorSpec, error) {
 	op := d.operators[dir]
 	d.mu.RUnlock()
 	if op == nil {
-		return nil, fmt.Errorf("Docker Operator %q was not prepared", dir)
+		return nil, fmt.Errorf("docker Operator %q was not prepared", dir)
 	}
 	return op, nil
 }

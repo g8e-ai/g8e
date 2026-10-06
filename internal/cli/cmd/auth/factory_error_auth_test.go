@@ -25,7 +25,7 @@ var errFactory = fmt.Errorf("factory boom")
 func TestApproveCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := cmdtest.NewCmdTestEnv(t)
 
-	cmd := approveCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), PanickingClientFactory(), cmdtest.FailingFileSvcFactory(errFactory))
+	cmd := approveCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), PanickingClientFactory(), cmdtest.FailingFileSvcFactory(errFactory), func(string) error { return nil })
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

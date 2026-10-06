@@ -220,6 +220,9 @@ func ValidPathElement(value string) bool {
 // ValidRelativePath returns true if the value is a safe relative path that
 // does not escape the root via traversal.
 func ValidRelativePath(value string) bool {
+	if strings.HasPrefix(value, "/") || strings.ContainsAny(value, "\\:\x00") {
+		return false
+	}
 	clean := filepath.Clean(value)
 	return clean != "." && clean != ".." && !filepath.IsAbs(clean) && !strings.HasPrefix(clean, ".."+string(os.PathSeparator))
 }
