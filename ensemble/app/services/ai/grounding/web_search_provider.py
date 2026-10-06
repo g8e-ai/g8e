@@ -76,6 +76,7 @@ class WebSearchProvider:
         api_key: str | None,
         location: str = "global",
     ) -> None:
+        self._client: SearchClientProtocol | None = None
         if not project_id or not engine_id or not api_key:
             logger.warning(
                 "WebSearchProvider initialized with missing credentials "
@@ -87,7 +88,6 @@ class WebSearchProvider:
             self._project_id = project_id or ""
             self._engine_id = engine_id or ""
             self._location = location
-            self._client = None  # type: ignore
             return
 
         self._project_id = project_id
@@ -98,7 +98,7 @@ class WebSearchProvider:
             if location != "global"
             else None
         )
-        self._client: SearchClientProtocol = discoveryengine.SearchServiceClient(
+        self._client = discoveryengine.SearchServiceClient(
             credentials=APIKeyCredentials(api_key),
             client_options=client_options,
         )

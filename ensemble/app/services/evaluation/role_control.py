@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from g8e.models.internal_api import EvaluationInferenceContext
 
 from app.constants import ReasoningAgent, TriageComplexityClassification
@@ -32,7 +34,7 @@ def resolve_scored_model_role(
     *,
     designated_model_role: str | None,
     active_agent: ReasoningAgent | None,
-) -> str:
+) -> Literal["primary", "assistant", "lite"]:
     """Return the model role the scored chat turn runs as.
 
     A campaign's designated role wins. Otherwise Dash runs as Assistant and
@@ -41,7 +43,13 @@ def resolve_scored_model_role(
     and the role's model always agree.
     """
     if designated_model_role:
-        return designated_model_role
+        if designated_model_role in ("primary", "assistant", "lite"):
+            return designated_model_role
+        raise ValidationError(
+            f"Unsupported designated model role: {designated_model_role}",
+            field="designated_model_role",
+            component="g8ee",
+        )
     return "assistant" if active_agent == ReasoningAgent.DASH else "primary"
 
 

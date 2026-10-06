@@ -13,6 +13,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+from fastapi import FastAPI
+
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.db.blob_service import BlobService
 from app.db.db_service import DBService
@@ -365,11 +367,11 @@ class ServiceFactory:
         register_auto_approved_validator(auto_approved_validator)
 
         operator_command_service = OperatorCommandService.build(
-            investigation_service=domain_services.investigation_service,  # type: ignore[arg-type]
+            investigation_service=domain_services.investigation_service,
             settings=settings,
-            ai_response_analyzer=response_analyzer,  # type: ignore[arg-type]
+            ai_response_analyzer=response_analyzer,
             internal_http_client=core_services.internal_http_client,
-            approval_service=approval_service,  # type: ignore[arg-type]
+            approval_service=approval_service,
             gateway_operator_client=gateway_operator_client,
             whitelist_validator=whitelist_validator,
             blacklist_validator=blacklist_validator,
@@ -449,7 +451,7 @@ class ServiceFactory:
         )
 
     @staticmethod
-    def bind_to_app_state(app: object, services: AllServices) -> None:
+    def bind_to_app_state(app: FastAPI, services: AllServices) -> None:
         """Assign the services container to ``app.state``."""
         state = cast(G8eeAppState, app.state)
         state.services = services

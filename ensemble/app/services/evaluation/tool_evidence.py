@@ -18,6 +18,7 @@ from app.models.evaluation_trace import (
     EvaluationErrorAnalysisSummary,
     EvaluationGovernedActionRecord,
     EvaluationPolicyDecisionRecord,
+    EvaluationPolicyOutcome,
     EvaluationToolCallRecord,
     EvaluationToolDecisionRecord,
 )
@@ -72,7 +73,7 @@ POLICY_DENY_ERROR_TYPES: frozenset[CommandErrorType] = frozenset(
 )
 
 
-def _policy_outcome_from_result(result: CommandExecutionResult) -> str:
+def _policy_outcome_from_result(result: CommandExecutionResult) -> EvaluationPolicyOutcome:
     if result.success:
         return "allow"
     if result.error_type in POLICY_DENY_ERROR_TYPES:

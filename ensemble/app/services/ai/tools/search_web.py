@@ -46,6 +46,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del investigation, g8e_context, request_settings, execution_id
     args = SearchWebArgs.model_validate(tool_args)
     logger.info("[G8E_WEB_SEARCH] Query: %s", args.query)
     if svc.web_search_provider is None:

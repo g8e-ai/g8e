@@ -192,7 +192,7 @@ class TestGatewayDispatchCorrelation:
 
     async def test_times_out_when_gateway_dispatch_hangs(self):
         async def slow_dispatch(**kwargs):
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             return {"success": True}
 
         mock_gateway = MagicMock()
@@ -202,7 +202,7 @@ class TestGatewayDispatchCorrelation:
         internal_result, envelope = await svc.dispatch_command(
             _build_command_message("lonely-exec-id"),
             build_g8e_http_context(),
-            timeout_seconds=0.1,
+            timeout_seconds=1,
         )
 
         assert internal_result.status == ExecutionStatus.TIMEOUT

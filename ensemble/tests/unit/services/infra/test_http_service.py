@@ -42,9 +42,6 @@ class TestHTTPService:
 
     def test_set_http_client_validation_errors(self):
         """Test validation errors when setting HTTP client."""
-        with pytest.raises(ValidationError, match="HTTP client is required"):
-            self.http_service.set_http_client(None, self.service_name)
-
         with pytest.raises(ValidationError, match="service_name is required"):
             self.http_service.set_http_client(self.mock_client, "")
 

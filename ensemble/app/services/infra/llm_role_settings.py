@@ -35,6 +35,7 @@ from app.models.internal_api import (
     LLMRole,
     LLMRoleSettingsResponse,
     LLMRoleSettingsUpdateRequest,
+    LLMRoleUpdate,
     LLMRoleView,
 )
 from app.models.settings import LLMSettings
@@ -159,14 +160,13 @@ def _check_provider(provider: LLMProvider, field: str) -> FieldRequirement:
 
 def apply_role_updates(llm: LLMSettings, request: LLMRoleSettingsUpdateRequest) -> None:
     """Validate role selections, then replace each selected provider/model pair."""
-    updates = {
-        role: update
-        for role, update in (
-            ("primary", request.primary),
-            ("assistant", request.assistant),
-            ("lite", request.lite),
-        )
-        if update is not None
+    requested_updates: tuple[tuple[LLMRole, LLMRoleUpdate | None], ...] = (
+        ("primary", request.primary),
+        ("assistant", request.assistant),
+        ("lite", request.lite),
+    )
+    updates: dict[LLMRole, LLMRoleUpdate] = {
+        role: update for role, update in requested_updates if update is not None
     }
     normalized: dict[LLMRole, tuple[LLMProvider | None, str | None]] = {}
     for role, update in updates.items():

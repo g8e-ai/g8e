@@ -48,6 +48,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del request_settings
     args = convert_args_to_payload(
         tool_args,
         FileEditRequestPayload,

@@ -81,7 +81,7 @@ class TestSettingsService:
         user_id = "user_456"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        platform_doc = AppSettingsDocument(settings=G8eeAppSettings()).model_dump()
+        platform_doc = AppSettingsDocument(settings=G8eeAppSettings.model_validate({})).model_dump()
 
         cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             None if document_id == user_doc_id else platform_doc
@@ -290,14 +290,14 @@ class TestLLMEnvVarBootstrapDefaults:
         assert local.llm.openai_api_key == "env-openai-key"
 
         # Platform DB carries a different provider, model, key, and endpoint.
-        platform = G8eeAppSettings(
-            llm=LLMSettings(
-                llm_primary_provider=LLMProvider.OPENAI,
-                llm_model="gpt-4o",
-                openai_api_key="platform-key",
-                ollama_endpoint="http://10.0.0.9:11434",
-            )
-        )
+        platform = G8eeAppSettings.model_validate({
+            "llm": {
+                "llm_primary_provider": LLMProvider.OPENAI,
+                "llm_model": "gpt-4o",
+                "openai_api_key": "platform-key",
+                "ollama_endpoint": "http://10.0.0.9:11434",
+            }
+        })
 
         merged = service.overlay_platform_data(local, platform)
 
@@ -316,7 +316,7 @@ class TestLLMEnvVarBootstrapDefaults:
         assert local.llm.openai_api_key == "env-openai-key"
 
         # Platform DB has no LLM values (all None).
-        platform = G8eeAppSettings()
+        platform = G8eeAppSettings.model_validate({})
 
         merged = service.overlay_platform_data(local, platform)
 
@@ -333,12 +333,12 @@ class TestLLMEnvVarBootstrapDefaults:
         assert local.llm.openai_api_key == "env-openai-key"
         assert local.llm.primary_model is None
 
-        platform = G8eeAppSettings(
-            llm=LLMSettings(
-                llm_model="gemma4:12b",
-                ollama_api_key="platform-ollama-key",
-            )
-        )
+        platform = G8eeAppSettings.model_validate({
+            "llm": {
+                "llm_model": "gemma4:12b",
+                "ollama_api_key": "platform-ollama-key",
+            }
+        })
 
         merged = service.overlay_platform_data(local, platform)
 

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import override
 
 from app.decision.provider import DecisionProvider
@@ -29,7 +30,7 @@ class FakeDecisionProvider(DecisionProvider):
         *,
         model: str,
         state: DecisionState,
-        questions: dict[str, Question],
+        questions: Mapping[str, Question],
     ) -> EvaluateResponse:
         self.last_request = {
             "model": model,

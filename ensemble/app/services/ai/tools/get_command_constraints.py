@@ -49,6 +49,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del tool_args, g8e_context, execution_id
     logger.info("[GET_COMMAND_CONSTRAINTS] Retrieving command constraints")
 
     user_settings = request_settings

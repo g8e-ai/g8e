@@ -396,22 +396,25 @@ async def internal_chat(
 
     # Validate investigation_id exists before proceeding, UNLESS we are creating
     # a new case or a new investigation under an existing case
-    if not create_new_case and not create_new_investigation:
-        if not g8e_context.investigation_id:
-            logger.error(
-                "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing",
-                extra={
-                    "case_id": g8e_context.case_id,
-                    "web_session_id": (g8e_context.web_session_id[:8] + "...")
-                    if g8e_context.web_session_id
-                    else None,
-                },
-            )
-            return ChatStartedResponse(
-                success=False,
-                case_id=g8e_context.case_id or "",
-                investigation_id=g8e_context.investigation_id or "",
-            )
+    if (
+        not create_new_case
+        and not create_new_investigation
+        and not g8e_context.investigation_id
+    ):
+        logger.error(
+            "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing",
+            extra={
+                "case_id": g8e_context.case_id,
+                "web_session_id": (g8e_context.web_session_id[:8] + "...")
+                if g8e_context.web_session_id
+                else None,
+            },
+        )
+        return ChatStartedResponse(
+            success=False,
+            case_id=g8e_context.case_id or "",
+            investigation_id=g8e_context.investigation_id or "",
+        )
 
     logger.info(
         "[INTERNAL-HTTP] Non-streaming chat request received",

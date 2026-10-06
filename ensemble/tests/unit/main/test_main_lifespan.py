@@ -89,7 +89,7 @@ def _build_mocks():
 def _configure_settings(mocks):
     """Wire up SettingsService + initialize_g8e_service to return a usable mock settings."""
 
-    settings = G8eeAppSettings()
+    settings = G8eeAppSettings.model_validate({})
     cert_path, key_path = get_app_cert_paths()
     settings._ca_cert_path = PATHS["infra"]["ca_cert_path"]
     settings._client_cert_path = cert_path

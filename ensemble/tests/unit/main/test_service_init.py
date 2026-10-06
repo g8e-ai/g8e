@@ -32,7 +32,7 @@ def _make_cache_aside_service():
 
 
 def _make_settings():
-    return G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
+    return G8eeAppSettings.model_validate({"port": PortConstants.G8E_PORT_G8EE_HTTPS})
 
 
 class TestUseDbConfigTrue:
@@ -94,16 +94,12 @@ class TestUseDbConfigFalse:
         )
         assert result is explicit_settings
 
-    async def test_creates_default_settings_when_none_provided(self):
-        with patch("app.utils.service_init.G8eeAppSettings") as mock_settings_class:
-            mock_settings_instance = MagicMock(spec=G8eeAppSettings)
-            mock_settings_class.return_value = mock_settings_instance
-            result = await initialize_g8e_service(
-                "test-service",
-                settings=None,
-                cache_aside_service=MagicMock(),
-                use_db_config=False,
-            )
-            assert result is mock_settings_instance
-            # Ensure G8eeAppSettings was called to create default
-            mock_settings_class.assert_called_once()
+    async def test_uses_explicit_settings_when_db_config_disabled(self):
+        settings = G8eeAppSettings.model_validate({})
+        result = await initialize_g8e_service(
+            "test-service",
+            settings=settings,
+            cache_aside_service=MagicMock(),
+            use_db_config=False,
+        )
+        assert result is settings

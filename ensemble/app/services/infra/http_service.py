@@ -21,7 +21,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import aiohttp  # type: ignore
+    import aiohttp
 
 from app.clients.http_client import HTTPClient
 from app.errors import ValidationError

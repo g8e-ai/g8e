@@ -270,6 +270,12 @@ def extract_tool_display_detail(tool_name: str, args: dict[str, object]) -> str:
     """Extract a concise display detail string from tool call arguments."""
     if not args:
         return ""
+    detail = _special_tool_display_detail(tool_name, args)
+    return detail if detail is not None else _fallback_tool_display_detail(args)
+
+
+def _special_tool_display_detail(tool_name: str, args: dict[str, object]) -> str | None:
+    """Build display details for tools with a specific argument format."""
     if tool_name == OperatorToolName.RUN_COMMANDS:
         req = args.get("request")
         if isinstance(req, str) and req.strip():
@@ -284,15 +290,16 @@ def extract_tool_display_detail(tool_name: str, args: dict[str, object]) -> str:
     if tool_name == OperatorToolName.CHECK_PORT:
         port = args.get("port")
         host = args.get("host")
-        if host and port:
-            return f"{host}:{port}"
-        if port:
-            return f"port {port}"
+        return f"{host}:{port}" if host and port else f"port {port}" if port else None
     if tool_name in (OperatorToolName.GRANT_INTENT, OperatorToolName.REVOKE_INTENT):
         intent = args.get("intent") or args.get("action")
         if intent:
             return str(intent)
+    return None
 
+
+def _fallback_tool_display_detail(args: dict[str, object]) -> str:
+    """Choose the first useful string argument for an otherwise generic tool."""
     for key in ("file_path", "path", "query", "command", "directory"):
         val = args.get(key)
         if isinstance(val, str) and val.strip():
@@ -536,38 +543,13 @@ async def orchestrate_tool_execution(
                 investigation.id,
             )
 
-        # Schedule fire-and-forget reputation resolution
-        async def _resolve_and_emit():
-            try:
-                marshal_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
-                res = await tool_executor.reputation_service.resolve_stakes(
-                    tribunal_command_id=gen_result.correlation_id,
-                    investigation_id=investigation.id,
-                    gen_result=gen_result,
-                    execution_result=result,
-                    marshal_risk=result.marshal_risk,
-                    marshal_blocked=marshal_blocked,
-                    context=RequestContext.from_app_context(g8e_context),
-                )
-
-                for outcome in res.resolutions:
-                    payload = StakeResolutionPayload.model_validate(outcome.model_dump())
-                    await event_service.publish_reputation_event(
-                        EventType.OPERATOR_REPUTATION_STATE_UPDATED, payload, g8e_context
-                    )
-
-                    if outcome.slash_tier:
-                        slash_event = getattr(
-                            EventType, f"OPERATOR_REPUTATION_SLASH_TIER_{outcome.slash_tier.value}"
-                        )
-                        await event_service.publish_reputation_event(
-                            slash_event, payload, g8e_context
-                        )
-            except Exception as e:
-                logger.error("[REPUTATION] Failed to resolve stakes: %s", e)
-
         task_id = f"reputation_resolution_{execution_id}"
-        task = asyncio.create_task(_resolve_and_emit(), name=task_id)
+        task = asyncio.create_task(
+            _resolve_and_emit(
+                gen_result, result, tool_executor, investigation, event_service, g8e_context
+            ),
+            name=task_id,
+        )
         tool_executor.chat_task_manager.track_detached(task_id, task)
 
     logger.info(
@@ -577,6 +559,7 @@ async def orchestrate_tool_execution(
         execution_id,
         result.error_type,
     )
+
 
     command_display = (
         gen_result.final_command if gen_result else (sage_request.request if sage_request else "")
@@ -627,6 +610,41 @@ async def orchestrate_tool_execution(
         tribunal_result=gen_result,
         player_steps=chain_steps,
     )
+
+
+async def _resolve_and_emit(
+    gen_result: CommandGenerationResult,
+    result: CommandExecutionResult,
+    tool_executor: AIToolService,
+    investigation: EnrichedInvestigationContext,
+    event_service: EventService,
+    g8e_context: G8eHttpContext,
+) -> None:
+    """Resolve command reputation stakes and publish the resulting events."""
+    try:
+        marshal_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
+        resolution = await tool_executor.reputation_service.resolve_stakes(
+            tribunal_command_id=gen_result.correlation_id,
+            investigation_id=investigation.id,
+            gen_result=gen_result,
+            execution_result=result,
+            marshal_risk=result.marshal_risk,
+            marshal_blocked=marshal_blocked,
+            context=RequestContext.from_app_context(g8e_context),
+        )
+
+        for outcome in resolution.resolutions:
+            payload = StakeResolutionPayload.model_validate(outcome.model_dump())
+            await event_service.publish_reputation_event(
+                EventType.OPERATOR_REPUTATION_STATE_UPDATED, payload, g8e_context
+            )
+            if outcome.slash_tier:
+                slash_event = getattr(
+                    EventType, f"OPERATOR_REPUTATION_SLASH_TIER_{outcome.slash_tier.value}"
+                )
+                await event_service.publish_reputation_event(slash_event, payload, g8e_context)
+    except Exception as exc:
+        logger.error("[REPUTATION] Failed to resolve stakes: %s", exc)
 
 
 async def execute_turn_tool_calls(

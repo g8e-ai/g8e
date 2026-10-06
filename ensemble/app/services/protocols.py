@@ -687,10 +687,6 @@ class FileServiceProtocol(Protocol):
         raise NotImplementedError
 
     @property
-    def event_service(self) -> EventServiceProtocol:
-        raise NotImplementedError
-
-    @property
     def execution_service(self) -> ExecutionServiceProtocol:
         raise NotImplementedError
 
@@ -771,10 +767,6 @@ class IntentServiceProtocol(Protocol):
 
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
-        raise NotImplementedError
-
-    @property
-    def event_service(self) -> EventServiceProtocol:
         raise NotImplementedError
 
     @property

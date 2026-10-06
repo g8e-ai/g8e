@@ -22,14 +22,14 @@ import pytest
 from g8e.models.events import ChatThinkingPayload, _SSEEventBody
 
 from app.constants import EventType, ThinkingPhase
-from app.models.base import G8eBaseModel, UTCDatetime
+from app.models.base import G8eBaseModel
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 
 pytestmark = pytest.mark.unit
 
 
 def _thinking_payload(
-    message: str = "test", timestamp: UTCDatetime | None = None
+    message: str = "test", timestamp: str | None = None
 ) -> ChatThinkingPayload:
     return ChatThinkingPayload(thinking=message, phase=ThinkingPhase.START, timestamp=timestamp)
 
@@ -51,7 +51,7 @@ class TestSessionEventWireContract:
             task_id="task-ghi",
         )
 
-        wire = SessionEventWire.from_session_event(session_event)
+        wire = SessionEventWire.from_routed_session_event(session_event)
 
         assert wire.web_session_id == "sess-123"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
@@ -71,7 +71,7 @@ class TestSessionEventWireContract:
             user_id="user-abc",
         )
 
-        wire = SessionEventWire.from_session_event(session_event)
+        wire = SessionEventWire.from_routed_session_event(session_event)
 
         assert wire.web_session_id == "sess-123"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
@@ -90,7 +90,7 @@ class TestSessionEventWireContract:
             web_session_id="sess-123",
             user_id="user-abc",
         )
-        wire = SessionEventWire.from_session_event(session_event)
+        wire = SessionEventWire.from_routed_session_event(session_event)
 
         dumped = wire.model_dump(mode="json")
 
@@ -111,7 +111,7 @@ class TestSessionEventWireContract:
             web_session_id="sess-123",
             user_id="user-abc",
         )
-        wire = SessionEventWire.from_session_event(session_event)
+        wire = SessionEventWire.from_routed_session_event(session_event)
 
         dumped = wire.model_dump(mode="json")
 
@@ -127,7 +127,7 @@ class TestSessionEventWireContract:
             web_session_id="sess-123",
             user_id="user-abc",
         )
-        wire = SessionEventWire.from_session_event(session_event)
+        wire = SessionEventWire.from_routed_session_event(session_event)
 
         dumped = wire.model_dump(mode="json")
 
@@ -150,7 +150,7 @@ class TestBackgroundEventWireContract:
             task_id="task-ghi",
         )
 
-        wire = BackgroundEventWire.from_background_event(background_event)
+        wire = BackgroundEventWire.from_routed_background_event(background_event)
 
         assert wire.user_id == "user-abc"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
@@ -168,7 +168,7 @@ class TestBackgroundEventWireContract:
             user_id="user-abc",
         )
 
-        wire = BackgroundEventWire.from_background_event(background_event)
+        wire = BackgroundEventWire.from_routed_background_event(background_event)
 
         assert wire.user_id == "user-abc"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
@@ -185,7 +185,7 @@ class TestBackgroundEventWireContract:
             payload=payload,
             user_id="user-abc",
         )
-        wire = BackgroundEventWire.from_background_event(background_event)
+        wire = BackgroundEventWire.from_routed_background_event(background_event)
 
         dumped = wire.model_dump(mode="json")
 
@@ -203,7 +203,7 @@ class TestBackgroundEventWireContract:
             payload=payload,
             user_id="user-abc",
         )
-        wire = BackgroundEventWire.from_background_event(background_event)
+        wire = BackgroundEventWire.from_routed_background_event(background_event)
 
         dumped = wire.model_dump(mode="json")
 
@@ -218,7 +218,7 @@ class TestBackgroundEventWireContract:
             payload=payload,
             user_id="user-abc",
         )
-        wire = BackgroundEventWire.from_background_event(background_event)
+        wire = BackgroundEventWire.from_routed_background_event(background_event)
 
         dumped = wire.model_dump(mode="json")
 
@@ -238,7 +238,7 @@ class TestSSEWireContractInvariants:
             web_session_id="sess-123",
             user_id="user-abc",
         )
-        session_wire = SessionEventWire.from_session_event(session_event)
+        session_wire = SessionEventWire.from_routed_session_event(session_event)
         session_dumped = session_wire.model_dump(mode="json")
 
         background_event = BackgroundEvent(
@@ -246,7 +246,7 @@ class TestSSEWireContractInvariants:
             payload=payload,
             user_id="user-abc",
         )
-        background_wire = BackgroundEventWire.from_background_event(background_event)
+        background_wire = BackgroundEventWire.from_routed_background_event(background_event)
         background_dumped = background_wire.model_dump(mode="json")
 
         assert isinstance(session_dumped, dict)
@@ -262,7 +262,7 @@ class TestSSEWireContractInvariants:
             web_session_id="sess-123",
             user_id="user-abc",
         )
-        session_wire = SessionEventWire.from_session_event(session_event)
+        session_wire = SessionEventWire.from_routed_session_event(session_event)
         dumped = session_wire.model_dump(mode="json")
 
         assert isinstance(dumped["event"]["type"], str)

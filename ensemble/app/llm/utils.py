@@ -56,45 +56,30 @@ def is_internal_endpoint(url: str | None) -> bool:
         return False
 
     try:
-        parsed = urlparse(url)
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-
-        hostname_lower = hostname.lower()
-
-        # Localhost checks
-        if hostname_lower in ("localhost", "127.0.0.1", "::1"):
-            return True
-
-        # g8e platform services (Docker Compose service names)
-        if hostname_lower in ("g8eo", "operator"):
-            return True
-
-        # Internal TLDs
-        if hostname_lower.endswith((".internal", ".local")):
-            return True
-
-        # IP range checks
-        try:
-            ip = ipaddress.ip_address(hostname)
-            if ip.is_loopback or ip.is_private:
-                return True
-        except ValueError:
-            # Not an IP address, just a hostname
-            pass
-
-        return False
-
+        hostname = urlparse(url).hostname
+        result = _is_internal_hostname(hostname) if hostname else False
     except Exception:
-        # Fallback to simple substring match if parsing fails
-        if not url:
-            return False
+        # Fallback to simple substring match if parsing fails.
         lower_url = url.lower()
-        return any(
-            x in lower_url
-            for x in ("localhost", "127.0.0.1", ".internal", ".local", "g8eo", "operator")
+        result = any(
+            marker in lower_url
+            for marker in ("localhost", "127.0.0.1", ".internal", ".local", "g8eo", "operator")
         )
+    return result
+
+
+def _is_internal_hostname(hostname: str) -> bool:
+    """Check a parsed hostname against internal service and IP ranges."""
+    hostname_lower = hostname.lower()
+    if hostname_lower in ("localhost", "127.0.0.1", "::1", "g8eo", "operator"):
+        return True
+    if hostname_lower.endswith((".internal", ".local")):
+        return True
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private
 
 
 def is_ollama_endpoint(url: str | None) -> bool:

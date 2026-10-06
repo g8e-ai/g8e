@@ -430,8 +430,8 @@ class MemoryGenerationService:
         current_key: str | None = None
         current_value: list[str] = []
 
-        for line in lines:
-            line = line.strip()
+        for raw_line in lines:
+            line = raw_line.strip()
             if not line:
                 continue
             if line.startswith(("#", "//", "/*")):
@@ -455,9 +455,8 @@ class MemoryGenerationService:
                 current_value = [value_part] if value_part else []
             elif current_key:
                 # Remove trailing commas from continuation lines
-                if line.endswith(","):
-                    line = line[:-1].strip()
-                current_value.append(line)
+                continuation = line[:-1].strip() if line.endswith(",") else line
+                current_value.append(continuation)
 
         if current_key and current_value:
             result[current_key] = " ".join(current_value).strip()

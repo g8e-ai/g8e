@@ -88,14 +88,18 @@ class OperatorIntentService:
         while changed:
             changed = False
             for intent in list(all_intents):
-                for dep in CLOUD_INTENT_DEPENDENCIES.get(intent, []):
+                intent_key = next((item for item in CloudIntent if item.value == intent), None)
+                if intent_key is None:
+                    continue
+                for dep in CLOUD_INTENT_DEPENDENCIES.get(intent_key, []):
                     if dep not in all_intents:
                         all_intents.add(dep)
                         changed = True
         return sorted(all_intents)
 
     def _get_verification_action_for_intent(self, intent: str) -> str | None:
-        return CLOUD_INTENT_VERIFICATION_ACTIONS.get(intent)
+        intent_key = next((item for item in CloudIntent if item.value == intent), None)
+        return CLOUD_INTENT_VERIFICATION_ACTIONS.get(intent_key) if intent_key is not None else None
 
     def _build_iam_attach_command(self, intent: str) -> str:
         return self._iam_builder.build_attach_command(intent)

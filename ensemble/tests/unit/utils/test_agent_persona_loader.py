@@ -10,7 +10,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.constants import PersonaCapability
+from app.constants import ConsensusAuditMode, PersonaCapability
 from app.llm.prompts import PromptFile, build_tribunal_auditor_context
 from app.prompts_data.loader import load_prompt
 from app.services.ai.auditor_service import AuditorInput
@@ -231,11 +231,9 @@ class TestPipelineTemplateContract:
         template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
 
         auditor_input = AuditorInput(
-            mode="unanimous",
+            mode=ConsensusAuditMode.UNANIMOUS,
             winner="ls -la",
             clusters=[],
-            request="list files",
-            guidelines="",
         )
         auditor_context = build_tribunal_auditor_context(
             auditor_input.mode, auditor_input.winner, []

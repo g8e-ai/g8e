@@ -131,6 +131,7 @@ class TestTribunalCommandModels:
         assert cmd.case_id == "case-123"
         assert cmd.request_context.request == "test"
         assert len(cmd.candidates) == 1
+        assert cmd.vote_breakdown is not None
         assert cmd.vote_breakdown.winner == "echo hello"
 
         # Test serialization
@@ -175,5 +176,6 @@ class TestTribunalCommandModels:
             ),
         )
         assert cmd.generation_result.outcome == CommandGenerationOutcome.CONSENSUS_FAILED
+        assert cmd.error_context is not None
         assert cmd.error_context.error_type == "ConsensusFailed"
         assert len(cmd.error_context.pass_errors) == 2

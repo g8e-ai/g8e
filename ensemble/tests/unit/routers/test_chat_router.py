@@ -8,11 +8,9 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import Request
 from fastapi.routing import APIRoute
 
-from app.constants import ChatSessionStatus, ComponentName, InvestigationStatus
-from app.constants.message_sender import MessageSender
+from app.constants import ChatSessionStatus, ComponentName, EventType, InvestigationStatus
 from app.errors import ResourceNotFoundError
 from app.models.http_context import G8eHttpContext
 from app.routers.chat_router import get_chat_session, get_latest_chat_session_for_case, router
@@ -32,7 +30,6 @@ class TestGetChatSession:
     async def test_get_chat_session_returns_session_info(self):
         """Test get chat session returns session information."""
 
-        mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
         web_session_id = "session-123"
         user_id = "user-456"
@@ -48,7 +45,6 @@ class TestGetChatSession:
 
         result = await get_chat_session(
             web_session_id=web_session_id,
-            request=mock_request,
             investigation_service=mock_investigation_service,
             g8e_context=G8eHttpContext(
                 user_id=user_id,
@@ -65,7 +61,6 @@ class TestGetChatSession:
     async def test_get_chat_session_wrong_user_raises_not_found(self):
         """Test ResourceNotFoundError when session belongs to a different user."""
 
-        mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
         owner_id = "user-owner"
         other_id = "user-other"
@@ -82,8 +77,7 @@ class TestGetChatSession:
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await get_chat_session(
                 web_session_id="session-123",
-                request=mock_request,
-                investigation_service=mock_investigation_service,
+                    investigation_service=mock_investigation_service,
                 g8e_context=G8eHttpContext(
                     user_id=other_id,
                     web_session_id="session-123",
@@ -97,7 +91,6 @@ class TestGetChatSession:
     async def test_get_chat_session_not_found_raises(self):
         """Test ResourceNotFoundError when investigation does not exist."""
 
-        mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
         mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(
             return_value=None
@@ -106,8 +99,7 @@ class TestGetChatSession:
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await get_chat_session(
                 web_session_id="session-missing",
-                request=mock_request,
-                investigation_service=mock_investigation_service,
+                    investigation_service=mock_investigation_service,
                 g8e_context=G8eHttpContext(
                     user_id="user-456",
                     web_session_id="session-missing",
@@ -121,7 +113,6 @@ class TestGetChatSession:
     async def test_get_chat_session_inactive_when_closed(self):
         """Test session status is INACTIVE when investigation is CLOSED."""
 
-        mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
         user_id = "user-456"
 
@@ -137,7 +128,6 @@ class TestGetChatSession:
 
         result = await get_chat_session(
             web_session_id="session-closed",
-            request=mock_request,
             investigation_service=mock_investigation_service,
             g8e_context=G8eHttpContext(
                 user_id=user_id,
@@ -157,7 +147,6 @@ class TestGetLatestChatSessionForCase:
     async def test_get_latest_session_with_investigations(self):
         """Test getting latest session when investigations exist."""
 
-        mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
         mock_investigation_service = MagicMock()
         user_id = "user-456"
@@ -171,7 +160,7 @@ class TestGetLatestChatSessionForCase:
             user_id=user_id,
         )
         investigation.conversation_history = [
-            create_conversation_message(sender=MessageSender.USER_CHAT, content="Hello")
+            create_conversation_message(sender=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER, content="Hello")
         ]
         mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(
             return_value=[investigation]
@@ -179,7 +168,6 @@ class TestGetLatestChatSessionForCase:
 
         result = await get_latest_chat_session_for_case(
             case_id="case-789",
-            request=mock_request,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
             g8e_context=G8eHttpContext(
@@ -198,7 +186,6 @@ class TestGetLatestChatSessionForCase:
     async def test_get_latest_session_no_investigations(self):
         """Test getting latest session when no investigations exist."""
 
-        mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
         mock_investigation_service = MagicMock()
         user_id = "user-456"
@@ -211,7 +198,6 @@ class TestGetLatestChatSessionForCase:
 
         result = await get_latest_chat_session_for_case(
             case_id="case-empty",
-            request=mock_request,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
             g8e_context=G8eHttpContext(
@@ -229,7 +215,6 @@ class TestGetLatestChatSessionForCase:
     async def test_get_latest_session_finds_most_recent(self):
         """Test that endpoint returns the most recent investigation."""
 
-        mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
         mock_investigation_service = MagicMock()
         user_id = "user-456"
@@ -245,7 +230,7 @@ class TestGetLatestChatSessionForCase:
             created_at=now_dt - timedelta(minutes=5),
         )
         inv_old.conversation_history = [
-            create_conversation_message(sender=MessageSender.USER_CHAT, content="Old")
+            create_conversation_message(sender=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER, content="Old")
         ]
         inv_new = create_investigation_data(
             investigation_id="inv-new",
@@ -254,7 +239,7 @@ class TestGetLatestChatSessionForCase:
             created_at=now_dt,
         )
         inv_new.conversation_history = [
-            create_conversation_message(sender=MessageSender.USER_CHAT, content="New")
+            create_conversation_message(sender=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER, content="New")
         ]
         mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(
             return_value=[inv_old, inv_new]
@@ -262,7 +247,6 @@ class TestGetLatestChatSessionForCase:
 
         result = await get_latest_chat_session_for_case(
             case_id="case-789",
-            request=mock_request,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
             g8e_context=G8eHttpContext(
@@ -279,7 +263,6 @@ class TestGetLatestChatSessionForCase:
     async def test_get_latest_session_case_not_found(self):
         """Test error raised when case does not exist."""
 
-        mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
         mock_investigation_service = MagicMock()
         user_id = "user-456"
@@ -288,8 +271,7 @@ class TestGetLatestChatSessionForCase:
         with pytest.raises(ResourceNotFoundError):
             await get_latest_chat_session_for_case(
                 case_id="case-missing",
-                request=mock_request,
-                case_service=mock_case_service,
+                    case_service=mock_case_service,
                 investigation_service=mock_investigation_service,
                 g8e_context=G8eHttpContext(
                     user_id=user_id,
@@ -302,7 +284,6 @@ class TestGetLatestChatSessionForCase:
     async def test_get_latest_session_wrong_user_raises_not_found(self):
         """Test ResourceNotFoundError when case belongs to a different user."""
 
-        mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
         mock_investigation_service = MagicMock()
         owner_id = "user-owner"
@@ -314,8 +295,7 @@ class TestGetLatestChatSessionForCase:
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await get_latest_chat_session_for_case(
                 case_id="case-789",
-                request=mock_request,
-                case_service=mock_case_service,
+                    case_service=mock_case_service,
                 investigation_service=mock_investigation_service,
                 g8e_context=G8eHttpContext(
                     user_id=other_id,
@@ -347,4 +327,4 @@ class TestChatRouterConfiguration:
             if isinstance(route, APIRoute) and (
                 "sessions" in route.path or "latest-session" in route.path
             ):
-                assert "GET" in route.methods
+                assert "GET" in (route.methods or set())

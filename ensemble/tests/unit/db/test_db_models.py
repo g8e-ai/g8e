@@ -29,7 +29,7 @@ class TestFieldFilter:
 
     def test_rejects_invalid_operator(self):
         with pytest.raises(ValidationError):
-            FieldFilter(field="x", op="LIKE", value="foo")
+            FieldFilter.model_validate({"field": "x", "op": "LIKE", "value": "foo"})
 
     def test_value_accepts_string(self):
         f = FieldFilter(field="user_id", op="==", value="user-123")

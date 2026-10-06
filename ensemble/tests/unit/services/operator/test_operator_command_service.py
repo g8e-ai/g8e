@@ -50,6 +50,11 @@ def _make_service() -> OperatorCommandService:
     return build_command_service()
 
 
+def _command_validation_settings(**overrides: object) -> CommandValidationSettings:
+    """Build a command policy using the settings model's normal field defaults."""
+    return CommandValidationSettings.model_validate(overrides)
+
+
 # ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
@@ -198,7 +203,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(enable_auto_approve=False),
+            command_validation=_command_validation_settings(enable_auto_approve=False),
         )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 
@@ -229,7 +234,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(enable_auto_approve=False),
+            command_validation=_command_validation_settings(enable_auto_approve=False),
         )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 
@@ -261,7 +266,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(enable_auto_approve=False),
+            command_validation=_command_validation_settings(enable_auto_approve=False),
         )
         result = await service.execute_command(args, g8e_context, investigation, request_settings)
 
@@ -332,7 +337,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_auto_approve=False,
                 enable_whitelisting=True,
                 whitelisted_commands="uptime,df,free",
@@ -362,7 +367,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_auto_approve=True,
                 auto_approved_commands="uptime,df,free",
             ),
@@ -390,7 +395,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_auto_approve=True,
                 auto_approved_commands="uptime,df,free",
             ),
@@ -418,7 +423,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_auto_approve=False,
                 auto_approved_commands="uptime,df,free",
             ),
@@ -448,7 +453,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_whitelisting=True,
                 whitelisted_commands="uptime,df,free",
                 enable_auto_approve=True,
@@ -480,7 +485,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_whitelisting=True,
                 whitelisted_commands="uptime,df,free",
             ),
@@ -508,7 +513,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(enable_auto_approve=False),
+            command_validation=_command_validation_settings(enable_auto_approve=False),
         )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 

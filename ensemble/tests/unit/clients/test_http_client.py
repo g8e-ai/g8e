@@ -30,6 +30,7 @@ from app.clients.http_client import (
     get_service_client,
 )
 from app.constants import (
+    CACHE_TTL_DEFAULT,
     CASE_ID,
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BACKOFF_FACTOR,
@@ -59,8 +60,10 @@ pytestmark = pytest.mark.unit
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def client():
 
-    listen = GatewaySettings()
-    tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
+    listen = GatewaySettings(default_ttl=CACHE_TTL_DEFAULT, enable_cache_read=False)
+    tls_config = TLSConfig(
+        ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None
+    )
     c = HTTPClient(
         component_id=G8EE_COMPONENT,
         base_url=listen.http_url,
@@ -79,8 +82,10 @@ async def client():
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def authed_client():
 
-    listen = GatewaySettings()
-    tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
+    listen = GatewaySettings(default_ttl=CACHE_TTL_DEFAULT, enable_cache_read=False)
+    tls_config = TLSConfig(
+        ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None
+    )
     c = HTTPClient(
         component_id=G8EE_COMPONENT,
         base_url=listen.http_url,
@@ -351,7 +356,7 @@ class TestG8eHTTPClientInit:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         assert c.timeout.total == 15.0
 
@@ -365,7 +370,7 @@ class TestG8eHTTPClientInit:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         assert c.timeout.total == DEFAULT_TIMEOUT
 
@@ -473,7 +478,7 @@ class TestG8eHTTPClientCircuitBreakerIsolation:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         try:
             cb1 = c._get_circuit_breaker("https://localhost:8443/api/health")
@@ -492,7 +497,7 @@ class TestG8eHTTPClientCircuitBreakerIsolation:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         try:
             cb1 = c._get_circuit_breaker("https://localhost:8443/api/health")
@@ -522,7 +527,7 @@ class TestG8eHTTPClientContextManager:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         ) as c:
             assert isinstance(c, HTTPClient)
 
@@ -536,7 +541,7 @@ class TestG8eHTTPClientContextManager:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         await c._get_http_session()
         assert c._session is not None
@@ -592,7 +597,7 @@ class TestShouldRetry:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         assert c._should_retry("GET", 503, 2, Exception()) is False
 
@@ -606,7 +611,7 @@ class TestShouldRetry:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         assert c._should_retry("POST", 503, 0, Exception()) is False
 
@@ -620,7 +625,7 @@ class TestShouldRetry:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         for status in (408, 429, 500, 502, 503, 504):
             assert c._should_retry("GET", status, 0, Exception()) is True
@@ -635,7 +640,7 @@ class TestShouldRetry:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         for status in (400, 401, 403, 404, 422):
             assert c._should_retry("GET", status, 0, Exception()) is False
@@ -650,7 +655,7 @@ class TestShouldRetry:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         assert c._should_retry("GET", 0, 0, TimeoutError()) is True
 
@@ -664,7 +669,7 @@ class TestShouldRetry:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         assert c._should_retry("GET", 0, 0, aiohttp.ServerTimeoutError()) is True
 
@@ -678,7 +683,7 @@ class TestShouldRetry:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         assert c._should_retry("GET", 0, 0, aiohttp.ServerDisconnectedError()) is True
 
@@ -692,7 +697,7 @@ class TestShouldRetry:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         assert c._should_retry("GET", 0, 0, ValueError("unexpected")) is False
 
@@ -715,7 +720,7 @@ class TestCalculateBackoff:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         for retry in range(5):
             assert c._calculate_backoff(retry) >= 0.0
@@ -730,7 +735,7 @@ class TestCalculateBackoff:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         b0 = c._calculate_backoff(0)
         b1 = c._calculate_backoff(1)
@@ -773,7 +778,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -802,7 +807,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -832,7 +837,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -856,7 +861,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -878,7 +883,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -923,7 +928,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -953,7 +958,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -983,7 +988,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -1008,7 +1013,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -1045,7 +1050,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -1073,7 +1078,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False
@@ -1107,7 +1112,7 @@ class TestG8eHTTPClientRequest:
             auth_token="",
             api_key="",
             headers={},
-            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None),
         )
         session = MagicMock()
         session.closed = False

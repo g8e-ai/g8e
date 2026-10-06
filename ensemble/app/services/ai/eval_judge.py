@@ -320,6 +320,8 @@ class EvalJudge:
         """Make the LLM call and parse the response into an EvalGrade."""
         if not self._model:
             raise EvalJudgeError("Model is not set", model_calls=model_calls)
+        if self._provider is None:
+            raise EvalJudgeError("LLM provider is not configured", model_calls=model_calls)
         prepare_provider_call(
             self._provider,
             g8e_context=self._g8e_context,
@@ -333,8 +335,6 @@ class EvalJudge:
             }
         )
         monotonic_start = time.monotonic()
-        if self._provider is None:
-            raise EvalJudgeError("LLM provider is not configured", model_calls=model_calls)
         try:
             response = await self._provider.generate_content_lite(
                 model=self._model,
@@ -680,6 +680,8 @@ class EvalJudge:
         finish_reason = (
             response.candidates[0].finish_reason if response and response.candidates else None
         )
+        if self._provider is None:
+            raise EvalJudgeError("LLM provider is not configured")
         return build_model_call_telemetry(
             provider=self._provider,
             agent_role="judge",

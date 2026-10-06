@@ -35,7 +35,18 @@ async def test_execute_file_edit_read_returns_content():
         operation=FileOperation.READ,
         file_path="/etc/test",
         status=ExecutionStatus.COMPLETED,
+        duration_seconds=0.0,
         content=mock_content,
+        stdout_size=0,
+        stderr_size=0,
+        stdout_hash=None,
+        stderr_hash=None,
+        stored_locally=False,
+        bytes_written=None,
+        lines_changed=None,
+        backup_path=None,
+        error_message=None,
+        error_type=None,
     )
     file_service.execution_service.execute = AsyncMock(
         return_value=(internal_result, mock_envelope)

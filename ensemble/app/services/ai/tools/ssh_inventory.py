@@ -46,6 +46,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del investigation, g8e_context, request_settings, execution_id
     args = SshInventoryArgs.model_validate(tool_args)
     logger.info("[SSH_INVENTORY] justification=%s", args.justification)
 

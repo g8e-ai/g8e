@@ -63,6 +63,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del g8e_context, request_settings, execution_id
     args = QueryInvestigationContextArgs.model_validate(tool_args)
     logger.info(
         "[QUERY_INVESTIGATION_CONTEXT] data_type=%s limit=%s",

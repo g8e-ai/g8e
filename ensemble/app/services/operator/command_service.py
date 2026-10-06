@@ -169,6 +169,8 @@ class OperatorCommandService:
         auto_approved_validator: CommandAutoApprovedValidator | None = None,
     ) -> OperatorCommandService:
         """Construct, wire, and return a fully-initialised OperatorCommandService."""
+        if gateway_operator_client is None:
+            raise ValueError("gateway_operator_client is required to build operator services")
         lfaa_service = OperatorLFAAService(
             gateway_operator_client=gateway_operator_client,
         )

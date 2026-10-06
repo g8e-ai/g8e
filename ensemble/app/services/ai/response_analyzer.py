@@ -373,7 +373,7 @@ class AIResponseAnalyzer:
             fallback_no_model=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_no_response=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_context_overflow=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
-            fallback_exception=lambda e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
+            fallback_exception=lambda _e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             log_context="Command risk analysis",
             agent_role="marshal_command",
             post_process=log_result,
@@ -572,7 +572,7 @@ class AIResponseAnalyzer:
                 ],
                 approval_prompt=f"Risk analysis failed because the conversation exceeded the model's context window. File operation: {operation} on {file_path}\nProceed with extreme caution?",
             ),
-            fallback_exception=lambda e: FileOperationRiskAnalysis(
+            fallback_exception=lambda _e: FileOperationRiskAnalysis(
                 risk_level=RiskLevel.HIGH,
                 is_system_file=False,
                 safe_to_proceed=False,

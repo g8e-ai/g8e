@@ -28,6 +28,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -187,11 +188,11 @@ async def approve_via_http(
 
     Returns a simple dict with the approval result.
     """
-    from app.models.http_context import RequestContext
-    from app.models.internal_api import OperatorApprovalResponse
+    request_context = import_module("app.models.http_context").RequestContext
+    operator_approval_response = import_module("app.models.internal_api").OperatorApprovalResponse
 
-    response = OperatorApprovalResponse(
-        context=RequestContext(
+    response = operator_approval_response(
+        context=request_context(
             web_session_id=operator_session_id or None,
             user_id="integration-test-user",
             operator_session_id=operator_session_id or None,
@@ -231,13 +232,15 @@ async def all_services(cache_aside_service, test_settings):
     Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
-    from app.clients.db_client import DBClient
-    from app.constants.paths import get_paths
-    from app.llm.factory import get_search_settings
-    from app.models.settings import TLSConfig
-    from app.services.ai.grounding.web_search_provider import WebSearchProvider
-    from app.services.infra.settings_service import SettingsService
-    from app.services.service_factory import ServiceFactory
+    db_client = import_module("app.clients.db_client").DBClient
+    get_paths = import_module("app.constants.paths").get_paths
+    get_search_settings = import_module("app.llm.factory").get_search_settings
+    tls_config = import_module("app.models.settings").TLSConfig
+    web_search_provider = import_module(
+        "app.services.ai.grounding.web_search_provider"
+    ).WebSearchProvider
+    settings_service = import_module("app.services.infra.settings_service").SettingsService
+    service_factory = import_module("app.services.service_factory").ServiceFactory
 
     # Check if CA certificate exists
     paths = get_paths()
@@ -247,14 +250,14 @@ async def all_services(cache_aside_service, test_settings):
 
     # Check if operator is online AND SSL is working
     try:
-        settings_service = SettingsService()
+        settings_service = settings_service()
         bootstrap_settings = settings_service.get_local_settings()
-        tls_config = TLSConfig(
+        tls_config = tls_config(
             ca_cert_path=bootstrap_settings.ca_cert_path,
             client_cert_path=bootstrap_settings.client_cert_path,
             client_key_path=bootstrap_settings.client_key_path,
         )
-        db_client = DBClient(tls_config=tls_config)
+        db_client = db_client(tls_config=tls_config)
         await db_client.connect()
         await db_client.close()
     except Exception as e:
@@ -264,7 +267,7 @@ async def all_services(cache_aside_service, test_settings):
     web_search_provider = None
     search_settings = get_search_settings()
     if search_settings and search_settings.enabled:
-        web_search_provider = WebSearchProvider(
+        web_search_provider = web_search_provider(
             project_id=search_settings.project_id,
             engine_id=search_settings.engine_id,
             api_key=search_settings.api_key,
@@ -276,7 +279,7 @@ async def all_services(cache_aside_service, test_settings):
             search_settings.engine_id,
         )
 
-    services = ServiceFactory.create_all_services(
+    services = service_factory.create_all_services(
         test_settings,
         cache_aside_service,
         db_service=MagicMock(),
@@ -288,7 +291,7 @@ async def all_services(cache_aside_service, test_settings):
 
     yield services
 
-    await ServiceFactory.stop_services(services)
+    await service_factory.stop_services(services)
 
 
 @pytest.fixture
@@ -318,9 +321,11 @@ async def cleanup(cache_aside_service, all_services):
 
     Awaits all background tasks before document deletion to prevent race conditions.
     """
-    from tests.integration.cleanup import IntegrationCleanupTracker
+    integration_cleanup_tracker = import_module(
+        "tests.integration.cleanup"
+    ).IntegrationCleanupTracker
 
-    tracker = IntegrationCleanupTracker(cache_aside_service)
+    tracker = integration_cleanup_tracker(cache_aside_service)
     yield tracker
 
     await tracker.cleanup()
@@ -333,22 +338,24 @@ async def user_settings(cache_aside_service, test_settings):
     Uses TEST_LLM settings when available (set via ./g8e test flags),
     otherwise loads user settings from operator.
     """
-    from app.llm.factory import get_llm_settings, get_search_settings
-    from app.models.settings import G8eeUserSettings, LLMSettings
-    from app.services.infra.settings_service import SettingsService
+    get_llm_settings = import_module("app.llm.factory").get_llm_settings
+    get_search_settings = import_module("app.llm.factory").get_search_settings
+    g8ee_user_settings = import_module("app.models.settings").G8eeUserSettings
+    llm_settings = import_module("app.models.settings").LLMSettings
+    settings_service = import_module("app.services.infra.settings_service").SettingsService
 
     # Use TEST_LLM settings if available
     llm = get_llm_settings()
     search = get_search_settings()
     if llm:
-        return G8eeUserSettings(llm=llm, search=search or test_settings.search)
+        return g8ee_user_settings(llm=llm, search=search or test_settings.search)
 
     # Otherwise load from operator
-    settings_service = SettingsService(cache_aside_service=cache_aside_service)
+    settings_service = settings_service(cache_aside_service=cache_aside_service)
     try:
         return await settings_service.get_user_settings("test-user-id")
     except Exception as e:
         logger.warning("Failed to load user settings from operator: %s", e)
 
     # Fallback to mock settings if operator is offline or connection fails
-    return G8eeUserSettings(llm=llm or LLMSettings(), search=search or test_settings.search)
+    return g8ee_user_settings(llm=llm or llm_settings(), search=search or test_settings.search)

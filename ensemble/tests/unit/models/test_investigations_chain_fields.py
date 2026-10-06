@@ -164,6 +164,8 @@ def test_hash_field_validation_length():
         entry_hash=valid_hash,
     )
 
+    assert message.prev_hash is not None
+    assert message.entry_hash is not None
     assert len(message.prev_hash) == 64
     assert len(message.entry_hash) == 64
 

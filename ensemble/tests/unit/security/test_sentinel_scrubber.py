@@ -69,8 +69,8 @@ class TestSentinelScrubberEmptyAndDisabled:
         assert result.scrub_count == 0
         assert result.scrub_types == []
 
-    def test_none_falsy_returns_empty(self):
-        result = _scrubber.scrub(None)
+    def test_empty_text_returns_empty(self):
+        result = _scrubber.scrub("")
         assert result.scrubbed_text == ""
         assert result.was_modified is False
 

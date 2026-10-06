@@ -306,4 +306,4 @@ class SettingsService:
         self, settings: G8eeAppSettings | G8eeUserSettings
     ) -> SearchSettings:
         """Build SearchSettings from platform or user settings."""
-        return settings.search
+        return SearchSettings.model_validate(settings.search.model_dump())

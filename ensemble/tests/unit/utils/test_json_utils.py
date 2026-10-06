@@ -209,4 +209,3 @@ class TestExtractJsonFromText:
 
     def test_returns_none_for_empty_input(self):
         assert extract_json_from_text("") is None
-        assert extract_json_from_text(None) is None

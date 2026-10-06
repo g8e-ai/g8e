@@ -26,6 +26,7 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from typing import Literal
 
 import app.llm.llm_types as types
 from app.constants import (
@@ -84,7 +85,7 @@ def _sum_optional_usage_counts(values: list[int | None]) -> int | None:
     return sum(value for value in values if value is not None)
 
 
-def _resolve_agent_model_role(inputs: AgentInputs) -> str:
+def _resolve_agent_model_role(inputs: AgentInputs) -> Literal["primary", "assistant", "lite"]:
     return resolve_scored_model_role(
         designated_model_role=inputs.designated_model_role,
         active_agent=inputs.active_agent,

@@ -45,6 +45,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del request_settings, execution_id
     args = RevokeIntentArgs.model_validate(tool_args)
     logger.info("[REVOKE_INTENT] Intent: %s", args.intent_name)
     result = await svc.operator_command_service.execute_intent_revocation(
