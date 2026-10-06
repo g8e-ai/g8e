@@ -481,6 +481,10 @@ class TriageAgent:
         ):
             raise ValueError("Jev triage response missing required choice answers")
 
+        assert isinstance(complexity_answer, ChoiceAnswer)
+        assert isinstance(intent_answer, ChoiceAnswer)
+        assert isinstance(posture_answer, ChoiceAnswer)
+
         complexity = TriageComplexityClassification(complexity_answer.choice)
         intent = TriageIntentClassification(intent_answer.choice)
         posture = TriageRequestPosture(posture_answer.choice)

@@ -52,6 +52,8 @@ func (p GatewayPosture) RequiresL3() bool {
 
 // LoadOptions contains all configuration values passed explicitly from main
 type LoadOptions struct {
+ OperatorRoles constants.OperatorRoles
+
 	// Required
 	OperatorEndpoint string
 	HTTPPort         int // HTTP port to dial on Operator for bootstrap and trust bundle fetch (default: from paths.json)
@@ -230,6 +232,8 @@ type ProvenanceOperatorConfig struct {
 
 // Config holds all configuration for g8eo
 type Config struct {
+ OperatorRoles constants.OperatorRoles
+
 	// Basic configuration
 	ProjectID     string
 	ComponentName constants.ComponentName
@@ -330,6 +334,14 @@ func FindProjectRoot() string {
 
 // GatewayOptions contains configuration values for LoadGateway.
 type GatewayOptions struct {
+ InferenceOllamaEndpoint string
+ InferenceKeepAlive string
+ ProviderBoundaryObserverID string
+ ProvenanceOperatorID string
+ ProvenanceOperatorModelStorageRoot string
+
+ OperatorRoles constants.OperatorRoles
+
 	Posture             GatewayPosture
 	HTTPPort            int
 	HTTPSPort           int
@@ -442,6 +454,11 @@ func validateAndResolveGatewayPorts(httpPort, httpsPort int, allowTestPortZero b
 // Gateway mode skips all operator-mode validation - no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
 func LoadGateway(opts GatewayOptions) (*Config, error) {
+ if err := opts.OperatorRoles.Validate(); err != nil { return nil, err }
+ roles := opts.OperatorRoles
+ if len(roles) == 0 { roles = constants.OperatorRoles{constants.OperatorRoleData} }
+ roles = append(append(constants.OperatorRoles{}, roles...), constants.OperatorRoleEmbedded).Canonical()
+
 	// Initialize paths relative to current working directory
 	projectRoot := FindProjectRoot()
 	if projectRoot == "" {
@@ -518,6 +535,11 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	jwtAudience := opts.JWTAudience
 
 	return &Config{
+ OperatorRoles: roles,
+ Inference: resolveInferenceConfig(LoadOptions{InferenceEnabled: roles.Has(constants.OperatorRoleInference), InferenceOllamaEndpoint: opts.InferenceOllamaEndpoint, InferenceKeepAlive: opts.InferenceKeepAlive}),
+ ProviderBoundaryObserver: resolveProviderBoundaryObserverConfig(LoadOptions{ProviderBoundaryObserverEnabled: roles.Has(constants.OperatorRoleObserver), ProviderBoundaryObserverID: opts.ProviderBoundaryObserverID}),
+ ProvenanceOperator: resolveProvenanceOperatorConfig(LoadOptions{ProvenanceOperatorEnabled: roles.Has(constants.OperatorRoleProvenance), ProvenanceOperatorID: opts.ProvenanceOperatorID, ProvenanceOperatorModelStorageRoot: opts.ProvenanceOperatorModelStorageRoot}),
+
 		ComponentName:      constants.ComponentNameG8EOGateway,
 		PKIDir:             pkiDir,
 		SecretsDir:         secretsDir,
@@ -579,6 +601,12 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 // Load creates configuration from explicit options passed by main
 func Load(opts LoadOptions) (*Config, error) {
+ if err := opts.OperatorRoles.Validate(); err != nil { return nil, err }
+ if opts.OperatorRoles.Has(constants.OperatorRoleEmbedded) { return nil, fmt.Errorf("%w: embedded requires gateway mode", constants.ErrOperatorRoleInvalid) }
+ opts.InferenceEnabled = opts.InferenceEnabled || opts.OperatorRoles.Has(constants.OperatorRoleInference)
+ opts.ProvenanceOperatorEnabled = opts.ProvenanceOperatorEnabled || opts.OperatorRoles.Has(constants.OperatorRoleProvenance)
+ opts.ProviderBoundaryObserverEnabled = opts.ProviderBoundaryObserverEnabled || opts.OperatorRoles.Has(constants.OperatorRoleObserver)
+
 	// Resolve the worker root before initializing process-wide runtime paths.
 	// An explicit --working-dir owns the Operator's .g8e vault, ledger, PKI,
 	// and databases; the repository root is only the default when it is absent.
@@ -607,6 +635,7 @@ func Load(opts LoadOptions) (*Config, error) {
 	// Build config from explicit options
 	tlsServerName := tlsServerName(opts.OperatorEndpoint)
 	cfg := &Config{
+ OperatorRoles: opts.OperatorRoles.Canonical(),
 		// From options
 		CloudMode:             opts.CloudMode,
 		CloudProvider:         opts.CloudProvider,
@@ -791,4 +820,14 @@ func tlsServerName(endpoint string) string {
 		return constants.GatewayInternalHostname
 	}
 	return ""
+}
+
+// EffectiveOperatorRoles resolves all configured capabilities in stable order.
+func (cfg *Config) EffectiveOperatorRoles() constants.OperatorRoles {
+ roles := append(constants.OperatorRoles{}, cfg.OperatorRoles...)
+ if cfg.Inference.Enabled { roles = append(roles, constants.OperatorRoleInference) }
+ if cfg.ProvenanceOperator.Enabled { roles = append(roles, constants.OperatorRoleProvenance) }
+ if cfg.ProviderBoundaryObserver.Enabled { roles = append(roles, constants.OperatorRoleObserver) }
+ if len(roles) == 0 { roles = append(roles, constants.OperatorRoleData) }
+ return roles.Canonical()
 }

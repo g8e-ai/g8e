@@ -459,6 +459,9 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         timeout_seconds = 300
         request_payload = CommandRequestPayload(command=command, execution_id=execution_id)
 
+        if self._gateway_operator_client is None:
+            raise ExternalServiceUnavailableError("Gateway operator client is not configured")
+
         try:
             dispatch_result = await asyncio.wait_for(
                 self._gateway_operator_client.dispatch(

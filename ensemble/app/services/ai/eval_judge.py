@@ -333,6 +333,8 @@ class EvalJudge:
             }
         )
         monotonic_start = time.monotonic()
+        if self._provider is None:
+            raise EvalJudgeError("LLM provider is not configured", model_calls=model_calls)
         try:
             response = await self._provider.generate_content_lite(
                 model=self._model,

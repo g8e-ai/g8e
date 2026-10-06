@@ -465,7 +465,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             if entry.details:
                 if entry.event_type == EventType.OPERATOR_COMMAND_EXECUTION:
                     status = entry.details.status
-                    if hasattr(status, "value"):
+                    if status is not None and hasattr(status, "value"):
                         status = status.value
                     status = status if status else "unknown"
                 else:

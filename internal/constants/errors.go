@@ -19,6 +19,7 @@ var (
 var (
 	ErrUserNotFound                 = errors.New("user not found")
 	ErrNoPasskeysRegistered         = errors.New("no passkeys registered")
+	ErrOperatorRoleInvalid = errors.New("invalid operator role")
 	ErrInvalidJSONBody              = errors.New("invalid JSON body")
 	ErrUserIDRequired               = errors.New("user_id required")
 	ErrMethodNotAllowed             = errors.New("method not allowed")

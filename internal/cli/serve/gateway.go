@@ -35,6 +35,13 @@ import (
 
 // GatewayConfig holds configuration for starting the gateway in gateway mode.
 type GatewayConfig struct {
+ OperatorRoles constants.OperatorRoles
+ InferenceOllamaEndpoint string
+ InferenceKeepAlive string
+ ProviderBoundaryObserverID string
+ ProvenanceOperatorID string
+ ProvenanceOperatorModelStorageRoot string
+
 	Posture             config.GatewayPosture `json:"posture"`
 	HTTPPort            int                   `json:"http_port"`
 	HTTPSPort           int                   `json:"https_port"`
@@ -122,6 +129,12 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		"build", vi.BuildID)
 
 	gatewayCfg, err := config.LoadGateway(config.GatewayOptions{
+ OperatorRoles: cfg.OperatorRoles,
+ InferenceOllamaEndpoint: cfg.InferenceOllamaEndpoint,
+ InferenceKeepAlive: cfg.InferenceKeepAlive,
+ ProviderBoundaryObserverID: cfg.ProviderBoundaryObserverID,
+ ProvenanceOperatorID: cfg.ProvenanceOperatorID,
+ ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperatorModelStorageRoot,
 		Posture:             cfg.Posture,
 		HTTPPort:            cfg.HTTPPort,
 		HTTPSPort:           cfg.HTTPSPort,

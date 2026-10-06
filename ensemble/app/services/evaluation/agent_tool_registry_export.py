@@ -182,7 +182,8 @@ def render_agent_tool_registry(registry: AgentToolRegistry) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    description = __doc__.splitlines()[0] if __doc__ else "Agent tool registry export"
+    parser = argparse.ArgumentParser(description=description)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true", help="write the generated registry")
     mode.add_argument(

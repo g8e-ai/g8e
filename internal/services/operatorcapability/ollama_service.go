@@ -74,7 +74,7 @@ func OllamaResidencyCommand() string {
 // ValidateWitnessCommand rejects generic command execution on read-only witness
 // operators. Their narrowly scoped observation handlers remain available.
 func ValidateWitnessCommand(cfg *models.RuntimeConfig, command string) error {
-	if cfg == nil || (!cfg.ProviderBoundaryObserverEnabled && !cfg.ProvenanceOperatorEnabled) {
+	if ResolveOperatorRoles(cfg).Has(constants.OperatorRoleData) || ResolveOperatorRoles(cfg).Has(constants.OperatorRoleInference) {
 		return nil
 	}
 	return fmt.Errorf("%w: command %q", constants.ErrWitnessCommandNotCapable, strings.TrimSpace(command))

@@ -58,7 +58,7 @@ func TestBriefStatusDistinguishesUnknownAndEmptyRegistry(t *testing.T) {
 func TestBriefStatusOnlyShowsConnectedOperators(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{
-		{OperatorRole: constants.OperatorRoleInference, CurrentHostname: "gpu-host", Status: constants.OperatorStatusActive},
+		{OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}, CurrentHostname: "gpu-host", Status: constants.OperatorStatusActive},
 		{CurrentHostname: "stopped-host", Status: constants.OperatorStatusStopped},
 		{CurrentHostname: "unclaimed-host", Status: constants.OperatorStatusActive, IsSlot: true},
 	}})

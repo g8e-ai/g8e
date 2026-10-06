@@ -47,6 +47,8 @@ async def handle(
 ) -> ToolResult:
     args = SearchWebArgs.model_validate(tool_args)
     logger.info("[G8E_WEB_SEARCH] Query: %s", args.query)
+    if svc.web_search_provider is None:
+        raise ToolExecutionError("Web search provider is not configured")
     result: ToolResult = await svc.web_search_provider.search(query=args.query, num=args.num)
     logger.info("[G8E_WEB_SEARCH] Result: %s", result)
     return result

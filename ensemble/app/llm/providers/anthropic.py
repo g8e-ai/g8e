@@ -290,7 +290,7 @@ class AnthropicProvider(LLMProvider):
 
         thinking_enabled = translation is not None and translation.enabled
 
-        if thinking_enabled:
+        if thinking_enabled and translation is not None:
             # Anthropic's contract: max_tokens is the TOTAL output budget and
             # must strictly exceed thinking.budget_tokens so the model has
             # headroom for a visible response. When the caller-provided

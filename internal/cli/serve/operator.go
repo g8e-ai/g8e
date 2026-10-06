@@ -28,6 +28,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/exitcode"
+"github.com/g8e-ai/g8e/v2/internal/models"
+"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/services"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -37,6 +39,7 @@ import (
 
 // ServeOperatorOptions holds the configuration for running the operator in standalone mode.
 type ServeOperatorOptions struct {
+ OperatorRoles constants.OperatorRoles
 	LogLevel          string
 	Endpoint          string
 	TrustBundlePath   string
@@ -233,6 +236,7 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 	}
 
 	return config.LoadOptions{
+ OperatorRoles: opts.OperatorRoles,
 		OperatorEndpoint:      operatorEndpoint,
 		HTTPPort:              0,
 		HTTPSPort:             0,
@@ -362,7 +366,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
 			os.Exit(constants.ExitConfigError)
 		}
-		role := operatorRole(opts)
+		role := operatorRoles(opts)
 		account := auth.ResolveCurrentAccount()
 		instanceID := operatorInstanceID(hostname, role, effectiveWorkDir)
 		enrollClient, err := NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname, fileSvc, logger)
@@ -523,17 +527,8 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	os.Exit(constants.ExitSuccess)
 }
 
-func operatorRole(opts ServeOperatorOptions) constants.OperatorRole {
-	switch {
-	case opts.InferenceEnabled:
-		return constants.OperatorRoleInference
-	case opts.ProvenanceOperatorEnabled:
-		return constants.OperatorRoleProvenance
-	case opts.ProviderBoundaryObserverEnabled:
-		return constants.OperatorRoleObserver
-	default:
-		return constants.OperatorRoleData
-	}
+func operatorRoles(opts ServeOperatorOptions) constants.OperatorRoles {
+ return operatorcapability.ResolveOperatorRoles(&models.RuntimeConfig{Roles: opts.OperatorRoles, InferenceEnabled: opts.InferenceEnabled, ProvenanceOperatorEnabled: opts.ProvenanceOperatorEnabled, ProviderBoundaryObserverEnabled: opts.ProviderBoundaryObserverEnabled})
 }
 
 func operatorFingerprintOptions(opts ServeOperatorOptions, localDir, account string) auth.FingerprintOptions {
@@ -541,12 +536,12 @@ func operatorFingerprintOptions(opts ServeOperatorOptions, localDir, account str
 		LocalDir: localDir,
 		Account:  account,
 		Port:     constants.Ports.OperatorHttp,
-		Role:     string(operatorRole(opts)),
+		Role:     operatorRoles(opts).String(),
 	}
 }
 
 // Include the canonical runtime directory so same-host, same-role workers enroll independently.
-func operatorInstanceID(hostname string, role constants.OperatorRole, dir string) string {
+func operatorInstanceID(hostname string, role constants.OperatorRoless, dir string) string {
 	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = resolved
 	}

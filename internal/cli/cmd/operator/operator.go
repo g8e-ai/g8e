@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/stream"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/ollama"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
@@ -332,7 +333,8 @@ func operatorStartCmd() *cobra.Command {
 	var latticeSandboxesToken string
 	var latticeEntityName string
 	var latticePostureFloor string
-	var inferenceEnabled bool
+	var roles constants.OperatorRoles
+ var inferenceEnabled bool
 	var inferenceOllamaEndpoint string
 	var inferenceKeepAlive string
 	var providerBoundaryObserverEnabled bool
@@ -351,6 +353,7 @@ func operatorStartCmd() *cobra.Command {
 			}
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			opts := serve.ServeOperatorOptions{
+ OperatorRoles: roles,
 				LogLevel:                        logLevel,
 				Endpoint:                        endpoint,
 				TrustBundlePath:                 trustBundle,
@@ -374,7 +377,10 @@ func operatorStartCmd() *cobra.Command {
 				ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot,
 			}
 
-			// Run operator (this blocks until shutdown)
+			if roles.Has(constants.OperatorRoleEmbedded) {
+ return serve.RunGateway(serve.GatewayConfig{OperatorRoles: operatorcapability.ResolveOperatorRoles(&models.RuntimeConfig{Roles: roles, InferenceEnabled: inferenceEnabled, ProvenanceOperatorEnabled: provenanceOperatorEnabled, ProviderBoundaryObserverEnabled: providerBoundaryObserverEnabled}), LogLevel: logLevel, InferenceOllamaEndpoint: inferenceOllamaEndpoint, InferenceKeepAlive: inferenceKeepAlive, ProviderBoundaryObserverID: providerBoundaryObserverID, ProvenanceOperatorID: provenanceOperatorID, ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot}, shared.VersionInfoFromCmd(cmd))
+ }
+ // Run operator (this blocks until shutdown)
 			serve.RunOperator(opts, shared.VersionInfoFromCmd(cmd))
 			return nil
 		},
@@ -399,7 +405,8 @@ func operatorStartCmd() *cobra.Command {
 
 	// Inference (g8ellama) flags. Enable when the operator runs as an
 	// Inference Node calling the configured remote Ollama provider.
-	cmd.Flags().BoolVar(&inferenceEnabled, "inference-enabled", false, "Enable governed LLM inference backend (g8ellama)")
+	cmd.Flags().Var(&roles, "roles", "Comma-separated operator roles: embedded,data,inference,provenance,observer (repeatable; default: data). Embedded runs the Gateway in process")
+ cmd.Flags().BoolVar(&inferenceEnabled, "inference-enabled", false, "Enable governed LLM inference backend (g8ellama)")
 	cmd.Flags().StringVar(&inferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Remote Ollama provider endpoint (default: http://127.0.0.1:11434)")
 	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", fmt.Sprintf("Ollama keep-alive duration (default: %s for infinite)", constants.InferenceDefaultKeepAlive))
 	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")

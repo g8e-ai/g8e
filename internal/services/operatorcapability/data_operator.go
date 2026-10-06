@@ -35,7 +35,7 @@ func IsDataOperator(op models.OperatorDocumentGo) bool {
 	if op.OperatorSessionID == "" {
 		return false
 	}
-	return GetOperatorRole(op) == constants.OperatorRoleData
+	return GetOperatorRoles(op).Has(constants.OperatorRoleData)
 }
 
 // IsStackDataOperator reports whether op is the data-operator the unified

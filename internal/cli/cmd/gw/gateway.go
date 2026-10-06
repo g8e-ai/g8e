@@ -52,6 +52,13 @@ func getBinaryName() string {
 // It is populated by addGatewayFlags and converted to serve.GatewayConfig
 // via gatewayFlagsToServeConfig.
 type GatewayFlags struct {
+ OperatorRoles constants.OperatorRoles
+ InferenceOllamaEndpoint string
+ InferenceKeepAlive string
+ ProviderBoundaryObserverID string
+ ProvenanceOperatorID string
+ ProvenanceOperatorModelStorageRoot string
+
 	Posture             string
 	HTTPPort            int
 	HTTPSPort           int
@@ -91,6 +98,13 @@ type GatewayFlags struct {
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
 // binding them to the provided GatewayFlags struct.
 func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
+ cmd.Flags().Var(&f.OperatorRoles, "roles", "Comma-separated embedded operator roles: data,inference,provenance,observer (repeatable; default: embedded,data)")
+ cmd.Flags().StringVar(&f.InferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Approved Ollama endpoint for embedded inference")
+ cmd.Flags().StringVar(&f.InferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration")
+ cmd.Flags().StringVar(&f.ProviderBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity")
+ cmd.Flags().StringVar(&f.ProvenanceOperatorID, "provenance-operator-id", "", "Stable provenance identity")
+ cmd.Flags().StringVar(&f.ProvenanceOperatorModelStorageRoot, "model-storage-root", "", "Root directory containing model weight blobs")
+
 	cmd.Flags().StringVar(&f.Posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced)")
 	cmd.Flags().IntVar(&f.HTTPPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
 	cmd.Flags().IntVar(&f.HTTPSPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
@@ -174,6 +188,12 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 // gateway config struct.
 func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	return serve.GatewayConfig{
+ OperatorRoles: f.OperatorRoles,
+ InferenceOllamaEndpoint: f.InferenceOllamaEndpoint,
+ InferenceKeepAlive: f.InferenceKeepAlive,
+ ProviderBoundaryObserverID: f.ProviderBoundaryObserverID,
+ ProvenanceOperatorID: f.ProvenanceOperatorID,
+ ProvenanceOperatorModelStorageRoot: f.ProvenanceOperatorModelStorageRoot,
 		Posture:                           g8econfig.GatewayPosture(f.Posture),
 		HTTPPort:                          f.HTTPPort,
 		HTTPSPort:                         f.HTTPSPort,
@@ -816,17 +836,7 @@ func isOperatorConnected(op models.OperatorDocumentGo) bool {
 }
 
 func operatorRoleDisplay(op models.OperatorDocumentGo) string {
-	if op.OperatorRole != "" {
-		return string(op.OperatorRole)
-	}
-	role := operatorcapability.GetOperatorRole(op)
-	if role != "" {
-		return string(role)
-	}
-	if op.OperatorType != "" {
-		return string(op.OperatorType)
-	}
-	return "-"
+ return operatorcapability.GetOperatorRoles(op).String()
 }
 
 func operatorHostnameDisplay(op models.OperatorDocumentGo) string {

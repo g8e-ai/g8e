@@ -97,6 +97,7 @@ const (
 type OperatorRole string
 
 const (
+	OperatorRoleEmbedded OperatorRole = "embedded"
 	OperatorRoleInference  OperatorRole = "inference"
 	OperatorRoleProvenance OperatorRole = "provenance"
 	OperatorRoleObserver   OperatorRole = "observer"

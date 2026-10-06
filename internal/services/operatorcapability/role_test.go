@@ -16,46 +16,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestResolveOperatorRole(t *testing.T) {
+func TestResolveOperatorRoles(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, constants.OperatorRoleData, ResolveOperatorRole(nil))
-	assert.Equal(t, constants.OperatorRoleData, ResolveOperatorRole(&models.RuntimeConfig{}))
+	assert.Equal(t, constants.OperatorRoleData, ResolveOperatorRoles(nil))
+	assert.Equal(t, constants.OperatorRoleData, ResolveOperatorRoles(&models.RuntimeConfig{}))
 
-	assert.Equal(t, constants.OperatorRoleInference, ResolveOperatorRole(&models.RuntimeConfig{
+	assert.Equal(t, constants.OperatorRoleInference, ResolveOperatorRoles(&models.RuntimeConfig{
 		InferenceEnabled: true,
 	}))
 
-	assert.Equal(t, constants.OperatorRoleProvenance, ResolveOperatorRole(&models.RuntimeConfig{
+	assert.Equal(t, constants.OperatorRoleProvenance, ResolveOperatorRoles(&models.RuntimeConfig{
 		ProvenanceOperatorEnabled: true,
 	}))
 
-	assert.Equal(t, constants.OperatorRoleObserver, ResolveOperatorRole(&models.RuntimeConfig{
+	assert.Equal(t, constants.OperatorRoleObserver, ResolveOperatorRoles(&models.RuntimeConfig{
 		ProviderBoundaryObserverEnabled: true,
 	}))
 
-	assert.Equal(t, constants.OperatorRoleData, ResolveOperatorRole(&models.RuntimeConfig{
+	assert.Equal(t, constants.OperatorRoleData, ResolveOperatorRoles(&models.RuntimeConfig{
 		Role: constants.OperatorRoleData,
 	}))
 }
 
-func TestGetOperatorRole(t *testing.T) {
+func TestGetOperatorRoles(t *testing.T) {
 	t.Parallel()
 
 	opDoc := models.OperatorDocumentGo{
-		OperatorRole: constants.OperatorRoleInference,
+		OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference},
 		RuntimeConfig: &models.RuntimeConfig{
 			Role: constants.OperatorRoleData, // OperatorRole takes precedence
 		},
 	}
-	assert.Equal(t, constants.OperatorRoleInference, GetOperatorRole(opDoc))
+	assert.Equal(t, constants.OperatorRoleInference, GetOperatorRoles(opDoc))
 
 	opDoc2 := models.OperatorDocumentGo{
 		RuntimeConfig: &models.RuntimeConfig{
 			ProviderBoundaryObserverEnabled: true,
 		},
 	}
-	assert.Equal(t, constants.OperatorRoleObserver, GetOperatorRole(opDoc2))
+	assert.Equal(t, constants.OperatorRoleObserver, GetOperatorRoles(opDoc2))
 }
 
 func TestValidateOperatorRoleCapabilities(t *testing.T) {
@@ -63,7 +63,7 @@ func TestValidateOperatorRoleCapabilities(t *testing.T) {
 
 	infOp := models.OperatorDocumentGo{
 		ID:           "inf-op",
-		OperatorRole: constants.OperatorRoleInference,
+		OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference},
 	}
 
 	require.NoError(t, ValidateOperatorRoleCapabilities(infOp, constants.OperatorRoleInference))
@@ -83,7 +83,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/home/user/runtime",
 			Port:              8444,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleInference,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleInference},
 			SystemFingerprint: "fp-1",
 		}
 		opData := models.OperatorDocumentGo{
@@ -91,7 +91,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/home/user/runtime",
 			Port:              8444,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-2",
 		}
 
@@ -106,7 +106,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/data/g8e/op1",
 			Port:              8443,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-1",
 		}
 		op2 := models.OperatorDocumentGo{
@@ -114,7 +114,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/data/g8e/op2",
 			Port:              8443,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-2",
 		}
 
@@ -129,7 +129,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-1",
 		}
 		op2 := models.OperatorDocumentGo{
@@ -137,7 +137,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/data/g8e/op",
 			Port:              8444,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-2",
 		}
 
@@ -152,7 +152,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
 			Account:           "alice",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-1",
 		}
 		op2 := models.OperatorDocumentGo{
@@ -160,7 +160,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-2",
 		}
 
@@ -175,7 +175,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-same-123456",
 		}
 		op2 := models.OperatorDocumentGo{
@@ -183,7 +183,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
 			Account:           "bob",
-			OperatorRole:      constants.OperatorRoleData,
+			OperatorRoles:      constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-same-123456",
 		}
 

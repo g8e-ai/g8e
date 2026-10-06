@@ -223,7 +223,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
     )
     investigation_id = request.g8e_context.investigation_id if request.g8e_context else None
 
-    if request.settings.llm is None:
+    if request.settings is None or request.settings.llm is None:
         raise ConfigurationError("LLM settings are missing")
 
     if not request.settings.llm.llm_command_gen_enabled:

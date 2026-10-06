@@ -28,7 +28,7 @@ type RuntimeConfig struct {
 	LogLevel              string `json:"log_level"`
 
 	HTTPPort int                    `json:"http_port"`
-	Role     constants.OperatorRole `json:"role,omitempty"`
+	Role     constants.OperatorRoles `json:"role,omitempty"`
 	LocalDir string                 `json:"local_dir,omitempty"`
 	Account  string                 `json:"account,omitempty"`
 

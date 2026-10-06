@@ -19,6 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
@@ -139,7 +140,7 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 	}
 	type configUpdatePayload struct {
 		RuntimeConfig *models.RuntimeConfig  `json:"runtime_config"`
-		OperatorRole  constants.OperatorRole `json:"operator_role,omitempty"`
+		OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
 		LocalDir      string                 `json:"local_dir,omitempty"`
 		Account       string                 `json:"account,omitempty"`
 		Port          int                    `json:"port,omitempty"`
@@ -147,7 +148,7 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 	}
 	payload := configUpdatePayload{
 		RuntimeConfig: runtimeConfig,
-		OperatorRole:  runtimeConfig.Role,
+		OperatorRole:  operatorcapability.ResolveOperatorRoles(runtimeConfig),
 		LocalDir:      runtimeConfig.LocalDir,
 		Account:       runtimeConfig.Account,
 		Port:          runtimeConfig.HTTPPort,
@@ -359,7 +360,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		Status             string                 `json:"status"`
 		OperatorSessionID  string                 `json:"operator_session_id"`
 		SystemFingerprint  string                 `json:"system_fingerprint"`
-		OperatorRole       constants.OperatorRole `json:"operator_role,omitempty"`
+		OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
 		LocalDir           string                 `json:"local_dir,omitempty"`
 		Account            string                 `json:"account,omitempty"`
 		Port               int                    `json:"port,omitempty"`
@@ -373,7 +374,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		Status:            string(constants.OperatorStatusActive),
 		OperatorSessionID: operatorSessionID,
 		SystemFingerprint: sanitizedFingerprint,
-		OperatorRole:      req.OperatorRole,
+		OperatorRole:      req.OperatorRoles,
 		LocalDir:          req.LocalDir,
 		Account:           req.Account,
 		Port:              req.Port,

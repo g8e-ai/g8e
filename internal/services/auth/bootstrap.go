@@ -117,10 +117,7 @@ type AuthServicesResponse struct {
 func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*BootstrapConfig, error) {
 	bs.logger.Info("Authenticating with endpoint...", "endpoint", bs.config.Endpoint)
 
-	role := constants.OperatorRoleData
-	if bs.config.Inference.Enabled {
-		role = constants.OperatorRoleInference
-	} else if bs.config.ProvenanceOperator.Enabled {
+	roles := bs.config.EffectiveOperatorRoles() else if bs.config.ProvenanceOperator.Enabled {
 		role = constants.OperatorRoleProvenance
 	} else if bs.config.ProviderBoundaryObserver.Enabled {
 		role = constants.OperatorRoleObserver
@@ -131,7 +128,7 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 		LocalDir: bs.config.WorkDir,
 		Account:  account,
 		Port:     bs.config.HTTPPort,
-		Role:     string(role),
+		Role:     roles.String(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapFingerprint, err)
@@ -163,10 +160,7 @@ type operatorAuthRequest struct {
 
 // requestHTTPAuth authenticates via POST /api/v1/operators/reauth with exponential backoff.
 func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConfig, error) {
-	role := constants.OperatorRoleData
-	if bs.config.Inference.Enabled {
-		role = constants.OperatorRoleInference
-	} else if bs.config.ProvenanceOperator.Enabled {
+	roles := bs.config.EffectiveOperatorRoles() else if bs.config.ProvenanceOperator.Enabled {
 		role = constants.OperatorRoleProvenance
 	} else if bs.config.ProviderBoundaryObserver.Enabled {
 		role = constants.OperatorRoleObserver
@@ -182,7 +176,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		LogLevel:              bs.config.LogLevel,
 
 		HTTPPort: bs.config.HTTPPort,
-		Role:     role,
+		Roles:    roles,
 		LocalDir: bs.config.WorkDir,
 		Account:  account,
 
