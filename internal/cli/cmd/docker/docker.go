@@ -26,7 +26,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/buildinfo"
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -105,10 +104,10 @@ func composeCommand(ctx context.Context, args []string, profiles []string) (*exe
 	if err != nil {
 		return nil, err
 	}
-	if err := demos.CheckDockerAvailable(); err != nil {
+	if err := checkDockerAvailable(); err != nil {
 		return nil, err
 	}
-	fullArgs := []string{"compose", "-f", demos.ToDockerPath(composePath)}
+	fullArgs := []string{"compose", "-f", toDockerPath(composePath)}
 	for _, profile := range profiles {
 		if profile != "" {
 			fullArgs = append(fullArgs, "--profile", profile)
@@ -158,7 +157,7 @@ func PrintDockerStackStatus(w io.Writer, profile string) error {
 	if err := checkDockerComposeFileExists(); err != nil {
 		return err
 	}
-	if err := demos.CheckDockerAvailable(); err != nil {
+	if err := checkDockerAvailable(); err != nil {
 		return err
 	}
 	out, err := runDockerComposeOutput([]string{"ps"}, profile)
@@ -345,7 +344,7 @@ already-enrolled CLI.`,
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
-			if err := demos.CheckDockerAvailable(); err != nil {
+			if err := checkDockerAvailable(); err != nil {
 				return err
 			}
 			if err := checkDockerInitEnv(); err != nil {
@@ -361,7 +360,7 @@ already-enrolled CLI.`,
 				if err := RunDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, dockerTeardownProfiles("")...); err != nil {
 					cmd.Printf("Warning: compose down had issues: %v\n", err)
 				}
-				demos.ForceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
+				forceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
 			}
 
 			cfg, err := configLoader("")
@@ -940,7 +939,7 @@ func promptApproveComponent(cmd *cobra.Command, ctx context.Context, client auth
 
 	authcmd.PrintPlatformEnrollmentRequestDetails(cmd, req)
 
-	if !demos.ConfirmAction(cmd, fmt.Sprintf("Approve this %s enrollment request?", component)) {
+	if !confirmAction(cmd, fmt.Sprintf("Approve this %s enrollment request?", component)) {
 		cmd.Printf("  Skipped %s enrollment. You can approve it later with:\n", component)
 		cmd.Printf("  g8e auth enroll approve %s\n", req.RequestID)
 		return nil
@@ -1239,7 +1238,7 @@ the gateway, not just the default-profile gateway container.`,
 			if err != nil || !proceed {
 				return err
 			}
-			if err := demos.CheckDockerAvailable(); err != nil {
+			if err := checkDockerAvailable(); err != nil {
 				cmd.Println("Docker not available — nothing to clean.")
 				return nil
 			}
@@ -1252,7 +1251,7 @@ the gateway, not just the default-profile gateway container.`,
 			if err := RunDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, dockerTeardownProfiles("")...); err != nil {
 				cmd.Printf("Warning: compose down had issues: %v\n", err)
 			}
-			demos.ForceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
+			forceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
 			cmd.Println("\nDocker Compose stack cleaned successfully.")
 			return nil
 		},
@@ -1287,7 +1286,7 @@ skip the confirmation (the backup still runs) and --skip-backup to opt out.`,
 			if err := RunDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, dockerTeardownProfiles(profile)...); err != nil {
 				cmd.Printf("Warning: compose down had issues: %v\n", err)
 			}
-			demos.ForceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
+			forceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
 			fileSvc, err := shared.NewFileSvc("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)

@@ -21,7 +21,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	g8ebinaries "github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
@@ -119,7 +118,7 @@ Windows, and macOS artifact set.`,
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
-			if err := demos.CheckDockerAvailable(); err != nil {
+			if err := checkDockerAvailable(); err != nil {
 				return err
 			}
 			if image == "" {

@@ -132,11 +132,7 @@ COVERAGE_ONLY_EXCLUDE_PKGS := \
 COVERAGE_EXCLUDE_PKGS := $(TEST_EXCLUDE_PKGS) $(COVERAGE_ONLY_EXCLUDE_PKGS)
 
 # Files excluded from coverage only (belong to otherwise-tested packages).
-EXCLUDE_FILES := \
-	internal/cli/cmd/demos/demos.go \
-	internal/cli/cmd/demos/demo_dhs.go \
-	internal/cli/cmd/demos/demo_finance.go \
-	internal/cli/cmd/demos/demo_healthcare.go
+EXCLUDE_FILES :=
 
 # Grep chains derived from the lists above — do not edit directly.
 _TEST_PKG_GREP := $(foreach p,$(TEST_EXCLUDE_PKGS),| grep -v "$(p)")
@@ -294,7 +290,6 @@ help:
 		'  ensemble-test             Run ensemble unit and integration tests' \
 		'  ensemble-test-external    Run tests that require real providers' \
 		'  ensemble-lint             Run ruff and pyright on the ensemble' \
-		'  demo-verify               Build and run all demo environments' \
 		'' \
 		'Run locally' \
 		'  up                        Build and start the Gateway on this host' \
@@ -845,43 +840,7 @@ test-airgap:
 	@echo "  2. Building with vendored modules (-mod=vendor)..."
 	@go build -mod=vendor ./... || { echo "ERROR: vendored build failed"; exit 1; }
 	@echo "  3. Verifying images.json manifest exists..."
-	@test -f demos/images.json || { echo "ERROR: demos/images.json missing"; exit 1; }
-	@echo "  4. Checking compose files have no unpinned image references..."
-	@! grep -rn 'image:.*:latest\|image:.*:alpine\|image:.*:slim\|image:.*:bookworm' demos/*/compose.yml || { echo "ERROR: found unpinned image references in compose files"; exit 1; }
-	@echo "  5. Verifying no pip install or requests imports remain in demos..."
-	@! grep -rn 'pip install\|import requests' demos/ --include='*.py' || { echo "ERROR: found pip install or requests import in demo Python files"; exit 1; }
 	@echo "Air-gap verification PASSED."
-
-# =============================================================================
-# DEMO VERIFICATION
-# =============================================================================
-# Requires Docker. Builds the binary, then runs all 5 demo environments.
-# Each demo is torn down (with volumes) before the next starts to avoid
-# port conflicts and stale PKI state.
-DEMO_ORGS := healthcare finance dhs fedramp frontend
-
-.PHONY: demo-verify
-demo-verify: build
-	@echo "=== demo-verify: running all $(words $(DEMO_ORGS)) demos ==="
-	@for org in $(DEMO_ORGS); do \
-		echo ""; \
-		echo "========================================================"; \
-		echo "  Demo: $$org"; \
-		echo "========================================================"; \
-		./g8e demos stop $$org 2>/dev/null || true; \
-		docker compose -f demos/$$org/compose.yml down -v --remove-orphans 2>/dev/null || true; \
-		if ! ./g8e demos run $$org; then \
-			echo "FAIL: demo $$org did not pass all scenarios"; \
-			exit 1; \
-		fi; \
-		./g8e demos stop $$org 2>/dev/null || true; \
-		docker compose -f demos/$$org/compose.yml down -v --remove-orphans 2>/dev/null || true; \
-		echo "PASS: demo $$org completed successfully"; \
-	done
-	@echo ""; \
-	echo "========================================================"; \
-	echo "  All $(words $(DEMO_ORGS)) demos PASSED"; \
-	echo "========================================================"
 
 # =============================================================================
 # ENSEMBLE (g8ee) — Python first-party component
