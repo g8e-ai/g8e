@@ -17,6 +17,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"log/slog"
 	"math/big"
 	"os"

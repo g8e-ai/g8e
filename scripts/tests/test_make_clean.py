@@ -37,7 +37,8 @@ class MakeCleanTests(unittest.TestCase):
                 f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{calls}'\nexit 99\n"
             )
             binary.chmod(0o755)
-            fake_bin = root / "bin"
+            (root / "bin").mkdir()
+            fake_bin = root / "tooling"
             fake_bin.mkdir()
             fake_go = fake_bin / "go"
             fake_go.write_text("#!/bin/sh\nexit 0\n")

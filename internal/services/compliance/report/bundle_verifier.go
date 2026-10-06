@@ -170,7 +170,7 @@ func (v *bundleVerifier) verifyBindings() {
 		if profile == nil {
 			continue
 		}
-		bundlePath := fmt.Sprintf("%s/%s.json", constants.ComplianceBundleProfilesDirname, profile.GetProfileId())
+		bundlePath := frameworkProfileBundlePath(profile.GetProfileId())
 		if profile.GetAnalysisRef() != bundle.GetAnalysis().GetAnalysisId() {
 			v.fail(constants.ErrUnresolvedReference, bundlePath, "framework profile does not reference the bundled analysis")
 		}
@@ -467,7 +467,7 @@ func (v *bundleVerifier) verifyTypedArtifacts() {
 		if profile == nil {
 			continue
 		}
-		bundlePath := fmt.Sprintf("%s/%s.json", constants.ComplianceBundleProfilesDirname, profile.GetProfileId())
+		bundlePath := frameworkProfileBundlePath(profile.GetProfileId())
 		body, ok := v.bodies[bundlePath]
 		if !ok {
 			v.fail(constants.ErrBundleArtifactMissing, bundlePath, "framework profile artifact is missing")
@@ -581,7 +581,7 @@ func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
 	}
 	for _, profile := range replayed.Profiles {
 		if !proto.Equal(expectedProfiles[profile.GetProfileId()], profile) {
-			v.fail(constants.ErrRendererMismatch, path.Join(constants.ComplianceBundleProfilesDirname, profile.GetProfileId()+constants.FileExtJSON), "framework profile does not reproduce from protected analysis")
+			v.fail(constants.ErrRendererMismatch, frameworkProfileBundlePath(profile.GetProfileId()), "framework profile does not reproduce from protected analysis")
 		}
 	}
 }

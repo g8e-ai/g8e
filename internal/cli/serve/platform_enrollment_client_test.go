@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 

@@ -142,8 +142,7 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 		if err != nil {
 			return nil, fmt.Errorf("%w: canonicalize framework profile %d: %w", constants.ErrBundleAssemblyFailed, i, err)
 		}
-		profileDigest := sha256.Sum256(profileBytes)
-		profilePath := fmt.Sprintf("%s/%x.json", constants.ComplianceBundleProfilesDirname, profileDigest)
+		profilePath := frameworkProfileBundlePath(profile.GetProfileId())
 		if err := addArtifact(&artifacts, &checksumEntries, profilePath, profileBytes, constants.MediaTypeJSON, constants.ComplianceBundleProfilePublic); err != nil {
 			return nil, err
 		}
@@ -571,4 +570,10 @@ func collectFrameworkDefinitions(refs []*compliancev1.VersionedReference) []*com
 		})
 	}
 	return definitions
+}
+
+// frameworkProfileBundlePath encodes an identifier as a portable filename.
+func frameworkProfileBundlePath(profileID string) string {
+	digest := sha256.Sum256([]byte(profileID))
+	return fmt.Sprintf("%s/%x.json", constants.ComplianceBundleProfilesDirname, digest)
 }

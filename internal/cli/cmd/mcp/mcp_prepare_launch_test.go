@@ -42,6 +42,7 @@ func createFakeAgentBinary(t *testing.T, agentName string) string {
 func TestPrepareAgentLaunch_Claude_VerifyTrue(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 	createFakeAgentBinary(t, "claude")
 
 	configPath, cleanup, launchArgs, err := prepareAgentLaunch("claude", "claude", true)
@@ -62,6 +63,7 @@ func TestPrepareAgentLaunch_Claude_VerifyTrue(t *testing.T) {
 func TestPrepareAgentLaunch_Codex_VerifyTrue(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 	createFakeAgentBinary(t, "codex")
 
 	configPath, cleanup, launchArgs, err := prepareAgentLaunch("codex", "codex", true)
@@ -81,6 +83,7 @@ func TestPrepareAgentLaunch_Codex_VerifyTrue(t *testing.T) {
 func TestPrepareAgentLaunch_Goose_VerifyTrue(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 	createFakeAgentBinary(t, "goose")
 
 	configPath, cleanup, launchArgs, err := prepareAgentLaunch("goose", "goose", true)
@@ -105,6 +108,7 @@ func TestPrepareAgentLaunch_Goose_VerifyTrue(t *testing.T) {
 func TestPrepareAgentLaunch_Gemini_VerifyTrue(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 	createFakeAgentBinary(t, "gemini")
 
 	configPath, cleanup, launchArgs, err := prepareAgentLaunch("gemini", "gemini", true)
@@ -134,6 +138,7 @@ func TestPrepareAgentLaunch_Gemini_VerifyTrue(t *testing.T) {
 func TestPrepareAgentLaunch_Devin_VerifyTrue(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 	createFakeAgentBinary(t, "devin")
 
 	configPath, cleanup, launchArgs, err := prepareAgentLaunch("devin", "devin", true)
@@ -163,6 +168,7 @@ func TestPrepareAgentLaunch_Devin_VerifyTrue(t *testing.T) {
 func TestPrepareAgentLaunch_VerifyFalse_SkipsVerification(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 	createFakeAgentBinary(t, "claude")
 
 	configPath, cleanup, launchArgs, err := prepareAgentLaunch("claude", "claude", false)
@@ -183,6 +189,7 @@ func TestPrepareAgentLaunch_VerifyFalse_SkipsVerification(t *testing.T) {
 func TestPrepareAgentLaunch_UnsupportedAgent(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 	createFakeAgentBinary(t, "cursor")
 
 	_, _, _, err := prepareAgentLaunch("cursor", "cursor", true)
@@ -195,6 +202,7 @@ func TestPrepareAgentLaunch_UnsupportedAgent(t *testing.T) {
 func TestPrepareAgentLaunch_AgentNotInPath(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 
 	// A registered agent whose binary is not installed fails closed before any
 	// config is written.

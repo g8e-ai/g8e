@@ -119,6 +119,7 @@ func TestStreamToHost_Success(t *testing.T) {
 	// Set HOME to temp dir so resolveHost finds our key
 	home := testutil.TempDir(t)
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	sshDir := filepath.Join(home, ".ssh")
 	err = os.MkdirAll(sshDir, 0700)
 	require.NoError(t, err)
@@ -179,6 +180,7 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 	// Set HOME to temp dir so resolveHost finds our key
 	home := testutil.TempDir(t)
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	sshDir := filepath.Join(home, ".ssh")
 	err = os.MkdirAll(sshDir, 0700)
 	require.NoError(t, err)

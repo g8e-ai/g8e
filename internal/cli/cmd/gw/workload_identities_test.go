@@ -22,6 +22,7 @@ func TestCleanupReportsRecordedIdentitiesWithoutScanningHome(t *testing.T) {
 	t.Chdir(t.TempDir())
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	known := filepath.Join(home, "custom-operator")
 	unlisted := filepath.Join(home, "unlisted-operator")
 	for _, dir := range []string{known, unlisted} {
@@ -48,6 +49,7 @@ func TestCleanupReportsDefaultDataIdentityWithoutRegistry(t *testing.T) {
 	t.Chdir(t.TempDir())
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	dir := filepath.Join(home, ".ollama/g8e/data")
 	path := filepath.Join(dir, ".g8e/pki/trust/g8eg-ca-bundle.pem")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))

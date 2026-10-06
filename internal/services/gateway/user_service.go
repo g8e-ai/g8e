@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"sort"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -234,14 +233,13 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 // FirstUserID returns the user ID of the first human enrollee, who is the
 // gateway owner and admin. Returns an empty string when no users exist.
 func (s *UserService) FirstUserID() (string, error) {
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 0)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "created_at ASC", 1)
 	if err != nil {
 		return "", fmt.Errorf("user service: failed to query users for first-user lookup: %w", err)
 	}
 	if len(docs) == 0 {
 		return "", nil
 	}
-	sort.Slice(docs, func(i, j int) bool { return docs[i].CreatedAt.Before(docs[j].CreatedAt) })
 	return docs[0].ID, nil
 }
 

@@ -289,28 +289,28 @@ func TestWriteCredentials_PersistsChainsKeysTrustBundleAndActuatorSigner(t *test
 
 	content, perm := readRuntimeFile(t, fileSvc, client.operatorCertPath())
 	assert.Equal(t, "OPERATOR-CERT\nOPERATOR-CHAIN", content, "the chain is appended to the leaf certificate")
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), perm)
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, false), perm)
 
 	content, perm = readRuntimeFile(t, fileSvc, client.operatorKeyPath())
 	assert.Equal(t, "OPERATOR-KEY", content)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), perm, "private keys must be 0600")
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, false), perm, "private keys must be 0600")
 
 	content, perm = readRuntimeFile(t, fileSvc, client.cliCertPath())
 	assert.Equal(t, "CLI-CERT\nCLI-CHAIN", content)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), perm)
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, false), perm)
 
 	content, perm = readRuntimeFile(t, fileSvc, client.cliKeyPath())
 	assert.Equal(t, "CLI-KEY", content)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), perm)
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, false), perm)
 
 	content, perm = readRuntimeFile(t, fileSvc, client.trustBundlePath())
 	assert.Equal(t, "TRUST-BUNDLE", content)
-	assert.Equal(t, os.FileMode(constants.PermFilePublic), perm, "the trust bundle is public")
+	assert.Equal(t, testutil.FileMode(constants.PermFilePublic, false), perm, "the trust bundle is public")
 
 	signerPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrustedSigners, "actuator-key-1"+constants.PublicKeySuffix)
 	content, perm = readRuntimeFile(t, fileSvc, signerPath)
 	assert.Equal(t, "ACTUATOR-PUB", content)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), perm)
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, false), perm)
 }
 
 func TestWriteCredentialsRetainsPinnedRecoveryTrust(t *testing.T) {

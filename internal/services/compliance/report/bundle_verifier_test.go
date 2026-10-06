@@ -2030,7 +2030,7 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
 			failureSubject := test.failureSubject
 			if failureSubject == constants.ComplianceBundleFrameworkProfileTestPath {
-				failureSubject = path.Join(constants.ComplianceBundleProfilesDirname, bundle.GetProfiles()[0].GetProfileId()+constants.FileExtJSON)
+				failureSubject = frameworkProfileBundlePath(bundle.GetProfiles()[0].GetProfileId())
 			}
 			test.mutate(bundle, reader, policy)
 

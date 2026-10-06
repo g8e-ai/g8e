@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -54,6 +55,9 @@ printf 'Enrollment failed: HTTP 429\n'
 // binary. The remote shell commands deploy sends therefore run for real.
 func useFakeSSH(t *testing.T, worker string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("SSH fixture executes a POSIX remote shell locally; host-native deployment is tested separately")
+	}
 	binDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(binDir, "ssh"), []byte("#!/bin/sh\nfor a; do cmd=\"$a\"; done\nexec sh -c \"$cmd\"\n"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(binDir, "scp"), []byte("#!/bin/sh\nfor a; do dst=\"${a#*:}\"; done\ncp \"$FAKE_WORKER\" \"$dst\"\n"), 0o755))
@@ -233,7 +237,7 @@ func TestOperatorDeployLocalBatchSharesBinaryAndPreservesEarlierBatch(t *testing
 	require.FileExists(t, filepath.Join(root, "op-05000", "g8e"))
 	dirs := operatorDeployDirs(root, 5000)
 	require.Len(t, dirs, 5000)
-	assert.Equal(t, filepath.Join(root, "op-05000"), dirs[4999])
+	assert.Equal(t, filepath.ToSlash(filepath.Join(root, "op-05000")), filepath.ToSlash(dirs[4999]))
 }
 
 func TestOperatorDeployRejectsUnsafeBatchesAndRoles(t *testing.T) {

@@ -20,7 +20,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -31,7 +30,6 @@ import (
 	sshlib "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/pkg/ssh"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
@@ -177,7 +175,7 @@ func startProxyConn(t *testing.T, shellCommand string) *proxyConn {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 
-	cmd := exec.CommandContext(ctx, constants.PathBinSh, "-c", shellCommand)
+	cmd := proxyCommand(ctx, shellCommand)
 	stdin, err := cmd.StdinPipe()
 	require.NoError(t, err)
 	stdout, err := cmd.StdoutPipe()

@@ -11,7 +11,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"

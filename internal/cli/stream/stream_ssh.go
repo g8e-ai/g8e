@@ -70,7 +70,7 @@ func dialSSH(ctx context.Context, r ssh.HostConfig, clientConfig *sshlib.ClientC
 			proxyCmd := strings.ReplaceAll(r.ProxyCommand, "%h", r.Hostname)
 			proxyCmd = strings.ReplaceAll(proxyCmd, "%p", r.Port)
 
-			cmd := exec.CommandContext(ctx, constants.PathBinSh, "-c", proxyCmd)
+			cmd := proxyCommand(ctx, proxyCmd)
 			stdin, err := cmd.StdinPipe()
 			if err != nil {
 				ch <- dialResult{nil, fmt.Errorf("ssh: proxy stdin pipe: %w", err)}

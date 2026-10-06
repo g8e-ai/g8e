@@ -317,7 +317,7 @@ func TestMonitorPasskeyRegistration_UnrelatedEventIgnored(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -365,7 +365,7 @@ func TestMonitorPasskeyRegistration_MalformedEventIgnored(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -412,7 +412,7 @@ func TestMonitorPasskeyRegistration_SuccessCancelsSSEContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -467,7 +467,7 @@ func TestMonitorPasskeyRegistration_MatchingEventCompletesOnce(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -503,7 +503,7 @@ func TestRegister_ValidateInputs(t *testing.T) {
 	fileSvc, cfg := newAuthTestEnv(t)
 	writeTestCLICert(t, fileSvc, cfg)
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 
 	err := r.Register(context.Background(), "", "test-session")
 	require.Error(t, err)
@@ -539,6 +539,7 @@ func TestRegister_ContextCancelledBeforeEnrollment(t *testing.T) {
 	startTLSEnrollServer(t, cfg, rh.ServeHTTP)
 
 	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{
+		Browser: func(string) error { return nil },
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {

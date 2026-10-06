@@ -494,7 +494,7 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 			require.NoError(t, err)
 			bundle := &compliancev1.ComplianceReportBundle{}
 			require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
-			bundleDir := path.Dir(descriptorPath)
+			bundleDir := path.Dir(filepath.ToSlash(descriptorPath))
 			sourcePath := path.Join(bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, test.relativePath)
 			require.NoError(t, fileSvc.WriteFile(context.Background(), sourcePath, test.body, constants.PermFileReadOnly))
 			root, err := os.OpenRoot(fileSvc.Resolve(bundleDir))
@@ -743,7 +743,7 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	require.Contains(t, selectionDiagnostics, "outside-window-candidate")
 	assert.Equal(t, "evaluation_candidate_outside_window", selectionDiagnostics["outside-window-candidate"].GetCode())
 	assert.Equal(t, "info", selectionDiagnostics["outside-window-candidate"].GetSeverity())
-	inventoryPath := path.Join(path.Dir(descriptorPath), constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, scope.SourceAdmissions[0].AdmissionId, constants.CampaignSourceInventoryFilename)
+	inventoryPath := path.Join(path.Dir(filepath.ToSlash(descriptorPath)), constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, scope.SourceAdmissions[0].AdmissionId, constants.CampaignSourceInventoryFilename)
 	inventoryBody, err := fileSvc.ReadFile(context.Background(), inventoryPath)
 	require.NoError(t, err)
 	inventory := &evalv1.CampaignComplianceSourceInventory{}
@@ -894,7 +894,7 @@ func generateCampaignComplianceBundleFixture(t *testing.T, includeWitnesses bool
 	require.NoError(t, err)
 	bundle := &compliancev1.ComplianceReportBundle{}
 	require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
-	bundleDir := path.Dir(descriptorPath)
+	bundleDir := path.Dir(filepath.ToSlash(descriptorPath))
 	verificationPath := path.Join(bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, admission.GetAdmissionId(), constants.ComplianceBundleSourceVerificationFilename)
 	verificationBody, err := fileSvc.ReadFile(ctx, verificationPath)
 	require.NoError(t, err)
