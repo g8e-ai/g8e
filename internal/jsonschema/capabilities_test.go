@@ -195,7 +195,6 @@ func TestOSCALProfile_HasRecursiveDefs(t *testing.T) {
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(schemaBytes, &raw))
 	// Find self-refs: a $ref whose value equals an $id in the same subtree
-	foundRecursive := false
 	var checkRecursive func(n any, currentID string) bool
 	checkRecursive = func(n any, currentID string) bool {
 		switch v := n.(type) {
@@ -223,7 +222,7 @@ func TestOSCALProfile_HasRecursiveDefs(t *testing.T) {
 		}
 		return false
 	}
-	foundRecursive = checkRecursive(raw, "")
+	foundRecursive := checkRecursive(raw, "")
 	assert.True(t, OSCALProfile.HasRecursiveDefs, "profile claims recursive defs")
 	assert.True(t, foundRecursive, "schema must contain at least one recursive definition")
 }

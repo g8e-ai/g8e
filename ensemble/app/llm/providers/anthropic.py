@@ -392,7 +392,7 @@ class AnthropicProvider(LLMProvider):
                                 )
                 stream_exhausted = True
             except Exception as e:
-                logger.error("[ANTHROPIC] Exception during streaming: %s", e, exc_info=True)
+                logger.exception("[ANTHROPIC] Exception during streaming: %s", e)
                 raise
 
         # Fallback: if stream ended without message_delta with stop_reason, yield completion
@@ -546,7 +546,7 @@ class AnthropicProvider(LLMProvider):
                                 )
                 stream_exhausted = True
             except Exception as e:
-                logger.error("[ANTHROPIC] Exception during primary streaming: %s", e, exc_info=True)
+                logger.exception("[ANTHROPIC] Exception during primary streaming: %s", e)
                 translate_capability_error(
                     e,
                     service_name="anthropic",

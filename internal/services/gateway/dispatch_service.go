@@ -126,7 +126,6 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 	}
 
 	// L1 screening: decode the typed payload and run doctrine validation.
-	l1Validated := false
 	decoded, err := governance.DecodePayloadForAction(actionType, params.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrTxPayloadDecodeFailed)
@@ -137,7 +136,7 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 	if violations := params.Doctrine.ValidatePayload(decoded); len(violations) > 0 {
 		return nil, fmt.Errorf("gateway: build envelope: %w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
 	}
-	l1Validated = true
+	l1Validated := true
 
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
@@ -418,7 +417,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	//    is a terminal transport failure: no operator received the command,
 	//    so no result can ever arrive.
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
-	delivered := 0
+	var delivered int
 	if op.OperatorType == constants.OperatorTypeEmbedded {
 		if d.embeddedProcessor == nil {
 			return nil, fmt.Errorf("dispatch embedded operator: %w", constants.ErrDispatchNoDelivery)

@@ -571,7 +571,7 @@ async def deliver_via_sse(
                 }
                 if has_sse:
                     error_extra["case_id"] = case_id
-                logger.error(
+                logger.exception(
                     "[SSE] LLM provider error: %s",
                     error_message,
                     extra=error_extra,
@@ -659,7 +659,7 @@ async def deliver_via_sse(
         raise
 
     except Exception as e:
-        logger.error("[SSE] Error: %s", e, exc_info=True)
+        logger.error("[SSE] Error: %s", e)
         await _publish(
             EventType.AI_LLM_CHAT_ITERATION_FAILED,
             ChatErrorPayload(error=str(e)),

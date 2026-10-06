@@ -77,7 +77,7 @@ class ReputationDataService:
             doc.setdefault("agent_id", agent_id)
             return ReputationState.model_validate(doc)
         except Exception as exc:
-            logger.error("Failed to get reputation_state for %s: %s", agent_id, exc, exc_info=True)
+            logger.exception("Failed to get reputation_state for %s: %s", agent_id, exc)
             raise DatabaseError(
                 message=f"Failed to get reputation_state for {agent_id}: {exc}",
                 code=ErrorCode.DB_QUERY_ERROR,
@@ -105,7 +105,7 @@ class ReputationDataService:
             states.sort(key=lambda s: s.agent_id)
             return states
         except Exception as exc:
-            logger.error("Failed to list reputation_state: %s", exc, exc_info=True)
+            logger.exception("Failed to list reputation_state: %s", exc)
             raise DatabaseError(
                 message=f"Failed to list reputation_state: {exc}",
                 code=ErrorCode.DB_QUERY_ERROR,
@@ -142,7 +142,7 @@ class ReputationDataService:
         except DatabaseError:
             raise
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Failed to upsert reputation_state for %s: %s", state.agent_id, exc, exc_info=True
             )
             raise DatabaseError(
@@ -247,7 +247,7 @@ class ReputationDataService:
                 return None
             return ReputationCommitment.model_validate(results[0])
         except Exception as exc:
-            logger.error("Failed to get latest reputation_commitment: %s", exc, exc_info=True)
+            logger.error("Failed to get latest reputation_commitment: %s", exc)
             raise DatabaseError(
                 message=f"Failed to get latest reputation_commitment: {exc}",
                 code=ErrorCode.DB_QUERY_ERROR,

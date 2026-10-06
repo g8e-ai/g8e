@@ -303,7 +303,7 @@ class TribunalAuditor:
                     break
 
             except ContextWindowExceededError as exc:
-                logger.error(
+                logger.exception(
                     "[TRIBUNAL-AUDITOR] Prompt exceeded the model context window, not retrying: %s",
                     exc,
                 )
@@ -340,7 +340,7 @@ class TribunalAuditor:
             except TribunalAuditorFailedError:
                 raise
             except Exception as exc:
-                logger.error("[TRIBUNAL-AUDITOR] Unexpected error: %s", exc, exc_info=True)
+                logger.error("[TRIBUNAL-AUDITOR] Unexpected error: %s", exc)
                 await fail_auditor(
                     self.emitter,
                     request,

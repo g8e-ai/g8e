@@ -71,7 +71,7 @@ async def handle(
     )
 
     if not investigation or not investigation.id:
-        logger.error("[QUERY_INVESTIGATION_CONTEXT] No investigation ID available")
+        logger.exception("[QUERY_INVESTIGATION_CONTEXT] No investigation ID available")
         return InvestigationContextResult(
             success=False,
             error="No investigation ID available",
@@ -127,7 +127,7 @@ async def handle(
         )
 
     except Exception as e:
-        logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e, exc_info=True)
+        logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e)
         return InvestigationContextResult(
             success=False,
             error=f"Investigation context query failed: {e}. Retry or check investigation ID.",

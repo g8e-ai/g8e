@@ -222,7 +222,7 @@ class AIResponseAnalyzer:
                 }
             )
         except Exception as exc:
-            logger.error("%s setup failed: %s", log_context, exc, exc_info=True)
+            logger.exception("%s setup failed: %s", log_context, exc)
             return fallback_exception(exc)
 
         monotonic_start = time.monotonic()
@@ -256,7 +256,7 @@ class AIResponseAnalyzer:
                 error=exc,
             )
             if isinstance(exc, ContextWindowExceededError):
-                logger.error(
+                logger.exception(
                     "%s: prompt exceeded the model context window, not retrying: %s",
                     log_context,
                     exc,
@@ -265,7 +265,7 @@ class AIResponseAnalyzer:
             if isinstance(exc, OllamaEmptyResponseError):
                 logger.error("%s: LLM returned no text content: %s", log_context, exc)
                 return fallback_no_response().model_copy(update={"model_call": telemetry})
-            logger.error("%s failed: %s", log_context, exc, exc_info=True)
+            logger.error("%s failed: %s", log_context, exc)
             return fallback_exception(exc).model_copy(update={"model_call": telemetry})
 
         telemetry = self._model_call_telemetry(

@@ -64,7 +64,7 @@ class OperatorPortService:
             protocol = NetworkProtocol(args.protocol.strip().lower())
         except ValueError:
             error_msg = f"Invalid network protocol: {args.protocol}"
-            logger.error("[PORT_CHECK] %s", error_msg)
+            logger.exception("[PORT_CHECK] %s", error_msg)
             return PortCheckToolResult(
                 success=False, error=error_msg, error_type=CommandErrorType.EXECUTION_ERROR
             )
@@ -86,7 +86,7 @@ class OperatorPortService:
             )
             resolved_operator = resolved_operators[0]
         except (ValidationError, BusinessLogicError, ValueError) as e:
-            logger.error("[PORT_CHECK] Operator resolution failed: %s", e, exc_info=True)
+            logger.error("[PORT_CHECK] Operator resolution failed: %s", e)
             return PortCheckToolResult(
                 success=False,
                 error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
@@ -156,7 +156,7 @@ class OperatorPortService:
                 )
 
             if not hasattr(envelope, "payload"):
-                logger.error("[PORT_CHECK] Unexpected envelope type: %s", type(envelope))
+                logger.exception("[PORT_CHECK] Unexpected envelope type: %s", type(envelope))
                 return PortCheckToolResult(
                     success=False,
                     error="Unexpected result format from operator",
@@ -191,7 +191,7 @@ class OperatorPortService:
         except (ValidationError, BusinessLogicError):
             raise
         except Exception as e:
-            logger.error("[PORT_CHECK] Unexpected error: %s", e, exc_info=True)
+            logger.error("[PORT_CHECK] Unexpected error: %s", e)
             return PortCheckToolResult(
                 success=False,
                 error=f"Port check execution failed: {e}. Check operator status and retry.",

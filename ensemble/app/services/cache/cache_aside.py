@@ -94,7 +94,8 @@ class CacheAsideService(DocumentServiceProtocol):
         self.read_enabled = read_enabled
 
         logger.info(
-            f"[{component_name.upper()}-CACHE] Cache-aside service initialized",
+            "[%s-CACHE] Cache-aside service initialized",
+            component_name.upper(),
             extra={"default_ttl": default_ttl},
         )
 
@@ -155,7 +156,8 @@ class CacheAsideService(DocumentServiceProtocol):
             )
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Document created in database",
+            "[%s-CACHE] Document created in database",
+            self.component_name.upper(),
             extra={"collection": collection, "doc_id": document_id, "operation": "create"},
         )
 
@@ -181,7 +183,8 @@ class CacheAsideService(DocumentServiceProtocol):
             )
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Document updated in database",
+            "[%s-CACHE] Document updated in database",
+            self.component_name.upper(),
             extra={"collection": collection, "doc_id": document_id, "merge": merge},
         )
 
@@ -197,18 +200,21 @@ class CacheAsideService(DocumentServiceProtocol):
             cached_data: object | None = await self.kv.get_json(key)
             if isinstance(cached_data, dict):
                 logger.info(
-                    f"[{self.component_name.upper()}-CACHE] Cache HIT",
+                    "[%s-CACHE] Cache HIT",
+                    self.component_name.upper(),
                     extra={"collection": collection, "doc_id": document_id},
                 )
                 return cast(dict[str, Any], cached_data)
 
             logger.info(
-                f"[{self.component_name.upper()}-CACHE] Cache MISS - reading from database",
+                "[%s-CACHE] Cache MISS - reading from database",
+                self.component_name.upper(),
                 extra={"collection": collection, "doc_id": document_id},
             )
         else:
             logger.info(
-                f"[{self.component_name.upper()}-CACHE] Cache read disabled - skipping KV lookup",
+                "[%s-CACHE] Cache read disabled - skipping KV lookup",
+                self.component_name.upper(),
                 extra={"collection": collection, "doc_id": document_id},
             )
 
@@ -216,7 +222,8 @@ class CacheAsideService(DocumentServiceProtocol):
 
         if not db_response.success or db_response.data is None:
             logger.info(
-                f"[{self.component_name.upper()}-CACHE] Document not found in database",
+                "[%s-CACHE] Document not found in database",
+                self.component_name.upper(),
                 extra={"collection": collection, "doc_id": document_id},
             )
             return None
@@ -231,7 +238,8 @@ class CacheAsideService(DocumentServiceProtocol):
 
         if cache_success:
             logger.info(
-                f"[{self.component_name.upper()}-CACHE] Cache warmed from database",
+                "[%s-CACHE] Cache warmed from database",
+                self.component_name.upper(),
                 extra={"collection": collection, "doc_id": document_id, "ttl": ttl},
             )
 
@@ -254,13 +262,15 @@ class CacheAsideService(DocumentServiceProtocol):
         if isinstance(cached_data, list):
             result = cast(list[dict[str, Any]], cached_data)
             logger.info(
-                f"[{self.component_name.upper()}-CACHE] Query cache HIT",
+                "[%s-CACHE] Query cache HIT",
+                self.component_name.upper(),
                 extra={"collection": collection, "result_count": len(result)},
             )
             return result
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Query cache MISS",
+            "[%s-CACHE] Query cache MISS",
+            self.component_name.upper(),
             extra={"collection": collection},
         )
 
@@ -282,7 +292,8 @@ class CacheAsideService(DocumentServiceProtocol):
         success = await self.kv.set_json(key, results, ex=ttl)
         if success:
             logger.info(
-                f"[{self.component_name.upper()}-CACHE] Query results cached",
+                "[%s-CACHE] Query results cached",
+                self.component_name.upper(),
                 extra={"collection": collection, "result_count": len(results), "ttl": ttl},
             )
         return success
@@ -322,7 +333,8 @@ class CacheAsideService(DocumentServiceProtocol):
             await self.set_query_result(collection, query_params, data, ttl=ttl)
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Query executed",
+            "[%s-CACHE] Query executed",
+            self.component_name.upper(),
             extra={"collection": collection, "result_count": len(data)},
         )
         return result
@@ -332,7 +344,8 @@ class CacheAsideService(DocumentServiceProtocol):
         deleted = await self.kv.delete(key)
         if deleted:
             logger.info(
-                f"[{self.component_name.upper()}-CACHE] Document cache invalidated",
+                "[%s-CACHE] Document cache invalidated",
+                self.component_name.upper(),
                 extra={"collection": collection, "doc_id": document_id},
             )
         return deleted > 0
@@ -361,7 +374,8 @@ class CacheAsideService(DocumentServiceProtocol):
             )
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Array append completed, cache invalidated",
+            "[%s-CACHE] Array append completed, cache invalidated",
+            self.component_name.upper(),
             extra={"collection": collection, "doc_id": document_id, "field": array_field},
         )
 
@@ -382,7 +396,8 @@ class CacheAsideService(DocumentServiceProtocol):
             )
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Document deleted, cache invalidated",
+            "[%s-CACHE] Document deleted, cache invalidated",
+            self.component_name.upper(),
             extra={"collection": collection, "doc_id": document_id},
         )
 
@@ -402,7 +417,8 @@ class CacheAsideService(DocumentServiceProtocol):
             )
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Batch write completed",
+            "[%s-CACHE] Batch write completed",
+            self.component_name.upper(),
             extra={"operation_count": len(operations)},
         )
 
@@ -428,7 +444,8 @@ class CacheAsideService(DocumentServiceProtocol):
         await self.batch_write(db_operations)
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Batch create completed",
+            "[%s-CACHE] Batch create completed",
+            self.component_name.upper(),
             extra={"operation_count": len(operations)},
         )
 

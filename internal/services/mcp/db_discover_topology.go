@@ -85,25 +85,31 @@ func (t *DBDiscoverTopologyTool) Execute(ctx context.Context, args json.RawMessa
 			continue
 		}
 
-		columns, err := db.Query("PRAGMA table_info(" + tableName + ")")
-		if err != nil {
-			continue
-		}
-
-		for columns.Next() {
-			var cid int
-			var name, datatype string
-			var notnull int
-			var dfltValue interface{}
-			var pk int
-
-			if err := columns.Scan(&cid, &name, &datatype, &notnull, &dfltValue, &pk); err != nil {
-				continue
+		func() {
+			columns, err := db.Query("PRAGMA table_info(" + tableName + ")")
+			if err != nil {
+				return
 			}
+			defer columns.Close()
 
-			schema[tableName][name] = datatype
-		}
-		columns.Close()
+			for columns.Next() {
+				var cid int
+				var name, datatype string
+				var notnull int
+				var dfltValue interface{}
+				var pk int
+
+				if err := columns.Scan(&cid, &name, &datatype, &notnull, &dfltValue, &pk); err != nil {
+					continue
+				}
+
+				schema[tableName][name] = datatype
+			}
+			_ = columns.Err()
+		}()
+	}
+	if err := tables.Err(); err != nil {
+		return CallToolResult{}, fmt.Errorf("failed during tables iteration: %w", err)
 	}
 
 	result := DBDiscoverTopologyResult{Schema: schema}

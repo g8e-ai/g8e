@@ -34,7 +34,7 @@ One `g8e` binary can assume any nonempty combination of Embedded, Data, Inferenc
 ./g8e operator start --roles embedded,data,inference --working-dir /srv/gateway
 ```
 
-`--roles` accepts comma-separated values and repeated occurrences. Existing enable flags are additive. No role flags means Data for a remote worker and Embedded plus Data for the Gateway. Provenance needs `--model-storage-root`; Inference uses the configured Ollama endpoint. Witness-only processes reject generic command execution. Adding Data permits governed commands in the same process.
+`--roles` accepts comma-separated values and repeated occurrences. Existing enable flags are additive. No role flags means Data for a remote worker and Embedded plus Data for the Gateway. Provenance needs `--model-storage-root`; Inference uses the configured Ollama endpoint. Witness-only processes reject generic command execution. Adding Data permits governed commands in the same process. Evaluation target selection accepts active Remote and configured Embedded sessions by capability membership: Data for command execution and Inference for model requests. Session and hardware selection remain exact; multiple eligible sessions require an explicit selection.
 
 Embedded runs the Gateway in process, including its enrollment and governance substrate. It does not become a remote worker by enabling another capability. `operator_type` continues to distinguish `embedded` and `remote` deployment. Cloud remains a deployment setting (`--cloud` and `--provider`), and Cloud, System, and Node are not entries in the operator type or role vocabulary. “Inference Node” names the Inference topology, not a separate operator type.
 

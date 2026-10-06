@@ -181,7 +181,7 @@ class BackgroundTaskManager:
             )
             raise
         except Exception as e:
-            logger.error("Error awaiting tracked tasks: %s", e, exc_info=True)
+            logger.exception("Error awaiting tracked tasks: %s", e)
             raise
 
 

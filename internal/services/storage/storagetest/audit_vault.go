@@ -352,6 +352,9 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		}
 		existing[name] = true
 	}
+	if err := cols.Err(); err != nil {
+		return fmt.Errorf("audit_vault: migrate receipts: cols iteration: %w", err)
+	}
 
 	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json", "event_type"} {
 		if existing[col] {

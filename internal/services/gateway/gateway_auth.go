@@ -1057,14 +1057,18 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 				// Extract it so processGatewayTransaction can bind both identities to
 				// the signed governance envelope (RequestorUserId + ActingAppId).
 				wid2 := protocol.NewWorkloadIdentity()
+				var delegateUserID string
 				for _, u2 := range cert.URIs {
 					u2Str := u2.String()
 					if wid2.IsUserSAN(u2Str) {
 						if userID, ok := wid2.ExtractUserIDFromUserSAN(u2Str); ok {
-							ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
+							delegateUserID = userID
 						}
 						break
 					}
+				}
+				if delegateUserID != "" {
+					ctx = context.WithValue(ctx, constants.ContextKeyUserID, delegateUserID)
 				}
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return true

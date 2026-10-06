@@ -246,7 +246,7 @@ class OperatorCommandService:
         try:
             target_operator_docs = self._resolve_targets(operator_documents, args)
         except (ValidationError, BusinessLogicError, ValueError) as e:
-            logger.error("[COMMAND] Operator resolution failed: %s", e, exc_info=True)
+            logger.exception("[COMMAND] Operator resolution failed: %s", e)
             return CommandExecutionResult(
                 success=False,
                 error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",

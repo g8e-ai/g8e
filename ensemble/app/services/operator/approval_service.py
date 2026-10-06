@@ -202,7 +202,7 @@ class OperatorApprovalService:
             try:
                 self._on_approval_requested(approval_id, pending)
             except Exception as e:
-                logger.error("[APPROVAL] on_approval_requested callback failed: %s", e)
+                logger.exception("[APPROVAL] on_approval_requested callback failed: %s", e)
 
     async def _audit(
         self,
@@ -523,7 +523,7 @@ class OperatorApprovalService:
             except Exception as publish_error:
                 self._pending_approvals.pop(approval_id, None)
                 error_msg = f"Failed to publish approval request to client: {publish_error}"
-                logger.error("[APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
+                logger.error("[APPROVAL-PUBLISH-FAILURE] %s", error_msg)
                 return ApprovalResult(
                     approved=False,
                     reason=error_msg,
@@ -617,7 +617,7 @@ class OperatorApprovalService:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[APPROVAL-EXCEPTION] Failed to request command approval: %s", e, exc_info=True
             )
             logger.error(
@@ -708,7 +708,7 @@ class OperatorApprovalService:
                 error_msg = (
                     f"Failed to publish file edit approval request to client: {publish_error}"
                 )
-                logger.error("[FILE_EDIT_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
+                logger.error("[FILE_EDIT_APPROVAL-PUBLISH-FAILURE] %s", error_msg)
                 return ApprovalResult(
                     approved=False,
                     reason=error_msg,
@@ -784,7 +784,7 @@ class OperatorApprovalService:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[FILE_EDIT_APPROVAL-EXCEPTION] Failed to request file edit approval: %s",
                 e,
                 exc_info=True,
@@ -885,7 +885,7 @@ class OperatorApprovalService:
                 logger.info("[INTENT_APPROVAL] Published to client")
             except Exception as publish_error:
                 error_msg = f"Failed to publish intent approval request to client: {publish_error}"
-                logger.error("[INTENT_APPROVAL] %s", error_msg, exc_info=True)
+                logger.error("[INTENT_APPROVAL] %s", error_msg)
                 return ApprovalResult(
                     approved=False,
                     reason=error_msg,

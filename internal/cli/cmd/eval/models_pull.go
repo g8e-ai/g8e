@@ -58,7 +58,7 @@ Examples:
   g8e eval models pull --family glm53 --dry-run
   g8e eval models pull --formations --timeout 24h`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			selector = selector.withArgs(args)
+			selector = *selector.withArgs(args)
 			if formations && selector.IsSet() {
 				return fmt.Errorf("evaluation: models pull: --formations cannot be combined with a model selector: %w", constants.ErrEvaluationFlagsInvalid)
 			}

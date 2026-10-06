@@ -47,9 +47,9 @@ class G8eHttpContextMiddleware(BaseHTTPMiddleware):
                     request.state.g8e_context = g8e_context
                     request.state.request_context = rc
                 except Exception as e:
-                    logger.warning(f"Failed to parse context: {e}")
+                    logger.warning("Failed to parse context: %s", e)
 
         except Exception as e:
-            logger.warning(f"Error in context middleware: {e}")
+            logger.warning("Error in context middleware: %s", e)
 
         return await call_next(request)

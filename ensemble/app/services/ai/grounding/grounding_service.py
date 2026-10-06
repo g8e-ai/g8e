@@ -116,7 +116,7 @@ class GroundingService:
             )
 
         except Exception as e:
-            logger.error("GROUNDING: Failed to extract grounding metadata: %s", e, exc_info=True)
+            logger.exception("GROUNDING: Failed to extract grounding metadata: %s", e)
             return GroundingMetadata(
                 grounding_used=False,
                 error=f"Grounding metadata extraction failed: {e}. Proceed without grounding.",

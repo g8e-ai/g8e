@@ -150,6 +150,9 @@ func (t *DBQueryValidateTool) Execute(ctx context.Context, args json.RawMessage)
 			hasFullScan = true
 		}
 	}
+	if err := planRows.Err(); err != nil {
+		return CallToolResult{}, fmt.Errorf("failed during query plan iteration: %w", err)
+	}
 
 	planStr := strings.Join(planLines, "\n")
 	result := DBQueryValidateResult{

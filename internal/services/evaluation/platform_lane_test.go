@@ -152,6 +152,8 @@ func TestCommandLane_ResolveTargetAndPostureFailClosed(t *testing.T) {
 		wantErr    error
 	}{
 		{name: "discovered active remote operator", client: &laneTestClient{discovered: activeRemote}, wantTarget: Target{OperatorID: "operator-1", SessionID: "session-1"}},
+		{name: "configured blended embedded Data operator", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "blend", OperatorSessionID: "blend-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference}}}}, wantTarget: Target{OperatorID: "blend", SessionID: "blend-session"}},
+		{name: "remote witness without Data rejected", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "witness", OperatorSessionID: "witness-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleObserver}}}}, wantErr: constants.ErrEvaluationTargetUnavailable},
 		{name: "discovered embedded operator rejected", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}}, wantErr: constants.ErrEvaluationTargetUnavailable},
 		{name: "discovered inactive operator rejected", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote}}, wantErr: constants.ErrEvaluationTargetUnavailable},
 	}

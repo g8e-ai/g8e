@@ -143,7 +143,7 @@ func TestGatewayCleanCmd_AbortsOnNoResponse(t *testing.T) {
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("n\n"))
+	w.WriteString("n\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 
@@ -163,7 +163,7 @@ func TestGatewayResetCmd_AbortsOnNoResponse(t *testing.T) {
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("n\n"))
+	w.WriteString("n\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 
@@ -427,7 +427,7 @@ func TestGatewayCleanCmd_AbortedOutputContainsNoDestructiveAction(t *testing.T) 
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("\n"))
+	w.WriteString("\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 
@@ -448,7 +448,7 @@ func TestGatewayResetCmd_WarningMessagesPrintedBeforePrompt(t *testing.T) {
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("n\n"))
+	w.WriteString("n\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 
@@ -472,7 +472,7 @@ func TestGatewayCleanCmd_WarningMessagesPrintedBeforePrompt(t *testing.T) {
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("n\n"))
+	w.WriteString("n\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 

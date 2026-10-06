@@ -388,14 +388,14 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 payload=cancel_payload.to_protobuf().SerializeToString(),
             )
         except NetworkError as exc:
-            logger.error("[EXECUTION] Cancel command failed: %s", exc, exc_info=True)
+            logger.exception("[EXECUTION] Cancel command failed: %s", exc)
             return CancelCommandResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.FAILED,
                 error=f"Command cancellation failed: {exc}. Check operator status and retry.",
             )
         except Exception as e:
-            logger.error("[EXECUTION] Cancel command failed: %s", e, exc_info=True)
+            logger.exception("[EXECUTION] Cancel command failed: %s", e)
             return CancelCommandResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.FAILED,

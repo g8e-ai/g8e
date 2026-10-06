@@ -28,7 +28,7 @@ func TestOpenForAppend_CreatesParentDirectories(t *testing.T) {
 	require.NoError(t, err)
 	defer f.Close()
 
-	_, err = f.Write([]byte("first"))
+	_, err = f.WriteString("first")
 	require.NoError(t, err)
 
 	got, err := svc.ReadFile(ctx, "nested/deep/dir/append.log")
@@ -57,7 +57,7 @@ func TestOpenForAppend_AppendsToExistingFile(t *testing.T) {
 
 	f, err := svc.OpenForAppend(ctx, "append.log", constants.PermFilePrivate)
 	require.NoError(t, err)
-	_, err = f.Write([]byte("line2\n"))
+	_, err = f.WriteString("line2\n")
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 

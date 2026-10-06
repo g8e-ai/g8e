@@ -488,7 +488,7 @@ Examples:
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			campaignID := args[0]
-			selector = selector.withArgs(args[1:])
+			selector = *selector.withArgs(args[1:])
 			formationCampaign := allFormations || len(formations) > 0
 			if allFormations && len(formations) > 0 {
 				return fmt.Errorf("evaluation: campaigns create: --formations and --all-formations are mutually exclusive: %w", constants.ErrEvaluationFlagsInvalid)

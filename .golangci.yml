@@ -21,8 +21,9 @@ linters:
     - gocyclo
     - misspell
     - unconvert
+    - whitespace
+    # - nolintlint  # Disabled pending removal of redundant G115 directives (46 issues)
     # - unparam  # Disabled for gradual compliance (27 issues)
-    # - whitespace  # Disabled for gradual compliance (1 issue)
     
     # Bug Prevention
     - bodyclose
@@ -30,12 +31,16 @@ linters:
     - durationcheck
     - reassign
     - makezero
+    - sqlclosecheck
+    - rowserrcheck
+    - wastedassign
+    - fatcontext
+    - recvcheck
+    - mirror
     # - contextcheck  # Disabled for gradual compliance (9 issues)
     # - copyloopvar  # Disabled for gradual compliance (14 issues)
     # - errorlint  # Disabled for gradual compliance (43 issues)
     # - nilerr  # Disabled for gradual compliance (16 issues)
-    # - rowserrcheck  # Disabled for gradual compliance (9 issues)
-    # - sqlclosecheck  # Disabled for gradual compliance (2 issues)
 
     # Security
     - gosec
@@ -86,6 +91,7 @@ linters:
       disable:
         - fieldalignment
         - shadow
+        - unusedwrite
       enable-all: true
     gocyclo:
       min-complexity: 60
@@ -110,6 +116,9 @@ linters:
           - gosec
         path: internal/cli/stream/proxy_command_unix\.go
         text: G702
+      - linters:
+          - recvcheck
+        path: internal/constants/operator_roles\.go
       - linters:
           - bodyclose
         path: internal/testutil/pubsub\.go

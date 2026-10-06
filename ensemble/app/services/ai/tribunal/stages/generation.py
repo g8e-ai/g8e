@@ -233,7 +233,7 @@ async def _run_generation_pass(
         if not response.text or not response.text.strip():
             error_msg = f"Pass {pass_index} ({member.value}): empty response"
             pass_errors.append(error_msg)
-            logger.error("[TRIBUNAL-PASS] %s", error_msg)
+            logger.exception("[TRIBUNAL-PASS] %s", error_msg)
             await _emit_pass_observation(
                 emitter,
                 pass_index,
@@ -381,7 +381,7 @@ async def _run_generation_pass(
     except Exception as exc:
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         pass_errors.append(error_msg)
-        logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)
+        logger.error("[TRIBUNAL-PASS] %s", error_msg)
         await _emit_pass_observation(
             emitter,
             pass_index,

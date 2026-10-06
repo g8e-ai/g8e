@@ -274,6 +274,9 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		}
 		existing[name] = true
 	}
+	if err := cols.Err(); err != nil {
+		return fmt.Errorf("audit_store: migrate receipts: cols iteration: %w", err)
+	}
 
 	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json", "event_type"} {
 		if existing[col] {
@@ -307,6 +310,9 @@ func migrateCommitmentColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 			return fmt.Errorf("audit_store: migrate commitments: scan: %w", err)
 		}
 		existing[name] = true
+	}
+	if err := cols.Err(); err != nil {
+		return fmt.Errorf("audit_store: migrate commitments: cols iteration: %w", err)
 	}
 	if existing["warden_intent_signature_digest"] {
 		return nil

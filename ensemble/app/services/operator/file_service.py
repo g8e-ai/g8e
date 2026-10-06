@@ -166,7 +166,7 @@ class OperatorFileService:
                 )
                 resolved_operator = resolved_operators[0]
             except Exception as e:
-                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
+                logger.exception("[FILE-ERROR] Operator resolution failed: %s", e)
                 return FileEditResult(
                     success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
@@ -203,7 +203,7 @@ class OperatorFileService:
                             blocking_issues=risk_analysis.blocking_issues,
                         )
                 except Exception as e:
-                    logger.error("[FILE-RISK] Failed to analyze risk: %s", e)
+                    logger.exception("[FILE-RISK] Failed to analyze risk: %s", e)
 
             # 4. Approval gate (only for write/update)
             approval_result = None
@@ -270,7 +270,7 @@ class OperatorFileService:
                 error=internal_result.error if internal_result else "Execution result is None",
             )
         except Exception as e:
-            logger.error("[FILE-ERROR] Unexpected error in execute_file_edit: %s", e, exc_info=True)
+            logger.error("[FILE-ERROR] Unexpected error in execute_file_edit: %s", e)
             return FileEditResult(
                 success=False,
                 error=f"File edit execution failed: {e}. Check operator status and retry.",
@@ -298,7 +298,7 @@ class OperatorFileService:
                 )
                 resolved_operator = resolved_operators[0]
             except Exception as e:
-                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
+                logger.exception("[FILE-ERROR] Operator resolution failed: %s", e)
                 return FetchFileHistoryToolResult(
                     success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
@@ -360,7 +360,7 @@ class OperatorFileService:
                 error=internal_result.error if internal_result else "Execution result is None",
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[FILE-ERROR] Unexpected error in execute_fetch_file_history: %s", e, exc_info=True
             )
             return FetchFileHistoryToolResult(
@@ -390,7 +390,7 @@ class OperatorFileService:
                 )
                 resolved_operator = resolved_operators[0]
             except Exception as e:
-                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
+                logger.error("[FILE-ERROR] Operator resolution failed: %s", e)
                 return FetchFileDiffToolResult(
                     success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",

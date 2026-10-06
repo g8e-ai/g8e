@@ -124,7 +124,7 @@ class WebSearchProvider:
                 favicon_url=favicon_url,
             )
         except Exception as e:
-            logger.error("Failed to extract source info from URI=%s, title=%s: %s", uri, title, e)
+            logger.exception("Failed to extract source info from URI=%s, title=%s: %s", uri, title, e)
             return GroundingSourceInfo(
                 uri=uri or "",
                 domain=title if title else "",
@@ -258,7 +258,7 @@ class WebSearchProvider:
             return text_clean
 
         except Exception as e:
-            logger.error("Failed to add inline citations: %s", e, exc_info=True)
+            logger.error("Failed to add inline citations: %s", e)
             return text
 
     def normalize_citation_numbers(self, markdown_text: str | None) -> str | None:
@@ -411,7 +411,7 @@ class WebSearchProvider:
             except GoogleAPICallError as e:
                 last_error = e
                 if not isinstance(e, (ServiceUnavailable, ResourceExhausted)):
-                    logger.error("[WEB_SEARCH] Non-retryable API error: %s", e)
+                    logger.exception("[WEB_SEARCH] Non-retryable API error: %s", e)
                     raise NetworkError(
                         message=f"Web search API call failed: {e}",
                         details={"query": query, "attempt": attempt + 1},
@@ -424,7 +424,7 @@ class WebSearchProvider:
                     e,
                 )
             except Exception as e:
-                logger.error("[WEB_SEARCH] Unexpected error: %s", e, exc_info=True)
+                logger.error("[WEB_SEARCH] Unexpected error: %s", e)
                 return SearchWebResult(
                     success=False,
                     query=query,

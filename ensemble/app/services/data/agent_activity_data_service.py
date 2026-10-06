@@ -92,7 +92,7 @@ class AgentActivityDataService:
             return metadata
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Failed to record agent activity metadata %s: %s", metadata.id, e, exc_info=True
             )
             raise DatabaseError(
@@ -186,7 +186,7 @@ class AgentActivityDataService:
             return [AgentActivityMetadata.model_validate(data) for data in results]
 
         except Exception as e:
-            logger.error("Failed to query agent activity metadata: %s", e, exc_info=True)
+            logger.error("Failed to query agent activity metadata: %s", e)
             raise DatabaseError(
                 message=f"Failed to query agent activity metadata: {e}",
                 code=ErrorCode.DB_QUERY_ERROR,

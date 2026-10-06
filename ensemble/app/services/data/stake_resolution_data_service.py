@@ -76,7 +76,7 @@ class StakeResolutionDataService:
             doc.setdefault("id", doc_id)
             return StakeResolution.model_validate(doc)
         except Exception as exc:
-            logger.error("Failed to get stake_resolution %s: %s", doc_id, exc, exc_info=True)
+            logger.exception("Failed to get stake_resolution %s: %s", doc_id, exc)
             raise DatabaseError(
                 message=f"Failed to get stake_resolution: {exc}",
                 code=ErrorCode.DB_QUERY_ERROR,

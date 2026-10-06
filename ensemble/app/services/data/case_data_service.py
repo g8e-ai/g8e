@@ -74,7 +74,7 @@ class CaseDataService:
         except G8eError:
             raise
         except Exception as e:
-            logger.error("Failed to %s %s: %s", action_msg, case_id, e, exc_info=True)
+            logger.exception("Failed to %s %s: %s", action_msg, case_id, e)
             raise DatabaseError(
                 message=f"Failed to {action_msg}: {e}",
                 code=error_code,

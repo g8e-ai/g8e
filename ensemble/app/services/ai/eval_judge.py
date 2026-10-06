@@ -283,7 +283,7 @@ class EvalJudge:
             except EvalJudgeError:
                 raise
             except ContextWindowExceededError as exc:
-                logger.error(
+                logger.exception(
                     "EvalJudge prompt exceeded the model context window, not retrying: %s", exc
                 )
                 raise EvalJudgeError(
@@ -304,7 +304,7 @@ class EvalJudge:
                     continue
                 break
 
-        logger.error("EvalJudge failed after %d attempt(s)", _MAX_RETRIES, exc_info=True)
+        logger.error("EvalJudge failed after %d attempt(s)", _MAX_RETRIES)
         raise EvalJudgeError(
             f"Judge could not produce a valid grade after {_MAX_RETRIES} attempt(s): {last_error}",
             model_calls=model_calls,
@@ -457,7 +457,7 @@ class EvalJudge:
                     continue
                 break
 
-        logger.error("EvalJudge Jev failed after %d attempt(s)", _MAX_RETRIES, exc_info=True)
+        logger.exception("EvalJudge Jev failed after %d attempt(s)", _MAX_RETRIES)
         raise EvalJudgeError(
             f"Judge could not produce a valid grade after {_MAX_RETRIES} attempt(s): {last_error}",
             model_calls=model_calls,

@@ -345,7 +345,7 @@ async def user_settings(cache_aside_service, test_settings):
     try:
         return await settings_service.get_user_settings("test-user-id")
     except Exception as e:
-        logger.warning(f"Failed to load user settings from operator: {e}")
+        logger.warning("Failed to load user settings from operator: %s", e)
 
     # Fallback to mock settings if operator is offline or connection fails
     return G8eeUserSettings(llm=llm or LLMSettings(), search=search or test_settings.search)

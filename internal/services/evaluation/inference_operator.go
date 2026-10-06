@@ -13,6 +13,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
 // InferenceOperatorStatus summarizes one active inference-capable Operator
@@ -25,15 +26,15 @@ type InferenceOperatorStatus struct {
 	OllamaEndpoint    string
 }
 
-// ActiveInferenceOperators returns every active remote Operator with
-// runtime_config.inference_enabled set.
+// ActiveInferenceOperators returns every active remote or configured embedded
+// Operator whose runtime roles include Inference.
 func ActiveInferenceOperators(operators []models.OperatorDocumentGo) []InferenceOperatorStatus {
 	matches := make([]InferenceOperatorStatus, 0)
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+		if op.Status != constants.OperatorStatusActive || (op.OperatorType != constants.OperatorTypeRemote && op.OperatorType != constants.OperatorTypeEmbedded) {
 			continue
 		}
-		if op.RuntimeConfig == nil || !op.RuntimeConfig.InferenceEnabled {
+		if op.RuntimeConfig == nil || !operatorcapability.GetOperatorRoles(op).Has(constants.OperatorRoleInference) {
 			continue
 		}
 		if op.OperatorSessionID == "" {

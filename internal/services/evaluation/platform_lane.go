@@ -21,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -69,8 +70,8 @@ func (l *CommandLane) ResolveTarget(ctx context.Context) (Target, error) {
 	if err != nil {
 		return Target{}, err
 	}
-	if operator == nil || operator.ID == "" || operator.OperatorSessionID == "" || operator.Status != constants.OperatorStatusActive || operator.OperatorType != constants.OperatorTypeRemote {
-		return Target{}, fmt.Errorf("%w: selected operator is not an active remote session", constants.ErrEvaluationTargetUnavailable)
+	if operator == nil || operator.ID == "" || !operatorcapability.IsDataOperator(*operator) {
+		return Target{}, fmt.Errorf("%w: selected operator is not an active Data session", constants.ErrEvaluationTargetUnavailable)
 	}
 	return Target{OperatorID: operator.ID, SessionID: operator.OperatorSessionID}, nil
 }

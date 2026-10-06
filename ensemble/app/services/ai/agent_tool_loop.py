@@ -494,7 +494,7 @@ async def orchestrate_tool_execution(
                     )
                 except (TribunalError, ValidationError) as exc:
                     error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
-                    logger.error(
+                    logger.exception(
                         "[TRIBUNAL-ERROR] %s (%s): %s",
                         type(exc).__name__,
                         tool_name,
@@ -564,7 +564,7 @@ async def orchestrate_tool_execution(
                             slash_event, payload, g8e_context
                         )
             except Exception as e:
-                logger.error("[REPUTATION] Failed to resolve stakes: %s", e, exc_info=True)
+                logger.error("[REPUTATION] Failed to resolve stakes: %s", e)
 
         task_id = f"reputation_resolution_{execution_id}"
         task = asyncio.create_task(_resolve_and_emit(), name=task_id)

@@ -326,7 +326,7 @@ def pytest_configure(config):
 
     env_llm = _llm_settings_from_env()
     if env_llm is not None:
-        logger.info(f"Overriding LLM settings from env: provider={env_llm.primary_provider}")
+        logger.info("Overriding LLM settings from env: provider=%s", env_llm.primary_provider)
         set_llm_settings(env_llm)
 
     env_search = _web_search_settings_from_env()

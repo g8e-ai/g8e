@@ -133,6 +133,9 @@ func tableColumns(db *sqliteutil.DB, table string) (map[string]bool, error) {
 		}
 		cols[name] = true
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return cols, nil
 }
 
@@ -241,6 +244,9 @@ func backfillEventChain(db *sqliteutil.DB, logger *slog.Logger, encryptionVault 
 
 			head = auditChainHead{Seq: nextSeq, PrevHash: hash}
 			backfilled++
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("audit chain backfill: rows iteration: %w", err)
 		}
 
 		if backfilled > 0 {

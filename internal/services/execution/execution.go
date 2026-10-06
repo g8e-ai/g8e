@@ -435,11 +435,10 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	// This reduces the risk of command injection and satisfies security scanners.
 
 	var cmd *exec.Cmd
-	useShell := false
 
 	// Check for shell-specific characters that might require a shell
 	// Or if the original command explicitly requested a shell (e.g. for builtins like 'exit')
-	useShell = isShellCommand || security.IsShellRequired(fullCommand)
+	useShell := isShellCommand || security.IsShellRequired(fullCommand)
 
 	if useShell {
 		// Apply memory limit via ulimit if configured - only on Linux

@@ -118,9 +118,8 @@ func (m Model) renderLedger(width, height int) string {
 	lines = append(lines, header, "")
 
 	visibleEntries := m.ledger
-	scrollOffset := 0
 	if m.ledgerScroll > 0 && m.ledgerScroll < len(m.ledger) {
-		scrollOffset = len(m.ledger) - m.ledgerScroll
+		scrollOffset := len(m.ledger) - m.ledgerScroll
 		visibleEntries = m.ledger[:scrollOffset]
 	}
 

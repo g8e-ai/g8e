@@ -187,7 +187,7 @@ class AIGenerationConfigBuilder:
             stop_sequences=stop_sequences,
         )
 
-        logger.info(f" [BUILD_CONFIG] assistant model={model}, max_tokens={effective_max_tokens}")
+        logger.info(" [BUILD_CONFIG] assistant model=%s, max_tokens=%s", model, effective_max_tokens)
         return settings
 
     @staticmethod
