@@ -11,9 +11,11 @@ import pytest
 
 from app.constants import (
     AgentMode,
+    LLMProvider,
     TriageComplexityClassification,
 )
 from app.models.agents.triage import TriageRequest
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.triage import TriageAgent
 from tests.fakes.fake_llm_provider import FakeLLMProvider
 
@@ -27,15 +29,13 @@ def fake_provider():
 
 @pytest.fixture
 def mock_settings():
-    from app.constants import LLMProvider
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     return G8eeUserSettings(
         llm=LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="main-model",
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="lite-model",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="main-model",
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="lite-model",
         )
     )
 

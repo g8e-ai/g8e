@@ -72,9 +72,11 @@ def check_file_for_violations(file_path: Path) -> list[str]:
     for node in ast.walk(tree):
         # 1. Check for imports of the data service
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                if "reputation_data_service" in alias.name:
-                    violations.append(f"Import of reputation_data_service: {alias.name}")
+            violations.extend(
+                f"Import of reputation_data_service: {alias.name}"
+                for alias in node.names
+                if "reputation_data_service" in alias.name
+            )
         elif isinstance(node, ast.ImportFrom):
             if node.module and "reputation_data_service" in node.module:
                 violations.append(f"Import from reputation_data_service: {node.module}")

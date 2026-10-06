@@ -46,6 +46,29 @@ func TestNewModel(t *testing.T) {
 	})
 }
 
+func TestSessionRotationReplacesRequestsAndSSESession(t *testing.T) {
+	oldSession := &testSession{}
+	newSession := &testSession{}
+	manager := newSessionManager(oldSession, "user-old")
+	m := NewModel(Options{
+		Session:        oldSession,
+		Identity:       Identity{UserID: "user-old", CLISessionID: "cli-old"},
+		sessionManager: manager,
+	})
+
+	model, _ := m.Update(SessionRotatedMsg{
+		Session:  newSession,
+		Identity: Identity{UserID: "user-new", CLISessionID: "cli-new"},
+	})
+	m = model.(Model)
+
+	assert.Equal(t, "user-new", m.identity.UserID)
+	assert.Same(t, newSession, m.gw.session)
+	gw, _, _ := manager.snapshot()
+	assert.Same(t, newSession, gw.session)
+	assert.Contains(t, m.ledger[len(m.ledger)-1].message, "rotated")
+}
+
 func TestApplyPipelineMsg(t *testing.T) {
 	tests := []struct {
 		name       string

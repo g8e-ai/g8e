@@ -82,9 +82,7 @@ class GatewayOperatorClient:
             "unbind operators",
         )
 
-    async def stop(
-        self, *, context: G8eHttpContext, operator_session_id: str, reason: str = ""
-    ) -> dict[str, Any]:
+    async def stop(self, *, operator_session_id: str, reason: str = "") -> dict[str, Any]:
         return await self._post(
             "/api/v1/operators/stop",
             {"operator_session_id": operator_session_id, "reason": reason},
@@ -184,7 +182,7 @@ class GatewayOperatorClient:
         return await self._post("/api/v1/audit/records", body, "ingest audit record")
 
     def _ensure_mtls(self) -> None:
-        self._internal_http_client._ensure_mtls()
+        self._internal_http_client.ensure_mtls()
 
     async def _post(self, path: str, body: dict[str, Any], operation: str) -> dict[str, Any]:
         self._ensure_mtls()

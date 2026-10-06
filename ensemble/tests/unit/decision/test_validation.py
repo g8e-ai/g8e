@@ -27,24 +27,24 @@ pytestmark = pytest.mark.unit
 class TestValidateJevLiteCoexistence:
     def test_returns_no_errors_for_generative_lite_provider(self):
         llm = LLMSettings(
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="qwen3:0.6b",
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="qwen3:0.6b",
             llm_command_gen_enabled=True,
         )
         assert validate_jev_lite_coexistence(llm) == []
 
     def test_returns_no_errors_for_jev_when_tribunal_disabled(self):
         llm = LLMSettings(
-            lite_provider=LLMProvider.JEV,
-            lite_model="nimble",
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model="nimble",
             llm_command_gen_enabled=False,
         )
         assert validate_jev_lite_coexistence(llm) == []
 
     def test_rejects_jev_when_tribunal_enabled(self):
         llm = LLMSettings(
-            lite_provider=LLMProvider.JEV,
-            lite_model="nimble",
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model="nimble",
             llm_command_gen_enabled=True,
         )
         errors = validate_jev_lite_coexistence(llm)
@@ -63,15 +63,15 @@ class TestJevGenerativeLiteWarning:
         caplog.set_level(logging.WARNING)
         log_jev_generative_lite_warning(
             logging.getLogger("test"),
-            LLMSettings(lite_provider=LLMProvider.OLLAMA, lite_model="qwen3:0.6b"),
+            LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="qwen3:0.6b"),
         )
         assert caplog.records == []
 
         log_jev_generative_lite_warning(
             logging.getLogger("test"),
             LLMSettings(
-                lite_provider=LLMProvider.JEV,
-                lite_model="nimble",
+                llm_lite_provider=LLMProvider.JEV,
+                llm_lite_model="nimble",
             ),
         )
         assert len(caplog.records) == 1

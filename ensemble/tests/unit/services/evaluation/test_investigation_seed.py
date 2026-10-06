@@ -54,18 +54,18 @@ class _Harness:
         self.investigation_service = MagicMock()
         self.investigation_service.investigation_data_service = self.data_service
         self.investigation_service.update_investigation = AsyncMock(
-            side_effect=lambda *a, **kw: self._record("investigation_title")
+            side_effect=lambda *_a, **_kw: self._record("investigation_title")
         )
         self.investigation_service.persist_ai_message = AsyncMock(
             side_effect=lambda **kw: self._record("ai:" + kw["sender"].name) or True
         )
         self.case_service = MagicMock()
         self.case_service.update_case = AsyncMock(
-            side_effect=lambda *a, **kw: self._record("case_title")
+            side_effect=lambda *_a, **_kw: self._record("case_title")
         )
         self.memory_service = MagicMock()
         self.memory_service.save_memory = AsyncMock(
-            side_effect=lambda *a, **kw: self._record("case_memory")
+            side_effect=lambda *_a, **_kw: self._record("case_memory")
         )
         self.service = InvestigationSeedService(
             investigation_service=self.investigation_service,
@@ -77,18 +77,18 @@ class _Harness:
         self.log.append(entry)
 
 
-def _context(**overrides) -> G8eHttpContext:
-    fields = {
+def _context(**overrides: str | None) -> G8eHttpContext:
+    fields: dict[str, str | None] = {
         "user_id": "user-1",
         "case_id": "case-1",
         "investigation_id": "inv-1",
         "web_session_id": "web-1",
     }
     fields.update(overrides)
-    return G8eHttpContext(**fields)
+    return G8eHttpContext.model_validate(fields)
 
 
-def _grep_failure(**overrides) -> EvaluationSeedHistoryEvent:
+def _grep_failure(**overrides: str) -> EvaluationSeedHistoryEvent:
     fields = {
         "event_type": "g8e.v1.operator.filesystem.grep.failed",
         "actor": "system",
@@ -100,7 +100,7 @@ def _grep_failure(**overrides) -> EvaluationSeedHistoryEvent:
         "error_type": "validation_error",
     }
     fields.update(overrides)
-    return EvaluationSeedHistoryEvent(**fields)
+    return EvaluationSeedHistoryEvent.model_validate(fields)
 
 
 async def test_apply_writes_title_then_turns_then_history_then_memory_in_that_order():

@@ -46,7 +46,9 @@ async def test_list_reads_gateway_operator_documents(gateway_client, internal_ht
 
     assert result == [{"id": "op-1"}]
     internal_http_client.client.get.assert_awaited_once()
-    assert internal_http_client.client.get.await_args.kwargs["params"] == {"user_id": "user-1"}
+    await_args = internal_http_client.client.get.await_args
+    assert await_args is not None
+    assert await_args.kwargs["params"] == {"user_id": "user-1"}
     internal_http_client._ensure_mtls.assert_called()
 
 
@@ -67,7 +69,9 @@ async def test_dispatch_sends_base64_typed_payload(gateway_client, internal_http
     )
 
     assert result == {"transaction_id": "tx-1"}
-    body = internal_http_client.client.post.await_args.kwargs["json_data"]
+    await_args = internal_http_client.client.post.await_args
+    assert await_args is not None
+    body = await_args.kwargs["json_data"]
     assert body["target_operator_session_id"] == "sess-1"
     assert body["event_type"] == "g8e.v1.operator.command.requested"
     assert body["payload"] == "dHlwZWQtcGF5bG9hZA=="
@@ -96,7 +100,9 @@ async def test_bind_sends_canonical_gateway_body(gateway_client, internal_http_c
     result = await gateway_client.bind(context=context, operator_ids=["op-1"])
 
     assert result["bound_count"] == 1
-    body = internal_http_client.client.post.await_args.kwargs["json_data"]
+    await_args = internal_http_client.client.post.await_args
+    assert await_args is not None
+    body = await_args.kwargs["json_data"]
     assert body == {
         "operator_ids": ["op-1"],
         "user_id": "user-1",
@@ -117,7 +123,9 @@ async def test_validate_session_calls_gateway(gateway_client, internal_http_clie
     )
 
     assert result["valid"] is True
-    body = internal_http_client.client.post.await_args.kwargs["json_data"]
+    await_args = internal_http_client.client.post.await_args
+    assert await_args is not None
+    body = await_args.kwargs["json_data"]
     assert body == {
         "operator_session_id": "sess-1",
         "cli_session_id": "cli-1",

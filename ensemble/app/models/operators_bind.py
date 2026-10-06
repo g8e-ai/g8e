@@ -23,7 +23,7 @@ class BindOperatorsResponse(G8eBaseModel):
     bound_operator_ids: list[str] = Field(default_factory=list)
     failed_operator_ids: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
-    statusCode: int = Field(default=200)
+    status_code: int = Field(default=200, alias="statusCode")
     error: str | None = Field(default=None)
 
 
@@ -42,5 +42,5 @@ class UnbindOperatorsResponse(G8eBaseModel):
     unbound_operator_ids: list[str] = Field(default_factory=list)
     failed_operator_ids: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
-    statusCode: int = Field(default=200)
+    status_code: int = Field(default=200, alias="statusCode")
     error: str | None = Field(default=None)

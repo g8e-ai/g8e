@@ -30,6 +30,7 @@ import (
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	cligateway "github.com/g8e-ai/g8e/v2/internal/cli/gateway"
 	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
@@ -915,21 +916,7 @@ func fetchEnrolled(client authcmd.APIClient) ([]models.PlatformEnrollmentEnrolle
 	if client == nil {
 		return nil, true
 	}
-	body, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentEnrolled)
-	if err != nil {
-		return nil, false
-	}
-	var resp models.PlatformEnrollmentEnrolledResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, false
-	}
-	completed := make([]models.PlatformEnrollmentEnrolledRequest, 0, len(resp.Enrollments))
-	for _, e := range resp.Enrollments {
-		if e.State == models.PlatformEnrollmentStateCompleted {
-			completed = append(completed, e)
-		}
-	}
-	return completed, true
+	return cligateway.FetchEnrolled(client.Get)
 }
 
 func printEnrolledKinds(w io.Writer, title, empty string, enrolled []models.PlatformEnrollmentEnrolledRequest, ok bool, kinds ...models.PlatformComponentKind) {

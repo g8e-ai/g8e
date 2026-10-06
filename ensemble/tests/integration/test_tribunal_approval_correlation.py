@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import G8EE_COMPONENT, CommandGenerationOutcome, EventType
+from app.constants import G8EE_COMPONENT, CommandGenerationOutcome, ConsensusMember, EventType
 from app.models.agents.tribunal import (
     CandidateCommand,
 )
@@ -47,8 +47,6 @@ class TestTribunalApprovalCorrelation:
             user_id="correlation-test-user-001",
         )
         event_svc = make_event_service()
-
-        from app.constants import ConsensusMember
 
         mock_candidates = [
             CandidateCommand(command="ls -la", pass_index=0, member=ConsensusMember.AXIOM),

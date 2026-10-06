@@ -11,6 +11,7 @@ from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
 
+from app.errors import ValidationError
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -288,14 +289,10 @@ class OpenAIProvider(LLMProvider):
                         try:
                             args = json.loads(tc.function.arguments)
                         except json.JSONDecodeError as exc:
-                            from app.errors import ValidationError
-
                             raise ValidationError(
                                 "Provider returned invalid tool arguments JSON"
                             ) from exc
                         if not isinstance(args, dict):
-                            from app.errors import ValidationError
-
                             raise ValidationError("Provider tool arguments must be a JSON object")
                         calls.append(
                             ToolCall(name=tc.function.name, args=args, id=getattr(tc, "id", None))
@@ -390,14 +387,10 @@ class OpenAIProvider(LLMProvider):
                     try:
                         args = json.loads(tc.function.arguments)
                     except json.JSONDecodeError as exc:
-                        from app.errors import ValidationError
-
                         raise ValidationError(
                             "Provider returned invalid tool arguments JSON"
                         ) from exc
                     if not isinstance(args, dict):
-                        from app.errors import ValidationError
-
                         raise ValidationError("Provider tool arguments must be a JSON object")
                     parts.append(
                         Part(

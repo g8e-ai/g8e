@@ -24,7 +24,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 
+from app.clients.governance_client import GovernanceClient
 from app.constants import EventType
 from app.constants.config import G8EE_COMPONENT as G8EE_COMPONENT_STR
 from app.models.command_request_payloads import (
@@ -32,16 +37,13 @@ from app.models.command_request_payloads import (
     DocumentUpdateRequestPayload,
 )
 from app.models.pubsub_messages import G8eMessage
+from app.models.settings import TLSConfig
 
 pytestmark = pytest.mark.unit
 
 
 def _generate_operator_cert_with_spiffe(cert_path: str, key_path: str, spiffe_uri: str) -> None:
     """Generate a self-signed ECDSA cert with a SPIFFE URI SAN and write PEM files."""
-    from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.x509.oid import NameOID
 
     private_key = ec.generate_private_key(ec.SECP256R1())
     subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "test-operator")])
@@ -86,10 +88,6 @@ def operator_cert_no_spiffe(tmp_path):
     """Create temp cert/key files WITHOUT a SPIFFE URI SAN."""
     cert_path = str(tmp_path / "nosan.crt")
     key_path = str(tmp_path / "nosan.key")
-    from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.x509.oid import NameOID
 
     private_key = ec.generate_private_key(ec.SECP256R1())
     subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "test-no-san")])
@@ -121,10 +119,8 @@ class TestGovernanceClientOperatorBinding:
 
     def test_resolve_operator_identity_from_cert(self, operator_cert_tmpdir):
         """_resolve_operator_identity_from_cert extracts operator_id and operator_session_id from SPIFFE URI SAN."""
-        from app.clients.governance_client import GovernanceClient
-        from app.models.settings import TLSConfig
 
-        cert_path, key_path, spiffe_uri = operator_cert_tmpdir
+        cert_path, key_path, _spiffe_uri = operator_cert_tmpdir
         client = GovernanceClient(
             tls_config=TLSConfig(
                 ca_cert_path=cert_path,
@@ -138,7 +134,6 @@ class TestGovernanceClientOperatorBinding:
 
     def test_resolve_operator_identity_returns_none_when_no_cert(self):
         """_resolve_operator_identity_from_cert returns (None, None) when no client cert is configured."""
-        from app.clients.governance_client import GovernanceClient
 
         client = GovernanceClient(tls_config=None)
         op_id, op_session = client._resolve_operator_identity_from_cert()
@@ -149,8 +144,6 @@ class TestGovernanceClientOperatorBinding:
         self, operator_cert_no_spiffe
     ):
         """_resolve_operator_identity_from_cert returns (None, None) when the cert has no URI SAN."""
-        from app.clients.governance_client import GovernanceClient
-        from app.models.settings import TLSConfig
 
         cert_path, key_path = operator_cert_no_spiffe
         client = GovernanceClient(
@@ -166,8 +159,6 @@ class TestGovernanceClientOperatorBinding:
 
     def test_resolve_operator_identity_caches_result(self, operator_cert_tmpdir):
         """_resolve_operator_identity_from_cert caches the parsed identity after the first call."""
-        from app.clients.governance_client import GovernanceClient
-        from app.models.settings import TLSConfig
 
         cert_path, key_path, _ = operator_cert_tmpdir
         client = GovernanceClient(
@@ -180,6 +171,7 @@ class TestGovernanceClientOperatorBinding:
         # First call parses the cert
         op_id_1, op_session_1 = client._resolve_operator_identity_from_cert()
         assert op_id_1 == "test-op-id"
+        assert op_session_1 == "test-op-session"
         # Second call returns cached values without re-reading the cert
         with patch(
             "app.clients.governance_client.GovernanceClient._read_cert_spiffe_uri"
@@ -194,10 +186,8 @@ class TestGovernanceClientOperatorBinding:
         self, operator_cert_tmpdir
     ):
         """submit_envelope stamps operator_id + operator_session_id from cert for host actions."""
-        from app.clients.governance_client import GovernanceClient
-        from app.models.settings import TLSConfig
 
-        cert_path, key_path, spiffe_uri = operator_cert_tmpdir
+        cert_path, key_path, _spiffe_uri = operator_cert_tmpdir
         client = GovernanceClient(
             tls_config=TLSConfig(
                 ca_cert_path=cert_path,
@@ -239,12 +229,15 @@ class TestGovernanceClientOperatorBinding:
         class FakeSession:
             def post(self, url, data=None):
                 nonlocal captured_envelope
+                assert data is not None
                 captured_envelope = json.loads(data)
                 return FakeResponse()
 
-        with patch.object(client, "_get_http_session", new=AsyncMock(return_value=FakeSession())):
-            with patch.object(client, "fetch_state_root", new=AsyncMock(return_value="test-root")):
-                await client.submit_envelope(message)
+        with (
+            patch.object(client, "_get_http_session", new=AsyncMock(return_value=FakeSession())),
+            patch.object(client, "fetch_state_root", new=AsyncMock(return_value="test-root")),
+        ):
+            await client.submit_envelope(message)
 
         assert captured_envelope is not None, "envelope was not submitted"
         assert captured_envelope.get("operator_id") == "test-op-id"
@@ -255,8 +248,6 @@ class TestGovernanceClientOperatorBinding:
         self, operator_cert_tmpdir
     ):
         """submit_envelope preserves explicit operator_id/operator_session_id for host actions."""
-        from app.clients.governance_client import GovernanceClient
-        from app.models.settings import TLSConfig
 
         cert_path, key_path, _ = operator_cert_tmpdir
         client = GovernanceClient(
@@ -299,12 +290,15 @@ class TestGovernanceClientOperatorBinding:
         class FakeSession:
             def post(self, url, data=None):
                 nonlocal captured_envelope
+                assert data is not None
                 captured_envelope = json.loads(data)
                 return FakeResponse()
 
-        with patch.object(client, "_get_http_session", new=AsyncMock(return_value=FakeSession())):
-            with patch.object(client, "fetch_state_root", new=AsyncMock(return_value="test-root")):
-                await client.submit_envelope(message)
+        with (
+            patch.object(client, "_get_http_session", new=AsyncMock(return_value=FakeSession())),
+            patch.object(client, "fetch_state_root", new=AsyncMock(return_value="test-root")),
+        ):
+            await client.submit_envelope(message)
 
         assert captured_envelope is not None
         assert captured_envelope.get("operator_id") == "explicit-op-id"
@@ -313,8 +307,6 @@ class TestGovernanceClientOperatorBinding:
     @pytest.mark.asyncio
     async def test_submit_envelope_keeps_app_document_writes_unbound(self, operator_cert_tmpdir):
         """Under INV-AUTH-ID-05 and INV-GOV-WARD-07, app document writes must remain unbound."""
-        from app.clients.governance_client import GovernanceClient
-        from app.models.settings import TLSConfig
 
         cert_path, key_path, _ = operator_cert_tmpdir
         client = GovernanceClient(
@@ -357,12 +349,15 @@ class TestGovernanceClientOperatorBinding:
         class FakeSession:
             def post(self, url, data=None):
                 nonlocal captured_envelope
+                assert data is not None
                 captured_envelope = json.loads(data)
                 return FakeResponse()
 
-        with patch.object(client, "_get_http_session", new=AsyncMock(return_value=FakeSession())):
-            with patch.object(client, "fetch_state_root", new=AsyncMock(return_value="test-root")):
-                await client.submit_envelope(message)
+        with (
+            patch.object(client, "_get_http_session", new=AsyncMock(return_value=FakeSession())),
+            patch.object(client, "fetch_state_root", new=AsyncMock(return_value="test-root")),
+        ):
+            await client.submit_envelope(message)
 
         assert captured_envelope is not None
         assert captured_envelope.get("operator_id", "") == ""
@@ -373,8 +368,6 @@ class TestGovernanceClientOperatorBinding:
         self, operator_cert_tmpdir
     ):
         """Explicit operator identity on app document writes is stripped so Gateway executes them."""
-        from app.clients.governance_client import GovernanceClient
-        from app.models.settings import TLSConfig
 
         cert_path, key_path, _ = operator_cert_tmpdir
         client = GovernanceClient(
@@ -419,12 +412,15 @@ class TestGovernanceClientOperatorBinding:
         class FakeSession:
             def post(self, url, data=None):
                 nonlocal captured_envelope
+                assert data is not None
                 captured_envelope = json.loads(data)
                 return FakeResponse()
 
-        with patch.object(client, "_get_http_session", new=AsyncMock(return_value=FakeSession())):
-            with patch.object(client, "fetch_state_root", new=AsyncMock(return_value="test-root")):
-                await client.submit_envelope(message)
+        with (
+            patch.object(client, "_get_http_session", new=AsyncMock(return_value=FakeSession())),
+            patch.object(client, "fetch_state_root", new=AsyncMock(return_value="test-root")),
+        ):
+            await client.submit_envelope(message)
 
         assert captured_envelope is not None
         assert captured_envelope.get("operator_id", "") == ""

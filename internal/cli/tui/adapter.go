@@ -39,8 +39,8 @@ type messageSender interface {
 // Operator list, platform enrollments, and Gateway health to bubbletea
 // messages.
 type Adapter struct {
-	gw     *gateway
-	sender messageSender
+	sessions *sessionManager
+	sender   messageSender
 }
 
 // wireEvent is the inner event of a Gateway SSE frame. Gateway producers
@@ -64,10 +64,11 @@ const sessionExpiredDetail = "CLI session expired — run 'g8e auth refresh'"
 // NewAdapter creates an Adapter over the CLI session. userID scopes the
 // Operator list the same way 'g8e gw status' does.
 func NewAdapter(session Session, userID string, sender messageSender) *Adapter {
-	if session == nil {
-		return &Adapter{sender: sender}
-	}
-	return &Adapter{gw: &gateway{session: session, userID: userID}, sender: sender}
+	return newAdapterWithManager(newSessionManager(session, userID), sender)
+}
+
+func newAdapterWithManager(sessions *sessionManager, sender messageSender) *Adapter {
+	return &Adapter{sessions: sessions, sender: sender}
 }
 
 // Run streams the CLI session's SSE events into the program until ctx is
@@ -78,11 +79,35 @@ func NewAdapter(session Session, userID string, sender messageSender) *Adapter {
 // reconciliation the console performs. Reconnects use the shared sse.Client
 // backoff.
 func (a *Adapter) Run(ctx context.Context) {
-	if a.gw == nil {
+	if a.sessions == nil {
 		return
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	for {
+		gw, generation, changed := a.sessions.snapshot()
+		if gw == nil {
+			return
+		}
+		if !a.runSession(ctx, gw, generation, changed) {
+			return
+		}
+	}
+}
+
+// runSession streams one CLI session. A replacement session cancels this
+// stream and returns true so Run can open the new stream with fresh headers.
+func (a *Adapter) runSession(ctx context.Context, gw *gateway, generation uint64, changed <-chan struct{}) bool {
+	streamCtx, cancelStream := context.WithCancel(ctx)
+	defer cancelStream()
+	go func() {
+		select {
+		case <-streamCtx.Done():
+		case <-changed:
+			cancelStream()
+		}
+	}()
 
 	connected := make(chan struct{}, 1)
 	approvalsChanged := make(chan struct{}, 1)
@@ -94,7 +119,7 @@ func (a *Adapter) Run(ctx context.Context) {
 		}
 	}
 
-	stream := a.gw.session.NewSSEClient()
+	stream := gw.session.NewSSEClient()
 	stream.SetReconnectOnClose(true)
 	stream.SetOnConnect(func() {
 		a.sender.Send(ConnStatusMsg{Status: ConnConnected})
@@ -111,12 +136,12 @@ func (a *Adapter) Run(ctx context.Context) {
 	refresherDone := make(chan struct{})
 	go func() {
 		defer close(refresherDone)
-		a.refresh(ctx, connected, approvalsChanged, enrollmentsChanged)
+		a.refresh(streamCtx, connected, approvalsChanged, enrollmentsChanged)
 	}()
 	defer func() { <-refresherDone }()
 
 	a.sender.Send(ConnStatusMsg{Status: ConnConnecting})
-	stream.Run(ctx, func(eventType, data string) {
+	stream.Run(streamCtx, func(eventType, data string) {
 		ev, ok := decodeSSEEvent(eventType, data)
 		if !ok {
 			a.sender.Send(LedgerMsg{Level: LevelInfo, Message: data, Time: timeNow()})
@@ -135,6 +160,11 @@ func (a *Adapter) Run(ctx context.Context) {
 			a.sender.Send(msg)
 		}
 	})
+	if streamCtx.Err() != nil && ctx.Err() == nil {
+		_, currentGeneration, _ := a.sessions.snapshot()
+		return currentGeneration != generation
+	}
+	return false
 }
 
 // refresh re-fetches Gateway state until ctx is cancelled: everything on each
@@ -148,18 +178,34 @@ func (a *Adapter) refresh(ctx context.Context, connected, approvalsChanged, enro
 		case <-ctx.Done():
 			return
 		case <-connected:
-			a.sender.Send(a.gw.fetchHealth(ctx))
-			a.sender.Send(a.gw.fetchPendingApprovals(ctx))
-			a.sender.Send(a.gw.fetchOperators(ctx))
-			a.sender.Send(a.gw.fetchEnrollments(ctx))
+			if gw := a.currentGateway(); gw != nil {
+				a.sender.Send(gw.fetchHealth(ctx))
+				a.sender.Send(gw.fetchPendingApprovals(ctx))
+				a.sender.Send(gw.fetchOperators(ctx))
+				a.sender.Send(gw.fetchEnrollments(ctx))
+			}
 		case <-approvalsChanged:
-			a.sender.Send(a.gw.fetchPendingApprovals(ctx))
+			if gw := a.currentGateway(); gw != nil {
+				a.sender.Send(gw.fetchPendingApprovals(ctx))
+			}
 		case <-enrollmentsChanged:
-			a.sender.Send(a.gw.fetchEnrollments(ctx))
+			if gw := a.currentGateway(); gw != nil {
+				a.sender.Send(gw.fetchEnrollments(ctx))
+			}
 		case <-ticker.C:
-			a.sender.Send(a.gw.fetchOperators(ctx))
+			if gw := a.currentGateway(); gw != nil {
+				a.sender.Send(gw.fetchOperators(ctx))
+			}
 		}
 	}
+}
+
+func (a *Adapter) currentGateway() *gateway {
+	if a.sessions == nil {
+		return nil
+	}
+	gw, _, _ := a.sessions.snapshot()
+	return gw
 }
 
 // decodeSSEEvent unwraps a Gateway SSE frame. Stored and live events are a

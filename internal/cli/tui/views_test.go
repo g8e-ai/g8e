@@ -8,6 +8,8 @@
 package tui
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -49,10 +51,14 @@ func TestViewSwitching(t *testing.T) {
 	for _, tt := range []struct {
 		key  rune
 		want viewID
-	}{{'2', viewApprovals}, {'3', viewOperators}, {'6', viewEnrollments}, {'1', viewOverview}} {
+	}{{'2', viewApprovals}, {'3', viewOperators}, {'5', viewAudit}, {'6', viewEnrollments}, {'7', viewGatewayStatus}, {'1', viewOverview}} {
 		m, _ = press(t, m, runeKey(tt.key))
 		assert.Equal(t, tt.want, m.view, "key %c", tt.key)
 	}
+	m, _ = press(t, m, runeKey('8'))
+	assert.Equal(t, viewRecovery, m.view)
+	m, _ = press(t, m, keyEsc)
+	assert.Equal(t, viewOverview, m.view)
 
 	m, _ = press(t, m, runeKey('4'))
 	assert.Equal(t, viewOverview, m.view, "a reserved key does not switch views")
@@ -102,6 +108,166 @@ func TestOperatorsViewKeys(t *testing.T) {
 	out := m.View()
 	assert.Contains(t, out, "bravo")
 	assert.Contains(t, out, "yes (this CLI session)")
+}
+
+func TestOperatorDetailsView(t *testing.T) {
+	m := NewModel(Options{}).applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+		{
+			ID:                "op-detail",
+			OperatorSessionID: "session-detail",
+			OperatorType:      constants.OperatorTypeRemote,
+			Status:            constants.OperatorStatusActive,
+			CurrentHostname:   "cached-host",
+			LatestHeartbeat: json.RawMessage(`{
+				"timestamp":"2026-09-18T12:00:00Z",
+				"status":"automatic",
+				"system_identity":{"hostname":"heartbeat-host","os":"linux","architecture":"amd64","cpu_count":8},
+				"performance_metrics":{"cpu_percent":12.5},
+				"version_info":{"operator_version":"v2.3.2"}
+			}`),
+		},
+	}})
+	m, _ = press(t, m, runeKey('3'))
+	m, _ = press(t, m, keyEnter)
+
+	assert.Equal(t, viewOperatorDetails, m.view)
+	out := m.View()
+	assert.Contains(t, out, "OPERATOR DETAILS")
+	assert.Contains(t, out, "heartbeat-host")
+	assert.Contains(t, out, "12.5%")
+
+	m, _ = press(t, m, keyDown)
+	assert.GreaterOrEqual(t, m.operatorDetailScroll, 1)
+	for range 12 {
+		m, _ = press(t, m, keyDown)
+	}
+	assert.Contains(t, m.View(), "v2.3.2")
+	m, _ = press(t, m, keyEsc)
+	assert.Equal(t, viewOperators, m.view)
+	assert.Equal(t, 0, m.operatorDetailScroll)
+}
+
+func TestAuditView(t *testing.T) {
+	session := &testSession{auditVerifyJSON: `{"success":true,"ok":true,"verified_from_seq":7,"head_seq":12,"head_hash":"hash-12"}`}
+	m := NewModel(Options{Session: session})
+	m, cmd := press(t, m, runeKey('5'))
+	assert.Equal(t, viewAudit, m.view)
+	require.NotNil(t, cmd, "entering Audit should fetch events and summary")
+	eventsMsg, ok := m.auditEventsCmd()().(AuditEventsMsg)
+	require.True(t, ok)
+	assert.NoError(t, eventsMsg.Err)
+	summaryMsg := m.gw.fetchAuditSummary(t.Context())
+	assert.NoError(t, summaryMsg.Err)
+	assert.Contains(t, session.requestedPaths(), constants.APIPaths.AuditEvents+"?limit=10&offset=0")
+	assert.Contains(t, session.requestedPaths(), constants.APIPaths.AuditSummary)
+
+	m = m.applyAuditEventsMsg(AuditEventsMsg{
+		Events: []models.AuditEventRow{
+			{ID: 12, Timestamp: "2026-10-06T12:00:00Z", Type: "command.completed", TransactionID: "tx-12", OperatorSessionID: "sess-12", CommandRaw: "echo governed", CommandExitCode: constants.ExitCodeNone},
+			{ID: 11, Timestamp: "2026-10-06T11:59:00Z", Type: "approval.completed", TransactionID: "tx-11", CommandRaw: "", CommandExitCode: constants.ExitCodeNone},
+		},
+		Count:  2,
+		Offset: 0,
+	})
+	m = m.applyAuditSummaryMsg(AuditSummaryMsg{Summary: models.AuditSummaryResponse{
+		EventsSummary: map[string]int{"command.completed": 1, "approval.completed": 1},
+		EventsTotal:   2,
+		ReceiptsTotal: 1,
+		TotalRecords:  3,
+	}})
+
+	out := m.View()
+	assert.Contains(t, out, "AUDIT EVENTS")
+	assert.Contains(t, out, "command.completed")
+	assert.Contains(t, out, "echo governed")
+	assert.Contains(t, out, "TOTAL")
+
+	m, _ = press(t, m, runeKey('j'))
+	assert.Contains(t, m.View(), "approval.completed")
+	m, cmd = press(t, m, runeKey('v'))
+	require.NotNil(t, cmd)
+	verifyMsg, ok := cmd().(AuditVerifyMsg)
+	require.True(t, ok)
+	model, _ := m.Update(verifyMsg)
+	m = model.(Model)
+	assert.Contains(t, m.View(), "OK")
+	assert.Contains(t, m.View(), "HEAD SEQ")
+
+	paths := session.requestedPaths()
+	assert.Contains(t, paths, constants.APIPaths.AuditVerify)
+}
+
+func TestGatewayStatusView(t *testing.T) {
+	m := NewModel(Options{Identity: Identity{UserID: "user-1", CLISessionID: "cli-1", OperatorID: "op-1"}}).
+		applyHealthMsg(HealthMsg{Health: models.HealthResponse{
+			Status:          constants.GatewayModeStatusOK,
+			Mode:            constants.GatewayModeGateway,
+			Version:         "v2.3.2",
+			PID:             1234,
+			GovernanceReady: true,
+			Posture:         "notary",
+			StateMerkleRoot: "root-123456789",
+		}}).
+		applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+			{ID: "op-1", CurrentHostname: "worker-1", Status: constants.OperatorStatusActive},
+		}}).
+		applyEnrollmentsMsg(enrollmentsFixture())
+	m, cmd := press(t, m, runeKey('7'))
+	assert.Equal(t, viewGatewayStatus, m.view)
+	assert.Nil(t, cmd, "a model without a session does not issue a refresh")
+
+	out := m.View()
+	assert.Contains(t, out, "GATEWAY STATUS")
+	assert.Contains(t, out, "v2.3.2")
+	assert.Contains(t, out, "GATEWAY")
+	assert.Contains(t, out, "ENROLLED WORKLOADS (1)")
+	assert.Contains(t, out, "db-01")
+	assert.Contains(t, out, "SELECTED WORKLOAD")
+}
+
+func TestRecoveryView(t *testing.T) {
+	session := &testSession{}
+	m := NewModel(Options{Session: session})
+	m, cmd := press(t, m, runeKey('8'))
+	assert.Equal(t, viewRecovery, m.view)
+	assert.NotNil(t, cmd, "entering recovery focuses the token input")
+	m.recoveryTokenInput.SetValue("recovery-token")
+
+	m, cmd = press(t, m, keyEnter)
+	assert.Nil(t, cmd)
+	require.NotNil(t, m.confirm)
+	assert.Contains(t, m.confirm.prompt, "recovery")
+
+	m, cmd = press(t, m, runeKey('y'))
+	require.NotNil(t, cmd)
+	msg, ok := cmd().(RecoveryApprovedMsg)
+	require.True(t, ok)
+	require.NoError(t, msg.Err)
+	assert.True(t, msg.Response.State == models.CLIRecoveryStateApproved)
+	assert.Equal(t, []interface{}{models.CLIRecoveryApproveRequest{Token: "recovery-token", Approve: true}}, session.posted)
+
+	model, _ := m.Update(msg)
+	m = model.(Model)
+	assert.Contains(t, m.View(), "LAST STATE")
+	assert.Contains(t, m.View(), "approved")
+
+	session.recoveryJSON = `{"success":true,"state":"denied"}`
+	m, _ = press(t, m, keyEsc)
+	assert.Equal(t, viewOverview, m.view)
+	m, _ = press(t, m, runeKey('8'))
+	m.recoveryTokenInput.SetValue("deny-token")
+	m, _ = press(t, m, keyTab)
+	assert.False(t, m.recoveryApprove)
+	m, _ = press(t, m, keyEnter)
+	assert.NotNil(t, m.confirm)
+	m, cmd = press(t, m, runeKey('y'))
+	require.NotNil(t, cmd)
+	denyMsg := cmd().(RecoveryApprovedMsg)
+	assert.False(t, denyMsg.Approve)
+	assert.NoError(t, denyMsg.Err)
+
+	m, _ = press(t, m, runeKey('n'))
+	assert.Equal(t, viewRecovery, m.view, "token characters are accepted instead of quitting")
 }
 
 func TestEnrollmentsView(t *testing.T) {
@@ -347,6 +513,53 @@ func TestOperatorStop(t *testing.T) {
 		stopped := cmd().(OperatorStopMsg)
 		assert.Error(t, stopped.Err)
 	})
+}
+
+func TestOperatorBindAndUnbindRotateSession(t *testing.T) {
+	oldSession := &testSession{}
+	var rebuiltSession *testSession
+	m := NewModel(Options{
+		Session: oldSession,
+		RebuildSession: func(_ context.Context, _ Identity) (Session, error) {
+			rebuiltSession = &testSession{}
+			return rebuiltSession, nil
+		},
+	}).applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+		{ID: "op-remote", OperatorSessionID: "sess-remote", CurrentHostname: "web-01", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
+	}})
+	m, _ = press(t, m, runeKey('3'))
+	m, _ = press(t, m, runeKey('b'))
+	require.NotNil(t, m.confirm)
+	m, cmd := press(t, m, runeKey('y'))
+	require.NotNil(t, cmd)
+	bindMsg, ok := cmd().(OperatorBindMsg)
+	require.True(t, ok)
+	require.NoError(t, bindMsg.Err)
+	assert.Equal(t, models.CLIBindRequest{OperatorSessionIDs: []string{"sess-remote"}}, oldSession.posted[0])
+
+	model, cmd := m.Update(bindMsg)
+	m = model.(Model)
+	require.NotNil(t, cmd, "successful bind rebuilds the session")
+	rotated, ok := cmd().(SessionRotatedMsg)
+	require.True(t, ok)
+	model, _ = m.Update(rotated)
+	m = model.(Model)
+	assert.Equal(t, "cli-new", m.identity.CLISessionID)
+	assert.Equal(t, "op-remote", m.identity.OperatorID)
+	assert.Same(t, rebuiltSession, m.gw.session)
+
+	m, _ = press(t, m, runeKey('u'))
+	require.NotNil(t, m.confirm)
+	m, cmd = press(t, m, runeKey('y'))
+	require.NotNil(t, cmd)
+	unbindMsg, ok := cmd().(OperatorUnbindMsg)
+	require.True(t, ok)
+	require.NoError(t, unbindMsg.Err)
+	_, cmd = m.Update(unbindMsg)
+	require.NotNil(t, cmd)
+	rotated, ok = cmd().(SessionRotatedMsg)
+	require.True(t, ok)
+	assert.Equal(t, "cli-unbound", rotated.Identity.CLISessionID)
 }
 
 // TestViews_FitTerminalExactly checks every view and overlay fills the

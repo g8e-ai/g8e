@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, override
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
@@ -69,6 +69,7 @@ class JevProvider(DecisionProvider):
         self._owns_client = client is None
 
     @staticmethod
+    @override
     def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
         errors: list[str] = []
         if not endpoint:

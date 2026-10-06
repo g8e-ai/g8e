@@ -8,7 +8,11 @@
 from unittest.mock import MagicMock
 
 import pytest
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+from g8e.models.internal_api import (
+    DesignatedModelRole,
+    EvaluationInferenceContext,
+    InferenceModelVariant,
+)
 
 from app.constants import (
     ReasoningAgent,
@@ -27,7 +31,7 @@ from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.evaluation.role_control import apply_homogeneous_role_control
 
 
-def _evaluation_context(role: str) -> EvaluationInferenceContext:
+def _evaluation_context(role: DesignatedModelRole) -> EvaluationInferenceContext:
     return EvaluationInferenceContext(
         campaign_id="campaign-1",
         run_id="run-1",
@@ -82,6 +86,7 @@ async def test_finalize_evaluation_assignment_records_role_not_invoked():
         model_overrides=ModelOverrideResolver("candidate", "candidate", "candidate"),
         request_settings=G8eeUserSettings(),
     )
+    assert controlled is not None
     inputs = AgentInputs.model_construct(
         case_id="case-1",
         investigation_id="inv-1",

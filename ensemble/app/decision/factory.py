@@ -14,6 +14,7 @@ import logging
 
 from app.constants import JEV_DEFAULT_MODEL, LLMProvider
 from app.decision.provider import DecisionProvider
+from app.decision.providers.jev import JevProvider
 from app.errors import ConfigurationError
 from app.models.settings import LLMSettings
 
@@ -48,14 +49,12 @@ def get_decision_provider(settings: LLMSettings) -> DecisionProvider:
     _, api_key, endpoint, _ = settings.resolve("lite")
     model = settings.resolved_lite_model or JEV_DEFAULT_MODEL
 
-    from app.decision.providers.jev import JevProvider
-
     provider = JevProvider(
         api_key=api_key,
         endpoint=endpoint,
         default_model=model,
     )
-    provider._is_cached_singleton = True
+    provider.mark_cached_singleton()
     _provider_cache[cache_key] = provider
     return provider
 

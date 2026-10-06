@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, override
 
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -37,6 +37,7 @@ class FakeLLMProvider(LLMProvider):
         self.call_log: list[dict[str, Any]] = []
 
     @staticmethod
+    @override
     def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
         """Fake provider validation - always valid for testing."""
         return []

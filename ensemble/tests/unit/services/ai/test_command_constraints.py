@@ -41,6 +41,7 @@ from app.utils.validation.blacklist_validator import (
     CommandBlacklistValidator,
 )
 from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+from tests.fakes.tool_helpers import create_tool_service_fake
 
 pytestmark = [pytest.mark.unit]
 
@@ -57,6 +58,9 @@ def mock_user_settings_disabled():
     settings.command_validation = CommandValidationSettings(
         enable_whitelisting=False,
         enable_blacklisting=False,
+        whitelisted_commands="",
+        enable_auto_approve=True,
+        auto_approved_commands="",
     )
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
@@ -70,6 +74,9 @@ def mock_user_settings_whitelist_only():
     settings.command_validation = CommandValidationSettings(
         enable_whitelisting=True,
         enable_blacklisting=False,
+        whitelisted_commands="",
+        enable_auto_approve=True,
+        auto_approved_commands="",
     )
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
@@ -83,6 +90,9 @@ def mock_user_settings_blacklist_only():
     settings.command_validation = CommandValidationSettings(
         enable_whitelisting=False,
         enable_blacklisting=True,
+        whitelisted_commands="",
+        enable_auto_approve=True,
+        auto_approved_commands="",
     )
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
@@ -96,6 +106,9 @@ def mock_user_settings_both():
     settings.command_validation = CommandValidationSettings(
         enable_whitelisting=True,
         enable_blacklisting=True,
+        whitelisted_commands="",
+        enable_auto_approve=True,
+        auto_approved_commands="",
     )
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
@@ -183,7 +196,6 @@ def mock_request_settings():
     settings.operator_context.os = "linux"
 
     # Needs a mock command_validation object
-    from app.models.settings import CommandValidationSettings
 
     cv_settings = MagicMock(spec=CommandValidationSettings)
     cv_settings.enable_whitelisting = False
@@ -210,7 +222,6 @@ def mock_investigation_service():
 @pytest.fixture
 def tool_service_builder():
     """Factory to create AIToolService using builder pattern."""
-    from tests.fakes.tool_helpers import create_tool_service_fake
 
     def _build(
         user_settings=None,
@@ -229,7 +240,7 @@ def tool_service_builder():
 
 
 # =============================================================================
-# TESTS: _handle_get_command_constraints
+# TESTS - _handle_get_command_constraints
 # =============================================================================
 
 
@@ -256,7 +267,7 @@ async def test_handle_get_command_constraints_both_disabled(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -267,6 +278,7 @@ async def test_handle_get_command_constraints_both_disabled(
     assert result.blacklisted_commands == []
     assert result.blacklisted_substrings == []
     assert result.blacklisted_patterns == []
+    assert result.message is not None
     assert "No command constraints are currently enforced" in result.message
 
 
@@ -293,7 +305,7 @@ async def test_handle_get_command_constraints_whitelist_only(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -304,6 +316,7 @@ async def test_handle_get_command_constraints_whitelist_only(
     assert result.global_forbidden_patterns == [r"rm -rf", r"format"]
     assert result.global_forbidden_directories == ["/etc", "/boot"]
     assert result.blacklisted_commands == []
+    assert result.message is not None
     assert "Whitelisting ENABLED" in result.message
 
 
@@ -330,7 +343,7 @@ async def test_handle_get_command_constraints_blacklist_only(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -345,6 +358,7 @@ async def test_handle_get_command_constraints_blacklist_only(
     assert result.blacklisted_substrings[0]["substring"] == "format"
     assert len(result.blacklisted_patterns) == 1
     assert result.blacklisted_patterns[0]["pattern"] == r"rm\s+-rf\s+/"
+    assert result.message is not None
     assert "Blacklisting ENABLED" in result.message
 
 
@@ -371,7 +385,7 @@ async def test_handle_get_command_constraints_both_enabled(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -380,6 +394,7 @@ async def test_handle_get_command_constraints_both_enabled(
     assert result.blacklisting_enabled is True
     assert sorted([cmd.command for cmd in result.whitelisted_commands]) == ["cat", "ls", "ping"]
     assert len(result.blacklisted_commands) == 2
+    assert result.message is not None
     assert "Whitelisting ENABLED" in result.message
     assert "Blacklisting ENABLED" in result.message
 
@@ -408,7 +423,7 @@ async def test_handle_get_command_constraints_csv_override(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -423,6 +438,7 @@ async def test_handle_get_command_constraints_csv_override(
         WhitelistedCommand(command="date"),
     ]
     assert result.blacklisted_commands == []
+    assert result.message is not None
     assert "Whitelisting ENABLED" in result.message
 
 
@@ -448,7 +464,7 @@ async def test_handle_get_command_constraints_auto_approve_platform_only(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -457,6 +473,7 @@ async def test_handle_get_command_constraints_auto_approve_platform_only(
     assert len(result.auto_approved_sources) == 3
     for source in result.auto_approved_sources:
         assert source["source"] == "platform"
+    assert result.message is not None
     assert "3 platform defaults" in result.message
 
 
@@ -482,7 +499,7 @@ async def test_handle_get_command_constraints_auto_approve_user_only(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -493,6 +510,7 @@ async def test_handle_get_command_constraints_auto_approve_user_only(
     user_sources = [s for s in result.auto_approved_sources if s["source"] == "user"]
     assert len(platform_sources) == 3
     assert len(user_sources) == 3
+    assert result.message is not None
     assert "3 platform defaults + 3 user-configured" in result.message
 
 
@@ -518,7 +536,7 @@ async def test_handle_get_command_constraints_auto_approve_csv_override(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -558,7 +576,7 @@ async def test_handle_get_command_constraints_auto_approve_disabled(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
-        execution_id=None,
+        execution_id="exec-constraints-test",
     )
 
     assert isinstance(result, CommandConstraintsResult)

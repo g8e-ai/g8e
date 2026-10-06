@@ -40,7 +40,7 @@ import httpx
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, utils
 from cryptography.x509.oid import NameOID
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap, get_bootstrap
@@ -151,7 +151,7 @@ def _patch_httpx_with_mock_transport(
     mock_transport = httpx.MockTransport(handler)
     real_async_client = httpx.AsyncClient
 
-    class _MockAsyncClient(real_async_client):  # type: ignore[misc]
+    class _MockAsyncClient(real_async_client):
         def __init__(self, *args, **kwargs):
             kwargs["transport"] = mock_transport
             super().__init__(*args, **kwargs)
@@ -182,6 +182,16 @@ def _mock_platform_enrollment_handler(
     captured: dict = {"requests": [], "poll_count": 0, "request_submitted": False}
     expires_at = (_dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)).isoformat()
 
+    def _status_state() -> str:
+        if deny:
+            return "denied"
+        if expire:
+            return "expired"
+        # First poll: pending; subsequent: approved (or the specified state).
+        if captured["poll_count"] < 2:
+            return "pending"
+        return state
+
     def handler(request: httpx.Request) -> httpx.Response:
         captured["requests"].append(request)
         path = request.url.path
@@ -206,43 +216,12 @@ def _mock_platform_enrollment_handler(
 
         if path == "/api/v1/auth/platform-enrollments/status":
             captured["poll_count"] += 1
-            if deny:
-                return httpx.Response(
-                    200,
-                    json={
-                        "request_id": request_id,
-                        "component_kind": "ensemble",
-                        "state": "denied",
-                        "expires_at": expires_at,
-                    },
-                )
-            if expire:
-                return httpx.Response(
-                    200,
-                    json={
-                        "request_id": request_id,
-                        "component_kind": "ensemble",
-                        "state": "expired",
-                        "expires_at": expires_at,
-                    },
-                )
-            # First poll: pending; subsequent: approved (or the specified state).
-            if captured["poll_count"] < 2:
-                return httpx.Response(
-                    200,
-                    json={
-                        "request_id": request_id,
-                        "component_kind": "ensemble",
-                        "state": "pending",
-                        "expires_at": expires_at,
-                    },
-                )
             return httpx.Response(
                 200,
                 json={
                     "request_id": request_id,
                     "component_kind": "ensemble",
-                    "state": state,
+                    "state": _status_state(),
                     "expires_at": expires_at,
                 },
             )
@@ -450,13 +429,13 @@ class TestEnrollPlatformEnrollment:
         assert "/api/v1/auth/platform-enrollments/complete" in paths_hit
 
         # Credentials were written to disk.
-        cert_on_disk = await asyncio.to_thread(
-            Path(identity.cert_path).read_text, encoding="utf-8"
-        )
+        cert_on_disk = await asyncio.to_thread(Path(identity.cert_path).read_text, encoding="utf-8")
         assert "BEGIN CERTIFICATE" in cert_on_disk
         key_on_disk = await asyncio.to_thread(Path(identity.key_path).read_text, encoding="utf-8")
         assert "BEGIN PRIVATE KEY" in key_on_disk
-        ca_on_disk = await asyncio.to_thread(Path(identity.ca_cert_path).read_text, encoding="utf-8")
+        ca_on_disk = await asyncio.to_thread(
+            Path(identity.ca_cert_path).read_text, encoding="utf-8"
+        )
         assert ca_on_disk == "CA-BUNDLE-PEM"
 
         # Pending state was removed after successful enrollment.
@@ -824,8 +803,6 @@ class TestEnrollPlatformEnrollment:
     ) -> None:
         """Verify the proof signature is valid ASN.1 DER ECDSA and verifies
         against the transcript digest."""
-        from cryptography.hazmat.primitives.asymmetric import utils
-
         service = AppEnrollmentService()
         private_key = ec.generate_private_key(ec.SECP256R1())
 

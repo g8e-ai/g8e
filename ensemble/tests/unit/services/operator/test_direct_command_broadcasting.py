@@ -32,13 +32,13 @@ def _build_execution_service(
     gateway_client = MagicMock()
     gateway_client.dispatch = AsyncMock(return_value=dispatch_result)
 
-    svc = OperatorExecutionService.__new__(OperatorExecutionService)
-    svc._approval_service = None
-    svc._settings = None
-    svc._ai_response_analyzer = None
-    svc._investigation_service = None
-    svc._gateway_operator_client = gateway_client
-    svc._background_tasks = set()
+    svc = OperatorExecutionService(
+        approval_service=MagicMock(),
+        settings=MagicMock(),
+        ai_response_analyzer=MagicMock(),
+        investigation_service=MagicMock(),
+        gateway_operator_client=gateway_client,
+    )
 
     return svc, gateway_client
 

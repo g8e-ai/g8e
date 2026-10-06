@@ -10,6 +10,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.constants import ErrorCategory, ErrorCode, ErrorSeverity
 from app.errors import G8eError
 from app.models.errors import ErrorBody, ErrorResponse
 
@@ -85,8 +86,6 @@ def setup_exception_handlers(app: FastAPI) -> None:
             trace_id = execution_id
 
         # Return a generic 500 error in production-safe format
-        from app.constants import ErrorCategory, ErrorCode, ErrorSeverity
-
         error_body = ErrorBody(
             code=ErrorCode.UNEXPECTED_ERROR,
             message="An unexpected internal error occurred",

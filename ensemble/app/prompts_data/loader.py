@@ -114,10 +114,7 @@ def load_mode_prompts(
     Returns:
         Dict keyed by PromptSection string with loaded prompt content.
     """
-    if operator_bound:
-        mode = AgentMode.G8E_BOUND
-    else:
-        mode = AgentMode.G8E_NOT_BOUND
+    mode = AgentMode.G8E_BOUND if operator_bound else AgentMode.G8E_NOT_BOUND
 
     section_files = dict(AGENT_MODE_PROMPT_FILES[mode])
 

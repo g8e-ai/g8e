@@ -44,7 +44,7 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -78,6 +78,7 @@ from app.services.investigation.investigation_service import (
     extract_all_operators_context,
     extract_system_context,
 )
+from app.services.service_factory import ServiceFactory
 from tests.fakes.factories import (
     build_g8e_http_context,
     build_production_operator_document,
@@ -86,6 +87,8 @@ from tests.fakes.factories import (
     create_investigation_memory,
     create_investigation_request,
 )
+from tests.integration.cleanup import IntegrationCleanupTracker
+from tests.integration.conftest import make_write_through_governance_client
 
 pytestmark = [pytest.mark.integration]
 
@@ -123,10 +126,6 @@ def cache_aside_service(fake_cache_aside_service):
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def all_services(cache_aside_service, test_settings):
-    from unittest.mock import MagicMock
-
-    from app.services.service_factory import ServiceFactory
-    from tests.integration.conftest import make_write_through_governance_client
 
     services = ServiceFactory.create_all_services(
         test_settings,
@@ -145,7 +144,6 @@ async def all_services(cache_aside_service, test_settings):
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def cleanup(cache_aside_service):
-    from tests.integration.cleanup import IntegrationCleanupTracker
 
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker

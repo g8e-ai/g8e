@@ -4,17 +4,18 @@
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import Request
+from fastapi.routing import APIRoute
 
 from app.constants import ChatSessionStatus, ComponentName, InvestigationStatus
 from app.constants.message_sender import MessageSender
 from app.errors import ResourceNotFoundError
 from app.models.http_context import G8eHttpContext
-from app.routers.chat_router import router
+from app.routers.chat_router import get_chat_session, get_latest_chat_session_for_case, router
 from tests.fakes.factories import (
     build_case_model,
     create_conversation_message,
@@ -30,7 +31,6 @@ class TestGetChatSession:
 
     async def test_get_chat_session_returns_session_info(self):
         """Test get chat session returns session information."""
-        from app.routers.chat_router import get_chat_session
 
         mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
@@ -64,7 +64,6 @@ class TestGetChatSession:
 
     async def test_get_chat_session_wrong_user_raises_not_found(self):
         """Test ResourceNotFoundError when session belongs to a different user."""
-        from app.routers.chat_router import get_chat_session
 
         mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
@@ -97,7 +96,6 @@ class TestGetChatSession:
 
     async def test_get_chat_session_not_found_raises(self):
         """Test ResourceNotFoundError when investigation does not exist."""
-        from app.routers.chat_router import get_chat_session
 
         mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
@@ -122,7 +120,6 @@ class TestGetChatSession:
 
     async def test_get_chat_session_inactive_when_closed(self):
         """Test session status is INACTIVE when investigation is CLOSED."""
-        from app.routers.chat_router import get_chat_session
 
         mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
@@ -159,7 +156,6 @@ class TestGetLatestChatSessionForCase:
 
     async def test_get_latest_session_with_investigations(self):
         """Test getting latest session when investigations exist."""
-        from app.routers.chat_router import get_latest_chat_session_for_case
 
         mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
@@ -201,7 +197,6 @@ class TestGetLatestChatSessionForCase:
 
     async def test_get_latest_session_no_investigations(self):
         """Test getting latest session when no investigations exist."""
-        from app.routers.chat_router import get_latest_chat_session_for_case
 
         mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
@@ -233,7 +228,6 @@ class TestGetLatestChatSessionForCase:
 
     async def test_get_latest_session_finds_most_recent(self):
         """Test that endpoint returns the most recent investigation."""
-        from app.routers.chat_router import get_latest_chat_session_for_case
 
         mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
@@ -243,7 +237,7 @@ class TestGetLatestChatSessionForCase:
         case = build_case_model(case_id="case-789", user_id=user_id, title="Test Case")
         mock_case_service.get_case = AsyncMock(return_value=case)
 
-        now_dt = datetime.now(timezone.utc)
+        now_dt = datetime.now(UTC)
         inv_old = create_investigation_data(
             investigation_id="inv-old",
             case_id="case-789",
@@ -284,7 +278,6 @@ class TestGetLatestChatSessionForCase:
 
     async def test_get_latest_session_case_not_found(self):
         """Test error raised when case does not exist."""
-        from app.routers.chat_router import get_latest_chat_session_for_case
 
         mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
@@ -308,7 +301,6 @@ class TestGetLatestChatSessionForCase:
 
     async def test_get_latest_session_wrong_user_raises_not_found(self):
         """Test ResourceNotFoundError when case belongs to a different user."""
-        from app.routers.chat_router import get_latest_chat_session_for_case
 
         mock_request = MagicMock(spec=Request)
         mock_case_service = MagicMock()
@@ -341,17 +333,18 @@ class TestChatRouterConfiguration:
 
     def test_router_has_chat_endpoint(self):
         """Test router has /chat endpoint."""
-        routes = [route.path for route in router.routes]
+        routes = [route.path for route in router.routes if isinstance(route, APIRoute)]
         assert any("chat" in path for path in routes)
 
     def test_router_has_session_endpoints(self):
         """Test router has session-related endpoints."""
-        routes = [route.path for route in router.routes]
+        routes = [route.path for route in router.routes if isinstance(route, APIRoute)]
         assert any("sessions" in path for path in routes)
 
     def test_session_endpoints_are_get(self):
         """Test session endpoints accept GET method."""
         for route in router.routes:
-            if "sessions" in route.path or "latest-session" in route.path:
-                if hasattr(route, "methods"):
-                    assert "GET" in route.methods
+            if isinstance(route, APIRoute) and (
+                "sessions" in route.path or "latest-session" in route.path
+            ):
+                assert "GET" in route.methods

@@ -12,6 +12,7 @@ import logging
 
 from app.constants import G8EE_COMPONENT, EventType
 from app.models.events import AiProcessingStoppedPayload, SessionEvent
+from app.models.http_context import RequestContext
 from app.services.infra.event_service import EventService
 from app.utils.time_ids.timestamp import now
 
@@ -111,8 +112,6 @@ class BackgroundTaskManager:
 
         if (web_session_id or cli_session_id) and case_id and event_service:
             try:
-                from app.models.http_context import RequestContext
-
                 ctx = RequestContext(
                     web_session_id=web_session_id,
                     cli_session_id=cli_session_id,

@@ -10,6 +10,9 @@
 This ensures that typos or gutted config files are caught by CI before deploy.
 """
 
+import app.utils.validation.auto_approved_validator as av_module
+import app.utils.validation.blacklist_validator as bv_module
+import app.utils.validation.whitelist_validator as wv_module
 from app.utils.validation.auto_approved_validator import (
     get_auto_approved_validator,
     register_auto_approved_validator,
@@ -32,7 +35,6 @@ class TestDefaultWhitelistConfigLoads:
 
         This catches typos and malformed JSON in the config file before deploy.
         """
-        import app.utils.validation.whitelist_validator as wv_module
 
         wv_module._validator_instance = None
         validator = get_whitelist_validator(whitelist_path=None)
@@ -48,7 +50,6 @@ class TestDefaultBlacklistConfigLoads:
 
         This catches typos and malformed JSON in the config file before deploy.
         """
-        import app.utils.validation.blacklist_validator as bv_module
 
         bv_module._validator = None
         validator = get_blacklist_validator(blacklist_path=None)
@@ -64,7 +65,6 @@ class TestDefaultAutoApprovedConfigLoads:
 
         This catches typos and malformed JSON in the config file before deploy.
         """
-        import app.utils.validation.auto_approved_validator as av_module
 
         av_module._validator = None
         validator = get_auto_approved_validator(auto_approved_path=None)
@@ -77,7 +77,6 @@ class TestDefaultAutoApprovedConfigLoads:
         Since auto_approved.json is enabled by default, we verify it contains expected entries
         to catch gutted files.
         """
-        import app.utils.validation.auto_approved_validator as av_module
 
         av_module._validator = None
         validator = get_auto_approved_validator(auto_approved_path=None)

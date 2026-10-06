@@ -101,21 +101,27 @@ func TestAdapterRunNilSession(t *testing.T) {
 // testSession is a Session over a plain-HTTP test server: the SSE stream is
 // served at url, and Gateway requests return the configured JSON (or err).
 type testSession struct {
-	url           string
-	pendingJSON   string
-	operatorsJSON string
-	healthJSON    string
-	statusJSON    string
-	err           error
-	mu            sync.Mutex
-	listCalls     int
-	paths         []string
+	url              string
+	pendingJSON      string
+	operatorsJSON    string
+	healthJSON       string
+	auditEventsJSON  string
+	auditSummaryJSON string
+	auditVerifyJSON  string
+	statusJSON       string
+	err              error
+	mu               sync.Mutex
+	listCalls        int
+	paths            []string
 
 	enrollPendingJSON string
 	enrolledJSON      string
 	decisionJSON      string
 	revokeJSON        string
 	stopJSON          string
+	recoveryJSON      string
+	bindJSON          string
+	unbindJSON        string
 	postErr           error
 	enrollListCalls   int
 	posted            []interface{}
@@ -142,6 +148,12 @@ func (s *testSession) DoRequestContext(_ context.Context, method, path string, b
 			return []byte(orDefault(s.revokeJSON, `{"request_id":"req-1","component_kind":"operator","state":"revoked"}`)), nil
 		case constants.APIPaths.OperatorsStop:
 			return []byte(orDefault(s.stopJSON, `{"success":true,"operator_id":"op-remote","operator_session_id":"sess-remote"}`)), nil
+		case constants.APIPaths.AuthCLIRecoveryApproveCLI:
+			return []byte(orDefault(s.recoveryJSON, `{"success":true,"state":"approved"}`)), nil
+		case constants.APIPaths.AuthCLIBind:
+			return []byte(orDefault(s.bindJSON, `{"success":true,"cli_session_id":"cli-new","user_id":"user-1","operator_id":"op-remote","operator_session_id":"sess-remote","bound":[{"operator_id":"op-remote","operator_session_id":"sess-remote"}]}`)), nil
+		case constants.APIPaths.AuthCLIUnbind:
+			return []byte(orDefault(s.unbindJSON, `{"success":true,"cli_session_id":"cli-unbound","user_id":"user-1"}`)), nil
 		}
 		return nil, constants.ErrNotFound
 	}
@@ -161,6 +173,12 @@ func (s *testSession) DoRequestContext(_ context.Context, method, path string, b
 		return []byte(orDefault(s.operatorsJSON, `{"success":true,"operators":[]}`)), nil
 	case path == constants.APIPaths.Health:
 		return []byte(orDefault(s.healthJSON, `{"status":"ok","posture":"notary"}`)), nil
+	case strings.HasPrefix(path, constants.APIPaths.AuditEvents):
+		return []byte(orDefault(s.auditEventsJSON, `{"success":true,"events":[],"count":0}`)), nil
+	case path == constants.APIPaths.AuditSummary:
+		return []byte(orDefault(s.auditSummaryJSON, `{"success":true,"events_summary":{},"events_total":0,"receipts_summary":{},"receipts_total":0,"total_records":0}`)), nil
+	case strings.HasPrefix(path, constants.APIPaths.AuditVerify):
+		return []byte(orDefault(s.auditVerifyJSON, `{"success":true,"ok":true,"verified_from_seq":0,"head_seq":0,"head_hash":""}`)), nil
 	case strings.HasPrefix(path, constants.APIPaths.ApprovalsCLIStatus):
 		return []byte(orDefault(s.statusJSON, `{"status":"approved"}`)), nil
 	}

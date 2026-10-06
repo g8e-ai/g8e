@@ -48,13 +48,13 @@ class TestSettingsService:
         # Mock user document
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OPENAI,
-                primary_model="gpt-4",
+                llm_primary_provider=LLMProvider.OPENAI,
+                llm_model="gpt-4",
                 openai_api_key="sk-user-key",
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -83,7 +83,7 @@ class TestSettingsService:
 
         platform_doc = AppSettingsDocument(settings=G8eeAppSettings()).model_dump()
 
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             None if document_id == user_doc_id else platform_doc
         )
 
@@ -116,13 +116,13 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA,
-                primary_model="gemma3:12b",
+                llm_primary_provider=LLMProvider.OLLAMA,
+                llm_model="gemma3:12b",
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
 
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -143,8 +143,8 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA,
-                primary_model="gemma3:12b",
+                llm_primary_provider=LLMProvider.OLLAMA,
+                llm_model="gemma3:12b",
                 llm_command_gen_passes=5,
                 llm_command_gen_enabled=False,
                 llm_command_gen_auditor=False,
@@ -152,7 +152,7 @@ class TestSettingsService:
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
 
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -173,13 +173,13 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.GEMINI,
-                primary_model="gemini-2.5-pro",
+                llm_primary_provider=LLMProvider.GEMINI,
+                llm_model="gemini-2.5-pro",
                 gemini_api_key="test-key",
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -199,11 +199,11 @@ class TestSettingsService:
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
         user_settings = G8eeUserSettings(
-            llm=LLMSettings(primary_provider=LLMProvider.OLLAMA, primary_model="gemma3:12b")
+            llm=LLMSettings(llm_primary_provider=LLMProvider.OLLAMA, llm_model="gemma3:12b")
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
 
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -292,8 +292,8 @@ class TestLLMEnvVarBootstrapDefaults:
         # Platform DB carries a different provider, model, key, and endpoint.
         platform = G8eeAppSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OPENAI,
-                primary_model="gpt-4o",
+                llm_primary_provider=LLMProvider.OPENAI,
+                llm_model="gpt-4o",
                 openai_api_key="platform-key",
                 ollama_endpoint="http://10.0.0.9:11434",
             )
@@ -335,7 +335,7 @@ class TestLLMEnvVarBootstrapDefaults:
 
         platform = G8eeAppSettings(
             llm=LLMSettings(
-                primary_model="gemma4:12b",
+                llm_model="gemma4:12b",
                 ollama_api_key="platform-ollama-key",
             )
         )

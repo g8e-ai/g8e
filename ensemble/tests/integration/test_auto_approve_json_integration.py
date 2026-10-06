@@ -201,7 +201,7 @@ class TestAutoApproveJsonIntegration:
     async def test_unlisted_verb_with_json_present_still_requires_approval(self, tmp_path):
         """A verb absent from BOTH JSON and CSV must still require approval."""
         json_path = _write_auto_approved_json(tmp_path, ["uptime"])
-        service, approval_service, event_service = _build_service(json_path)
+        service, approval_service, _event_service = _build_service(json_path)
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),

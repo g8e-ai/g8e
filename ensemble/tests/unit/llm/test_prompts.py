@@ -14,11 +14,17 @@ from app.constants import (
     Priority,
     PromptFile,
     PromptSection,
+    ReasoningAgent,
     Severity,
+    TriageComplexityClassification,
+    TriageConfidence,
+    TriageIntentClassification,
+    TriageRequestPosture,
 )
 from app.constants.message_sender import MessageSender
 from app.llm import prompts
 from app.models.agent import OperatorContext
+from app.models.agents.triage import TriageResult
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,
@@ -171,13 +177,6 @@ def test_build_triage_context_section_none_returns_empty():
 
 
 def test_build_triage_context_section_renders_posture_and_intent():
-    from app.constants import (
-        TriageComplexityClassification,
-        TriageConfidence,
-        TriageIntentClassification,
-        TriageRequestPosture,
-    )
-    from app.models.agents.triage import TriageResult
 
     result = TriageResult(
         complexity=TriageComplexityClassification.COMPLEX,
@@ -199,13 +198,6 @@ def test_build_triage_context_section_includes_user_facing_intent_on_error():
     """When triage fails, intent_summary is included but contains only user-facing
     instructions, not internal error details. Internal error fields (error_code,
     error_class, error_message) are for logging only and never exposed to AI."""
-    from app.constants import (
-        TriageComplexityClassification,
-        TriageConfidence,
-        TriageIntentClassification,
-        TriageRequestPosture,
-    )
-    from app.models.agents.triage import TriageResult
 
     result = TriageResult(
         complexity=TriageComplexityClassification.COMPLEX,
@@ -231,13 +223,6 @@ def test_build_triage_context_section_includes_user_facing_intent_on_error():
 def test_build_modular_system_prompt_injects_triage_context(mock_loader, operator_context):
     """When Triage supplies a posture, the modular prompt must include the
     <triage_context> block so the dissent protocol can calibrate on it."""
-    from app.constants import (
-        TriageComplexityClassification,
-        TriageConfidence,
-        TriageIntentClassification,
-        TriageRequestPosture,
-    )
-    from app.models.agents.triage import TriageResult
 
     triage_result = TriageResult(
         complexity=TriageComplexityClassification.COMPLEX,
@@ -460,7 +445,6 @@ def test_build_modular_system_prompt_with_agent_name_uses_persona_not_core_ident
 ):
     """When agent_name is provided, the persona's system prompt should be used
     instead of CORE_IDENTITY to avoid duplicate role tags."""
-    from app.constants import ReasoningAgent
 
     prompt, _context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -512,7 +496,6 @@ def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(
     """When agent_name is provided, there should be no duplicate <role> tags.
     This regression test ensures the fix for fragmented prompt logic prevents
     CORE_IDENTITY and persona system prompt from both adding role tags."""
-    from app.constants import ReasoningAgent
 
     prompt, _context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -535,7 +518,6 @@ def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(
     mock_loader, operator_context
 ):
     """Dash agent should use its persona system prompt, not CORE_IDENTITY."""
-    from app.constants import ReasoningAgent
 
     prompt, _context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -567,7 +549,6 @@ def test_build_modular_system_prompt_dash_includes_full_governance_stack(
     that stripped this governance bundle; this test pins the unified
     behaviour so that regression cannot return without being seen.
     """
-    from app.constants import ReasoningAgent
 
     prompt, _ = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -609,7 +590,6 @@ def test_build_modular_system_prompt_protocol_prefix_precedes_persona(
     llama-server / vLLM prefix caches can reuse that prefix across
     every agent that shares the mode (Dash and Sage included).
     """
-    from app.constants import ReasoningAgent
 
     prompt, _ = prompts.build_modular_system_prompt(
         operator_bound=True,

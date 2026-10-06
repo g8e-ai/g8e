@@ -148,13 +148,15 @@ class TestTribunalCommandModels:
     def test_tribunal_command_validation_error(self):
         with pytest.raises(ValidationError):
             # Missing required investigation_id
-            TribunalCommand(
-                case_id="case-123",
-                created_at=datetime.now(UTC),
-                request_context=TribunalCommandRequestContext(request="test"),
-                generation_result=TribunalCommandGenerationResult(
-                    outcome=CommandGenerationOutcome.CONSENSUS
-                ),
+            TribunalCommand.model_validate(
+                {
+                    "case_id": "case-123",
+                    "created_at": datetime.now(UTC),
+                    "request_context": TribunalCommandRequestContext(request="test"),
+                    "generation_result": TribunalCommandGenerationResult(
+                        outcome=CommandGenerationOutcome.CONSENSUS
+                    ),
+                }
             )
 
     def test_tribunal_command_error_state(self):

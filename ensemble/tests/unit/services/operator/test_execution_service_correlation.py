@@ -8,16 +8,17 @@ from __future__ import annotations
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
+import asyncio
 import base64
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from g8e.operator.v1 import operator_pb2
 
-from app.constants import G8EE_COMPONENT, ExecutionStatus
+from app.constants import G8EE_COMPONENT, ExecutionStatus, FileOperation
 from app.constants.generated_status import AITaskId, EventType
 from app.models.command_request_payloads import CommandRequestPayload, FileEditRequestPayload
-from app.models.pubsub_messages import G8eMessage
+from app.models.pubsub_messages import FileEditResultPayload, G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
 from tests.fakes.factories import build_g8e_http_context
 
@@ -80,7 +81,7 @@ class TestGatewayDispatchCorrelation:
         message.event_type = EventType.OPERATOR_FILE_EDIT_REQUESTED
         message.payload = FileEditRequestPayload(
             execution_id="read-1",
-            operation="read",
+            operation=FileOperation.READ,
             file_path="/tmp/status.txt",
             justification="Read status",
             target_operators=["all"],
@@ -91,6 +92,7 @@ class TestGatewayDispatchCorrelation:
         assert internal.status == (ExecutionStatus.FAILED if failed else ExecutionStatus.COMPLETED)
         assert internal.error == ("path not found" if failed else "")
         assert envelope is not None
+        assert isinstance(envelope.payload, FileEditResultPayload)
         assert envelope.payload.content == (None if failed else "ready")
 
     async def test_missing_result_payload_is_not_success(self):
@@ -100,6 +102,7 @@ class TestGatewayDispatchCorrelation:
             _build_command_message("read-1"), build_g8e_http_context()
         )
         assert internal.status == ExecutionStatus.FAILED
+        assert internal.error is not None
         assert "no operator result payload" in internal.error
         assert envelope is None
 
@@ -189,8 +192,6 @@ class TestGatewayDispatchCorrelation:
 
     async def test_times_out_when_gateway_dispatch_hangs(self):
         async def slow_dispatch(**kwargs):
-            import asyncio
-
             await asyncio.sleep(1)
             return {"success": True}
 

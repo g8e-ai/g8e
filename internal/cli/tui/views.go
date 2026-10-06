@@ -23,12 +23,15 @@ const (
 	viewOverview viewID = iota
 	viewApprovals
 	viewOperators
+	viewOperatorDetails
 	viewEnrollments
+	viewAudit
+	viewGatewayStatus
+	viewRecovery
 )
 
 // viewSpec binds a view to its number key. Keys follow the TUI roadmap so a
-// view keeps its key as others are added (4 chat, 5 audit, 7 account are
-// reserved).
+// view keeps its key as others are added (4 chat remains reserved).
 type viewSpec struct {
 	key   string
 	id    viewID
@@ -39,7 +42,10 @@ var viewSpecs = []viewSpec{
 	{key: "1", id: viewOverview, title: "Overview"},
 	{key: "2", id: viewApprovals, title: "Approvals"},
 	{key: "3", id: viewOperators, title: "Operators"},
+	{key: "5", id: viewAudit, title: "Audit"},
 	{key: "6", id: viewEnrollments, title: "Enrollments"},
+	{key: "7", id: viewGatewayStatus, title: "Status"},
+	{key: "8", id: viewRecovery, title: "Recovery"},
 }
 
 // viewForKey returns the view bound to a number key.
@@ -80,7 +86,8 @@ func (m Model) renderTabs(width int) string {
 	parts := make([]string, 0, len(viewSpecs))
 	for _, spec := range viewSpecs {
 		label := spec.key + " " + spec.title + m.viewCount(spec.id)
-		if spec.id == m.view {
+		active := spec.id == m.view || (spec.id == viewOperators && m.view == viewOperatorDetails)
+		if active {
 			parts = append(parts, tabActiveStyle.Render("["+label+"]"))
 		} else {
 			parts = append(parts, tabStyle.Render(" "+label+" "))
@@ -123,17 +130,40 @@ func (m Model) helpLines() []string {
 	case viewOperators:
 		lines = append(lines,
 			"j/k, ↓/↑         select a connected Operator",
-			"s                stop the selected remote Operator (governed shutdown)")
+			"enter            show the selected Operator's heartbeat details",
+			"s                stop the selected remote Operator (governed shutdown)",
+			"b / u            bind / unbind this CLI session (replacement session)")
+	case viewOperatorDetails:
+		lines = append(lines,
+			"j/k, ↓/↑         scroll the heartbeat details",
+			"s                stop the selected remote Operator (governed shutdown)",
+			"b / u            bind / unbind this CLI session (replacement session)",
+			"esc              return to the Operators list")
 	case viewEnrollments:
 		lines = append(lines,
 			"tab              switch between pending requests and enrollments",
 			"j/k, ↓/↑         select",
 			"a / d            approve / deny the selected pending request",
 			"x                revoke the selected enrollment")
+	case viewAudit:
+		lines = append(lines,
+			"j/k, ↓/↑         select an audit event",
+			"n / p            next / previous event page",
+			"v                verify the Gateway audit hash chain")
+	case viewGatewayStatus:
+		lines = append(lines,
+			"r                refresh Gateway health and enrolled workloads",
+			"j/k              move through the enrolled workload list")
+	case viewRecovery:
+		lines = append(lines,
+			"type token       enter the one-time CLI recovery token",
+			"tab              toggle approve / deny",
+			"enter            submit after y/N confirmation",
+			"esc              leave the recovery form")
 	}
 	lines = append(lines, "",
-		"1 2 3 6          switch view: overview, approvals, Operators, enrollments",
-		"r                refresh approvals, Operators, enrollments, and posture",
+		"1 2 3 5 6 7 8 switch view: overview, approvals, Operators, audit, enrollments, status, recovery",
+		"r                refresh the active data and Gateway posture",
 		"?, esc           close this help",
 		"q, ctrl+c        quit",
 		"",
@@ -164,9 +194,17 @@ func (m Model) statusHints() string {
 	case viewApprovals:
 		return "j/k: move | a: approve | r: refresh | ?: help | q: quit "
 	case viewOperators:
-		return "j/k: move | s: stop | r: refresh | ?: help | q: quit "
+		return "j/k: move | s: stop | b/u: bind/unbind | r: refresh | ?: help | q: quit "
+	case viewOperatorDetails:
+		return "j/k: scroll | s: stop | b/u: bind/unbind | esc: back | r: refresh | ?: help | q: quit "
 	case viewEnrollments:
 		return "tab: section | j/k: move | a: approve | d: deny | x: revoke | ?: help | q: quit "
+	case viewAudit:
+		return "j/k: select | n/p: page | v: verify | r: refresh | ?: help | q: quit "
+	case viewGatewayStatus:
+		return "j/k: move | r: refresh | ?: help | q: quit "
+	case viewRecovery:
+		return "tab: approve/deny | enter: submit | esc: leave | ctrl+c: quit "
 	default:
 		return "tab: focus | j/k: move | a: approve | r: refresh | ?: help | q: quit "
 	}

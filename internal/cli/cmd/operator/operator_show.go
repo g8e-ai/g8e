@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -25,23 +26,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/spf13/cobra"
 )
-
-type operatorHeartbeatView struct {
-	Timestamp          string
-	HeartbeatType      string
-	SystemIdentity     models.HeartbeatSystemIdentity
-	PerformanceMetrics models.HeartbeatPerformanceMetrics
-	NetworkInfo        models.HeartbeatNetworkInfo
-	UptimeInfo         models.HeartbeatUptimeInfo
-	OSDetails          models.HeartbeatOSDetails
-	UserDetails        models.HeartbeatUserDetails
-	DiskDetails        models.HeartbeatDiskDetails
-	MemoryDetails      models.HeartbeatMemoryDetails
-	Environment        models.HeartbeatEnvironment
-	VersionInfo        models.HeartbeatVersionInfo
-	CapabilityFlags    models.HeartbeatCapabilityFlags
-	SystemFingerprint  string
-}
 
 func operatorShowCmd() *cobra.Command {
 	return operatorShowCmdWithConfig(shared.LoadConfig, authcmd.DefaultAPIClientFactory, shared.NewFileSvc)
@@ -113,7 +97,7 @@ func findOperatorByIDOrSession(operators []models.OperatorDocumentGo, idOrSessio
 }
 
 func operatorHostnameValue(op models.OperatorDocumentGo) string {
-	view := parseOperatorHeartbeatView(op.LatestHeartbeat)
+	view := clioperator.ParseHeartbeatView(op.LatestHeartbeat)
 	if view != nil && view.SystemIdentity.Hostname != "" {
 		return view.SystemIdentity.Hostname
 	}
@@ -175,13 +159,13 @@ func operatorShowPayload(op models.OperatorDocumentGo) operatorShowOutput {
 		LastHeartbeatAt:   op.LastHeartbeatAt,
 		RuntimeConfig:     op.RuntimeConfig,
 	}
-	if view := parseOperatorHeartbeatView(op.LatestHeartbeat); view != nil {
+	if view := clioperator.ParseHeartbeatView(op.LatestHeartbeat); view != nil {
 		payload.Heartbeat = heartbeatViewOutput(view)
 	}
 	return payload
 }
 
-func heartbeatViewOutput(view *operatorHeartbeatView) *operatorHeartbeatOutput {
+func heartbeatViewOutput(view *clioperator.HeartbeatView) *operatorHeartbeatOutput {
 	result := &operatorHeartbeatOutput{Timestamp: view.Timestamp, HeartbeatType: view.HeartbeatType, SystemFingerprint: view.SystemFingerprint}
 	if view.SystemIdentity.Hostname != "" || view.SystemIdentity.OS != "" {
 		result.SystemIdentity = &view.SystemIdentity
@@ -220,7 +204,7 @@ func heartbeatViewOutput(view *operatorHeartbeatView) *operatorHeartbeatOutput {
 }
 
 func printOperatorShow(cmd *cobra.Command, op models.OperatorDocumentGo) {
-	view := parseOperatorHeartbeatView(op.LatestHeartbeat)
+	view := clioperator.ParseHeartbeatView(op.LatestHeartbeat)
 
 	cmd.Printf("Operator:  %s\n", op.ID)
 	cmd.Printf("Session:   %s\n", op.OperatorSessionID)

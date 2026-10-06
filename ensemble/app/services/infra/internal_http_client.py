@@ -34,7 +34,7 @@ from app.models.auth import (
     ProxySigningKeyResponse,
 )
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import (
     GrantIntentResponse,
     InferenceDispatchRequest,
@@ -105,6 +105,10 @@ class InternalHttpClient:
 
     async def close(self) -> None:
         await self._http.close()
+
+    def ensure_mtls(self) -> None:
+        """Public entry point for collaborators that issue requests via ``client``."""
+        self._ensure_mtls()
 
     def _ensure_mtls(self) -> None:
         """Ensure mTLS credentials are up to date from settings.
@@ -251,7 +255,6 @@ class InternalHttpClient:
             )
 
             self._ensure_mtls()
-            from app.models.http_context import RequestContext
 
             request_payload = IntentRequestPayload(
                 context=RequestContext.from_app_context(context),
@@ -271,13 +274,9 @@ class InternalHttpClient:
                     extra={
                         "operator_id": operator_id,
                         "intent": intent,
-                        "granted_intents": result.granted_intents,
                     },
                 )
-                return IntentOperationResult(
-                    success=True,
-                    granted_intents=result.granted_intents,
-                )
+                return IntentOperationResult(success=True)
             logger.warning(
                 "[HTTP-CLIENT] Failed to grant intent",
                 extra={
@@ -307,7 +306,6 @@ class InternalHttpClient:
     ) -> IntentOperationResult:
         try:
             self._ensure_mtls()
-            from app.models.http_context import RequestContext
 
             request_payload = IntentRequestPayload(
                 context=RequestContext.from_app_context(context),
@@ -322,10 +320,7 @@ class InternalHttpClient:
             )
             result = RevokeIntentResponse.model_validate(response.json())
             if response.is_success and result.success:
-                return IntentOperationResult(
-                    success=True,
-                    granted_intents=result.granted_intents,
-                )
+                return IntentOperationResult(success=True)
             return IntentOperationResult(
                 success=False,
                 error=result.error or UNKNOWN_ERROR_MESSAGE,
@@ -357,7 +352,6 @@ class InternalHttpClient:
             )
 
             self._ensure_mtls()
-            from app.models.http_context import RequestContext
 
             if context:
                 request_context = RequestContext.from_app_context(context)
@@ -509,7 +503,7 @@ class InternalHttpClient:
 
         The gateway resolves the Inference Node's operator session from the
         requestor's mTLS identity, constructs a governed envelope, dispatches
-        it through the full L1–L5 gauntlet on the Inference Node, and returns
+        it through the full L1-L5 gauntlet on the Inference Node, and returns
         the signed receipt and InferenceResult. This is the transport layer
         underneath the ensemble chat pipeline's ``G8E`` LLM provider.
         """
@@ -551,8 +545,15 @@ class InternalHttpClient:
                 },
             )
 
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise NetworkError(
+                "[HTTP-CLIENT] Inference dispatch returned a non-object JSON body",
+                component=G8EE_COMPONENT,
+                details={"status_code": response.status_code, "role": request.role},
+            )
         dispatch_response = InferenceDispatchResponse()
-        json_format.ParseDict(response.json(), dispatch_response)
+        json_format.ParseDict(payload, dispatch_response)
         return dispatch_response
 
     async def dispatch_inference_stream(

@@ -13,7 +13,7 @@ Canonical field definitions for tool results.
 
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any
 
 from app.constants import (
     CommandErrorType,
@@ -621,21 +621,21 @@ class TokenUsage(G8eBaseModel):
     error: str | None = None
 
 
-ToolResult = Union[
-    CommandExecutionResult,
-    CommandConstraintsResult,
-    FileEditResult,
-    PortCheckToolResult,
-    FsListToolResult,
-    FsGrepToolResult,
-    FsReadToolResult,
-    FetchLogsToolResult,
-    FetchHistoryToolResult,
-    FetchFileHistoryToolResult,
-    RestoreFileToolResult,
-    FetchFileDiffToolResult,
-    IntentPermissionResult,
-    SearchWebResult,
-    InvestigationContextResult,
-    SshInventoryToolResult,
-]
+ToolResult = (
+    CommandExecutionResult
+    | CommandConstraintsResult
+    | FileEditResult
+    | PortCheckToolResult
+    | FsListToolResult
+    | FsGrepToolResult
+    | FsReadToolResult
+    | FetchLogsToolResult
+    | FetchHistoryToolResult
+    | FetchFileHistoryToolResult
+    | RestoreFileToolResult
+    | FetchFileDiffToolResult
+    | IntentPermissionResult
+    | SearchWebResult
+    | InvestigationContextResult
+    | SshInventoryToolResult
+)

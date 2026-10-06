@@ -14,7 +14,8 @@ Covers: Attachment
 import pytest
 from pydantic import ValidationError
 
-from app.models.investigations import Attachment
+from app.constants import InvestigationStatus
+from app.models.investigations import Attachment, InvestigationModel
 
 pytestmark = [pytest.mark.unit]
 
@@ -45,7 +46,7 @@ class TestAttachment:
 
     def test_filename_required(self):
         with pytest.raises(ValidationError):
-            Attachment()
+            Attachment.model_validate({})
 
     def test_content_type_defaults_to_none(self):
         att = Attachment(filename="report.pdf")
@@ -87,41 +88,43 @@ class TestAttachment:
         assert "updated_at" not in flat
 
     def test_url_field_silently_ignored_on_construction(self):
-        att = Attachment(filename="report.pdf", url="https://example.com/file")
+        att = Attachment.model_validate(
+            {"filename": "report.pdf", "url": "https://example.com/file"}
+        )
         assert not hasattr(att, "url")
 
 
 class TestInvestigationStatus:
     def test_status_coerces_case_insensitively(self):
-        from app.constants import InvestigationStatus
-        from app.models.investigations import InvestigationModel
 
         for raw in ("open", "Open", "OPEN"):
-            inv = InvestigationModel(
-                case_id="case-1",
-                case_title="Title",
-                user_id="user-1",
-                sentinel_mode=False,
-                status=raw,
+            inv = InvestigationModel.model_validate(
+                {
+                    "case_id": "case-1",
+                    "case_title": "Title",
+                    "user_id": "user-1",
+                    "sentinel_mode": False,
+                    "status": raw,
+                }
             )
             assert inv.status == InvestigationStatus.OPEN
             assert inv.status.value == "Open"
             assert inv.model_dump(mode="json")["status"] == "Open"
 
         for raw in ("closed", "Closed", "CLOSED"):
-            inv = InvestigationModel(
-                case_id="case-1",
-                case_title="Title",
-                user_id="user-1",
-                sentinel_mode=False,
-                status=raw,
+            inv = InvestigationModel.model_validate(
+                {
+                    "case_id": "case-1",
+                    "case_title": "Title",
+                    "user_id": "user-1",
+                    "sentinel_mode": False,
+                    "status": raw,
+                }
             )
             assert inv.status == InvestigationStatus.CLOSED
             assert inv.status.value == "Closed"
 
     def test_status_defaults_to_open(self):
-        from app.constants import InvestigationStatus
-        from app.models.investigations import InvestigationModel
 
         inv = InvestigationModel(
             case_id="case-1",

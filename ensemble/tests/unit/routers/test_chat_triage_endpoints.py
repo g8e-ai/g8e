@@ -55,7 +55,6 @@ class TestTriageEndpoints:
             source_component=ComponentName.CLIENT,
         )
         payload = TriageAnswerRequest(
-            investigation_id=investigation_id,
             question_index=1,
             answer=True,
             context=RequestContext(
@@ -112,7 +111,6 @@ class TestTriageEndpoints:
             source_component=ComponentName.CLIENT,
         )
         payload = TriageSkipRequest(
-            investigation_id=investigation_id,
             context=RequestContext(
                 investigation_id=investigation_id,
                 case_id="case-123",
@@ -160,7 +158,6 @@ class TestTriageEndpoints:
             investigation_id=investigation_id,
         )
         payload = TriageTimeoutRequest(
-            investigation_id=investigation_id,
             context=RequestContext(
                 investigation_id=investigation_id,
                 case_id="case-123",

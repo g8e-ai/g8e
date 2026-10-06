@@ -19,10 +19,12 @@ and ``acting_app_id`` and include them in the canonical transaction hash so
 they are cryptographically tamper-evident and verified by the gateway.
 """
 
+import base64
 import json
 from pathlib import Path
 
 import pytest
+from g8e.models.governance import GOVERNANCE_PROTOCOL_VERSION_V1, compute_transaction_hash
 
 from app.clients.governance_client import (
     _source_component_to_proto_enum,
@@ -126,13 +128,11 @@ class TestEnvelopeIdentityBinding:
         We verify this by checking that the hash differs from a hash computed
         without acting_app_id (using the canonical function directly).
         """
-        from g8e.models.governance import compute_transaction_hash
 
         message = _make_message(user_id="user-1")
         envelope = build_governance_envelope(message, state_merkle_root="root")
 
         # Recompute without acting_app_id to prove it was included
-        import base64
 
         payload_bytes = message.payload.to_protobuf().SerializeToString()
         payload_b64 = base64.b64encode(payload_bytes).decode("ascii")
@@ -189,10 +189,6 @@ class TestHashParityVectors:
         assert len(vectors) >= 6
 
     def test_all_vectors_match_go_expected_hashes(self):
-        from g8e.models.governance import (
-            GOVERNANCE_PROTOCOL_VERSION_V1,
-            compute_transaction_hash,
-        )
 
         vectors = self._load_vectors()
         for v in vectors:

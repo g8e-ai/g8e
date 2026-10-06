@@ -22,7 +22,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from datetime import datetime
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import urljoin, urlparse
 
 import aiohttp
@@ -441,6 +441,217 @@ class HTTPClient:
         """
         return status_code >= 500 and status_code not in retry_config.retry_status_codes
 
+    def _build_request_kwargs(
+        self,
+        json_data: JSONPayload | None,
+        request_context: RequestContext | None,
+        params: QueryParams | None = None,
+    ) -> dict[str, Any]:
+        """Serialize the JSON body (embedding RequestContext when possible) and params."""
+        request_kwargs: dict[str, Any] = {}
+        json_body = self._serialize_json_payload(json_data)
+
+        # Embed RequestContext into the request body if context is provided. A
+        # Pydantic model body cannot be modified directly; the caller should
+        # include context in their model via the context field.
+        if request_context is not None and isinstance(json_body, dict):
+            json_body["context"] = request_context.model_dump(mode="json")
+
+        if json_body is not None:
+            request_kwargs["json"] = json_body
+        if params is not None:
+            request_kwargs["params"] = dict(params)
+        return request_kwargs
+
+    @staticmethod
+    async def _raise_if_circuit_open(
+        circuit_breaker: CircuitBreaker, final_url: str, method: str
+    ) -> None:
+        if await circuit_breaker.allow_request():
+            return
+        error = NetworkError(
+            message=f"Circuit breaker is open for {circuit_breaker.endpoint}",
+            code=ErrorCode.API_CONNECTION_ERROR,
+            severity=ErrorSeverity.HIGH,
+            details={
+                "url": final_url,
+                "method": method,
+                "circuit_state": circuit_breaker.state,
+                "failures": circuit_breaker.failures,
+                "last_failure_time": circuit_breaker.last_failure_time,
+            },
+            retry_suggested=False,
+        )
+        logger.error("Circuit breaker prevented request: %s", error)
+        raise error from error
+
+    async def _raise_status_error(
+        self,
+        wrapped: AiohttpResponse,
+        circuit_breaker: CircuitBreaker,
+        effective_retry: RetryConfig,
+        trace: RequestTrace,
+        final_url: str,
+        method: str,
+    ) -> NoReturn:
+        try:
+            error_detail = wrapped.json()
+        except (json.JSONDecodeError, ValueError):
+            error_detail = {"text": wrapped.text[:1000] if wrapped.text else "(empty response)"}
+
+        await circuit_breaker.record_failure(
+            countable=self._counts_toward_circuit_breaker(wrapped.status_code, effective_retry)
+        )
+        trace.finish()
+
+        error = NetworkError(
+            message=f"HTTP request failed with status {wrapped.status_code}",
+            code=ErrorCode.API_RESPONSE_ERROR,
+            details={
+                "url": final_url,
+                "method": method,
+                "status_code": wrapped.status_code,
+                "response": error_detail,
+                "duration_ms": trace.duration_ms,
+                "execution_id": trace.execution_id,
+            },
+            retry_suggested=False,
+        )
+
+        logger.error(
+            "HTTP request failed: %s %s",
+            method,
+            final_url,
+            extra={
+                "request_method": method,
+                "request_url": final_url,
+                "response_status": wrapped.status_code,
+                "response": error_detail,
+                "duration_ms": trace.duration_ms,
+                "error": str(error),
+                "execution_id": trace.execution_id,
+            },
+        )
+
+        raise error
+
+    async def _raise_timeout_error(
+        self,
+        exc: BaseException,
+        circuit_breaker: CircuitBreaker,
+        trace: RequestTrace,
+        final_url: str,
+        method: str,
+    ) -> NoReturn:
+        await circuit_breaker.record_failure(countable=False)
+        trace.finish()
+
+        error = NetworkError(
+            message=f"HTTP request timed out after {trace.duration_ms:.2f}ms",
+            code=ErrorCode.API_TIMEOUT_ERROR,
+            details={
+                "url": final_url,
+                "method": method,
+                "timeout": self.timeout.total,
+                "duration_ms": trace.duration_ms,
+                "execution_id": trace.execution_id,
+            },
+            retry_suggested=True,
+            cause=exc,
+        )
+
+        logger.error(
+            "HTTP request timed out: %s %s",
+            method,
+            final_url,
+            extra={
+                "request_method": method,
+                "request_url": final_url,
+                "duration_ms": trace.duration_ms,
+                "error": str(error),
+                "execution_id": trace.execution_id,
+            },
+        )
+
+        raise error from exc
+
+    @staticmethod
+    async def _raise_connection_error(
+        exc: BaseException,
+        circuit_breaker: CircuitBreaker,
+        trace: RequestTrace,
+        final_url: str,
+        method: str,
+    ) -> NoReturn:
+        await circuit_breaker.record_failure(countable=False)
+        trace.finish()
+
+        error = NetworkError(
+            message=f"HTTP request failed: {exc!s}",
+            code=ErrorCode.API_CONNECTION_ERROR,
+            details={
+                "url": final_url,
+                "method": method,
+                "duration_ms": trace.duration_ms,
+                "execution_id": trace.execution_id,
+            },
+            retry_suggested=True,
+            cause=exc,
+        )
+
+        logger.error(
+            "HTTP connection error: %s %s",
+            method,
+            final_url,
+            extra={
+                "request_method": method,
+                "request_url": final_url,
+                "duration_ms": trace.duration_ms,
+                "error": str(error),
+                "execution_id": trace.execution_id,
+            },
+        )
+
+        raise error from exc
+
+    @staticmethod
+    async def _raise_unexpected_error(
+        exc: Exception,
+        circuit_breaker: CircuitBreaker,
+        trace: RequestTrace,
+        final_url: str,
+        method: str,
+    ) -> NoReturn:
+        await circuit_breaker.record_failure()
+        trace.finish()
+
+        error = NetworkError(
+            message=f"Unexpected error during HTTP request: {exc!s}",
+            code=ErrorCode.API_REQUEST_ERROR,
+            details={
+                "url": final_url,
+                "method": method,
+                "duration_ms": trace.duration_ms,
+                "execution_id": trace.execution_id,
+            },
+            cause=exc,
+        )
+
+        logger.exception(
+            "Unexpected HTTP request error: %s %s",
+            method,
+            final_url,
+            extra={
+                "request_method": method,
+                "request_url": final_url,
+                "duration_ms": trace.duration_ms,
+                "error": str(error),
+                "execution_id": trace.execution_id,
+            },
+        )
+
+        raise error from exc
+
     async def request(
         self,
         method: str,
@@ -473,41 +684,10 @@ class HTTPClient:
             method, url, headers, context=context
         )
 
-        request_kwargs: dict[str, Any] = {}
-        json_body = self._serialize_json_payload(json_data)
-
-        # Embed RequestContext into the request body if context is provided
-        if request_context is not None and json_body is not None:
-            if isinstance(json_body, dict):
-                json_body["context"] = request_context.model_dump(mode="json")
-            else:
-                # If json_body is already a Pydantic model, we can't modify it directly
-                # The caller should include context in their model via the context field
-                pass
-
-        if json_body is not None:
-            request_kwargs["json"] = json_body
-        if params is not None:
-            request_kwargs["params"] = dict(params)
+        request_kwargs = self._build_request_kwargs(json_data, request_context, params)
 
         circuit_breaker = self._get_circuit_breaker(final_url)
-
-        if not await circuit_breaker.allow_request():
-            error = NetworkError(
-                message=f"Circuit breaker is open for {circuit_breaker.endpoint}",
-                code=ErrorCode.API_CONNECTION_ERROR,
-                severity=ErrorSeverity.HIGH,
-                details={
-                    "url": final_url,
-                    "method": method,
-                    "circuit_state": circuit_breaker.state,
-                    "failures": circuit_breaker.failures,
-                    "last_failure_time": circuit_breaker.last_failure_time,
-                },
-                retry_suggested=False,
-            )
-            logger.error("Circuit breaker prevented request: %s", error)
-            raise error from error
+        await self._raise_if_circuit_open(circuit_breaker, final_url, method)
 
         retry_count = 0
         effective_retry = retry_config or self.retry_config
@@ -582,50 +762,9 @@ class HTTPClient:
                     await asyncio.sleep(backoff)
                     continue
 
-                try:
-                    error_detail = wrapped.json()
-                except (json.JSONDecodeError, ValueError):
-                    error_detail = {
-                        "text": wrapped.text[:1000] if wrapped.text else "(empty response)"
-                    }
-
-                await circuit_breaker.record_failure(
-                    countable=self._counts_toward_circuit_breaker(
-                        wrapped.status_code, effective_retry
-                    )
+                await self._raise_status_error(
+                    wrapped, circuit_breaker, effective_retry, trace, final_url, method
                 )
-                trace.finish()
-
-                error = NetworkError(
-                    message=f"HTTP request failed with status {wrapped.status_code}",
-                    code=ErrorCode.API_RESPONSE_ERROR,
-                    details={
-                        "url": final_url,
-                        "method": method,
-                        "status_code": wrapped.status_code,
-                        "response": error_detail,
-                        "duration_ms": trace.duration_ms,
-                        "execution_id": trace.execution_id,
-                    },
-                    retry_suggested=False,
-                )
-
-                logger.error(
-                    "HTTP request failed: %s %s",
-                    method,
-                    final_url,
-                    extra={
-                        "request_method": method,
-                        "request_url": final_url,
-                        "response_status": wrapped.status_code,
-                        "response": error_detail,
-                        "duration_ms": trace.duration_ms,
-                        "error": str(error),
-                        "execution_id": trace.execution_id,
-                    },
-                )
-
-                raise error
 
             except (TimeoutError, aiohttp.ServerTimeoutError) as e:
                 if self._should_retry(method, 0, retry_count, e, retry_config=effective_retry):
@@ -651,37 +790,7 @@ class HTTPClient:
                     await asyncio.sleep(backoff)
                     continue
 
-                await circuit_breaker.record_failure(countable=False)
-                trace.finish()
-
-                error = NetworkError(
-                    message=f"HTTP request timed out after {trace.duration_ms:.2f}ms",
-                    code=ErrorCode.API_TIMEOUT_ERROR,
-                    details={
-                        "url": final_url,
-                        "method": method,
-                        "timeout": self.timeout.total,
-                        "duration_ms": trace.duration_ms,
-                        "execution_id": trace.execution_id,
-                    },
-                    retry_suggested=True,
-                    cause=e,
-                )
-
-                logger.error(
-                    "HTTP request timed out: %s %s",
-                    method,
-                    final_url,
-                    extra={
-                        "request_method": method,
-                        "request_url": final_url,
-                        "duration_ms": trace.duration_ms,
-                        "error": str(error),
-                        "execution_id": trace.execution_id,
-                    },
-                )
-
-                raise error from e
+                await self._raise_timeout_error(e, circuit_breaker, trace, final_url, method)
 
             except (aiohttp.ClientError, OSError) as e:
                 if self._should_retry(method, 0, retry_count, e, retry_config=effective_retry):
@@ -707,70 +816,13 @@ class HTTPClient:
                     await asyncio.sleep(backoff)
                     continue
 
-                await circuit_breaker.record_failure(countable=False)
-                trace.finish()
-
-                error = NetworkError(
-                    message=f"HTTP request failed: {e!s}",
-                    code=ErrorCode.API_CONNECTION_ERROR,
-                    details={
-                        "url": final_url,
-                        "method": method,
-                        "duration_ms": trace.duration_ms,
-                        "execution_id": trace.execution_id,
-                    },
-                    retry_suggested=True,
-                    cause=e,
-                )
-
-                logger.error(
-                    "HTTP connection error: %s %s",
-                    method,
-                    final_url,
-                    extra={
-                        "request_method": method,
-                        "request_url": final_url,
-                        "duration_ms": trace.duration_ms,
-                        "error": str(error),
-                        "execution_id": trace.execution_id,
-                    },
-                )
-
-                raise error from e
+                await self._raise_connection_error(e, circuit_breaker, trace, final_url, method)
 
             except NetworkError:
                 raise
 
             except Exception as e:
-                await circuit_breaker.record_failure()
-                trace.finish()
-
-                error = NetworkError(
-                    message=f"Unexpected error during HTTP request: {e!s}",
-                    code=ErrorCode.API_REQUEST_ERROR,
-                    details={
-                        "url": final_url,
-                        "method": method,
-                        "duration_ms": trace.duration_ms,
-                        "execution_id": trace.execution_id,
-                    },
-                    cause=e,
-                )
-
-                logger.exception(
-                    "Unexpected HTTP request error: %s %s",
-                    method,
-                    final_url,
-                    extra={
-                        "request_method": method,
-                        "request_url": final_url,
-                        "duration_ms": trace.duration_ms,
-                        "error": str(error),
-                        "execution_id": trace.execution_id,
-                    },
-                )
-
-                raise error from e
+                await self._raise_unexpected_error(e, circuit_breaker, trace, final_url, method)
 
     async def post(
         self,
@@ -818,16 +870,7 @@ class HTTPClient:
         final_url, request_headers, _trace, request_context = await self._prepare_request(
             method, url, headers, context=context
         )
-        request_kwargs: dict[str, Any] = {}
-        json_body = self._serialize_json_payload(json_data)
-
-        # Embed RequestContext into the request body if context is provided
-        if request_context is not None and json_body is not None:
-            if isinstance(json_body, dict):
-                json_body["context"] = request_context.model_dump(mode="json")
-
-        if json_body is not None:
-            request_kwargs["json"] = json_body
+        request_kwargs = self._build_request_kwargs(json_data, request_context)
 
         circuit_breaker = self._get_circuit_breaker(final_url)
         if not await circuit_breaker.allow_request():

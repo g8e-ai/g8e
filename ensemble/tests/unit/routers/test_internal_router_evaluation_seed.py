@@ -77,10 +77,10 @@ class _Router:
     def __init__(self, *, case_description: str = "derived from the prompt") -> None:
         self.calls: list[str] = []
         self.pipeline = MagicMock()
-        self.pipeline.run_chat = MagicMock(side_effect=lambda **kw: self.calls.append("run_chat"))
+        self.pipeline.run_chat = MagicMock(side_effect=lambda **_kw: self.calls.append("run_chat"))
         self.cases = MagicMock()
         self.cases.create_case = AsyncMock(
-            side_effect=lambda *a, **kw: self._created(
+            side_effect=lambda *_args, **_kwargs: self._created(
                 "create_case",
                 build_case_model(
                     case_id="case-123", user_id="user-123", description=case_description
@@ -91,14 +91,14 @@ class _Router:
         self.cases.publish_case_update_sse = AsyncMock()
         self.investigations = MagicMock()
         self.investigations.create_investigation = AsyncMock(
-            side_effect=lambda request: self._created(
+            side_effect=lambda _request: self._created(
                 "create_investigation",
                 create_investigation_data(investigation_id="inv-123", case_id="case-123"),
             )
         )
         self.seed_service = MagicMock()
         self.seed_service.apply = AsyncMock(
-            side_effect=lambda seed, context: self._created(
+            side_effect=lambda seed, _context: self._created(
                 "seed_apply", EvaluationSeedApplication(turns=len(seed.turns))
             )
         )

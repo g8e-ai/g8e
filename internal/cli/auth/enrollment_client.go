@@ -381,29 +381,13 @@ func (c *EnrollmentClient) Bind(ctx context.Context, fileSvc fs.RuntimeFileServi
 		headers[constants.HeaderCLISessionID] = creds.CLISessionID
 	}
 
-	var resp models.CLIBindResponse
+	var respBody models.CLIBindResponse
 	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIBind, models.CLIBindRequest{
 		OperatorSessionIDs: operatorSessionIDs,
-	}, &resp, headers); err != nil {
+	}, &respBody, headers); err != nil {
 		return CLISessionBind{}, err
 	}
-	if !resp.Success {
-		return CLISessionBind{}, fmt.Errorf("%w: bind unsuccessful", constants.ErrCLIRefreshFailed)
-	}
-	if resp.CLISessionID == "" || resp.UserID == "" || resp.OperatorSessionID == "" || resp.OperatorID == "" {
-		return CLISessionBind{}, constants.ErrMissingRequiredField
-	}
-	if len(resp.Bound) != len(operatorSessionIDs) {
-		return CLISessionBind{}, fmt.Errorf("%w: gateway bound %d of %d operator sessions", constants.ErrCLIRefreshFailed, len(resp.Bound), len(operatorSessionIDs))
-	}
-	return CLISessionBind{
-		CLISessionID:      resp.CLISessionID,
-		UserID:            resp.UserID,
-		OperatorSessionID: resp.OperatorSessionID,
-		OperatorID:        resp.OperatorID,
-		AlreadyBound:      resp.AlreadyBound,
-		Bound:             resp.Bound,
-	}, nil
+	return ValidateCLIBindResponse(respBody, operatorSessionIDs)
 }
 
 // CLISessionBind is the result of a successful CLI operator bind. The primary
@@ -436,21 +420,11 @@ func (c *EnrollmentClient) Unbind(ctx context.Context, fileSvc fs.RuntimeFileSer
 		headers[constants.HeaderCLISessionID] = creds.CLISessionID
 	}
 
-	var resp models.CLIUnbindResponse
-	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIUnbind, models.CLIUnbindRequest{}, &resp, headers); err != nil {
+	var respBody models.CLIUnbindResponse
+	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIUnbind, models.CLIUnbindRequest{}, &respBody, headers); err != nil {
 		return CLISessionUnbind{}, err
 	}
-	if !resp.Success {
-		return CLISessionUnbind{}, fmt.Errorf("%w: unbind unsuccessful", constants.ErrCLIRefreshFailed)
-	}
-	if resp.CLISessionID == "" || resp.UserID == "" {
-		return CLISessionUnbind{}, constants.ErrMissingRequiredField
-	}
-	return CLISessionUnbind{
-		CLISessionID:   resp.CLISessionID,
-		UserID:         resp.UserID,
-		AlreadyUnbound: resp.AlreadyUnbound,
-	}, nil
+	return ValidateCLIUnbindResponse(respBody)
 }
 
 // SessionInfo returns the authenticated CLI session's persisted identity

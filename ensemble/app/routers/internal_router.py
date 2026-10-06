@@ -1384,7 +1384,6 @@ async def stop_operator(
 
     try:
         result = await gateway_operator_client.stop(
-            context=g8e_context,
             operator_session_id=request.operator_session_id,
         )
     except NetworkError as exc:

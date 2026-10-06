@@ -62,6 +62,7 @@ from g8e.operator.v1.operator_pb2 import (
 )
 
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
+from app.errors import ModelCapabilityError, NetworkError, ValidationError
 from app.llm.llm_dataclasses import (
     Candidate,
     Content,
@@ -74,6 +75,7 @@ from app.llm.llm_dataclasses import (
     ToolGroup,
     UsageMetadata,
 )
+from app.llm.llm_schema import inline_json_schema_refs
 from app.llm.llm_types import (
     AssistantLLMSettings,
     LiteLLMSettings,
@@ -120,8 +122,6 @@ _GO_JSON_STRING_ESCAPES = str.maketrans(
 
 
 def _canonical_json(value: object) -> str:
-    from app.errors import ValidationError
-
     try:
         return json.dumps(
             value,
@@ -139,8 +139,6 @@ def _contents_to_messages(
     system_instructions: str | None,
     model: str = "",
 ) -> list[InferenceMessage]:
-    from app.errors import ModelCapabilityError, ValidationError
-
     messages: list[InferenceMessage] = []
     if system_instructions is not None:
         messages.append(
@@ -231,7 +229,6 @@ def _tools_to_declarations(tools: list[ToolGroup] | None) -> list[InferenceToolD
 def _response_format(format_value: ResponseFormat | None) -> InferenceResponseFormat | None:
     if format_value is None:
         return None
-    from app.llm.llm_schema import inline_json_schema_refs
 
     return InferenceResponseFormat(
         media_type="application/json",
@@ -244,7 +241,6 @@ def _response_format(format_value: ResponseFormat | None) -> InferenceResponseFo
 def _tool_choice(config: ToolConfig | None) -> InferenceToolChoice | None:
     if config is None:
         return None
-    from app.errors import ValidationError
 
     mode_name = config.tool_calling_config.mode.upper()
     modes = {
@@ -277,7 +273,6 @@ def _apply_evaluation_context(
 ) -> None:
     if context is None or context.evaluation_context is None:
         return
-    from app.errors import ValidationError
 
     evaluation = context.evaluation_context
     matches = [variant for variant in evaluation.model_registry if variant.model == model]
@@ -346,8 +341,6 @@ def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetad
 
 
 def _response_parts(result: InferenceDispatchResponse) -> list[Part]:
-    from app.errors import ValidationError
-
     if not result.HasField("result"):
         raise ValidationError("Governed inference response is missing its result")
     parts: list[Part] = []
@@ -389,8 +382,6 @@ def _response_parts(result: InferenceDispatchResponse) -> list[Part]:
 def _validate_response_identity(
     request: InferenceDispatchRequest, response: InferenceDispatchResponse
 ) -> None:
-    from app.errors import ValidationError
-
     if not response.HasField("result"):
         raise ValidationError("Governed inference response is missing its result")
     result = response.result
@@ -444,8 +435,6 @@ def _part_to_stream_chunk(part: Part) -> StreamChunkFromModel:
 
 
 def _progress_parts_to_stream_chunks(progress) -> list[StreamChunkFromModel]:
-    from app.errors import ValidationError
-
     chunks: list[StreamChunkFromModel] = []
     for response_part in progress.parts:
         kind = response_part.WhichOneof("part")
@@ -596,7 +585,6 @@ class G8EProvider(LLMProvider):
         tools: list[ToolGroup] | None = None,
     ) -> InferenceDispatchResponse:
         """Dispatch a governed inference request and return the response."""
-        from app.errors import NetworkError
 
         self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
@@ -691,8 +679,6 @@ class G8EProvider(LLMProvider):
         thinking_config: ThinkingConfig | None,
         tools: list[ToolGroup] | None = None,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        from app.errors import NetworkError, ValidationError
-
         self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
         retry_count = self._provider_retry_count.get()
@@ -824,7 +810,6 @@ class G8EProvider(LLMProvider):
         request: InferenceDispatchRequest,
     ) -> AsyncGenerator[InferenceDispatchStreamFrame]:
         """Capture bounded Gateway frames independently of their interpretation."""
-        from app.errors import ValidationError
 
         artifact = ModelResponseArtifact()
         self._response_artifact.set(artifact)
@@ -905,8 +890,6 @@ class G8EProvider(LLMProvider):
             "lite": _ROLE_LITE,
         }
         if model_role not in role_map:
-            from app.errors import ValidationError
-
             raise ValidationError(f"Unsupported scored model role: {model_role}")
         stream = self._dispatch_stream(
             role_map[model_role],

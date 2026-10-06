@@ -72,6 +72,10 @@ class SettingsService:
         self._cache_aside = cache_aside_service
         self._logger = logging.getLogger(__name__)
 
+    def attach_cache_aside(self, cache_aside_service: CacheAsideService) -> None:
+        """Attach the cache-aside service once it is constructed after bootstrap."""
+        self._cache_aside = cache_aside_service
+
     def get_local_settings(self) -> G8eeAppSettings:
         """Load canonical defaults and local LLM credentials."""
         settings = G8eeAppSettings(

@@ -6,7 +6,11 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+from g8e.models.internal_api import (
+    DesignatedModelRole,
+    EvaluationInferenceContext,
+    InferenceModelVariant,
+)
 
 from app.constants import ReasoningAgent, TriageComplexityClassification
 from app.llm.utils import ModelOverrideResolver
@@ -22,14 +26,14 @@ from app.services.evaluation.role_control import (
 def _settings() -> G8eeUserSettings:
     return G8eeUserSettings(
         llm=LLMSettings(
-            primary_model="primary-default",
-            assistant_model="assistant-default",
-            lite_model="lite-default",
+            llm_model="primary-default",
+            llm_assistant_model="assistant-default",
+            llm_lite_model="lite-default",
         )
     )
 
 
-def _model_role_context(role: str) -> EvaluationInferenceContext:
+def _model_role_context(role: DesignatedModelRole) -> EvaluationInferenceContext:
     return EvaluationInferenceContext(
         campaign_id="campaign-1",
         run_id="run-1",

@@ -75,6 +75,7 @@ from app.llm.providers.g8e import G8EProvider, _contents_to_messages, _validate_
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import InferenceDispatchRequest, InferenceDispatchResponse
 from app.models.settings import G8eeUserSettings, LLMSettings
+from app.services.ai.chat_pipeline import ChatPipelineService
 
 pytestmark = pytest.mark.unit
 
@@ -174,9 +175,7 @@ def _dispatch_stream_response(response: InferenceDispatchResponse | None = None)
     async def dispatch_stream(request):
         result = response or _response()
         _bind_response_identity(request, result)
-        sequence = 0
-        for part in result.result.parts:
-            sequence += 1
+        for sequence, part in enumerate(result.result.parts, start=1):
             progress = InferenceProgressEvent(
                 provider_attempt_id=request.provider_attempt_id,
                 sequence=sequence,
@@ -232,15 +231,14 @@ class TestValidateLLMConfigAcceptsG8E:
     """ChatPipelineService.validate_llm_config must accept the g8e provider."""
 
     def _pipeline(self):
-        from app.services.ai.chat_pipeline import ChatPipelineService
 
         return ChatPipelineService.__new__(ChatPipelineService)
 
     def test_g8e_primary_provider_passes_validation(self):
         settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
             )
         )
         # G8E needs no endpoint or API key; validation must not reject the
@@ -250,12 +248,12 @@ class TestValidateLLMConfigAcceptsG8E:
     def test_g8e_provider_per_tier_passes_validation(self):
         settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
-                assistant_provider=LLMProvider.G8E,
-                assistant_model="gemma3:4b",
-                lite_provider=LLMProvider.G8E,
-                lite_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
+                llm_assistant_provider=LLMProvider.G8E,
+                llm_assistant_model="gemma3:4b",
+                llm_lite_provider=LLMProvider.G8E,
+                llm_lite_model="gemma3:4b",
             )
         )
         self._pipeline().validate_llm_config(settings)
@@ -277,8 +275,8 @@ class TestG8EProviderFactoryWiring:
         set_internal_http_client(_client())
         try:
             settings = LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
             )
             provider = get_llm_provider(settings)
             assert isinstance(provider, G8EProvider)
@@ -290,8 +288,8 @@ class TestG8EProviderFactoryWiring:
         await self._reset()
         try:
             settings = LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
             )
             with pytest.raises(ConfigurationError):
                 get_llm_provider(settings)
@@ -304,8 +302,8 @@ class TestG8EProviderFactoryWiring:
         set_internal_http_client(_client())
         try:
             settings = LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
             )
             first = get_llm_provider(settings)
             second = get_llm_provider(settings)
@@ -625,6 +623,7 @@ class TestG8EProviderDispatch:
             rest = [chunk async for chunk in stream]
             assert len(rest) == 1
             assert rest[0].finish_reason == "stop"
+            assert provider.response_artifact is not None
             assert provider.response_artifact.received_complete is True
         finally:
             release.set()
@@ -637,6 +636,7 @@ class TestG8EProviderDispatch:
         client = _client()
         client.dispatch_inference_stream = _dispatch_stream_response(response)
         provider = G8EProvider(internal_http_client=client)
+
         async def consume_stream() -> list:
             return [
                 chunk
@@ -647,6 +647,7 @@ class TestG8EProviderDispatch:
 
         with pytest.raises(ValidationError):
             await consume_stream()
+        assert provider.response_artifact is not None
         assert provider.response_artifact.received_complete is True
 
     @pytest.mark.asyncio

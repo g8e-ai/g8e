@@ -44,7 +44,8 @@ from app.constants import (
 from app.constants.generated_status import OperatorToolName
 from app.errors import ExternalServiceError, ValidationError
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.settings import G8eeUserSettings
+from app.models.operators import HeartbeatSnapshot, HeartbeatSystemIdentity
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import (
     CommandExecutionResult,
     FetchFileDiffToolResult,
@@ -66,6 +67,7 @@ from tests.fakes.factories import (
     build_bound_operator,
     build_g8e_http_context,
 )
+from tests.fakes.tool_helpers import create_tool_service_fake
 
 pytestmark = [pytest.mark.integration]
 
@@ -135,7 +137,6 @@ def sample_g8e_context():
 @pytest.fixture
 def sample_investigation():
     """Sample investigation for testing."""
-    from app.models.operators import HeartbeatSnapshot, HeartbeatSystemIdentity
 
     return EnrichedInvestigationContext(
         id="inv-101",
@@ -165,7 +166,6 @@ def sample_investigation():
 @pytest.fixture
 def request_settings():
     """Sample request settings for testing."""
-    from app.models.settings import LLMSettings
 
     return G8eeUserSettings(llm=LLMSettings())
 
@@ -987,7 +987,6 @@ class TestNetworkSearchTools:
     ):
         """Test g8e_web_search tool handles unavailable provider correctly."""
         # Create tool service without web search provider
-        from tests.fakes.tool_helpers import create_tool_service_fake
 
         tool_service_no_search = create_tool_service_fake(
             web_search_provider=None, auto_approve=True

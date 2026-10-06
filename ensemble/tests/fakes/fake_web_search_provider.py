@@ -25,8 +25,6 @@ class FakeWebSearchProvider:
     """
 
     def __init__(self, search_result=None):
-        from app.models.tool_results import SearchWebResult
-
         self._search_result = search_result or SearchWebResult(
             success=False, query="", error="no result configured"
         )

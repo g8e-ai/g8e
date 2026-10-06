@@ -22,10 +22,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.errors import DatabaseError
+from app.errors import DatabaseError, NetworkError
 from app.models.http_context import RequestContext
 from app.models.reputation import GENESIS_PREV_ROOT, ReputationSignResponse, ReputationState
 from app.services.ai.auditor_service import commit_reputation
@@ -73,7 +74,6 @@ def _expected_signature(
 class TestCommitReputation:
     @pytest.fixture
     def service(self, fake_cache_aside_service) -> ReputationDataService:
-        from unittest.mock import AsyncMock, MagicMock
 
         async def _write_through(collection, document_id, updates, **kwargs):
             return await fake_cache_aside_service.db_client.update_document(
@@ -244,8 +244,6 @@ class TestCommitReputation:
 
     async def test_gateway_signing_failure_does_not_persist(self, service, seeded_states):
         await _seed_states(service, seeded_states)
-
-        from app.errors import NetworkError
 
         service._governance_client.sign_reputation_commitment.side_effect = NetworkError(
             "Gateway signing unavailable"

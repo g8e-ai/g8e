@@ -55,10 +55,10 @@ def _make_enabled_settings(passes: int = 3) -> G8eeUserSettings:
     return G8eeUserSettings(
         llm=LLMSettings(
             llm_command_gen_enabled=True,
-            primary_provider=LLMProvider.OLLAMA,
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="gemma3:1b",
-            primary_model="test-primary",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="gemma3:1b",
+            llm_model="test-primary",
             llm_command_gen_passes=passes,
             llm_command_gen_auditor=False,
         )
@@ -160,10 +160,13 @@ async def test_consensus_failure_emits_failed_agent_state():
 
     mock_provider = _make_mock_provider_divergent(["cmd-a", "cmd-b", "cmd-c", "cmd-d", "cmd-e"])
 
-    with patch(
-        "app.services.ai.generator.get_llm_provider",
-        return_value=mock_provider,
-    ), pytest.raises(TribunalConsensusFailedError):
+    with (
+        patch(
+            "app.services.ai.generator.get_llm_provider",
+            return_value=mock_provider,
+        ),
+        pytest.raises(TribunalConsensusFailedError),
+    ):
         await generate_command(
             make_tribunal_generation_request(
                 request="list files",

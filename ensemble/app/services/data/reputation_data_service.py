@@ -143,7 +143,7 @@ class ReputationDataService:
             raise
         except Exception as exc:
             logger.exception(
-                "Failed to upsert reputation_state for %s: %s", state.agent_id, exc, exc_info=True
+                "Failed to upsert reputation_state for %s: %s", state.agent_id, exc
             )
             raise DatabaseError(
                 message=f"Failed to upsert reputation_state for {state.agent_id}: {exc}",

@@ -22,11 +22,25 @@ from pathlib import Path
 
 import g8e.constants as g8e_constants
 import g8e.enums as g8e_enums
+import g8e.models.base as proto_base
 import pytest
+from g8e.models.context import RequestContext as ProtoRequestContext
+from g8e.models.events import BackgroundEventWire as ProtoBackgroundEventWire
+from g8e.models.events import SessionEventWire as ProtoSessionEventWire
+from g8e.models.internal_api import ChatMessageRequest as ProtoChatMessageRequest
+from g8e.models.internal_api import ChatStartedResponse as ProtoChatStartedResponse
+from g8e.models.internal_api import ResourceCreationRequest as ProtoResourceCreationRequest
 
 import app.constants as app_constants
 import app.models.base as app_base
 from app.constants import generated_status as gs
+from app.models import settings as ens_settings
+from app.models.events import BackgroundEventWire as AppBackgroundEventWire
+from app.models.events import SessionEventWire as AppSessionEventWire
+from app.models.http_context import RequestContext as AppRequestContext
+from app.models.internal_api import ChatMessageRequest as AppChatMessageRequest
+from app.models.internal_api import ChatStartedResponse as AppChatStartedResponse
+from app.models.internal_api import ResourceCreationRequest as AppResourceCreationRequest
 
 pytestmark = pytest.mark.unit
 
@@ -227,8 +241,6 @@ class TestModelBaseReexports:
         ids=[e for e, _ in BASE_REEXPORT_PAIRS],
     )
     def test_base_symbol_is_protocol_identity(self, ensemble_name: str, protocol_name: str):
-        import g8e.models.base as proto_base
-
         ens = getattr(app_base, ensemble_name)
         proto = getattr(proto_base, protocol_name)
         assert ens is proto, (
@@ -245,46 +257,22 @@ class TestModelSubclassing:
     """Ensemble models that extend protocol models must subclass them."""
 
     def test_request_context_subclasses_protocol(self):
-        from g8e.models.context import RequestContext as Proto
-
-        from app.models.http_context import RequestContext
-
-        assert issubclass(RequestContext, Proto)
+        assert issubclass(AppRequestContext, ProtoRequestContext)
 
     def test_chat_message_request_subclasses_protocol(self):
-        from g8e.models.internal_api import ChatMessageRequest as Proto
-
-        from app.models.internal_api import ChatMessageRequest
-
-        assert issubclass(ChatMessageRequest, Proto)
+        assert issubclass(AppChatMessageRequest, ProtoChatMessageRequest)
 
     def test_chat_started_response_is_protocol(self):
-        from g8e.models.internal_api import ChatStartedResponse as Proto
-
-        from app.models.internal_api import ChatStartedResponse
-
-        assert ChatStartedResponse is Proto
+        assert AppChatStartedResponse is ProtoChatStartedResponse
 
     def test_resource_creation_request_is_protocol(self):
-        from g8e.models.internal_api import ResourceCreationRequest as Proto
-
-        from app.models.internal_api import ResourceCreationRequest
-
-        assert ResourceCreationRequest is Proto
+        assert AppResourceCreationRequest is ProtoResourceCreationRequest
 
     def test_session_event_wire_subclasses_protocol(self):
-        from g8e.models.events import SessionEventWire as Proto
-
-        from app.models.events import SessionEventWire
-
-        assert issubclass(SessionEventWire, Proto)
+        assert issubclass(AppSessionEventWire, ProtoSessionEventWire)
 
     def test_background_event_wire_subclasses_protocol(self):
-        from g8e.models.events import BackgroundEventWire as Proto
-
-        from app.models.events import BackgroundEventWire
-
-        assert issubclass(BackgroundEventWire, Proto)
+        assert issubclass(AppBackgroundEventWire, ProtoBackgroundEventWire)
 
     @pytest.mark.parametrize(
         ("ensemble_name", "protocol_path"),
@@ -306,8 +294,6 @@ class TestModelSubclassing:
         ],
     )
     def test_settings_model_subclasses_protocol(self, ensemble_name: str, protocol_path: str):
-        from app.models import settings as ens_settings
-
         mod_path, cls_name = protocol_path.split(":")
         proto_mod = importlib.import_module(mod_path)
         proto_cls = getattr(proto_mod, cls_name)

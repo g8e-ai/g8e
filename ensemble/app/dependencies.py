@@ -420,7 +420,17 @@ async def get_request_context(request: Request) -> RequestContext:
 
 
 async def health_check_dependencies(request: Request) -> HealthCheckResult:
-    return await HealthService.check_dependencies(request)
+    return await HealthService.check_dependencies(
+        {
+            "settings": get_g8ee_app_settings(request),
+            "cache_aside_service": get_g8ee_cache_aside_service(request),
+            "investigation_data_service": get_g8ee_investigation_data_service(request),
+            "investigation_service": get_g8ee_investigation_service(request),
+            "memory_service": get_g8ee_memory_service(request),
+            "chat_pipeline": get_g8ee_chat_pipeline(request),
+            "attachment_service": get_g8ee_attachment_service(request),
+        }
+    )
 
 
 async def get_g8ee_chat_user_settings(

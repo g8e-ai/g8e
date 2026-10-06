@@ -326,37 +326,22 @@ class ConsensusConfidence:
             return "consensus_failed"
 
         strength = vote_breakdown.consensus_strength
-        len(vote_breakdown.candidates_by_member)
 
         if strength == 1.0:
-            if auditor_passed is True:
-                return "unanimous_verified"
-            return "unanimous_unverified"
+            return "unanimous_verified" if auditor_passed is True else "unanimous_unverified"
 
-        if strength >= 0.8:  # 4/5
+        tier = "strong" if strength >= 0.8 else "majority" if strength >= 0.6 else None  # 4/5, 3/5
+        if tier is not None:
             if auditor_passed is True:
-                return "strong_verified"
+                return f"{tier}_verified"
             if auditor_reason in (
                 AuditorReason.REVISED,
                 AuditorReason.REVISED_FROM_DISSENT,
                 AuditorReason.SWAPPED_TO_DISSENTER,
             ):
-                return "strong_with_intervention"
+                return f"{tier}_with_intervention"
 
-        if strength >= 0.6:  # 3/5
-            if auditor_passed is True:
-                return "majority_verified"
-            if auditor_reason in (
-                AuditorReason.REVISED,
-                AuditorReason.REVISED_FROM_DISSENT,
-                AuditorReason.SWAPPED_TO_DISSENTER,
-            ):
-                return "majority_with_intervention"
-
-        if vote_breakdown.tie_broken:
-            return "tied_resolved"
-
-        return "consensus_failed"
+        return "tied_resolved" if vote_breakdown.tie_broken else "consensus_failed"
 
 
 class CommandGenerationResult(G8eBaseModel):

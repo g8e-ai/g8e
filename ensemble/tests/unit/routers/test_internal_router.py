@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import ComponentName, LLMProvider, OperatorStatus
+from app.constants import ComponentName, LLMProvider, OperatorStatus, OperatorType
 from app.errors import ResourceNotFoundError, ValidationError
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.cases import (
@@ -595,7 +595,7 @@ async def test_create_operator_slot_rejects_local_authority(request_context, g8e
     request = OperatorSlotCreationRequest(
         context=request_context,
         slot_number=1,
-        operator_type="remote",
+        operator_type=OperatorType.REMOTE,
         name_prefix="operator",
     )
 
@@ -616,7 +616,7 @@ async def test_claim_operator_slot_rejects_local_authority(request_context, g8e_
         operator_id="op-123",
         operator_session_id="session-123",
         bound_web_session_id="web-session-123",
-        operator_type="REMOTE",
+        operator_type=OperatorType.REMOTE,
     )
 
     response = await claim_operator_slot(

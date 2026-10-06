@@ -68,6 +68,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OperatorStopMsg:
 		return m.applyOperatorStopMsg(msg)
 
+	case OperatorBindMsg:
+		return m.applyOperatorBindMsg(msg)
+
+	case OperatorUnbindMsg:
+		return m.applyOperatorUnbindMsg(msg)
+
+	case RecoveryApprovedMsg:
+		return m.applyRecoveryApprovedMsg(msg)
+
+	case SessionRotatedMsg:
+		return m.applySessionRotatedMsg(msg)
+
+	case AuditEventsMsg:
+		m = m.applyAuditEventsMsg(msg)
+
+	case AuditSummaryMsg:
+		m = m.applyAuditSummaryMsg(msg)
+
+	case AuditVerifyMsg:
+		m = m.applyAuditVerifyMsg(msg)
+
 	case ApprovalOpenedMsg:
 		m = m.applyApprovalOpenedMsg(msg)
 
@@ -133,6 +154,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.view == viewRecovery {
+		return m.handleRecoveryKey(msg)
+	}
 	switch key {
 	case "q":
 		m.quitting = true
@@ -142,18 +166,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		return m, m.refreshCmd()
+	case "esc":
+		if m.view == viewOperatorDetails {
+			m.view = viewOperators
+			m.operatorDetailScroll = 0
+		}
+		return m, nil
 	}
 	if id, ok := viewForKey(key); ok {
 		m.view = id
+		if id == viewAudit {
+			return m, m.auditRefreshCmd()
+		}
+		if id == viewGatewayStatus {
+			return m, m.refreshCmd()
+		}
+		if id == viewRecovery {
+			cmd := m.recoveryTokenInput.Focus()
+			return m, cmd
+		}
 		return m, nil
 	}
 	switch m.view {
 	case viewApprovals:
 		return m.handleApprovalsKey(key)
-	case viewOperators:
+	case viewOperators, viewOperatorDetails:
 		return m.handleOperatorsKey(key)
 	case viewEnrollments:
 		return m.handleEnrollmentsKey(key)
+	case viewAudit:
+		return m.handleAuditKey(key)
+	case viewGatewayStatus:
+		return m.handleGatewayStatusKey(key)
 	default:
 		return m.handleOverviewKey(key)
 	}
@@ -204,19 +248,23 @@ func (m Model) moveSelection(delta int) Model {
 	return m
 }
 
-// refreshCmd re-fetches pending approvals, Operators, Gateway health, and
-// platform enrollments.
+// refreshCmd re-fetches the active session data, Gateway health, and audit
+// data when the Audit view is active.
 func (m Model) refreshCmd() tea.Cmd {
 	if m.gw == nil {
 		return nil
 	}
 	gw := m.gw
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		withTimeout(gw.fetchPendingApprovals),
 		withTimeout(gw.fetchOperators),
 		withTimeout(gw.fetchHealth),
 		withTimeout(gw.fetchEnrollments),
-	)
+	}
+	if m.view == viewAudit {
+		cmds = append(cmds, m.auditRefreshCmds()...)
+	}
+	return tea.Batch(cmds...)
 }
 
 // withTimeout adapts a Gateway fetch to a tea.Cmd bounded by requestTimeout.
@@ -236,6 +284,36 @@ func (m Model) noteSessionError(err error) Model {
 		m.connDetail = sessionExpiredDetail
 	}
 	return m
+}
+
+// applySessionRotatedMsg replaces the request gateway and tells the adapter
+// to restart its SSE stream on the same fresh session.
+func (m Model) applySessionRotatedMsg(msg SessionRotatedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m = m.noteSessionError(msg.Err)
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "CLI session rebuild failed: " + msg.Err.Error()}), nil
+	}
+	if msg.Session == nil {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "CLI session rebuild returned no session"}), nil
+	}
+	m.identity = msg.Identity
+	m.gw = &gateway{session: msg.Session, userID: msg.Identity.UserID}
+	if m.sessionManager != nil {
+		m.sessionManager.replace(msg.Session, msg.Identity.UserID)
+	}
+	m = m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: "CLI session rotated; reconnecting SSE"})
+	return m, m.refreshCmd()
+}
+
+func (m Model) rebuildSessionCmd(identity Identity) tea.Cmd {
+	if m.rebuildSession == nil {
+		return nil
+	}
+	rebuild := m.rebuildSession
+	return withTimeout(func(ctx context.Context) SessionRotatedMsg {
+		session, err := rebuild(ctx, identity)
+		return SessionRotatedMsg{Session: session, Identity: identity, Err: err}
+	})
 }
 
 // applyPipelineMsg updates a pipeline stage's status and detail.
@@ -259,6 +337,7 @@ func (m Model) applyHealthMsg(msg HealthMsg) Model {
 		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Gateway health unavailable: " + msg.Err.Error()})
 	}
 	m.gatewayVersion = msg.Health.Version
+	m.health = msg.Health
 	posture, err := governance.ParseGovernancePosture(msg.Health.Posture)
 	if err != nil {
 		m.posture = nil

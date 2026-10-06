@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.constants import ErrorAnalysisCategory, RiskLevel
+from app.constants import ErrorAnalysisCategory, LLMProvider, RiskLevel
 from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.settings import G8eeUserSettings, LLMSettings
@@ -39,7 +39,7 @@ def create_real_llm_response(text: str | None) -> GenerateContentResponse:
 @pytest.fixture
 def mock_settings():
     llm = LLMSettings()
-    llm.lite_provider = "ollama"
+    llm.lite_provider = LLMProvider.OLLAMA
     llm.lite_model = "lite-model"
     return G8eeUserSettings(llm=llm)
 

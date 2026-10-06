@@ -37,6 +37,7 @@ from app.errors import (
     ConfigurationError,
     ServiceUnavailableError,
 )
+from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeAppSettings
 from tests.fakes.factories import build_authenticated_user
 
@@ -312,7 +313,6 @@ class TestRequireAuthenticatedContext:
             auth_method=AuthMethod.PROXY,
         )
         mock_auth_service = MagicMock()
-        from app.models.http_context import G8eHttpContext
 
         mock_context = G8eHttpContext(user_id="user-123", source_component=G8EE_COMPONENT)
         mock_auth_service.get_validated_context = AsyncMock(return_value=mock_context)

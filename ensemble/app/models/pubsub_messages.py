@@ -15,7 +15,7 @@ communication via operator pub/sub.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Union
+from typing import Literal
 from uuid import uuid4
 
 from app.constants import ComponentName, EventType, ExecutionStatus
@@ -437,51 +437,51 @@ class PortCheckResultPayload(G8eBaseModel):
     error: str | None = Field(default=None, description="Error message on failure")
 
 
-G8eoResultPayload = Union[
-    ExecutionResultsPayload,
-    ExecutionStatusPayload,
-    CancellationResultPayload,
-    FileEditResultPayload,
-    FsListResultPayload,
-    FsGrepResultPayload,
-    FsReadResultPayload,
-    FetchLogsResultPayload,
-    FetchLogsErrorPayload,
-    FetchHistorySuccessPayload,
-    FetchHistoryErrorPayload,
-    FetchFileHistorySuccessPayload,
-    FetchFileHistoryErrorPayload,
-    RestoreFileSuccessPayload,
-    RestoreFileErrorPayload,
-    FetchFileDiffByIdSuccessPayload,
-    FetchFileDiffBySessionSuccessPayload,
-    FetchFileDiffErrorPayload,
-    PortCheckResultPayload,
-]
+G8eoResultPayload = (
+    ExecutionResultsPayload
+    | ExecutionStatusPayload
+    | CancellationResultPayload
+    | FileEditResultPayload
+    | FsListResultPayload
+    | FsGrepResultPayload
+    | FsReadResultPayload
+    | FetchLogsResultPayload
+    | FetchLogsErrorPayload
+    | FetchHistorySuccessPayload
+    | FetchHistoryErrorPayload
+    | FetchFileHistorySuccessPayload
+    | FetchFileHistoryErrorPayload
+    | RestoreFileSuccessPayload
+    | RestoreFileErrorPayload
+    | FetchFileDiffByIdSuccessPayload
+    | FetchFileDiffBySessionSuccessPayload
+    | FetchFileDiffErrorPayload
+    | PortCheckResultPayload
+)
 
 G8eoResultPayloadAdapter = TypeAdapter(G8eoResultPayload)
 
 
 # Union type for all outbound payloads from g8ee to g8eo
 # Uses discriminator field 'payload_type' for type-safe parsing
-G8eOutboundPayload = Union[
-    CommandRequestPayload,
-    CommandCancelRequestPayload,
-    CheckPortRequestPayload,
-    FileEditRequestPayload,
-    FsListRequestPayload,
-    FsGrepRequestPayload,
-    FsReadRequestPayload,
-    FetchLogsRequestPayload,
-    FetchHistoryRequestPayload,
-    FetchFileHistoryRequestPayload,
-    FetchFileDiffRequestPayload,
-    RestoreFileRequestPayload,
-    DirectCommandAuditRequestPayload,
-    HeartbeatRequestPayload,
-    DocumentUpdateRequestPayload,
-    DocumentDeleteRequestPayload,
-]
+G8eOutboundPayload = (
+    CommandRequestPayload
+    | CommandCancelRequestPayload
+    | CheckPortRequestPayload
+    | FileEditRequestPayload
+    | FsListRequestPayload
+    | FsGrepRequestPayload
+    | FsReadRequestPayload
+    | FetchLogsRequestPayload
+    | FetchHistoryRequestPayload
+    | FetchFileHistoryRequestPayload
+    | FetchFileDiffRequestPayload
+    | RestoreFileRequestPayload
+    | DirectCommandAuditRequestPayload
+    | HeartbeatRequestPayload
+    | DocumentUpdateRequestPayload
+    | DocumentDeleteRequestPayload
+)
 
 
 class G8eoResultEnvelope(G8eBaseModel):

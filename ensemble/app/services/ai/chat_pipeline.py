@@ -37,6 +37,8 @@ from app.constants import (
     TriageComplexityClassification,
 )
 from app.constants.message_sender import MessageSender
+from app.decision.providers.jev import JevProvider
+from app.decision.validation import validate_jev_lite_coexistence
 from app.errors import BusinessLogicError, ConfigurationError
 from app.llm import get_llm_provider
 from app.llm.factory import get_llm_provider_class
@@ -157,8 +159,6 @@ class ChatPipelineService:
         # Validate credentials for each configured tier
         validation_errors = []
 
-        from app.decision.validation import validate_jev_lite_coexistence
-
         def check_tier(
             tier_name: str,
             model: str | None,
@@ -182,8 +182,6 @@ class ChatPipelineService:
                 return
 
             if provider == LLMProvider.JEV.value:
-                from app.decision.providers.jev import JevProvider
-
                 provider_errors = JevProvider.validate_config(api_key, endpoint)
                 for error in provider_errors:
                     validation_errors.append(f"{tier_name.capitalize()} {error}")

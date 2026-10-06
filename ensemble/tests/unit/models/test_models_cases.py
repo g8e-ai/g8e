@@ -141,7 +141,7 @@ class TestCaseModel:
             "description": "Cannot connect to the primary database",
         }
         defaults.update(overrides)
-        return CaseModel(**defaults)
+        return CaseModel.model_validate(defaults)
 
     def test_instantiation_with_required_fields(self):
         case = self._make_case()
@@ -229,10 +229,8 @@ class TestCaseModel:
         assert not hasattr(case, "injected_client_field")
 
     def test_inherits_extra_ignore_from_base(self):
-        case = CaseModel(
-            title="Test",
-            description="Desc",
-            unknown_field="should_be_dropped",
+        case = CaseModel.model_validate(
+            {"title": "Test", "description": "Desc", "unknown_field": "should_be_dropped"}
         )
         assert not hasattr(case, "unknown_field")
 
@@ -261,7 +259,7 @@ class TestCaseCreateRequest:
             "web_session_id": "sess-xyz",
         }
         defaults.update(overrides)
-        return CaseCreateRequest(**defaults)
+        return CaseCreateRequest.model_validate(defaults)
 
     def test_instantiation_with_required_fields(self):
         req = self._make_request()
@@ -271,7 +269,7 @@ class TestCaseCreateRequest:
 
     def test_initial_message_required(self):
         with pytest.raises(ValidationError):
-            CaseCreateRequest(user_id="u", web_session_id="s")
+            CaseCreateRequest.model_validate({"user_id": "u", "web_session_id": "s"})
 
     def test_initial_message_min_length_enforced(self):
         with pytest.raises(ValidationError):
@@ -279,9 +277,8 @@ class TestCaseCreateRequest:
 
     def test_user_id_required(self):
         with pytest.raises(ValidationError):
-            CaseCreateRequest(
-                initial_message="test",
-                web_session_id="sess-xyz",
+            CaseCreateRequest.model_validate(
+                {"initial_message": "test", "web_session_id": "sess-xyz"}
             )
 
     def test_user_id_min_length_enforced(self):

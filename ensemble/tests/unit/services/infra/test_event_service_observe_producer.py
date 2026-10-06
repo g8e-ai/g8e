@@ -15,6 +15,7 @@ propagation, and targetless skip.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -29,20 +30,20 @@ from app.services.infra.event_service import EventService
 pytestmark = pytest.mark.unit
 
 
-def _agent_request(*, web_session_id="web-1", cli_session_id=None):
+def _agent_request(*, web_session_id: str | None = "web-1", cli_session_id: str | None = None):
     return ObserveProducerAgentStateRequest(
         schema_version="1.0.0",
         agent_id="user-1:triage",
         display_name="Triage",
         role="classifier",
         status="running",
-        observed_at="2026-09-09T12:00:00Z",
+        observed_at=datetime(2026, 9, 9, 12, 0, tzinfo=UTC),
         web_session_id=web_session_id,
         cli_session_id=cli_session_id,
     )
 
 
-def _run_request(*, web_session_id="web-1", cli_session_id=None):
+def _run_request(*, web_session_id: str | None = "web-1", cli_session_id: str | None = None):
     return ObserveProducerRunStateRequest(
         schema_version="1.0.0",
         run_id="inv-1",
@@ -51,7 +52,7 @@ def _run_request(*, web_session_id="web-1", cli_session_id=None):
         status="running",
         completed_tasks=0,
         total_tasks=0,
-        observed_at="2026-09-09T12:00:00Z",
+        observed_at=datetime(2026, 9, 9, 12, 0, tzinfo=UTC),
         web_session_id=web_session_id,
         cli_session_id=cli_session_id,
     )

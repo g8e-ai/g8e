@@ -14,6 +14,7 @@ defaults to the in-code default.
 """
 
 import argparse
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -78,8 +79,6 @@ def parse_args(argv: Sequence[str]) -> ServeArgs:
 
 def main(argv: Sequence[str] | None = None) -> None:
     """Install bootstrap settings, then start the API server."""
-    import sys
-
     args = parse_args(sys.argv[1:] if argv is None else argv)
     # Bootstrap must be installed before uvicorn imports the application.
     configure_bootstrap(args.bootstrap)

@@ -30,9 +30,9 @@ from tests.unit.services.ai.tribunal.conftest import (
 async def test_generate_command_round_2_triggered():
     """Test that Round 2 is triggered when consensus is low and enabled."""
     llm = LLMSettings(
-        primary_provider=LLMProvider.OLLAMA,
-        lite_provider=LLMProvider.OLLAMA,
-        lite_model="gemma3:1b",
+        llm_primary_provider=LLMProvider.OLLAMA,
+        llm_lite_provider=LLMProvider.OLLAMA,
+        llm_lite_model="gemma3:1b",
         llm_command_gen_passes=3,
     )
     settings = G8eeUserSettings(llm=llm)

@@ -80,9 +80,11 @@ class TestEventVocabularyArchitecture:
             if path in SKIP_BANNED_VOCABULARY_FILES:
                 continue
             text = _read(path)
-            for needle in BANNED_SUBSTRINGS:
-                if needle in text:
-                    offenders.append(f"{path.relative_to(REPO_ROOT)} matches {needle}")
+            offenders.extend(
+                f"{path.relative_to(REPO_ROOT)} matches {needle}"
+                for needle in BANNED_SUBSTRINGS
+                if needle in text
+            )
         assert offenders == [], f"Banned vocabulary reappeared in ensemble/app: {offenders}"
 
     def test_no_action_type_string_keyword_args_in_ensemble_app(self):

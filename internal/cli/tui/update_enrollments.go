@@ -172,6 +172,7 @@ func (m Model) applyEnrollmentsMsg(msg EnrollmentsMsg) Model {
 	m.enrollEnrolled = msg.Enrolled
 	m.enrollmentsLoaded = true
 	m.enrollmentsErr = ""
+	m.gatewayStatusSelected = clamp(m.gatewayStatusSelected, max(len(m.gatewayStatusWorkloads())-1, 0))
 	return m
 }
 

@@ -31,6 +31,7 @@ builds, and deterministic e2e tests.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import AsyncGenerator
@@ -489,7 +490,6 @@ class FakeProvider(LLMProvider):
         and a permissive, low-risk response is produced. When no
         ``response_format`` is set, return a plain-text fallback.
         """
-        import json
 
         rf = getattr(lite_llm_settings, "response_format", None)
         if rf is None:

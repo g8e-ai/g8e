@@ -7,6 +7,9 @@
 
 """Unit tests for proxy_env - NO_PROXY/no_proxy bracketed-IPv6 normalization."""
 
+import os
+from unittest.mock import patch
+
 import pytest
 
 from app.utils.proxy_env import sanitize_proxy_env
@@ -59,8 +62,6 @@ def test_idempotent():
 
 def test_result_parses_under_httpx():
     """The normalized value must survive httpx's own no_proxy parsing."""
-    import os
-    from unittest.mock import patch
 
     httpx_utils = pytest.importorskip("httpx._utils")
 

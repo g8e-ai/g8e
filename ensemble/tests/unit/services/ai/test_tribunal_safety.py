@@ -5,17 +5,26 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import json
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.constants import G8EE_COMPONENT, AuditorReason
 from app.models.agent import OperatorContext
-from app.models.agents.tribunal import TribunalGenerationFailedError
+from app.models.agents.tribunal import (
+    TribunalAuditorFailedError,
+    TribunalGenerationFailedError,
+    VoteBreakdown,
+)
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.services.ai.generator import TribunalEmitter, generate_command
+from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+from app.services.ai.tribunal.stages.generation import _run_generation_pass
 from app.utils.command import normalise_command
+from app.utils.validation.blacklist_validator import CommandBlacklistResult
 from app.utils.validation.safety import validate_command_safety
+from app.utils.validation.whitelist_validator import CommandValidationResult
 from tests.unit.services.ai.tribunal.conftest import make_tribunal_generation_request
 
 
@@ -78,10 +87,10 @@ class TestValidateCommandSafety:
     def test_forbidden_patterns(self):
         result = validate_command_safety("sudo ls", False, False, None)
         assert not result.is_safe
+        assert result.error_message is not None
         assert "forbidden pattern" in result.error_message.lower()
 
     def test_blacklist_enforcement(self):
-        from app.utils.validation.blacklist_validator import CommandBlacklistResult
 
         mock_blacklist = MagicMock()
         mock_blacklist.validate_command.return_value = CommandBlacklistResult(
@@ -96,11 +105,11 @@ class TestValidateCommandSafety:
             blacklist_validator=mock_blacklist,
         )
         assert not result.is_safe
+        assert result.error_message is not None
         assert "blocked by blacklist: blocked" in result.error_message.lower()
         mock_blacklist.validate_command.assert_called_once_with("echo test")
 
     def test_whitelist_enforcement(self):
-        from app.utils.validation.whitelist_validator import CommandValidationResult
 
         mock_whitelist = MagicMock()
         mock_whitelist.validate_command.return_value = CommandValidationResult(
@@ -115,13 +124,13 @@ class TestValidateCommandSafety:
             whitelist_validator=mock_whitelist,
         )
         assert not result.is_safe
+        assert result.error_message is not None
         assert "not whitelisted: not whitelisted" in result.error_message.lower()
         mock_whitelist.validate_command.assert_called_once_with(
             "echo test", ANY, allowed_commands_override=None
         )
 
     def test_whitelist_override_forwarded_to_validator(self):
-        from app.utils.validation.whitelist_validator import CommandValidationResult
 
         mock_whitelist = MagicMock()
         mock_whitelist.validate_command.return_value = CommandValidationResult(
@@ -157,8 +166,6 @@ class TestAuditorSafety:
         with patch("app.services.ai.auditor_service.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = False
 
-            from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown
-
             vote_breakdown = VoteBreakdown(
                 candidates_by_member={},
                 candidates_by_command={"ls": ["axiom"]},
@@ -167,8 +174,6 @@ class TestAuditorSafety:
                 dissenters_by_command={},
                 consensus_strength=1.0,
             )
-
-            from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 
             auditor = TribunalAuditor(
                 emitter=emitter,
@@ -194,6 +199,7 @@ class TestAuditorSafety:
                 )
 
             assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
+            assert exc_info.value.error is not None
             assert "technical safety failure" in exc_info.value.error.lower()
 
 
@@ -243,7 +249,6 @@ class TestGenerateCommandSafety:
 class TestStructuredOutputSupport:
     @pytest.mark.asyncio
     async def test_handles_structured_json_response(self):
-        import json
 
         mock_response = MagicMock()
         mock_response.text = json.dumps({"command": "ls -la"})
@@ -251,8 +256,6 @@ class TestStructuredOutputSupport:
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        from app.services.ai.tribunal.stages.generation import _run_generation_pass
 
         with patch("app.services.ai.tribunal.stages.generation.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = True

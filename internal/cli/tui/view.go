@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
@@ -62,8 +63,16 @@ func (m Model) View() string {
 		body = m.renderApprovalsView(width, bodyHeight)
 	case m.view == viewOperators:
 		body = m.renderOperatorsView(width, bodyHeight)
+	case m.view == viewOperatorDetails:
+		body = m.renderOperatorDetailsView(width, bodyHeight)
 	case m.view == viewEnrollments:
 		body = m.renderEnrollmentsView(width, bodyHeight)
+	case m.view == viewAudit:
+		body = m.renderAuditView(width, bodyHeight)
+	case m.view == viewGatewayStatus:
+		body = m.renderGatewayStatusView(width, bodyHeight)
+	case m.view == viewRecovery:
+		body = m.renderRecoveryView(width, bodyHeight)
 	default:
 		body = m.renderOverview(width, bodyHeight)
 	}
@@ -350,6 +359,9 @@ func listWindow(n, selected int) (int, int) {
 
 // operatorHostname names an Operator for display, as 'g8e gw status' does.
 func operatorHostname(op models.OperatorDocumentGo) string {
+	if view := clioperator.ParseHeartbeatView(op.LatestHeartbeat); view != nil && view.SystemIdentity.Hostname != "" {
+		return view.SystemIdentity.Hostname
+	}
 	if op.CurrentHostname != "" {
 		return op.CurrentHostname
 	}

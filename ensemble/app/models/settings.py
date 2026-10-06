@@ -55,7 +55,7 @@ from app.constants import (
 from app.constants.bootstrap import get_bootstrap
 from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PortConstants
-from app.constants.paths import PATHS
+from app.constants.paths import PATHS, get_app_cert_paths
 from app.models.base import (
     ConfigDict,
     Field,
@@ -603,8 +603,6 @@ class G8eeAppSettings(G8eBaseModel):
         """Client certificate path for mTLS."""
         if self._client_cert_path is not None:
             return self._client_cert_path
-        from app.constants.paths import get_app_cert_paths
-
         cert_path, _ = get_app_cert_paths()
         if not cert_path:
             return None
@@ -619,8 +617,6 @@ class G8eeAppSettings(G8eBaseModel):
         """Client private key path for mTLS."""
         if self._client_key_path is not None:
             return self._client_key_path
-        from app.constants.paths import get_app_cert_paths
-
         _, key_path = get_app_cert_paths()
         if not key_path:
             return None

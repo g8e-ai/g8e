@@ -22,6 +22,7 @@ import pytest
 
 from app.constants import (
     AgentMode,
+    LLMProvider,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
@@ -31,6 +32,7 @@ from app.errors import ContextWindowExceededError
 from app.llm.providers.fake import FakeProvider
 from app.models.agents.triage import TriageRequest
 from app.models.attachments import AttachmentMetadata
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.triage import TriageAgent
 from tests.fakes.fake_llm_provider import FakeLLMProvider
 
@@ -44,15 +46,13 @@ def fake_provider():
 
 @pytest.fixture
 def mock_settings():
-    from app.constants import LLMProvider
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     return G8eeUserSettings(
         llm=LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="main-model",
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="lite-model",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="main-model",
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="lite-model",
         )
     )
 
@@ -485,9 +485,12 @@ async def test_triage_uses_provided_model_override(fake_provider, mock_settings)
         model_override="custom-model",
     )
 
-    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider), patch(
-        "app.services.ai.triage.AIGenerationConfigBuilder.build_lite_settings"
-    ) as mock_config:
+    with (
+        patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider),
+        patch(
+            "app.services.ai.triage.AIGenerationConfigBuilder.build_lite_settings"
+        ) as mock_config,
+    ):
         mock_config.return_value = MagicMock()
         await agent.triage(request)
 

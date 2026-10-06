@@ -7,6 +7,7 @@
 
 """Unit tests for OperatorApprovalService."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -110,7 +111,7 @@ class TestHandleApprovalResponse:
             approval_id=approval_id,
             approval_type=ApprovalType.INTENT,
             intent_name=CloudIntent.EC2_MANAGEMENT,
-            requested_at="2022-01-01 12:00:00",
+            requested_at=datetime(2022, 1, 1, 12, 0, tzinfo=UTC),
             case_id="case-1",
             investigation_id="inv-1",
             user_id="user-1",

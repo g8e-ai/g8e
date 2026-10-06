@@ -103,6 +103,7 @@ async def test_dispatch_inference_posts_protojson_request_and_parses_proto_respo
     assert result.receipt.status == EXECUTION_STATUS_COMPLETED
 
     client._http.post.assert_awaited_once()
+    assert client._http.post.await_args is not None
     path = client._http.post.await_args.args[0]
     assert path == "/api/v1/inference/dispatch"
     sent = client._http.post.await_args.kwargs["json_data"]

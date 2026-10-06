@@ -31,17 +31,19 @@ class TestOperatorDocumentNoSystemInfoField:
 
     def test_operator_document_differentiation_fields(self):
         """OperatorDocument supports multi-operator differentiation fields."""
-        doc = OperatorDocument(
-            operator_type=OperatorType.REMOTE,
-            id="op-inf-1",
-            user_id="user-1",
-            status=OperatorStatus.ACTIVE,
-            system_fingerprint="fp-sha256-composite",
-            operator_roles=["inference"],
-            local_dir="/home/bob/op-inf",
-            account="bob",
-            port=8444,
-            runtime_config={"inference_enabled": True, "http_port": 8444},
+        doc = OperatorDocument.model_validate(
+            {
+                "operator_type": OperatorType.REMOTE,
+                "id": "op-inf-1",
+                "user_id": "user-1",
+                "status": OperatorStatus.ACTIVE,
+                "system_fingerprint": "fp-sha256-composite",
+                "operator_roles": ["inference"],
+                "local_dir": "/home/bob/op-inf",
+                "account": "bob",
+                "port": 8444,
+                "runtime_config": {"inference_enabled": True, "http_port": 8444},
+            }
         )
         assert doc.operator_roles == ["inference"]
         assert doc.local_dir == "/home/bob/op-inf"
@@ -54,13 +56,15 @@ class TestOperatorDocumentNoSystemInfoField:
 
 
 def test_operator_document_preserves_blended_typed_roles():
-    doc = OperatorDocument(
-        operator_type=OperatorType.REMOTE,
-        id="blended",
-        user_id="owner",
-        status=OperatorStatus.ACTIVE,
-        operator_roles=["embedded", "data", "inference", "provenance", "observer"],
-        runtime_config={"roles": ["data", "inference", "provenance", "observer"]},
+    doc = OperatorDocument.model_validate(
+        {
+            "operator_type": OperatorType.REMOTE,
+            "id": "blended",
+            "user_id": "owner",
+            "status": OperatorStatus.ACTIVE,
+            "operator_roles": ["embedded", "data", "inference", "provenance", "observer"],
+            "runtime_config": {"roles": ["data", "inference", "provenance", "observer"]},
+        }
     )
     assert len(doc.operator_roles) == 5
     assert doc.runtime_config is not None
@@ -70,8 +74,9 @@ def test_operator_document_preserves_blended_typed_roles():
         == doc.operator_roles
     )
     with pytest.raises(ValidationError):
-        OperatorDocument(id="invalid", user_id="owner", operator_roles=["cloud"])
-Noneoperator_type=OperatorType.REMOTE,
+        OperatorDocument.model_validate(
+            {"id": "invalid", "user_id": "owner", "operator_roles": ["cloud"]}
+        )
 
 
 def _operator(**fields) -> OperatorDocument:
@@ -87,7 +92,7 @@ def _operator(**fields) -> OperatorDocument:
 
 def test_operator_document_requires_operator_type():
     with pytest.raises(ValidationError):
-        OperatorDocument(id="op", user_id="owner")
+        OperatorDocument.model_validate({"id": "op", "user_id": "owner"})
 
 
 def test_resolved_roles_defaults_to_data_without_role_metadata():

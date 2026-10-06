@@ -136,10 +136,13 @@ keys switch the main area between views:
   1 Overview     the execution pipeline (L1-L5), the Sovereign Audit Ledger,
                  the pending L3 approval queue, and your connected Operators
   2 Approvals    every pending L3 transaction with its details
-  3 Operators    your connected Operators with their details; stop a
-                 remote Operator
+  3 Operators    your connected Operators; press Enter for full heartbeat
+                 details and stop a remote Operator
+  5 Audit        paged audit events, summary totals, and hash-chain verification
   6 Enrollments  pending platform enrollment requests and completed
                  enrollments (platform owner only)
+  7 Status       Gateway health, connected Operators, and enrolled workloads
+  8 Recovery     approve or deny a headless CLI recovery request
 
 Pending approvals and enrollments are listed on connect and whenever the
 Gateway reports a change. Approving a transaction opens the same browser
@@ -154,7 +157,7 @@ before launching the TUI. If the CLI session expires, run 'g8e auth refresh'.
 
 Controls:
   q / Ctrl+C       Quit
-  1 2 3 6          Switch view
+  1 2 3 5 6 7 8    Switch view
   ?                Show the keys for the current view
   Tab / Shift+Tab  Focus the next / previous pane (overview: ledger, approvals,
                    operators; enrollments: pending requests, enrollments)
@@ -163,7 +166,14 @@ Controls:
   a / Enter        Approve the selected pending transaction (browser WebAuthn)
   a / d / x        Enrollments view: approve / deny the selected request,
                    revoke the selected enrollment
+  Enter            Operators view: show the selected Operator's heartbeat details
+  b / u            Operators view: bind / unbind this CLI session (replacement session)
+  n / p            Audit view: next / previous event page
+  v                Audit view: verify the Gateway audit hash chain
+  j / k            Status view: move through enrolled workloads
+  Tab              Recovery view: toggle approve / deny
   s                Operators view: stop the selected remote Operator
+  Esc              Return from Operator details to the Operators list
   y / n, Esc       Confirm / cancel the pending action
   r                Refresh approvals, operators, enrollments, and posture`,
 		SilenceErrors: true,
@@ -220,11 +230,32 @@ func runTUI(cmd *cobra.Command, deps tuiDeps) error {
 	return deps.tuiRun(ctx, tui.Options{
 		Version: version,
 		Identity: tui.Identity{
-			UserID:       authCtx.UserID,
-			CLISessionID: authCtx.CLISessionID,
-			OperatorID:   authCtx.OperatorID,
+			UserID:            authCtx.UserID,
+			CLISessionID:      authCtx.CLISessionID,
+			OperatorID:        authCtx.OperatorID,
+			OperatorSessionID: authCtx.OperatorSessionID,
 		},
-		Session:     session,
+		Session: session,
+		RebuildSession: func(ctx context.Context, identity tui.Identity) (tui.Session, error) {
+			creds, err := auth.LoadCredentials(fileSvc, cfg)
+			if err != nil {
+				return nil, err
+			}
+			if creds == nil {
+				return nil, constants.ErrNotAuthenticated
+			}
+			creds.UserID = identity.UserID
+			creds.CLISessionID = identity.CLISessionID
+			creds.OperatorID = identity.OperatorID
+			creds.OperatorSessionID = identity.OperatorSessionID
+			if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
+				return nil, err
+			}
+			if _, err := deps.loadAuthContext(fileSvc, cfg); err != nil {
+				return nil, err
+			}
+			return deps.newSession(fileSvc, cfg)
+		},
 		ApprovalURL: func(txHash string) string { return auth.ApprovalPageURL(cfg, txHash) },
 		OpenBrowser: deps.openBrowser,
 	})

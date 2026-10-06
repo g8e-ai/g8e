@@ -249,9 +249,12 @@ class TestOllamaProviderGeneration:
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary("llama3", contents, settings):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "llama3", contents, settings
+            )
+        ]
 
         mock_client.chat.assert_called_once()
         assert mock_client.chat.call_args.kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX

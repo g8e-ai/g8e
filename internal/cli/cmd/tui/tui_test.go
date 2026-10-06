@@ -256,8 +256,9 @@ func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "v9.9.9", capturedOpts.Version)
-		assert.Equal(t, tui.Identity{UserID: "user-test", CLISessionID: "cli-sess-test", OperatorID: "operator-test"}, capturedOpts.Identity)
+		assert.Equal(t, tui.Identity{UserID: "user-test", CLISessionID: "cli-sess-test", OperatorID: "operator-test", OperatorSessionID: "op-sess-test"}, capturedOpts.Identity)
 		assert.IsType(t, &stubSession{}, capturedOpts.Session, "the CLI API session must be threaded into tui.Options")
+		assert.NotNil(t, capturedOpts.RebuildSession, "session-rotating TUI actions must be able to rebuild the mTLS session")
 		require.NotNil(t, capturedOpts.ApprovalURL)
 		assert.Equal(t, auth.ApprovalPageURL(cfg, "tx-1"), capturedOpts.ApprovalURL("tx-1"), "the TUI must open the same page as 'g8e auth approve'")
 		assert.NotNil(t, capturedOpts.OpenBrowser)

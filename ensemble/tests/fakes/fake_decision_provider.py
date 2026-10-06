@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from typing import override
+
 from app.decision.provider import DecisionProvider
 from app.decision.types import DecisionState, EvaluateResponse, Question
 
@@ -39,5 +41,6 @@ class FakeDecisionProvider(DecisionProvider):
         return self.responses.pop(0)
 
     @staticmethod
+    @override
     def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
         return []

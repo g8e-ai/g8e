@@ -41,6 +41,7 @@ from app.services.ai.reputation_service import (
     TRIBUNAL_HONEST_FOUR,
     ClassifierInputs,
     ReputationService,
+    StakeOutcome,
     apply_slash,
     classify_stakes,
     ema_update,
@@ -104,7 +105,7 @@ def _result(
     )
 
 
-def _outcomes_by_agent(rows) -> dict[str, object]:
+def _outcomes_by_agent(rows: list[StakeOutcome]) -> dict[str, StakeOutcome]:
     return {row.agent_id: row for row in rows}
 
 

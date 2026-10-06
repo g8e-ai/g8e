@@ -15,7 +15,7 @@ services/g8eo/models/commands.go and the Protobuf definitions in
 protocol/proto/operator.proto.
 """
 
-from typing import Literal, Union
+from typing import Literal
 
 from g8e.operator.v1 import operator_pb2
 from google.protobuf.json_format import ParseDict
@@ -492,19 +492,19 @@ class DocumentDeleteRequestPayload(G8eBaseModel):
 
 
 # Union type for all outbound command payloads to g8eo
-G8eCommandPayload = Union[
-    CommandRequestPayload,
-    CommandCancelRequestPayload,
-    FileEditRequestPayload,
-    FsListRequestPayload,
-    FsGrepRequestPayload,
-    FsReadRequestPayload,
-    FetchLogsRequestPayload,
-    FetchHistoryRequestPayload,
-    FetchFileHistoryRequestPayload,
-    FetchFileDiffRequestPayload,
-    CheckPortRequestPayload,
-    RestoreFileRequestPayload,
-    DirectCommandAuditRequestPayload,
-    HeartbeatRequestPayload,
-]
+G8eCommandPayload = (
+    CommandRequestPayload
+    | CommandCancelRequestPayload
+    | FileEditRequestPayload
+    | FsListRequestPayload
+    | FsGrepRequestPayload
+    | FsReadRequestPayload
+    | FetchLogsRequestPayload
+    | FetchHistoryRequestPayload
+    | FetchFileHistoryRequestPayload
+    | FetchFileDiffRequestPayload
+    | CheckPortRequestPayload
+    | RestoreFileRequestPayload
+    | DirectCommandAuditRequestPayload
+    | HeartbeatRequestPayload
+)

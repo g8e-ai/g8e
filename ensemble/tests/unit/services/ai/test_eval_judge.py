@@ -136,6 +136,14 @@ class TestExtractJson:
             _extract_json("not json at all")
 
 
+class _StatusCodeError(Exception):
+    """Exception carrying a ``status_code`` attribute, as SDK errors do."""
+
+    def __init__(self, message: str, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class TestIsRetryable:
     """Transient error classification."""
 
@@ -149,8 +157,7 @@ class TestIsRetryable:
         assert _is_retryable(Exception("RESOURCE_EXHAUSTED: quota exceeded")) is True
 
     def test_status_code_attribute(self):
-        exc = Exception("fail")
-        exc.status_code = 429
+        exc = _StatusCodeError("fail", 429)
         assert _is_retryable(exc) is True
 
     def test_non_retryable_error(self):
@@ -184,13 +191,13 @@ class TestEvalJudgeConstruction:
 
     def test_construction_with_settings(self):
         provider = MagicMock()
-        settings = EvalJudgeSettings(model="settings-model")
+        settings = EvalJudgeSettings(eval_judge_model="settings-model")
         judge = EvalJudge(provider=provider, settings=settings)
         assert judge._model == "settings-model"
 
     def test_construction_with_model_overrides_settings(self):
         provider = MagicMock()
-        settings = EvalJudgeSettings(model="settings-model")
+        settings = EvalJudgeSettings(eval_judge_model="settings-model")
         judge = EvalJudge(provider=provider, model="override-model", settings=settings)
         assert judge._model == "override-model"
 

@@ -5,7 +5,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package operatorcmd
+package operator
 
 import (
 	"encoding/json"
@@ -17,29 +17,47 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-// Gateway heartbeat snapshots are canonical HeartbeatResult protojson. Protojson
-// accepts both the documented snake_case storage names and protobuf's camelCase
-// names, but unknown legacy Python fields must fail closed.
-var heartbeatSnapshotUnmarshalOptions = protojson.UnmarshalOptions{}
+// HeartbeatView is the normalized host snapshot shared by operator show and
+// the TUI. Heartbeat snapshots are canonical HeartbeatResult protojson.
+type HeartbeatView struct {
+	Timestamp          string
+	HeartbeatType      string
+	SystemIdentity     models.HeartbeatSystemIdentity
+	PerformanceMetrics models.HeartbeatPerformanceMetrics
+	NetworkInfo        models.HeartbeatNetworkInfo
+	UptimeInfo         models.HeartbeatUptimeInfo
+	OSDetails          models.HeartbeatOSDetails
+	UserDetails        models.HeartbeatUserDetails
+	DiskDetails        models.HeartbeatDiskDetails
+	MemoryDetails      models.HeartbeatMemoryDetails
+	Environment        models.HeartbeatEnvironment
+	VersionInfo        models.HeartbeatVersionInfo
+	CapabilityFlags    models.HeartbeatCapabilityFlags
+	SystemFingerprint  string
+}
 
-func parseOperatorHeartbeatView(raw json.RawMessage) *operatorHeartbeatView {
+// ParseHeartbeatView decodes a canonical Operator heartbeat snapshot. Legacy
+// Python-shaped payloads are rejected because protojson rejects unknown fields.
+func ParseHeartbeatView(raw json.RawMessage) *HeartbeatView {
 	if len(raw) == 0 {
 		return nil
 	}
 
 	heartbeat := &operatorv1.HeartbeatResult{}
-	if err := heartbeatSnapshotUnmarshalOptions.Unmarshal(raw, heartbeat); err != nil {
+	if err := protojson.Unmarshal(raw, heartbeat); err != nil {
 		return nil
 	}
-	return operatorHeartbeatViewFromResult(heartbeat)
+	return HeartbeatViewFromResult(heartbeat)
 }
 
-func operatorHeartbeatViewFromResult(heartbeat *operatorv1.HeartbeatResult) *operatorHeartbeatView {
+// HeartbeatViewFromResult normalizes a typed heartbeat result for human-facing
+// CLI and TUI rendering.
+func HeartbeatViewFromResult(heartbeat *operatorv1.HeartbeatResult) *HeartbeatView {
 	if heartbeat == nil {
 		return nil
 	}
 
-	view := &operatorHeartbeatView{
+	view := &HeartbeatView{
 		Timestamp:         heartbeat.Timestamp,
 		HeartbeatType:     heartbeat.Status,
 		SystemFingerprint: heartbeat.SystemFingerprint,
@@ -69,9 +87,7 @@ func operatorHeartbeatViewFromResult(heartbeat *operatorv1.HeartbeatResult) *ope
 		}
 	}
 	if heartbeat.NetworkInfo != nil {
-		view.NetworkInfo = models.HeartbeatNetworkInfo{
-			Interfaces: heartbeat.NetworkInfo.Interfaces,
-		}
+		view.NetworkInfo = models.HeartbeatNetworkInfo{Interfaces: heartbeat.NetworkInfo.Interfaces}
 		for _, iface := range heartbeat.NetworkInfo.ConnectivityStatus {
 			view.NetworkInfo.ConnectivityStatus = append(view.NetworkInfo.ConnectivityStatus, models.HeartbeatNetworkInterface{
 				Name: iface.Name,

@@ -13,6 +13,7 @@ from collections.abc import AsyncGenerator
 
 import anthropic
 
+from app.errors import ConfigurationError, ValidationError
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -163,8 +164,6 @@ def _parse_response_blocks(blocks: list) -> list[Part]:
         elif block_type == "tool_use":
             args = block.input
             if not isinstance(args, dict):
-                from app.errors import ValidationError
-
                 raise ValidationError("Provider tool arguments must be a JSON object")
             parts.append(
                 Part(
@@ -267,10 +266,6 @@ class AnthropicProvider(LLMProvider):
             else (model_config.max_output_tokens if model_config else None)
         )
         if effective_max_tokens is None:
-            # Lazy import to avoid circular dependency: app.errors -> app.models ->
-            # app.llm -> providers -> this module.
-            from app.errors import ConfigurationError
-
             raise ConfigurationError(
                 f"Anthropic requires max_tokens and model '{model}' declares no output ceiling",
                 details={"model": model},
@@ -495,14 +490,10 @@ class AnthropicProvider(LLMProvider):
                             try:
                                 args = json.loads(raw_input)
                             except json.JSONDecodeError as exc:
-                                from app.errors import ValidationError
-
                                 raise ValidationError(
                                     "Provider returned invalid tool arguments JSON"
                                 ) from exc
                             if not isinstance(args, dict):
-                                from app.errors import ValidationError
-
                                 raise ValidationError(
                                     "Provider tool arguments must be a JSON object"
                                 )

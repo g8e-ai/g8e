@@ -16,6 +16,7 @@ were moved from ``app.utils.envelope_builder`` (deleted) into
 removed ``app.models.uap.UAPEnvelope``.
 """
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -261,7 +262,6 @@ class TestBuildGovernanceEnvelope:
         assert len(envelope_json) > 0
 
         # Should be valid JSON
-        import json
 
         parsed = json.loads(envelope_json)
         assert parsed["transaction_hash"] is not None

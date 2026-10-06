@@ -20,6 +20,9 @@ import (
 // goroutine and feeds the session's SSE stream and pending approvals into
 // the program.
 func Run(ctx context.Context, opts Options) error {
+	if opts.Session != nil && opts.sessionManager == nil {
+		opts.sessionManager = newSessionManager(opts.Session, opts.Identity.UserID)
+	}
 	m := NewModel(opts)
 	programOpts := append(
 		[]tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()},
@@ -32,7 +35,7 @@ func Run(ctx context.Context, opts Options) error {
 
 	var wg sync.WaitGroup
 	if opts.Session != nil {
-		adapter := NewAdapter(opts.Session, opts.Identity.UserID, p)
+		adapter := newAdapterWithManager(opts.sessionManager, p)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

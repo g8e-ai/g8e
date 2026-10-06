@@ -22,6 +22,22 @@ const stopReason = "stopped from g8e tui"
 // handleOperatorsKey applies a key on the Operators view: s requests a
 // governed shutdown of the selected Operator, after y/N.
 func (m Model) handleOperatorsKey(key string) (tea.Model, tea.Cmd) {
+	if m.view == viewOperatorDetails {
+		switch key {
+		case "up", "k":
+			m.operatorDetailScroll = max(m.operatorDetailScroll-1, 0)
+		case "down", "j":
+			m.operatorDetailScroll++
+		case "s":
+			return m.confirmOperatorStop(), nil
+		case "b":
+			return m.confirmOperatorBind(), nil
+		case "u":
+			return m.confirmOperatorUnbind(), nil
+		}
+		return m, nil
+	}
+
 	switch key {
 	case "up", "k":
 		m.operatorsSelected = clamp(m.operatorsSelected-1, max(len(m.operators)-1, 0))
@@ -29,6 +45,15 @@ func (m Model) handleOperatorsKey(key string) (tea.Model, tea.Cmd) {
 		m.operatorsSelected = clamp(m.operatorsSelected+1, max(len(m.operators)-1, 0))
 	case "s":
 		return m.confirmOperatorStop(), nil
+	case "b":
+		return m.confirmOperatorBind(), nil
+	case "u":
+		return m.confirmOperatorUnbind(), nil
+	case "enter":
+		if m.operatorsSelected < len(m.operators) {
+			m.view = viewOperatorDetails
+			m.operatorDetailScroll = 0
+		}
 	}
 	return m, nil
 }
@@ -59,6 +84,82 @@ func (m Model) confirmOperatorStop() Model {
 		},
 	}
 	return m
+}
+
+// confirmOperatorBind asks to bind the CLI session to the selected Operator.
+func (m Model) confirmOperatorBind() Model {
+	if m.operatorsSelected >= len(m.operators) {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: "Select an Operator first"})
+	}
+	op := m.operators[m.operatorsSelected]
+	if op.OperatorSessionID == "" {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Selected Operator has no session ID"})
+	}
+	if m.gw == nil {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Not connected to a Gateway"})
+	}
+	gw := m.gw
+	sessionID := op.OperatorSessionID
+	m.confirm = &confirmation{
+		prompt: fmt.Sprintf("Bind this CLI session to Operator %s (session %s)? The Gateway issues a replacement CLI session.", operatorHostname(op), shortHash(sessionID)),
+		run: func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+			defer cancel()
+			return gw.bindOperator(ctx, sessionID)
+		},
+	}
+	return m
+}
+
+// confirmOperatorUnbind asks to clear the current CLI session's binding.
+func (m Model) confirmOperatorUnbind() Model {
+	if m.gw == nil {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Not connected to a Gateway"})
+	}
+	gw := m.gw
+	m.confirm = &confirmation{
+		prompt: "Clear this CLI session's Operator binding? The Gateway issues a replacement CLI session.",
+		run: func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+			defer cancel()
+			return gw.unbindOperator(ctx)
+		},
+	}
+	return m
+}
+
+func (m Model) applyOperatorBindMsg(msg OperatorBindMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m = m.noteSessionError(msg.Err)
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Operator bind failed: " + msg.Err.Error()}), nil
+	}
+	identity := m.identity
+	identity.UserID = msg.Response.UserID
+	identity.CLISessionID = msg.Response.CLISessionID
+	identity.OperatorID = msg.Response.OperatorID
+	identity.OperatorSessionID = msg.Response.OperatorSessionID
+	m = m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: fmt.Sprintf("CLI session bound to Operator session %s; rotating session", shortHash(msg.Response.OperatorSessionID))})
+	if m.rebuildSession == nil {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Session rotation is unavailable; restart the TUI to use the new binding"}), nil
+	}
+	return m, m.rebuildSessionCmd(identity)
+}
+
+func (m Model) applyOperatorUnbindMsg(msg OperatorUnbindMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m = m.noteSessionError(msg.Err)
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Operator unbind failed: " + msg.Err.Error()}), nil
+	}
+	identity := m.identity
+	identity.UserID = msg.Response.UserID
+	identity.CLISessionID = msg.Response.CLISessionID
+	identity.OperatorID = ""
+	identity.OperatorSessionID = ""
+	m = m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: "CLI session Operator binding cleared; rotating session"})
+	if m.rebuildSession == nil {
+		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Session rotation is unavailable; restart the TUI to use the unbound session"}), nil
+	}
+	return m, m.rebuildSessionCmd(identity)
 }
 
 // applyOperatorStopMsg reports a shutdown request and re-lists Operators.

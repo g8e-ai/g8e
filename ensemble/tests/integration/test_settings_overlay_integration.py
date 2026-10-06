@@ -17,7 +17,7 @@ from app.constants.collections import (
 )
 from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PortConstants
-from app.models.settings import G8eeAppSettings
+from app.models.settings import AuthSettings, G8eeAppSettings
 from app.services.infra.settings_service import SettingsService
 
 
@@ -308,7 +308,6 @@ class TestG8eeSettingsOverlayIntegration:
         enumerated fields by hand. The test iterates ``AuthSettings.model_fields``
         directly so any newly added auth field is automatically covered.
         """
-        from app.models.settings import AuthSettings
 
         auth_field_names = list(AuthSettings.model_fields.keys())
         # Synthesise a unique non-empty value per field so we can assert each

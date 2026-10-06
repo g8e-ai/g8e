@@ -16,6 +16,9 @@ ordinary chat completion.
 
 from __future__ import annotations
 
+import asyncio
+from itertools import pairwise
+
 import pytest
 
 from app.constants import (
@@ -26,6 +29,7 @@ from app.constants import (
     ToolCallStatus,
 )
 from app.models.agent import StreamChunkData, StreamChunkFromModel
+from app.models.personas import get_persona
 from app.models.tool_results import CommandExecutionResult, InvestigationContextResult
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import make_agent_run_args
@@ -213,13 +217,12 @@ async def test_second_run_after_terminal_state_follows_gateway_transitions():
     )
 
     statuses = _agent_state_statuses(event_svc)
-    for previous, current in zip(statuses, statuses[1:], strict=False):
+    for previous, current in pairwise(statuses):
         if previous in ("completed", "failed"):
             assert current in (previous, "idle", "offline"), statuses
 
 
 async def test_cancellation_emits_idle_agent_state():
-    import asyncio
 
     inputs, state = make_agent_run_args(
         case_id="case-obs-5",
@@ -299,7 +302,6 @@ async def test_producer_failure_does_not_abort_stream():
 
 
 async def test_agent_state_request_carries_registry_owned_display_name():
-    from app.models.personas import get_persona
 
     inputs, state = make_agent_run_args(
         case_id="case-obs-8",

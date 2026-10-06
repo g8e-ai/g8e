@@ -32,7 +32,7 @@ async def test_execute_file_edit_read_returns_content():
     mock_envelope = MagicMock()
     mock_envelope.payload = FileEditResultPayload(
         execution_id="exec-123",
-        operation="read",
+        operation=FileOperation.READ,
         file_path="/etc/test",
         status=ExecutionStatus.COMPLETED,
         content=mock_content,
@@ -41,11 +41,10 @@ async def test_execute_file_edit_read_returns_content():
         return_value=(internal_result, mock_envelope)
     )
 
-    # Mock operator resolution
+    # Bound operator document for the investigation
     mock_operator = MagicMock(spec=OperatorDocument)
     mock_operator.id = "op-123"
     mock_operator.operator_session_id = "sess-123"
-    file_service.execution_service.resolve_target_operator = MagicMock(return_value=mock_operator)
 
     # 2. Execute
     args = FileEditRequestPayload(

@@ -80,7 +80,10 @@ def test_registry_exports_the_error_types_g8ee_records_as_a_deny_decision():
     assert {"approval.denied", "user.denied"}.isdisjoint(exported)
 
 
-@pytest.mark.parametrize("error_type", sorted(CommandErrorType, key=lambda value: value.value))
+_ALL_ERROR_TYPES = sorted(CommandErrorType, key=lambda value: value.value)
+
+
+@pytest.mark.parametrize("error_type", _ALL_ERROR_TYPES)
 def test_policy_outcome_is_deny_exactly_for_the_exported_error_types(error_type):
     result = CommandExecutionResult(success=False, error_type=error_type)
 

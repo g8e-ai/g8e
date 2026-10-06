@@ -47,7 +47,6 @@ import asyncio
 import datetime
 import fnmatch
 import logging
-import os
 import ssl
 import tempfile
 from pathlib import Path

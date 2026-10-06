@@ -187,13 +187,14 @@ Files at `internal/cli/cmd/` root are the root command, its tests, and shared fi
 | `internal/cli/cmd/cmdtest/` | `cmdtest` | Cross-package test helpers. Not a Cobra group. |
 | `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/show/verify`. |
 | `internal/cli/api/` | | Typed CLI HTTP client. |
-| `internal/cli/auth/` | | CLI enrollment, credential staging, key generation, passkey registration, trust bundles, and mTLS clients. `approval.go` owns the L3 approval page URL and status verification shared by `auth approve` and the TUI; `platform_enrollment.go` owns the enrollment fingerprint, issued-identity, and response helpers shared by `auth enroll` and the TUI. |
+| `internal/cli/auth/` | | CLI enrollment, credential staging, key generation, passkey registration, trust bundles, and mTLS clients. `approval.go` owns the L3 approval page URL and status verification shared by `auth approve` and the TUI; `platform_enrollment.go` owns the enrollment fingerprint, issued-identity, and response helpers shared by `auth enroll` and the TUI; `operator_binding.go` owns bind/unbind response validation shared by the CLI and TUI. |
 | `internal/cli/browserorigin/` | | Frontend-origin validation and normalization. |
 | `internal/cli/config/` | | CLI configuration resolution and endpoint overrides. |
 | `internal/cli/frontendverify/` | | Frontend connection and running-Gateway verification. |
+| `internal/cli/gateway/` | | Shared Gateway inventory helpers, including completed platform-enrollment filtering used by `gw status` and the TUI status view. |
 | `internal/cli/identityreset/` | `identityreset` | Workload enrollment identity removal for operator and ensemble (`Reset`). Consumed by `operator reset-identity` and `ensemble reset-identity`. |
 | `internal/cli/mcptransport/` | `mcptransport` | Standard JSON-RPC 2.0 stdio framing, dispatch handler, and transport for CLI MCP serving (`mcp stdio`). |
-| `internal/cli/operator/` | | Operator discovery and management helpers, including the Operator inventory helpers (`IsConnected`) shared by `gw status` and the TUI. |
+| `internal/cli/operator/` | | Operator discovery and management helpers, including the Operator inventory helpers (`IsConnected`) and normalized heartbeat parser shared by `operator show` and the TUI. |
 | `internal/cli/output/` | | Human-readable and JSON command output. |
 | `internal/cli/platform/` | | Cross-platform process, browser, and system trust operations. |
 | `internal/cli/serve/` | | Foreground Gateway and Operator runtimes. See [Process entry](#process-entry). |

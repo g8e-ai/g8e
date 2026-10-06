@@ -153,3 +153,96 @@ func (g *gateway) stopOperator(ctx context.Context, operatorSessionID, reason st
 	msg.Response, msg.Err = clioperator.DecodeStopResponse(body)
 	return msg
 }
+
+// bindOperator binds the CLI session to one Operator session, matching the
+// request and response validation used by 'g8e operator bind'.
+func (g *gateway) bindOperator(ctx context.Context, operatorSessionID string) OperatorBindMsg {
+	body, err := g.session.DoRequestContext(ctx, http.MethodPost, constants.APIPaths.AuthCLIBind, models.CLIBindRequest{OperatorSessionIDs: []string{operatorSessionID}})
+	if err != nil {
+		return OperatorBindMsg{Err: fmt.Errorf("operator bind: %w", err)}
+	}
+	response, err := auth.DecodeCLIBindResponse(body, []string{operatorSessionID})
+	return OperatorBindMsg{Response: response, Err: err}
+}
+
+// unbindOperator clears the CLI session's Operator binding, matching
+// 'g8e operator bind unbind'.
+func (g *gateway) unbindOperator(ctx context.Context) OperatorUnbindMsg {
+	body, err := g.session.DoRequestContext(ctx, http.MethodPost, constants.APIPaths.AuthCLIUnbind, models.CLIUnbindRequest{})
+	if err != nil {
+		return OperatorUnbindMsg{Err: fmt.Errorf("operator unbind: %w", err)}
+	}
+	response, err := auth.DecodeCLIUnbindResponse(body)
+	return OperatorUnbindMsg{Response: response, Err: err}
+}
+
+// approveRecovery posts the CLI recovery decision, matching
+// 'g8e auth approve-recovery <token> [--deny]'.
+func (g *gateway) approveRecovery(ctx context.Context, token string, approve bool) RecoveryApprovedMsg {
+	msg := RecoveryApprovedMsg{Approve: approve}
+	body, err := g.session.DoRequestContext(ctx, http.MethodPost, constants.APIPaths.AuthCLIRecoveryApproveCLI, models.CLIRecoveryApproveRequest{Token: token, Approve: approve})
+	if err != nil {
+		msg.Err = fmt.Errorf("approve-recovery: post approve: %w", err)
+		return msg
+	}
+	if err := json.Unmarshal(body, &msg.Response); err != nil {
+		msg.Err = fmt.Errorf("approve-recovery: parse response: %w", err)
+		return msg
+	}
+	if msg.Response.State != models.CLIRecoveryStateApproved && msg.Response.State != models.CLIRecoveryStateDenied {
+		msg.Err = fmt.Errorf("approve-recovery: %w: state %q", constants.ErrCLIRecoveryRequestFailed, msg.Response.State)
+	}
+	return msg
+}
+
+const auditPageSize = 10
+
+// fetchAuditEvents lists one page of the Gateway audit event store, matching
+// 'g8e audit events' while using the TUI's enrolled CLI session.
+func (g *gateway) fetchAuditEvents(ctx context.Context, offset int) AuditEventsMsg {
+	query := url.Values{}
+	query.Set("limit", fmt.Sprint(auditPageSize))
+	query.Set("offset", fmt.Sprint(max(offset, 0)))
+	path := constants.APIPaths.AuditEvents + "?" + query.Encode()
+	body, err := g.session.DoRequestContext(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return AuditEventsMsg{Offset: offset, Err: fmt.Errorf("fetch audit events: %w", err)}
+	}
+	var resp models.AuditEventsResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return AuditEventsMsg{Offset: offset, Err: fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)}
+	}
+	return AuditEventsMsg{Events: resp.Events, Count: resp.Count, Offset: offset}
+}
+
+// fetchAuditSummary reads the aggregate Gateway audit summary, matching
+// 'g8e audit summary'.
+func (g *gateway) fetchAuditSummary(ctx context.Context) AuditSummaryMsg {
+	body, err := g.session.DoRequestContext(ctx, http.MethodGet, constants.APIPaths.AuditSummary, nil)
+	if err != nil {
+		return AuditSummaryMsg{Err: fmt.Errorf("fetch audit summary: %w", err)}
+	}
+	var summary models.AuditSummaryResponse
+	if err := json.Unmarshal(body, &summary); err != nil {
+		return AuditSummaryMsg{Err: fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)}
+	}
+	return AuditSummaryMsg{Summary: summary}
+}
+
+// verifyAudit verifies the Gateway audit hash chain, matching
+// 'g8e audit verify'.
+func (g *gateway) verifyAudit(ctx context.Context, fromSeq int64) AuditVerifyMsg {
+	path := constants.APIPaths.AuditVerify
+	if fromSeq > 0 {
+		path += "?from_seq=" + fmt.Sprint(fromSeq)
+	}
+	body, err := g.session.DoRequestContext(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return AuditVerifyMsg{Err: fmt.Errorf("verify audit chain: %w", err)}
+	}
+	var verify models.AuditVerifyResponse
+	if err := json.Unmarshal(body, &verify); err != nil {
+		return AuditVerifyMsg{Err: fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)}
+	}
+	return AuditVerifyMsg{Verify: verify}
+}

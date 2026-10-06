@@ -17,6 +17,7 @@ Covers the service's own responsibilities:
 
 """
 
+import inspect
 from typing import ClassVar
 
 import pytest
@@ -59,16 +60,10 @@ class TestOperatorCommandServiceInit:
 
     pytestmark = pytest.mark.unit
 
-    def test_raises_type_error_when_required_arg_missing(self):
-        """Missing required arg must raise TypeError at construction time."""
-        with pytest.raises(TypeError):
-            OperatorCommandService.build(
-                # investigation_service is missing
-                settings=None,
-                ai_response_analyzer=None,
-                internal_http_client=None,
-                approval_service=None,
-            )
+    def test_investigation_service_is_a_required_build_arg(self):
+        """investigation_service has no default, so omitting it fails at construction time."""
+        params = inspect.signature(OperatorCommandService.build).parameters
+        assert params["investigation_service"].default is inspect.Parameter.empty
 
     def test_succeeds_with_all_required_args(self):
         """Service constructs without error when all required deps are provided."""

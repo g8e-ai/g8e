@@ -1640,6 +1640,11 @@
         "_python_const": "GET_COMMAND_CONSTRAINTS",
         "value": "get_command_constraints"
       },
+      "grant_intent_permission": {
+        "_go_const": "G8eToolNameGrantIntent",
+        "_python_const": "GRANT_INTENT",
+        "value": "grant_intent_permission"
+      },
       "list_files_and_directories_with_detailed_metadata": {
         "_go_const": "G8eToolNameListFiles",
         "_python_const": "LIST_FILES",
@@ -1669,6 +1674,11 @@
         "_go_const": "G8eToolNameRestoreFile",
         "_python_const": "RESTORE_FILE",
         "value": "restore_file"
+      },
+      "revoke_intent_permission": {
+        "_go_const": "G8eToolNameRevokeIntent",
+        "_python_const": "REVOKE_INTENT",
+        "value": "revoke_intent_permission"
       },
       "run_commands_with_operator": {
         "_go_const": "G8eToolNameRunCommands",

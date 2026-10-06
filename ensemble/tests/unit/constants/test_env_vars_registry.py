@@ -140,8 +140,10 @@ def test_production_env_reads_use_registry_keys():
     ]
     for path in sorted(py_files):
         tree = ast.parse(path.read_text(), filename=str(path))
-        for arg in _env_read_arguments(tree):
-            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                offenders.append(f"{path.relative_to(_APP_DIR.parent)}:{arg.lineno} {arg.value!r}")
+        offenders.extend(
+            f"{path.relative_to(_APP_DIR.parent)}:{arg.lineno} {arg.value!r}"
+            for arg in _env_read_arguments(tree)
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+        )
 
     assert not offenders, f"env reads must use EnvVar keys, not string literals: {offenders}"

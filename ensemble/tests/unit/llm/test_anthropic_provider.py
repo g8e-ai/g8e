@@ -43,6 +43,13 @@ from app.llm.llm_types import (
     Type,
 )
 from app.llm.model_evidence import model_boundary_hash
+from app.llm.providers.anthropic import (
+    AnthropicProvider,
+    _build_usage,
+    _contents_to_anthropic,
+    _tools_to_anthropic,
+)
+from app.models.model_configs import MODEL_REGISTRY
 
 pytestmark = [pytest.mark.unit]
 
@@ -50,8 +57,6 @@ pytestmark = [pytest.mark.unit]
 def _make_provider():
     """Create an AnthropicProvider with mocked httpx and anthropic clients."""
     with patch("app.llm.providers.anthropic.anthropic.AsyncAnthropic"):
-        from app.llm.providers.anthropic import AnthropicProvider
-
         return AnthropicProvider(endpoint=None, api_key="test-key")
 
 
@@ -147,14 +152,16 @@ class TestBuildKwargsThinkingMode:
     def test_thinking_sets_default_sonnet_high_budget(self):
         """Sonnet with HIGH has no per-model override, so default table applies."""
         request = self._build(max_tokens=20000)
+        assert request.thinking is not None
         assert request.thinking["type"] == "enabled"
-        # ANTHROPIC_DEFAULT_THINKING_BUDGETS[HIGH]
+        # Budget comes from the default thinking-budget table entry for HIGH.
         assert request.thinking["budget_tokens"] == 16_384
 
     def test_thinking_budget_unchanged_when_max_tokens_fits(self):
         """When max_tokens already exceeds budget+reserve, no uplift happens."""
         request = self._build(max_tokens=40_000)
         assert request.max_tokens == 40_000
+        assert request.thinking is not None
         assert request.thinking["budget_tokens"] == 16_384
 
     def test_thinking_uplifts_max_tokens_when_too_small(self):
@@ -164,6 +171,7 @@ class TestBuildKwargsThinkingMode:
         left ~1 output token for Opus HIGH)."""
         request = self._build(max_tokens=8_192)
         # budget is still the requested 16_384 - not clamped down.
+        assert request.thinking is not None
         assert request.thinking["budget_tokens"] == 16_384
         # max_tokens is uplifted to budget + output reserve (4096).
         assert request.max_tokens == 16_384 + 4_096
@@ -178,6 +186,7 @@ class TestBuildKwargsThinkingMode:
             ),
         )
         # Opus MEDIUM override = 16_384 (coincidentally same as default HIGH).
+        assert request.thinking is not None
         assert request.thinking["budget_tokens"] == 16_384
 
     def test_thinking_opus_high_uplifts_max_tokens(self):
@@ -188,6 +197,7 @@ class TestBuildKwargsThinkingMode:
             model=ANTHROPIC_CLAUDE_OPUS_4_6,
             max_tokens=8_192,
         )
+        assert request.thinking is not None
         assert request.thinking["budget_tokens"] == 32_000
         assert request.max_tokens == 32_000 + 8_192
 
@@ -195,7 +205,6 @@ class TestBuildKwargsThinkingMode:
         """Uplift uses the model's per-config thinking_output_reserve, not a
         module-level constant. Installing a scoped override on a specific
         model config must change the uplifted max_tokens for that model only."""
-        from app.models.model_configs import MODEL_REGISTRY
 
         with MODEL_REGISTRY.override(ANTHROPIC_CLAUDE_SONNET_4_6, thinking_output_reserve=2_048):
             request = self._build(
@@ -204,6 +213,7 @@ class TestBuildKwargsThinkingMode:
             )
             # Sonnet HIGH default budget is 16_384. With override reserve=2048,
             # max_tokens must uplift to exactly budget + 2048.
+            assert request.thinking is not None
             assert request.thinking["budget_tokens"] == 16_384
             assert request.max_tokens == 16_384 + 2_048
 
@@ -216,7 +226,8 @@ class TestBuildKwargsThinkingMode:
                 include_thoughts=True,
             ),
         )
-        # ANTHROPIC_DEFAULT_THINKING_BUDGETS[MINIMAL]
+        # Budget comes from the default thinking-budget table entry for MINIMAL.
+        assert request.thinking is not None
         assert request.thinking["budget_tokens"] == 1_024
 
     def test_thinking_clamps_unsupported_level(self):
@@ -228,7 +239,8 @@ class TestBuildKwargsThinkingMode:
                 include_thoughts=True,
             ),
         )
-        # ANTHROPIC_DEFAULT_THINKING_BUDGETS[LOW]
+        # Budget comes from the default thinking-budget table entry for LOW.
+        assert request.thinking is not None
         assert request.thinking["budget_tokens"] == 2_048
 
     def test_thinking_strips_top_k(self):
@@ -266,7 +278,6 @@ class TestBuildKwargsThinkingMode:
 
 class TestBuildUsage:
     def test_build_usage_with_tokens(self):
-        from app.llm.providers.anthropic import _build_usage
 
         mock_usage = MagicMock()
         mock_usage.input_tokens = 100
@@ -280,7 +291,6 @@ class TestBuildUsage:
         assert result.usage_reported is True
 
     def test_build_usage_none(self):
-        from app.llm.providers.anthropic import _build_usage
 
         result = _build_usage(None)
         assert result.prompt_token_count == 0
@@ -313,6 +323,7 @@ class TestBuildResponse:
         mock_block.type = "tool_use"
         mock_block.name = "run_command"
         mock_block.input = {"command": "ls"}
+        assert tc is not None
         mock_block.id = "tool_123"
         mock_response = MagicMock()
         mock_response.content = [mock_block]
@@ -328,14 +339,12 @@ class TestBuildResponse:
 
 class TestContentsToAnthropic:
     def test_text_content(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         contents = [Content(role="user", parts=[Part(text="hello")])]
         result = _contents_to_anthropic(contents)
         assert result == [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]
 
     def test_model_role_mapped_to_assistant(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         contents = [Content(role="model", parts=[Part(text="hi")])]
         result = _contents_to_anthropic(contents)
@@ -343,7 +352,6 @@ class TestContentsToAnthropic:
 
     def test_thinking_block_with_thought_signature_object(self):
         """ThoughtSignature object must be serialized to string via str()."""
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         sig = ThoughtSignature(value="abc123sig")
         contents = [
@@ -361,7 +369,6 @@ class TestContentsToAnthropic:
         assert block["signature"] == "abc123sig"
 
     def test_thinking_block_with_none_signature(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         contents = [
             Content(
@@ -375,7 +382,6 @@ class TestContentsToAnthropic:
         assert result[0]["content"][0]["signature"] == ""
 
     def test_tool_call_block(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         tc = ToolCall(name="run_command", args={"cmd": "ls"}, id="tc_1")
         contents = [Content(role="model", parts=[Part(tool_call=tc)])]
@@ -386,7 +392,6 @@ class TestContentsToAnthropic:
         assert block["name"] == "run_command"
 
     def test_tool_response_block(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         tr = ToolResponse(name="run_command", response={"output": "ok"}, id="tc_1")
         contents = [Content(role="user", parts=[Part(tool_response=tr)])]
@@ -396,7 +401,6 @@ class TestContentsToAnthropic:
         assert block["tool_use_id"] == "tc_1"
 
     def test_empty_parts_skipped(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         contents = [Content(role="user", parts=[])]
         result = _contents_to_anthropic(contents)
@@ -409,7 +413,6 @@ class TestContentsToAnthropic:
         in the immediately preceding assistant message. Without correct ID
         propagation, the API returns 400.
         """
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         tool_id = "toolu_01XFDUDYJgAACzvnptvVoYEL"
         contents = [
@@ -453,7 +456,6 @@ class TestContentsToAnthropic:
         Consecutive Content objects with the same role must be merged into
         a single message to avoid API rejection.
         """
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         contents = [
             Content(role="user", parts=[Part(text="first")]),
@@ -470,7 +472,6 @@ class TestContentsToAnthropic:
 
     def test_empty_text_blocks_dropped(self):
         """Anthropic rejects zero-length text blocks."""
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         contents = [
             Content(
@@ -486,14 +487,12 @@ class TestContentsToAnthropic:
         assert result[0]["content"][0]["text"] == "real text"
 
     def test_content_with_only_empty_text_produces_no_message(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         contents = [Content(role="user", parts=[Part(text="")])]
         result = _contents_to_anthropic(contents)
         assert result == []
 
     def test_tool_call_fallback_id_when_none(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         tc = ToolCall(name="run_command", args={"cmd": "ls"}, id=None)
         contents = [Content(role="model", parts=[Part(tool_call=tc)])]
@@ -501,7 +500,6 @@ class TestContentsToAnthropic:
         assert result[0]["content"][0]["id"] == "toolc_run_command"
 
     def test_tool_response_fallback_id_when_none(self):
-        from app.llm.providers.anthropic import _contents_to_anthropic
 
         tr = ToolResponse(name="run_command", response={"output": "ok"}, id=None)
         contents = [Content(role="user", parts=[Part(tool_response=tr)])]
@@ -511,7 +509,6 @@ class TestContentsToAnthropic:
 
 class TestToolsToAnthropic:
     def test_converts_tool_declarations(self):
-        from app.llm.providers.anthropic import _tools_to_anthropic
 
         schema = Schema(type=Type.OBJECT, properties={"cmd": Schema(type=Type.STRING)})
         tools = [
@@ -522,17 +519,16 @@ class TestToolsToAnthropic:
             )
         ]
         result = _tools_to_anthropic(tools)
+        assert result is not None
         assert len(result) == 1
         assert result[0]["name"] == "run_command"
         assert "input_schema" in result[0]
 
     def test_none_tools_returns_none(self):
-        from app.llm.providers.anthropic import _tools_to_anthropic
 
         assert _tools_to_anthropic(None) is None
 
     def test_empty_tools_returns_none(self):
-        from app.llm.providers.anthropic import _tools_to_anthropic
 
         assert _tools_to_anthropic([]) is None
 
@@ -717,13 +713,14 @@ class TestStreamCompletionVerification:
             ),
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_assistant(
-            model="claude-sonnet-4-20250514",
-            contents=[Content(role="user", parts=[Part(text="hi")])],
-            assistant_llm_settings=settings,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_assistant(
+                model="claude-sonnet-4-20250514",
+                contents=[Content(role="user", parts=[Part(text="hi")])],
+                assistant_llm_settings=settings,
+            )
+        ]
 
         # Should have usage metadata, text chunk, and fallback completion
         assert len(chunks) == 3
@@ -814,13 +811,14 @@ class TestStreamCompletionVerification:
             ),
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_assistant(
-            model="claude-sonnet-4-20250514",
-            contents=[Content(role="user", parts=[Part(text="hi")])],
-            assistant_llm_settings=settings,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_assistant(
+                model="claude-sonnet-4-20250514",
+                contents=[Content(role="user", parts=[Part(text="hi")])],
+                assistant_llm_settings=settings,
+            )
+        ]
 
         # Should have text chunk, usage, and finish_reason - no fallback
         assert len(chunks) == 3
@@ -870,13 +868,14 @@ class TestStreamCompletionVerification:
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary(
-            model="claude-sonnet-4-20250514",
-            contents=[Content(role="user", parts=[Part(text="hi")])],
-            primary_llm_settings=settings,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                model="claude-sonnet-4-20250514",
+                contents=[Content(role="user", parts=[Part(text="hi")])],
+                primary_llm_settings=settings,
+            )
+        ]
 
         # Should have usage metadata, text chunk, and fallback completion
         assert len(chunks) == 3

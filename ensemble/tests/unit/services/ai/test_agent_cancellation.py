@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.llm.llm_types import ToolCall
+from app.models.tool_results import CommandExecutionResult
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
     make_event_service,
@@ -49,12 +51,12 @@ class TestAgentCancellation:
 
         # Run the stream in a task so we can cancel it
         async def run_stream():
-            chunks = []
-            async for chunk in agent.stream_response(
-                inputs=inputs, event_service=event_service, llm_provider=provider
-            ):
-                chunks.append(chunk)
-            return chunks
+            return [
+                chunk
+                async for chunk in agent.stream_response(
+                    inputs=inputs, event_service=event_service, llm_provider=provider
+                )
+            ]
 
         task = asyncio.create_task(run_stream())
 
@@ -75,7 +77,6 @@ class TestAgentCancellation:
         # LLM turn that yields tool calls
         async def tool_calling_stream(**kwargs):
             # We need to use proper types from app.llm.llm_types
-            from app.llm.llm_types import ToolCall
 
             yield make_provider_chunk(
                 tool_calls=[
@@ -91,7 +92,6 @@ class TestAgentCancellation:
         async def slow_tool(*args, **kwargs):
             await asyncio.sleep(0.5)
             # Return a minimal tool result
-            from app.models.tool_results import CommandExecutionResult
 
             return CommandExecutionResult(success=True, output="done")
 
@@ -106,12 +106,12 @@ class TestAgentCancellation:
         event_service = make_event_service()
 
         async def run_stream():
-            chunks = []
-            async for chunk in agent.stream_response(
-                inputs=inputs, event_service=event_service, llm_provider=provider
-            ):
-                chunks.append(chunk)
-            return chunks
+            return [
+                chunk
+                async for chunk in agent.stream_response(
+                    inputs=inputs, event_service=event_service, llm_provider=provider
+                )
+            ]
 
         task = asyncio.create_task(run_stream())
 

@@ -10,6 +10,7 @@ package tui
 import (
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
@@ -217,6 +218,59 @@ type OperatorStopMsg struct {
 	OperatorSessionID string
 	Response          models.StopOperatorResponse
 	Err               error
+}
+
+// OperatorBindMsg carries a replacement CLI session after binding to an
+// Operator, or the error that prevented binding.
+type OperatorBindMsg struct {
+	Response auth.CLISessionBind
+	Err      error
+}
+
+// OperatorUnbindMsg carries a replacement CLI session after clearing the
+// Operator binding, or the error that prevented unbinding.
+type OperatorUnbindMsg struct {
+	Response auth.CLISessionUnbind
+	Err      error
+}
+
+// RecoveryApprovedMsg carries the Gateway response to an approve-recovery
+// action, or the error that prevented it.
+type RecoveryApprovedMsg struct {
+	Approve  bool
+	Response models.CLIRecoveryApproveResponse
+	Err      error
+}
+
+// SessionRotatedMsg carries a freshly rebuilt CLI session and authoritative
+// identity after a Gateway action replaces the session credentials.
+type SessionRotatedMsg struct {
+	Session  Session
+	Identity Identity
+	Err      error
+}
+
+// AuditEventsMsg carries one page of Gateway audit events, or the error that
+// prevented listing them.
+type AuditEventsMsg struct {
+	Events []models.AuditEventRow
+	Count  int
+	Offset int
+	Err    error
+}
+
+// AuditSummaryMsg carries the aggregate Gateway audit summary, or the error
+// that prevented fetching it.
+type AuditSummaryMsg struct {
+	Summary models.AuditSummaryResponse
+	Err     error
+}
+
+// AuditVerifyMsg carries the result of verifying the Gateway audit chain, or
+// the error that prevented the verification request.
+type AuditVerifyMsg struct {
+	Verify models.AuditVerifyResponse
+	Err    error
 }
 
 // ScenarioStatus represents the terminal state of a demo scenario run.

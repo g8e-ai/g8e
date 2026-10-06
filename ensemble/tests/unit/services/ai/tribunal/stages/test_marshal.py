@@ -39,6 +39,7 @@ class TestRunMarshalStage:
             investigation_state=MagicMock(),
         )
 
+        assert result is not None
         assert result.risk_level == RiskLevel.LOW
 
     async def test_raises_blocked_error_on_high_risk(self, mock_g8e_context, mock_operator_context):

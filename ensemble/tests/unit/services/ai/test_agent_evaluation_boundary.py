@@ -15,15 +15,19 @@ issued each call, and whether the provider itself refused the tool declaration.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
-from app.constants import StreamChunkFromModelType
-from app.errors import ToolsNotSupportedError
+from app.constants import ReasoningAgent, StreamChunkFromModelType
+from app.errors import ToolsNotSupportedError, ValidationError
+from app.llm import llm_types
 from app.llm.llm_types import ToolCall
 from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.models.tool_results import CommandExecutionResult
+from app.services.ai.agent import _agent_role_for_telemetry
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
@@ -33,50 +37,45 @@ from tests.fakes.agent_helpers import (
     make_gen_config,
     make_provider_chunk,
 )
+from tests.fakes.fake_llm_provider import FakeLLMProvider
 
 pytestmark = [pytest.mark.unit]
 
 DECLARED = ["recursive_grep_search", "file_read_on_operator"]
 
 
-class _BoundaryProvider:
+class _BoundaryProvider(FakeLLMProvider):
     """Stub provider that records its tool declarations when called, as the
     governed provider does at the dispatch boundary."""
 
-    def __init__(self, turns: list[list], declared: list[str], failure: Exception | None = None):
+    def __init__(
+        self,
+        turns: list[list[llm_types.StreamChunkFromModel]],
+        declared: list[str],
+        failure: Exception | None = None,
+    ):
+        super().__init__()
         self._turns = turns
         self._declared = declared
         self._failure = failure
         self._call = 0
-        self.declared_tool_names: list[str] | None = None
 
-    def clear_input_artifact_hash(self) -> None:
-        self.input_artifact_hash = ""
-
-    def clear_declared_tools(self) -> None:
-        self.declared_tool_names = None
-
-    def set_g8e_context(self, context) -> None:
-        pass
-
-    def set_provider_retry_count(self, retry_count: int) -> None:
-        pass
-
-    def generate_content_stream_primary(self, **kwargs):
+    async def generate_content_stream_primary(
+        self,
+        model: str,
+        contents: list[llm_types.Content],
+        primary_llm_settings: llm_types.PrimaryLLMSettings,
+    ) -> AsyncGenerator[llm_types.StreamChunkFromModel]:
         index = self._call
         self._call += 1
-        self.declared_tool_names = list(self._declared)
-
-        async def _gen():
-            if self._failure is not None:
-                raise self._failure
-            for chunk in self._turns[index]:
-                yield chunk
-
-        return _gen()
+        self._record_declared_tools(self._declared)
+        if self._failure is not None:
+            raise self._failure
+        for chunk in self._turns[index]:
+            yield chunk
 
 
-def _tool_turn(call_id: str) -> list:
+def _tool_turn(call_id: str) -> list[llm_types.StreamChunkFromModel]:
     return [
         make_provider_chunk(
             tool_calls=[
@@ -91,7 +90,7 @@ def _tool_turn(call_id: str) -> list:
     ]
 
 
-def _text_turn(text: str = "done") -> list:
+def _text_turn(text: str = "done") -> list[llm_types.StreamChunkFromModel]:
     return [make_provider_chunk(text=text), make_provider_chunk(finish_reason="STOP")]
 
 
@@ -289,9 +288,6 @@ class TestAgentRoleAttribution:
     """Every scored model call reports a persona the grader recognises."""
 
     def _inputs(self, *, scored: bool, active_agent):
-        from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
-
-        from tests.fakes.agent_helpers import make_agent_inputs
 
         inputs = make_agent_inputs()
         inputs.active_agent = active_agent
@@ -309,22 +305,16 @@ class TestAgentRoleAttribution:
         return inputs
 
     def test_reports_the_active_agent_persona(self):
-        from app.constants import ReasoningAgent
-        from app.services.ai.agent import _agent_role_for_telemetry
 
         inputs = self._inputs(scored=True, active_agent=ReasoningAgent.DASH)
         assert _agent_role_for_telemetry(inputs) == "dash"
 
     def test_a_scored_request_without_an_active_agent_fails_loudly(self):
-        from app.errors import ValidationError
-        from app.services.ai.agent import _agent_role_for_telemetry
 
         with pytest.raises(ValidationError):
             _agent_role_for_telemetry(self._inputs(scored=True, active_agent=None))
 
     def test_an_unscored_request_without_an_active_agent_fails_loudly(self):
-        from app.errors import ValidationError
-        from app.services.ai.agent import _agent_role_for_telemetry
 
         with pytest.raises(ValidationError):
             _agent_role_for_telemetry(self._inputs(scored=False, active_agent=None))

@@ -16,7 +16,7 @@ from pathlib import Path
 from app.errors import ConfigurationError
 from app.models.base import BaseModel, ConfigDict
 from app.utils.config_loader import load_json_config
-from app.utils.path import resolve_config_path
+from app.constants.paths import resolve_config_path
 
 logger = logging.getLogger(__name__)
 

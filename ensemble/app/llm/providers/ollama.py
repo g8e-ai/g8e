@@ -17,6 +17,7 @@ from app.constants import (
     LLM_OLLAMA_DEFAULT_NUM_CTX,
     ThinkingLevel,
 )
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError, ValidationError
 from app.llm.endpoints import normalize_ollama_host
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -183,8 +184,6 @@ def _raise_on_context_overflow(
     done_reason = getattr(response, "done_reason", None)
     prompt_eval_count = getattr(response, "prompt_eval_count", None)
 
-    from app.errors import ContextWindowExceededError
-
     if _prompt_filled_context(prompt_eval_count, num_ctx):
         logger.warning(
             "[OLLAMA] Prompt filled the context window: channel=%s model=%s "
@@ -216,7 +215,6 @@ def _raise_on_unusable_response(
     num_predict: int | None,
 ) -> None:
     """Reject overflow and empty answers; primary tool-only output is usable."""
-    from app.errors import OllamaEmptyResponseError
 
     _raise_on_context_overflow(response, model=model, channel=channel, num_ctx=num_ctx)
     message = getattr(response, "message", None)
@@ -401,8 +399,6 @@ class OllamaProvider(LLMProvider):
                 calls = []
                 for tc in msg.tool_calls:
                     if not isinstance(tc.function.arguments, dict):
-                        from app.errors import ValidationError
-
                         raise ValidationError("Provider tool arguments must be a JSON object")
                     calls.append(
                         ToolCall(name=tc.function.name, args=tc.function.arguments, id=None)

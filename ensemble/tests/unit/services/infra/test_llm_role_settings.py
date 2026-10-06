@@ -56,7 +56,7 @@ class TestNormalizeEndpoint:
 
 class TestApplyRoleUpdates:
     def test_default_roles_resolve_through_governed_inference(self):
-        llm = LLMSettings(primary_model="chosen-model")
+        llm = LLMSettings(llm_model="chosen-model")
         for role in ("primary", "assistant", "lite"):
             assert llm.resolve(role) == ("g8e", None, None, "chosen-model")
         assert llm.assistant_provider is None
@@ -99,10 +99,10 @@ class TestApplyRoleUpdates:
 
     def test_partial_update_leaves_other_roles_unchanged(self):
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="primary",
-            assistant_provider=LLMProvider.OPENAI,
-            assistant_model="assistant",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="primary",
+            llm_assistant_provider=LLMProvider.OPENAI,
+            llm_assistant_model="assistant",
         )
         apply_role_updates(
             llm,
@@ -114,10 +114,10 @@ class TestApplyRoleUpdates:
 
     def test_unset_optional_role_falls_back_to_primary(self):
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="gemma4:e4b",
-            assistant_provider=LLMProvider.OPENAI,
-            assistant_model="gpt-x",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="gemma4:e4b",
+            llm_assistant_provider=LLMProvider.OPENAI,
+            llm_assistant_model="gpt-x",
         )
         apply_role_updates(llm, _request(assistant=LLMRoleUpdate()))
         assert llm.assistant_provider is None
@@ -144,7 +144,7 @@ class TestApplyRoleUpdates:
             )
 
     def test_invalid_role_leaves_settings_untouched(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA, primary_model="old")
+        llm = LLMSettings(llm_primary_provider=LLMProvider.OLLAMA, llm_model="old")
         with pytest.raises(ValidationError):
             apply_role_updates(
                 llm,
@@ -158,7 +158,7 @@ class TestApplyRoleUpdates:
 
 class TestProviderConnections:
     def test_updates_connections_independently_of_roles(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OPENAI, primary_model="gpt-5")
+        llm = LLMSettings(llm_primary_provider=LLMProvider.OPENAI, llm_model="gpt-5")
         apply_provider_updates(
             llm,
             [
@@ -203,8 +203,8 @@ class TestProviderConnections:
 class TestSettingsView:
     def test_masks_provider_keys_and_keeps_roles_connection_free(self):
         llm = LLMSettings(
-            primary_provider=LLMProvider.ANTHROPIC,
-            primary_model="claude",
+            llm_primary_provider=LLMProvider.ANTHROPIC,
+            llm_model="claude",
             anthropic_api_key="sk-provider",
         )
         view = settings_view(llm)
@@ -277,7 +277,7 @@ class TestSettingsServiceLLMRoles:
         cache.update_document = AsyncMock(side_effect=update_document)
         cache.invalidate_document = AsyncMock(return_value=True)
         cache.get_document_with_cache = AsyncMock(
-            side_effect=lambda collection, document_id: stored.get(document_id)
+            side_effect=lambda *_args, document_id, **_kwargs: stored.get(document_id)
         )
         service = SettingsService(cache_aside_service=cache)
         await service.update_user_settings("user_1", G8eeUserSettings(llm=LLMSettings()))

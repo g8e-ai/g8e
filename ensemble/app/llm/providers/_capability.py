@@ -19,6 +19,8 @@ pattern belongs here, never at a consumer.
 
 from __future__ import annotations
 
+from app.errors import ContextWindowExceededError, ThinkingNotSupportedError, ToolsNotSupportedError
+
 # Fingerprints (lowercased) that mean "model does not support thinking".
 _THINKING_PATTERNS: tuple[str, ...] = (
     "thinking_config",
@@ -88,8 +90,6 @@ def translate_governed_tool_rejection(
     ):
         return
 
-    from app.errors import ToolsNotSupportedError
-
     raise ToolsNotSupportedError(
         f"Provider rejected the tool declaration: {rejection_text}",
         model=model,
@@ -114,8 +114,6 @@ def translate_governed_context_overflow(
     rejection_text = _governed_rejection_text(exc)
     if _GOVERNED_CONTEXT_OVERFLOW not in rejection_text.lower():
         return
-
-    from app.errors import ContextWindowExceededError
 
     raise ContextWindowExceededError(
         f"Provider context window exceeded: {rejection_text}",
@@ -143,10 +141,6 @@ def translate_capability_error(
     error mentioning "tools" when tools were not requested is not a tool
     capability error.
     """
-    # Lazy import to avoid circular dependency: app.errors -> app.models ->
-    # app.llm -> providers -> this module.
-    from app.errors import ThinkingNotSupportedError, ToolsNotSupportedError
-
     message = str(exc).lower()
     if not message:
         return

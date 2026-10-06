@@ -304,7 +304,7 @@ def build_minimal_operator_document(
                 cpu_count=2,
                 memory_mb=4096,
             ),
-            network=HeartbeatNetworkInfo(),
+            network_info=HeartbeatNetworkInfo(),
             environment=HeartbeatEnvironment(pwd="/home/test-user"),
         ),
     )
@@ -344,11 +344,11 @@ def build_production_operator_document(
                 cpu_count=8,
                 memory_mb=16384,
             ),
-            network=HeartbeatNetworkInfo(),
+            network_info=HeartbeatNetworkInfo(),
             user_details=HeartbeatUserDetails(
                 username="root",
-                uid="0",
-                gid="0",
+                uid=0,
+                gid=0,
                 home="/root",
                 shell="/bin/bash",
             ),
@@ -436,7 +436,12 @@ def create_mock_llm_provider(text: str):
 
     if text is not None:
         mock_response = GenerateContentResponse(
-            candidates=[Candidate(content=Content(role="model", parts=[Part.from_text(text)]))]
+            candidates=[
+                Candidate(
+                    content=Content(role="model", parts=[Part.from_text(text)]),
+                    finish_reason="STOP",
+                )
+            ]
         )
         provider.generate_content = AsyncMock(return_value=mock_response)
     else:

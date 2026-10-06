@@ -18,8 +18,13 @@ from pathlib import Path
 
 import pytest
 
-from app.constants import EventType
+from app.constants import EventType, OperatorToolName
 from app.models.agent import StreamChunkData, StreamChunkFromModel, StreamChunkFromModelType
+from app.models.agents.tribunal import (
+    TribunalConsensusFailedPayload,
+    TribunalDissentRecordedPayload,
+    VoteBreakdown,
+)
 from app.models.events import ChatProcessingStartedPayload
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import (
@@ -295,8 +300,6 @@ class TestSSEEventContract:
 
     async def test_search_web_events_match_protocol_fixtures(self):
         """Search web tool events match protocol structures."""
-        from app.constants import OperatorToolName
-        from app.models.agent import StreamChunkData, StreamChunkFromModel
 
         inputs, state = make_agent_run_args(
             case_id="contract-test-case-004",
@@ -388,7 +391,6 @@ class TestSSEEventContract:
 
     async def test_tribunal_consensus_failed_matches_protocol_fixture(self):
         """TRIBUNAL_CONSENSUS_FAILED event matches protocol structure."""
-        from app.models.agents.tribunal import TribunalConsensusFailedPayload, VoteBreakdown
 
         expected_fixture = PROTOCOL_SSE_EVENTS["tribunal_voting_consensus_failed"]
 
@@ -422,7 +424,6 @@ class TestSSEEventContract:
 
     async def test_tribunal_dissent_recorded_matches_protocol_fixture(self):
         """TRIBUNAL_DISSENT_RECORDED event matches protocol structure."""
-        from app.models.agents.tribunal import TribunalDissentRecordedPayload, VoteBreakdown
 
         expected_fixture = PROTOCOL_SSE_EVENTS["tribunal_voting_dissent_recorded"]
 

@@ -26,9 +26,10 @@ Run with:
     ./g8e test g8ee -- tests/unit/services/ai/test_agent.py
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 from app.constants import (
     AGENT_MAX_RETRIES,
@@ -38,6 +39,8 @@ from app.constants import (
     ReasoningAgent,
 )
 from app.errors import ValidationError
+from app.llm.llm_types import ToolCall
+from app.llm.model_call_attribution import build_model_call_telemetry
 from app.models.agent import (
     StreamChunkData,
     StreamChunkFromModel,
@@ -47,6 +50,7 @@ from app.models.grounding import GroundingMetadata
 from app.models.tool_results import SearchWebResult
 from app.services.ai.agent import g8eEnsemble
 from app.services.ai.agent_tool_loop import ToolCallResponse
+from app.services.ai.grounding.grounding_service import GroundingService
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
     make_agent_stream_state,
@@ -55,12 +59,14 @@ from tests.fakes.agent_helpers import (
     make_gen_config,
     make_provider_chunk,
 )
+from tests.fakes.factories import build_g8e_http_context
+from tests.fakes.fake_approval_service import FakeApprovalService
 
 pytestmark = pytest.mark.unit
 
 
 # =============================================================================
-# TEST: Constructor
+# TEST - Constructor
 # =============================================================================
 
 
@@ -88,8 +94,6 @@ class Testg8eEnsembleConstructor:
             tool_executor=tool_executor,
             grounding_service=None,
         )
-
-        from app.services.ai.grounding.grounding_service import GroundingService
 
         assert isinstance(agent._grounding_service, GroundingService)
 
@@ -154,13 +158,14 @@ class TestStreamResponseRetryLoop:
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
-        chunks = []
-        async for chunk in agent.stream_response(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent.stream_response(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         assert len(chunks) == 3
         assert chunks[0].type == StreamChunkFromModelType.RETRY
@@ -198,17 +203,19 @@ class TestStreamResponseRetryLoop:
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
-        chunks = []
-        async for chunk in agent.stream_response(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent.stream_response(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         assert len(chunks) == 2
         assert chunks[0].type == StreamChunkFromModelType.TEXT
         assert chunks[1].type == StreamChunkFromModelType.ERROR
+        assert chunks[1].data.error is not None
         assert "Network error after text" in chunks[1].data.error
         assert len(chunks[1].data.model_calls) == 1
         assert chunks[1].data.model_calls[0].succeeded is False
@@ -248,13 +255,14 @@ class TestStreamResponseRetryLoop:
 
             context.model_to_use = "test-model"
             context.generation_config = gen_config
-            chunks = []
-            async for chunk in agent.stream_response(
-                inputs=context,
-                event_service=event_service,
-                llm_provider=provider,
-            ):
-                chunks.append(chunk)
+            _chunks = [
+                chunk
+                async for chunk in agent.stream_response(
+                    inputs=context,
+                    event_service=event_service,
+                    llm_provider=provider,
+                )
+            ]
 
             assert len(sleep_calls) == 2
             assert sleep_calls[0] == AGENT_RETRY_DELAY_SECONDS
@@ -280,13 +288,14 @@ class TestStreamResponseRetryLoop:
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
-        chunks = []
-        async for chunk in agent.stream_response(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent.stream_response(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         # Expect RETRY chunks for attempts 2, 3, 4, then ERROR
         assert len(chunks) == 4
@@ -297,6 +306,7 @@ class TestStreamResponseRetryLoop:
         assert chunks[2].type == StreamChunkFromModelType.RETRY
         assert chunks[2].data.attempt == 4
         assert chunks[3].type == StreamChunkFromModelType.ERROR
+        assert chunks[3].data.error is not None
         assert "Always fails" in chunks[3].data.error
 
 
@@ -327,16 +337,18 @@ class TestStreamResponseErrorHandling:
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
-        chunks = []
-        async for chunk in agent.stream_response(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent.stream_response(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         assert len(chunks) == 1
         assert chunks[0].type == StreamChunkFromModelType.ERROR
+        assert chunks[0].data.error is not None
         assert "Invalid API key" in chunks[0].data.error
 
     async def test_success_returns_without_error(self):
@@ -359,13 +371,14 @@ class TestStreamResponseErrorHandling:
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
-        chunks = []
-        async for chunk in agent.stream_response(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent.stream_response(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         assert all(c.type != StreamChunkFromModelType.ERROR for c in chunks)
 
@@ -382,8 +395,7 @@ class TestRunWithSSEValidation:
         provider = MagicMock()
         agent = make_g8e_agent(fn_handler=tool_executor)
 
-        context = make_agent_inputs()
-        context.g8e_context = None
+        context = make_agent_inputs().model_copy(update={"g8e_context": None})
 
         event_service = make_event_service()
 
@@ -424,20 +436,18 @@ class TestStreamWithToolLoop:
         context.model_to_use = "test-model"
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         assert any(c.type == StreamChunkFromModelType.COMPLETE for c in chunks)
 
     async def test_loop_continues_when_tool_calls_present(self):
-        from unittest.mock import AsyncMock
-
-        from app.llm.llm_types import ToolCall
 
         tool_executor = MagicMock()
         tool_executor.execute_tool_call = AsyncMock()
@@ -473,18 +483,18 @@ class TestStreamWithToolLoop:
         context.model_to_use = "test-model"
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        _chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         assert call_count == 2
 
     async def test_uses_provided_llm_provider(self):
-        from unittest.mock import AsyncMock
 
         tool_executor = MagicMock()
         tool_executor.execute_tool_call = AsyncMock()
@@ -505,13 +515,14 @@ class TestStreamWithToolLoop:
         context.model_to_use = "test-model"
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        _chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         provider.generate_content_stream_primary.assert_called_once()
 
@@ -528,7 +539,6 @@ class TestMaxTurnLimitApproval:
 
     def _make_tool_calling_provider(self):
         """Provider that always emits a tool call, forcing the loop to run indefinitely."""
-        from app.llm.llm_types import ToolCall
 
         def _stream(**kwargs):
             async def _gen():
@@ -545,7 +555,6 @@ class TestMaxTurnLimitApproval:
         return provider
 
     async def test_requests_approval_when_max_turns_exceeded_and_stops_on_deny(self):
-        from tests.fakes.fake_approval_service import FakeApprovalService
 
         approval_service = FakeApprovalService(approved=False)
         provider = self._make_tool_calling_provider()
@@ -567,13 +576,14 @@ class TestMaxTurnLimitApproval:
 
             mock_exec.side_effect = _fake_exec
 
-            chunks = []
-            async for chunk in agent._stream_with_tool_loop(
-                inputs=context,
-                event_service=event_service,
-                llm_provider=provider,
-            ):
-                chunks.append(chunk)
+            _chunks = [
+                chunk
+                async for chunk in agent._stream_with_tool_loop(
+                    inputs=context,
+                    event_service=event_service,
+                    llm_provider=provider,
+                )
+            ]
 
         assert len(approval_service.agent_continue_approval_calls) == 1
         req = approval_service.agent_continue_approval_calls[0]
@@ -588,7 +598,6 @@ class TestMaxTurnLimitApproval:
         assert provider.generate_content_stream_primary.call_count == 2
 
     async def test_continues_when_approval_granted(self):
-        from tests.fakes.fake_approval_service import FakeApprovalService
 
         approval_service = FakeApprovalService(approved=True)
         provider = self._make_tool_calling_provider()
@@ -626,13 +635,14 @@ class TestMaxTurnLimitApproval:
 
             provider.generate_content_stream_primary.side_effect = limited_stream
 
-            chunks = []
-            async for chunk in agent._stream_with_tool_loop(
-                inputs=context,
-                event_service=event_service,
-                llm_provider=provider,
-            ):
-                chunks.append(chunk)
+            _chunks = [
+                chunk
+                async for chunk in agent._stream_with_tool_loop(
+                    inputs=context,
+                    event_service=event_service,
+                    llm_provider=provider,
+                )
+            ]
 
         # With limit=2, approval is requested after turn 2, granted; counter resets
         # to 1, so we need another approval after turn 4, etc. We exercised >= 2 approvals.
@@ -659,13 +669,14 @@ class TestMaxTurnLimitApproval:
 
             mock_exec.side_effect = _fake_exec
 
-            chunks = []
-            async for chunk in agent._stream_with_tool_loop(
-                inputs=context,
-                event_service=event_service,
-                llm_provider=provider,
-            ):
-                chunks.append(chunk)
+            _chunks = [
+                chunk
+                async for chunk in agent._stream_with_tool_loop(
+                    inputs=context,
+                    event_service=event_service,
+                    llm_provider=provider,
+                )
+            ]
 
         # Exactly max-turn provider calls, then abort (no approval possible)
         assert provider.generate_content_stream_primary.call_count == 2
@@ -697,10 +708,6 @@ class TestMaxTurnLimitApproval:
         """No human is present to answer the continue-approval, so a scored run
         (evaluation_context set) must deny it immediately instead of waiting,
         and the COMPLETE chunk must say the limit was reached."""
-        from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
-
-        from tests.fakes.factories import build_g8e_http_context
-        from tests.fakes.fake_approval_service import FakeApprovalService
 
         approval_service = FakeApprovalService(approved=True)  # would approve if it were asked
         provider = self._make_tool_calling_provider()
@@ -735,7 +742,6 @@ class TestMaxTurnLimitApproval:
     async def test_production_run_reaching_the_limit_still_asks_for_approval(self):
         """Characterization: the immediate denial is keyed on evaluation_context;
         a production request still waits on the human."""
-        from tests.fakes.fake_approval_service import FakeApprovalService
 
         approval_service = FakeApprovalService(approved=False)
         provider = self._make_tool_calling_provider()
@@ -786,13 +792,14 @@ class TestTokenAccumulation:
         context.active_agent = ReasoningAgent.SAGE
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         assert complete_chunk.data.token_usage is not None
@@ -821,10 +828,6 @@ class TestTokenAccumulation:
         in between. Distinct, small values per call mean any invented amount (such
         as a configured output limit) added anywhere breaks the equality.
         """
-        from unittest.mock import AsyncMock
-
-        from app.llm.llm_types import ToolCall
-        from app.llm.model_call_attribution import build_model_call_telemetry
 
         tool_executor = MagicMock()
         tool_executor.execute_tool_call = AsyncMock()
@@ -880,18 +883,20 @@ class TestTokenAccumulation:
         context.model_to_use = "test-model"
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-            model_calls=[triage_call],
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+                model_calls=[triage_call],
+            )
+        ]
 
         complete = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         calls = complete.data.model_calls
         usage = complete.data.token_usage
+        assert usage is not None
         assert len(calls) == 3
         assert usage.input_tokens == sum(c.input_tokens for c in calls) == 290
         assert usage.output_tokens == sum(c.output_tokens for c in calls) == 20
@@ -917,13 +922,14 @@ class TestTokenAccumulation:
         context.model_to_use = "test-model"
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         assert complete_chunk.data.token_usage is not None
@@ -941,7 +947,6 @@ class TestTokenAccumulation:
 @pytest.mark.asyncio(loop_scope="session")
 class TestGroundingMetadata:
     async def test_emits_citations_when_grounding_present(self):
-        from app.llm.llm_types import ToolCall
 
         tool_executor = MagicMock()
         provider = MagicMock()
@@ -1001,13 +1006,14 @@ class TestGroundingMetadata:
             )
 
         with patch("app.services.ai.agent.execute_turn_tool_calls", side_effect=mock_execute):
-            chunks = []
-            async for chunk in agent._stream_with_tool_loop(
-                inputs=context,
-                event_service=event_service,
-                llm_provider=provider,
-            ):
-                chunks.append(chunk)
+            chunks = [
+                chunk
+                async for chunk in agent._stream_with_tool_loop(
+                    inputs=context,
+                    event_service=event_service,
+                    llm_provider=provider,
+                )
+            ]
 
         assert any(c.type == StreamChunkFromModelType.CITATIONS for c in chunks)
 
@@ -1030,13 +1036,14 @@ class TestGroundingMetadata:
         context.model_to_use = "test-model"
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         assert not any(c.type == StreamChunkFromModelType.CITATIONS for c in chunks)
 
@@ -1053,9 +1060,6 @@ class TestInterrogationGate:
 
     async def test_interrogation_gate_suppresses_tool_execution(self):
         """Gate fires when <interrogation> block present: drops tool calls, breaks loop."""
-        from unittest.mock import patch
-
-        from app.llm.llm_types import ToolCall
 
         tool_executor = MagicMock()
         provider = MagicMock()
@@ -1094,13 +1098,14 @@ class TestInterrogationGate:
 
             mock_exec.side_effect = _fake_exec
 
-            chunks = []
-            async for chunk in agent._stream_with_tool_loop(
-                inputs=context,
-                event_service=event_service,
-                llm_provider=provider,
-            ):
-                chunks.append(chunk)
+            chunks = [
+                chunk
+                async for chunk in agent._stream_with_tool_loop(
+                    inputs=context,
+                    event_service=event_service,
+                    llm_provider=provider,
+                )
+            ]
 
         # No TOOL_CALL or TOOL_RESULT chunks should be emitted
         assert not any(c.type == StreamChunkFromModelType.TOOL_CALL for c in chunks), (
@@ -1127,7 +1132,6 @@ class TestInterrogationGate:
 
     async def test_normal_tool_execution_without_interrogation(self):
         """When no <interrogation> block, tool execution proceeds normally."""
-        from app.llm.llm_types import ToolCall
 
         tool_executor = MagicMock()
         provider = MagicMock()
@@ -1171,13 +1175,14 @@ class TestInterrogationGate:
 
             mock_exec.side_effect = _fake_exec
 
-            chunks = []
-            async for chunk in agent._stream_with_tool_loop(
-                inputs=context,
-                event_service=event_service,
-                llm_provider=provider,
-            ):
-                chunks.append(chunk)
+            _chunks = [
+                chunk
+                async for chunk in agent._stream_with_tool_loop(
+                    inputs=context,
+                    event_service=event_service,
+                    llm_provider=provider,
+                )
+            ]
 
         # Tool execution should proceed (execute_turn_tool_calls called)
         assert mock_exec.called, "Without interrogation, tool execution should proceed normally"
@@ -1212,13 +1217,14 @@ class TestCompleteEmission:
         context.model_to_use = "test-model"
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         assert complete_chunk.data.finish_reason == "STOP"
@@ -1243,13 +1249,14 @@ class TestCompleteEmission:
         context.model_to_use = "test-model"
         event_service = make_event_service()
 
-        chunks = []
-        async for chunk in agent._stream_with_tool_loop(
-            inputs=context,
-            event_service=event_service,
-            llm_provider=provider,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                event_service=event_service,
+                llm_provider=provider,
+            )
+        ]
 
         complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         assert complete_chunk.data.finish_reason == DEFAULT_FINISH_REASON

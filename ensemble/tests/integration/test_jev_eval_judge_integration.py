@@ -37,10 +37,10 @@ FROZEN_ASSIGNMENT = {
 def jev_settings() -> G8eeUserSettings:
     return G8eeUserSettings(
         llm=LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="main-model",
-            lite_provider=LLMProvider.JEV,
-            lite_model=JEV_DEFAULT_MODEL,
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="main-model",
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model=JEV_DEFAULT_MODEL,
             ollama_endpoint=os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT,
         ),
         eval_judge=EvalJudgeSettings(eval_judge_model=JEV_DEFAULT_MODEL),

@@ -7,11 +7,16 @@
 
 """Regression tests for the Tribunal command generator."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.constants import (
+    DEFAULT_OS_NAME,
+    DEFAULT_SHELL,
+    DEFAULT_WORKING_DIRECTORY,
+    FORBIDDEN_COMMAND_PATTERNS,
     G8EE_COMPONENT,
     AuditorReason,
     CommandGenerationOutcome,
@@ -22,6 +27,7 @@ from app.constants import (
     RiskLevel,
 )
 from app.llm.llm_types import Role
+from app.llm.prompts import PromptFile
 from app.llm.prompts import (
     build_forbidden_patterns_message as _format_forbidden_patterns_message,
 )
@@ -41,6 +47,7 @@ from app.models.agents.tribunal import (
     TribunalMarshalBlockedError,
     TribunalMarshalBlockedPayload,
     TribunalModelNotConfiguredError,
+    TribunalPassCompletedPayload,
     TribunalProviderUnavailableError,
     TribunalSessionCompletedPayload,
     TribunalSessionDisabledPayload,
@@ -58,6 +65,7 @@ from app.models.tool_results import (
     CommandRiskAnalysis,
     ErrorAnalysisResult,
 )
+from app.prompts_data.loader import load_prompt
 from app.services.ai.generator import (
     TribunalEmitter,
     _build_and_emit_result,
@@ -68,6 +76,7 @@ from app.services.ai.tribunal.stages.generation import _run_generation_pass
 from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
 from app.services.ai.tribunal.utils import member_for_pass
 from app.services.evaluation.player_steps import PlayerStepRecorder
+from app.services.infra.event_service import EventService
 from app.utils.agent_persona_loader import get_agent_persona
 from tests.unit.services.ai.tribunal.conftest import (
     _MOCK_USER_SETTINGS,
@@ -158,7 +167,6 @@ class TestRoleImportRegression:
         pass_errors: list[str] = []
 
         # Importing from generation module
-        from app.services.ai.tribunal.stages.generation import _run_generation_pass
 
         result = await _run_generation_pass(
             provider=mock_provider,
@@ -403,9 +411,9 @@ class TestGenerateCommandSystemError:
     @pytest.mark.asyncio
     async def test_raises_on_all_system_errors(self):
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="gemma3:1b",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -451,9 +459,9 @@ class TestGenerateCommandSystemError:
     async def test_raises_generation_failed_error_on_non_system_errors(self):
         """Non-system errors now raise TribunalGenerationFailedError instead of silent fallback."""
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="gemma3:1b",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -498,9 +506,9 @@ class TestGenerateCommandSystemError:
     @pytest.mark.asyncio
     async def test_provider_routing_uses_settings_provider(self):
         llm = LLMSettings(
-            primary_provider=LLMProvider.GEMINI,
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="gemma3:1b",
+            llm_primary_provider=LLMProvider.GEMINI,
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -568,9 +576,9 @@ class TestMixedErrorFallback:
     async def test_mixed_errors_raise_generation_failed_error(self):
         """1 system error + 2 non-system errors must raise TribunalGenerationFailedError."""
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="gemma3:1b",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="gemma3:1b",
             llm_command_gen_passes=3,
         )
         settings = G8eeUserSettings(llm=llm)
@@ -647,8 +655,8 @@ class TestTribunalProviderUnavailableError:
     async def test_raises_on_provider_init_failure(self):
         """Provider init failure raises TribunalProviderUnavailableError instead of silent fallback."""
         llm = LLMSettings(
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="gemma3:1b",
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -695,7 +703,7 @@ class TestTribunalModelNotConfiguredError:
     async def test_raises_on_no_model_configured(self):
         """No model configured raises TribunalModelNotConfiguredError with fallback event."""
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
+            llm_primary_provider=LLMProvider.OLLAMA,
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -877,6 +885,7 @@ class TestTribunalAuditorFailedError:
             )
 
         assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
+        assert exc_info.value.error is not None
         assert "timeout" in exc_info.value.error
         assert exc_info.value.request == "list files"
 
@@ -954,7 +963,6 @@ class TestRunAuditStageMarshalRiskAnalysis:
     @pytest.mark.asyncio
     async def test_high_risk_first_strike_emits_marshal_blocked_and_increments_counter(self):
         """HIGH risk on a fresh investigation raises a first-strike block."""
-        from app.constants import EventType
 
         analyzer = self._make_analyzer(
             RiskLevel.HIGH,
@@ -1005,7 +1013,6 @@ class TestRunAuditStageMarshalRiskAnalysis:
     @pytest.mark.asyncio
     async def test_high_risk_second_strike_emits_agent_conflict_and_resets_counter(self):
         """HIGH risk after a prior block raises an agent-conflict second strike."""
-        from app.constants import EventType
 
         analyzer = self._make_analyzer(RiskLevel.HIGH)
         mock_event_service = MagicMock()
@@ -1112,9 +1119,9 @@ class TestGenerateCommandHappyPath:
         passes=3,
     ):
         llm = LLMSettings(
-            primary_provider=primary_provider,
-            lite_provider=lite_provider,
-            lite_model=lite_model,
+            llm_primary_provider=primary_provider,
+            llm_lite_provider=lite_provider,
+            llm_lite_model=lite_model,
             llm_command_gen_passes=passes,
             llm_command_gen_auditor=auditor,
         )
@@ -1144,7 +1151,6 @@ class TestGenerateCommandHappyPath:
                     resp.text = '{"status": "ok"}'
                 else:
                     # Assume it's a revised command
-                    import json
 
                     resp.text = json.dumps({"status": "revised", "revised_command": auditor_text})
             else:
@@ -1197,7 +1203,6 @@ class TestGenerateCommandHappyPath:
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
         ]
-        from app.constants import EventType
 
         assert EventType.AI_CONSENSUS_SESSION_STARTED in emitted_types
         assert emitted_types.count(EventType.AI_CONSENSUS_VOTING_PASS_COMPLETED) == 3
@@ -1251,7 +1256,6 @@ class TestGenerateCommandHappyPath:
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
         ]
-        from app.constants import EventType
 
         assert EventType.AI_CONSENSUS_SESSION_STARTED in emitted_types
         assert emitted_types.count(EventType.AI_CONSENSUS_VOTING_PASS_COMPLETED) == 3
@@ -1386,7 +1390,6 @@ class TestGenerateCommandHappyPath:
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
         ]
-        from app.constants import EventType
 
         assert EventType.AI_CONSENSUS_VOTING_AUDIT_STARTED in emitted_types
         assert EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED in emitted_types
@@ -1525,8 +1528,6 @@ class TestGenerateCommandHappyPath:
                 )
             )
 
-        from app.constants import EventType
-
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
         ]
@@ -1637,8 +1638,6 @@ class TestGenerateCommandHappyPath:
         assert result.final_command != result.request
         assert result.final_command == "cat /etc/hostname"
 
-        from app.constants import EventType
-
         completed_calls = [
             call
             for call in mock_event_service.publish.call_args_list
@@ -1687,8 +1686,6 @@ class TestGenerateCommandHappyPath:
 
         assert result.final_command == result.request
 
-        from app.constants import EventType
-
         completed_calls = [
             call
             for call in mock_event_service.publish.call_args_list
@@ -1717,9 +1714,9 @@ class TestGenerateCommandAuditorFailure:
         passes=3,
     ):
         llm = LLMSettings(
-            primary_provider=primary_provider,
-            lite_provider=lite_provider,
-            lite_model=lite_model,
+            llm_primary_provider=primary_provider,
+            llm_lite_provider=lite_provider,
+            llm_lite_model=lite_model,
             llm_command_gen_passes=passes,
             llm_command_gen_auditor=True,
         )
@@ -1751,19 +1748,14 @@ class TestGenerateCommandAuditorFailure:
                 return resp
             if auditor_side_effect is not None:
                 raise auditor_side_effect
-            if auditor_return is not None:
-                # Convert auditor response to JSON format if it's plain text
-                if hasattr(auditor_return, "text"):
-                    text = auditor_return.text
-                    if text == "ok":
-                        auditor_return.text = '{"status": "ok"}'
-                    elif text and text != generation_text:
-                        # Assume it's a revised command
-                        import json
-
-                        auditor_return.text = json.dumps(
-                            {"status": "revised", "revised_command": text}
-                        )
+            # Convert auditor response to JSON format if it's plain text
+            if auditor_return is not None and hasattr(auditor_return, "text"):
+                text = auditor_return.text
+                if text == "ok":
+                    auditor_return.text = '{"status": "ok"}'
+                elif text and text != generation_text:
+                    # Assume it's a revised command
+                    auditor_return.text = json.dumps({"status": "revised", "revised_command": text})
             return auditor_return
 
         return _make_mock_provider(generate_content_lite_side_effect=_side_effect)
@@ -1813,9 +1805,8 @@ class TestGenerateCommandAuditorFailure:
 
             assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
             assert exc_info.value.request == "list files with details"
+            assert exc_info.value.error is not None
             assert "Provider returned empty response" in exc_info.value.error
-
-        from app.constants import EventType
 
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
@@ -1873,9 +1864,8 @@ class TestGenerateCommandAuditorFailure:
 
             assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
             assert exc_info.value.request == "list files with details"
+            assert exc_info.value.error is not None
             assert "invalid JSON" in exc_info.value.error
-
-        from app.constants import EventType
 
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
@@ -1928,10 +1918,9 @@ class TestGenerateCommandAuditorFailure:
                 )
 
             assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
+            assert exc_info.value.error is not None
             assert "timeout" in exc_info.value.error.lower()
             assert exc_info.value.request == "list files with details"
-
-        from app.constants import EventType
 
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
@@ -2033,8 +2022,6 @@ class TestGenerateCommandAuditorFailure:
             assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
             assert exc_info.value.request == "show current user"
 
-        from app.constants import EventType
-
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
         ]
@@ -2057,7 +2044,6 @@ class TestForbiddenPatternsMessage:
         assert "rejected" in message
 
     def test_message_lists_all_forbidden_base_patterns(self):
-        from app.constants import FORBIDDEN_COMMAND_PATTERNS
 
         message = _format_forbidden_patterns_message()
         for pattern in FORBIDDEN_COMMAND_PATTERNS:
@@ -2103,7 +2089,6 @@ class TestPromptFields:
     """_prompt_fields returns all keys required by every Tribunal persona template."""
 
     def test_returns_all_required_keys(self):
-        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
 
         fields = _prompt_fields(
             OperatorContext(
@@ -2128,7 +2113,6 @@ class TestPromptFields:
         assert "FORBIDDEN" in fields["forbidden_patterns_message"]
 
     def test_defaults_applied_when_context_none(self):
-        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
 
         fields = _prompt_fields(
             None,
@@ -2144,7 +2128,6 @@ class TestPromptFields:
         assert fields["user_context"] == "unknown"
 
     def test_root_uid_is_preserved_in_user_context(self):
-        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
 
         fields = _prompt_fields(
             OperatorContext(operator_id="op", username="root", uid=0),
@@ -2163,12 +2146,9 @@ class TestPromptFields:
         and TRIBUNAL_AUDITOR_TEMPLATE - not in the persona text itself. This test
         guards against drift in either the templates or _prompt_fields.
         """
-        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
-        from app.llm.prompts import PromptFile
-        from app.prompts_data.loader import load_prompt
 
-        TRIBUNAL_PROMPT_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
-        TRIBUNAL_AUDITOR_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
+        tribunal_prompt_template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
+        tribunal_auditor_template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
 
         fields = _prompt_fields(
             OperatorContext(
@@ -2192,18 +2172,18 @@ class TestPromptFields:
         }
 
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
-            rendered = TRIBUNAL_PROMPT_TEMPLATE.format(
+            rendered = tribunal_prompt_template.format(
                 **common,
                 **fields,
             )
-            assert "{operator_context}" in TRIBUNAL_PROMPT_TEMPLATE, (
+            assert "{operator_context}" in tribunal_prompt_template, (
                 "TRIBUNAL_PROMPT_TEMPLATE missing {operator_context} placeholder"
             )
             assert "host1" in rendered, f"{member_id}: operator_context did not render"
             assert "FORBIDDEN" in rendered, f"{member_id}: forbidden_patterns missing"
 
         get_agent_persona("auditor")
-        rendered = TRIBUNAL_AUDITOR_TEMPLATE.format(
+        rendered = tribunal_auditor_template.format(
             auditor_context="Auditor context placeholder",
             **common,
             **fields,
@@ -2235,8 +2215,6 @@ class TestTribunalEmitter:
     @pytest.mark.asyncio
     async def test_terminal_event_publish_failure_raises(self):
         """Terminal event publish failures are re-raised to ensure caller is aware of the failure."""
-        from app.models.http_context import G8eHttpContext
-        from app.services.infra.event_service import EventService
 
         mock_event_service = MagicMock(spec=EventService)
         mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
@@ -2260,9 +2238,6 @@ class TestTribunalEmitter:
     @pytest.mark.asyncio
     async def test_progress_event_publish_failure_swallowed(self):
         """Progress event publish failures are logged but not re-raised."""
-        from app.models.agents.tribunal import TribunalPassCompletedPayload
-        from app.models.http_context import G8eHttpContext
-        from app.services.infra.event_service import EventService
 
         mock_event_service = MagicMock(spec=EventService)
         mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
@@ -2290,9 +2265,9 @@ class TestTribunalEmitter:
     async def test_round_2_peer_review_flow(self):
         """Test the full Round 2 peer review flow when consensus is low."""
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="gemma3:1b",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="gemma3:1b",
             llm_command_gen_passes=3,
             llm_command_gen_auditor=False,
         )
@@ -2358,12 +2333,6 @@ class TestTribunalEmitter:
     @pytest.mark.asyncio
     async def test_all_terminal_events_raise_on_publish_failure(self):
         """All TRIBUNAL_SESSION_* events are terminal and should re-raise on publish failure."""
-        from app.models.agents.tribunal import (
-            TribunalSessionModelNotConfiguredPayload,
-            TribunalSessionSystemErrorPayload,
-        )
-        from app.models.http_context import G8eHttpContext
-        from app.services.infra.event_service import EventService
 
         mock_event_service = MagicMock(spec=EventService)
         mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
@@ -2443,7 +2412,6 @@ class TestDefaultConfigCoversAllMembers:
 
     def test_default_pass_count_covers_all_members(self):
         """At default config (5 passes), all five Tribunal members must be assigned."""
-        from app.models.settings import LLMSettings
 
         default_settings = LLMSettings()
         default_passes = default_settings.llm_command_gen_passes

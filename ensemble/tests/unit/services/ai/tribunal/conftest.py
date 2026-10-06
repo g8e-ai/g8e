@@ -85,7 +85,7 @@ def make_mock_provider():
 
 _MOCK_USER_SETTINGS = G8eeUserSettings(
     llm=LLMSettings(
-        assistant_model="test-assistant", primary_model="test-primary", lite_model="test-lite"
+        llm_assistant_model="test-assistant", llm_model="test-primary", llm_lite_model="test-lite"
     )
 )
 

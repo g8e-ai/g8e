@@ -33,6 +33,7 @@ import logging
 from collections.abc import AsyncGenerator
 
 import httpx
+from google import genai
 from google.genai import types as genai_types
 from tenacity import (
     AsyncRetrying,
@@ -358,7 +359,6 @@ class GeminiProvider(LLMProvider):
 
     def __init__(self, api_key: str):
         super().__init__()
-        from google import genai
 
         http_options = genai_types.HttpOptions(
             timeout=300_000,

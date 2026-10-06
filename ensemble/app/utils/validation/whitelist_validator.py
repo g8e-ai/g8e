@@ -16,7 +16,7 @@ from app.errors import ConfigurationError
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.utils.config_loader import load_json_config
 from app.utils.csv_commands import parse_command_csv
-from app.utils.path import resolve_config_path
+from app.constants.paths import resolve_config_path
 
 logger = logging.getLogger(__name__)
 

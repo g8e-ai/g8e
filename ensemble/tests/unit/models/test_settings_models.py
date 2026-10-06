@@ -54,7 +54,7 @@ class TestLLMSettingsProviderValidation:
 
 class TestLLMSettingsResolvedAssistantModel:
     def test_returns_model_when_set(self):
-        llm = LLMSettings(assistant_model="gemma3:4b")
+        llm = LLMSettings(llm_assistant_model="gemma3:4b")
         assert llm.resolved_assistant_model == "gemma3:4b"
 
     def test_returns_none_when_not_set(self):
@@ -62,21 +62,21 @@ class TestLLMSettingsResolvedAssistantModel:
         assert llm.resolved_assistant_model is None
 
     def test_returns_none_for_empty_string(self):
-        llm = LLMSettings(assistant_model="")
+        llm = LLMSettings(llm_assistant_model="")
         assert llm.resolved_assistant_model is None
 
     def test_does_not_fallback_to_primary_model(self):
-        llm = LLMSettings(primary_model="gemma3:12b")
+        llm = LLMSettings(llm_model="gemma3:12b")
         assert llm.resolved_assistant_model is None
 
     def test_independent_of_primary_model(self):
-        llm = LLMSettings(primary_model="gemma3:12b", assistant_model="gemma3:4b")
+        llm = LLMSettings(llm_model="gemma3:12b", llm_assistant_model="gemma3:4b")
         assert llm.resolved_assistant_model == "gemma3:4b"
 
 
 class TestLLMSettingsResolvedLiteModel:
     def test_returns_lite_model_when_set(self):
-        llm = LLMSettings(lite_model="gemma3:1b")
+        llm = LLMSettings(llm_lite_model="gemma3:1b")
         assert llm.resolved_lite_model == "gemma3:1b"
 
     def test_returns_none_when_nothing_configured(self):
@@ -84,127 +84,129 @@ class TestLLMSettingsResolvedLiteModel:
         assert llm.resolved_lite_model is None
 
     def test_returns_none_for_empty_lite_model(self):
-        llm = LLMSettings(lite_model="")
+        llm = LLMSettings(llm_lite_model="")
         assert llm.resolved_lite_model is None
 
     def test_falls_back_to_assistant_model(self):
-        llm = LLMSettings(assistant_model="gemma3:4b")
+        llm = LLMSettings(llm_assistant_model="gemma3:4b")
         assert llm.resolved_lite_model == "gemma3:4b"
 
     def test_falls_back_to_primary_model_when_assistant_unset(self):
-        llm = LLMSettings(primary_model="gemma3:12b")
+        llm = LLMSettings(llm_model="gemma3:12b")
         assert llm.resolved_lite_model == "gemma3:12b"
 
     def test_falls_back_to_primary_model_when_assistant_empty(self):
-        llm = LLMSettings(primary_model="gemma3:12b", assistant_model="")
+        llm = LLMSettings(llm_model="gemma3:12b", llm_assistant_model="")
         assert llm.resolved_lite_model == "gemma3:12b"
 
     def test_lite_model_takes_precedence_over_assistant_and_primary(self):
         llm = LLMSettings(
-            lite_model="gemma3:1b", assistant_model="gemma3:4b", primary_model="gemma3:12b"
+            llm_lite_model="gemma3:1b", llm_assistant_model="gemma3:4b", llm_model="gemma3:12b"
         )
         assert llm.resolved_lite_model == "gemma3:1b"
 
     def test_assistant_model_takes_precedence_over_primary(self):
-        llm = LLMSettings(assistant_model="gemma3:4b", primary_model="gemma3:12b")
+        llm = LLMSettings(llm_assistant_model="gemma3:4b", llm_model="gemma3:12b")
         assert llm.resolved_lite_model == "gemma3:4b"
 
     def test_falls_back_to_lite_provider_default(self):
-        llm = LLMSettings(lite_provider=LLMProvider.OLLAMA, ollama_model="llama3:8b")
+        llm = LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, ollama_model="llama3:8b")
         assert llm.resolved_lite_model == "llama3:8b"
 
     def test_lite_model_takes_precedence_over_provider_default(self):
         llm = LLMSettings(
-            lite_provider=LLMProvider.OLLAMA, lite_model="custom:1b", ollama_model="llama3:8b"
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="custom:1b",
+            ollama_model="llama3:8b",
         )
         assert llm.resolved_lite_model == "custom:1b"
 
     def test_primary_provider_default_used_when_only_primary_configured(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA, ollama_model="llama3:8b")
+        llm = LLMSettings(llm_primary_provider=LLMProvider.OLLAMA, ollama_model="llama3:8b")
         assert llm.resolved_lite_model == "llama3:8b"
 
 
 class TestLLMSettingsResolvedGenerativeLiteModel:
     def test_returns_resolved_lite_model_for_generative_providers(self):
-        llm = LLMSettings(lite_provider=LLMProvider.OLLAMA, lite_model="gemma3:1b")
+        llm = LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="gemma3:1b")
         assert llm.resolved_generative_lite_model == "gemma3:1b"
 
     def test_uses_assistant_model_when_lite_provider_is_jev(self):
         llm = LLMSettings(
-            lite_provider=LLMProvider.JEV,
-            lite_model="nimble",
-            assistant_model="gemma3:4b",
-            primary_model="gemma3:12b",
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model="nimble",
+            llm_assistant_model="gemma3:4b",
+            llm_model="gemma3:12b",
         )
         assert llm.resolved_generative_lite_model == "gemma3:4b"
 
     def test_falls_back_to_primary_when_jev_lite_and_assistant_unset(self):
         llm = LLMSettings(
-            lite_provider=LLMProvider.JEV,
-            lite_model="nimble",
-            primary_model="gemma3:12b",
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model="nimble",
+            llm_model="gemma3:12b",
         )
         assert llm.resolved_generative_lite_model == "gemma3:12b"
 
 
 class TestLLMSettingsResolveLiteFallback:
     def test_resolve_lite_falls_back_to_primary_provider(self):
-        llm = LLMSettings(primary_provider=LLMProvider.FAKE, primary_model="fake")
-        provider, api_key, endpoint, model = llm.resolve("lite")
+        llm = LLMSettings(llm_primary_provider=LLMProvider.FAKE, llm_model="fake")
+        provider, _api_key, _endpoint, model = llm.resolve("lite")
         assert provider == LLMProvider.FAKE.value
         assert model == "fake"
 
     def test_resolve_lite_defaults_to_governed_provider_without_selecting_a_model(self):
         llm = LLMSettings()
-        provider, api_key, endpoint, model = llm.resolve("lite")
+        provider, _api_key, _endpoint, model = llm.resolve("lite")
         assert provider == LLMProvider.G8E.value
         assert model is None
 
     def test_resolve_lite_uses_lite_provider_when_configured(self):
         llm = LLMSettings(
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="llama3:8b",
-            primary_provider=LLMProvider.FAKE,
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="llama3:8b",
+            llm_primary_provider=LLMProvider.FAKE,
         )
-        provider, api_key, endpoint, model = llm.resolve("lite")
+        provider, _api_key, _endpoint, model = llm.resolve("lite")
         assert provider == LLMProvider.OLLAMA.value
         assert model == "llama3:8b"
 
     def test_resolve_lite_uses_assistant_provider_when_configured(self):
         llm = LLMSettings(
-            assistant_provider=LLMProvider.OLLAMA,
-            assistant_model="llama3:8b",
-            primary_provider=LLMProvider.FAKE,
-            primary_model="fake",
+            llm_assistant_provider=LLMProvider.OLLAMA,
+            llm_assistant_model="llama3:8b",
+            llm_primary_provider=LLMProvider.FAKE,
+            llm_model="fake",
         )
-        provider, api_key, endpoint, model = llm.resolve("lite")
+        provider, _api_key, _endpoint, model = llm.resolve("lite")
         assert provider == LLMProvider.OLLAMA.value
         assert model == "llama3:8b"
 
     def test_resolve_lite_override_takes_precedence_over_primary_fallback(self):
-        llm = LLMSettings(primary_provider=LLMProvider.FAKE, primary_model="fake")
-        provider, api_key, endpoint, model = llm.resolve(
+        llm = LLMSettings(llm_primary_provider=LLMProvider.FAKE, llm_model="fake")
+        provider, _api_key, _endpoint, model = llm.resolve(
             "lite", provider_override=LLMProvider.OLLAMA.value, model_override="llama3:8b"
         )
         assert provider == LLMProvider.OLLAMA.value
         assert model == "llama3:8b"
 
     def test_resolve_lite_model_override_honored_with_primary_provider_fallback(self):
-        llm = LLMSettings(primary_provider=LLMProvider.FAKE, primary_model="fake")
-        provider, api_key, endpoint, model = llm.resolve("lite", model_override="custom-lite:1b")
+        llm = LLMSettings(llm_primary_provider=LLMProvider.FAKE, llm_model="fake")
+        provider, _api_key, _endpoint, model = llm.resolve("lite", model_override="custom-lite:1b")
         assert provider == LLMProvider.FAKE.value
         assert model == "custom-lite:1b"
 
     def test_resolve_lite_uses_fallback_model_when_no_model_override(self):
-        llm = LLMSettings(primary_provider=LLMProvider.FAKE, primary_model="fake")
-        provider, api_key, endpoint, model = llm.resolve("lite")
+        llm = LLMSettings(llm_primary_provider=LLMProvider.FAKE, llm_model="fake")
+        provider, _api_key, _endpoint, model = llm.resolve("lite")
         assert provider == LLMProvider.FAKE.value
         assert model == "fake"
 
     def test_resolve_lite_falls_back_to_primary_with_api_key_and_endpoint(self):
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="llama3:8b",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="llama3:8b",
             ollama_api_key="secret-key",
             ollama_endpoint="http://ollama:11434",
         )

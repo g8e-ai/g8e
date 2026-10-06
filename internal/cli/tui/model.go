@@ -8,8 +8,10 @@
 package tui
 
 import (
+	"context"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -19,9 +21,10 @@ import (
 // Identity is the enrolled CLI identity the TUI runs as: the same fields
 // 'g8e auth' reports.
 type Identity struct {
-	UserID       string
-	CLISessionID string
-	OperatorID   string // bound Operator, empty when the CLI session is unbound
+	UserID            string
+	CLISessionID      string
+	OperatorID        string // bound Operator, empty when the CLI session is unbound
+	OperatorSessionID string // primary bound Operator session, when present
 }
 
 // Options configures the TUI at launch.
@@ -33,6 +36,10 @@ type Options struct {
 	// nil the TUI runs without a live event source.
 	Session Session
 
+	// RebuildSession reloads the persisted CLI identity and constructs a fresh
+	// authenticated session after an action issues replacement credentials.
+	RebuildSession func(context.Context, Identity) (Session, error)
+
 	// ApprovalURL returns the browser WebAuthn approval page for a pending
 	// transaction (auth.ApprovalPageURL), and OpenBrowser opens it
 	// (platform.OpenBrowser) — the same flow as 'g8e auth approve'. When
@@ -43,6 +50,10 @@ type Options struct {
 	// ProgramOptions are appended to the default bubbletea program options
 	// (AltScreen, MouseCellMotion). Tests use this to inject headless options.
 	ProgramOptions []tea.ProgramOption
+
+	// sessionManager is shared by Run's model and adapter; it is kept private
+	// so callers use RebuildSession rather than managing stream state directly.
+	sessionManager *sessionManager
 }
 
 // pane identifies a focusable pane.
@@ -95,11 +106,12 @@ type Model struct {
 
 	// Operators from the last successful refresh: connected ones only, plus
 	// the total the Gateway listed.
-	operators         []models.OperatorDocumentGo
-	operatorsTotal    int
-	operatorsLoaded   bool
-	operatorsErr      string
-	operatorsSelected int
+	operators            []models.OperatorDocumentGo
+	operatorsTotal       int
+	operatorsLoaded      bool
+	operatorsErr         string
+	operatorsSelected    int
+	operatorDetailScroll int
 
 	// Platform enrollments from the last successful refresh: pending
 	// requests and completed enrollments. The enrollments view selects in one
@@ -112,7 +124,34 @@ type Model struct {
 	enrollPendingSelected  int
 	enrollEnrolledSelected int
 
+	// Audit data from the last successful refresh. Events are paged because the
+	// Gateway endpoint returns a bounded slice, while summary and verification
+	// are independent read-only views of the same ledger.
+	auditEvents        []models.AuditEventRow
+	auditEventsCount   int
+	auditEventsLoaded  bool
+	auditEventsErr     string
+	auditOffset        int
+	auditSelected      int
+	auditSummary       models.AuditSummaryResponse
+	auditSummaryLoaded bool
+	auditSummaryErr    string
+	auditVerify        *models.AuditVerifyResponse
+	auditVerifyErr     string
+
+	gatewayStatusSelected int
+
+	// CLI recovery approval form. The token is entered locally and is never
+	// placed in the ledger or confirmation prompt in full.
+	recoveryTokenInput textinput.Model
+	recoveryApprove    bool
+	recoveryState      models.CLIRecoveryState
+	recoveryErr        string
+	rebuildSession     func(context.Context, Identity) (Session, error)
+	sessionManager     *sessionManager
+
 	// Gateway health: posture is nil until health is fetched.
+	health         models.HealthResponse
 	posture        governance.GovernancePosture
 	gatewayVersion string
 
@@ -129,6 +168,11 @@ type Model struct {
 
 // NewModel constructs a Model with all pipeline stages idle.
 func NewModel(opts Options) Model {
+	recoveryInput := textinput.New()
+	recoveryInput.Prompt = "> "
+	recoveryInput.Placeholder = "paste CLI recovery token"
+	recoveryInput.CharLimit = 512
+	recoveryInput.Width = 48
 	m := Model{
 		version:     opts.Version,
 		identity:    opts.Identity,
@@ -141,10 +185,16 @@ func NewModel(opts Options) Model {
 			{status: StatusIdle},
 			{status: StatusIdle},
 		},
-		ledger:           make([]ledgerEntry, 0, 64),
-		awaitingApproval: make(map[string]struct{}),
+		ledger:             make([]ledgerEntry, 0, 64),
+		awaitingApproval:   make(map[string]struct{}),
+		recoveryTokenInput: recoveryInput,
+		recoveryApprove:    true,
+		rebuildSession:     opts.RebuildSession,
 	}
-	if opts.Session != nil {
+	if opts.sessionManager != nil {
+		m.sessionManager = opts.sessionManager
+		m.gw, _, _ = opts.sessionManager.snapshot()
+	} else if opts.Session != nil {
 		m.gw = &gateway{session: opts.Session, userID: opts.Identity.UserID}
 	}
 	return m

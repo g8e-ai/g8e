@@ -378,6 +378,7 @@ class TestAuditorContextOverflow:
             )
 
         assert exc_info.value.reason == AuditorReason.CONTEXT_OVERFLOW
+        assert exc_info.value.error is not None
         assert "context window" in exc_info.value.error
         assert "empty" not in exc_info.value.error.lower()
         # Retrying the same prompt cannot succeed.
@@ -424,5 +425,6 @@ class TestAuditorContextOverflow:
             )
 
         assert exc_info.value.reason == AuditorReason.CONTEXT_OVERFLOW
+        assert exc_info.value.error is not None
         assert "context window" in exc_info.value.error
         assert provider.generate_content_lite.await_count == 1

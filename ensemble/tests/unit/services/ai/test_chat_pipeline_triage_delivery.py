@@ -18,10 +18,12 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 from app.constants import (
     AgentMode,
     EventType,
+    InvestigationStatus,
     LLMProvider,
     ReasoningAgent,
     ThinkingLevel,
@@ -37,14 +39,18 @@ from app.llm.llm_types import (
 )
 from app.llm.utils import ModelOverrideResolver
 from app.models.agent import AgentInputs, AgentStreamState
-from app.models.agents.triage import TriageResult
+from app.models.agents.triage import TriageRequest, TriageResult
+from app.models.events import ChatErrorPayload
+from app.models.memory import InvestigationMemory
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.chat_pipeline import ChatPipelineService
+from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.request_builder import BuiltContents
 from tests.fakes.factories import (
     build_enriched_context,
     build_g8e_http_context,
 )
-from tests.fakes.fake_event_service import FakeEventService as create_mock_event_service
+from tests.fakes.fake_event_service import FakeEventService
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -67,7 +73,7 @@ LOW_CONFIDENCE_TRIAGE_RESULT = TriageResult(
 
 def _make_pipeline() -> ChatPipelineService:
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.event_service = create_mock_event_service()
+    svc.event_service = FakeEventService()
     svc.g8e_agent = MagicMock()
     svc.g8e_agent.run_with_sse = AsyncMock()
     svc.investigation_service = MagicMock()
@@ -85,7 +91,6 @@ def _make_pipeline() -> ChatPipelineService:
 def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentStreamState]:
     inv = build_enriched_context(investigation_id="inv-1")
     g8e_ctx = build_g8e_http_context(user_id="user-1")
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     request_settings = G8eeUserSettings(llm=LLMSettings())
 
@@ -143,13 +148,10 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
     svc._run_chat_impl = AsyncMock(side_effect=test_error)
 
     # Mock ChatTaskManager
-    from app.services.ai.chat_task_manager import ChatTaskManager
 
     mock_task_manager = MagicMock(spec=ChatTaskManager)
     mock_task_manager.track = AsyncMock()
     mock_task_manager.untrack = AsyncMock()
-
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
 
@@ -179,7 +181,6 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
     ]
 
     assert len(failed_events) == 1
-    from app.models.events import ChatErrorPayload
 
     assert isinstance(failed_events[0].payload, ChatErrorPayload)
     assert "Test error from _run_chat_impl" in failed_events[0].payload.error
@@ -197,8 +198,6 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
     the coercion at the override site by inspecting the LLMSettings
     passed to get_llm_provider.
     """
-    from app.constants import LLMProvider
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
@@ -245,8 +244,6 @@ async def test_prepare_chat_context_passes_lite_model_to_triage():
     Gemini API endpoint, producing a 404 NOT_FOUND on generateContent).
     With the lite tier wiring, triage now uses the lite model.
     """
-    from app.models.agents.triage import TriageRequest, TriageResult
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _make_pipeline()
     svc.investigation_service.get_investigation_context = AsyncMock(
@@ -268,7 +265,6 @@ async def test_prepare_chat_context_passes_lite_model_to_triage():
     svc.request_builder.build_contents_from_history = MagicMock(
         return_value=BuiltContents(contents=[], scrubbing_observations=[])
     )
-    from app.llm.llm_types import PrimaryLLMSettings
 
     svc.request_builder.get_generation_config = MagicMock(return_value=PrimaryLLMSettings())
 
@@ -312,7 +308,6 @@ async def test_prepare_chat_context_passes_lite_model_to_triage():
 def _pipeline_for_prepare_chat_context() -> ChatPipelineService:
     """A pipeline whose collaborators are stubbed just far enough for
     ``_prepare_chat_context`` to reach ``request_builder.get_generation_config``."""
-    from app.models.agents.triage import TriageResult
 
     svc = _make_pipeline()
     svc.investigation_service.get_investigation_context = AsyncMock(
@@ -347,7 +342,6 @@ def _pipeline_for_prepare_chat_context() -> ChatPipelineService:
 
 
 async def _prepare(svc: ChatPipelineService, g8e_ctx) -> AgentInputs:
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     with patch("app.services.ai.chat_pipeline.resolve_model", return_value="qwen3.5:4b"):
         return await svc._prepare_chat_context(
@@ -366,7 +360,6 @@ async def _prepare(svc: ChatPipelineService, g8e_ctx) -> AgentInputs:
 
 async def test_prepare_chat_context_hands_the_evaluation_context_to_generation_config():
     """The scored request's context is what lifts the tool gate (INV-EVAL-CAMP-07)."""
-    from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
     evaluation_context = EvaluationInferenceContext(
         campaign_id="campaign-1",
@@ -415,13 +408,12 @@ async def test_prepare_chat_context_budgets_history_only_for_ollama_backed_provi
     provider, expected_budget
 ):
     """Only Ollama-backed providers send num_ctx=65536; others keep untrimmed history."""
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _pipeline_for_prepare_chat_context()
     g8e_ctx = build_g8e_http_context(
         investigation_id="inv-1", case_id="case-1", web_session_id="web-1", user_id="user-1"
     )
-    llm = LLMSettings() if provider is None else LLMSettings(primary_provider=provider)
+    llm = LLMSettings() if provider is None else LLMSettings(llm_primary_provider=provider)
 
     with patch("app.services.ai.chat_pipeline.resolve_model", return_value="qwen3.5:4b"):
         await svc._prepare_chat_context(
@@ -442,7 +434,6 @@ async def test_prepare_chat_context_budgets_history_only_for_ollama_backed_provi
 
 
 def _scored_context():
-    from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
     return build_g8e_http_context(
         investigation_id="inv-1", case_id="case-1", web_session_id="web-1", user_id="user-1"
@@ -466,8 +457,6 @@ async def test_prepare_chat_context_scored_request_reads_case_memories_but_not_u
     """User-wide memories are artifacts of other assignments and would leak one
     scenario into the next; case memories (which the seed may have written) are
     still read. The suppression is recorded on the inputs for the trace."""
-    from app.constants import InvestigationStatus
-    from app.models.memory import InvestigationMemory
 
     case_memory = InvestigationMemory(
         case_id="case-1",
@@ -507,7 +496,6 @@ async def test_prepare_chat_context_production_request_still_reads_user_memories
 async def test_run_chat_impl_rejects_unknown_provider_override():
     """An unknown provider override surfaces as a ValueError - not a
     silent bad-value in an enum-typed field."""
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
@@ -515,8 +503,9 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
-    with patch("app.services.ai.chat_pipeline.get_llm_provider"), pytest.raises(
-        ValueError, match="not-a-real-provider"
+    with (
+        patch("app.services.ai.chat_pipeline.get_llm_provider"),
+        pytest.raises(ValueError, match="not-a-real-provider"),
     ):
         await svc._run_chat_impl(
             message="hello",
@@ -550,7 +539,6 @@ async def test_run_chat_impl_selects_provider_of_scored_model_role(
     inference sent role Lite with the Assistant model, which the Inference
     Operator rejects.
     """
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
@@ -600,7 +588,6 @@ async def test_run_chat_impl_grades_with_settings_before_request_overrides():
     request overrides. A campaign's overrides bind the scored model; grading
     with them made the scored model its own judge and, on a shared Inference
     Operator, sent a non-bound Lite model without campaign authority (403)."""
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
@@ -609,7 +596,7 @@ async def test_run_chat_impl_grades_with_settings_before_request_overrides():
     svc._finalize_evaluation_assignment = AsyncMock()
 
     user_settings = G8eeUserSettings(
-        llm=LLMSettings(primary_provider=LLMProvider.G8E, lite_model="operator-lite")
+        llm=LLMSettings(llm_primary_provider=LLMProvider.G8E, llm_lite_model="operator-lite")
     )
     with patch("app.services.ai.chat_pipeline.get_llm_provider", return_value=MagicMock()):
         await svc._run_chat_impl(

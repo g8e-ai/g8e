@@ -41,7 +41,10 @@ from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
 from app.models.settings import G8eeUserSettings
 from app.services.ai.tools import query_investigation_context
+from app.services.service_factory import ServiceFactory
 from tests.fakes.factories import build_enriched_context
+from tests.integration.cleanup import IntegrationCleanupTracker
+from tests.integration.conftest import make_write_through_governance_client
 
 pytestmark = [pytest.mark.integration]
 
@@ -55,8 +58,6 @@ def cache_aside_service(fake_cache_aside_service):
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def all_services(cache_aside_service, test_settings):
-    from app.services.service_factory import ServiceFactory
-    from tests.integration.conftest import make_write_through_governance_client
 
     services = ServiceFactory.create_all_services(
         test_settings,
@@ -72,7 +73,6 @@ async def all_services(cache_aside_service, test_settings):
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def cleanup(cache_aside_service):
-    from tests.integration.cleanup import IntegrationCleanupTracker
 
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker

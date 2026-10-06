@@ -45,7 +45,7 @@ from app.constants import (
 )
 from app.errors import NetworkError, ValidationError
 from app.models.http_context import G8eHttpContext
-from app.models.settings import TLSConfig
+from app.models.settings import GatewaySettings, TLSConfig
 from app.utils.time_ids.timestamp import now
 
 pytestmark = pytest.mark.unit
@@ -58,7 +58,6 @@ pytestmark = pytest.mark.unit
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def client():
-    from app.models.settings import GatewaySettings
 
     listen = GatewaySettings()
     tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
@@ -79,7 +78,6 @@ async def client():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def authed_client():
-    from app.models.settings import GatewaySettings
 
     listen = GatewaySettings()
     tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")

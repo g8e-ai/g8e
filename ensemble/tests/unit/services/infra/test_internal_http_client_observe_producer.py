@@ -15,6 +15,7 @@ not touch the network; the underlying HTTPClient is stubbed.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -52,7 +53,7 @@ def _agent_request() -> ObserveProducerAgentStateRequest:
         run_id="inv-1",
         task_id="task-1",
         model="test-model",
-        observed_at="2026-09-09T12:00:00Z",
+        observed_at=datetime(2026, 9, 9, 12, 0, tzinfo=UTC),
         web_session_id="web-session-1",
     )
 
@@ -66,7 +67,7 @@ def _run_request() -> ObserveProducerRunStateRequest:
         status="running",
         completed_tasks=0,
         total_tasks=0,
-        observed_at="2026-09-09T12:00:00Z",
+        observed_at=datetime(2026, 9, 9, 12, 0, tzinfo=UTC),
         web_session_id="web-session-1",
     )
 
@@ -84,6 +85,7 @@ async def test_push_agent_state_posts_typed_request_to_producer_path_and_parses_
     assert isinstance(result, ObserveProducerResponse)
     assert result.accepted is True
     client._http.post.assert_awaited_once()
+    assert client._http.post.await_args is not None
     path = client._http.post.await_args.args[0]
     assert path == "/api/v1/observe/producer/agent-state"
     sent = client._http.post.await_args.kwargs["json_data"]
@@ -104,6 +106,7 @@ async def test_push_run_state_posts_typed_request_to_producer_path_and_parses_re
 
     assert isinstance(result, ObserveProducerResponse)
     assert result.accepted is True
+    assert client._http.post.await_args is not None
     path = client._http.post.await_args.args[0]
     assert path == "/api/v1/observe/producer/run-state"
     sent = client._http.post.await_args.kwargs["json_data"]

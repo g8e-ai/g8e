@@ -93,7 +93,7 @@ class AgentActivityDataService:
 
         except Exception as e:
             logger.exception(
-                "Failed to record agent activity metadata %s: %s", metadata.id, e, exc_info=True
+                "Failed to record agent activity metadata %s: %s", metadata.id, e
             )
             raise DatabaseError(
                 message=f"Failed to record agent activity metadata: {e}",

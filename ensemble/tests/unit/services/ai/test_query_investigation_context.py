@@ -17,8 +17,26 @@ from app.models.tool_results import InvestigationContextResult
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tools import query_investigation_context as qic_tool
 from app.services.investigation.investigation_service import InvestigationService
+from tests.fakes.tool_helpers import create_tool_service_fake
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
+
+_EXECUTION_ID = "exec-qic-test"
+
+
+async def _run(
+    tool_service, tool_args: dict[str, object], investigation, g8e_context, user_settings
+) -> InvestigationContextResult:
+    result = await qic_tool.handle(
+        tool_service,
+        tool_args,
+        investigation,
+        g8e_context,
+        user_settings,
+        execution_id=_EXECUTION_ID,
+    )
+    assert isinstance(result, InvestigationContextResult)
+    return result
 
 
 @pytest.fixture
@@ -32,8 +50,6 @@ def mock_investigation_service():
 
 @pytest.fixture
 def tool_service(mock_investigation_service):
-    from tests.fakes.tool_helpers import create_tool_service_fake
-
     mock_web_search = MagicMock(spec=WebSearchProvider)
     return create_tool_service_fake(
         investigation_service=mock_investigation_service,
@@ -67,30 +83,24 @@ class TestHandleQueryInvestigationContext:
         inv = MagicMock(spec=EnrichedInvestigationContext)
         inv.id = None
 
-        tool_args = {"data_type": "conversation_history"}
-        result = await qic_tool.handle(
-            tool_service, tool_args, inv, g8e_context, user_settings, execution_id=None
-        )
+        tool_args: dict[str, object] = {"data_type": "conversation_history"}
+        result = await _run(tool_service, tool_args, inv, g8e_context, user_settings)
 
-        assert isinstance(result, InvestigationContextResult)
         assert result.success is False
+        assert result.error is not None
         assert "No investigation ID" in result.error
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
 
     async def test_invalid_data_type(
         self, tool_service, investigation_context, g8e_context, user_settings
     ):
-        tool_args = {"data_type": "invalid_type"}
-        result = await qic_tool.handle(
-            tool_service,
-            tool_args,
-            investigation_context,
-            g8e_context,
-            user_settings,
-            execution_id=None,
+        tool_args: dict[str, object] = {"data_type": "invalid_type"}
+        result = await _run(
+            tool_service, tool_args, investigation_context, g8e_context, user_settings
         )
 
         assert result.success is False
+        assert result.error is not None
         assert "Invalid data_type" in result.error
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
 
@@ -106,18 +116,14 @@ class TestHandleQueryInvestigationContext:
         mock_msg.model_dump.return_value = {"text": "hello"}
         mock_investigation_service.get_chat_messages = AsyncMock(return_value=[mock_msg] * 5)
 
-        tool_args = {"data_type": "conversation_history", "limit": 2}
-        result = await qic_tool.handle(
-            tool_service,
-            tool_args,
-            investigation_context,
-            g8e_context,
-            user_settings,
-            execution_id=None,
+        tool_args: dict[str, object] = {"data_type": "conversation_history", "limit": 2}
+        result = await _run(
+            tool_service, tool_args, investigation_context, g8e_context, user_settings
         )
 
         assert result.success is True
         assert result.data_type == "conversation_history"
+        assert isinstance(result.data, list)
         assert len(result.data) == 2
         assert result.item_count == 2
         mock_investigation_service.get_chat_messages.assert_called_once_with("inv-123")
@@ -134,18 +140,14 @@ class TestHandleQueryInvestigationContext:
         mock_inv.model_dump.return_value = {"id": "inv-123", "status": "Open"}
         mock_investigation_service.get_investigation = AsyncMock(return_value=mock_inv)
 
-        tool_args = {"data_type": "investigation_status"}
-        result = await qic_tool.handle(
-            tool_service,
-            tool_args,
-            investigation_context,
-            g8e_context,
-            user_settings,
-            execution_id=None,
+        tool_args: dict[str, object] = {"data_type": "investigation_status"}
+        result = await _run(
+            tool_service, tool_args, investigation_context, g8e_context, user_settings
         )
 
         assert result.success is True
         assert result.data_type == "investigation_status"
+        assert isinstance(result.data, dict)
         assert result.data["status"] == "Open"
         assert result.item_count == 1
 
@@ -159,17 +161,13 @@ class TestHandleQueryInvestigationContext:
     ):
         mock_investigation_service.get_investigation = AsyncMock(return_value=None)
 
-        tool_args = {"data_type": "investigation_status"}
-        result = await qic_tool.handle(
-            tool_service,
-            tool_args,
-            investigation_context,
-            g8e_context,
-            user_settings,
-            execution_id=None,
+        tool_args: dict[str, object] = {"data_type": "investigation_status"}
+        result = await _run(
+            tool_service, tool_args, investigation_context, g8e_context, user_settings
         )
 
         assert result.success is False
+        assert result.error is not None
         assert "Investigation not found" in result.error
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
 
@@ -187,14 +185,9 @@ class TestHandleQueryInvestigationContext:
         mock_inv = MagicMock(spec=InvestigationModel)
         mock_investigation_service.get_investigation = AsyncMock(return_value=mock_inv)
 
-        tool_args = {"data_type": "operator_actions"}
-        result = await qic_tool.handle(
-            tool_service,
-            tool_args,
-            investigation_context,
-            g8e_context,
-            user_settings,
-            execution_id=None,
+        tool_args: dict[str, object] = {"data_type": "operator_actions"}
+        result = await _run(
+            tool_service, tool_args, investigation_context, g8e_context, user_settings
         )
 
         assert result.success is True
@@ -213,16 +206,12 @@ class TestHandleQueryInvestigationContext:
             side_effect=Exception("Service failure")
         )
 
-        tool_args = {"data_type": "conversation_history"}
-        result = await qic_tool.handle(
-            tool_service,
-            tool_args,
-            investigation_context,
-            g8e_context,
-            user_settings,
-            execution_id=None,
+        tool_args: dict[str, object] = {"data_type": "conversation_history"}
+        result = await _run(
+            tool_service, tool_args, investigation_context, g8e_context, user_settings
         )
 
         assert result.success is False
+        assert result.error is not None
         assert "Service failure" in result.error
         assert result.error_type == CommandErrorType.EXECUTION_ERROR

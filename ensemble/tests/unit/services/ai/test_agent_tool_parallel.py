@@ -54,17 +54,18 @@ async def test_execute_turn_tool_calls_parallel():
         new=mock_orchestrate,
     ):
         result_out = []
-        chunks = []
-        async for chunk in execute_turn_tool_calls(
-            pending_tool_calls=pending_tool_calls,
-            tool_executor=tool_executor,
-            investigation=investigation,
-            g8e_context=g8e_context,
-            result_out=result_out,
-            request_settings=request_settings,
-            event_service=event_service,
-        ):
-            chunks.append(chunk)
+        _chunks = [
+            chunk
+            async for chunk in execute_turn_tool_calls(
+                pending_tool_calls=pending_tool_calls,
+                tool_executor=tool_executor,
+                investigation=investigation,
+                g8e_context=g8e_context,
+                result_out=result_out,
+                request_settings=request_settings,
+                event_service=event_service,
+            )
+        ]
 
     # Verify results
     assert len(result_out[0]) == 2

@@ -17,16 +17,16 @@ class TestResolveModel:
     """resolve_model returns a concrete model string with proper fallback chain."""
 
     def test_returns_lite_model_when_set(self):
-        llm = LLMSettings(lite_model="custom-lite")
+        llm = LLMSettings(llm_lite_model="custom-lite")
         assert resolve_model(llm, tier="lite") == "custom-lite"
 
     def test_falls_back_to_primary_model_when_lite_is_none(self):
-        llm = LLMSettings(primary_model="custom-primary")
+        llm = LLMSettings(llm_model="custom-primary")
         assert llm.lite_model is None
         assert resolve_model(llm, tier="lite") == "custom-primary"
 
     def test_raises_when_both_models_none(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA)
+        llm = LLMSettings(llm_primary_provider=LLMProvider.OLLAMA)
         assert llm.lite_model is None
         assert llm.primary_model is None
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
@@ -34,25 +34,25 @@ class TestResolveModel:
         assert exc_info.value.provider == "ollama"
 
     def test_raises_for_openai_when_no_model_configured(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OPENAI)
+        llm = LLMSettings(llm_primary_provider=LLMProvider.OPENAI)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
             resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "openai"
 
     def test_raises_for_anthropic_when_no_model_configured(self):
-        llm = LLMSettings(primary_provider=LLMProvider.ANTHROPIC)
+        llm = LLMSettings(llm_primary_provider=LLMProvider.ANTHROPIC)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
             resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "anthropic"
 
     def test_raises_for_gemini_when_no_model_configured(self):
-        llm = LLMSettings(primary_provider=LLMProvider.GEMINI)
+        llm = LLMSettings(llm_primary_provider=LLMProvider.GEMINI)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
             resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "gemini"
 
     def test_lite_takes_priority_over_primary(self):
-        llm = LLMSettings(primary_model="primary", lite_model="lite")
+        llm = LLMSettings(llm_model="primary", llm_lite_model="lite")
         assert resolve_model(llm, tier="lite") == "lite"
 
 

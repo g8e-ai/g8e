@@ -14,25 +14,32 @@ misled documentation and approval-gate reasoning; ``_assert_tool_registry_invari
 is the enforcement point and these tests cover it directly.
 """
 
+import inspect
 from unittest.mock import MagicMock
 
 import pytest
 
+import app.services.ai.tool_service as tool_service_mod
 from app.constants.generated_status import OperatorToolName
+from app.constants.prompts import AgentMode
 from app.constants.tool_registry_pending import PENDING_RESTORATION as _PENDING_RESTORATION
 from app.errors import ConfigurationError
+from app.services.ai.agent_tool_loop import tool_display_metadata
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tool_registry import (
     AI_UNIVERSAL_TOOLS,
     OPERATOR_TOOLS,
+    TOOL_SPECS,
+    ToolScope,
+    get_tool_spec,
 )
 from app.services.ai.tool_service import AIToolService
+from tests.fakes.tool_helpers import create_tool_service_fake
 
 pytestmark = [pytest.mark.unit]
 
 
 def _build_tool_service(web_search_provider: WebSearchProvider | None = None) -> AIToolService:
-    from tests.fakes.tool_helpers import create_tool_service_fake
 
     return create_tool_service_fake(web_search_provider=web_search_provider, auto_approve=True)
 
@@ -73,7 +80,6 @@ def test_every_operator_tool_name_has_a_spec_or_is_pending():
     (a) wire the spec now or (b) add an explicit allowlist entry with a
     documented restoration owner.
     """
-    from app.services.ai.tool_registry import TOOL_SPECS
 
     spec_names = {spec.name.value for spec in TOOL_SPECS}
     enum_names = {member.value for member in OperatorToolName}
@@ -94,7 +100,6 @@ def test_pending_restoration_allowlist_does_not_shadow_active_specs():
     hiding classification mistakes. The allowlist is strictly for *not-yet-
     shipped* tools; once restored, the entry must be removed.
     """
-    from app.services.ai.tool_registry import TOOL_SPECS
 
     spec_names = {spec.name.value for spec in TOOL_SPECS}
     stale = _PENDING_RESTORATION & spec_names
@@ -132,7 +137,6 @@ def test_tool_service_init_registers_required_universal_tools():
 
 def test_assertion_fails_when_operator_tools_contains_unregistered_name(monkeypatch):
     """If OPERATOR_TOOLS grows a name with no declaration, startup must fail loudly."""
-    import app.services.ai.tool_service as tool_service_mod
 
     augmented = OPERATOR_TOOLS | {"phantom_tool_that_does_not_exist"}
     monkeypatch.setattr(tool_service_mod, "OPERATOR_TOOLS", augmented)
@@ -148,7 +152,6 @@ def test_assertion_fails_when_declaration_is_unclassified(monkeypatch):
     forgotten (the precise failure mode that would bypass the bound-operator check
     in ``execute_tool_call``).
     """
-    import app.services.ai.tool_service as tool_service_mod
 
     # Shrink OPERATOR_TOOLS so RUN_COMMANDS becomes unclassified.
     shrunken = OPERATOR_TOOLS - {OperatorToolName.RUN_COMMANDS.value}
@@ -166,7 +169,6 @@ def test_every_spec_has_non_empty_display_metadata():
     ``TOOL_SPECS``. After folding onto ``ToolSpec``, this test guards against
     anyone re-introducing the drift by shipping a spec without a label/icon.
     """
-    from app.services.ai.tool_registry import TOOL_SPECS
 
     for spec in TOOL_SPECS:
         assert spec.display_label, f"ToolSpec {spec.name.value} has empty display_label"
@@ -182,8 +184,6 @@ def test_tool_display_metadata_uses_tool_spec():
     declared on the spec for a known tool, and returns the documented
     fallback for an unknown one.
     """
-    from app.services.ai.agent_tool_loop import tool_display_metadata
-    from app.services.ai.tool_registry import get_tool_spec
 
     spec = get_tool_spec(OperatorToolName.RUN_COMMANDS)
     assert spec is not None
@@ -211,9 +211,6 @@ def test_every_spec_has_builder_and_handler_callable():
     ``AIToolService``. This guards against a regression where a spec ships
     with a non-callable (e.g. ``None``) wired in.
     """
-    import inspect
-
-    from app.services.ai.tool_registry import TOOL_SPECS
 
     for spec in TOOL_SPECS:
         assert callable(spec.builder), f"ToolSpec for {spec.name.value} has non-callable builder"
@@ -231,8 +228,6 @@ def test_operator_gated_specs_only_exposed_in_bound_modes():
     ``tool_registry._validate_specs`` enforces this at import time; this test pins
     the contract for future readers.
     """
-    from app.constants.prompts import AgentMode
-    from app.services.ai.tool_registry import TOOL_SPECS, ToolScope
 
     for spec in TOOL_SPECS:
         if spec.scope is ToolScope.OPERATOR_GATED:
@@ -243,8 +238,6 @@ def test_operator_gated_specs_only_exposed_in_bound_modes():
 
 def test_get_tools_partitions_by_agent_mode():
     """``get_tools`` must derive its tool set purely from ``TOOL_SPECS.agent_modes``."""
-    from app.constants.prompts import AgentMode
-    from app.services.ai.tool_registry import TOOL_SPECS, ToolScope
 
     svc = _build_tool_service(web_search_provider=MagicMock(spec=WebSearchProvider))
 

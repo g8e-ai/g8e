@@ -70,6 +70,53 @@ func TestAdapterRun_ConnectedOnOpenStream(t *testing.T) {
 	}, 3*time.Second, 50*time.Millisecond, "adapter never emitted ConnConnected")
 }
 
+// TestAdapterRun_RestartsAfterSessionRotation verifies a replacement CLI
+// session closes the old SSE stream and reconnects with the new session.
+func TestAdapterRun_RestartsAfterSessionRotation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	oldSession := &testSession{url: srv.URL}
+	newSession := &testSession{url: srv.URL}
+	manager := newSessionManager(oldSession, "user-1")
+	sender := &mockSender{}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		newAdapterWithManager(manager, sender).Run(ctx)
+		close(done)
+	}()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("adapter did not stop after session rotation test")
+		}
+	}()
+
+	waitForConnected := func(want int) {
+		t.Helper()
+		require.Eventually(t, func() bool {
+			count := 0
+			for _, msg := range sender.snapshot() {
+				if status, ok := msg.(ConnStatusMsg); ok && status.Status == ConnConnected {
+					count++
+				}
+			}
+			return count >= want
+		}, 3*time.Second, 50*time.Millisecond)
+	}
+	waitForConnected(1)
+	manager.replace(newSession, "user-1")
+	waitForConnected(2)
+}
+
 // TestAdapterRun_ReconcilesPendingApprovals verifies the pending-approval list
 // is fetched on connect and re-fetched on approvals.changed.
 func TestAdapterRun_ReconcilesPendingApprovals(t *testing.T) {

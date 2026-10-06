@@ -23,6 +23,7 @@ from unittest.mock import patch
 
 import pytest
 
+import app.utils.validation.whitelist_validator as wv_module
 from app.constants import CommandCategory, Platform
 from app.errors import ConfigurationError
 from app.utils.csv_commands import parse_command_csv
@@ -453,7 +454,6 @@ class TestSingletonGetter:
 
 class TestConvenienceFunctions:
     def test_validate_command_against_whitelist_delegates(self, monkeypatch, whitelist_path):
-        import app.utils.validation.whitelist_validator as wv_module
 
         fresh = CommandWhitelistValidator(whitelist_path=whitelist_path)
         monkeypatch.setattr(wv_module, "_validator_instance", fresh)
