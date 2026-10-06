@@ -147,15 +147,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		hostnames, err := d.detectHostnames()
-		if err != nil {
-			mu.Lock()
-			if firstErr == nil {
-				firstErr = fmt.Errorf("network: detect hostnames: %w", err)
-			}
-			mu.Unlock()
-			return
-		}
+		hostnames := d.detectHostnames()
 		mu.Lock()
 		identity.Hostnames = hostnames
 		mu.Unlock()
@@ -204,15 +196,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		mu.Lock()
 		ips := identity.IPs
 		mu.Unlock()
-		ptrs, err := d.detectDNSPTRs(ctx, ips)
-		if err != nil {
-			mu.Lock()
-			if firstErr == nil {
-				firstErr = fmt.Errorf("network: detect DNS PTR records: %w", err)
-			}
-			mu.Unlock()
-			return
-		}
+		ptrs := d.detectDNSPTRs(ctx, ips)
 		mu.Lock()
 		identity.DNSPTRs = ptrs
 		mu.Unlock()
@@ -330,7 +314,7 @@ func (d *Detector) detectIPs() ([]string, error) {
 }
 
 // detectHostnames detects hostnames from /etc/hostname.host, /etc/hostname, and hostname command.
-func (d *Detector) detectHostnames() ([]string, error) {
+func (d *Detector) detectHostnames() []string {
 	hostnameSet := make(map[string]bool)
 
 	// Try host-mounted /etc/hostname.host first (when running in Docker container)
@@ -371,7 +355,7 @@ func (d *Detector) detectHostnames() ([]string, error) {
 		hostnames = append(hostnames, hn)
 	}
 
-	return hostnames, nil
+	return hostnames
 }
 
 // getHostsFilePath returns the OS-specific hosts file path.
@@ -469,10 +453,7 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 	mdnsSet := make(map[string]bool)
 
 	// Get hostname and append .local
-	hostnames, err := d.detectHostnames()
-	if err != nil {
-		return nil, fmt.Errorf("network: detect mDNS names: %w", err)
-	}
+	hostnames := d.detectHostnames()
 
 	for _, hn := range hostnames {
 		// Skip if already has .local
@@ -536,7 +517,7 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 }
 
 // detectDNSPTRs performs reverse DNS lookups on detected IPs.
-func (d *Detector) detectDNSPTRs(ctx context.Context, ips []string) ([]DNSPTRRecord, error) {
+func (d *Detector) detectDNSPTRs(ctx context.Context, ips []string) []DNSPTRRecord {
 	ptrs := make([]DNSPTRRecord, 0)
 
 	for _, ip := range ips {
@@ -562,7 +543,7 @@ func (d *Detector) detectDNSPTRs(ctx context.Context, ips []string) ([]DNSPTRRec
 		}
 	}
 
-	return ptrs, nil
+	return ptrs
 }
 
 // detectSSHKnownHosts checks SSH known_hosts for hostnames pointing to this machine.

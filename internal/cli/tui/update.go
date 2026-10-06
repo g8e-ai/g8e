@@ -141,11 +141,11 @@ func (m Model) moveSelection(delta int) Model {
 	switch m.focus {
 	case paneLedger:
 		// Up (delta -1) scrolls toward older entries.
-		m.ledgerScroll = clamp(m.ledgerScroll-delta, 0, max(len(m.ledger)-1, 0))
+		m.ledgerScroll = clamp(m.ledgerScroll-delta, max(len(m.ledger)-1, 0))
 	case paneApprovals:
-		m.pendingSelected = clamp(m.pendingSelected+delta, 0, max(len(m.pending)-1, 0))
+		m.pendingSelected = clamp(m.pendingSelected+delta, max(len(m.pending)-1, 0))
 	case paneOperators:
-		m.operatorsSelected = clamp(m.operatorsSelected+delta, 0, max(len(m.operators)-1, 0))
+		m.operatorsSelected = clamp(m.operatorsSelected+delta, max(len(m.operators)-1, 0))
 	}
 	return m
 }
@@ -313,7 +313,7 @@ func (m Model) applyOperatorsMsg(msg OperatorsMsg) Model {
 			m.operators = append(m.operators, op)
 		}
 	}
-	m.operatorsSelected = clamp(m.operatorsSelected, 0, max(len(m.operators)-1, 0))
+	m.operatorsSelected = clamp(m.operatorsSelected, max(len(m.operators)-1, 0))
 	return m
 }
 
@@ -355,7 +355,7 @@ func toolLabel(tool string) string {
 	return tool
 }
 
-// clamp bounds v to [lo, hi].
-func clamp(v, lo, hi int) int {
-	return min(max(v, lo), hi)
+// clamp bounds v to [0, hi].
+func clamp(v, hi int) int {
+	return min(max(v, 0), hi)
 }

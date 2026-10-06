@@ -42,7 +42,7 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger, auditStore *storag
 }
 
 // recordMessage records a user or AI message to the audit store.
-func (as *AuditService) recordMessage(ctx context.Context, msg *PubSubCommandMessage, eventType constants.EventType, unmarshalErr, recordErr error) error {
+func (as *AuditService) recordMessage(msg *PubSubCommandMessage, eventType constants.EventType, unmarshalErr, recordErr error) error {
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
 		return fmt.Errorf("audit service: %w: %w", unmarshalErr, err)
@@ -73,17 +73,17 @@ func (as *AuditService) recordMessage(ctx context.Context, msg *PubSubCommandMes
 // HandleUserMsgRequest records an inbound user message to the audit store.
 func (as *AuditService) HandleUserMsgRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording user message (via Protobuf)")
-	return as.recordMessage(ctx, msg, constants.Event.Operator.Audit.UserMsg, constants.ErrAuditUnmarshalUserMsg, constants.ErrAuditRecordUserMsg)
+	return as.recordMessage(msg, constants.Event.Operator.Audit.UserMsg, constants.ErrAuditUnmarshalUserMsg, constants.ErrAuditRecordUserMsg)
 }
 
 // HandleAIMsgRequest records an inbound AI message to the audit store.
 func (as *AuditService) HandleAIMsgRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
-	return as.recordMessage(ctx, msg, constants.Event.Operator.Audit.AIMsg, constants.ErrAuditUnmarshalAIMsg, constants.ErrAuditRecordAIMsg)
+	return as.recordMessage(msg, constants.Event.Operator.Audit.AIMsg, constants.ErrAuditUnmarshalAIMsg, constants.ErrAuditRecordAIMsg)
 }
 
 // recordDirectCommand records a direct terminal command to the audit store.
-func (as *AuditService) recordDirectCommand(ctx context.Context, msg *PubSubCommandMessage, unmarshalErr, recordErr error, withResult bool) error {
+func (as *AuditService) recordDirectCommand(msg *PubSubCommandMessage, unmarshalErr, recordErr error, withResult bool) error {
 	var event *storage.Event
 
 	if withResult {
@@ -145,13 +145,13 @@ func (as *AuditService) recordDirectCommand(ctx context.Context, msg *PubSubComm
 // HandleDirectCmdRequest records an inbound direct terminal command to the audit store.
 func (as *AuditService) HandleDirectCmdRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
-	return as.recordDirectCommand(ctx, msg, constants.ErrAuditUnmarshalDirectCmd, constants.ErrAuditRecordDirectCmd, false)
+	return as.recordDirectCommand(msg, constants.ErrAuditUnmarshalDirectCmd, constants.ErrAuditRecordDirectCmd, false)
 }
 
 // HandleDirectCmdResultRequest records an inbound direct terminal command result to the audit store.
 func (as *AuditService) HandleDirectCmdResultRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
-	return as.recordDirectCommand(ctx, msg, constants.ErrAuditUnmarshalDirectResult, constants.ErrAuditRecordDirectResult, true)
+	return as.recordDirectCommand(msg, constants.ErrAuditUnmarshalDirectResult, constants.ErrAuditRecordDirectResult, true)
 }
 
 // HandleAuditRecord ingests one LFAA audit record from the audit: channel and publishes an ack.

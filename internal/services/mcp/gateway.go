@@ -638,7 +638,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 }
 
 // handleReadField processes the read_field tool with governed access controls
-func (g *GatewayService) handleReadField(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
+func (g *GatewayService) handleReadField(arguments json.RawMessage) (interface{}, error) {
 	if g.fieldPathRegistry == nil {
 		return nil, constants.ErrGatewayFieldPathRegistryNotInit
 	}
@@ -1300,7 +1300,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage, operatorSessionID string) (string, error) {
 	// Handle read_field tool locally (JIT field resolution)
 	if toolName == "read_field" {
-		result, err := g.handleReadField(ctx, toolArgs)
+		result, err := g.handleReadField(toolArgs)
 		if err != nil {
 			return "", err
 		}

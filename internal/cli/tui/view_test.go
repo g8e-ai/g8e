@@ -70,7 +70,6 @@ func TestView_ContainsAllPipelineStages(t *testing.T) {
 	assert.Contains(t, out, "L5: Actuator")
 }
 
-
 func TestRenderPipeline_AllStatusesRender(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -247,7 +246,6 @@ func TestRenderLedger_TruncatesToMaxLines(t *testing.T) {
 	out := m.renderLedger(60, 10)
 	assert.NotEmpty(t, out)
 }
-
 
 func TestRenderStatusBar_ConnectionStates(t *testing.T) {
 	tests := []struct {

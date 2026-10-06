@@ -80,7 +80,7 @@ func (h *PasskeyHandler) bindEmbeddedOperatorSession(userID, webSessionID string
 }
 
 // enforceFirstCred checks whether a new registration is allowed. Returns (true, code, msg) to signal forbidden.
-func (h *PasskeyHandler) enforceFirstCred(userID string, cfg passkeyHandlerConfig) (forbidden bool, code int, msg string) {
+func (h *PasskeyHandler) enforceFirstCred(userID string) (forbidden bool, code int, msg string) {
 	user, err := h.getUser(userID)
 	if err != nil {
 		return true, http.StatusInternalServerError, "failed to fetch user"
@@ -224,7 +224,7 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 		}
 
 		if cfg.enforceFirstCredentialOnly {
-			if forbidden, code, msg := h.enforceFirstCred(req.UserID, cfg); forbidden {
+			if forbidden, code, msg := h.enforceFirstCred(req.UserID); forbidden {
 				h.responder.Error(w, code, msg)
 				return
 			}
@@ -376,7 +376,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 		}
 
 		if cfg.enforceFirstCredentialOnly {
-			if forbidden, code, msg := h.enforceFirstCred(req.UserID, cfg); forbidden {
+			if forbidden, code, msg := h.enforceFirstCred(req.UserID); forbidden {
 				h.responder.Error(w, code, msg)
 				return
 			}

@@ -19,9 +19,7 @@ the user wrote in their config.
 from __future__ import annotations
 
 import functools
-import glob
 import logging
-import os
 from pathlib import Path
 
 from app.errors import ConfigurationError
@@ -159,13 +157,14 @@ def _resolve_include_path(pattern: str, config_dir: Path) -> list[Path]:
     Returns an empty list if no files match the pattern.
     """
     # Expand ~ to home directory
-    expanded = os.path.expanduser(pattern)
+    expanded = Path(pattern).expanduser()
 
     # If the path is absolute, use it as-is; otherwise, make it relative to config_dir
-    glob_pattern = expanded if os.path.isabs(expanded) else str(config_dir / expanded)
-
-    # Resolve the glob pattern
-    matched = glob.glob(glob_pattern)
+    if expanded.is_absolute():
+        glob_root = Path(expanded.anchor)
+        matched = glob_root.glob(str(expanded.relative_to(glob_root)))
+    else:
+        matched = config_dir.glob(str(expanded))
 
     # Sort for deterministic ordering and validate paths
     safe_paths: list[Path] = []

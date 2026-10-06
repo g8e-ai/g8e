@@ -108,7 +108,7 @@ func publishLFAATypedResponseTo(
 	logger.Info("LFAA typed response published (Universal)", "event_type", eventType)
 
 	// §3: observed-state content evidence (best-effort, non-fatal)
-	publishObservedStateEvidence(ctx, logger, msg, eventType, payload, auditStore, scrubbingService)
+	publishObservedStateEvidence(logger, msg, eventType, payload, auditStore, scrubbingService)
 }
 
 // publishLFAAErrorTo builds an error GovernanceEnvelope and publishes it to the results channel.
@@ -155,14 +155,13 @@ func publishLFAAErrorTo(
 	}
 
 	// §3: observed-state content evidence (best-effort, non-fatal)
-	publishObservedStateEvidence(ctx, logger, msg, eventType, payload, auditStore, scrubbingService)
+	publishObservedStateEvidence(logger, msg, eventType, payload, auditStore, scrubbingService)
 }
 
 // publishObservedStateEvidence persists observed-state content evidence to the audit store.
 // This is best-effort (non-fatal) and only applies to observe handlers (not commands).
 // Commands already capture stdout/stderr via their own RecordEvent calls.
 func publishObservedStateEvidence(
-	ctx context.Context,
 	logger *slog.Logger,
 	msg *PubSubCommandMessage,
 	eventType constants.EventType,

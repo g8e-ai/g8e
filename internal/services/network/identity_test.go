@@ -43,8 +43,7 @@ func TestDetector_DetectHostnames(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	detector := NewDetector(logger)
 
-	hostnames, err := detector.detectHostnames()
-	require.NoError(t, err)
+	hostnames := detector.detectHostnames()
 
 	// At minimum should have one hostname
 	assert.NotEmpty(t, hostnames)
@@ -90,8 +89,7 @@ func TestDetector_DetectDNSPTRs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ptrs, err := detector.detectDNSPTRs(ctx, ips)
-	require.NoError(t, err)
+	ptrs := detector.detectDNSPTRs(ctx, ips)
 
 	// Should not error even if no PTR records found
 	assert.NotNil(t, ptrs)
@@ -246,8 +244,7 @@ func TestDetector_DetectMDNS_HostnameSuffix(t *testing.T) {
 	assert.NotNil(t, mdnsNames)
 
 	// Verify that if a hostname already has .local suffix, it's not duplicated
-	hostnames, err := detector.detectHostnames()
-	require.NoError(t, err)
+	hostnames := detector.detectHostnames()
 
 	for _, hn := range hostnames {
 		if strings.HasSuffix(hn, ".local") {
@@ -420,8 +417,7 @@ func TestDetector_DetectDNSPTRs_SkipsLocal(t *testing.T) {
 
 	// Test with localhost IPs - should be skipped
 	ips := []string{"127.0.0.1", "::1", "192.168.1.1"}
-	ptrs, err := detector.detectDNSPTRs(ctx, ips)
-	require.NoError(t, err)
+	ptrs := detector.detectDNSPTRs(ctx, ips)
 
 	// Verify no PTR records for localhost IPs
 	for _, ptr := range ptrs {
@@ -440,8 +436,7 @@ func TestDetector_DetectDNSPTRs_SkipsLinkLocal(t *testing.T) {
 
 	// Test with link-local IPs - should be skipped
 	ips := []string{"fe80::1", "192.168.1.1"}
-	ptrs, err := detector.detectDNSPTRs(ctx, ips)
-	require.NoError(t, err)
+	ptrs := detector.detectDNSPTRs(ctx, ips)
 
 	// Verify no PTR records for link-local IPs
 	for _, ptr := range ptrs {
@@ -504,8 +499,7 @@ func TestDetector_DetectHostnames_EmptyFile(t *testing.T) {
 
 	// This test verifies that hostname detection works even if /etc/hostname doesn't exist
 	// It should fall back to the hostname command
-	hostnames, err := detector.detectHostnames()
-	require.NoError(t, err)
+	hostnames := detector.detectHostnames()
 	assert.NotEmpty(t, hostnames)
 }
 
@@ -514,8 +508,7 @@ func TestDetector_DetectHostnames_Deduplication(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	detector := NewDetector(logger)
 
-	hostnames, err := detector.detectHostnames()
-	require.NoError(t, err)
+	hostnames := detector.detectHostnames()
 
 	// Verify no duplicates in the returned hostnames
 	seen := make(map[string]bool)

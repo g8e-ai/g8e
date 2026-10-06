@@ -109,7 +109,7 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 	case "instance_type":
 		marshalTarget, err = getInstanceType(ctx, provider)
 	case "all":
-		marshalTarget, err = getAllMetadata(ctx, provider)
+		marshalTarget = getAllMetadata(ctx, provider)
 	default:
 		return CallToolResult{}, fmt.Errorf("cloud_metadata: invalid operation: %w: %s", constants.ErrMCPValidateCloudMetadataInvalidOperation, req.Operation)
 	}
@@ -419,7 +419,7 @@ func getInstanceType(ctx context.Context, provider string) (CloudMetadataInstanc
 	}
 }
 
-func getAllMetadata(ctx context.Context, provider string) (CloudMetadataAllResult, error) {
+func getAllMetadata(ctx context.Context, provider string) CloudMetadataAllResult {
 	instance, err := getInstanceMetadata(ctx, provider)
 	if err != nil {
 		instance = CloudMetadataInstanceResult{Error: err.Error()}
@@ -446,5 +446,5 @@ func getAllMetadata(ctx context.Context, provider string) (CloudMetadataAllResul
 		Region:           region,
 		AvailabilityZone: az,
 		InstanceType:     instanceType,
-	}, nil
+	}
 }

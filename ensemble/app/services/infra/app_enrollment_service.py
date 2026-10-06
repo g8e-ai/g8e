@@ -850,16 +850,16 @@ def _atomic_write_file(file_path: str, data: str, mode: int) -> None:
     target path. This ensures the target file is either fully written or not
     changed at all (no partial writes visible to concurrent readers).
     """
-    directory = os.path.dirname(file_path)
+    directory = Path(file_path).parent
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".tmp_", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(data)
-        os.chmod(tmp_path, mode)
-        os.replace(tmp_path, file_path)
+        Path(tmp_path).chmod(mode)
+        Path(tmp_path).replace(file_path)
     except Exception:
         try:
-            os.unlink(tmp_path)
+            Path(tmp_path).unlink()
         except OSError:
             pass
         raise

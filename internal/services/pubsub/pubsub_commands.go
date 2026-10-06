@@ -260,9 +260,7 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
 	// Initialize governance services after trusted signers are loaded
-	if err := rs.initializeGovernance(c, core, consensusPolicyStore); err != nil {
-		return nil, err
-	}
+	rs.initializeGovernance(c, core, consensusPolicyStore)
 	// Wire the heartbeat service's actuator after initializeGovernance has
 	// constructed it. Calling SetActuator earlier passes nil and silently
 	// drops every automatic heartbeat (no audit record, no pub/sub publish).
@@ -333,7 +331,7 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	return rs, nil
 }
 
-func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, core GovernanceCoreDeps, consensusPolicyStore governance.L2ConsensusPolicyStore) error {
+func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, core GovernanceCoreDeps, consensusPolicyStore governance.L2ConsensusPolicyStore) {
 	// Initialize L5Actuator with trusted nodes and audit store
 	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
@@ -388,7 +386,6 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, co
 	c.Logger.Info("governance services initialized",
 		"signer_store", signerStoreType,
 		"transaction_verifier", l4wardenType)
-	return nil
 }
 
 func (rs *OperatorPubSubService) buildHandlers() {

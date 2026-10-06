@@ -138,13 +138,9 @@ func TestMatchPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := matchPattern(tt.key, tt.pattern)
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.want, got)
-			}
+			got := matchPattern(tt.key, tt.pattern)
+			require.False(t, tt.wantErr)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }

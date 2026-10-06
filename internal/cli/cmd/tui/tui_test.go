@@ -286,7 +286,7 @@ func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
 		parent, cancel := context.WithCancel(context.Background())
 		var runCtx context.Context
 		deps.tuiRun = func(ctx context.Context, _ tui.Options) error {
-			runCtx = ctx
+			runCtx = ctx //nolint:fatcontext // Test intentionally captures context to verify cancellation.
 			return nil
 		}
 		cmd := tuiCmdWithDeps(deps)

@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest, marshal_canonical_json
@@ -249,7 +248,7 @@ class EvaluationTraceService:
         tmp_path = path.with_suffix(".json.tmp")
         payload = trace.model_dump(mode="json")
         tmp_path.write_bytes(marshal_canonical_json(payload))
-        os.replace(tmp_path, path)
+        tmp_path.replace(path)
         logger.info(
             "Persisted evaluation trace assignment_id=%s attempt_id=%s status=%s",
             evaluation.assignment_id,

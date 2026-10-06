@@ -71,13 +71,13 @@ func NewGatewayConfigWithHostname(gatewayURL, clientCertPath, clientKeyPath, caC
 	if err := validateGatewayURL(gatewayURL); err != nil {
 		return nil, fmt.Errorf("validate gateway URL: %w", err)
 	}
-	if err := validateCertPath(clientCertPath, "client certificate"); err != nil {
+	if err := validateCertPath(clientCertPath); err != nil {
 		return nil, fmt.Errorf("validate client certificate path: %w", err)
 	}
-	if err := validateCertPath(clientKeyPath, "client key"); err != nil {
+	if err := validateCertPath(clientKeyPath); err != nil {
 		return nil, fmt.Errorf("validate client key path: %w", err)
 	}
-	if err := validateCertPath(caCertPath, "CA certificate"); err != nil {
+	if err := validateCertPath(caCertPath); err != nil {
 		return nil, fmt.Errorf("validate CA certificate path: %w", err)
 	}
 	if verifyHostname == "" {
@@ -169,7 +169,7 @@ func NewStdioConfigSimple(g8eBinaryPath string) (*SimpleConfig, error) {
 }
 
 // validateCertPath validates that a certificate path is non-empty.
-func validateCertPath(path, certType string) error {
+func validateCertPath(path string) error {
 	if path == "" {
 		return constants.ErrMCPConfigCertPathEmpty
 	}

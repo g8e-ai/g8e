@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -46,7 +45,7 @@ class CertificateService:
             pki_dir = PATHS["infra"]["pki_dir"]
             ca_cert_path = ca_cert_path or PATHS["infra"]["ca_cert_path"]
         self.pki_dir = pki_dir
-        self.ca_cert_path = ca_cert_path or os.path.join(pki_dir, "trust", "g8eg-ca-bundle.pem")
+        self.ca_cert_path = ca_cert_path or str(Path(pki_dir) / "trust" / "g8eg-ca-bundle.pem")
         self.data_service = data_service
         self.ca_cert: x509.Certificate | None = None
         self.ca_key: ec.EllipticCurvePrivateKey | None = None
@@ -77,15 +76,15 @@ class CertificateService:
         # Authority: operator (Operator Gateway mode)
         # We no longer read ca.key directly. Key operations are behind the /.well-known/g8e/pki/sign-csr API.
         paths = [
-            self.ca_cert_path,
-            os.path.join(self.pki_dir, "trust", "g8eg-ca-bundle.pem"),
-            os.path.join(self.pki_dir, "authorities", "hub_ca.crt"),
-            os.path.join(self.pki_dir, "root", "root_ca.crt"),
+            Path(self.ca_cert_path),
+            Path(self.pki_dir) / "trust" / "g8eg-ca-bundle.pem",
+            Path(self.pki_dir) / "authorities" / "hub_ca.crt",
+            Path(self.pki_dir) / "root" / "root_ca.crt",
         ]
 
-        found_cert_path = None
+        found_cert_path: Path | None = None
         for cert_path in paths:
-            if os.path.exists(cert_path):
+            if cert_path.exists():
                 found_cert_path = cert_path
                 break
 
