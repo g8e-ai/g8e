@@ -1504,6 +1504,7 @@ var (
 	ErrInferenceGenerationOptionsInvalid  = errors.New("inference: generation options invalid")
 	ErrInferenceCapabilityUnsupported     = errors.New("inference: requested capability unsupported")
 	ErrInferenceToolsUnsupported          = errors.New("inference: tools unsupported")
+	ErrInferenceContextOverflow           = errors.New("inference: context window exceeded")
 	ErrInferenceProviderAttemptRequired   = errors.New("inference: provider attempt ID required")
 	ErrInferenceProviderAttemptIDInvalid  = errors.New("inference: provider attempt ID invalid")
 	ErrInferenceIdentityMismatch          = errors.New("inference: request and result identity mismatch")

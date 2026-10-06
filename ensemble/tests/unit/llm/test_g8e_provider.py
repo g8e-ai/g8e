@@ -20,9 +20,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants import LLMProvider, ThinkingLevel
+from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, LLMProvider, ThinkingLevel
 from app.errors import (
     ConfigurationError,
+    ContextWindowExceededError,
     ModelCapabilityError,
     NetworkError,
     ToolsNotSupportedError,
@@ -855,6 +856,69 @@ class TestG8EProviderToolDeclarationEvidence:
             )
 
         assert provider.declared_tool_names == ["recursive_grep_search"]
+
+
+class TestG8EProviderContextOverflow:
+    """The Gateway's typed context-overflow rejection is a distinct, typed outcome."""
+
+    _BODY = '{"error":"inference: context window exceeded"}'
+
+    @pytest.mark.asyncio
+    async def test_http_rejection_raises_context_window_exceeded(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(side_effect=_http_rejection(422, self._BODY))
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ContextWindowExceededError) as raised:
+            await provider.generate_content_primary("qwen3.5:4b", _contents(), _tool_settings())
+
+        assert raised.value.model == "qwen3.5:4b"
+        assert raised.value.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
+        assert not isinstance(raised.value, ToolsNotSupportedError)
+
+    @pytest.mark.asyncio
+    async def test_streaming_http_rejection_raises_context_window_exceeded(self):
+        async def dispatch_stream(_request):
+            raise _http_rejection(422, self._BODY)
+            yield  # pragma: no cover - makes this an async generator
+
+        client = _client()
+        client.dispatch_inference_stream = dispatch_stream
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ContextWindowExceededError):
+            async for _ in provider.generate_content_stream_primary(
+                "qwen3.5:4b", _contents(), _tool_settings()
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_failure_frame_raises_context_window_exceeded(self):
+        async def dispatch_stream(_request):
+            yield InferenceDispatchStreamFrame(
+                failure=InferenceDispatchStreamFailure(reason="inference: context window exceeded")
+            )
+
+        client = _client()
+        client.dispatch_inference_stream = dispatch_stream
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ContextWindowExceededError):
+            async for _ in provider.generate_content_stream_primary(
+                "qwen3.5:4b", _contents(), _tool_settings()
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_other_gateway_rejection_is_not_translated(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(
+            side_effect=_http_rejection(502, '{"error":"inference: backend unavailable"}')
+        )
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(NetworkError):
+            await provider.generate_content_primary("qwen3.5:4b", _contents(), _tool_settings())
 
 
 class TestG8EProviderToolDeclarationRejection:

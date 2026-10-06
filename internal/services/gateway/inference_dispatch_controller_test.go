@@ -481,6 +481,7 @@ func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 		{name: "no inference operator", dispatchErr: constants.ErrInferenceOperatorNotFound, wantStatus: http.StatusNotFound},
 		{name: "ambiguous inference operators", dispatchErr: constants.ErrInferenceOperatorAmbiguous, wantStatus: http.StatusConflict},
 		{name: "target not inference capable", dispatchErr: constants.ErrInferenceOperatorNotCapable, wantStatus: http.StatusUnprocessableEntity},
+		{name: "context overflow", dispatchErr: constants.ErrInferenceContextOverflow, wantStatus: http.StatusUnprocessableEntity},
 		{name: "model override denied", dispatchErr: constants.ErrInferenceModelOverrideDenied, wantStatus: http.StatusForbidden},
 		{name: "model registry invalid", dispatchErr: constants.ErrInferenceModelRegistryInvalid, wantStatus: http.StatusForbidden},
 		{name: "campaign binding invalid", dispatchErr: constants.ErrInferenceCampaignBindingInvalid, wantStatus: http.StatusForbidden},

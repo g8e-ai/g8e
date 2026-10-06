@@ -12,6 +12,7 @@ package inference
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -876,6 +877,45 @@ func TestOllamaBackend_GenerateParsesCacheTokensWithoutInferringThinkingTokens(t
 				assert.Equal(t, *tt.wantCacheTokens, *result.CacheTokens)
 			}
 			assert.Nil(t, response.ThinkingTokens)
+		})
+	}
+}
+
+func TestOllamaBackend_GenerateFailsTypedWhenPromptFillsContextWindow(t *testing.T) {
+	limit := func(v int32) *int32 { return &v }
+	tests := []struct {
+		name         string
+		contextLimit *int32
+		content      string
+		wantOverflow bool
+	}{
+		{name: "empty output at limit", contextLimit: limit(8192), wantOverflow: true},
+		{name: "empty output over limit", contextLimit: limit(4096), wantOverflow: true},
+		{name: "answered output at limit", contextLimit: limit(8192), content: "ok", wantOverflow: true},
+		{name: "prompt below limit", contextLimit: limit(32768), content: "ok"},
+		{name: "limit unset", contextLimit: nil, content: "ok"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, err := fmt.Fprintf(w, `{"model":"test-model","message":{"role":"assistant","content":%q},"done":true,"prompt_eval_count":8192,"eval_count":1}`, tt.content)
+				require.NoError(t, err)
+			}))
+			defer server.Close()
+			backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+			require.NoError(t, err)
+
+			response, err := backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model", ContextLimit: tt.contextLimit})
+
+			if tt.wantOverflow {
+				require.Error(t, err)
+				assert.Nil(t, response)
+				assert.ErrorIs(t, err, constants.ErrInferenceContextOverflow)
+				assert.NotErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, int32(8192), response.PromptTokens)
 		})
 	}
 }

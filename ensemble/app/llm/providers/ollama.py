@@ -168,12 +168,14 @@ def _raise_on_empty_content(
 ) -> None:
     """Raise OllamaEmptyResponseError when Ollama returns HTTP 200 with no content.
 
-    Context-window overflow, load failures, and thinking-only output all surface
-    as ``message.content == ""`` with a 200 response. This error captures the
-    diagnostic context needed to identify the root cause.
+    Load failures and thinking-only output surface as ``message.content == ""``
+    with a 200 response; this error captures the diagnostic context needed to
+    identify the root cause. A prompt that filled ``num_ctx`` surfaces the same
+    way but is raised as the distinct ``ContextWindowExceededError``.
 
     Raises:
-        OllamaEmptyResponseError: If response.message.content is empty or falsy.
+        ContextWindowExceededError: If content is empty and the prompt filled num_ctx.
+        OllamaEmptyResponseError: If content is empty for any other reason.
     """
     message = getattr(response, "message", None)
     content = getattr(message, "content", None) if message else None
@@ -188,7 +190,7 @@ def _raise_on_empty_content(
     tool_calls = getattr(message, "tool_calls", None) if message else None
     tool_calls_count = len(tool_calls) if tool_calls else 0
 
-    from app.errors import OllamaEmptyResponseError
+    from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 
     ctx_overflow_suspected = (
         prompt_eval_count is not None and num_ctx is not None and prompt_eval_count >= num_ctx
@@ -209,6 +211,17 @@ def _raise_on_empty_content(
         tool_calls_count,
         ctx_overflow_suspected,
     )
+
+    if ctx_overflow_suspected:
+        raise ContextWindowExceededError(
+            f"Ollama prompt filled the context window (channel={channel}, model={model}, "
+            f"prompt_tokens={prompt_eval_count}, num_ctx={num_ctx})",
+            model=model,
+            service_name="ollama",
+            num_ctx=num_ctx,
+            prompt_tokens=prompt_eval_count,
+            channel=channel,
+        )
 
     raise OllamaEmptyResponseError(
         f"Ollama returned empty message.content on 200 OK (channel={channel}, model={model})",

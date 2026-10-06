@@ -155,12 +155,7 @@ describe('OverviewView', () => {
     expect(guide.getByRole('link', { name: /Tool selection/ })).toHaveAttribute('href', '/tasks#category-tool_selection');
   });
 
-  it('presents campaign coverage and public-safe data surfaces for engineers', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ schema_version: '1.0.0', mirror_origin: 'https://mirror.example' }),
-    }));
-
+  it('presents campaign coverage for engineers without duplicate public data section', () => {
     render(
       <MemoryRouter initialEntries={['/?release=all']}>
         <OverviewView />
@@ -178,22 +173,7 @@ describe('OverviewView', () => {
     expect(evidence.getByText('6 / 75 terminal')).toBeInTheDocument();
     expect(evidence.getByText('Verification pending')).toBeInTheDocument();
 
-    const data = within(screen.getByRole('region', { name: 'Public data and APIs' }));
-    expect(data.getByText('Public data & APIs')).toBeInTheDocument();
-    expect(data.getByText(/public-safe projection/i)).toBeInTheDocument();
-    expect(await data.findByRole('link', { name: /Campaign summaries/i })).toHaveAttribute(
-      'href',
-      'https://mirror.example/history?kind=evaluation_summary&cursor=0&limit=500',
-    );
-    expect(data.getByRole('link', { name: /Assignment results/i })).toHaveAttribute(
-      'href',
-      'https://mirror.example/history?kind=assignment_result&cursor=0&limit=500',
-    );
-    expect(data.getByText('Cryptographic proofs')).toBeInTheDocument();
-    expect(data.getByText(/No verified proof package published yet/i)).toBeInTheDocument();
-    expect(data.queryByRole('link', { name: /Cryptographic proofs/i })).not.toBeInTheDocument();
-    expect(data.queryByRole('link', { name: /Proof manifest/i })).not.toBeInTheDocument();
-    expect(data.queryByRole('link', { name: /Live updates/i })).not.toBeInTheDocument();
-    expect(data.queryByText('Download data')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Public data and APIs' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Public data & APIs')).not.toBeInTheDocument();
   });
 });

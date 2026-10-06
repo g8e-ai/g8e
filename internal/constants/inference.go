@@ -35,4 +35,9 @@ const (
 	ModelProvenanceCommandAcknowledgementTimeout    = 10 * time.Second
 	ModelProvenanceAttestationPreflightTimeout      = 5 * time.Minute
 	ModelProvenanceAttestationPreflightClientMargin = 15 * time.Second
+	// Bound storage I/O independently of the command-channel goroutine count.
+	ModelProvenanceHashConcurrency = 2
+	// Strict verification waits on durable completion coverage, never a fixed sleep.
+	ModelProvenanceCompletionTimeout      = 5 * time.Minute
+	ModelProvenanceCompletionPollInterval = 2 * time.Second
 )

@@ -53,7 +53,10 @@ from app.llm.llm_types import (
     ThinkingConfig,
 )
 from app.llm.provider import LLMProvider
-from app.llm.providers._capability import translate_governed_tool_rejection
+from app.llm.providers._capability import (
+    translate_governed_context_overflow,
+    translate_governed_tool_rejection,
+)
 from app.llm.thinking import translate_for_ollama
 from app.models.model_configs import get_model_config
 from app.models.http_context import G8eHttpContext
@@ -543,6 +546,21 @@ class G8EProvider(LLMProvider):
             tools_declared=len(request.tools) > 0,
         )
 
+    @staticmethod
+    def _raise_if_context_overflow(
+        exc: BaseException, *, model: str, request: InferenceDispatchRequest
+    ) -> None:
+        """Re-raise the Gateway's typed context-overflow rejection as
+        ``ContextWindowExceededError``. Any other failure returns so the caller
+        re-raises the original exception.
+        """
+        translate_governed_context_overflow(
+            exc,
+            service_name="g8e",
+            model=model,
+            num_ctx=request.context_limit if request.HasField("context_limit") else None,
+        )
+
     async def _close_resources(self):
         """Clean up provider resources. The HTTP client is owned by the
         application lifecycle, not by this provider, so close is a no-op."""
@@ -620,6 +638,7 @@ class G8EProvider(LLMProvider):
             response = await self._client.dispatch_inference(request)
         except NetworkError as exc:
             self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
+            self._raise_if_context_overflow(exc, model=model, request=request)
             raise
         self._record_response(response, complete=True)
         _validate_response_identity(request, response)
@@ -720,11 +739,13 @@ class G8EProvider(LLMProvider):
                     self._raise_if_tool_declaration_rejected(
                         failure, model=model, request=request
                     )
+                    self._raise_if_context_overflow(failure, model=model, request=request)
                     raise failure
                 if frame.HasField("completion"):
                     completion = frame.completion
         except NetworkError as exc:
             self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
+            self._raise_if_context_overflow(exc, model=model, request=request)
             raise
 
         if completion is None:

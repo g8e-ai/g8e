@@ -1,14 +1,13 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-// Overview view — the live event stream, recent campaigns, and public data.
+// Overview view — the live event stream and recent campaigns.
 
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CURRENT_PLATFORM_RELEASE, matchesRelease, releaseLabel } from '../content/release';
 import { useDatasetOptions } from '../state/dataset';
 import { useStoreState } from '../state/store';
-import { useMirrorOrigin } from '../state/mirror';
 import { LiveEventStream } from '../components/LiveEventStream';
 import { WhatAmILookingAt } from '../components/WhatAmILookingAt';
 import { formatNumber } from '../components/shared';
@@ -124,86 +123,6 @@ function RecentCampaigns({
   );
 }
 
-type PublicResourceCard = {
-  label: string;
-  eyebrow: string;
-  description: string;
-  format: string;
-  href?: string;
-  disabledReason?: string;
-};
-
-/** Public-safe evaluation datasets. Transport and schema links live in the footer. */
-function DownloadsPanel() {
-  const origin = useMirrorOrigin();
-  const proofArtifactCount = useStoreState((state) => state.proofArtifactCount);
-  const proofsPublished = proofArtifactCount > 0;
-  const unavailable = origin ? undefined : 'Mirror origin unavailable.';
-
-  const resources: PublicResourceCard[] = [
-    {
-      label: 'Campaign summaries',
-      eyebrow: 'Analyze runs',
-      description: 'Lifecycle, terminal outcomes, headline metrics, verifier disposition.',
-      format: 'JSON · paginated',
-      href: origin ? `${origin}/history?kind=evaluation_summary&cursor=0&limit=500` : undefined,
-      disabledReason: unavailable,
-    },
-    {
-      label: 'Assignment results',
-      eyebrow: 'Analyze tasks',
-      description: 'Scenario outcomes, closed grades, bounded resources, evidence bindings.',
-      format: 'JSON · paginated',
-      href: origin ? `${origin}/history?kind=assignment_result&cursor=0&limit=500` : undefined,
-      disabledReason: unavailable,
-    },
-    {
-      label: 'Cryptographic proofs',
-      eyebrow: 'Verify offline',
-      description: proofsPublished
-        ? 'Signed manifest and content-addressed artifacts for offline verification.'
-        : 'No verified proof package published yet.',
-      format: proofsPublished ? `JSON · ${formatNumber(proofArtifactCount)} artifact${proofArtifactCount === 1 ? '' : 's'}` : 'JSON · pending',
-      href: origin && proofsPublished ? `${origin}/proof-catalog` : undefined,
-      disabledReason: origin ? undefined : unavailable,
-    },
-  ];
-
-  return (
-    <section className="panel public-data-panel" id="downloads" aria-label="Public data and APIs">
-      <div className="public-data-head">
-        <h2>Public data &amp; APIs</h2>
-        <p className="panel-note">
-          Anonymous, public-safe projection. Prompts, outputs, identities, paths, and receipt bodies stay private.
-        </p>
-      </div>
-      <ul className="public-resource-grid">
-        {resources.map((resource) => (
-          <li key={resource.label}>
-            {resource.href ? (
-              <a className="public-resource-card" href={resource.href} target="_blank" rel="noopener noreferrer">
-                <span className="public-resource-eyebrow">{resource.eyebrow}</span>
-                <strong>{resource.label}</strong>
-                <span className="public-resource-description">{resource.description}</span>
-                <span className="public-resource-format">{resource.format}<span aria-hidden="true"> ↗</span></span>
-              </a>
-            ) : (
-              <div className="public-resource-card public-resource-disabled" aria-disabled="true">
-                <span className="public-resource-eyebrow">{resource.eyebrow}</span>
-                <strong>{resource.label}</strong>
-                <span className="public-resource-description">
-                  {resource.disabledReason ?? resource.description}
-                </span>
-                <span className="public-resource-format">{resource.format}</span>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 export function OverviewView() {
   const [params] = useSearchParams();
   const release = params.get('release') ?? CURRENT_PLATFORM_RELEASE;
@@ -229,7 +148,6 @@ export function OverviewView() {
       <div className="overview-content">
         <div className="overview-primary">
           <RecentCampaigns catalogs={catalogs} evaluations={allEvaluations} />
-          <DownloadsPanel />
         </div>
         <WhatAmILookingAt />
       </div>

@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
-from app.errors import OllamaEmptyResponseError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Content,
@@ -829,6 +829,45 @@ class TestOllamaEmptyResponseError:
         assert error.ctx_overflow_suspected is False
         assert error.thinking_len == 0
         assert error.tool_calls_count == 0
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_raises_context_window_exceeded_when_prompt_fills_num_ctx(
+        self, provider
+    ):
+        provider, mock_client = provider
+
+        mock_response = MagicMock()
+        mock_response.message.content = ""
+        mock_response.message.thinking = None
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = LLM_OLLAMA_DEFAULT_NUM_CTX
+        mock_response.eval_count = 0
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.OFF, include_thoughts=False
+            ),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
+        )
+
+        with pytest.raises(ContextWindowExceededError) as exc_info:
+            await provider.generate_content_primary("llama3", contents, settings)
+
+        error = exc_info.value
+        assert not isinstance(error, OllamaEmptyResponseError)
+        assert error.model == "llama3"
+        assert error.channel == "primary"
+        assert error.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
+        assert error.prompt_tokens == LLM_OLLAMA_DEFAULT_NUM_CTX
 
     @pytest.mark.asyncio
     async def test_generate_content_assistant_raises_on_empty_content(self, provider):

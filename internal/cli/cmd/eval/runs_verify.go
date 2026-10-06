@@ -220,7 +220,17 @@ func verifyRun(
 	if err := evaluation.CaptureCampaignRunProviderObservationEvidence(cmd.Context(), store, runID, observationReader); err != nil {
 		return nil, fmt.Errorf("evaluation: runs verify: provider observation: %w", err)
 	}
-	if err := evaluation.CaptureCampaignRunModelProvenanceEvidence(cmd.Context(), store, runID, provenanceReader); err != nil {
+	if requireProvenance {
+		if !jsonOutput {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Waiting for model provenance completion (up to %s)\n", constants.ModelProvenanceCompletionTimeout)
+		}
+		waitCtx, cancel := context.WithTimeout(cmd.Context(), constants.ModelProvenanceCompletionTimeout)
+		err := evaluation.WaitForCampaignRunModelProvenanceEvidence(waitCtx, store, runID, provenanceReader)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: runs verify: model provenance: %w", err)
+		}
+	} else if err := evaluation.CaptureCampaignRunModelProvenanceEvidence(cmd.Context(), store, runID, provenanceReader); err != nil {
 		return nil, fmt.Errorf("evaluation: runs verify: model provenance: %w", err)
 	}
 	report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)

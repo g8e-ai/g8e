@@ -423,3 +423,25 @@ func TestCaptureCampaignRunEvidence_DecoupledObservationAndProvenance(t *testing
 	assert.NoError(t, CaptureCampaignRunModelProvenanceEvidence(ctx, store, req.RunID, provReader))
 	assert.NoError(t, CaptureCampaignRunWitnessEvidence(ctx, store, req.RunID, obsReader, provReader))
 }
+
+func TestWaitForCampaignRunModelProvenanceEvidence_UsesPersistedScoredAttempts(t *testing.T) {
+	fixture := newCompletedRunFixture(t, nil)
+	result := proto.Clone(fixture.imported).(*evalv1.EvaluationAssignmentResult)
+	result.ModelInferences = []*evalv1.ModelInferenceRecord{{ProviderAttemptId: "attempt-scored"}}
+	digest, err := ComputeAssignmentResultDigest(result)
+	require.NoError(t, err)
+	result.ResultDigest = digest
+	require.NoError(t, fixture.store.SaveAssignmentResult(t.Context(), result))
+	remote := &stubModelProvenanceRemote{window: testModelProvenanceWindow(t, "attempt-scored")}
+	reader, err := NewCampaignModelProvenanceReaderWithRemote(fixture.store.files, remote)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	require.NoError(t, WaitForCampaignRunModelProvenanceEvidence(ctx, fixture.store, fixture.req.RunID, reader))
+	// Other scheduled assignments have no result and require no windows.
+	local, err := NewLocalModelProvenanceReader(fixture.store.files)
+	require.NoError(t, err)
+	window, err := local.Load(ctx, "attempt-scored")
+	require.NoError(t, err)
+	assert.Equal(t, "attempt-scored", window.GetProviderAttemptId())
+}
