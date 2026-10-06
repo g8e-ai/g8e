@@ -636,7 +636,7 @@ func resolveFullCertificateIdentity(identityFile string, detector networkIdentit
 	if err != nil {
 		logger.Warn("Failed to detect full network identity, falling back to basic IP detection", "error", err)
 		extraIPs := detectBasicNonLoopbackIPv4Addresses()
-		return extraIPs, nil, nil
+		return extraIPs, []string{"localhost"}, nil
 	}
 
 	extraIPs := netIdentity.GetAllIPs()
