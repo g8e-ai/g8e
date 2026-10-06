@@ -252,6 +252,11 @@ class InvestigationService:
 
         has_bound = len(operator_docs) > 0
         investigation.operator_documents = operator_docs
+        # Tool-arg defaulting (``convert_args_to_payload``) reads this field, so it
+        # must mirror the BOUND operators the tool gate sees in ``g8e_context``.
+        investigation.bound_operators = [
+            op for op in bound_in_context if op.status == OperatorStatus.BOUND
+        ]
 
         if has_bound:
             logger.info(

@@ -152,14 +152,50 @@ func TestEvalBackup_CreateEmptyRuntimeFails(t *testing.T) {
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "a failed backup must not leave a destination behind")
 }
 
-func TestEvalBackup_CreateRefusesToReuseSnapshotDirectory(t *testing.T) {
+func TestEvalBackup_CreateSameSecondPreservesSnapshots(t *testing.T) {
 	f := newEvalBackupFixture(t)
-	f.create(t)
+	first := f.create(t)
+	f.write(t, backupRunReportPath, `{"run":2}`)
 
-	_, err := f.backup.Create(context.Background(), f.outRoot)
+	second := f.create(t)
+	third := f.create(t)
 
-	require.Error(t, err)
-	assert.FileExists(t, filepath.Join(f.outRoot, backupSnapshotPrefix, constants.EvaluationBackupManifestFilename), "the earlier snapshot must survive a colliding backup")
+	assert.Equal(t, first.SnapshotDir+"-000001", second.SnapshotDir)
+	assert.Equal(t, first.SnapshotDir+"-000002", third.SnapshotDir)
+	data, err := os.ReadFile(filepath.Join(first.SnapshotDir, backupRunReportPath))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"run":1}`, string(data))
+	data, err = os.ReadFile(filepath.Join(second.SnapshotDir, backupRunReportPath))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"run":2}`, string(data))
+	latest, err := LatestEvalBackupSnapshot(f.outRoot)
+	require.NoError(t, err)
+	assert.Equal(t, third.SnapshotDir, latest)
+}
+
+func TestEvalBackup_CreateConcurrentSnapshots(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	type outcome struct {
+		report *EvalBackupReport
+		err    error
+	}
+	const count = 4
+	results := make(chan outcome, count)
+	for i := 0; i < count; i++ {
+		go func() {
+			report, err := f.backup.Create(context.Background(), f.outRoot)
+			results <- outcome{report, err}
+		}()
+	}
+	directories := make(map[string]bool)
+	for i := 0; i < count; i++ {
+		result := <-results
+		require.NoError(t, result.err)
+		assert.False(t, directories[result.report.SnapshotDir])
+		directories[result.report.SnapshotDir] = true
+		assert.FileExists(t, filepath.Join(result.report.SnapshotDir, constants.EvaluationBackupManifestFilename))
+	}
+	assert.Len(t, directories, count)
 }
 
 func TestEvalBackup_RoundTripAfterWipe(t *testing.T) {
@@ -278,7 +314,7 @@ func TestEvalBackup_CreateIfChangedSkipsIdenticalEvidence(t *testing.T) {
 	f := newEvalBackupFixture(t)
 	first := f.create(t)
 
-	report, err := f.laterBackup(time.Minute).CreateIfChanged(context.Background(), f.outRoot)
+	report, err := f.backup.CreateIfChanged(context.Background(), f.outRoot)
 
 	require.NoError(t, err)
 	assert.True(t, report.Unchanged)
@@ -294,7 +330,7 @@ func TestEvalBackup_CreateIfChangedKeepsSnapshotWhenEvidenceChanged(t *testing.T
 	first := f.create(t)
 	f.write(t, backupRunReportPath, `{"run":2}`)
 
-	report, err := f.laterBackup(time.Minute).CreateIfChanged(context.Background(), f.outRoot)
+	report, err := f.backup.CreateIfChanged(context.Background(), f.outRoot)
 
 	require.NoError(t, err)
 	assert.False(t, report.Unchanged)

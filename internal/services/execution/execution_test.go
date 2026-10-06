@@ -10,6 +10,8 @@ package execution
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -23,6 +25,34 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestResolveCommandBinary(t *testing.T) {
+	t.Parallel()
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	for _, command := range []string{
+		"/g8e operator model release smollm2:135m",
+		"/g8e operator model pull qwen3:0.6b",
+		"/g8e operator model copy qwen3:0.6b local/qwen3:0.6b",
+		"/g8e operator model inventory",
+		"/g8e operator model residency",
+	} {
+		t.Run(command, func(t *testing.T) {
+			binary, err := resolveCommandBinary(strings.Fields(command))
+			require.NoError(t, err)
+			assert.Equal(t, executable, binary)
+		})
+	}
+	for _, command := range []string{"/g8e", "/g8e operator start", "go version"} {
+		t.Run(command, func(t *testing.T) {
+			parts := strings.Fields(command)
+			want, wantErr := exec.LookPath(parts[0])
+			binary, err := resolveCommandBinary(parts)
+			assert.Equal(t, want, binary)
+			assert.Equal(t, wantErr, err)
+		})
+	}
+}
 
 func TestExecutionService_ExecuteCommand(t *testing.T) {
 	t.Parallel()

@@ -618,6 +618,7 @@ class TestOperatorEnrichment:
         assert len(enriched_context.operator_documents) == 1
         assert enriched_context.operator_documents[0].id == operator.id
         assert enriched_context.operator_documents[0].current_hostname == operator.current_hostname
+        assert [op.operator_id for op in enriched_context.bound_operators] == [operator.id]
 
         # Cleanup
         cleanup.track_operator(operator.id)

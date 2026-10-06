@@ -779,7 +779,7 @@ class EnrichedInvestigationContext(InvestigationModel):
         default=None, description="Attached InvestigationMemory for AI context"
     )
     bound_operators: list[BoundOperator] = Field(
-        default_factory=list, description="BoundOperator instances from G8eHttpContext"
+        default_factory=list, description="BOUND BoundOperator instances from G8eHttpContext"
     )
     operator_session_token: str | None = Field(
         default=None, description="Transient operator session token for authorization validation"

@@ -676,8 +676,13 @@ func (b *OllamaBackend) decodeChatStream(
 			terminal = &event
 		}
 	}
-	if terminal == nil || terminal.Model == "" || servedModel != terminal.Model || len(parts) == 0 {
-		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: %w", constants.ErrInferenceProviderResponseInvalid)
+	switch {
+	case terminal == nil:
+		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: stream ended without a done event: %w", constants.ErrInferenceProviderResponseInvalid)
+	case terminal.Model == "":
+		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: done event carries no model: %w", constants.ErrInferenceProviderResponseInvalid)
+	case len(parts) == 0:
+		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: provider produced no text, thinking, or tool call (done_reason %q): %w", terminal.DoneReason, constants.ErrInferenceProviderResponseInvalid)
 	}
 	return *terminal, parts, timeToFirstToken, nil
 }

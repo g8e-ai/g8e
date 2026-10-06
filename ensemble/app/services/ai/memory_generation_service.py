@@ -49,6 +49,7 @@ All fields are optional but try to populate each one.
 CONVERSATION_HISTORY_LIMIT = 20
 FALLBACK_TEXT_LIMIT = 2000
 PAST_MEMORIES_LIMIT = 10
+MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS = 2048
 
 
 class MemoryGenerationService:
@@ -195,7 +196,7 @@ class MemoryGenerationService:
 
         config = AIGenerationConfigBuilder.build_lite_settings(
             model=lite_model,
-            max_tokens=None,
+            max_tokens=MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS,
             system_instructions=system_instructions,
             response_format=types.ResponseFormat.from_pydantic_schema(
                 MemoryAnalysis.model_json_schema()

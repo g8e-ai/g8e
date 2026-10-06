@@ -26,9 +26,36 @@ from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.memory_generation_service import (
     CONVERSATION_HISTORY_LIMIT,
     FALLBACK_TEXT_LIMIT,
+    MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS,
     MemoryGenerationService,
 )
 from tests.fakes.fake_memory_data_service import FakeMemoryDataService
+from tests.fakes.fake_llm_provider import FakeLLMProvider
+
+
+@pytest.mark.asyncio
+async def test_memory_generation_bounds_models_without_documented_output_limit(monkeypatch):
+    provider = FakeLLMProvider()
+    provider.add_response('{"investigation_summary":"Synthetic test summary"}')
+    monkeypatch.setattr(
+        "app.services.ai.memory_generation_service.get_generative_lite_provider",
+        lambda settings: provider,
+    )
+    service = MemoryGenerationService(FakeMemoryDataService())
+    memory = InvestigationMemory(
+        investigation_id="inv-1",
+        case_id="case-1",
+        user_id="user-1",
+        status=InvestigationStatus.OPEN,
+        case_title="Test Case",
+    )
+    settings = G8eeUserSettings(llm=LLMSettings(lite_provider="ollama", lite_model="smollm2:135m"))
+    await service._ai_update_memory(memory, [], settings)
+    assert (
+        provider.call_log[0]["lite_llm_settings"].max_output_tokens
+        == MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS
+    )
+    assert memory.investigation_summary == "Synthetic test summary"
 
 
 class TestMemoryGenerationServiceInit:

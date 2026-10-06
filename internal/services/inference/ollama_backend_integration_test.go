@@ -306,6 +306,53 @@ func TestOllamaBackend_GenerateRejectsStreamWithoutOneTerminalEvent(t *testing.T
 	}
 }
 
+func TestOllamaBackend_GenerateTerminalEventErrorNamesFailedCondition(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "missing terminal",
+			body: `{"model":"test-model","message":{"role":"assistant","content":"partial"},"done":false}` + "\n",
+			want: "stream ended without a done event",
+		},
+		{
+			name: "terminal without model",
+			body: `{"model":"test-model","message":{"role":"assistant","content":"x"},"done":false}` + "\n" +
+				`{"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}` + "\n",
+			want: "done event carries no model",
+		},
+		{
+			name: "terminal model differs from streamed model",
+			body: `{"model":"test-model","message":{"role":"assistant","content":"x"},"done":false}` + "\n" +
+				`{"model":"other-model","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}` + "\n",
+			want: "served model changed",
+		},
+		{
+			name: "empty completion",
+			body: `{"model":"test-model","message":{"role":"assistant","content":""},"done":true,"done_reason":"length"}` + "\n",
+			want: `produced no text, thinking, or tool call (done_reason "length")`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, err := io.WriteString(w, tt.body)
+				require.NoError(t, err)
+			}))
+			defer server.Close()
+			backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+			require.NoError(t, err)
+
+			_, err = backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model"})
+
+			require.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+			assert.ErrorContains(t, err, tt.want)
+		})
+	}
+}
+
 func TestOllamaBackend_GenerateRejectsParallelToolCallsSplitAcrossEventsWhenDisabled(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		events := []string{

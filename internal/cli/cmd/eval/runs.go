@@ -439,6 +439,10 @@ type runCell struct {
 	Verdict string  `json:"verdict,omitempty"`
 	Passed  bool    `json:"passed"`
 	Score   float64 `json:"score"`
+	// ToolRejected marks a cell whose provider refused the tool declaration. The
+	// cell still scores as a FAIL (INV-EVAL-CAMP-07); the flag only lets reports
+	// separate "model cannot call tools" from "model called tools badly".
+	ToolRejected bool `json:"tool_rejected,omitempty"`
 }
 
 // invalidEvidence reports a cell whose grades measure the harness, not the
@@ -458,6 +462,8 @@ func cellFromResult(result *evalv1.EvaluationAssignmentResult) runCell {
 		Status:  strings.ToLower(strings.TrimPrefix(result.GetLifecycleStatus().String(), "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_")),
 		Verdict: strings.ToLower(strings.TrimPrefix(verdict.String(), verdictStatusPrefix)),
 		Passed:  verdict == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+
+		ToolRejected: result.GetTrajectoryOutcome() == evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION,
 	}
 	if rate, ok := evaluation.DeterministicPassRate(result); ok {
 		cell.Score = rate
@@ -472,6 +478,7 @@ type runCompareSide struct {
 	Completed       int     `json:"completed"`
 	Passed          int     `json:"passed"`
 	InvalidEvidence int     `json:"invalid_evidence"`
+	ToolRejected    int     `json:"tool_rejected"`
 	MeanScore       float64 `json:"mean_score"`
 }
 
@@ -568,6 +575,9 @@ func summarizeRunCells(runID, campaignID string, cells map[string]runCell) runCo
 		}
 		if cell.Passed {
 			side.Passed++
+		}
+		if cell.ToolRejected {
+			side.ToolRejected++
 		}
 		if cell.invalidEvidence() {
 			side.InvalidEvidence++
@@ -669,7 +679,7 @@ like any other.`,
 			}
 			out := cmd.OutOrStdout()
 			for _, side := range sides {
-				_, _ = fmt.Fprintf(out, "%s (%s): %d cells, %d completed, %d passed, %d invalid evidence, mean score %.3f\n", side.RunID, side.CampaignID, side.Cells, side.Completed, side.Passed, side.InvalidEvidence, side.MeanScore)
+				_, _ = fmt.Fprintf(out, "%s (%s): %d cells, %d completed, %d passed, %d invalid evidence, %d tool declaration rejected, mean score %.3f\n", side.RunID, side.CampaignID, side.Cells, side.Completed, side.Passed, side.InvalidEvidence, side.ToolRejected, side.MeanScore)
 			}
 			_, _ = fmt.Fprintf(out, "Regressions: %d  Improvements: %d  Only in %s: %d  Only in %s: %d\n",
 				payload.Regressions, payload.Improvements, args[0], len(onlyLeft), args[1], len(onlyRight))
