@@ -9,7 +9,7 @@ import asyncio
 import logging
 import time
 from typing import Any
-from app.errors import OllamaEmptyResponseError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
 from app.models.agent import OperatorContext
 from app.constants import (
@@ -298,6 +298,20 @@ async def _run_generation_pass(
 
         return normalised
 
+    except ContextWindowExceededError as exc:
+        # Fixed text, not str(exc): token counts in the exception could contain
+        # digits that is_system_error() would misread as an HTTP status.
+        error_msg = (
+            f"Pass {pass_index} ({member.value}): "
+            "the conversation exceeded the model's context window"
+        )
+        pass_errors.append(error_msg)
+        logger.error("[TRIBUNAL-PASS] %s, not retrying: %s", error_msg, exc)
+        await _emit_pass_observation(
+            emitter, pass_index, member, provider, model, response,
+            monotonic_start, input_artifact_hash, None, error_msg, type(exc).__name__,
+        )
+        return None
     except OllamaEmptyResponseError as exc:
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         pass_errors.append(error_msg)

@@ -401,6 +401,46 @@ async def test_prepare_chat_context_production_request_carries_no_evaluation_con
     assert svc.request_builder.get_generation_config.call_args.kwargs["evaluation_context"] is None
 
 
+@pytest.mark.parametrize(
+    ("provider", "expected_budget"),
+    [
+        ("ollama", 16384),
+        ("g8e", 16384),
+        ("gemini", None),
+        ("anthropic", None),
+        (None, None),
+    ],
+)
+async def test_prepare_chat_context_budgets_history_only_for_ollama_backed_providers(
+    provider, expected_budget
+):
+    """Only Ollama-backed providers send num_ctx=32768; others keep untrimmed history."""
+    from app.models.settings import G8eeUserSettings, LLMSettings
+
+    svc = _pipeline_for_prepare_chat_context()
+    g8e_ctx = build_g8e_http_context(
+        investigation_id="inv-1", case_id="case-1", web_session_id="web-1", user_id="user-1"
+    )
+    llm = LLMSettings() if provider is None else LLMSettings(primary_provider=provider)
+
+    with patch("app.services.ai.chat_pipeline.resolve_model", return_value="qwen3.5:4b"):
+        await svc._prepare_chat_context(
+            message="hello",
+            g8e_context=g8e_ctx,
+            request_settings=G8eeUserSettings(llm=llm),
+            attachments=[],
+            sentinel_mode=True,
+            model_overrides=ModelOverrideResolver(
+                primary_model="qwen3.5:4b",
+                assistant_model="qwen3.5:4b",
+                lite_model="qwen3.5:4b",
+            ),
+        )
+
+    kwargs = svc.request_builder.build_contents_from_history.call_args.kwargs
+    assert kwargs["history_token_budget"] == expected_budget
+
+
 def _scored_context():
     from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 

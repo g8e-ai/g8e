@@ -8,11 +8,13 @@
 """Unit tests for MemoryGenerationService."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.constants import InvestigationStatus
 from app.constants.message_sender import MessageSender
+from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Content, Role
 from app.models.investigations import (
     AIResponseMetadata,
@@ -56,6 +58,43 @@ async def test_memory_generation_bounds_models_without_documented_output_limit(m
         == MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS
     )
     assert memory.investigation_summary == "Synthetic test summary"
+
+
+@pytest.mark.asyncio
+async def test_memory_generation_skips_update_on_context_overflow_without_retry(monkeypatch):
+    provider = FakeLLMProvider()
+    provider.generate_content_lite = AsyncMock(
+        side_effect=ContextWindowExceededError(
+            "prompt filled the context window",
+            model="smollm2:135m",
+            service_name="ollama",
+            num_ctx=32768,
+            prompt_tokens=32768,
+            channel="lite",
+        )
+    )
+    monkeypatch.setattr(
+        "app.services.ai.memory_generation_service.get_generative_lite_provider",
+        lambda settings: provider,
+    )
+    service = MemoryGenerationService(FakeMemoryDataService())
+    memory = InvestigationMemory(
+        investigation_id="inv-1",
+        case_id="case-1",
+        user_id="user-1",
+        status=InvestigationStatus.OPEN,
+        case_title="Test Case",
+        investigation_summary="Existing summary",
+    )
+    settings = G8eeUserSettings(llm=LLMSettings(lite_provider="ollama", lite_model="smollm2:135m"))
+
+    model_call = await service._ai_update_memory(memory, [], settings)
+
+    assert memory.investigation_summary == "Existing summary"
+    assert model_call is not None
+    assert model_call.succeeded is False
+    assert model_call.error_type == "ContextWindowExceededError"
+    assert provider.generate_content_lite.await_count == 1
 
 
 class TestMemoryGenerationServiceInit:

@@ -14,7 +14,7 @@ from typing import TypeVar
 
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
-from app.errors import OllamaEmptyResponseError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_generative_lite_provider, Role
 from app.llm.model_evidence import model_boundary_hash
@@ -191,6 +191,7 @@ class AIResponseAnalyzer:
         settings: G8eeUserSettings,
         fallback_no_model: Callable[[], T],
         fallback_no_response: Callable[[], T],
+        fallback_context_overflow: Callable[[], T],
         fallback_exception: Callable[[Exception], T],
         log_context: str,
         agent_role: str,
@@ -252,6 +253,13 @@ class AIResponseAnalyzer:
                 response_text=response_text,
                 error=exc,
             )
+            if isinstance(exc, ContextWindowExceededError):
+                logger.error(
+                    "%s: prompt exceeded the model context window, not retrying: %s",
+                    log_context,
+                    exc,
+                )
+                return fallback_context_overflow().model_copy(update={"model_call": telemetry})
             if isinstance(exc, OllamaEmptyResponseError):
                 logger.error("%s: LLM returned no text content: %s", log_context, exc)
                 return fallback_no_response().model_copy(update={"model_call": telemetry})
@@ -360,6 +368,7 @@ class AIResponseAnalyzer:
             settings=resolved_settings,
             fallback_no_model=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_no_response=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
+            fallback_context_overflow=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_exception=lambda e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             log_context="Command risk analysis",
             agent_role="marshal_command",
@@ -455,6 +464,14 @@ class AIResponseAnalyzer:
                 reasoning="LLM response contained no text parts",
                 user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
             ),
+            fallback_context_overflow=lambda: ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause="Error analysis prompt exceeded the model's context window",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning="The conversation exceeded the model's context window",
+                user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable because the conversation exceeded the model's context window - manual intervention required.",
+            ),
             fallback_exception=lambda e: ErrorAnalysisResult(
                 error_category=ErrorAnalysisCategory.UNKNOWN,
                 root_cause="Error analysis failed",
@@ -541,6 +558,13 @@ class AIResponseAnalyzer:
                 safe_to_proceed=False,
                 blocking_issues=["Risk analysis failed - LLM returned no content"],
                 approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
+            ),
+            fallback_context_overflow=lambda: FileOperationRiskAnalysis(
+                risk_level=RiskLevel.HIGH,
+                is_system_file=False,
+                safe_to_proceed=False,
+                blocking_issues=["Risk analysis failed - the conversation exceeded the model's context window"],
+                approval_prompt=f"Risk analysis failed because the conversation exceeded the model's context window. File operation: {operation} on {file_path}\nProceed with extreme caution?",
             ),
             fallback_exception=lambda e: FileOperationRiskAnalysis(
                 risk_level=RiskLevel.HIGH,

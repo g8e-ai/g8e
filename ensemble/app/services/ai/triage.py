@@ -17,7 +17,7 @@ import time
 
 import app.llm.llm_types as types
 from app.llm import Role, get_llm_provider
-from app.errors import OllamaEmptyResponseError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.llm.model_evidence import (
     model_boundary_hash,
 )
@@ -183,6 +183,27 @@ class TriageAgent:
                         error_code="MODEL_EMPTY_RESPONSE",
                     ).model_copy(update={"model_call": failed_call})
                 result = self._parse_response(response.text).model_copy(update={"model_call": model_call})
+            except ContextWindowExceededError as exc:
+                logger.warning(
+                    "[TRIAGE] Prompt exceeded the lite model context window, defaulting to complex without retry: %s",
+                    exc,
+                )
+                failed_call = build_model_call_telemetry(
+                    provider=provider,
+                    agent_role="triage",
+                    model_role="lite",
+                    model=model,
+                    monotonic_start=monotonic_start,
+                    input_artifact_hash=input_artifact_hash,
+                    succeeded=False,
+                    error_type=type(exc).__name__,
+                )
+                return self._escalation_result(
+                    "Triage unavailable: the conversation exceeded the lite model's context window. Escalating to full LLM for complexity classification.",
+                    error_code="MODEL_CONTEXT_OVERFLOW",
+                    error_class=exc.__class__.__name__,
+                    error_message=str(exc),
+                ).model_copy(update={"model_call": failed_call})
             except OllamaEmptyResponseError as exc:
                 logger.warning(
                     "[TRIAGE] No response from lite model, defaulting to complex: %s", exc

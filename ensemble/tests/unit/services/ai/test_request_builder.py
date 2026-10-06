@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 from app.services.ai.request_builder import AIRequestBuilder, ToolExecutorProtocol
 from app.models.investigations import ConversationHistoryMessage, UserChatMetadata
 from app.constants.message_sender import MessageSender
-from app.constants import AgentMode
+from app.constants import HISTORY_OMITTED_MARKER, AgentMode
 import app.llm.llm_types as types
 from app.errors import ConfigurationError
 from app.models.settings import G8eeUserSettings, LLMSettings
@@ -225,6 +225,143 @@ class TestBuildContentsFromHistory:
         assert len(contents) == 1
         assert len(contents[0].parts) == 1
         assert contents[0].parts[0].text == "ai only"
+
+
+def _msg(sender, text, n):
+    return ConversationHistoryMessage(sender=sender, content=text, prev_hash=f"{n:064d}")
+
+
+def _five_message_history():
+    """user, model, user, model, user - each message estimates to 100 tokens."""
+    return [
+        _msg(MessageSender.USER_CHAT, "a" * 400, 0),
+        _msg(MessageSender.AI_PRIMARY, "b" * 400, 1),
+        _msg(MessageSender.USER_CHAT, "c" * 400, 2),
+        _msg(MessageSender.AI_PRIMARY, "d" * 400, 3),
+        _msg(MessageSender.USER_CHAT, "e" * 400, 4),
+    ]
+
+
+def _texts(contents):
+    return [c.parts[0].text for c in contents]
+
+
+class TestHistoryTokenBudget:
+    """History compaction: drop oldest whole messages, never the last user message."""
+
+    def test_under_budget_is_unchanged(self, builder):
+        history = _five_message_history()
+        trimmed = builder.build_contents_from_history(
+            history, sentinel_mode=False, history_token_budget=500
+        )
+        untrimmed = builder.build_contents_from_history(history, sentinel_mode=False)
+
+        assert trimmed.contents == untrimmed.contents
+        assert HISTORY_OMITTED_MARKER not in _texts(trimmed.contents)
+
+    def test_no_budget_never_trims(self, builder):
+        result = builder.build_contents_from_history(
+            _five_message_history(), sentinel_mode=False, history_token_budget=None
+        )
+        assert len(result.contents) == 5
+
+    def test_over_budget_drops_oldest_first_and_prepends_marker(self, builder):
+        result = builder.build_contents_from_history(
+            _five_message_history(), sentinel_mode=False, history_token_budget=250
+        )
+
+        texts = _texts(result.contents)
+        assert texts[0] == HISTORY_OMITTED_MARKER
+        assert texts[1:] == ["d" * 400, "e" * 400]
+        assert texts.count(HISTORY_OMITTED_MARKER) == 1
+
+    def test_marker_tokens_count_against_the_budget(self, builder):
+        # Two 100-token messages plus the ~24-token marker is 224: one more than fits.
+        result = builder.build_contents_from_history(
+            _five_message_history(), sentinel_mode=False, history_token_budget=210
+        )
+
+        assert _texts(result.contents) == [HISTORY_OMITTED_MARKER, "e" * 400]
+
+    def test_drops_whole_messages_never_splits_one(self, builder):
+        result = builder.build_contents_from_history(
+            _five_message_history(), sentinel_mode=False, history_token_budget=250
+        )
+
+        for text in _texts(result.contents)[1:]:
+            assert text in {"a" * 400, "b" * 400, "c" * 400, "d" * 400, "e" * 400}
+
+    def test_last_user_message_and_attachments_always_survive(self, builder):
+        attachment = types.Part.from_text("ATTACHED " * 100)
+        result = builder.build_contents_from_history(
+            _five_message_history(),
+            attachments=[attachment],
+            sentinel_mode=False,
+            history_token_budget=1,
+        )
+
+        assert result.contents[0].parts[0].text == HISTORY_OMITTED_MARKER
+        assert result.contents[-1].role == types.Role.USER
+        assert result.contents[-1].parts[0].text == "e" * 400
+        assert result.contents[-1].parts[-1] is attachment
+
+    def test_single_oversized_last_message_is_kept_as_is(self, builder):
+        history = [_msg(MessageSender.USER_CHAT, "x" * 400_000, 0)]
+
+        result = builder.build_contents_from_history(
+            history, sentinel_mode=False, history_token_budget=100
+        )
+
+        assert _texts(result.contents) == ["x" * 400_000]
+
+    def test_oversized_last_message_drops_all_history_before_it(self, builder):
+        history = [*_five_message_history()[:-1], _msg(MessageSender.USER_CHAT, "x" * 400_000, 9)]
+
+        result = builder.build_contents_from_history(
+            history, sentinel_mode=False, history_token_budget=100
+        )
+
+        assert _texts(result.contents) == [HISTORY_OMITTED_MARKER, "x" * 400_000]
+
+    def test_marker_is_a_user_message_visible_to_the_model(self, builder):
+        result = builder.build_contents_from_history(
+            _five_message_history(), sentinel_mode=False, history_token_budget=250
+        )
+
+        assert result.contents[0].role == types.Role.USER
+        assert "omitted" in result.contents[0].parts[0].text
+
+    def test_dropped_messages_have_no_scrubbing_observations(self, builder):
+        history = [
+            _msg(MessageSender.USER_CHAT, "old " + "a" * 400, 0),
+            _msg(MessageSender.AI_PRIMARY, "b" * 400, 1),
+            _msg(MessageSender.USER_TERMINAL, "term " + "c" * 400, 2),
+            _msg(MessageSender.USER_CHAT, "latest", 3),
+        ]
+
+        result = builder.build_contents_from_history(
+            history, sentinel_mode=True, history_token_budget=120
+        )
+
+        assert _texts(result.contents)[-1] == "latest"
+        assert [o.source for o in result.scrubbing_observations] == [MessageSender.USER_CHAT]
+        assert len(result.contents) == 2
+
+    def test_kept_messages_keep_their_observations(self, builder):
+        history = [
+            _msg(MessageSender.USER_CHAT, "a" * 400, 0),
+            _msg(MessageSender.USER_TERMINAL, "t" * 40, 1),
+            _msg(MessageSender.USER_CHAT, "latest", 2),
+        ]
+
+        result = builder.build_contents_from_history(
+            history, sentinel_mode=True, history_token_budget=40
+        )
+
+        assert [o.source for o in result.scrubbing_observations] == [
+            MessageSender.USER_TERMINAL,
+            MessageSender.USER_CHAT,
+        ]
 
 
 class TestGetGenerationConfig:

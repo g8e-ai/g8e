@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.http_context import G8eHttpContext
@@ -189,6 +190,31 @@ async def test_generate_title_uses_fallback_on_short_llm_response(mock_provider,
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "Memory leak in the worker process"
     assert result.fallback is True
+
+
+@pytest.mark.asyncio
+async def test_generate_title_uses_fallback_on_context_overflow_without_retry(
+    mock_provider, mock_settings
+):
+    """Overflow falls back to the description title, records the typed error, and is not retried."""
+    mock_provider.generate_content_lite.side_effect = ContextWindowExceededError(
+        "prompt filled the context window",
+        model="lite-model",
+        service_name="ollama",
+        num_ctx=32768,
+        prompt_tokens=32768,
+        channel="lite",
+    )
+
+    description = "Nginx service is failing to start on port 80"
+    result = await generate_case_title(description, max_length=80, settings=mock_settings)
+
+    assert result.generated_title == "Nginx service is failing to start on port 80"
+    assert result.fallback is True
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type == "ContextWindowExceededError"
+    assert mock_provider.generate_content_lite.await_count == 1
 
 
 @pytest.mark.asyncio

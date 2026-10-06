@@ -31,6 +31,8 @@ from app.constants import (
     AITaskId,
     EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
     EventType,
+    LLM_OLLAMA_DEFAULT_NUM_CTX,
+    LLM_OLLAMA_HISTORY_BUDGET_FRACTION,
     LLMProvider,
     TriageComplexityClassification,
     AgentMode,
@@ -460,10 +462,18 @@ class ChatPipelineService:
             attachment_parts = self.request_builder.format_attachment_parts(processed)
 
         investigation_sentinel_mode = investigation.sentinel_mode if investigation else True
+        # Both Ollama-backed providers send num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX, so that
+        # is the real window; other providers have their own, larger windows.
+        history_token_budget = (
+            int(LLM_OLLAMA_DEFAULT_NUM_CTX * LLM_OLLAMA_HISTORY_BUDGET_FRACTION)
+            if request_settings.llm.primary_provider in (LLMProvider.OLLAMA, LLMProvider.G8E)
+            else None
+        )
         built_contents = self.request_builder.build_contents_from_history(
             conversation_history=conversation_history,
             attachments=attachment_parts if attachment_parts else [],
             sentinel_mode=investigation_sentinel_mode,
+            history_token_budget=history_token_budget,
         )
 
         return AgentInputs(

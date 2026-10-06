@@ -2706,6 +2706,11 @@
         "_go_const": "AuditorReasonEmptyResponse",
         "_python_const": "EMPTY_RESPONSE",
         "value": "empty_response"
+      },
+      "context_overflow": {
+        "_go_const": "AuditorReasonContextOverflow",
+        "_python_const": "CONTEXT_OVERFLOW",
+        "value": "context_overflow"
       }
     },
     "tie_break_reason": {

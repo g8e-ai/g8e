@@ -470,6 +470,18 @@ DEFAULT_OPERATOR_CONFIG = {
 # output. 32768 matches common modern model context sizes.
 LLM_OLLAMA_DEFAULT_NUM_CTX = 32768
 
+# Share of the Ollama context window that cross-turn chat history may occupy.
+# The remainder is headroom for what history does not include: the system
+# prompt (persona, memories, operator context), the declared tool schemas, and
+# the generation budget (thinking models spend several thousand tokens before
+# visible output). The estimate below also undercounts code and JSON, which
+# tokenise nearer 3 characters per token, so history is deliberately capped at
+# half the window rather than packed to the limit.
+LLM_OLLAMA_HISTORY_BUDGET_FRACTION = 0.5
+
+# Dependency-free token estimate (no tokenizer): characters divided by this.
+LLM_ESTIMATED_CHARS_PER_TOKEN = 4
+
 CACHE_TTL_DEFAULT = 3600
 CACHE_TTL_SHORT = 300
 CACHE_TTL_MEDIUM = 1800
@@ -528,6 +540,10 @@ FILE_SECURITY_WARNING_PREFIX_TEMPLATE = (
 ATTACHED_DOCUMENT_HEADER_TEMPLATE = "\n\n--- Attached Document: {filename} ---\n"
 ATTACHED_DOCUMENT_FOOTER_TEMPLATE = "--- End of {filename} ---\n"
 ATTACHMENT_FILENAMES_PREFIX_TEMPLATE = "[ATTACHMENTS: {filenames}]\n\n"
+HISTORY_OMITTED_MARKER = (
+    "[SYSTEM NOTE: Earlier messages in this conversation were omitted to fit "
+    "the model's context window.]"
+)
 BATCH_OUTPUT_SECTION_SEPARATOR = "\n\n"
 TRUNCATED_LINES_MARKER_TEMPLATE = "\n\n... [{count} lines truncated] ...\n\n"
 DOCS_UNAVAILABLE_TEMPLATE = (

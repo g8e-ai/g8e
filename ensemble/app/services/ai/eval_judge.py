@@ -39,7 +39,7 @@ from app.models.model_telemetry import ModelCallTelemetry
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.models.settings import EvalJudgeSettings
 from app.utils.agent_persona_loader import get_agent_persona
-from app.errors import OllamaEmptyResponseError, RateLimitError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError, RateLimitError
 from app.models.model_configs import get_model_config
 
 logger = logging.getLogger(__name__)
@@ -269,6 +269,12 @@ class EvalJudge:
                 return await self._call_and_parse(contents, settings, attempt, model_calls)
             except EvalJudgeError:
                 raise
+            except ContextWindowExceededError as exc:
+                logger.error("EvalJudge prompt exceeded the model context window, not retrying: %s", exc)
+                raise EvalJudgeError(
+                    f"Judge prompt exceeded the model's context window; the case was not scored: {exc}",
+                    model_calls=model_calls,
+                ) from exc
             except Exception as exc:
                 last_error = exc
                 if _is_retryable(exc) and attempt < _MAX_RETRIES - 1:

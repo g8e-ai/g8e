@@ -32,7 +32,12 @@ from g8e.models.events import ScrubbingTelemetry
 from g8e.models.internal_api import EvaluationInferenceContext
 
 import app.llm.llm_types as types
-from app.constants import ATTACHMENT_FILENAMES_PREFIX_TEMPLATE, AgentMode
+from app.constants import (
+    ATTACHMENT_FILENAMES_PREFIX_TEMPLATE,
+    HISTORY_OMITTED_MARKER,
+    LLM_ESTIMATED_CHARS_PER_TOKEN,
+    AgentMode,
+)
 from app.constants.message_sender import MessageSender
 from app.errors import ConfigurationError
 from app.llm.llm_types import PrimaryLLMSettings
@@ -50,6 +55,17 @@ logger = logging.getLogger(__name__)
 class BuiltContents:
     contents: list[types.Content]
     scrubbing_observations: list[ScrubbingTelemetry]
+
+
+def _estimate_tokens(content: types.Content) -> int:
+    """Estimate prompt tokens for one message as characters // 4 (no tokenizer)."""
+    chars = 0
+    for part in content.parts:
+        if part.text:
+            chars += len(part.text)
+        if part.inline_data:
+            chars += len(part.inline_data.data)
+    return chars // LLM_ESTIMATED_CHARS_PER_TOKEN
 
 
 @runtime_checkable
@@ -122,6 +138,7 @@ class AIRequestBuilder:
         conversation_history: list[ConversationHistoryMessage],
         attachments: list[types.Part] | None = None,
         sentinel_mode: bool = True,
+        history_token_budget: int | None = None,
     ) -> BuiltContents:
         """
         Build a contents array from database conversation history for stateless generate_content.
@@ -137,12 +154,20 @@ class AIRequestBuilder:
                 Must include the current user message (already stored before this call).
             attachments: Optional list of Part objects to append to the last user message.
             sentinel_mode: Controls AI data access - True (scrubbed/redacted) or False (full data)
+            history_token_budget: Estimated-token ceiling for the built contents. When the
+                history exceeds it, the oldest whole messages are dropped and one marker
+                message is prepended. The last user message (with its attachments) is never
+                dropped, even if it alone exceeds the budget; the provider then reports the
+                overflow as ``ContextWindowExceededError``. ``None`` disables trimming.
 
         Returns:
-            Built contents and authoritative scrubbing observations.
+            Built contents and authoritative scrubbing observations. Observations
+            of dropped messages are omitted: they were not sent.
         """
         contents: list[types.Content] = []
-        scrubbing_observations: list[ScrubbingTelemetry] = []
+        # Aligned with ``contents``: the scrubbing observation of each message,
+        # or None for messages that are not scrubbed (model output).
+        content_observations: list[ScrubbingTelemetry | None] = []
         should_scrub = sentinel_mode is True
 
         if conversation_history:
@@ -159,7 +184,6 @@ class AIRequestBuilder:
                     text_for_ai, observation = self._prepare_user_text(
                         content_text, sender, should_scrub
                     )
-                    scrubbing_observations.append(observation)
                     filenames = (
                         msg.metadata.attachment_filenames
                         if isinstance(msg.metadata, UserChatMetadata)
@@ -179,11 +203,11 @@ class AIRequestBuilder:
                             parts=[types.Part.from_text(text=text_for_ai)],
                         )
                     )
+                    content_observations.append(observation)
                 elif sender == MessageSender.USER_TERMINAL:
                     terminal_text_for_ai, observation = self._prepare_user_text(
                         content_text, sender, should_scrub
                     )
-                    scrubbing_observations.append(observation)
                     contents.append(
                         types.Content(
                             role=types.Role.USER,
@@ -194,6 +218,7 @@ class AIRequestBuilder:
                             ],
                         )
                     )
+                    content_observations.append(observation)
                 elif sender in [
                     MessageSender.AI_PRIMARY,
                     MessageSender.AI_ASSISTANT,
@@ -206,6 +231,7 @@ class AIRequestBuilder:
                             parts=[types.Part.from_text(text=content_text)],
                         )
                     )
+                    content_observations.append(None)
 
             logger.info(" [BUILD_CONTENTS] Built %s Content objects from history", len(contents))
 
@@ -219,10 +245,65 @@ class AIRequestBuilder:
                     )
                     break
 
+        if history_token_budget is not None:
+            contents, content_observations = self._trim_to_budget(
+                contents, content_observations, history_token_budget
+            )
+
         return BuiltContents(
             contents=contents,
-            scrubbing_observations=scrubbing_observations,
+            scrubbing_observations=[o for o in content_observations if o is not None],
         )
+
+    @staticmethod
+    def _trim_to_budget(
+        contents: list[types.Content],
+        observations: list[ScrubbingTelemetry | None],
+        budget: int,
+    ) -> tuple[list[types.Content], list[ScrubbingTelemetry | None]]:
+        """Drop the oldest whole messages until the estimate fits ``budget``.
+
+        Everything from the last user message onward is kept, so the current
+        request and its attachments survive even when they alone exceed the budget.
+        """
+        estimates = [_estimate_tokens(c) for c in contents]
+        total = sum(estimates)
+        if total <= budget:
+            return contents, observations
+
+        last_user = next(
+            (i for i in range(len(contents) - 1, -1, -1) if contents[i].role == types.Role.USER),
+            len(contents) - 1,
+        )
+        marker_tokens = len(HISTORY_OMITTED_MARKER) // LLM_ESTIMATED_CHARS_PER_TOKEN
+        dropped = 0
+        while dropped < last_user and total + marker_tokens > budget:
+            total -= estimates[dropped]
+            dropped += 1
+
+        if dropped == 0:
+            logger.info(
+                " [BUILD_CONTENTS] History exceeds budget but nothing is droppable: "
+                "kept=%s estimated_tokens=%s budget=%s",
+                len(contents),
+                total,
+                budget,
+            )
+            return contents, observations
+
+        logger.info(
+            " [BUILD_CONTENTS] Trimmed history to fit context budget: dropped=%s kept=%s "
+            "estimated_tokens=%s budget=%s",
+            dropped,
+            len(contents) - dropped,
+            total + marker_tokens,
+            budget,
+        )
+        marker = types.Content(
+            role=types.Role.USER,
+            parts=[types.Part.from_text(text=HISTORY_OMITTED_MARKER)],
+        )
+        return [marker, *contents[dropped:]], [None, *observations[dropped:]]
 
     def get_generation_config(
         self,

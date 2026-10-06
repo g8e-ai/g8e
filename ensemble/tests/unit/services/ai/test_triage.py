@@ -27,6 +27,7 @@ from app.constants import (
     TriageIntentClassification,
     TriageRequestPosture,
 )
+from app.errors import ContextWindowExceededError
 from app.models.agents.triage import TriageRequest
 from app.llm.providers.fake import FakeProvider
 from app.models.attachments import AttachmentMetadata
@@ -276,6 +277,43 @@ async def test_triage_defaults_to_complex_on_provider_exception(fake_provider, m
     assert result.model_call.error_type == "RuntimeError"
     assert result.model_call.monotonic_end >= result.model_call.monotonic_start
     assert result.model_call.input_artifact_hash
+
+
+async def test_triage_defaults_to_complex_on_context_overflow_without_retry(
+    fake_provider, mock_settings
+):
+    fake_provider.generate_content_lite = AsyncMock(
+        side_effect=ContextWindowExceededError(
+            "prompt filled the context window",
+            model="lite-model",
+            service_name="ollama",
+            num_ctx=32768,
+            prompt_tokens=32768,
+            channel="lite",
+        )
+    )
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="hello",
+        agent_mode=AgentMode.G8E_NOT_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
+        result = await agent.triage(request)
+
+    assert result.complexity == TriageComplexityClassification.COMPLEX
+    assert result.complexity_confidence == TriageConfidence.LOW
+    assert result.error_code == "MODEL_CONTEXT_OVERFLOW"
+    assert result.error_class == "ContextWindowExceededError"
+    assert "context window" in result.intent_summary
+    assert "empty" not in result.intent_summary.lower()
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type == "ContextWindowExceededError"
+    assert fake_provider.generate_content_lite.await_count == 1
 
 
 async def test_triage_defaults_to_complex_on_llm_exception(fake_provider, mock_settings):

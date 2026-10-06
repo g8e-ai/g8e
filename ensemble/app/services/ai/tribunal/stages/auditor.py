@@ -18,7 +18,7 @@ from app.constants import (
 from app.constants import EventType
 from app.constants.generated_status import CommandErrorType
 from app.llm.provider import LLMProvider
-from app.errors import OllamaEmptyResponseError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.models.agent import OperatorContext
 from app.models.reputation import (
     ReputationCommitmentCreatedPayload,
@@ -302,6 +302,19 @@ class TribunalAuditor:
                     )
                     break
 
+            except ContextWindowExceededError as exc:
+                logger.error(
+                    "[TRIBUNAL-AUDITOR] Prompt exceeded the model context window, not retrying: %s",
+                    exc,
+                )
+                await fail_auditor(
+                    self.emitter,
+                    request,
+                    AuditorReason.CONTEXT_OVERFLOW,
+                    f"The conversation exceeded the model's context window: {exc!s}",
+                    target_cmd,
+                    model_calls=model_calls,
+                )
             except (ValueError, OllamaEmptyResponseError) as exc:
                 logger.warning("[TRIBUNAL-AUDITOR] Attempt %d failed: %s", attempt + 1, exc)
                 if attempt == max_attempts - 1:

@@ -31,7 +31,7 @@ from app.llm.llm_types import (
     ToolConfig,
 )
 from app.llm.model_evidence import model_boundary_hash
-from app.llm.providers.ollama import OllamaProvider
+from app.llm.providers.ollama import OllamaProvider, _prompt_filled_context
 from app.models.model_telemetry import ModelResponseArtifact
 
 PATCH_TARGET = "app.llm.providers.ollama.AsyncClient"
@@ -869,6 +869,122 @@ class TestOllamaEmptyResponseError:
         assert error.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
         assert error.prompt_tokens == LLM_OLLAMA_DEFAULT_NUM_CTX
 
+    @staticmethod
+    def _answered_response(prompt_eval_count):
+        response = MagicMock()
+        response.message.content = "Hello World"
+        response.message.thinking = None
+        response.message.tool_calls = None
+        response.done_reason = "stop"
+        response.prompt_eval_count = prompt_eval_count
+        response.eval_count = 5
+        return response
+
+    @staticmethod
+    def _lite_settings():
+        return LiteLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            response_format=ResponseFormat(
+                json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")
+            ),
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("prompt_eval_count", [LLM_OLLAMA_DEFAULT_NUM_CTX, LLM_OLLAMA_DEFAULT_NUM_CTX + 50])
+    async def test_generate_content_lite_raises_context_window_exceeded_on_answered_prompt_at_limit(
+        self, provider, prompt_eval_count
+    ):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(return_value=self._answered_response(prompt_eval_count))
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+
+        with pytest.raises(ContextWindowExceededError) as exc_info:
+            await provider.generate_content_lite("llama3", contents, self._lite_settings())
+
+        error = exc_info.value
+        assert not isinstance(error, OllamaEmptyResponseError)
+        assert error.model == "llama3"
+        assert error.channel == "lite"
+        assert error.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
+        assert error.prompt_tokens == prompt_eval_count
+
+    @pytest.mark.asyncio
+    async def test_generate_content_lite_accepts_answered_prompt_below_limit(self, provider):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(
+            return_value=self._answered_response(LLM_OLLAMA_DEFAULT_NUM_CTX - 1)
+        )
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+
+        response = await provider.generate_content_lite("llama3", contents, self._lite_settings())
+
+        assert response.candidates[0].content.parts[0].text == "Hello World"
+
+    @pytest.mark.asyncio
+    async def test_generate_content_lite_accepts_answered_prompt_when_prompt_eval_count_unset(
+        self, provider
+    ):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(return_value=self._answered_response(None))
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+
+        response = await provider.generate_content_lite("llama3", contents, self._lite_settings())
+
+        assert response.candidates[0].content.parts[0].text == "Hello World"
+
+    @pytest.mark.asyncio
+    async def test_generate_content_assistant_raises_context_window_exceeded_on_answered_prompt_at_limit(
+        self, provider
+    ):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(
+            return_value=self._answered_response(LLM_OLLAMA_DEFAULT_NUM_CTX)
+        )
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = AssistantLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            response_format=ResponseFormat(
+                json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")
+            ),
+        )
+
+        with pytest.raises(ContextWindowExceededError) as exc_info:
+            await provider.generate_content_assistant("llama3", contents, settings)
+
+        assert exc_info.value.channel == "assistant"
+        assert exc_info.value.prompt_tokens == LLM_OLLAMA_DEFAULT_NUM_CTX
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_raises_context_window_exceeded_on_answered_prompt_at_limit(
+        self, provider
+    ):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(
+            return_value=self._answered_response(LLM_OLLAMA_DEFAULT_NUM_CTX)
+        )
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.OFF, include_thoughts=False
+            ),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
+        )
+
+        with pytest.raises(ContextWindowExceededError) as exc_info:
+            await provider.generate_content_primary("llama3", contents, settings)
+
+        assert exc_info.value.channel == "primary"
+        assert exc_info.value.prompt_tokens == LLM_OLLAMA_DEFAULT_NUM_CTX
+
     @pytest.mark.asyncio
     async def test_generate_content_assistant_raises_on_empty_content(self, provider):
         provider, mock_client = provider
@@ -1001,3 +1117,22 @@ class TestOllamaEmptyResponseError:
 
         error = exc_info.value
         assert error.tool_calls_count == 1
+
+
+class TestPromptFilledContext:
+    """The single predicate behind both the empty-content and the answered-prompt checks."""
+
+    @pytest.mark.parametrize(
+        ("prompt_eval_count", "num_ctx", "expected"),
+        [
+            (32768, 32768, True),
+            (40000, 32768, True),
+            (32767, 32768, False),
+            (None, 32768, False),
+            (32768, None, False),
+            (32768, 0, False),
+            (0, 32768, False),
+        ],
+    )
+    def test_predicate(self, prompt_eval_count, num_ctx, expected):
+        assert _prompt_filled_context(prompt_eval_count, num_ctx) is expected

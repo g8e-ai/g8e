@@ -158,7 +158,19 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
     return ollama_tools if ollama_tools else None
 
 
-def _raise_on_empty_content(
+def _prompt_filled_context(prompt_eval_count: int | None, num_ctx: int | None) -> bool:
+    """Return True when the evaluated prompt consumed the whole context window.
+
+    Ollama silently truncates a prompt that fills ``num_ctx`` (dropping the
+    oldest tokens) or leaves no room to generate, so the answer is empty or
+    degraded. The Gateway applies the same ``prompt_eval_count >= num_ctx`` rule
+    in ``internal/services/inference/ollama_backend.go``. Unset counts cannot
+    prove overflow.
+    """
+    return bool(num_ctx) and prompt_eval_count is not None and prompt_eval_count >= num_ctx
+
+
+def _raise_on_unusable_response(
     response,
     *,
     model: str,
@@ -166,53 +178,36 @@ def _raise_on_empty_content(
     num_ctx: int,
     num_predict: int | None,
 ) -> None:
-    """Raise OllamaEmptyResponseError when Ollama returns HTTP 200 with no content.
+    """Raise when a non-streaming Ollama response cannot be trusted.
 
-    Load failures and thinking-only output surface as ``message.content == ""``
-    with a 200 response; this error captures the diagnostic context needed to
-    identify the root cause. A prompt that filled ``num_ctx`` surfaces the same
-    way but is raised as the distinct ``ContextWindowExceededError``.
+    A prompt that filled ``num_ctx`` raises ``ContextWindowExceededError`` even
+    when the answer is non-empty, because Ollama truncated the prompt. Otherwise
+    an HTTP 200 with no content raises ``OllamaEmptyResponseError``; load
+    failures and thinking-only output surface that way, and the error captures
+    the diagnostic context needed to identify the root cause.
 
     Raises:
-        ContextWindowExceededError: If content is empty and the prompt filled num_ctx.
+        ContextWindowExceededError: If the prompt filled num_ctx.
         OllamaEmptyResponseError: If content is empty for any other reason.
     """
     message = getattr(response, "message", None)
     content = getattr(message, "content", None) if message else None
-    if content:
-        return
-
     done_reason = getattr(response, "done_reason", None)
     prompt_eval_count = getattr(response, "prompt_eval_count", None)
-    eval_count = getattr(response, "eval_count", None)
-    thinking = getattr(message, "thinking", None) if message else None
-    thinking_len = len(thinking) if thinking else 0
-    tool_calls = getattr(message, "tool_calls", None) if message else None
-    tool_calls_count = len(tool_calls) if tool_calls else 0
 
     from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 
-    ctx_overflow_suspected = (
-        prompt_eval_count is not None and num_ctx is not None and prompt_eval_count >= num_ctx
-    )
-
-    logger.warning(
-        "[OLLAMA] Empty message.content on 200 OK: channel=%s model=%s "
-        "done_reason=%s prompt_eval_count=%s eval_count=%s num_ctx=%s "
-        "num_predict=%s thinking_chars=%d tool_calls=%d ctx_overflow_suspected=%s",
-        channel,
-        model,
-        done_reason,
-        prompt_eval_count,
-        eval_count,
-        num_ctx,
-        num_predict,
-        thinking_len,
-        tool_calls_count,
-        ctx_overflow_suspected,
-    )
-
-    if ctx_overflow_suspected:
+    if _prompt_filled_context(prompt_eval_count, num_ctx):
+        logger.warning(
+            "[OLLAMA] Prompt filled the context window: channel=%s model=%s "
+            "done_reason=%s prompt_eval_count=%s num_ctx=%s has_content=%s",
+            channel,
+            model,
+            done_reason,
+            prompt_eval_count,
+            num_ctx,
+            bool(content),
+        )
         raise ContextWindowExceededError(
             f"Ollama prompt filled the context window (channel={channel}, model={model}, "
             f"prompt_tokens={prompt_eval_count}, num_ctx={num_ctx})",
@@ -222,6 +217,30 @@ def _raise_on_empty_content(
             prompt_tokens=prompt_eval_count,
             channel=channel,
         )
+
+    if content:
+        return
+
+    eval_count = getattr(response, "eval_count", None)
+    thinking = getattr(message, "thinking", None) if message else None
+    thinking_len = len(thinking) if thinking else 0
+    tool_calls = getattr(message, "tool_calls", None) if message else None
+    tool_calls_count = len(tool_calls) if tool_calls else 0
+
+    logger.warning(
+        "[OLLAMA] Empty message.content on 200 OK: channel=%s model=%s "
+        "done_reason=%s prompt_eval_count=%s eval_count=%s num_ctx=%s "
+        "num_predict=%s thinking_chars=%d tool_calls=%d",
+        channel,
+        model,
+        done_reason,
+        prompt_eval_count,
+        eval_count,
+        num_ctx,
+        num_predict,
+        thinking_len,
+        tool_calls_count,
+    )
 
     raise OllamaEmptyResponseError(
         f"Ollama returned empty message.content on 200 OK (channel={channel}, model={model})",
@@ -234,7 +253,7 @@ def _raise_on_empty_content(
         num_predict=num_predict,
         thinking_len=thinking_len,
         tool_calls_count=tool_calls_count,
-        ctx_overflow_suspected=ctx_overflow_suspected,
+        ctx_overflow_suspected=False,
     )
 
 
@@ -422,7 +441,7 @@ class OllamaProvider(LLMProvider):
             )
             raise
 
-        _raise_on_empty_content(
+        _raise_on_unusable_response(
             response,
             model=model,
             channel="primary",
@@ -532,7 +551,7 @@ class OllamaProvider(LLMProvider):
         response = await self._client.chat(**chat_kwargs)
         self._record_response(response, complete=True)
 
-        _raise_on_empty_content(
+        _raise_on_unusable_response(
             response,
             model=model,
             channel="assistant",
@@ -631,7 +650,7 @@ class OllamaProvider(LLMProvider):
         response = await self._client.chat(**chat_kwargs)
         self._record_response(response, complete=True)
 
-        _raise_on_empty_content(
+        _raise_on_unusable_response(
             response,
             model=model,
             channel="lite",

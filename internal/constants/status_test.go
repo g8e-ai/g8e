@@ -154,6 +154,7 @@ func TestAuditorReasonConstants(t *testing.T) {
 		{AuditorReasonNoValidRevision, "no_valid_revision"},
 		{AuditorReasonAuditorError, "auditor_error"},
 		{AuditorReasonEmptyResponse, "empty_response"},
+		{AuditorReasonContextOverflow, "context_overflow"},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.value, string(tc.goConst))

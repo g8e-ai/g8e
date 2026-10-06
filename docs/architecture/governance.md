@@ -382,7 +382,7 @@ The L5 Actuator owns the execution boundary. It guarantees zero standing privile
 6. **Receipt Finalization and Failure Classification**:
    - Updates receipt status to `EXECUTION_STATUS_COMPLETED` or `EXECUTION_STATUS_FAILED`.
    - Captures state root after execution.
-   - Maps errors to typed `ReceiptFailureCode` (e.g. `RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED`, `RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT`, `RECEIPT_FAILURE_CODE_EXECUTION_FAILED`).
+   - Maps errors to typed `ReceiptFailureCode` (e.g. `RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED`, `RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT`, `RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW`, `RECEIPT_FAILURE_CODE_EXECUTION_FAILED`).
 7. **Final Persistence Attestation**:
    - Signs the final receipt and logs it to the audit stores.
    - Generates a `ReceiptPersistenceAttestation` containing the transaction ID, final receipt signature digest, audit record ID, signer key ID, and timestamp, signed by the Actuator's private key.

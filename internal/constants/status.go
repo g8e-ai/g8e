@@ -519,6 +519,7 @@ const (
 	AuditorReasonNoValidRevision    AuditorReason = "no_valid_revision"
 	AuditorReasonAuditorError       AuditorReason = "auditor_error"
 	AuditorReasonEmptyResponse      AuditorReason = "empty_response"
+	AuditorReasonContextOverflow    AuditorReason = "context_overflow"
 )
 
 // TieBreakReason is a typed string for tie-break reason.

@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import ANTHROPIC_CLAUDE_HAIKU_4_5
+from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.settings import EvalJudgeSettings
 from app.services.ai.eval_judge import (
@@ -341,6 +342,26 @@ class TestGradeTurnErrorPaths:
         )
         with pytest.raises(EvalJudgeError, match="out-of-range score"):
             await judge.grade_turn(**GRADE_KWARGS)
+
+    async def test_context_overflow_raises_judge_error_without_retry(self, judge, mock_provider):
+        mock_provider.generate_content_lite.side_effect = ContextWindowExceededError(
+            "prompt filled the context window",
+            model="gemini-3.1-pro-preview",
+            service_name="ollama",
+            num_ctx=32768,
+            prompt_tokens=32768,
+            channel="lite",
+        )
+        with pytest.raises(EvalJudgeError, match="context window") as exc_info:
+            await judge.grade_turn(**GRADE_KWARGS)
+
+        # Not scored, not empty-response, and retrying the same prompt cannot succeed.
+        assert "empty" not in str(exc_info.value).lower()
+        assert mock_provider.generate_content_lite.await_count == 1
+        assert isinstance(exc_info.value.__cause__, ContextWindowExceededError)
+        assert len(exc_info.value.model_calls) == 1
+        assert exc_info.value.model_calls[0].succeeded is False
+        assert exc_info.value.model_calls[0].error_type == "ContextWindowExceededError"
 
     async def test_non_retryable_api_error_raises_immediately(self, judge, mock_provider):
         mock_provider.generate_content_lite.side_effect = Exception("401 Unauthorized")

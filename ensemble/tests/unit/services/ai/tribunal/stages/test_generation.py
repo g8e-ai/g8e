@@ -7,6 +7,7 @@
 
 from unittest.mock import AsyncMock, MagicMock
 import pytest
+from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Role
 from app.models.agents.tribunal import (
     TribunalSystemError,
@@ -117,6 +118,48 @@ class TestRunGenerationPass:
         assert event.payload.error_type == "RuntimeError"
         assert event.payload.monotonic_end >= event.payload.monotonic_start
         assert event.payload.input_artifact_hash
+
+    async def test_context_overflow_reports_overflow_not_empty_response(
+        self, make_mock_provider, mock_g8e_context, mock_operator_context
+    ):
+        mock_provider = make_mock_provider(
+            generate_content_lite_side_effect=ContextWindowExceededError(
+                "prompt filled the context window",
+                model="test-model",
+                service_name="ollama",
+                num_ctx=32768,
+                prompt_tokens=32768,
+                channel="lite",
+            )
+        )
+        event_service = MagicMock()
+        event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(event_service, mock_g8e_context)
+        pass_errors: list[str] = []
+
+        result = await _run_generation_pass(
+            provider=mock_provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            operator_context=mock_operator_context,
+            pass_index=0,
+            emitter=emitter,
+            pass_errors=pass_errors,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+        )
+
+        assert result is None
+        assert len(pass_errors) == 1
+        assert "exceeded the model's context window" in pass_errors[0]
+        assert "empty" not in pass_errors[0].lower()
+        # Token counts in the exception must not leak into text that
+        # is_system_error() scans for HTTP status codes.
+        assert "32768" not in pass_errors[0]
+        assert mock_provider.generate_content_lite.await_count == 1
+        event = event_service.publish.await_args.args[0]
+        assert event.payload.succeeded is False
+        assert event.payload.error_type == "ContextWindowExceededError"
 
     async def test_empty_response_appends_to_pass_errors(
         self, make_mock_provider, mock_g8e_context, mock_operator_context

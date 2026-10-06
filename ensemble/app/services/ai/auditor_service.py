@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NoReturn
 
-from app.errors import OllamaEmptyResponseError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
 from app.models.agent import OperatorContext
 from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment, ReputationSignRequest
@@ -536,6 +536,18 @@ async def run_auditor(
                 )
                 return False, revised_final, revised_final, reason, None, None
 
+        except ContextWindowExceededError as exc:
+            logger.error(
+                "[TRIBUNAL-AUDITOR] Prompt exceeded the model context window, not retrying: %s",
+                exc,
+            )
+            await fail_auditor(
+                emitter,
+                request,
+                AuditorReason.CONTEXT_OVERFLOW,
+                f"The conversation exceeded the model's context window: {exc!s}",
+                target_cmd,
+            )
         except (ValueError, OllamaEmptyResponseError) as exc:
             last_error = exc
             logger.warning(

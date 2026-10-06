@@ -11,7 +11,7 @@ import time
 
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
-from app.errors import OllamaEmptyResponseError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.llm import get_generative_lite_provider, Role
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
@@ -253,6 +253,22 @@ class MemoryGenerationService:
                     ctx_overflow_suspected=False,
                 )
             ai_analysis = self._parse_memory_analysis(response.text)
+        except ContextWindowExceededError as exc:
+            logger.warning(
+                "Prompt exceeded the model context window during memory update for %s, skipping preference update without retry: %s",
+                memory.investigation_id,
+                exc,
+            )
+            return build_model_call_telemetry(
+                provider=provider,
+                agent_role="codex",
+                model_role="lite",
+                model=lite_model,
+                monotonic_start=monotonic_start,
+                input_artifact_hash=input_artifact_hash,
+                succeeded=False,
+                error_type=type(exc).__name__,
+            )
         except OllamaEmptyResponseError as exc:
             logger.warning(
                 "AI response was empty during memory update for %s, skipping preference update: %s",
