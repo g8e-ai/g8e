@@ -163,16 +163,15 @@ async def test_consensus_failure_emits_failed_agent_state():
     with patch(
         "app.services.ai.generator.get_llm_provider",
         return_value=mock_provider,
-    ):
-        with pytest.raises(TribunalConsensusFailedError):
-            await generate_command(
-                make_tribunal_generation_request(
-                    request="list files",
-                    event_service=event_svc,
-                    g8e_context=_make_context(),
-                    settings=settings,
-                )
+    ), pytest.raises(TribunalConsensusFailedError):
+        await generate_command(
+            make_tribunal_generation_request(
+                request="list files",
+                event_service=event_svc,
+                g8e_context=_make_context(),
+                settings=settings,
             )
+        )
 
     statuses = _agent_state_statuses(event_svc)
     assert statuses[-2:] == ["failed", "idle"]

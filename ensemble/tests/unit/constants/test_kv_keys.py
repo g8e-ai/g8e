@@ -20,7 +20,7 @@ class TestCachePrefix:
     """Verify CACHE_PREFIX is sourced from g8e constants."""
 
     def test_cache_prefix_matches_g8e(self):
-        assert CACHE_PREFIX == KV["kv_keys"]["CachePrefix"]["value"]
+        assert KV["kv_keys"]["CachePrefix"]["value"] == CACHE_PREFIX
 
     def test_cache_prefix_value(self):
         assert CACHE_PREFIX == "g8e"
@@ -61,8 +61,8 @@ class TestKVKeyPrefix:
 
     def test_cache_doc_prefix_matches_g8e_template(self):
         template = KV["kv_keys"]["CacheDoc"]["value"]
-        assert KVKeyPrefix.CACHE_DOC == template.split("{")[0]
+        assert template.split("{")[0] == KVKeyPrefix.CACHE_DOC
 
     def test_cache_query_prefix_matches_g8e_template(self):
         template = KV["kv_keys"]["CacheQuery"]["value"]
-        assert KVKeyPrefix.CACHE_QUERY == template.split("{")[0]
+        assert template.split("{")[0] == KVKeyPrefix.CACHE_QUERY

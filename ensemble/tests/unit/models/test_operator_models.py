@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
+from pydantic import ValidationError
 
 from app.models.operators import (
     OperatorDocument,
@@ -60,3 +61,22 @@ class TestOperatorDocumentNoSystemInfoField:
         assert doc.runtime_config is not None
         assert doc.runtime_config.inference_enabled is True
         assert doc.runtime_config.http_port == 8444
+
+
+def test_operator_document_preserves_blended_typed_roles():
+    doc = OperatorDocument(
+        id="blended",
+        user_id="owner",
+        status=OperatorStatus.ACTIVE,
+        operator_roles=["embedded", "data", "inference", "provenance", "observer"],
+        runtime_config={"roles": ["data", "inference", "provenance", "observer"]},
+    )
+    assert len(doc.operator_roles) == 5
+    assert doc.runtime_config is not None
+    assert len(doc.runtime_config.roles) == 4
+    assert (
+        OperatorDocument.model_validate_json(doc.model_dump_json()).operator_roles
+        == doc.operator_roles
+    )
+    with pytest.raises(ValidationError):
+        OperatorDocument(id="invalid", user_id="owner", operator_roles=["cloud"])

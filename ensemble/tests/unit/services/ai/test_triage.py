@@ -485,13 +485,12 @@ async def test_triage_uses_provided_model_override(fake_provider, mock_settings)
         model_override="custom-model",
     )
 
-    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
-        with patch(
-            "app.services.ai.triage.AIGenerationConfigBuilder.build_lite_settings"
-        ) as mock_config:
-            mock_config.return_value = MagicMock()
-            await agent.triage(request)
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider), patch(
+        "app.services.ai.triage.AIGenerationConfigBuilder.build_lite_settings"
+    ) as mock_config:
+        mock_config.return_value = MagicMock()
+        await agent.triage(request)
 
-            # Verify custom model was used in config builder
-            _args, kwargs = mock_config.call_args
-            assert kwargs["model"] == "custom-model"
+        # Verify custom model was used in config builder
+        _args, kwargs = mock_config.call_args
+        assert kwargs["model"] == "custom-model"

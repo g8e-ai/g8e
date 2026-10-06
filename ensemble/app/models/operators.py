@@ -14,7 +14,6 @@ from __future__ import annotations
 # released under the Apache License, Version 2.0.
 import asyncio
 import logging
-from typing import Any
 
 from app.constants import (
     ApprovalErrorType,
@@ -26,9 +25,9 @@ from app.constants import (
     FileOperation,
     HistoryActor,
     OperatorHistoryEventType,
+    OperatorRole,
     OperatorStatus,
     OperatorType,
-    OperatorRole,
     VersionStability,
 )
 from app.models.base import (
@@ -130,6 +129,7 @@ class OperatorHistoryEntry(G8eBaseModel):
 
 class OperatorRuntimeConfig(G8eBaseModel):
     """Typed runtime configuration reported by remote and embedded operators."""
+
     roles: list[OperatorRole] = Field(default_factory=list)
     cloud_mode: bool = False
     cloud_provider: str | None = None
