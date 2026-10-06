@@ -216,7 +216,7 @@ class AppEnrollmentService:
     @staticmethod
     def _load_cert(cert_path: str) -> x509.Certificate:
         """Load and parse a PEM cert from disk. Raises on any failure."""
-        with open(cert_path, "rb") as fh:
+        with Path(cert_path).open("rb") as fh:
             return x509.load_pem_x509_certificate(fh.read())
 
     @staticmethod

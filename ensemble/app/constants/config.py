@@ -33,7 +33,7 @@ def _load_security_constraints() -> SecurityConstraintsConstants:
     try:
         config_path = Path(__file__).parent.parent.parent / "config" / "security_constraints.json"
         if config_path.exists():
-            with open(config_path) as f:
+            with config_path.open() as f:
                 constraints = json.load(f)
             return SecurityConstraintsConstants.model_validate(constraints)
     except Exception:

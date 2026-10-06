@@ -137,7 +137,7 @@ class TestToIsoZ:
         assert "+" not in result
 
     def test_naive_datetime_treated_as_utc(self):
-        dt = datetime(2026, 1, 15, 10, 30, 0)
+        dt = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
         result = _to_iso_z(dt)
         assert result.endswith("Z")
 
@@ -169,7 +169,7 @@ class TestUTCDatetime:
         assert "+" not in dumped["timestamp"]
 
     def test_naive_datetime_treated_as_utc_and_emits_z_suffix(self):
-        dt = datetime(2026, 1, 15, 10, 30, 0)
+        dt = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
         m = self._ModelWithUTCDatetime(timestamp=dt)
         dumped = m.model_dump(mode="json")
         assert dumped["timestamp"].endswith("Z")

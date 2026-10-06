@@ -249,7 +249,7 @@ class TestPhase3PII:
         import app.security.sentinel_scrubber as ss_module
 
         filepath = Path(ss_module.__file__)
-        with open(filepath) as f:
+        with filepath.open() as f:
             tree = ast.parse(f.read())
 
         for node in ast.walk(tree):

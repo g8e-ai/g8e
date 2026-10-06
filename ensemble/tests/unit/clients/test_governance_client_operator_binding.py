@@ -20,6 +20,7 @@ See: .local.dev/docs/plans/in-progress/2026-08-23-ollama-ensemble-e2e-remaining-
 
 import datetime
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -58,9 +59,9 @@ def _generate_operator_cert_with_spiffe(cert_path: str, key_path: str, spiffe_ur
         )
         .sign(private_key, hashes.SHA256())
     )
-    with open(cert_path, "wb") as f:
+    with Path(cert_path).open("wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
-    with open(key_path, "wb") as f:
+    with Path(key_path).open("wb") as f:
         f.write(
             private_key.private_bytes(
                 serialization.Encoding.PEM,
@@ -102,9 +103,9 @@ def operator_cert_no_spiffe(tmp_path):
         .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
         .sign(private_key, hashes.SHA256())
     )
-    with open(cert_path, "wb") as f:
+    with Path(cert_path).open("wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
-    with open(key_path, "wb") as f:
+    with Path(key_path).open("wb") as f:
         f.write(
             private_key.private_bytes(
                 serialization.Encoding.PEM,

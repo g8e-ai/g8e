@@ -8,6 +8,7 @@
 import os
 import shutil
 import tempfile
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -65,7 +66,7 @@ def setup_ca_files(temp_pki_dir, ca_cert):
     os.makedirs(trust_dir, exist_ok=True)
     cert_path = os.path.join(trust_dir, "g8eg-ca-bundle.pem")
 
-    with open(cert_path, "wb") as f:
+    with Path(cert_path).open("wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     return temp_pki_dir
@@ -113,7 +114,7 @@ async def test_initialize_alternate_path(temp_pki_dir, ca_cert, mock_data_servic
 
     cert_path = os.path.join(auth_subdir, "hub_ca.crt")
 
-    with open(cert_path, "wb") as f:
+    with Path(cert_path).open("wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     service = CertificateService(

@@ -18,7 +18,7 @@ def _load[T](filename: str, model_cls: type[T]) -> T:
     # Load from local app/constants directory
     path = Path(__file__).parent / filename
     try:
-        with open(path) as f:
+        with path.open() as f:
             data = json.load(f)
             # Use Pydantic to validate and parse the JSON data
             if hasattr(model_cls, "model_validate"):

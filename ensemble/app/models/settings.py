@@ -587,13 +587,13 @@ class G8eeAppSettings(G8eBaseModel):
             return self._ca_cert_path
         ca_path = PATHS["infra"]["ca_cert_path"]
         try:
-            with open(ca_path):
+            with Path(ca_path).open():
                 return ca_path
         except OSError:
             pki_dir = Path(PATHS["infra"]["pki_dir"])
             candidate = pki_dir / "trust" / "g8eg-ca-bundle.pem"
             try:
-                with open(candidate):
+                with candidate.open():
                     return str(candidate)
             except OSError:
                 return None
@@ -609,7 +609,7 @@ class G8eeAppSettings(G8eBaseModel):
         if not cert_path:
             return None
         try:
-            with open(cert_path):
+            with Path(cert_path).open():
                 return cert_path
         except OSError:
             return None
@@ -625,7 +625,7 @@ class G8eeAppSettings(G8eBaseModel):
         if not key_path:
             return None
         try:
-            with open(key_path):
+            with Path(key_path).open():
                 return key_path
         except OSError:
             return None

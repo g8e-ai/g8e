@@ -30,6 +30,7 @@ resolve_pubsub_ssl_context(ssl_settings) and passes it to ws_connect().
 
 import os
 import ssl
+from pathlib import Path
 
 import aiohttp
 
@@ -53,13 +54,13 @@ def _resolve_ssl_context(
                     logger.warning("[SSL] CA cert path does not exist: %s", path)
                     continue
                 logger.info("[SSL] Probing CA cert path: %s", path)
-                with open(path):
+                with Path(path).open():
                     pass
                 ctx = ssl.create_default_context(cafile=path)
                 if certfile and keyfile:
                     logger.info("[SSL] Loading cert chain: cert=%s, key=%s", certfile, keyfile)
                     try:
-                        with open(certfile), open(keyfile):
+                        with Path(certfile).open(), Path(keyfile).open():
                             ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
                     except (OSError, ssl.SSLError) as e:
                         logger.warning("Failed to load client cert chain: %s", e)

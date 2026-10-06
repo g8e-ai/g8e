@@ -55,7 +55,7 @@ def load_prompt(prompt_file: PromptFile) -> str:
         )
 
     try:
-        with open(file_path, encoding="utf-8") as f:
+        with Path(file_path).open(encoding="utf-8") as f:
             content = f.read()
 
         logger.info("Loaded prompt from %s (%d chars)", prompt_file.name, len(content))

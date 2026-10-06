@@ -423,7 +423,7 @@ class GovernanceClient:
         try:
             from cryptography import x509
 
-            with open(self._client_cert_path, "rb") as f:
+            with Path(self._client_cert_path).open("rb") as f:
                 cert = x509.load_pem_x509_certificate(f.read())
             for ext in cert.extensions:
                 if isinstance(ext.value, x509.SubjectAlternativeName):

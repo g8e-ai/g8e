@@ -44,7 +44,7 @@ def _load_security_constraints() -> dict:
     """Load security constraints from local config."""
     try:
         config_path = Path(__file__).parent.parent.parent / "config" / "security_constraints.json"
-        with open(config_path) as f:
+        with config_path.open() as f:
             return json.load(f)
     except Exception:
         return {}

@@ -50,6 +50,7 @@ import logging
 import os
 import ssl
 import tempfile
+from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
@@ -103,7 +104,7 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
     )
 
     ca_path = os.path.join(tmpdir, "ca.pem")
-    with open(ca_path, "wb") as f:
+    with Path(ca_path).open("wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     # --- Server cert signed by CA ---
@@ -134,11 +135,11 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
     )
 
     cert_path = os.path.join(tmpdir, "server.pem")
-    with open(cert_path, "wb") as f:
+    with Path(cert_path).open("wb") as f:
         f.write(server_cert.public_bytes(serialization.Encoding.PEM))
 
     key_path = os.path.join(tmpdir, "server.key")
-    with open(key_path, "wb") as f:
+    with Path(key_path).open("wb") as f:
         f.write(
             server_key.private_bytes(
                 serialization.Encoding.PEM,

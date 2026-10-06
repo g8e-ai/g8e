@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -90,7 +91,7 @@ class CertificateService:
 
         if found_cert_path:
             try:
-                with open(found_cert_path, "rb") as f:
+                with Path(found_cert_path).open("rb") as f:
                     self.ca_cert = x509.load_pem_x509_certificate(f.read())
                 # CodeQL: Avoid logging absolute paths as they can reveal system information
                 logger.info("[CERT-SERVICE] CA certificate loaded")

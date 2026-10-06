@@ -43,7 +43,7 @@ def _load_protocol_sse_fixtures():
     )
     if not fixtures_path.exists():
         return None
-    with open(fixtures_path) as f:
+    with fixtures_path.open() as f:
         return json.load(f)
 
 

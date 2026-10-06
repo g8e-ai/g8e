@@ -61,7 +61,7 @@ def get_all_python_files(root: Path):
 
 def check_file_for_violations(file_path: Path) -> list[str]:
     """Returns a list of violation descriptions found in the file."""
-    with open(file_path, encoding="utf-8", errors="ignore") as f:
+    with file_path.open(encoding="utf-8", errors="ignore") as f:
         try:
             tree = ast.parse(f.read())
         except SyntaxError:
