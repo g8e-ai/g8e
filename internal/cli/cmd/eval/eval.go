@@ -168,8 +168,9 @@ func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "formations",
-		Short: "Heterogeneous model sets",
+		Use:     "formations",
+		Aliases: []string{"formation"},
+		Short:   "Heterogeneous model sets",
 	}
 	cmd.AddCommand(
 		formationsListEvalCmd(),
