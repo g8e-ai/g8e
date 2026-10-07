@@ -284,7 +284,7 @@ the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 			}
 
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
-			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", timeout.String(), "-v"}
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", defaultE2ETimeout.String(), "-v"}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}

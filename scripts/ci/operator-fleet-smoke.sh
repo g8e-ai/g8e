@@ -19,6 +19,7 @@
 #                      (unshare --map-root-user --net). Workers always dial the
 #                      default Gateway ports 8080/8443, so use this when another
 #                      Gateway already owns them (a developer machine).
+#   G8E_FLEET_TIMEOUT  overall `g8e test e2e` time limit (default 20m)
 #   G8E_E2E_FLEET_SOAK / _CONCURRENCY / _ROUNDS   passed through to the scenario
 #
 # Never touches a Gateway or Operators it did not start: it uses its own
@@ -75,12 +76,27 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Workers always dial the default Gateway ports, so another listener there
+# would receive this run's enrollments and commands. Refuse to start rather
+# than risk pointing the deploy at a Gateway this script does not own.
+for port in 8080 8443; do
+    if ss -Hltn "sport = :$port" | grep -q .; then
+        echo "port $port already has a listener; stop it or run with G8E_FLEET_NETNS=1" >&2
+        exit 1
+    fi
+done
+
 echo "== Gateway (isolated runtime: $RUN)"
 cd "$RUN"
 "$G8E_BIN" gw start --cert-mode localhost --posture doctrine --public-spectator=false --rate-limit-rps 0 --log info --quiet
 "$G8E_BIN" auth enroll user -e localhost --headless
 
 GATEWAY_PID="$(pgrep -f -- "$RUN/.g8e/bin/g8e gw start" | head -n1)"
+# Confirm the listener on the Operator port belongs to the Gateway started above.
+if ! ss -Hltnp "sport = :8443" | grep -q "pid=$GATEWAY_PID,"; then
+    echo "port 8443 is not served by the Gateway this script started (pid ${GATEWAY_PID:-none})" >&2
+    exit 1
+fi
 bash "$REPO/scripts/ci/sample-gateway.sh" "$GATEWAY_PID" "$RUN/.g8e/data" "$OUT/gateway-resources.csv" 10 &
 SAMPLER_PID=$!
 
@@ -97,6 +113,6 @@ G8E_E2E_RUNTIME_ROOT="$RUN" \
 G8E_E2E_FLEET_SIZE="$FLEET_SIZE" \
 G8E_E2E_FLEET_BIN="$G8E_BIN" \
 G8E_E2E_FLEET_REPORT="$OUT/fleet-report.json" \
-    "$G8E_BIN" test e2e --run '^TestOperatorFleet_' 2>&1 | tee "$OUT/scenario.log"
+    "$G8E_BIN" test e2e --timeout "${G8E_FLEET_TIMEOUT:-20m}" --run '^TestOperatorFleet_' 2>&1 | tee "$OUT/scenario.log"
 
 echo "Operator fleet scenario passed: $FLEET_SIZE Operators; results in $OUT"
