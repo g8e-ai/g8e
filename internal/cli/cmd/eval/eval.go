@@ -184,8 +184,9 @@ func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gates",
-		Short: "Pre-campaign acceptance gates",
+		Use:     "gates",
+		Aliases: []string{"gate"},
+		Short:   "Pre-campaign acceptance gates",
 	}
 	cmd.AddCommand(
 		jsonLeaf(gatesChatEvalCmd(deps)),
