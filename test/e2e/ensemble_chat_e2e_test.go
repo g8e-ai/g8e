@@ -114,7 +114,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 			if r.TargetResource != filePath {
 				continue
 			}
-			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBefore) {
+			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBefore) {
 				continue
 			}
 			if r.Signature == "" {
@@ -166,7 +166,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 			if r.EventType != constants.EventAppCaseCreateRequested {
 				continue
 			}
-			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBefore) {
+			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBefore) {
 				continue
 			}
 			if r.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {

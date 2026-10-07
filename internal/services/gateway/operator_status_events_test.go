@@ -73,7 +73,7 @@ func putWebSession(t *testing.T, store *DocumentStoreService, id, userID string,
 func putSilentOperator(t *testing.T, store *DocumentStoreService, _, _, _ string) {
 	t.Helper()
 	op := remoteOperator(constants.OperatorStatusActive)
-	op.UserID = statusEventOwner
+	op.UserId = statusEventOwner
 	op.Name = "edge-1"
 	op.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 2)
 	putOperator(t, store, "op-silent", op, time.Hour)
@@ -164,7 +164,7 @@ func TestOperatorStatusEvents_StopAndTerminateReachOwnerWebSession(t *testing.T)
 
 	for _, id := range []string{"op-stopped", "op-terminated"} {
 		op := remoteOperator(constants.OperatorStatusActive)
-		op.UserID = statusEventOwner
+		op.UserId = statusEventOwner
 		op.Name = id
 		putOperator(t, store, id, op, time.Second)
 	}
@@ -187,7 +187,7 @@ func TestOperatorStatusEvents_StopByNonOwnerIsNotPushed(t *testing.T) {
 	store := ls.GetDocStore()
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 	op := remoteOperator(constants.OperatorStatusActive)
-	op.UserID = statusEventOwner
+	op.UserId = statusEventOwner
 	putOperator(t, store, "op-1", op, time.Second)
 
 	require.ErrorIs(t, ls.reg.MarkOperatorStopped("op-1", statusEventOther, ""), constants.ErrRegistrationOperatorNotBelongToUser)
@@ -201,7 +201,7 @@ func TestOperatorStatusEvents_HeartbeatRecoveryReachesOwnerWebSession(t *testing
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 
 	stale := remoteOperator(constants.OperatorStatusStale)
-	stale.UserID = statusEventOwner
+	stale.UserId = statusEventOwner
 	stale.Name = "edge-1"
 	stale.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 10)
 	putOperator(t, store, "op-stale", stale, time.Hour)
@@ -266,8 +266,8 @@ func TestOperatorStatusEvents_SlotClaimAnnouncesActiveToOwner(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.True(t, resp.Success)
-	require.Equal(t, slot.ID, resp.OperatorID, "claim the pre-created offline slot")
-	assertActiveAnnouncement(t, env.svc, env.ownerID, slot.ID, slot.Name)
+	require.Equal(t, slot.Id, resp.OperatorID, "claim the pre-created offline slot")
+	assertActiveAnnouncement(t, env.svc, env.ownerID, slot.Id, slot.Name)
 }
 
 func TestOperatorStatusEvents_HeartbeatFromHealthyOperatorIsNotPushed(t *testing.T) {
@@ -275,7 +275,7 @@ func TestOperatorStatusEvents_HeartbeatFromHealthyOperatorIsNotPushed(t *testing
 	store := ls.GetDocStore()
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 	op := remoteOperator(constants.OperatorStatusActive)
-	op.UserID = statusEventOwner
+	op.UserId = statusEventOwner
 	putOperator(t, store, "op-healthy", op, time.Second)
 
 	publishTestHeartbeat(t, ls, "op-healthy")

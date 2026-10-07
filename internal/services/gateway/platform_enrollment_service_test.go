@@ -467,11 +467,9 @@ func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSess
 	opDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc)
-	opBytes, err := json.Marshal(opDoc.Data)
+	op, err := models.OperatorDocumentFromStore(opDoc)
 	require.NoError(t, err)
-	var op *operatorv1.OperatorDocument
-	require.NoError(t, json.Unmarshal(opBytes, &op))
-	assert.Equal(t, constants.OperatorStatusTerminated, op.Status)
+	assert.Equal(t, string(constants.OperatorStatusTerminated), op.Status)
 
 	cliDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID)
 	require.NoError(t, err)
@@ -559,21 +557,19 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	opDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc)
-	dataBytes, err := json.Marshal(opDoc.Data)
+	op, err := models.OperatorDocumentFromStore(opDoc)
 	require.NoError(t, err)
-	var op *operatorv1.OperatorDocument
-	require.NoError(t, json.Unmarshal(dataBytes, &op))
 	// DocSet strips the "id" field from the data JSON (the ID is stored
 	// separately in the documents table), so op.ID is empty. The operator
 	// document was found by resp.Operator.OperatorID, which proves the ID
 	// was correctly generated and used as the document key.
-	assert.Equal(t, env.ownerID, op.UserID, "operator doc must carry the approving owner's user_id")
+	assert.Equal(t, env.ownerID, op.UserId, "operator doc must carry the approving owner's user_id")
 	owner, err := env.userSvc.GetByID(env.ownerID)
 	require.NoError(t, err)
 	require.NotNil(t, owner)
-	assert.Equal(t, owner.OrganizationID, op.OrganizationID, "operator doc must carry the approving owner's organization_id")
+	assert.Equal(t, owner.OrganizationID, op.OrganizationId, "operator doc must carry the approving owner's organization_id")
 	assert.False(t, op.IsSlot, "platform-enrolled operators are not slots")
-	assert.Equal(t, constants.OperatorStatusActive, op.Status)
+	assert.Equal(t, string(constants.OperatorStatusActive), op.Status)
 	assert.True(t, op.Claimed)
 
 	// Verify the CLI session is bound to the approving owner's user_id.
@@ -660,15 +656,15 @@ func TestPlatformEnrollmentService_OperatorIssuanceIsDiscoverableViaListUserOper
 
 	var found *operatorv1.OperatorDocument
 	for i := range operators {
-		if operators[i].ID == resp.Operator.OperatorID {
-			found = &operators[i]
+		if operators[i].Id == resp.Operator.OperatorID {
+			found = operators[i]
 			break
 		}
 	}
 	require.NotNil(t, found, "platform-enrolled operator must appear in ListUserOperators")
-	assert.Equal(t, env.ownerID, found.UserID)
+	assert.Equal(t, env.ownerID, found.UserId)
 	assert.False(t, found.IsSlot, "platform-enrolled operator is not a slot")
-	assert.Equal(t, constants.OperatorStatusActive, found.Status)
+	assert.Equal(t, string(constants.OperatorStatusActive), found.Status)
 }
 
 // enrollOperatorWithFingerprint runs a full operator enrollment (create,
@@ -706,11 +702,11 @@ func TestPlatformEnrollmentService_ReEnrollmentSupersedesPriorOperatorLease(t *t
 	require.NoError(t, err)
 	byID := make(map[string]*operatorv1.OperatorDocument, len(operators))
 	for _, op := range operators {
-		byID[op.ID] = op
+		byID[op.Id] = op
 	}
-	assert.Equal(t, constants.OperatorStatusTerminated, byID[oldID].Status, "the earlier lease for the same identity must be terminated")
-	assert.Equal(t, constants.OperatorStatusActive, byID[newID].Status)
-	assert.Equal(t, constants.OperatorStatusActive, byID[otherID].Status, "a different identity must not be superseded")
+	assert.Equal(t, string(constants.OperatorStatusTerminated), byID[oldID].Status, "the earlier lease for the same identity must be terminated")
+	assert.Equal(t, string(constants.OperatorStatusActive), byID[newID].Status)
+	assert.Equal(t, string(constants.OperatorStatusActive), byID[otherID].Status, "a different identity must not be superseded")
 
 	assertOperatorSessionActive := func(sessionID string, want bool) {
 		t.Helper()

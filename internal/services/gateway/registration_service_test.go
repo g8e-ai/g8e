@@ -19,6 +19,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -201,9 +202,9 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 		// Find the slot we just created (may not be first due to ordering)
 		found := false
 		for _, s := range slots {
-			if s.ID == slot.ID {
+			if s.Id == slot.Id {
 				found = true
-				assert.Equal(t, "user-123", s.UserID)
+				assert.Equal(t, "user-123", s.UserId)
 				assert.True(t, s.IsSlot)
 				break
 			}
@@ -240,20 +241,20 @@ func TestRegistrationService_ListUserOperators(t *testing.T) {
 		// Persist a platform-enrolled operator (is_slot=false) stamped
 		// with the same user_id, mimicking what signOperatorComponent
 		// writes for a platform-enrolled operator.
-		platformOp := operatorv1.OperatorDocument{
-			ID:        "platform-op-1",
-			UserID:    "user-123",
-			Component: constants.ComponentNameG8EO,
+		platformOp := &operatorv1.OperatorDocument{
+			Id:        "platform-op-1",
+			UserId:    "user-123",
+			Component: string(constants.ComponentNameG8EO),
 			Name:      "platform-operator",
-			Status:    constants.OperatorStatusActive,
+			Status:    string(constants.OperatorStatusActive),
 			IsSlot:    false,
 			Claimed:   true,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
+			CreatedAt: timestamppb.Now(),
+			UpdatedAt: timestamppb.Now(),
 		}
-		opBytes, err := json.Marshal(platformOp)
+		opBytes, err := models.MarshalOperatorDocument(platformOp)
 		require.NoError(t, err)
-		require.NoError(t, regSvc.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), platformOp.ID, opBytes))
+		require.NoError(t, regSvc.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), platformOp.Id, opBytes))
 
 		operators, err := regSvc.ListUserOperators("user-123")
 		require.NoError(t, err)
@@ -262,14 +263,14 @@ func TestRegistrationService_ListUserOperators(t *testing.T) {
 		slotFound := false
 		platformFound := false
 		for _, op := range operators {
-			if op.ID == slot.ID {
+			if op.Id == slot.Id {
 				slotFound = true
 				assert.True(t, op.IsSlot, "user-created slot must keep is_slot=true")
 			}
-			if op.ID == platformOp.ID {
+			if op.Id == platformOp.Id {
 				platformFound = true
 				assert.False(t, op.IsSlot, "platform-enrolled operator must keep is_slot=false")
-				assert.Equal(t, "user-123", op.UserID)
+				assert.Equal(t, "user-123", op.UserId)
 			}
 		}
 		assert.True(t, slotFound, "user-created slot should be in results")
@@ -315,7 +316,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to terminate with different user_id
-		err = regSvc.TerminateOperator(slot.ID, "user-456", "test")
+		err = regSvc.TerminateOperator(slot.Id, "user-456", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "does not belong to user")
 	})
@@ -325,11 +326,11 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		require.NoError(t, err)
 
 		// First termination
-		err = regSvc.TerminateOperator(slot.ID, "user-123", "test")
+		err = regSvc.TerminateOperator(slot.Id, "user-123", "test")
 		require.NoError(t, err)
 
 		// Second termination should be no-op
-		err = regSvc.TerminateOperator(slot.ID, "user-123", "test")
+		err = regSvc.TerminateOperator(slot.Id, "user-123", "test")
 		assert.NoError(t, err)
 	})
 
@@ -337,18 +338,17 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
-		err = regSvc.TerminateOperator(slot.ID, "user-123", "test reason")
+		err = regSvc.TerminateOperator(slot.Id, "user-123", "test reason")
 		require.NoError(t, err)
 
 		// Verify status was updated
-		doc, err := infra.DocStore.DocGet("operators", slot.ID)
+		doc, err := infra.DocStore.DocGet("operators", slot.Id)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
-		var op *operatorv1.OperatorDocument
-		b, _ := json.Marshal(doc.ForWire())
-		_ = json.Unmarshal(b, &op)
-		assert.Equal(t, constants.OperatorStatusTerminated, op.Status)
+		op, err := models.OperatorDocumentFromStore(doc)
+		require.NoError(t, err)
+		assert.Equal(t, string(constants.OperatorStatusTerminated), op.Status)
 	})
 }
 
@@ -361,13 +361,13 @@ func TestRegistrationService_ToOperatorDoc(t *testing.T) {
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
-		doc, err := infra.DocStore.DocGet("operators", slot.ID)
+		doc, err := infra.DocStore.DocGet("operators", slot.Id)
 		require.NoError(t, err)
 
-		op, err := regSvc.toOperatorDoc(doc)
+		op, err := models.OperatorDocumentFromStore(doc)
 		require.NoError(t, err)
-		assert.Equal(t, slot.ID, op.ID)
-		assert.Equal(t, "user-123", op.UserID)
+		assert.Equal(t, slot.Id, op.Id)
+		assert.Equal(t, "user-123", op.UserId)
 	})
 
 	t.Run("Malformed doc returns error", func(t *testing.T) {
@@ -381,7 +381,7 @@ func TestRegistrationService_ToOperatorDoc(t *testing.T) {
 			},
 		}
 
-		_, err := regSvc.toOperatorDoc(malformedDoc)
+		_, err := models.OperatorDocumentFromStore(malformedDoc)
 		assert.Error(t, err)
 	})
 }
@@ -445,7 +445,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 		req := models.BindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-456", // Different owner
-			OperatorIDs:  []string{slot.ID},
+			OperatorIDs:  []string{slot.Id},
 		}
 		resp, err := regSvc.BindOperators(req)
 		require.NoError(t, err)
@@ -461,7 +461,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 		req := models.BindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
-			OperatorIDs:  []string{slot.ID},
+			OperatorIDs:  []string{slot.Id},
 		}
 		resp, err := regSvc.BindOperators(req)
 		require.NoError(t, err)
@@ -482,20 +482,20 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.DocStore.DocUpdate("operators", slot.ID, updateBytes)
+		_, err = infra.DocStore.DocUpdate("operators", slot.Id, updateBytes)
 		require.NoError(t, err)
 
 		req := models.BindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
-			OperatorIDs:  []string{slot.ID},
+			OperatorIDs:  []string{slot.Id},
 		}
 		resp, err := regSvc.BindOperators(req)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 		assert.Equal(t, 1, resp.BoundCount)
 		assert.Equal(t, 0, resp.FailedCount)
-		assert.Contains(t, resp.BoundOperatorIDs, slot.ID)
+		assert.Contains(t, resp.BoundOperatorIDs, slot.Id)
 	})
 
 	t.Run("Multiple operators with mixed success", func(t *testing.T) {
@@ -511,13 +511,13 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.DocStore.DocUpdate("operators", slot1.ID, updateBytes)
+		_, err = infra.DocStore.DocUpdate("operators", slot1.Id, updateBytes)
 		require.NoError(t, err)
 
 		req := models.BindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
-			OperatorIDs:  []string{slot1.ID, slot2.ID, "nonexistent"},
+			OperatorIDs:  []string{slot1.Id, slot2.Id, "nonexistent"},
 		}
 		resp, err := regSvc.BindOperators(req)
 		require.NoError(t, err)
@@ -574,7 +574,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		req := models.UnbindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-456", // Different owner
-			OperatorIDs:  []string{slot.ID},
+			OperatorIDs:  []string{slot.Id},
 		}
 		resp, err := regSvc.UnbindOperators(req)
 		require.NoError(t, err)
@@ -595,7 +595,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.DocStore.DocUpdate("operators", slot.ID, updateBytes)
+		_, err = infra.DocStore.DocUpdate("operators", slot.Id, updateBytes)
 		require.NoError(t, err)
 
 		// Create bound sessions document
@@ -604,7 +604,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 			"web_session_id":       "web-123",
 			"user_id":              "user-123",
 			"operator_session_ids": []string{"session-123"},
-			"operator_ids":         []string{slot.ID},
+			"operator_ids":         []string{slot.Id},
 			"bound_at":             time.Now().UTC().Format(time.RFC3339),
 			"last_updated_at":      time.Now().UTC().Format(time.RFC3339),
 			"status":               string(constants.OperatorStatusActive),
@@ -617,14 +617,14 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		req := models.UnbindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
-			OperatorIDs:  []string{slot.ID},
+			OperatorIDs:  []string{slot.Id},
 		}
 		resp, err := regSvc.UnbindOperators(req)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 		assert.Equal(t, 1, resp.UnboundCount)
 		assert.Equal(t, 0, resp.FailedCount)
-		assert.Contains(t, resp.UnboundOperatorIDs, slot.ID)
+		assert.Contains(t, resp.UnboundOperatorIDs, slot.Id)
 	})
 
 	t.Run("Multiple operators with mixed success", func(t *testing.T) {
@@ -641,13 +641,13 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.DocStore.DocUpdate("operators", slot1.ID, updateBytes)
+		_, err = infra.DocStore.DocUpdate("operators", slot1.Id, updateBytes)
 		require.NoError(t, err)
 
 		req := models.UnbindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
-			OperatorIDs:  []string{slot1.ID, slot2.ID, "nonexistent"},
+			OperatorIDs:  []string{slot1.Id, slot2.Id, "nonexistent"},
 		}
 		resp, err := regSvc.UnbindOperators(req)
 		require.NoError(t, err)
@@ -704,7 +704,7 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 		req := models.SetTargetContextRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-456", // Different owner
-			OperatorID:   slot.ID,
+			OperatorID:   slot.Id,
 		}
 		resp, err := regSvc.SetTargetContext(req)
 		assert.Error(t, err)
@@ -733,13 +733,13 @@ func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
 	}
 	updateBytes, err := json.Marshal(update)
 	require.NoError(t, err)
-	_, err = infra.DocStore.DocUpdate("operators", slot.ID, updateBytes)
+	_, err = infra.DocStore.DocUpdate("operators", slot.Id, updateBytes)
 	require.NoError(t, err)
 
 	req := models.SetTargetContextRequest{
 		WebSessionID: "web-123",
 		UserID:       "user-123",
-		OperatorID:   slot.ID,
+		OperatorID:   slot.Id,
 	}
 
 	res, err := regSvc.SetTargetContext(req)

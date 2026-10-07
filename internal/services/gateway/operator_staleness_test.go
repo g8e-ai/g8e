@@ -16,6 +16,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,16 +27,16 @@ import (
 
 const operatorsCollection = string(constants.CollectionOperators)
 
-func timeAgo(d time.Duration) *time.Time {
+func timeAgo(d time.Duration) *timestamppb.Timestamp {
 	t := time.Now().UTC().Add(-d)
-	return &t
+	return timestamppb.New(t)
 }
 
 // putOperator persists an operator document whose created_at is createdAgo in
 // the past, bypassing the reconciler so the test controls the starting state.
 func putOperator(t *testing.T, svc *DocumentStoreService, id string, op *operatorv1.OperatorDocument, createdAgo time.Duration) {
 	t.Helper()
-	body, err := json.Marshal(op)
+	body, err := models.MarshalOperatorDocument(op)
 	require.NoError(t, err)
 	createdAt := time.Now().UTC().Add(-createdAgo)
 	require.NoError(t, svc.DocSetWithTimestamps(operatorsCollection, id, body, createdAt, createdAt))
@@ -53,9 +54,9 @@ func persistedOperatorStatus(t *testing.T, svc *DocumentStoreService, _ string) 
 }
 
 func remoteOperator(status constants.OperatorStatus) *operatorv1.OperatorDocument {
-	return operatorv1.OperatorDocument{
-		Status:       status,
-		OperatorType: constants.OperatorTypeRemote,
+	return &operatorv1.OperatorDocument{
+		Status:       string(status),
+		OperatorType: string(constants.OperatorTypeRemote),
 	}
 }
 
@@ -101,8 +102,8 @@ func TestOperatorStaleness_LastSignOfLife(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		heartbeat  *time.Time
-		claimed    *time.Time
+		heartbeat  *timestamppb.Timestamp
+		claimed    *timestamppb.Timestamp
 		createdAgo time.Duration
 		want       constants.OperatorStatus
 	}{
@@ -137,7 +138,7 @@ func TestOperatorStaleness_LastSignOfLife(t *testing.T) {
 func TestOperatorStaleness_OnlyActiveRemoteOperatorsGoStale(t *testing.T) {
 	silent := constants.OperatorHeartbeatStaleAfter * 10
 
-	embedded := operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}
+	embedded := &operatorv1.OperatorDocument{Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded)}
 	tests := []struct {
 		name string
 		op   *operatorv1.OperatorDocument
@@ -186,7 +187,7 @@ func TestOperatorStaleness_OtherCollectionsAreNotReconciled(t *testing.T) {
 	svc := newDocumentStoreService(t)
 	op := remoteOperator(constants.OperatorStatusActive)
 	op.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 10)
-	body, err := json.Marshal(op)
+	body, err := models.MarshalOperatorDocument(op)
 	require.NoError(t, err)
 	require.NoError(t, svc.DocSet("settings", "not-an-operator", body))
 

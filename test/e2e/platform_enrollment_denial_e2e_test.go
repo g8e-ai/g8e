@@ -106,7 +106,7 @@ func TestPlatformEnrollment_Denial(t *testing.T) {
 	operators, err := e2eClient.ListOperators(ctx)
 	require.NoError(t, err, "operator list must succeed after denial")
 	for _, op := range operators.Operators {
-		assert.NotEqual(t, constants.OperatorStatusActive, op.Status,
+		assert.NotEqual(t, string(constants.OperatorStatusActive), op.Status,
 			"no operator must be active after its enrollment was denied (session=%s)",
 			op.OperatorSessionId)
 	}

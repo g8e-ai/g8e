@@ -142,7 +142,7 @@ func TestCrossEnrollment_GatewayAsOperator_ApproveAndActivate(t *testing.T) {
 	active := e2eClient.DiscoverActiveOperatorByName(t, ctx, crossEnrollmentHostname)
 	require.NotEmpty(t, active.OperatorSessionId,
 		"active secondary gateway operator must have a session ID")
-	assert.Equal(t, constants.OperatorStatusActive, active.Status,
+	assert.Equal(t, string(constants.OperatorStatusActive), active.Status,
 		"secondary gateway operator must be in the active state")
 	t.Logf("secondary gateway became active operator: id=%s session=%s name=%s",
 		active.Id, active.OperatorSessionId, active.Name)
@@ -302,7 +302,7 @@ func TestCrossEnrollment_GatewayAsOperator_RestartDuringPending(t *testing.T) {
 	active := e2eClient.DiscoverActiveOperatorByName(t, ctx, crossEnrollmentHostname)
 	require.NotEmpty(t, active.OperatorSessionId,
 		"active secondary gateway operator must have a session ID after restart-during-pending approval")
-	assert.Equal(t, constants.OperatorStatusActive, active.Status,
+	assert.Equal(t, string(constants.OperatorStatusActive), active.Status,
 		"secondary gateway operator must be active after restart-during-pending approval")
 	t.Logf("secondary gateway became active after restart-during-pending approval: session=%s",
 		active.OperatorSessionId)

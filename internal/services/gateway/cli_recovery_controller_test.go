@@ -25,8 +25,6 @@ import (
 	"testing"
 	"time"
 
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1042,11 +1040,9 @@ func TestCLIRecoveryController_IssueCLIIdentity_MintsRemoteRecoveryOperator(t *t
 	doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, doc)
-	var op *operatorv1.OperatorDocument
-	b, err := json.Marshal(doc.Data)
+	op, err := models.OperatorDocumentFromStore(doc)
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal(b, &op))
-	assert.Equal(t, constants.OperatorTypeRemote, op.OperatorType)
+	assert.Equal(t, string(constants.OperatorTypeRemote), op.OperatorType)
 	assert.Equal(t, "cli-recovery-"+safePrefix(user.ID), op.Name)
 	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionId)
 	assert.Equal(t, user.ID, op.UserId)

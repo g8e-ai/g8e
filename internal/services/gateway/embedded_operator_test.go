@@ -72,7 +72,7 @@ func TestRegisterPendingEmbeddedOperator_Idempotent(t *testing.T) {
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.Id)
 	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
 	assert.Equal(t, constants.ComponentNameG8EO, op.Component)
-	assert.Equal(t, constants.OperatorStatusAvailable, op.Status)
+	assert.Equal(t, string(constants.OperatorStatusAvailable), op.Status)
 	assert.False(t, op.Claimed)
 	assert.False(t, op.IsSlot)
 	assert.Empty(t, op.UserId)

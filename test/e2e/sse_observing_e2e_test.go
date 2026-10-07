@@ -43,7 +43,7 @@ func TestSSE_LiveChatObserving(t *testing.T) {
 	var targetSessionID string
 	for _, op := range operators.Operators {
 		if op.Status == string(constants.OperatorStatusActive) && op.OperatorType == string(constants.OperatorTypeRemote) {
-			targetOperatorID = op.ID
+			targetOperatorID = op.Id
 			targetSessionID = op.OperatorSessionId
 			break
 		}

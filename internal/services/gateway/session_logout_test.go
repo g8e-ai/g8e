@@ -20,6 +20,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,14 +52,14 @@ func newLogoutUser(t *testing.T, infra *TestInfrastructure) *models.User {
 func persistLogoutOperator(t *testing.T, infra *TestInfrastructure, userID, operatorID, operatorSessionID string) {
 	t.Helper()
 	now := time.Now().UTC()
-	b, err := json.Marshal(operatorv1.OperatorDocument{
-		ID:                operatorID,
-		OperatorSessionID: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
-		UserID:            userID,
-		OperatorType:      constants.OperatorTypeRemote,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+	b, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
+		Id:                operatorID,
+		OperatorSessionId: operatorSessionID,
+		Status:            string(constants.OperatorStatusActive),
+		UserId:            userID,
+		OperatorType:      string(constants.OperatorTypeRemote),
+		CreatedAt:         timestamppb.New(now),
+		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, b))
@@ -142,7 +143,7 @@ func operatorBoundWebSession(t *testing.T, infra *TestInfrastructure, operatorID
 	t.Helper()
 	op, err := infra.Reg.GetOperator(operatorID)
 	require.NoError(t, err)
-	return op.BoundWebSessionID
+	return op.BoundWebSessionId
 }
 
 func revocationReason(t *testing.T, infra *TestInfrastructure, serial string) string {
@@ -198,8 +199,8 @@ func TestSessionLogout_All_TerminatesWebAndCLISessionsUnbindsOperatorsAndRevokes
 	// The operator itself keeps its session: logout only unbinds.
 	op, err := infra.Reg.GetOperator("logout-op-1")
 	require.NoError(t, err)
-	assert.Equal(t, "logout-opsess-1", op.OperatorSessionID)
-	assert.Equal(t, constants.OperatorStatusActive, op.Status)
+	assert.Equal(t, "logout-opsess-1", op.OperatorSessionId)
+	assert.Equal(t, string(constants.OperatorStatusActive), op.Status)
 
 	// Another user's sessions, bindings and certificates are untouched.
 	requireWebSessionPresent(t, infra, otherWebID)

@@ -108,7 +108,6 @@ class TestModelSchemaIntegrity:
         "reputation_state.json",
         "request_context.json",
         "revoked_certificate.json",
-        "runtime_config.json",
         "security_constraints.json",
         "sse_event_payloads.json",
         "sse_event_wire.json",

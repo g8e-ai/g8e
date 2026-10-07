@@ -27,11 +27,8 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
 	"testing"
-
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -169,24 +166,22 @@ func TestPlatformEnrollment_ApproveAndIssue_GatewayOriginBecomesActiveOperator(t
 	opDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), completionResp.Operator.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc)
-	dataBytes, err := json.Marshal(opDoc.Data)
+	op, err := models.OperatorDocumentFromStore(opDoc)
 	require.NoError(t, err)
-	var op *operatorv1.OperatorDocument
-	require.NoError(t, json.Unmarshal(dataBytes, &op))
-	assert.Equal(t, env.ownerID, op.UserID,
+	assert.Equal(t, env.ownerID, op.UserId,
 		"gateway-as-operator doc must carry the approving owner's user_id")
 	owner, err := env.userSvc.GetByID(env.ownerID)
 	require.NoError(t, err)
 	require.NotNil(t, owner)
 	require.NotEmpty(t, owner.OrganizationID)
-	assert.Equal(t, owner.OrganizationID, op.OrganizationID,
+	assert.Equal(t, owner.OrganizationID, op.OrganizationId,
 		"gateway-as-operator doc must carry the owner's organization membership")
-	assert.Equal(t, constants.OperatorStatusActive, op.Status,
+	assert.Equal(t, string(constants.OperatorStatusActive), op.Status,
 		"gateway-as-operator must be active after issuance")
-	assert.Equal(t, constants.OperatorTypeRemote, op.OperatorType,
+	assert.Equal(t, string(constants.OperatorTypeRemote), op.OperatorType,
 		"gateway-as-operator type must be remote")
 	assert.True(t, op.Claimed, "gateway-as-operator must be claimed")
-	assert.Equal(t, gatewayHostname, op.Name,
+	assert.Equal(t, gatewayHostname, op.GetName(),
 		"gateway-as-operator name must match the enrollment hostname")
 
 	// Verify the operator cert carries a SPIFFE URI SAN in the canonical
@@ -245,8 +240,8 @@ func TestPlatformEnrollment_Deny_GatewayOriginTerminalNoActiveOperator(t *testin
 	operators, err := regSvc.ListUserOperators(env.ownerID)
 	require.NoError(t, err)
 	for _, op := range operators {
-		assert.NotEqual(t, constants.OperatorStatusActive, op.Status,
-			"no operator must be active after its gateway-origin enrollment was denied (id=%s)", op.ID)
+		assert.NotEqual(t, string(constants.OperatorStatusActive), op.Status,
+			"no operator must be active after its gateway-origin enrollment was denied (id=%s)", op.Id)
 	}
 }
 

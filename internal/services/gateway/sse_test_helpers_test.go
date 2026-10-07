@@ -88,13 +88,13 @@ func makeTLSRequest(method, _ string, body string, cert *x509.Certificate) *http
 // code's DocGet(operators, operatorSessionID) lookup pattern.
 func seedOperatorDoc(t *testing.T, h *HTTPHandler, opID, userID, operatorSessionID string) {
 	t.Helper()
-	op := operatorv1.OperatorDocument{
-		ID:                opID,
-		UserID:            userID,
-		Status:            constants.OperatorStatusActive,
-		OperatorSessionID: operatorSessionID,
+	op := &operatorv1.OperatorDocument{
+		Id:                opID,
+		UserId:            userID,
+		Status:            string(constants.OperatorStatusActive),
+		OperatorSessionId: operatorSessionID,
 	}
-	opBytes, err := json.Marshal(op)
+	opBytes, err := models.MarshalOperatorDocument(op)
 	require.NoError(t, err)
 	err = h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorSessionID, opBytes)
 	require.NoError(t, err)

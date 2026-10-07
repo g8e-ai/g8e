@@ -1360,7 +1360,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 		Status:            string(constants.OperatorStatusActive),
 		UserId:            userID,
 		OrganizationId:    organizationID,
-		CreatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.Now(),
 		UpdatedAt:         timestamppb.Now(),
 	}
 	opBytes, err := models.MarshalOperatorDocument(opDoc)
@@ -1441,7 +1441,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 		UserID:            userID,
 		OperatorSessionID: operatorSessionID,
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
-		CreatedAt:         timestamppb.Now(),
+		CreatedAt:         time.Now().UTC(),
 		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 		IsActive:          true,
 	}

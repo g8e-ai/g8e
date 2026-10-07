@@ -167,7 +167,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 			if r.TargetResource != targetResource {
 				continue
 			}
-			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBeforeCreate) {
+			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBeforeCreate) {
 				continue
 			}
 			if r.Signature == "" {
@@ -267,7 +267,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 			if r.TargetResource != targetResource {
 				continue
 			}
-			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBeforeMerge) {
+			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBeforeMerge) {
 				continue
 			}
 			if r.Signature == "" {
@@ -358,7 +358,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 			if r.TargetResource != targetResource {
 				continue
 			}
-			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBeforeDelete) {
+			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBeforeDelete) {
 				continue
 			}
 			if r.Signature == "" {

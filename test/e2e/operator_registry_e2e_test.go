@@ -53,7 +53,7 @@ func TestOperatorRegistry_ActiveOperator(t *testing.T) {
 	require.NotNil(t, active, "at least one operator must have active status")
 	assert.NotEmpty(t, active.Id, "active operator must have a non-empty ID")
 	assert.NotEmpty(t, active.OperatorSessionId, "active operator must have a session ID")
-	assert.False(t, active.CreatedAt == nil, "active operator must have a creation timestamp")
+	assert.NotNil(t, active.CreatedAt, "active operator must have a creation timestamp")
 	t.Logf("active operator discovered: id=%s session=%s slot=%d",
 		active.Id, active.OperatorSessionId, active.SlotNumber)
 
@@ -66,7 +66,7 @@ func TestOperatorRegistry_ActiveOperator(t *testing.T) {
 	require.NotNil(t, single.Operator, "session lookup must return an operator document")
 	assert.Equal(t, active.Id, single.Operator.Id,
 		"session lookup must return the same operator ID as the list")
-	assert.Equal(t, constants.OperatorStatusActive, single.Operator.Status,
+	assert.Equal(t, string(constants.OperatorStatusActive), single.Operator.Status,
 		"session lookup must report active status")
 }
 
@@ -86,7 +86,7 @@ func TestOperatorRegistry_HeartbeatTimestampSet(t *testing.T) {
 	var active *operatorv1.OperatorDocument
 	active = findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, active, "an active operator must exist")
-	assert.False(t, active.UpdatedAt == nil,
+	assert.NotNil(t, active.UpdatedAt,
 		"active operator UpdatedAt must be set by at least one heartbeat delivery")
 	// UpdatedAt should be recent relative to suite start, proving the
 	// heartbeat path is live, not a stale bootstrap timestamp.

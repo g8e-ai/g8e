@@ -869,7 +869,7 @@ func TestPasskeyHandler_BindEmbeddedOperatorToWebSession(t *testing.T) {
 
 		// The operator document itself carries bound_web_session_id.
 		op := loadEmbeddedOperatorDoc(t, infra.DocStore)
-		assert.Equal(t, webSession.ID, op.BoundWebSessionID)
+		assert.Equal(t, webSession.ID, op.BoundWebSessionId)
 	})
 
 	t.Run("different user's web session binds nothing", func(t *testing.T) {

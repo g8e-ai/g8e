@@ -458,7 +458,7 @@ func seedInferenceOperator(t *testing.T, infra *TestInfrastructure, userID, oper
 		CreatedAt:         timestamppb.New(now),
 		UpdatedAt:         timestamppb.New(now),
 	}
-	body, err := json.Marshal(op)
+	body, err := models.MarshalOperatorDocument(op)
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, body))
 	require.NoError(t, infra.OperatorSessionSvc.PersistOperatorSession(sessionID, userID, op.OrganizationId, operatorID, "mTLS"))

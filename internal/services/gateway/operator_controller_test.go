@@ -65,14 +65,14 @@ func seedStopOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessi
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-		ID:                operatorID,
-		UserID:            userID,
-		OrganizationID:    "stop-org",
-		OperatorSessionID: sessionID,
-		OperatorType:      operatorType,
-		Status:            status,
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		Id:                operatorID,
+		UserId:            userID,
+		OrganizationId:    "stop-org",
+		OperatorSessionId: sessionID,
+		OperatorType:      string(operatorType),
+		Status:            string(status),
+		CreatedAt:         timestamppb.Now(),
+		UpdatedAt:         timestamppb.Now(),
 	})
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
@@ -134,7 +134,7 @@ func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testin
 		assert.Contains(t, rr.Body.String(), constants.ErrDispatchNoDelivery.Error())
 		op, err := infra.Auth.ValidateOperatorSession("stop-remote-session")
 		require.NoError(t, err)
-		assert.Equal(t, constants.OperatorStatusActive, op.Status)
+		assert.Equal(t, string(constants.OperatorStatusActive), op.Status)
 	})
 
 	t.Run("acknowledged delivery records reason and stopped state", func(t *testing.T) {
@@ -160,11 +160,9 @@ func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testin
 		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), "stop-remote")
 		require.NoError(t, err)
 		require.NotNil(t, doc)
-		body, err := json.Marshal(doc.Data)
+		operator, err := models.OperatorDocumentFromStore(doc)
 		require.NoError(t, err)
-		var operator *operatorv1.OperatorDocument
-		require.NoError(t, json.Unmarshal(body, &operator))
-		assert.Equal(t, constants.OperatorStatusStopped, operator.Status)
+		assert.Equal(t, string(constants.OperatorStatusStopped), operator.Status)
 		assert.Equal(t, "planned maintenance", operator.StopReason)
 	})
 }
@@ -187,14 +185,10 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 
 	// Create a valid Operator session
 	operatorSessionID := "test-session-123"
-	opDoc := map[string]interface{}{
-		"id":                  "op-123",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusActive),
-		"user_id":             "user-123",
-		"organization_id":     "org-123",
-	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
+		Id: "op-123", OperatorSessionId: operatorSessionID, Status: string(constants.OperatorStatusActive),
+		UserId: "user-123", OrganizationId: "org-123",
+	})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet("operators", "op-123", opBytes))
 
@@ -267,20 +261,20 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 		// Persist a platform-enrolled operator (is_slot=false) stamped
 		// with the same user_id, mimicking what signOperatorComponent
 		// writes for a platform-enrolled operator.
-		platformOp := operatorv1.OperatorDocument{
-			ID:        "platform-op-controller",
-			UserID:    "user-platform",
-			Component: constants.ComponentNameG8EO,
+		platformOp := &operatorv1.OperatorDocument{
+			Id:        "platform-op-controller",
+			UserId:    "user-platform",
+			Component: string(constants.ComponentNameG8EO),
 			Name:      "platform-operator",
-			Status:    constants.OperatorStatusActive,
+			Status:    string(constants.OperatorStatusActive),
 			IsSlot:    false,
 			Claimed:   true,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
+			CreatedAt: timestamppb.Now(),
+			UpdatedAt: timestamppb.Now(),
 		}
-		opBytes, err := json.Marshal(platformOp)
+		opBytes, err := models.MarshalOperatorDocument(platformOp)
 		require.NoError(t, err)
-		require.NoError(t, infra.Reg.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), platformOp.ID, opBytes))
+		require.NoError(t, infra.Reg.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), platformOp.Id, opBytes))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators?user_id=user-platform", nil)
 		w := httptest.NewRecorder()
@@ -296,11 +290,11 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 		slotFound := false
 		platformFound := false
 		for _, op := range resp.Operators {
-			if op.ID == slot.ID {
+			if op.Id == slot.Id {
 				slotFound = true
 				assert.True(t, op.IsSlot)
 			}
-			if op.ID == platformOp.ID {
+			if op.Id == platformOp.Id {
 				platformFound = true
 				assert.False(t, op.IsSlot)
 			}
@@ -577,14 +571,10 @@ func TestHandleReauth_ResponseContainsGatewayPosture(t *testing.T) {
 	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: res})
 
 	operatorSessionID := "test-session-posture"
-	opDoc := map[string]interface{}{
-		"id":                  "op-posture",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusActive),
-		"user_id":             "user-posture",
-		"organization_id":     "org-posture",
-	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
+		Id: "op-posture", OperatorSessionId: operatorSessionID, Status: string(constants.OperatorStatusActive),
+		UserId: "user-posture", OrganizationId: "org-posture",
+	})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet("operators", "op-posture", opBytes))
 
@@ -630,14 +620,10 @@ func TestHandleReauth_PersistsRuntimeConfig(t *testing.T) {
 	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: res})
 
 	operatorSessionID := "test-session-runtime-config"
-	opDoc := map[string]interface{}{
-		"id":                  "op-runtime-config",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusActive),
-		"user_id":             "user-runtime-config",
-		"organization_id":     "org-runtime-config",
-	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
+		Id: "op-runtime-config", OperatorSessionId: operatorSessionID, Status: string(constants.OperatorStatusActive),
+		UserId: "user-runtime-config", OrganizationId: "org-runtime-config",
+	})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet("operators", "op-runtime-config", opBytes))
 
@@ -696,14 +682,10 @@ func TestOperatorController_HandleGetOperatorBySession(t *testing.T) {
 
 	t.Run("Valid session ID returns 200 with operator document", func(t *testing.T) {
 		operatorSessionID := "sess-valid-456"
-		opDoc := map[string]interface{}{
-			"id":                  "op-456",
-			"operator_session_id": operatorSessionID,
-			"status":              marshaler.Status(constants.OperatorStatusActive),
-			"user_id":             "user-456",
-			"organization_id":     "org-456",
-		}
-		opBytes, err := json.Marshal(opDoc)
+		opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
+			Id: "op-456", OperatorSessionId: operatorSessionID, Status: string(constants.OperatorStatusActive),
+			UserId: "user-456", OrganizationId: "org-456",
+		})
 		require.NoError(t, err)
 		require.NoError(t, infra.DocStore.DocSet(string(constants.CollectionOperators), "op-456", opBytes))
 
@@ -719,9 +701,9 @@ func TestOperatorController_HandleGetOperatorBySession(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 		require.NotNil(t, resp.Operator)
-		assert.Equal(t, "op-456", resp.Operator.ID)
-		assert.Equal(t, operatorSessionID, resp.Operator.OperatorSessionID)
-		assert.Equal(t, constants.OperatorStatusActive, resp.Operator.Status)
+		assert.Equal(t, "op-456", resp.Operator.Id)
+		assert.Equal(t, operatorSessionID, resp.Operator.OperatorSessionId)
+		assert.Equal(t, string(constants.OperatorStatusActive), resp.Operator.Status)
 	})
 }
 
@@ -750,8 +732,8 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-		ID: operatorID, UserID: userID, OperatorSessionID: operatorSessionID,
-		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		Id: operatorID, UserId: userID, OperatorSessionId: operatorSessionID,
+		Status: string(constants.OperatorStatusActive), CreatedAt: timestamppb.Now(), UpdatedAt: timestamppb.Now(),
 	})
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(
@@ -870,8 +852,8 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-		ID: operatorID, UserID: userID, OperatorSessionID: operatorSessionID,
-		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		Id: operatorID, UserId: userID, OperatorSessionId: operatorSessionID,
+		Status: string(constants.OperatorStatusActive), CreatedAt: timestamppb.Now(), UpdatedAt: timestamppb.Now(),
 	})
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(
@@ -933,26 +915,26 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 
 func TestWithResolvedOperatorRole(t *testing.T) {
 	t.Run("keeps a stored role", func(t *testing.T) {
-		op := operatorv1.OperatorDocument{
-			OperatorRoles: constants.OperatorRoles{constants.OperatorRoleObserver},
+		op := &operatorv1.OperatorDocument{
+			OperatorRoles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleObserver}),
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		}
-		withResolvedOperatorRoles(&op)
-		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, op.OperatorRoles)
+		withResolvedOperatorRoles(op)
+		assert.Equal(t, models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleProvenance}), op.OperatorRoles)
 	})
 
 	t.Run("resolves a missing role from runtime config", func(t *testing.T) {
-		op := operatorv1.OperatorDocument{
+		op := &operatorv1.OperatorDocument{
 			Claimed:       true,
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		}
-		withResolvedOperatorRoles(&op)
-		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, op.OperatorRoles)
+		withResolvedOperatorRoles(op)
+		assert.Equal(t, models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleProvenance}), op.OperatorRoles)
 	})
 
 	t.Run("leaves an unclaimed slot without a role", func(t *testing.T) {
-		op := operatorv1.OperatorDocument{IsSlot: true}
-		withResolvedOperatorRoles(&op)
+		op := &operatorv1.OperatorDocument{IsSlot: true}
+		withResolvedOperatorRoles(op)
 		assert.Empty(t, op.OperatorRoles)
 	})
 }

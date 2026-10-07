@@ -83,9 +83,9 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 	// UpdatedAt; the second must be strictly later, proving the pub/sub
 	// heartbeat path is live. The E2E stack uses a short configurable
 	// heartbeat interval so this assertion remains fast and bounded.
-	firstUpdatedAt := active.UpdatedAt.AsTime()
-	require.False(t, firstUpdatedAt == nil,
+	require.NotNil(t, active.UpdatedAt,
 		"first observation: operator UpdatedAt must be set")
+	firstUpdatedAt := active.UpdatedAt.AsTime()
 	t.Logf("first heartbeat observation: updated_at=%s",
 		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 

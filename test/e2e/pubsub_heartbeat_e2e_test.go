@@ -37,9 +37,9 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 	defer cancel()
 
 	first := activeOperator(t, ctx)
-	firstUpdatedAt := first.UpdatedAt
-	require.False(t, firstUpdatedAt == nil,
+	require.NotNil(t, first.UpdatedAt,
 		"first observation: active operator UpdatedAt must be set by at least one heartbeat")
+	firstUpdatedAt := first.UpdatedAt.AsTime()
 	t.Logf("first heartbeat observation: operator_id=%s updated_at=%s hostname=%s",
 		first.Id, firstUpdatedAt.UTC().Format(time.RFC3339Nano), first.CurrentHostname)
 
@@ -53,22 +53,22 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 			return false
 		}
 		second = findOperatorByID(operators.Operators, first.Id)
-		return second != nil && second.UpdatedAt.After(firstUpdatedAt)
+		return second != nil && second.UpdatedAt != nil && second.UpdatedAt.AsTime().After(firstUpdatedAt)
 	}, 45*time.Second, 500*time.Millisecond,
 		"heartbeat UpdatedAt for operator %s did not advance past %s within 45s — pub/sub heartbeat path may be dead",
 		first.Id, firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 
-	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),
+	assert.True(t, second.UpdatedAt.AsTime().After(firstUpdatedAt),
 		"second heartbeat observation must be strictly later than the first")
-	assert.Equal(t, constants.OperatorStatusActive, second.Status,
+	assert.Equal(t, string(constants.OperatorStatusActive), second.Status,
 		"operator must remain active across heartbeat observations")
 	assert.NotEmpty(t, second.CurrentHostname,
 		"active remote operator CurrentHostname must be populated from heartbeat telemetry")
-	assert.NotEmpty(t, second.LatestHeartbeat,
+	assert.NotNil(t, second.LatestHeartbeatSnapshot,
 		"active remote operator LatestHeartbeat must be populated from heartbeat telemetry")
 	t.Logf("second heartbeat observation: updated_at=%s (advanced by %s), hostname=%s",
-		second.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		second.UpdatedAt.Sub(firstUpdatedAt).Round(time.Second),
+		second.UpdatedAt.AsTime().UTC().Format(time.RFC3339Nano),
+		second.UpdatedAt.AsTime().Sub(firstUpdatedAt).Round(time.Second),
 		second.CurrentHostname)
 }
 
