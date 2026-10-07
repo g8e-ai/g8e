@@ -15,6 +15,11 @@ conversion. All Anthropic API calls are mocked -- no network access.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from anthropic.types import (
+    ContentBlockDeltaEvent,
+    MessageDeltaEvent,
+    MessageStartEvent,
+)
 
 from app.constants import (
     ANTHROPIC_CLAUDE_HAIKU_4_5,
@@ -681,17 +686,18 @@ class TestStreamCompletionVerification:
 
         # Mock stream that completes normally but without message_delta with stop_reason
         mock_stream = AsyncMock()
-        mock_event_start = MagicMock()
+        mock_event_start = MagicMock(spec=MessageStartEvent)
         mock_event_start.type = "message_start"
         mock_event_start.message = MagicMock()
         mock_event_start.message.usage = MagicMock(input_tokens=10)
 
-        mock_event_delta = MagicMock()
+        mock_event_delta = MagicMock(spec=ContentBlockDeltaEvent)
         mock_event_delta.type = "content_block_delta"
         mock_delta = MagicMock()
         mock_delta.type = "text_delta"
         mock_delta.text = "hello"
         mock_event_delta.delta = mock_delta
+        mock_event_delta.index = 0
 
         # Stream yields events but no message_delta with stop_reason
         mock_stream.__aiter__.return_value = [mock_event_start, mock_event_delta]
@@ -768,19 +774,20 @@ class TestStreamCompletionVerification:
         provider = _make_provider()
 
         # Mock stream that completes normally with message_delta stop_reason
-        mock_event_start = MagicMock()
+        mock_event_start = MagicMock(spec=MessageStartEvent)
         mock_event_start.type = "message_start"
         mock_event_start.message = MagicMock()
         mock_event_start.message.usage = MagicMock(input_tokens=10)
 
-        mock_event_delta = MagicMock()
+        mock_event_delta = MagicMock(spec=ContentBlockDeltaEvent)
         mock_event_delta.type = "content_block_delta"
         mock_delta = MagicMock()
         mock_delta.type = "text_delta"
         mock_delta.text = "hello"
         mock_event_delta.delta = mock_delta
+        mock_event_delta.index = 0
 
-        mock_event_message_delta = MagicMock()
+        mock_event_message_delta = MagicMock(spec=MessageDeltaEvent)
         mock_event_message_delta.type = "message_delta"
         mock_message_delta = MagicMock()
         mock_message_delta.stop_reason = "end_turn"
@@ -833,17 +840,18 @@ class TestStreamCompletionVerification:
         provider = _make_provider()
 
         # Mock stream that completes normally but without message_delta with stop_reason
-        mock_event_start = MagicMock()
+        mock_event_start = MagicMock(spec=MessageStartEvent)
         mock_event_start.type = "message_start"
         mock_event_start.message = MagicMock()
         mock_event_start.message.usage = MagicMock(input_tokens=10)
 
-        mock_event_delta = MagicMock()
+        mock_event_delta = MagicMock(spec=ContentBlockDeltaEvent)
         mock_event_delta.type = "content_block_delta"
         mock_delta = MagicMock()
         mock_delta.type = "text_delta"
         mock_delta.text = "hello"
         mock_event_delta.delta = mock_delta
+        mock_event_delta.index = 0
 
         mock_stream = AsyncMock()
         mock_stream.__aiter__.return_value = [mock_event_start, mock_event_delta]

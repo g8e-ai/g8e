@@ -28,7 +28,7 @@ def _response(payload: object, *, success: bool = True) -> MagicMock:
 def internal_http_client() -> MagicMock:
     client = MagicMock()
     client.client = MagicMock()
-    client._ensure_mtls = MagicMock()
+    client.ensure_mtls = MagicMock()
     return client
 
 
@@ -49,7 +49,7 @@ async def test_list_reads_gateway_operator_documents(gateway_client, internal_ht
     await_args = internal_http_client.client.get.await_args
     assert await_args is not None
     assert await_args.kwargs["params"] == {"user_id": "user-1"}
-    internal_http_client._ensure_mtls.assert_called()
+    internal_http_client.ensure_mtls.assert_called()
 
 
 async def test_dispatch_sends_base64_typed_payload(gateway_client, internal_http_client):
@@ -85,10 +85,7 @@ async def test_gateway_failure_is_not_reinterpreted_as_local_operator_state(
     internal_http_client.client.post = AsyncMock(return_value=_response({}, success=False))
 
     with pytest.raises(Exception, match="Gateway failed to stop operator"):
-        await gateway_client.stop(
-            context=G8eHttpContext(user_id="user-1"),
-            operator_session_id="sess-1",
-        )
+        await gateway_client.stop(operator_session_id="sess-1")
 
 
 async def test_bind_sends_canonical_gateway_body(gateway_client, internal_http_client):

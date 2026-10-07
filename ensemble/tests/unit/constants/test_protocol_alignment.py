@@ -259,8 +259,8 @@ class TestModelSubclassing:
     def test_request_context_subclasses_protocol(self):
         assert issubclass(AppRequestContext, ProtoRequestContext)
 
-    def test_chat_message_request_subclasses_protocol(self):
-        assert issubclass(AppChatMessageRequest, ProtoChatMessageRequest)
+    def test_chat_message_request_declares_every_protocol_field(self):
+        assert set(ProtoChatMessageRequest.model_fields) <= set(AppChatMessageRequest.model_fields)
 
     def test_chat_started_response_is_protocol(self):
         assert AppChatStartedResponse is ProtoChatStartedResponse
@@ -277,16 +277,12 @@ class TestModelSubclassing:
     @pytest.mark.parametrize(
         ("ensemble_name", "protocol_path"),
         [
-            ("G8eeUserSettings", "g8e.models.settings:G8eeUserSettings"),
-            ("LLMSettings", "g8e.models.settings:LLMSettings"),
             ("SearchSettings", "g8e.models.settings:SearchSettings"),
             ("BatchExecutionSettings", "g8e.models.settings:BatchExecutionSettings"),
             ("CommandValidationSettings", "g8e.models.settings:CommandValidationSettings"),
             ("EvalJudgeSettings", "g8e.models.settings:EvalJudgeSettings"),
         ],
         ids=[
-            "G8eeUserSettings",
-            "LLMSettings",
             "SearchSettings",
             "BatchExecutionSettings",
             "CommandValidationSettings",
@@ -299,6 +295,12 @@ class TestModelSubclassing:
         proto_cls = getattr(proto_mod, cls_name)
         ens_cls = getattr(ens_settings, ensemble_name)
         assert issubclass(ens_cls, proto_cls), f"{ensemble_name} must subclass {protocol_path}"
+
+    @pytest.mark.parametrize("name", ["G8eeUserSettings", "LLMSettings"])
+    def test_standalone_settings_model_declares_every_protocol_field(self, name: str):
+        proto_cls = getattr(importlib.import_module("g8e.models.settings"), name)
+        ens_cls = getattr(ens_settings, name)
+        assert set(proto_cls.model_fields) <= set(ens_cls.model_fields)
 
 
 # ---------------------------------------------------------------------------

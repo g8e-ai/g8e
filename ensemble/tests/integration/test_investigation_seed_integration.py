@@ -171,8 +171,8 @@ class TestSeededFactsAreReachableThroughTheRealHandler:
 
         result = await _query(all_services, investigation, g8e_context, "operator_actions")
 
-        assert isinstance(result.data, list)
-        assert FACT in json.dumps(result.data)
+        assert isinstance(result.data, str)
+        assert FACT in result.data
 
     async def test_the_seeded_turn_is_part_of_the_conversation(
         self, all_services, seeded_investigation

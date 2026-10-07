@@ -22,6 +22,7 @@ def test_operator_document_from_gateway_accepts_canonical_id():
         {
             "id": "op-1",
             "user_id": "user-1",
+            "operator_type": "remote",
             "status": OperatorStatus.ACTIVE,
             "current_hostname": "worker-1",
         }
@@ -37,6 +38,7 @@ def test_operator_document_from_gateway_normalizes_operator_id_alias():
         {
             "operator_id": "op-2",
             "user_id": "user-1",
+            "operator_type": "remote",
             "status": OperatorStatus.BOUND,
         }
     )
@@ -49,6 +51,7 @@ def test_operator_document_from_gateway_parses_canonical_heartbeat_snapshot():
         {
             "id": "op-3",
             "user_id": "user-1",
+            "operator_type": "remote",
             "status": OperatorStatus.ACTIVE,
             "latest_heartbeat_snapshot": {
                 "timestamp": "2026-09-18T12:00:00Z",

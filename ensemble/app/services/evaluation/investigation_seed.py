@@ -217,14 +217,10 @@ class InvestigationSeedService:
         case reads like any other titled case. The description is only sent when
         the seed has one, because an unset field is what leaves it untouched.
         """
-        await self._case_service.update_case(
-            case_id,
-            CaseUpdateRequest(
-                context=context,
-                title=seed.case_title,
-                description=seed.case_description,
-            ),
-        )
+        update = CaseUpdateRequest(context=context, title=seed.case_title)
+        if seed.case_description:
+            update.description = seed.case_description
+        await self._case_service.update_case(case_id, update)
         await self._investigation_service.update_investigation(
             investigation_id,
             InvestigationUpdateRequest(context=context, case_title=seed.case_title),

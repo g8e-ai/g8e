@@ -149,7 +149,8 @@ cd ensemble
 The existing Ollama provider unit suite passed: **48 tests**. Configuration JSON
 and TOML parse successfully. Root and ensemble Pyright configurations are checked
 for diagnostic parity. `make ensemble-lint` runs both analyzers and returns a
-nonzero exit status on the recorded backlog.
+nonzero exit status on any finding. The optional strict services profile is
+not part of the gate and currently reports 722 `reportUnknown*` errors.
 
 Policy references: [Pyright configuration](https://github.com/microsoft/pyright/blob/main/docs/configuration.md),
 [Ruff formatter](https://docs.astral.sh/ruff/formatter/),

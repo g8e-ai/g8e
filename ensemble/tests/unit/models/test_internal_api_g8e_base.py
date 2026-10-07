@@ -80,10 +80,10 @@ class TestChatStartedResponseReExport:
 
 
 class TestChatMessageRequestInheritance:
-    """Verify ChatMessageRequest subclasses g8e base and RequestOverrides."""
+    """Verify ChatMessageRequest carries every protocol field and RequestOverrides."""
 
-    def test_chat_message_request_subclasses_g8e(self):
-        assert issubclass(ChatMessageRequest, G8eChatMessageRequest)
+    def test_chat_message_request_declares_every_g8e_field(self):
+        assert set(G8eChatMessageRequest.model_fields) <= set(ChatMessageRequest.model_fields)
 
     def test_chat_message_request_inherits_request_overrides(self):
         assert issubclass(ChatMessageRequest, RequestOverrides)

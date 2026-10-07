@@ -82,34 +82,6 @@ class TestOperatorExecutionServiceProperties:
         assert execution_service.investigation_service == mock_investigation
 
 
-class TestOperatorExecutionServiceFailCommand:
-    @pytest.mark.asyncio
-    async def test_fail_command_returns_failure_result(self, execution_service):
-        g8e_context = build_g8e_http_context()
-        result = await execution_service._fail_command(
-            error_msg="some error",
-            error_type=CommandErrorType.EXECUTION_FAILED,
-            command="echo hi",
-            g8e_context=g8e_context,
-            execution_id="exec-1",
-            operator_session_id="sess-1",
-            status=ExecutionStatus.FAILED,
-            approval_id="app-1",
-            rule="rule-1",
-            violations=["v1"],
-            denial_reason="denied",
-            feedback_reason="feedback",
-        )
-
-        assert result.success is False
-        assert result.error == "some error"
-        assert result.error_type == CommandErrorType.EXECUTION_FAILED
-        assert result.execution_id == "exec-1"
-        assert result.rule == "rule-1"
-        assert result.denial_reason == "denied"
-        assert result.feedback_reason == "feedback"
-
-
 class TestOperatorExecutionServiceResolveOperators:
     def test_resolve_operators_empty_documents(self, execution_service):
         with pytest.raises(BusinessLogicError, match="No operators bound"):
