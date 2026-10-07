@@ -5,8 +5,8 @@ parent: Core
 
 # Governing Agentic Execution Without Surrendering Data Custody
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-10-06
+Version: v2.3.2
 
 ## Abstract
 
@@ -197,8 +197,8 @@ The literature supports the need for an execution boundary, but it does not vali
 The repository publishes bounded evidence rather than treating implementation claims as measured outcomes:
 
 - A clean v2.1.7 acceptance run used a fresh, network-disabled, read-only Linux container with all capabilities dropped and `no-new-privileges`. The candidate reproduced a signed compliance bundle and passed 10 verification checks. Four separate mutations—to protected ledger source, protected build/configuration source, rendered Markdown, and the manifest signature—each failed closed. This demonstrates one candidate and one point-in-time assessment scope; it is not certification or recurring operating effectiveness ([acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md)).
-- The current public eval snapshot contains two complete five-task runs with all 10 terminal attempts retained. Their deterministic results are 4/5 and 3/5, or 7/10 in aggregate, on a curated instruction-following diagnostic using a declared local model cohort. The tasks produced no receipts, so the snapshot supports no mutation, governance, persistence, state, or compliance claim ([README evidence](../../README.md#current-public-eval-snapshot)).
-- The compliance evidence model defines 13 typed control assertions and 14 evidence-grade scenarios. Its current FedRAMP 20x and NIST SP 800-53 catalog classifies 131 controls: 34 mapped and 97 unsupported. Catalog coverage is not customer compliance, authorization, or external attestation ([compliance evidence](../reference/compliance-evidence.md)).
+- The v2.1.6 public eval snapshot retained two complete five-task runs, scored 4/5 and 3/5 (7/10 in aggregate), on a curated instruction-following diagnostic using a declared local model cohort. Both answer-only populations produced no receipts, so this historical snapshot supports no mutation, governance, persistence, state, or compliance claim ([v2.1.6 evidence record](../release_notes/v2.1.x/v2.1.6.md#readme-evidence)).
+- The current compliance evidence model defines 13 typed control assertions. The 14 evidence-grade demo scenarios belong to the retired pre-v2.3.2 demo system and are retained as historical records; they are not a current executable evidence source. The FedRAMP 20x and NIST SP 800-53 catalog classifies 131 controls: 34 mapped and 97 unsupported. Catalog coverage is not customer compliance, authorization, or external attestation ([compliance evidence](../reference/compliance-evidence.md)).
 
 This evidence is meaningful partly because it contains non-passing and unsupported results. A research program that reports only positive demonstrations cannot reveal the boundary of its claims. g8e's evidence model distinguishes documented, implemented, deterministically evaluated, demonstrated, continuously evidenced, and externally attested levels; the current pipeline does not claim to produce the last two.
 

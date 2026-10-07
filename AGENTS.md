@@ -18,7 +18,7 @@ This file provides guidance and operational constraints for AI coding agents, au
 - **`ensemble/` (`g8ee`)** — Optional Python 3.12 / FastAPI agentic application (Tribunal deliberation, ReAct tool loops, multi-provider LLM routing). Communicates with the Gateway over mTLS; never possesses direct execution authority.
 - **`console/`** — Browser frontend: React + TypeScript (Vite) SPA, embedded in the Go binary and served by the Gateway at `/console/`. Handles passkey authentication, human approvals, Operator inventory/binding, cases, investigations, and chat. The browser communicates only with the Gateway; chat reaches `g8ee` via the Gateway's ensemble browser proxy.
 - **`g8e-adapter/` and `evaluation-explorer/`** — Audited browser adapter + contract pack for generated observe frontends, and the evaluation explorer SPA (embedded during `make build`).
-- **`eval/` and `demos/`** — Evaluation fixtures, campaign schemas, benchmark datasets, and sealed vertical demo environments (Healthcare, Finance, DHS, FedRAMP).
+- **`eval/`** — Evaluation fixtures, campaign schemas, and benchmark datasets.
 
 Full architectural specifications live in `docs/` — see [Where to look before making changes](#where-to-look-before-making-changes).
 
@@ -39,7 +39,7 @@ make build
 ./g8e test e2e           # Tier 3: against an already-running stack
 ./g8e test e2e-docker    # Tier 3 (Docker required): compose up, wait for health, run e2e, compose down -v
 ./g8e test coverage      # Coverage report
-./g8e test lint          # Linting: vulncheck, doctrine/COSAiS validation, golangci-lint (also: make lint)
+./g8e test lint          # golangci-lint; make lint also runs vulncheck and doctrine validation
 ./g8e test chaos         # Chaos & fault injection tests
 ./g8e test summary       # Test run summary
 ./g8e test public-loop --candidate candidate.json --output evidence.json
@@ -57,7 +57,7 @@ ensemble/.venv/bin/python -m pytest tests/unit/services/evaluation/test_trace_se
 cd console && npm test             # Run Vitest once
 make console-test                  # Run Vitest suite from repo root
 make console-lint                  # Typecheck (tsc --noEmit) + ESLint
-make console-build embed-console   # Rebuild console and refresh Gateway embedded assets (commit static/)
+make console-embed   # Rebuild console and refresh Gateway embedded assets (commit static/)
 make console-embed-check           # Fails if committed embedded assets are stale relative to console/
 
 # Protocol / Code Generation
@@ -65,7 +65,6 @@ make proto-generate       # Regenerate Go, Python, TS bindings + lockfiles (neve
 make constants-check      # Verify generated event/action-type constants match protocol definitions
 make swagger-generate     # Regenerate Gateway OpenAPI spec from Go Swagger annotations
 make doctrines-validate   # Validate doctrine definitions
-make cosais-validate      # Validate COSAiS JSON registries
 ```
 
 ---
@@ -112,8 +111,8 @@ Each executing runtime (Gateway, each Operator) is strictly authoritative for it
 
 ```text
 cmd/g8e/              Binary entry point
-internal/cli/cmd/     Cobra CLI command groups (gw, auth, mcp, operator, vault, test, demos,
-                      docker, audit, report, public, swagger, tui, version, compliance, eval)
+internal/cli/cmd/     Cobra CLI command groups (gw, auth, mcp, operator, vault, test,
+                      docker, audit, report, public, swagger, tui, version, compliance, ensemble, eval)
 internal/services/    Gateway, outbound Operator, governance (L1–L5), consensus, storage, network,
                       vault, SSE, pubsub, MCP native tools, evaluation, compliance
 protocol/             Canonical Protobuf contracts, constants registries, generated Go/Python/TS bindings
@@ -122,7 +121,6 @@ console/              Browser console (React + TypeScript + Vite), embedded in G
 g8e-adapter/          Audited browser adapter + observe-frontend contract pack
 evaluation-explorer/  Frontend SPA for live model-campaign inspection
 eval/                 Evaluation fixtures, campaign schemas, benchmark datasets
-demos/                Healthcare, finance, DHS, FedRAMP sealed demo environments
 docs/                 Full platform documentation and developer invariant specifications
 ```
 
@@ -175,7 +173,7 @@ These rules prevent frequent architectural, security, and runtime regressions:
    - Register tools explicitly in `RegisterNativeTools` (`internal/services/mcp/native_tool_registry.go`). Never register tools inside package `init()`, and never duplicate tool lists into documentation.
 
 7. **Generated Artifacts**:
-   - Protobuf bindings, Gateway OpenAPI specs, and doctrine/COSAiS JSON registries must only change via their sources and generator commands (`make proto-generate`, `make swagger-generate`, `make doctrines-validate`, `make cosais-validate`). Never hand-edit generated files.
+   - Protobuf bindings, Gateway OpenAPI specs, and doctrine JSON definitions must only change via their sources and generator commands (`make proto-generate`, `make swagger-generate`, `make doctrines-validate`). Never hand-edit generated files.
 
 8. **Testing Discipline**:
    - Always execute platform test suites through `./g8e test <suite>` or the corresponding `make` targets — never run bare `go test` for platform suites.

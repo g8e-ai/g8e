@@ -160,7 +160,7 @@ Evaluation programs implement one instance of a broader architecture: **Confiden
 
 Evaluations prove that allowed governed mutations succeed through the real Gateway and remote Operator; doctrine-prohibited equivalents fail closed without side effects; independent observers attest terminal state without network access or write authority; model-role and system-lane inference remain bound to the selected Inference Operator; and Provenance and Observer Operators witness model weights and provider-boundary hardware separately from the inference executor.
 
-When AI actively alters system state from local inference, the value of zero-trust provenance and outbound-only telemetry scales with each mutation's consequence. The evaluation topology proves this separation; the topology mirrors in the [Position Paper](../core/position_paper.md) show where the same pattern applies in DevSecOps, OT/SCADA, healthcare EHR, and financial trading workflows.
+When AI actively alters system state from local inference, the value of zero-trust provenance and outbound-only telemetry scales with each mutation's consequence. The evaluation topology proves this separation for the implemented evaluation paths. The [Position Paper](../core/position_paper.md) sketches DevSecOps, OT/SCADA, healthcare EHR, and financial trading as conceptual application examples; these are not deployed demo environments in the current repository.
 
 Every mirror deployment separates four roles:
 

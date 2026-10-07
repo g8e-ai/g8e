@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-10-01
-Version: v2.2.6
+Last Updated: 2026-10-06
+Version: v2.3.2
 
 ---
 
@@ -278,12 +278,12 @@ Deploy up to 5000 Operators per host. Use `--local` to run on this system withou
 
 ```bash
 ./g8e operator deploy --local --endpoint localhost \
-  --dest-dir .local.local/tmp/operator-fleet --count 10 \
+  --dest-dir .local/tmp/operator-fleet --count 10 \
   --roles data --background --approve
 
 # Add another 100 without replacing the first 10.
 ./g8e operator deploy --local --endpoint localhost \
-  --dest-dir .local.local/tmp/operator-fleet --start-index 11 --count 100 \
+  --dest-dir .local/tmp/operator-fleet --start-index 11 --count 100 \
   --roles data --background --approve
 
 # A separate provenance batch; role flags are forwarded to operator start.
@@ -343,7 +343,7 @@ Execute a governed shell command on active Operators in parallel:
   --cmd "uname -a"
 ```
 
-Each target Operator must belong to the authenticated user. Binding changes and `operator run` both require an enrolled CLI identity. See [Build Operator](build_operator.md#operate-remote-operators-from-the-cli) and [Authentication and Authorization](../architecture/auth.md#cli-operator-session-binding).
+Each target Operator must belong to the authenticated user. Binding changes and `operator run` both require an enrolled CLI identity. See [Build Operator](build_operator.md#operate-remote-operators-from-the-cli) and [Authentication and Authorization](../architecture/auth.md#operator-binding).
 
 ### View Gateway Logs
 

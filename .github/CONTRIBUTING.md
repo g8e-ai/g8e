@@ -26,7 +26,7 @@ New here? Start with [Early testers](../EARLY_TESTERS.md) — small cohorts, asy
 3. **README cold read.** Read the README as a stranger and report the first sentence that made you want to stop. One sentence is a complete contribution.
 
 **For Python folks (protocol only, ~30 min)**
-4. **Run the protocol examples.** `pip install g8e==2.3.1`, run `protocol/python/examples/`, and report Python version, OS, and anything surprising.
+4. **Run the protocol examples.** `pip install g8e==2.3.2`, run `protocol/python/examples/`, and report Python version, OS, and anything surprising.
 5. **Conformance test report.** Run `protocol/conformance/` tests and file the result. A green run on a new environment is useful signal.
 
 **For careful readers (~1 hr)**
@@ -39,9 +39,7 @@ Look for issues labeled `first-run`, `good-first-task`, and `docs`. Experienced 
 
 Choose the smallest environment that fits your work:
 
-- **Gateway only:** clone the repository, then run `make up`. A native build
-  needs Go 1.26.6, Make, and Node.js 22+ for the embedded explorer. Python,
-  Ollama, and model SDKs are not needed for this track.
+- **Gateway only:** clone the repository, then run `make up`. A native build needs Go 1.26.6 and Make. Fresh clones use the committed frontend embeds; Node.js 22+ and npm are needed only to rebuild the Console or Evaluation Explorer. Python, Ollama, and model SDKs are not needed for this track.
 - **Full platform:** run `make ensemble-env` once, then `make full`. This
   provisions Python 3.12+ through `uv` and installs the Ensemble runtime
   dependencies. Use `make dev-python` when you also need Ensemble test and lint

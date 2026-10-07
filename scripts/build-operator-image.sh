@@ -30,10 +30,10 @@ trap 'rm -rf "$build_context"' EXIT HUP INT TERM
 mkdir -p "$build_context/protocol" "$build_context/docs"
 cp "$binary" "$build_context/g8e"
 cp "$repo_root/scripts/docker-entrypoint.sh" "$build_context/entrypoint.sh"
-cp "$repo_root/deploy/operator-runtime/gateway-preflight.sh" "$build_context/gateway-preflight.sh"
+cp "$repo_root/scripts/operator-runtime/gateway-preflight.sh" "$build_context/gateway-preflight.sh"
 cp -R "$repo_root/protocol/constants" "$build_context/protocol/constants"
 cp -R "$repo_root/docs/reference" "$build_context/docs/reference"
-cp "$repo_root/deploy/operator-runtime/Dockerfile" "$build_context/Dockerfile"
+cp "$repo_root/scripts/operator-runtime/Dockerfile" "$build_context/Dockerfile"
 
 docker --context "$docker_context" build --pull=false --tag "$image_tag" "$build_context"
 docker --context "$docker_context" image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}}' "$image_tag"
