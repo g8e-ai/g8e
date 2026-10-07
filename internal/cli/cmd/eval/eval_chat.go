@@ -97,6 +97,7 @@ the harness is broken rather than the model:
   seed-delivered        a seeded investigation was applied by g8ee and echoed unchanged
   workspace-reachable   a fixture file written to the attempt workspace reads back through governed dispatch
   guidance-delivered    seeded tool guidance reached g8ee byte for byte from the agent tool registry
+  semantic-judge        g8ee resolved a judge model and it returned a grade (the verdict is not inspected)
   registry-mcp          every agent registry entry verifies and the Gateway /mcp tools/list answers
 
 The model must be in the frozen inventory (g8e eval models).`,

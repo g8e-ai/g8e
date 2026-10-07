@@ -46,6 +46,7 @@ const CANARIES = [
   ['seed-delivered', 'The investigation seed is applied and echoed unchanged.'],
   ['workspace-reachable', 'A canary file can be read through governed Data Operator dispatch.'],
   ['guidance-delivered', 'Registry guidance reaches g8ee byte for byte.'],
+  ['semantic-judge', 'The semantic judge resolves a model and returns a grade.'],
   ['registry-mcp', 'Agent tool registry entries verify and Gateway /mcp tools/list answers.'],
 ] as const;
 

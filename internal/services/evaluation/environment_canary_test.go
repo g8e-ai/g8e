@@ -35,6 +35,9 @@ type fakeCanaryChat struct {
 	dropSeedEcho   bool
 	alterGuidance  bool
 	replyText      string
+	judgeStatus    string
+	judgeDetail    string
+	omitGrades     bool
 	submittedCount int
 }
 
@@ -80,7 +83,7 @@ func (f *fakeCanaryChat) GetEvaluationTrace(_ context.Context, _ harnessclient.P
 	if gate == "" {
 		gate = canaryToolGateBypass
 	}
-	return EvaluationTrace{
+	trace := EvaluationTrace{
 		"status":                 "completed",
 		"tool_gate":              gate,
 		"seed_application":       applied,
@@ -91,7 +94,21 @@ func (f *fakeCanaryChat) GetEvaluationTrace(_ context.Context, _ harnessclient.P
 			scored,
 			map[string]any{"agent_role": "codex", "provider": "G8EProvider"},
 		},
-	}, nil
+	}
+	if !f.omitGrades {
+		judgeStatus := f.judgeStatus
+		if judgeStatus == "" {
+			judgeStatus = "pass"
+		}
+		trace["semantic_grades"] = []any{map[string]any{
+			"grade_id":         "environment-canary-assignment-1:semantic-judge",
+			"criterion_id":     "semantic-judge",
+			"status":           judgeStatus,
+			"judge_variant_id": "judge-model",
+			"detail":           f.judgeDetail,
+		}}
+	}
+	return trace, nil
 }
 
 func jsonValue(value any) any {
@@ -204,11 +221,11 @@ func TestEnvironmentCanary_PassesOnAnIntactHarness(t *testing.T) {
 	report, err := RunEnvironmentCanaries(context.Background(), h.deps())
 
 	require.NoError(t, err)
-	require.Len(t, report.Results, 5)
+	require.Len(t, report.Results, 6)
 	for _, result := range report.Results {
 		assert.True(t, result.Passed, "%s: %s", result.ID, result.Detail)
 	}
-	assert.Equal(t, 1, h.chat.submittedCount, "the tools, seed, and guidance canaries share one chat")
+	assert.Equal(t, 1, h.chat.submittedCount, "the tools, seed, guidance, and semantic-judge canaries share one chat")
 }
 
 func TestEnvironmentCanary_SendsAScenarioNeutralSeededRequest(t *testing.T) {
@@ -227,6 +244,10 @@ func TestEnvironmentCanary_SendsAScenarioNeutralSeededRequest(t *testing.T) {
 	assert.Len(t, req.EvaluationContext.Seed.HistoryEvents, 1)
 	require.NotNil(t, req.EvaluationContext.Workspace)
 	assert.Equal(t, "/srv/data-operator", req.EvaluationContext.Workspace.OperatorWorkingDirectory)
+	assert.Equal(t, "semantic_judge", req.EvaluationContext.GradingMethod, "the chat asks g8ee to grade so the judge canary has a grade to read")
+	require.NotNil(t, req.EvaluationContext.GoldSummary)
+	assert.Equal(t, canaryChatInstruction, req.EvaluationContext.GoldSummary.UserPrompt)
+	assert.Equal(t, canaryJudgeExpected, req.EvaluationContext.GoldSummary.ExpectedBehavior)
 }
 
 func TestEnvironmentCanary_ToolsDeclaredIgnoresWhatTheModelReplied(t *testing.T) {
@@ -237,6 +258,19 @@ func TestEnvironmentCanary_ToolsDeclaredIgnoresWhatTheModelReplied(t *testing.T)
 
 	require.NoError(t, err)
 	assert.True(t, canaryResult(t, report, CanaryToolsDeclared).Passed)
+}
+
+// INV-EVAL-CAMP-15: the semantic-judge canary proves a judge ran, not what it
+// concluded, so a verdict against the canary reply must not fail the harness.
+func TestEnvironmentCanary_SemanticJudgeIgnoresTheVerdict(t *testing.T) {
+	h := newCanaryHarness()
+	h.chat.judgeStatus = "fail"
+	h.chat.judgeDetail = "the reply does not match"
+
+	report, err := RunEnvironmentCanaries(context.Background(), h.deps())
+
+	require.NoError(t, err)
+	assert.True(t, canaryResult(t, report, CanarySemanticJudge).Passed)
 }
 
 func TestEnvironmentCanary_FailuresAreEnvironmentErrorsNamingTheCanary(t *testing.T) {
@@ -270,7 +304,14 @@ func TestEnvironmentCanary_FailuresAreEnvironmentErrorsNamingTheCanary(t *testin
 		{"the guidance is paraphrased", func(h *canaryHarness) { h.chat.alterGuidance = true }, CanaryGuidanceDelivered, "differs from registry vector"},
 		{"agent registry verification fails", func(h *canaryHarness) { h.mcp.verifyErr = errors.New("lockdown drift") }, CanaryRegistryMCP, "lockdown drift"},
 		{"the gateway lists no MCP tools", func(h *canaryHarness) { h.mcp.tools = nil }, CanaryRegistryMCP, "no tools"},
+		{"the semantic judge is unavailable", func(h *canaryHarness) {
+			h.chat.judgeStatus = "unavailable"
+			h.chat.judgeDetail = "EvalJudge requires an explicit model name"
+		}, CanarySemanticJudge, "EvalJudge requires"},
+		{"the trace records no semantic grade", func(h *canaryHarness) { h.chat.omitGrades = true }, CanarySemanticJudge, "did not run"},
+		{"the semantic grade has an unrecognised status", func(h *canaryHarness) { h.chat.judgeStatus = "error" }, CanarySemanticJudge, "unavailable"},
 		{"the chat cannot be submitted", func(h *canaryHarness) { h.chat.submitErr = errors.New("g8ee unreachable") }, CanaryToolsDeclared, "g8ee unreachable"},
+		{"the chat cannot be submitted for the judge", func(h *canaryHarness) { h.chat.submitErr = errors.New("g8ee unreachable") }, CanarySemanticJudge, "g8ee unreachable"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

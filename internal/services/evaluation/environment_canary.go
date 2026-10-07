@@ -48,9 +48,6 @@ const (
 	canaryToolGateBypass  = "bypassed_for_eval"
 	canaryChatInstruction = "Reply with exactly: canary-ok"
 	canaryJudgeExpected   = "The reply is exactly the text canary-ok."
-	// canaryJudgeUnavailable is the g8ee EvaluationSemanticOutcome recorded when
-	// no judge could run.
-	canaryJudgeUnavailable = "unavailable"
 )
 
 // WorkspaceFileReader reads one workspace file back through a governed read on
@@ -262,20 +259,16 @@ func scoredModelCall(trace EvaluationTrace) (EvaluationTrace, bool) {
 // reply down still passes. An unavailable judge fails every semantic scenario
 // as a grader failure after the whole matrix has already executed.
 func checkSemanticJudgeAvailable(trace EvaluationTrace) (string, error) {
-	grades, _ := trace["semantic_grades"].([]any)
+	grades := semanticGradesFromTrace("", trace)
 	if len(grades) == 0 {
 		return "", fmt.Errorf("trace records no semantic grade, so the judge did not run")
 	}
-	for _, raw := range grades {
-		grade, ok := evaluationTrace(raw)
-		if !ok {
-			return "", fmt.Errorf("trace records a malformed semantic grade")
-		}
-		if stringValue(grade["status"]) == canaryJudgeUnavailable {
-			return "", fmt.Errorf("semantic judge unavailable: %s; set an eval judge model (or a Lite model) in the console settings and serve it on the Inference Operator's Lite binding", stringValue(grade["detail"]))
+	for _, grade := range grades {
+		if grade.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE {
+			return "", fmt.Errorf("semantic judge unavailable: %s; check the eval judge model (or Lite model) in the console settings and that it is served on the Inference Operator's Lite binding", grade.GetDetail())
 		}
 	}
-	return fmt.Sprintf("semantic judge ran and returned %d grade (the grade itself is not inspected)", len(grades)), nil
+	return fmt.Sprintf("semantic judge ran and returned %d grade (the verdict is not inspected)", len(grades)), nil
 }
 
 func checkToolsDeclared(trace EvaluationTrace, registry *AgentToolRegistry) (string, error) {

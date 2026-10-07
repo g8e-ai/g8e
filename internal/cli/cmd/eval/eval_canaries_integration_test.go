@@ -57,7 +57,7 @@ func TestGatesChat_HelpDescribesTheCanaries(t *testing.T) {
 
 	for _, canary := range []evaluation.CanaryID{
 		evaluation.CanaryToolsDeclared, evaluation.CanarySeedDelivered, evaluation.CanaryWorkspaceReachable,
-		evaluation.CanaryGuidanceDelivered, evaluation.CanaryRegistryMCP,
+		evaluation.CanaryGuidanceDelivered, evaluation.CanarySemanticJudge, evaluation.CanaryRegistryMCP,
 	} {
 		assert.Contains(t, out, string(canary))
 	}
