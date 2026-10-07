@@ -62,6 +62,7 @@ from app.models.investigations import (
     ConversationMessageMetadata,
     EnrichedInvestigationContext,
 )
+from app.models.memory import InvestigationMemory
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from app.services.data.agent_activity_data_service import AgentActivityDataService
@@ -160,7 +161,7 @@ class ChatPipelineService:
             )
 
         # Validate credentials for each configured tier
-        validation_errors = []
+        validation_errors: list[str] = []
 
         def check_tier(
             tier_name: str,
@@ -168,7 +169,7 @@ class ChatPipelineService:
             provider: str | None,
             api_key: str | None,
             endpoint: str | None,
-        ):
+        ) -> None:
             if not model:
                 return
 
@@ -509,10 +510,15 @@ class ChatPipelineService:
             investigation=investigation, user_id=user_id or "", g8e_context=g8e_context
         )
 
-    async def _load_chat_memories(self, g8e_context, investigation, case_id):
+    async def _load_chat_memories(
+        self,
+        g8e_context: G8eHttpContext,
+        investigation: EnrichedInvestigationContext,
+        case_id: str | None,
+    ) -> tuple[list[InvestigationMemory], list[InvestigationMemory], bool]:
         # A scored request avoids user-wide memories from other assignments.
-        user_memories = []
-        case_memories = []
+        user_memories: list[InvestigationMemory] = []
+        case_memories: list[InvestigationMemory] = []
         suppressed = g8e_context.evaluation_context is not None
         try:
             if investigation.user_id and not suppressed:
@@ -547,7 +553,7 @@ class ChatPipelineService:
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
             getattr(g8e_context, "investigation_id", None) if g8e_context else "None",
-            len(state.response_text) if state.response_text is not None else 0,
+            len(state.response_text),
         )
 
         sender = inputs.message_sender
@@ -695,7 +701,7 @@ class ChatPipelineService:
                 bound_operator_count=len(inputs.g8e_context.bound_operators)
                 if inputs.g8e_context.bound_operators
                 else 0,
-                response_length=len(state.response_text) if state.response_text is not None else 0,
+                response_length=len(state.response_text),
                 context_sizes=context_sizes,
                 attachment_total_bytes=attachment_total_bytes
                 if attachment_total_bytes > 0
@@ -873,8 +879,7 @@ class ChatPipelineService:
         grader_calls = []
         evaluation_context = g8e_context.evaluation_context
         if (
-            evaluation_context is not None
-            and evaluation_context.grading_method == "semantic_judge"
+            evaluation_context.grading_method == "semantic_judge"
             and evaluation_context.gold_summary is not None
         ):
             semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
@@ -912,7 +917,7 @@ class ChatPipelineService:
 
     @staticmethod
     async def _await_evaluation_memory_task(
-        memory_task: asyncio.Task,
+        memory_task: asyncio.Task[None],
         memory_holder: MemoryHolder | None,
         assignment_id: str,
     ) -> ModelCallTelemetry | None:
@@ -1248,5 +1253,5 @@ class ChatPipelineService:
 
         logger.info(
             "[SSE-CHAT] Completed: %d chars",
-            len(state.response_text) if state.response_text is not None else 0,
+            len(state.response_text),
         )

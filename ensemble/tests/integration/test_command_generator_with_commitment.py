@@ -104,10 +104,10 @@ class TestCommandGeneratorWithCommitment:
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch(
-                "app.services.ai.generator._run_voting_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_voting_stage", new_callable=AsyncMock
             ) as mock_vote,
             patch(
                 "app.services.ai.generator.TribunalAuditor.run", new_callable=AsyncMock
@@ -227,10 +227,10 @@ class TestCommandGeneratorWithCommitment:
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch(
-                "app.services.ai.generator._run_voting_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_voting_stage", new_callable=AsyncMock
             ) as mock_vote,
             patch(
                 "app.services.ai.generator.TribunalAuditor.run", new_callable=AsyncMock
@@ -312,10 +312,10 @@ class TestCommandGeneratorWithCommitment:
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch(
-                "app.services.ai.generator._run_voting_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_voting_stage", new_callable=AsyncMock
             ) as mock_vote,
             patch(
                 "app.services.ai.generator.TribunalAuditor.run", new_callable=AsyncMock

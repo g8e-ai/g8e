@@ -59,7 +59,7 @@ def _format_past_memories(
     if not past_memories:
         return ""
 
-    past_lines = []
+    past_lines: list[str] = []
     for i, memory in enumerate(past_memories[:PAST_MEMORIES_LIMIT], 1):
         attributes = [
             label + value

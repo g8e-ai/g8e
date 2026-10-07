@@ -242,7 +242,7 @@ class ToolCallResult(BaseModel):
     result: ToolResult
     grounding: GroundingMetadata | None = None
     tribunal_result: CommandGenerationResult | None = None
-    player_steps: list[EvaluationPlayerStep] = Field(default_factory=list)
+    player_steps: list[EvaluationPlayerStep] = Field(default_factory=list[EvaluationPlayerStep])
 
 
 logger = logging.getLogger(__name__)
@@ -566,7 +566,6 @@ async def orchestrate_tool_execution(
         execution_id,
         result.error_type,
     )
-
 
     command_display = (
         gen_result.final_command if gen_result else (sage_request.request if sage_request else "")

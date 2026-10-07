@@ -38,7 +38,12 @@ from app.constants import (
 )
 from app.constants.config import GroundingSource
 from app.errors import NetworkError
-from app.models.grounding import GroundingChunk, GroundingMetadata, GroundingSourceInfo
+from app.models.grounding import (
+    GroundingChunk,
+    GroundingMetadata,
+    GroundingSourceInfo,
+    GroundingSupport,
+)
 from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
 logger = logging.getLogger(__name__)
@@ -175,7 +180,9 @@ class WebSearchProvider:
             logger.error("Failed to add inline citations: %s", e)
             return text
 
-    def _resolve_inline_sources(self, supports, chunks):
+    def _resolve_inline_sources(
+        self, supports: Sequence[GroundingSupport], chunks: Sequence[GroundingChunk]
+    ) -> tuple[dict[int, int], list[GroundingSourceInfo]]:
         """Build stable citation numbers and source records from support metadata."""
         citation_nums: dict[int, int] = {}
         source_info: dict[int, GroundingSourceInfo] = {}
@@ -220,7 +227,9 @@ class WebSearchProvider:
         return citation_nums, sources
 
     @staticmethod
-    def _insert_inline_citations(text, supports, citation_nums):
+    def _insert_inline_citations(
+        text: str, supports: Sequence[GroundingSupport], citation_nums: dict[int, int]
+    ) -> str:
         """Insert citations from right to left so earlier offsets stay valid."""
         valid_supports = sorted(
             (s for s in supports if s.segment.end_index > 0 and s.grounding_chunk_indices),

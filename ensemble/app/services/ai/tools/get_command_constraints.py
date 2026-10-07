@@ -19,7 +19,7 @@ from app.constants.prompts import PromptFile
 from app.llm.prompts import load_prompt
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.settings import G8eeUserSettings
+from app.models.settings import CommandValidationSettings, G8eeUserSettings
 from app.models.tool_results import CommandConstraintsResult, ToolResult
 from app.models.whitelist import WhitelistedCommand
 from app.services.investigation.investigation_service import (
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 def _auto_approved_commands(
-    svc: AIToolService, cv: object
+    svc: AIToolService, cv: CommandValidationSettings
 ) -> tuple[list[str], list[dict[str, str]]]:
     commands: list[str] = []
     sources: list[dict[str, str]] = []
@@ -46,7 +46,7 @@ def _auto_approved_commands(
             commands.append(name)
             sources.append({"command": name, "source": "platform"})
     # CSV duplicates retain their existing precedence for source attribution.
-    for name in parse_command_csv(cv.auto_approved_commands):  # type: ignore[attr-defined]
+    for name in parse_command_csv(cv.auto_approved_commands):
         if name not in seen:
             seen.add(name)
             commands.append(name)
@@ -62,12 +62,12 @@ def _auto_approved_commands(
 def _whitelist_data(
     svc: AIToolService,
     investigation: EnrichedInvestigationContext,
-    cv: object,
+    cv: CommandValidationSettings | None,
 ) -> tuple[list[WhitelistedCommand], list[str], list[str]]:
     primary = investigation.operator_documents[0] if investigation.operator_documents else None
     operator_context = extract_single_operator_context(primary) if primary else None
     os_name = operator_context.os if operator_context else DEFAULT_OS_NAME
-    csv_override = cv.whitelisted_commands if cv else None  # type: ignore[attr-defined]
+    csv_override = cv.whitelisted_commands if cv else None
     csv_commands = parse_command_csv(csv_override) if csv_override else []
     commands = (
         [WhitelistedCommand(command=cmd) for cmd in csv_commands]
@@ -94,7 +94,7 @@ def _constraint_message(
     """Describe the enabled controls and their effective behavior."""
     if not whitelisting_enabled and not blacklisting_enabled and not auto_approve_enabled:
         return "No command constraints are currently enforced. All commands require human approval."
-    parts = []
+    parts: list[str] = []
     if whitelisting_enabled:
         parts.append(
             f"Whitelisting ENABLED: only the {len(whitelisted_commands)} listed commands are permitted. "

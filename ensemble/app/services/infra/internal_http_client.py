@@ -8,6 +8,7 @@
 import codecs
 import logging
 from collections.abc import AsyncIterator
+from typing import cast
 
 from g8e.operator.v1.operator_pb2 import InferenceDispatchStreamFrame
 from google.protobuf import json_format
@@ -553,7 +554,7 @@ class InternalHttpClient:
                 details={"status_code": response.status_code, "role": request.role},
             )
         dispatch_response = InferenceDispatchResponse()
-        json_format.ParseDict(payload, dispatch_response)
+        json_format.ParseDict(cast(dict[str, object], payload), dispatch_response)
         return dispatch_response
 
     async def dispatch_inference_stream(

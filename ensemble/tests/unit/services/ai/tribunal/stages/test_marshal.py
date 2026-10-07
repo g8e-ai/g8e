@@ -14,7 +14,7 @@ from app.models.agents.tribunal import TribunalMarshalBlockedError
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import CommandRiskAnalysis, ErrorAnalysisResult
 from app.services.ai.tribunal.emitter import TribunalEmitter
-from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
+from app.services.ai.tribunal.stages.marshal import run_marshal_stage
 
 
 @pytest.mark.asyncio
@@ -27,7 +27,7 @@ class TestRunMarshalStage:
         emitter = TribunalEmitter(None, mock_g8e_context)
         settings = G8eeUserSettings(llm=LLMSettings())
 
-        result = await _run_marshal_stage(
+        result = await run_marshal_stage(
             request="list files",
             guidelines="",
             vote_winner="ls -la",
@@ -66,7 +66,7 @@ class TestRunMarshalStage:
         investigation_state.marshal_block_count = 0
 
         with pytest.raises(TribunalMarshalBlockedError):
-            await _run_marshal_stage(
+            await run_marshal_stage(
                 request="danger",
                 guidelines="",
                 vote_winner="rm -rf /",

@@ -55,7 +55,7 @@ class TestTribunalApprovalCorrelation:
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class,
         ):
@@ -132,7 +132,7 @@ class TestTribunalApprovalCorrelation:
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class,
         ):

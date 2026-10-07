@@ -29,6 +29,7 @@ from app.llm.prompts import (
     build_command_constraints_message,
     build_tribunal_prompt_fields,
 )
+from app.llm.provider import LLMProvider
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -47,17 +48,17 @@ from app.models.agents.tribunal import (
     TribunalVotingCompletedPayload,
     VoteBreakdown,
 )
-from app.models.http_context import RequestContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.tool_results import CommandRiskAnalysis
 from app.models.tribunal_commands import TribunalGenerationRequest
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.generation import (
-    _anonymize_clusters,
-    _run_generation_stage,
+    anonymize_clusters,
+    run_generation_stage,
 )
-from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
-from app.services.ai.tribunal.stages.voting import _run_voting_stage
+from app.services.ai.tribunal.stages.marshal import run_marshal_stage
+from app.services.ai.tribunal.stages.voting import run_voting_stage
 from app.services.ai.tribunal.utils import (
     member_for_pass,
     resolve_model,
@@ -80,7 +81,7 @@ async def _run_peer_review_round(
     num_passes: int,
     candidates: list[CandidateCommand],
     vote_breakdown: VoteBreakdown,
-    generation_provider,
+    generation_provider: LLMProvider,
     command_constraints_message: str,
 ) -> tuple[
     str | None,
@@ -108,7 +109,7 @@ async def _run_peer_review_round(
     await _push_tribunal_agent_state(
         emitter, "running", run_id=investigation_id, model=generation_model
     )
-    r1_clusters, _, _ = _anonymize_clusters(candidates)
+    r1_clusters, _, _ = anonymize_clusters(candidates)
     await emitter.emit(
         EventType.AI_CONSENSUS_VOTING_ROUND_2_STARTED,
         TribunalSessionStartedPayload(
@@ -120,7 +121,7 @@ async def _run_peer_review_round(
             correlation_id=correlation_id,
         ),
     )
-    round_2_candidates = await _run_generation_stage(
+    round_2_candidates = await run_generation_stage(
         provider=generation_provider,
         model=generation_model,
         request=request.request,
@@ -132,7 +133,7 @@ async def _run_peer_review_round(
         round_num=2,
         r1_clusters=r1_clusters,
     )
-    vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
+    vote_winner, vote_score, vote_breakdown, tied_candidates = await run_voting_stage(
         candidates=round_2_candidates,
         request=request.request,
         emitter=emitter,
@@ -176,12 +177,17 @@ async def _run_peer_review_round(
     )
 
 
-async def _get_generation_provider(request, emitter, investigation_id):
+async def _get_generation_provider(
+    request: TribunalGenerationRequest, emitter: TribunalEmitter, investigation_id: str | None
+) -> LLMProvider:
     """Resolve the lite provider and preserve Tribunal's failure events."""
+    settings = request.settings
+    if settings is None:
+        raise ConfigurationError("LLM settings are missing")
     try:
-        generation_provider = get_llm_provider(request.settings.llm, is_lite=True)
+        generation_provider = get_llm_provider(settings.llm, is_lite=True)
     except Exception as exc:
-        lite_provider = request.settings.llm.lite_provider
+        lite_provider = settings.llm.lite_provider
         provider_name = lite_provider.value if lite_provider else "not_configured"
         await emitter.emit(
             EventType.AI_CONSENSUS_SESSION_PROVIDER_UNAVAILABLE,
@@ -198,10 +204,6 @@ async def _get_generation_provider(request, emitter, investigation_id):
             request=request.request,
         ) from exc
 
-    if generation_provider is None:
-        lite_provider = request.settings.llm.lite_provider
-        provider_name = lite_provider.value if lite_provider else "not_configured"
-        raise ConfigurationError(f"Failed to initialize generation provider for {provider_name}")
     return generation_provider
 
 
@@ -319,7 +321,9 @@ async def _build_and_emit_result(
     return result
 
 
-def _prepare_generation_request(request: TribunalGenerationRequest):
+def _prepare_generation_request(
+    request: TribunalGenerationRequest,
+) -> tuple[str, str, TribunalEmitter, str | None]:
     """Normalize request text and initialize prompt, event, and run metadata."""
     request.request = request.request.strip()
     request.guidelines = request.guidelines.strip()
@@ -358,9 +362,14 @@ def _prepare_generation_request(request: TribunalGenerationRequest):
     return constraints, correlation_id, emitter, investigation_id
 
 
-async def _start_generation_session(request, emitter, investigation_id, correlation_id):
+async def _start_generation_session(
+    request: TribunalGenerationRequest,
+    emitter: TribunalEmitter,
+    investigation_id: str | None,
+    correlation_id: str,
+) -> tuple[G8eHttpContext, str, str, str, int, list[ConsensusMember]]:
     """Validate configuration and publish the session start transition."""
-    if request.settings is None or request.settings.llm is None:
+    if request.settings is None:
         raise ConfigurationError("LLM settings are missing")
     if not request.settings.llm.llm_command_gen_enabled:
         await emitter.emit(
@@ -438,7 +447,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
 
     prepare_provider_call(generation_provider, g8e_context=request.g8e_context)
 
-    candidates = await _run_generation_stage(
+    candidates = await run_generation_stage(
         provider=generation_provider,
         model=generation_model,
         request=request.request,
@@ -451,7 +460,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
     )
 
     # Run Round 1 voting
-    vote_winner, vote_score, vote_breakdown, _ = await _run_voting_stage(
+    vote_winner, vote_score, vote_breakdown, _ = await run_voting_stage(
         candidates=candidates,
         request=request.request,
         emitter=emitter,
@@ -515,7 +524,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         # Auditor failure is non-fatal if consensus was reached, but here we can't even start it
         auditor_provider = None
 
-    marshal_risk_analysis = await _run_marshal_stage(
+    marshal_risk_analysis = await run_marshal_stage(
         request=request.request,
         guidelines=request.guidelines,
         vote_winner=vote_winner,

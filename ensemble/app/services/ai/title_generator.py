@@ -62,7 +62,6 @@ async def generate_case_title(
     )
 
 
-
 async def _generate_title_with_provider(
     description: str,
     *,

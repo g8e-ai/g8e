@@ -151,7 +151,7 @@ class EvalGrade(BaseModel):
     score: int = Field(..., ge=1, le=5, description="Score from 1 to 5")
     reasoning: str = Field(..., description="Detailed explanation for the score")
     passed: bool = Field(..., description="Whether the score meets the passing threshold")
-    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list[ModelCallTelemetry])
 
     @field_validator("reasoning", mode="before")
     @classmethod

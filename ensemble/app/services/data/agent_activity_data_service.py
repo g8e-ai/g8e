@@ -92,9 +92,7 @@ class AgentActivityDataService:
             return metadata
 
         except Exception as e:
-            logger.exception(
-                "Failed to record agent activity metadata %s: %s", metadata.id, e
-            )
+            logger.exception("Failed to record agent activity metadata %s: %s", metadata.id, e)
             raise DatabaseError(
                 message=f"Failed to record agent activity metadata: {e}",
                 code=ErrorCode.DB_WRITE_ERROR,
@@ -129,9 +127,7 @@ class AgentActivityDataService:
             return AgentActivityMetadata.model_validate(doc_data)
 
         except Exception as e:
-            logger.exception(
-                "Failed to retrieve agent activity metadata %s: %s", activity_id, e
-            )
+            logger.exception("Failed to retrieve agent activity metadata %s: %s", activity_id, e)
             raise DatabaseError(
                 message=f"Failed to retrieve agent activity metadata: {e}",
                 code=ErrorCode.DB_QUERY_ERROR,
@@ -162,7 +158,7 @@ class AgentActivityDataService:
         Returns:
             List of matching activity metadata records
         """
-        filters = []
+        filters: list[FieldFilter] = []
 
         if user_id:
             filters.append(FieldFilter(field="user_id", op="==", value=user_id))
@@ -225,9 +221,7 @@ class AgentActivityDataService:
             logger.info("Agent activity metadata deleted: %s", activity_id)
 
         except Exception as e:
-            logger.exception(
-                "Failed to delete agent activity metadata %s: %s", activity_id, e
-            )
+            logger.exception("Failed to delete agent activity metadata %s: %s", activity_id, e)
             raise DatabaseError(
                 message=f"Failed to delete agent activity metadata: {e}",
                 code=ErrorCode.DB_WRITE_ERROR,

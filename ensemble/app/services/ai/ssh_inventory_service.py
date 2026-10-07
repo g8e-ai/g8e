@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import functools
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 
 from app.errors import ConfigurationError
@@ -184,7 +185,7 @@ def _parse_ssh_config(
     raw: str,
     config_dir: Path,
     included_files: set[str] | None = None,
-):
+) -> Iterator[SshHost]:
     """Yield :class:`SshHost` instances for every ``Host`` block in *raw*.
 
     A ``Host`` line may declare multiple aliases (e.g. ``Host web-1 web-2``);
@@ -274,7 +275,9 @@ def _parse_ssh_config(
     yield from flush()
 
 
-def _parse_ssh_includes(value: str, config_dir: Path, included_files: set[str]):
+def _parse_ssh_includes(
+    value: str, config_dir: Path, included_files: set[str]
+) -> Iterator[SshHost]:
     """Yield hosts found in Include paths, skipping cycles and unreadable files."""
     for include_path in _resolve_include_path(value, config_dir):
         canonical_path = str(include_path.resolve())
@@ -291,9 +294,7 @@ def _parse_ssh_includes(value: str, config_dir: Path, included_files: set[str]):
                 included_files=included_files,
             )
         except OSError as exc:
-            logger.warning(
-                "[SSH_INVENTORY] Failed to read included file %s: %s", include_path, exc
-            )
+            logger.warning("[SSH_INVENTORY] Failed to read included file %s: %s", include_path, exc)
 
 
 def default_ssh_inventory_service() -> SshInventoryService:

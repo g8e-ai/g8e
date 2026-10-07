@@ -13,15 +13,17 @@ streaming loop into client EventService pub/sub calls for browser delivery.
 import asyncio
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from typing import cast
+from typing import Any
 
 from app.constants import (
     DEFAULT_FINISH_REASON,
     UNKNOWN_ERROR_MESSAGE,
+    AgentMode,
     EventType,
     StreamChunkFromModelType,
     ThinkingPhase,
     ToolCallStatus,
+    WorkflowType,
 )
 from app.constants.generated_status import OperatorToolName
 from app.errors import ValidationError
@@ -57,6 +59,7 @@ from app.models.tool_results import (
     PortCheckToolResult,
     SearchWebResult,
     SshInventoryToolResult,
+    ToolResult,
 )
 from app.services.ai.tool_registry import AI_UNIVERSAL_TOOLS
 from app.services.evaluation.tool_evidence import (
@@ -75,9 +78,21 @@ from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 
+EventPublisher = Callable[[EventType, G8eBaseModel], Awaitable[None]]
+StatePusher = Callable[[str], Awaitable[None]]
 
-def _make_event_publisher(event_service, has_sse, investigation_id, web_session_id, cli_session_id, case_id, user_id):
+
+def _make_event_publisher(
+    event_service: EventServiceProtocol,
+    has_sse: bool,
+    investigation_id: str,
+    web_session_id: str | None,
+    cli_session_id: str | None,
+    case_id: str,
+    user_id: str,
+) -> EventPublisher:
     """Bind stream routing values to a best-effort event publisher."""
+
     async def publish(event_type: EventType, payload: G8eBaseModel) -> None:
         if not has_sse:
             return
@@ -93,10 +108,19 @@ def _make_event_publisher(event_service, has_sse, investigation_id, web_session_
             )
         except Exception as exc:
             logger.warning("[SSE] Push failed for %s (non-blocking): %s", event_type, exc)
+
     return publish
 
 
-def _make_state_pushers(event_service, inputs, investigation_id, run_display_name, user_id, web_session_id, cli_session_id):
+def _make_state_pushers(
+    event_service: EventServiceProtocol,
+    inputs: AgentInputs,
+    investigation_id: str,
+    run_display_name: str,
+    user_id: str,
+    web_session_id: str | None,
+    cli_session_id: str | None,
+) -> tuple[StatePusher, StatePusher]:
     """Create best-effort publishers for agent and investigation run state."""
     persona_id = resolve_chat_persona_id(inputs.active_agent)
 
@@ -241,20 +265,47 @@ async def deliver_via_sse(
     await _push_run_state("running")
 
     await _run_sse_delivery(
-        stream, inputs, state, _publish, _push_agent_state, _push_run_state,
-        on_iteration_text, investigation_id, agent_mode, has_sse, case_id
+        stream,
+        inputs,
+        state,
+        _publish,
+        _push_agent_state,
+        _push_run_state,
+        on_iteration_text,
+        investigation_id,
+        agent_mode,
+        has_sse,
+        case_id,
     )
 
 
 async def _run_sse_delivery(
-    stream, inputs, state, publish, push_agent_state, push_run_state,
-    on_iteration_text, investigation_id, agent_mode, has_sse, case_id
+    stream: AsyncGenerator[StreamChunkFromModel],
+    inputs: AgentInputs,
+    state: AgentStreamState,
+    publish: EventPublisher,
+    push_agent_state: StatePusher,
+    push_run_state: StatePusher,
+    on_iteration_text: Callable[[str], Awaitable[None]] | None,
+    investigation_id: str,
+    agent_mode: AgentMode | WorkflowType,
+    has_sse: bool,
+    case_id: str,
 ) -> None:
     """Consume a stream and publish its completion or terminal error event."""
     try:
         error_occurred = await _consume_sse_stream(
-            stream, inputs, state, publish, push_agent_state, push_run_state,
-            on_iteration_text, investigation_id, agent_mode, has_sse, case_id
+            stream,
+            inputs,
+            state,
+            publish,
+            push_agent_state,
+            push_run_state,
+            on_iteration_text,
+            investigation_id,
+            agent_mode,
+            has_sse,
+            case_id,
         )
 
         # Read final aggregate values from the mutable stream state
@@ -324,8 +375,12 @@ async def _run_sse_delivery(
 
 
 async def _handle_tool_call_chunk(
-    chunk: StreamChunkFromModel, state: AgentStreamState, inputs: AgentInputs,
-    _publish, _push_agent_state, _push_run_state
+    chunk: StreamChunkFromModel,
+    state: AgentStreamState,
+    inputs: AgentInputs,
+    _publish: EventPublisher,
+    _push_agent_state: StatePusher,
+    _push_run_state: StatePusher,
 ) -> None:
     """Handle one tool call chunk."""
     fn = chunk.data.tool_name or ""
@@ -350,10 +405,7 @@ async def _handle_tool_call_chunk(
             event_type = EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED
             if chunk.data.arguments and "query" in chunk.data.arguments:
                 query = str(chunk.data.arguments["query"])
-            elif (
-                isinstance(chunk.data.result, SearchWebResult)
-                and chunk.data.result.query
-            ):
+            elif isinstance(chunk.data.result, SearchWebResult) and chunk.data.result.query:
                 query = chunk.data.result.query
         elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
             event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED
@@ -361,10 +413,7 @@ async def _handle_tool_call_chunk(
             event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED
             if chunk.data.arguments and "query" in chunk.data.arguments:
                 query = str(chunk.data.arguments["query"])
-            elif (
-                isinstance(chunk.data.result, SearchWebResult)
-                and chunk.data.result.query
-            ):
+            elif isinstance(chunk.data.result, SearchWebResult) and chunk.data.result.query:
                 query = chunk.data.result.query
 
         if event_type:
@@ -406,7 +455,12 @@ async def _handle_tool_call_chunk(
 
 
 async def _handle_universal_tool_result(
-    chunk: StreamChunkFromModel, fn: str, exec_id: str, publish, push_agent_state, push_run_state
+    chunk: StreamChunkFromModel,
+    fn: str,
+    exec_id: str,
+    publish: EventPublisher,
+    push_agent_state: StatePusher,
+    push_run_state: StatePusher,
 ) -> None:
     """Publish completion details for a universal tool result."""
     result = chunk.data.result
@@ -434,43 +488,45 @@ async def _handle_universal_tool_result(
         await push_run_state("running")
 
 
-def _universal_tool_result_details(fn: str, result):
+def _universal_tool_result_details(
+    fn: str, result: ToolResult | None
+) -> tuple[EventType | None, str | None, list[dict[str, Any]] | None, str | None]:
     """Return the event and result fields for a completed universal tool."""
-    handlers = {
-        OperatorToolName.QUERY_INVESTIGATION_CONTEXT: (
-            EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED,
-            InvestigationContextResult,
-            lambda value: str(value.data) if value.data is not None else None,
-        ),
-        OperatorToolName.GET_COMMAND_CONSTRAINTS: (
-            EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED,
-            CommandConstraintsResult,
-            lambda value: value.message,
-        ),
-        OperatorToolName.G8E_SEARCH_WEB: (
-            EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
-            SearchWebResult,
-            lambda value: [item.model_dump(mode="json") for item in value.results],
-        ),
-    }
-    handler = next((handlers[key] for key in handlers if fn == key), None)
-    if handler is None:
-        return None, None, None, None
-    event_type, result_type, content_for = handler
-    if not isinstance(result, result_type):
-        return event_type, None, None, None
-    content = content_for(result) if result_type is not SearchWebResult else None
-    results = content_for(result) if result_type is SearchWebResult else None
-    error = result.error if not result.success else None
+    event_type: EventType | None = None
+    content: str | None = None
+    results: list[dict[str, Any]] | None = None
+    error: str | None = None
+    if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
+        event_type = EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
+        if isinstance(result, InvestigationContextResult):
+            content = str(result.data) if result.data is not None else None
+            error = result.error if not result.success else None
+    elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
+        event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED
+        if isinstance(result, CommandConstraintsResult):
+            content = result.message
+            error = result.error if not result.success else None
+    elif fn == OperatorToolName.G8E_SEARCH_WEB:
+        event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED
+        if isinstance(result, SearchWebResult):
+            results = [item.model_dump(mode="json") for item in result.results]
+            error = result.error if not result.success else None
     return event_type, content, results, error
 
 
 async def _handle_operator_tool_result(
-    chunk: StreamChunkFromModel, fn: str, exec_id: str, publish, push_agent_state, push_run_state
+    chunk: StreamChunkFromModel,
+    fn: str,
+    exec_id: str,
+    publish: EventPublisher,
+    push_agent_state: StatePusher,
+    push_run_state: StatePusher,
 ) -> None:
     """Publish completion details for an operator tool result."""
     error = str(chunk.data.error) if chunk.data.error else None
-    content = None if error or chunk.data.result is None else _operator_result_content(chunk.data.result)
+    content = (
+        None if error or chunk.data.result is None else _operator_result_content(chunk.data.result)
+    )
     if not error and chunk.data.result is not None and not chunk.data.result.success:
         error = str(chunk.data.result.error) if chunk.data.result.error else None
     is_failed = _tool_result_failed(chunk, error)
@@ -493,38 +549,34 @@ async def _handle_operator_tool_result(
     await push_run_state("running")
 
 
-def _operator_result_content(result):
+def _operator_result_content(result: ToolResult) -> str | None:
     """Convert a typed operator result to the content shown in its SSE event."""
     if not result.success and result.error:
         return None
     return _operator_result_content_value(result)
 
 
-_NO_OPERATOR_CONTENT = object()
-
-
-def _simple_operator_result_content(result):
-    handlers = (
-        (CommandExecutionResult, lambda value: value.output),
-        ((FileEditResult, FsReadToolResult), lambda value: value.content),
-        (FetchLogsToolResult, lambda value: value.stdout),
-        (FetchFileDiffToolResult, lambda value: value.diff.diff_content if value.diff else None),
-        (InvestigationContextResult, lambda value: str(value.data) if value.data is not None else None),
-        (CommandConstraintsResult, lambda value: value.message),
-    )
-    handler = next((render for types, render in handlers if isinstance(result, types)), None)
-    return handler(result) if handler else _NO_OPERATOR_CONTENT
-
-
-def _operator_result_content_value(result):
-    content = _simple_operator_result_content(result)
-    if content is not _NO_OPERATOR_CONTENT:
-        return cast(str | None, content)
-    if isinstance(result, PortCheckToolResult):
-        return f"Port {result.port} on {result.host} is {'open' if result.is_open else 'closed'}"
-    if isinstance(result, (FsListToolResult, FsGrepToolResult, SshInventoryToolResult, SearchWebResult)):
-        return str(result.model_dump(mode="json"))
-    return None
+def _operator_result_content_value(result: ToolResult) -> str | None:
+    content: str | None = None
+    if isinstance(result, CommandExecutionResult):
+        content = result.output
+    elif isinstance(result, (FileEditResult, FsReadToolResult)):
+        content = result.content
+    elif isinstance(result, FetchLogsToolResult):
+        content = result.stdout
+    elif isinstance(result, FetchFileDiffToolResult):
+        content = result.diff.diff_content if result.diff else None
+    elif isinstance(result, InvestigationContextResult):
+        content = str(result.data) if result.data is not None else None
+    elif isinstance(result, CommandConstraintsResult):
+        content = result.message
+    elif isinstance(result, PortCheckToolResult):
+        content = f"Port {result.port} on {result.host} is {'open' if result.is_open else 'closed'}"
+    elif isinstance(
+        result, (FsListToolResult, FsGrepToolResult, SshInventoryToolResult, SearchWebResult)
+    ):
+        content = str(result.model_dump(mode="json"))
+    return content
 
 
 def _tool_result_failed(chunk: StreamChunkFromModel, error: str | None) -> bool:
@@ -538,8 +590,14 @@ def _tool_result_failed(chunk: StreamChunkFromModel, error: str | None) -> bool:
 
 
 async def _handle_tool_result_chunk(
-    chunk: StreamChunkFromModel, state: AgentStreamState, inputs: AgentInputs,
-    _publish, _push_agent_state, _push_run_state, on_iteration_text, turn: int
+    chunk: StreamChunkFromModel,
+    state: AgentStreamState,
+    inputs: AgentInputs,
+    _publish: EventPublisher,
+    _push_agent_state: StatePusher,
+    _push_run_state: StatePusher,
+    on_iteration_text: Callable[[str], Awaitable[None]] | None,
+    turn: int,
 ) -> int:
     """Handle one tool result chunk."""
     _turn = turn
@@ -578,7 +636,12 @@ async def _handle_tool_result_chunk(
     return _turn
 
 
-async def _handle_stream_update_chunk(chunk, state, publish, thinking_started: bool) -> bool:
+async def _handle_stream_update_chunk(
+    chunk: StreamChunkFromModel,
+    state: AgentStreamState,
+    publish: EventPublisher,
+    thinking_started: bool,
+) -> bool:
     """Handle text, thinking, retry, citation, and completion chunks."""
     if chunk.type == StreamChunkFromModelType.TEXT:
         state.response_text += chunk.data.content or ""
@@ -635,7 +698,15 @@ async def _handle_stream_update_chunk(chunk, state, publish, thinking_started: b
 
 
 async def _handle_model_error_chunk(
-    chunk, inputs, state, publish, push_agent_state, investigation_id, agent_mode, has_sse, case_id
+    chunk: StreamChunkFromModel,
+    inputs: AgentInputs,
+    state: AgentStreamState,
+    publish: EventPublisher,
+    push_agent_state: StatePusher,
+    investigation_id: str,
+    agent_mode: AgentMode | WorkflowType,
+    has_sse: bool,
+    case_id: str,
 ) -> None:
     """Record and publish a terminal model error chunk."""
     error_message = chunk.data.error or UNKNOWN_ERROR_MESSAGE
@@ -656,8 +727,17 @@ async def _handle_model_error_chunk(
 
 
 async def _consume_sse_stream(
-    stream, inputs, state, publish, push_agent_state, push_run_state,
-    on_iteration_text, investigation_id, agent_mode, has_sse, case_id
+    stream: AsyncGenerator[StreamChunkFromModel],
+    inputs: AgentInputs,
+    state: AgentStreamState,
+    publish: EventPublisher,
+    push_agent_state: StatePusher,
+    push_run_state: StatePusher,
+    on_iteration_text: Callable[[str], Awaitable[None]] | None,
+    investigation_id: str,
+    agent_mode: AgentMode | WorkflowType,
+    has_sse: bool,
+    case_id: str,
 ) -> bool:
     """Consume stream chunks, publish events, and return whether a model error occurred."""
     _turn = 0
@@ -665,13 +745,31 @@ async def _consume_sse_stream(
     error_occurred = False
     async for chunk in stream:
         if chunk.type == StreamChunkFromModelType.TOOL_CALL:
-            await _handle_tool_call_chunk(chunk, state, inputs, publish, push_agent_state, push_run_state)
+            await _handle_tool_call_chunk(
+                chunk, state, inputs, publish, push_agent_state, push_run_state
+            )
         elif chunk.type == StreamChunkFromModelType.TOOL_RESULT:
-            _turn = await _handle_tool_result_chunk(chunk, state, inputs, publish, push_agent_state, push_run_state, on_iteration_text, _turn)
+            _turn = await _handle_tool_result_chunk(
+                chunk,
+                state,
+                inputs,
+                publish,
+                push_agent_state,
+                push_run_state,
+                on_iteration_text,
+                _turn,
+            )
         elif chunk.type == StreamChunkFromModelType.ERROR:
             await _handle_model_error_chunk(
-                chunk, inputs, state, publish, push_agent_state,
-                investigation_id, agent_mode, has_sse, case_id
+                chunk,
+                inputs,
+                state,
+                publish,
+                push_agent_state,
+                investigation_id,
+                agent_mode,
+                has_sse,
+                case_id,
             )
             error_occurred = True
             break  # Break instead of return to ensure post-loop code executes

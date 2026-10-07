@@ -244,13 +244,20 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         )
 
     async def _dispatch_and_build_result(
-        self, *, g8e_message, operator_id, operator_session_id,
-        g8e_context, timeout_seconds,
+        self,
+        *,
+        g8e_message: G8eMessage,
+        operator_id: str,
+        operator_session_id: str,
+        g8e_context: G8eHttpContext,
+        timeout_seconds: int,
     ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]:
         """Dispatch a validated message and translate the gateway response."""
         gateway_operator_client = self._gateway_operator_client
         assert gateway_operator_client is not None
         payload = g8e_message.payload
+        if payload is None:
+            raise ValidationError("g8e_message.payload is required", component="g8ee")
         execution_id = getattr(payload, "execution_id", None) or g8e_message.id
         payload_bytes = payload.to_protobuf().SerializeToString()
         target_resource = getattr(payload, "file_path", None) or getattr(payload, "path", None)

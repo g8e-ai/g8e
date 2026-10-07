@@ -243,9 +243,6 @@ async def call_auditor_llm(
         response_format=response_format,
     )
 
-    if settings is None:
-        raise ValueError(f"Failed to generate LiteLLM settings for model {model}")
-
     current_prompt = prompt
     if attempt > 0:
         current_prompt += "\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY a valid JSON object. No Markdown fences, no prose, no preamble."
@@ -402,9 +399,7 @@ async def _handle_legacy_auditor_decision(
 
     if status == ConsensusAuditStatus.SWAP and swap_to_cluster:
         final_cmd = cluster_to_cmd[swap_to_cluster]
-        swap_to_member = cluster_to_members[swap_to_cluster][
-            0
-        ]  # Pick first member for telemetry
+        swap_to_member = cluster_to_members[swap_to_cluster][0]  # Pick first member for telemetry
 
         # RE-VALIDATE SWAP TARGET SAFETY (L1Doctrine Technical Bedrock)
         safety_result = validate_command_safety(
@@ -504,9 +499,7 @@ async def _handle_legacy_auditor_decision(
         )
         await emitter.emit(
             EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
-            TribunalAuditorCompletedPayload(
-                passed=False, revision=revised_final, reason=reason
-            ),
+            TribunalAuditorCompletedPayload(passed=False, revision=revised_final, reason=reason),
             correlation_id=correlation_id,
         )
         return False, revised_final, revised_final, reason, None, None

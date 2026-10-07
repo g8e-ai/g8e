@@ -65,7 +65,7 @@ def _pass_model_call(
     error_type: str | None = None,
 ) -> ModelCallTelemetry:
     usage = response.usage_metadata if response else None
-    candidates = response.candidates if response and isinstance(response.candidates, list) else []
+    candidates = response.candidates if response else []
     finish_reason = candidates[0].finish_reason if candidates else None
     response_text = response.text if response else ""
     return build_model_call_telemetry(
@@ -143,10 +143,13 @@ async def _emit_pass_observation(
     )
 
 
-
 def _generation_prompt(
-    request: str, guidelines: str, operator_context: OperatorContext | None,
-    pass_index: int, command_constraints_message: str, round_num: int,
+    request: str,
+    guidelines: str,
+    operator_context: OperatorContext | None,
+    pass_index: int,
+    command_constraints_message: str,
+    round_num: int,
     r1_clusters: list[Any] | None,
 ) -> tuple[Any, Any, str]:
     """Build a member-specific prompt for one generation pass."""
@@ -187,8 +190,14 @@ def _generation_prompt(
 
 
 def _prepare_generation_call(
-    provider: LLMProvider, model: str, request: str, member_persona: Any,
-    prompt: str, emitter: TribunalEmitter, pass_index: int, member: Any,
+    provider: LLMProvider,
+    model: str,
+    request: str,
+    member_persona: Any,
+    prompt: str,
+    emitter: TribunalEmitter,
+    pass_index: int,
+    member: Any,
 ) -> tuple[Any, list[Content], Any, str]:
     """Build and fingerprint the provider request for one generation pass."""
     logger.info(
@@ -225,6 +234,7 @@ def _prepare_generation_call(
     )
     return model_config, contents, settings, input_artifact_hash
 
+
 async def _run_generation_pass(
     provider: LLMProvider,
     model: str,
@@ -240,8 +250,13 @@ async def _run_generation_pass(
 ) -> str | None:
     """Run a single Tribunal generation pass."""
     member, member_persona, prompt = _generation_prompt(
-        request, guidelines, operator_context, pass_index, command_constraints_message,
-        round_num, r1_clusters
+        request,
+        guidelines,
+        operator_context,
+        pass_index,
+        command_constraints_message,
+        round_num,
+        r1_clusters,
     )
 
     model_config, contents, settings, input_artifact_hash = _prepare_generation_call(
@@ -278,7 +293,8 @@ async def _run_generation_pass(
 
         if model_config.supports_structured_output:
             parsed = extract_json_from_text(raw_command)
-            if not (isinstance(parsed, dict) and isinstance(parsed.get("command"), str)):
+            parsed_command = parsed.get("command") if parsed is not None else None
+            if not isinstance(parsed_command, str):
                 error_msg = (
                     f"Pass {pass_index} ({member.value}): structured output missing 'command' field"
                 )
@@ -298,7 +314,7 @@ async def _run_generation_pass(
                     "StructuredOutputError",
                 )
                 return None
-            raw_command = parsed["command"]
+            raw_command = parsed_command
 
         normalised = normalise_command(raw_command)
 
@@ -365,21 +381,49 @@ async def _run_generation_pass(
             "the conversation exceeded the model's context window"
         )
         await _record_generation_failure(
-            emitter, pass_index, member, provider, model, response, monotonic_start,
-            input_artifact_hash, pass_errors, error_msg, type(exc).__name__, exc
+            emitter,
+            pass_index,
+            member,
+            provider,
+            model,
+            response,
+            monotonic_start,
+            input_artifact_hash,
+            pass_errors,
+            error_msg,
+            type(exc).__name__,
+            exc,
         )
 
     except OllamaEmptyResponseError as exc:
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         await _record_generation_failure(
-            emitter, pass_index, member, provider, model, response, monotonic_start,
-            input_artifact_hash, pass_errors, error_msg, type(exc).__name__
+            emitter,
+            pass_index,
+            member,
+            provider,
+            model,
+            response,
+            monotonic_start,
+            input_artifact_hash,
+            pass_errors,
+            error_msg,
+            type(exc).__name__,
         )
     except Exception as exc:
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         await _record_generation_failure(
-            emitter, pass_index, member, provider, model, response, monotonic_start,
-            input_artifact_hash, pass_errors, error_msg, type(exc).__name__
+            emitter,
+            pass_index,
+            member,
+            provider,
+            model,
+            response,
+            monotonic_start,
+            input_artifact_hash,
+            pass_errors,
+            error_msg,
+            type(exc).__name__,
         )
 
     return None
@@ -428,7 +472,7 @@ async def _record_generation_failure(
     )
 
 
-def _anonymize_clusters(
+def anonymize_clusters(
     candidates: list[CandidateCommand],
 ) -> tuple[list[AuditorClusterInfo], dict[str, str], dict[str, list[str]]]:
     """Anonymize R1 candidates as cluster_a, cluster_b, etc.
@@ -460,7 +504,7 @@ def _anonymize_clusters(
     return clusters, cluster_to_cmd, cluster_to_members
 
 
-async def _run_generation_stage(
+async def run_generation_stage(
     provider: LLMProvider,
     model: str,
     request: str,

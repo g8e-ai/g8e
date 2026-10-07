@@ -13,17 +13,19 @@ installed g8e package (from vendored submodule).
 
 import json
 from pathlib import Path
+from typing import Any
 
 from g8e.constants import _PROTOCOL_CONSTANTS_DIR
 
 
-def _load_ports_json() -> dict:
+def _load_ports_json() -> dict[str, Any]:
     """Load ports.json from protocol constants."""
     ports_file = _PROTOCOL_CONSTANTS_DIR / "ports.json"
     if not ports_file.exists():
         return {}
     with ports_file.open() as f:
-        return json.load(f)
+        data: dict[str, Any] = json.load(f)
+        return data
 
 
 _PORTS_DATA = _load_ports_json()

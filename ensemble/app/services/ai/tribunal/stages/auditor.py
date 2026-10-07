@@ -403,7 +403,6 @@ class TribunalAuditor:
             return False, revised, revised, reason
         return None
 
-
     async def _commit_reputation_if_verified(
         self, auditor_passed: bool, investigation_id: str, context: RequestContext
     ) -> str | None:

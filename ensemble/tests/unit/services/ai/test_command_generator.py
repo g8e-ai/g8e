@@ -73,7 +73,7 @@ from app.services.ai.generator import (
 )
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.generation import _run_generation_pass
-from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
+from app.services.ai.tribunal.stages.marshal import run_marshal_stage
 from app.services.ai.tribunal.utils import member_for_pass
 from app.services.evaluation.player_steps import PlayerStepRecorder
 from app.services.infra.event_service import EventService
@@ -944,7 +944,7 @@ class TestRunAuditStageMarshalRiskAnalysis:
         analyzer = self._make_analyzer(RiskLevel.LOW)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        risk_analysis = await _run_marshal_stage(
+        risk_analysis = await run_marshal_stage(
             request="list files",
             guidelines="",
             vote_winner="ls -la",
@@ -979,7 +979,7 @@ class TestRunAuditStageMarshalRiskAnalysis:
         investigation_state.marshal_block_count = 0
 
         with pytest.raises(TribunalMarshalBlockedError) as exc_info:
-            await _run_marshal_stage(
+            await run_marshal_stage(
                 request="purge logs",
                 guidelines="",
                 vote_winner="rm -rf /var/log",
@@ -1025,7 +1025,7 @@ class TestRunAuditStageMarshalRiskAnalysis:
         investigation_state.marshal_block_count = 1
 
         with pytest.raises(TribunalMarshalBlockedError) as exc_info:
-            await _run_marshal_stage(
+            await run_marshal_stage(
                 request="purge logs",
                 guidelines="",
                 vote_winner="rm -rf /var/log",

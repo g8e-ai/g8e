@@ -24,7 +24,7 @@ from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.pubsub_messages import G8eMessage, PortCheckResultPayload
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, PortCheckResultPayload
 from app.models.tool_results import PortCheckToolResult
 from app.services.protocols import ExecutionServiceProtocol
 
@@ -155,7 +155,12 @@ class OperatorPortService:
             )
 
     @staticmethod
-    def _parse_port_result(envelope, host: str, port: int, protocol: NetworkProtocol):
+    def _parse_port_result(
+        envelope: G8eoResultEnvelope | None,
+        host: str,
+        port: int,
+        protocol: NetworkProtocol,
+    ) -> PortCheckToolResult:
         if not envelope:
             timeout_error = (
                 f"Port check timed out after {OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS} seconds"

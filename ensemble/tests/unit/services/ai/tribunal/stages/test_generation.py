@@ -18,7 +18,7 @@ from app.models.agents.tribunal import (
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.generation import (
     _run_generation_pass,
-    _run_generation_stage,
+    run_generation_stage,
 )
 
 
@@ -206,7 +206,7 @@ class TestRunGenerationStage:
         mock_provider = make_mock_provider(generate_content_lite_return=mock_response)
         emitter = TribunalEmitter(None, mock_g8e_context)
 
-        candidates = await _run_generation_stage(
+        candidates = await run_generation_stage(
             provider=mock_provider,
             model="test-model",
             request="list files",
@@ -229,7 +229,7 @@ class TestRunGenerationStage:
         emitter = TribunalEmitter(None, mock_g8e_context)
 
         with pytest.raises(TribunalSystemError):
-            await _run_generation_stage(
+            await run_generation_stage(
                 provider=mock_provider,
                 model="test-model",
                 request="list files",
@@ -249,7 +249,7 @@ class TestRunGenerationStage:
         emitter = TribunalEmitter(None, mock_g8e_context)
 
         with pytest.raises(TribunalGenerationFailedError):
-            await _run_generation_stage(
+            await run_generation_stage(
                 provider=mock_provider,
                 model="test-model",
                 request="list files",
@@ -277,7 +277,7 @@ class TestRunGenerationStage:
         mock_provider = make_mock_provider(generate_content_lite_side_effect=partial_side_effect)
         emitter = TribunalEmitter(None, mock_g8e_context)
 
-        candidates = await _run_generation_stage(
+        candidates = await run_generation_stage(
             provider=mock_provider,
             model="test-model",
             request="list files",

@@ -5,12 +5,13 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import json
 import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
+
+from pydantic import Field
 
 import app.llm.llm_types as types
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
@@ -40,23 +41,41 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=G8eBaseModel)
 
 
-def _load_security_constraints() -> dict:
+_DEFAULT_SYSTEM_PATH_PREFIXES: list[str] = [
+    "/etc/",
+    "/usr/",
+    "/sys/",
+    "/proc/",
+    "/bin/",
+    "/sbin/",
+    "/boot/",
+    "/lib/",
+]
+
+
+class _SystemPathPrefixesConfig(G8eBaseModel):
+    prefixes: list[str] = Field(default_factory=lambda: list(_DEFAULT_SYSTEM_PATH_PREFIXES))
+
+
+class _SecurityConstraintsConfig(G8eBaseModel):
+    system_path_prefixes: _SystemPathPrefixesConfig = Field(
+        default_factory=_SystemPathPrefixesConfig
+    )
+    high_risk_system_files: dict[str, object] = Field(default_factory=dict)
+
+
+def _load_security_constraints() -> _SecurityConstraintsConfig:
     """Load security constraints from local config."""
     try:
         config_path = Path(__file__).parent.parent.parent / "config" / "security_constraints.json"
-        with config_path.open() as f:
-            return json.load(f)
+        return _SecurityConstraintsConfig.model_validate_json(config_path.read_text())
     except Exception:
-        return {}
+        return _SecurityConstraintsConfig()
 
 
 _SECURITY_CONSTRAINTS = _load_security_constraints()
-SYSTEM_PATH_PREFIXES = tuple(
-    _SECURITY_CONSTRAINTS.get("system_path_prefixes", {}).get(
-        "prefixes", ["/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/"]
-    )
-)
-HIGH_RISK_SYSTEM_FILES = _SECURITY_CONSTRAINTS.get("high_risk_system_files", {})
+SYSTEM_PATH_PREFIXES = tuple(_SECURITY_CONSTRAINTS.system_path_prefixes.prefixes)
+HIGH_RISK_SYSTEM_FILES = _SECURITY_CONSTRAINTS.high_risk_system_files
 
 
 def _build_marshal_command_template(
@@ -69,7 +88,7 @@ def _build_marshal_command_template(
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
-    parts = []
+    parts: list[str] = []
 
     parts.append(AgentPersona.format_xml_tag("command", command))
     parts.append(AgentPersona.format_xml_tag("justification", justification))
@@ -96,7 +115,7 @@ def _build_marshal_error_template(
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
-    parts = []
+    parts: list[str] = []
 
     parts.append(AgentPersona.format_xml_tag("failed_command", command))
     parts.append(AgentPersona.format_xml_tag("exit_code", str(exit_code)))
@@ -139,7 +158,7 @@ def _build_marshal_file_template(
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
-    parts = []
+    parts: list[str] = []
 
     parts.append(AgentPersona.format_xml_tag("operation", operation))
     parts.append(AgentPersona.format_xml_tag("file_path", file_path))

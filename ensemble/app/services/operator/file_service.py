@@ -25,7 +25,7 @@ from app.models.command_request_payloads import (
 )
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.operators import FileEditApprovalRequest
+from app.models.operators import FileEditApprovalRequest, OperatorDocument
 from app.models.pubsub_messages import (
     FetchFileDiffByIdSuccessPayload,
     FetchFileDiffBySessionSuccessPayload,
@@ -34,9 +34,11 @@ from app.models.pubsub_messages import (
     FetchFileHistorySuccessPayload,
     FileEditResultPayload,
     G8eMessage,
+    G8eoResultEnvelope,
 )
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import (
+    CommandInternalResult,
     FetchFileDiffToolResult,
     FetchFileHistoryToolResult,
     FileEditResult,
@@ -256,7 +258,9 @@ class OperatorFileService:
             )
         return None
 
-    def _resolve_file_operator(self, operator_documents, args):
+    def _resolve_file_operator(
+        self, operator_documents: list[OperatorDocument], args: FileEditRequestPayload
+    ) -> tuple[OperatorDocument, None] | tuple[None, FileEditResult]:
         try:
             resolved = self.execution_service.resolve_operators(
                 operator_documents=operator_documents,
@@ -433,7 +437,11 @@ class OperatorFileService:
             )
 
     @staticmethod
-    def _file_diff_result(envelope, internal_result, operator_session_id: str):
+    def _file_diff_result(
+        envelope: G8eoResultEnvelope | None,
+        internal_result: CommandInternalResult | None,
+        operator_session_id: str,
+    ) -> FetchFileDiffToolResult:
         if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
             return FetchFileDiffToolResult(
                 success=True,

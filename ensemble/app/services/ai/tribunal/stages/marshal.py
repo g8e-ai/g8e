@@ -26,7 +26,7 @@ from app.services.protocols import AIResponseAnalyzerProtocol
 logger = logging.getLogger(__name__)
 
 
-async def _run_marshal_stage(
+async def run_marshal_stage(
     request: str,
     guidelines: str,
     vote_winner: str,

@@ -6,8 +6,9 @@
 # released under the Apache License, Version 2.0.
 
 import logging
+from collections.abc import ItemsView, KeysView, ValuesView
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Literal, TypedDict, cast, overload
 
 from app.constants.bootstrap import BootstrapSettings, get_bootstrap
 from app.constants.generated_paths import PortConstants
@@ -137,22 +138,30 @@ def reload_paths() -> None:
 class _PathsProxy:
     """Proxy object that provides dict-like access to dynamically resolved paths."""
 
-    def __getitem__(self, key):
-        return get_paths()[key]
+    @overload
+    def __getitem__(self, key: Literal["infra"]) -> InfraPaths: ...
+    @overload
+    def __getitem__(self, key: Literal["g8ee"]) -> G8eePaths: ...
+    @overload
+    def __getitem__(self, key: Literal["ports"]) -> dict[str, int]: ...
+    def __getitem__(self, key: str) -> InfraPaths | G8eePaths | dict[str, int]:
+        return cast(dict[str, InfraPaths | G8eePaths | dict[str, int]], get_paths())[key]
 
-    def get(self, key, default=None):
-        return get_paths().get(key, default)
+    def get(self, key: Literal["host"], default: str) -> str:
+        """Return the optional ``host`` entry, which the resolved paths do not define."""
+        value: object = cast(dict[str, object], get_paths()).get(key, default)
+        return value if isinstance(value, str) else default
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:
         return key in get_paths()
 
-    def keys(self):
+    def keys(self) -> KeysView[str]:
         return get_paths().keys()
 
-    def values(self):
+    def values(self) -> ValuesView[object]:
         return get_paths().values()
 
-    def items(self):
+    def items(self) -> ItemsView[str, object]:
         return get_paths().items()
 
 
@@ -161,7 +170,7 @@ PATHS = _PathsProxy()
 
 def get_app_cert_paths(app_name: str | None = None) -> tuple[str, str]:
     if app_name is None:
-        app_name = PATHS.get("g8ee", {}).get("cert_name", "g8ee")
+        app_name = PATHS["g8ee"].get("cert_name", "g8ee")
     app_cert_dir = PATHS["infra"]["app_cert_dir"]
     cert_path = str(Path(app_cert_dir) / f"{app_name}.crt")
     key_path = str(Path(app_cert_dir) / f"{app_name}.key")
@@ -173,7 +182,7 @@ def resolve_config_path(filename: str) -> Path:
     Resolves a config file path using centralized PATHS if available,
     otherwise falls back to repo-relative resolution.
     """
-    config_dir = PATHS.get("g8ee", {}).get("config_dir")
+    config_dir = PATHS["g8ee"].get("config_dir")
     if config_dir:
         target_dir = Path(config_dir)
         # Handle container absolute paths when running on host

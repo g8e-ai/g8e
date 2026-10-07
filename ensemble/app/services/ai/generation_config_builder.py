@@ -72,9 +72,7 @@ class AIGenerationConfigBuilder:
         """Extract tool names from tool groups for logging."""
         tool_names: list[str] = []
         tool_names.extend(
-            getattr(fd, "name", "?")
-            for tool_group in tools
-            for fd in tool_group.tools
+            getattr(fd, "name", "?") for tool_group in tools for fd in tool_group.tools
         )
         return tool_names
 
@@ -107,7 +105,7 @@ class AIGenerationConfigBuilder:
         if clamped is ThinkingLevel.OFF:
             logger.info(
                 "[CONFIG] ThinkingConfig: disabled (model=%s has no supported thinking levels)",
-                config.name
+                config.name,
             )
             return types.ThinkingConfig(
                 thinking_level=ThinkingLevel.OFF,
@@ -119,13 +117,13 @@ class AIGenerationConfigBuilder:
                 "[CONFIG] ThinkingConfig: clamped desired=%s -> %s (model=%s)",
                 desired_level,
                 clamped,
-                config.name
+                config.name,
             )
         logger.info(
             "[CONFIG] ThinkingConfig: thinking_level=%s, include_thoughts=%s (model=%s)",
             clamped,
             include_thoughts,
-            config.name
+            config.name,
         )
         return types.ThinkingConfig(
             thinking_level=clamped,
@@ -169,7 +167,7 @@ class AIGenerationConfigBuilder:
             effective_max_tokens,
             thinking_level,
             len(tools) if tools else 0,
-            tool_names
+            tool_names,
         )
         return settings
 
@@ -196,7 +194,9 @@ class AIGenerationConfigBuilder:
             stop_sequences=stop_sequences,
         )
 
-        logger.info(" [BUILD_CONFIG] assistant model=%s, max_tokens=%s", model, effective_max_tokens)
+        logger.info(
+            " [BUILD_CONFIG] assistant model=%s, max_tokens=%s", model, effective_max_tokens
+        )
         return settings
 
     @staticmethod
@@ -258,7 +258,7 @@ class AIGenerationConfigBuilder:
             effective_max_tokens,
             thinking_level,
             len(tools) if tools else 0,
-            tool_names
+            tool_names,
         )
         return config
 
@@ -292,7 +292,7 @@ class AIGenerationConfigBuilder:
         logger.info(
             " [BUILD_CONFIG] lite model=%s, max_tokens=%s, thinking=disabled",
             model,
-            effective_max_tokens
+            effective_max_tokens,
         )
         return config
 

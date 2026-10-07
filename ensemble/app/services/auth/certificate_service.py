@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
     from app.services.auth.certificate_data_service import CertificateDataService
@@ -23,6 +23,16 @@ from app.constants.config import CLIENT_CERT_VALIDITY_DAYS, CRL_ISSUER
 from app.constants.paths import PATHS
 
 logger = logging.getLogger(__name__)
+
+
+class _OperatorJsonClient(Protocol):
+    async def request_json(
+        self, method: str, path: str, **kwargs: Any
+    ) -> dict[str, object] | None: ...
+
+
+class _ClientBackedDocumentService(Protocol):
+    client: _OperatorJsonClient
 
 
 class CertificateService:
@@ -103,9 +113,7 @@ class CertificateService:
             logger.error("[CERT-SERVICE] CA certificate not found in the configured PKI directory")
             # We let it proceed but some operations might fail if they expect a CA cert local copy
 
-    async def generate_operator_certificate(
-        self, operator_id: str, user_id: str
-    ) -> dict[str, str]:
+    async def generate_operator_certificate(self, operator_id: str, user_id: str) -> dict[str, str]:
         """Request a new per-operator client certificate from operator signing API."""
         if not self.initialized:
             await self.initialize()
@@ -129,7 +137,10 @@ class CertificateService:
         # In a cleaner world we'd inject a OperatorClient, but DBClient already has the connection info.
         # We'll use the _request_json internal of db_client for this transition phase.
 
-        db_client = self.data_service.cache.db.client  # type: ignore
+        if self.data_service is None:
+            raise RuntimeError("CertificateDataService is required to sign certificates")
+        db_service = cast(_ClientBackedDocumentService, self.data_service.cache.db)
+        db_client = db_service.client
 
         payload = {
             "public_key_pem": public_key_pem,

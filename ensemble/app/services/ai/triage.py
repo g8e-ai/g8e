@@ -127,9 +127,7 @@ class TriageAgent:
 
         persona = get_agent_persona("triage")
         prompt_template = persona.get_system_prompt()
-        conversation_tail_xml = AgentPersona.format_xml_tag(
-            "conversation_tail", conversation_tail
-        )
+        conversation_tail_xml = AgentPersona.format_xml_tag("conversation_tail", conversation_tail)
         message_xml = AgentPersona.format_xml_tag("message", request.message)
         prompt = f"{prompt_template}\n\n{conversation_tail_xml}\n\n{message_xml}"
         response_schema = TriageResult.model_json_schema()
@@ -163,9 +161,7 @@ class TriageAgent:
             )
             monotonic_end = time.monotonic()
             usage = response.usage_metadata
-            finish_reason = (
-                response.candidates[0].finish_reason if response.candidates else None
-            )
+            finish_reason = response.candidates[0].finish_reason if response.candidates else None
             model_call = build_model_call_telemetry(
                 provider=provider,
                 agent_role="triage",
@@ -226,9 +222,7 @@ class TriageAgent:
                 error_message=str(exc),
             ).model_copy(update={"model_call": failed_call})
         except OllamaEmptyResponseError as exc:
-            logger.warning(
-                "[TRIAGE] No response from lite model, defaulting to complex: %s", exc
-            )
+            logger.warning("[TRIAGE] No response from lite model, defaulting to complex: %s", exc)
             failed_call = build_model_call_telemetry(
                 provider=provider,
                 agent_role="triage",

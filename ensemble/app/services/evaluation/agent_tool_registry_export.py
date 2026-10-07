@@ -80,8 +80,10 @@ class AgentToolGuidanceVector(G8eBaseModel):
 
 class AgentToolRegistry(G8eBaseModel):
     schema_version: str = AGENT_TOOL_REGISTRY_SCHEMA_VERSION
-    tools: list[AgentToolSchema] = Field(default_factory=list)
-    guidance_vectors: list[AgentToolGuidanceVector] = Field(default_factory=list)
+    tools: list[AgentToolSchema] = Field(default_factory=list[AgentToolSchema])
+    guidance_vectors: list[AgentToolGuidanceVector] = Field(
+        default_factory=list[AgentToolGuidanceVector]
+    )
     policy_deny_error_types: list[str] = Field(default_factory=list)
 
 

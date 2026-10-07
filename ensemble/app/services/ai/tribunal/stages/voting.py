@@ -24,7 +24,7 @@ from app.services.ai.voter import (
 logger = logging.getLogger(__name__)
 
 
-async def _run_voting_stage(
+async def run_voting_stage(
     candidates: list[CandidateCommand],
     request: str,
     emitter: TribunalEmitter,
