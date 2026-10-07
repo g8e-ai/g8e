@@ -920,6 +920,8 @@ export interface ModelRoleLeaderboardRow {
   coverage: number;
   latency_p50_ms?: number;
   throughput_p50?: number;
+  parameter_billions?: number;
+  elapsed_seconds?: number;
 }
 
 export interface RoleLeaderRow {
@@ -927,20 +929,47 @@ export interface RoleLeaderRow {
   leader?: ModelRoleLeaderboardRow;
 }
 
-/** Homogeneous model-role leaderboard rows from measured model summaries.
- *  Inventory-only entries and variants without terminal assignments are excluded. */
+/** Parameter count advertised in model identity, expressed in billions.
+ *  Unknown tags stay unavailable; quantization numbers are not parameter counts. */
+function modelParameterBillions(model: ModelSummary): number | undefined {
+  for (const identity of [model.served_model_tag, model.display_name, model.variant_id]) {
+    const match = identity?.match(/(?:^|[^a-z0-9.])(?:e)?(?:(\d+)x)?(\d+(?:\.\d+)?)\s*([bm])(?=$|[^a-z0-9])/i);
+    if (!match) continue;
+    const size = Number(match[2]) * Number(match[1] ?? 1) / (match[3]?.toLowerCase() === 'm' ? 1000 : 1);
+    if (size > 0 && Number.isFinite(size)) return size;
+  }
+  return undefined;
+}
+
+/** A dataset with a single homogeneous run has an unambiguous finish time.
+ *  Multi-run and heterogeneous datasets cannot supply a per-model duration. */
+function modelElapsedSeconds(model: ModelSummary, evaluations: EvaluationSummary[]): number | undefined {
+  const runs = evaluations.filter((run) => run.dataset_id === model.dataset_id);
+  const run = runs[0];
+  if (runs.length !== 1 || !run || run.evaluation_unit !== 'model' || run.lifecycle_state !== 'completed') return undefined;
+  const elapsed = run.elapsed_seconds;
+  return elapsed !== undefined && Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : undefined;
+}
+
+/** Homogeneous model-role leaders require full coverage and verified, scored evidence.
+ *  Equal scores prefer smaller models, then shorter completed evaluations. */
 export function modelRoleLeaderboardRows(
   models: ModelSummary[],
   role: ModelRole | 'all' = 'all',
+  evaluations: EvaluationSummary[] = [],
 ): ModelRoleLeaderboardRow[] {
   const measured = models.filter((model) => {
-    if (model.inventory_only || !model.pass_rate) return false;
+    if (model.inventory_only || !model.pass_rate || model.pass_rate.denominator <= 0) return false;
+    if (model.evaluation_coverage !== 1) return false;
+    if (model.quality_state !== 'verified_public' && model.quality_state !== 'exploratory_verified') return false;
     if (role !== 'all' && model.role !== role) return false;
     return true;
   });
   measured.sort(
     (a, b) =>
       (b.pass_rate?.estimate ?? -1) - (a.pass_rate?.estimate ?? -1) ||
+      (modelParameterBillions(a) ?? Infinity) - (modelParameterBillions(b) ?? Infinity) ||
+      (modelElapsedSeconds(a, evaluations) ?? Infinity) - (modelElapsedSeconds(b, evaluations) ?? Infinity) ||
       a.display_name.localeCompare(b.display_name) ||
       a.variant_id.localeCompare(b.variant_id),
   );
@@ -960,15 +989,17 @@ export function modelRoleLeaderboardRows(
       coverage: model.evaluation_coverage,
       latency_p50_ms: model.latency_p50_ms?.value,
       throughput_p50: model.output_throughput_p50?.value,
+      parameter_billions: modelParameterBillions(model),
+      elapsed_seconds: modelElapsedSeconds(model, evaluations),
     };
   });
 }
 
 /** Top measured model per role bucket, in Primary → Assistant → Lite order. */
-export function roleLeaderRows(models: ModelSummary[]): RoleLeaderRow[] {
+export function roleLeaderRows(models: ModelSummary[], evaluations: EvaluationSummary[] = []): RoleLeaderRow[] {
   return MODEL_ROLE_WIRE_ORDER.map((role) => ({
     role,
-    leader: modelRoleLeaderboardRows(models, role)[0],
+    leader: modelRoleLeaderboardRows(models, role, evaluations)[0],
   }));
 }
 

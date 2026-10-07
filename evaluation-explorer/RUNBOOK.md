@@ -77,6 +77,8 @@ Publication is owned by the Go evaluation service. Campaign runs project lifecyc
 
 The overview first reconstructs bootstrap, complete paginated history, and the sealed snapshot, then connects SSE. A live run appears as queued, running, provisional assignment and metric updates, and finally completed, failed, or stopped without a refresh. Reload reconstructs the same state before SSE resumes. Current-standard verified, run-scoped verified, not fully verified, legacy unverified, in-progress, failed, unavailable, and not-evaluated states remain distinct; the site never averages datasets.
 
+The Evals leaderboard admits only scored models with exactly 100% evaluation coverage and current-standard or run-scoped verification. Each role leader ranks by pass rate descending, advertised parameter count ascending, then completed evaluation elapsed time ascending. Size comes from the model tag or name (billions or millions of parameters); elapsed time comes from a dataset containing one homogeneous model run. Unknown sizes and durations follow known values, with model name and variant ID providing a stable final order. Size and evaluation time appear beside each leader.
+
 ## Verification
 
 ```bash

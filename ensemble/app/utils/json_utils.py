@@ -24,7 +24,7 @@ from app.utils.time_ids.timestamp import parse_iso
 logger = logging.getLogger(__name__)
 
 
-def extract_json_from_text(text: str) -> dict | None:
+def extract_json_from_text(text: str) -> dict[str, Any] | None:
     """Extract and parse a JSON object from a potentially messy text string.
 
     Handles:

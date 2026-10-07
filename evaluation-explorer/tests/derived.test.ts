@@ -17,6 +17,7 @@ import {
   recentCampaignRows,
   roleLabel,
   roleLeaderRows,
+  modelRoleLeaderboardRows,
   restampStreamProgress,
   siblingRepetitions,
   streamProgressLabel,
@@ -99,7 +100,7 @@ function modelSummary(partial: Partial<ModelSummary> & Pick<ModelSummary, 'varia
     schema_version: '1.3.0',
     kind: 'model_summary',
     dataset_id: 'ds-test',
-    quality_state: 'live_in_progress',
+    quality_state: 'exploratory_verified',
     observed_at: '2026-09-17T00:00:00Z',
     display_name: partial.display_name ?? partial.variant_id,
     inventory_only: false,
@@ -109,25 +110,61 @@ function modelSummary(partial: Partial<ModelSummary> & Pick<ModelSummary, 'varia
 }
 
 describe('roleLeaderRows', () => {
+  it('excludes incomplete, unverified, inventory-only, and unscored models', () => {
+    const base = modelSummary({ variant_id: 'eligible', role: 'primary',
+      pass_rate: { estimate: 0.8, lower: 0.8, upper: 0.8, denominator: 10 } });
+    const models = [base, ...[
+      { variant_id: 'partial', evaluation_coverage: 0.999 },
+      { variant_id: 'unverified', quality_state: 'exploratory_partial' as const },
+      { variant_id: 'running', quality_state: 'live_in_progress' as const },
+      { variant_id: 'inventory', inventory_only: true },
+      { variant_id: 'unscored', pass_rate: undefined },
+      { variant_id: 'zero-scored', pass_rate: { ...base.pass_rate!, denominator: 0 } },
+    ].map((overrides) => ({ ...base, ...overrides }))];
+    expect(modelRoleLeaderboardRows(models).map((row) => row.model.variant_id)).toEqual(['eligible']);
+  });
+
+  it('breaks score ties by smaller parameter size, then faster completed run', () => {
+    const models = [
+      ['large', 'qwen:8b', 10, 0.8],
+      ['small-slow', 'gemma:e4b', 120, 0.8],
+      ['small-fast', 'qwen:4b', 60, 0.8],
+      ['best-score', 'qwen:32b', 300, 0.9],
+      ['unknown-size', 'model:latest', 1, 0.8],
+      ['unknown-time', 'qwen:4b', undefined, 0.8],
+      ['tiny', 'model:500m', 200, 0.8],
+    ].map(([id, tag, , score]) => modelSummary({
+      variant_id: id as string, dataset_id: id as string, role: 'primary', served_model_tag: tag as string,
+      pass_rate: { estimate: score as number, lower: 0, upper: 1, denominator: 10 },
+    }));
+    const evaluations = models.map((model) => ({
+      ...evaluationSummary({ dataset_id: model.dataset_id, run_id: model.dataset_id }), lifecycle_state: 'completed' as const,
+      elapsed_seconds: ({ large: 10, 'small-slow': 120, 'small-fast': 60, 'best-score': 300,
+        'unknown-size': 1, tiny: 200 } as Record<string, number>)[model.variant_id],
+    }));
+    expect(modelRoleLeaderboardRows(models, 'all', evaluations).map((row) => row.model.variant_id))
+      .toEqual(['best-score', 'tiny', 'small-fast', 'small-slow', 'unknown-time', 'large', 'unknown-size']);
+  });
+
   it('returns one leader per role ordered Primary, Assistant, Lite', () => {
     const models = [
       modelSummary({
         variant_id: 'qwen3-4b',
         role: 'lite',
         pass_rate: { estimate: 0.82, lower: 0.82, upper: 0.82, denominator: 18 },
-        evaluation_coverage: div(18, 25),
+        evaluation_coverage: 1,
       }),
       modelSummary({
         variant_id: 'qwen3-4b',
         role: 'assistant',
         pass_rate: { estimate: 0.77, lower: 0.77, upper: 0.77, denominator: 18 },
-        evaluation_coverage: div(18, 25),
+        evaluation_coverage: 1,
       }),
       modelSummary({
         variant_id: 'qwen3-4b',
         role: 'primary',
         pass_rate: { estimate: 0.78, lower: 0.78, upper: 0.78, denominator: 18 },
-        evaluation_coverage: div(18, 25),
+        evaluation_coverage: 1,
       }),
     ];
     const rows = roleLeaderRows(models);
@@ -539,10 +576,6 @@ describe('visibleStreamEvents', () => {
     expect(second.replacedId).toBe('run:a1:lifecycle:COMPLETED');
   });
 });
-
-function div(n: number, d: number): number {
-  return n / d;
-}
 
 function evaluationSummary(
   partial: Partial<EvaluationSummary> & Pick<EvaluationSummary, 'dataset_id' | 'run_id'>,
