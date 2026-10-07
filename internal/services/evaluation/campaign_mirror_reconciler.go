@@ -9,7 +9,9 @@ package evaluation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -28,6 +30,7 @@ type CampaignMirrorReconcileResult struct {
 	RepublishedRunIDs []string          `json:"republished_run_ids,omitempty"`
 	SkippedRunIDs     []string          `json:"skipped_run_ids"`
 	MissingRunIDs     []string          `json:"missing_run_ids,omitempty"`
+	IneligibleRunIDs  []string          `json:"ineligible_run_ids,omitempty"`
 	HostAbsentRunIDs  []string          `json:"host_absent_run_ids"`
 	FailedRuns        map[string]string `json:"failed_runs,omitempty"`
 	PublishedRecords  int               `json:"published_records"`
@@ -36,6 +39,7 @@ type CampaignMirrorReconcileResult struct {
 type CampaignMirrorReconcileStatus string
 
 const (
+	CampaignMirrorReconcileIneligible  CampaignMirrorReconcileStatus = "ineligible"
 	CampaignMirrorReconcileChecking    CampaignMirrorReconcileStatus = "checking"
 	CampaignMirrorReconcileRestored    CampaignMirrorReconcileStatus = "restored"
 	CampaignMirrorReconcileRepublished CampaignMirrorReconcileStatus = "republished"
@@ -87,78 +91,7 @@ func (r *CampaignMirrorReconciler) ReconcileAllVerifiedRunsFromStore(ctx context
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: reconcile verified runs from store: list runs: %w", err)
 	}
-	verifiedRunIDs := make([]string, 0)
-	for _, runID := range runIDs {
-		eligible, err := r.completedAndVerified(ctx, runID)
-		if err == nil && eligible {
-			verifiedRunIDs = append(verifiedRunIDs, runID)
-		}
-	}
-	result := &CampaignMirrorReconcileResult{FailedRuns: map[string]string{}}
-	for index, runID := range verifiedRunIDs {
-		update := func(status CampaignMirrorReconcileStatus, published int, err error) {
-			if progress != nil {
-				progress(CampaignMirrorReconcileProgress{Index: index + 1, Total: len(verifiedRunIDs), RunID: runID, Status: status, PublishedRecords: published, Err: err})
-			}
-		}
-		update(CampaignMirrorReconcileChecking, 0, nil)
-		effectiveTimeout := runTimeout
-		if restoreMissing {
-			effectiveTimeout = CampaignMirrorReconcileRunTimeout(runTimeout, assignmentCountForMirrorTimeout(ctx, r.store, runID))
-		}
-		runCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
-		if r.probe != nil {
-			present, err := r.probe.DatasetPresent(runCtx, CampaignDatasetID(runID))
-			if err != nil {
-				cancel()
-				result.FailedRuns[runID] = err.Error()
-				update(CampaignMirrorReconcileFailed, 0, err)
-				continue
-			}
-			if present {
-				cancel()
-				result.SkippedRunIDs = append(result.SkippedRunIDs, runID)
-				update(CampaignMirrorReconcilePresent, 0, nil)
-				continue
-			}
-		}
-		exists, err := r.store.RunExists(runCtx, runID)
-		if err != nil {
-			cancel()
-			result.FailedRuns[runID] = err.Error()
-			update(CampaignMirrorReconcileFailed, 0, err)
-			continue
-		}
-		if !exists {
-			cancel()
-			result.HostAbsentRunIDs = append(result.HostAbsentRunIDs, runID)
-			update(CampaignMirrorReconcileHostAbsent, 0, nil)
-			continue
-		}
-		if !restoreMissing {
-			cancel()
-			result.MissingRunIDs = append(result.MissingRunIDs, runID)
-			update(CampaignMirrorReconcileMissing, 0, nil)
-			continue
-		}
-		published, err := r.restoreRun(runCtx, runID, force)
-		cancel()
-		if err != nil {
-			result.FailedRuns[runID] = err.Error()
-			update(CampaignMirrorReconcileFailed, published, err)
-			if campaignMirrorGatewayUnreachable(err) {
-				for _, remainingRunID := range verifiedRunIDs[index+1:] {
-					result.FailedRuns[remainingRunID] = "skipped after gateway publication failure"
-				}
-				break
-			}
-			continue
-		}
-		result.RestoredRunIDs = append(result.RestoredRunIDs, runID)
-		update(CampaignMirrorReconcileRestored, published, nil)
-		result.PublishedRecords += published
-	}
-	return result, nil
+	return r.reconcileRuns(ctx, runIDs, runTimeout, restoreMissing, force, progress)
 }
 
 // ReconcileVerifiedQueue compares verified queue entries against the public
@@ -177,11 +110,12 @@ func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, q
 		if entry.VerifiedRunID == "" {
 			continue
 		}
-		eligible, err := r.completedAndVerified(ctx, entry.VerifiedRunID)
-		if err == nil && eligible {
-			runIDs = append(runIDs, entry.VerifiedRunID)
-		}
+		runIDs = append(runIDs, entry.VerifiedRunID)
 	}
+	return r.reconcileRuns(ctx, runIDs, runTimeout, restoreMissing, force, progress)
+}
+
+func (r *CampaignMirrorReconciler) reconcileRuns(ctx context.Context, runIDs []string, runTimeout time.Duration, restoreMissing, force bool, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
 	result := &CampaignMirrorReconcileResult{FailedRuns: map[string]string{}}
 	for index, runID := range runIDs {
 		update := func(status CampaignMirrorReconcileStatus, published int, err error) {
@@ -195,6 +129,32 @@ func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, q
 			effectiveTimeout = CampaignMirrorReconcileRunTimeout(runTimeout, assignmentCountForMirrorTimeout(ctx, r.store, runID))
 		}
 		runCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
+		exists, err := r.store.RunExists(runCtx, runID)
+		if err != nil {
+			cancel()
+			result.FailedRuns[runID] = err.Error()
+			update(CampaignMirrorReconcileFailed, 0, err)
+			continue
+		}
+		if !exists {
+			cancel()
+			result.HostAbsentRunIDs = append(result.HostAbsentRunIDs, runID)
+			update(CampaignMirrorReconcileHostAbsent, 0, nil)
+			continue
+		}
+		eligible, err := r.completedAndVerified(runCtx, runID)
+		if err != nil {
+			cancel()
+			result.FailedRuns[runID] = err.Error()
+			update(CampaignMirrorReconcileFailed, 0, err)
+			continue
+		}
+		if !eligible {
+			cancel()
+			result.IneligibleRunIDs = append(result.IneligibleRunIDs, runID)
+			update(CampaignMirrorReconcileIneligible, 0, nil)
+			continue
+		}
 		if r.probe != nil {
 			present, err := r.probe.DatasetPresent(runCtx, CampaignDatasetID(runID))
 			if err != nil {
@@ -209,19 +169,6 @@ func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, q
 				update(CampaignMirrorReconcilePresent, 0, nil)
 				continue
 			}
-		}
-		exists, err := r.store.RunExists(runCtx, runID)
-		if err != nil {
-			cancel()
-			result.FailedRuns[runID] = err.Error()
-			update(CampaignMirrorReconcileFailed, 0, err)
-			continue
-		}
-		if !exists {
-			cancel()
-			result.HostAbsentRunIDs = append(result.HostAbsentRunIDs, runID)
-			update(CampaignMirrorReconcileHostAbsent, 0, nil)
-			continue
 		}
 		if !restoreMissing {
 			cancel()
@@ -275,14 +222,17 @@ func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID strin
 }
 
 func (r *CampaignMirrorReconciler) completedAndVerified(ctx context.Context, runID string) (bool, error) {
-	run, err := r.store.LoadRun(ctx, runID)
+	summary, err := NewCampaignController(r.store, nil, nil, nil).RunSummary(ctx, runID)
 	if err != nil {
 		return false, err
 	}
-	if run == nil || run.GetCompletedAt() == nil || !run.GetCompletedAt().IsValid() {
+	if CampaignRunStatus(summary, nil, false) != "completed" {
 		return false, nil
 	}
 	report, err := r.store.LoadCampaignVerification(ctx, runID)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
 	if err != nil || report == nil || report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
 		return false, err
 	}
@@ -290,13 +240,19 @@ func (r *CampaignMirrorReconciler) completedAndVerified(ctx context.Context, run
 }
 
 func (r *CampaignMirrorReconciler) restoreRun(ctx context.Context, runID string, force bool) (int, error) {
+	report, err := r.store.LoadCampaignVerification(ctx, runID)
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: restore run verification: %w", err)
+	}
+	if report == nil || report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		return 0, fmt.Errorf("evaluation: restore run requires passing verification: %w", constants.ErrEvidenceScopeMismatch)
+	}
 	if force {
 		if err := r.publication.ResetFeedPublicationIdempotency(ctx, runID); err != nil {
 			return 0, err
 		}
 	}
-	report, err := r.store.LoadCampaignVerification(ctx, runID)
-	if err != nil || legacyCampaignVerificationReport(report) {
+	if legacyCampaignVerificationReport(report) {
 		return r.publication.PublishRunCatchUp(ctx, runID)
 	}
 	return r.publication.PublishRunCatchUpWithVerification(ctx, runID, report)

@@ -23,9 +23,8 @@ const suiteStdinArg = "-"
 
 func suitesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "suite",
-		Aliases: []string{"suites"},
-		Short:   "Create, inspect, edit, and delete evaluation suites",
+		Use:   "suites",
+		Short: "Create, inspect, edit, and delete evaluation suites",
 		Long: `A suite is a named, versioned set of scenarios a campaign scores. Two suites are
 built in and read-only: default-suite (the full scenario set) and smoke-suite
 (its five-scenario screening subset). Custom suites are authored as JSON files

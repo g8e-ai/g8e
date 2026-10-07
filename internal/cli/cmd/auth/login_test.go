@@ -48,32 +48,37 @@ func loginResult() *auth.EnrollmentResult {
 	return &auth.EnrollmentResult{UserID: "user-1", CLISessionID: "sess-1"}
 }
 
-func TestLoginCmd_DefaultsToBrowserLogin(t *testing.T) {
-	for _, args := range [][]string{nil, {"web"}} {
-		mock := &mockEnroller{result: loginResult()}
-		out, err := runLogin(t, mock, args...)
+func TestLoginCmd_WebUsesBrowserLogin(t *testing.T) {
+	mock := &mockEnroller{result: loginResult()}
+	out, err := runLogin(t, mock, "web")
 
-		require.NoError(t, err, "args %v", args)
-		require.Equal(t, 1, mock.callCount(), "args %v", args)
-		opts := mock.lastOptions()
-		assert.False(t, opts.Headless, "login must not be headless by default (args %v)", args)
-		assert.False(t, opts.NoSystemTrust, "browser login installs OS trust by default (args %v)", args)
-		assert.False(t, opts.RotateCLI)
-		assert.Contains(t, out, "User ID: user-1")
-		assert.Contains(t, out, "CLI Session ID: sess-1")
-	}
+	require.NoError(t, err)
+	require.Equal(t, 1, mock.callCount())
+	opts := mock.lastOptions()
+	assert.False(t, opts.Headless, "web login must not be headless")
+	assert.False(t, opts.NoSystemTrust, "browser login installs OS trust by default")
+	assert.False(t, opts.RotateCLI)
+	assert.Contains(t, out, "User ID: user-1")
+	assert.Contains(t, out, "CLI Session ID: sess-1")
 }
 
-func TestLoginCmd_CLIAndHeadlessAliasAreHeadless(t *testing.T) {
-	for _, name := range []string{"cli", "headless"} {
+func TestLoginCmd_DefaultCLIAndHeadlessAliasAreHeadless(t *testing.T) {
+	for _, name := range []string{"", "cli", "headless"} {
 		t.Run(name, func(t *testing.T) {
 			mock := &mockEnroller{result: loginResult()}
-			_, err := runLogin(t, mock, name)
+			var args []string
+			if name != "" {
+				args = []string{name}
+			}
+			out, err := runLogin(t, mock, args...)
 
 			require.NoError(t, err)
 			require.Equal(t, 1, mock.callCount())
 			opts := mock.lastOptions()
 			assert.True(t, opts.Headless)
+			assert.False(t, opts.RotateCLI)
+			assert.Contains(t, out, "User ID: user-1")
+			assert.Contains(t, out, "CLI Session ID: sess-1")
 			assert.True(t, opts.NoSystemTrust, "headless login never installs OS trust")
 		})
 	}
@@ -87,9 +92,8 @@ func TestLoginCmd_FlagPropagation(t *testing.T) {
 		wantRotate   bool
 		wantHeadless bool
 	}{
-		{"bare no-system-trust", []string{"--no-system-trust"}, true, false, false},
-		{"bare rotate-cli", []string{"--rotate-cli"}, false, true, false},
-		{"bare both", []string{"--no-system-trust", "--rotate-cli"}, true, true, false},
+		{"bare rotate-cli", []string{"--rotate-cli"}, true, true, true},
+		{"web no-system-trust", []string{"web", "--no-system-trust"}, true, false, false},
 		{"web both", []string{"web", "--no-system-trust", "--rotate-cli"}, true, true, false},
 		{"cli rotate-cli", []string{"cli", "--rotate-cli"}, true, true, true},
 		{"headless rotate-cli", []string{"headless", "--rotate-cli"}, true, true, true},
@@ -116,6 +120,7 @@ func TestLoginCmd_RejectsInvalidInvocations(t *testing.T) {
 		{"unknown subcommand", []string{"bogus"}},
 		{"stray argument on subcommand", []string{"cli", "extra"}},
 		{"headless has no no-system-trust flag", []string{"cli", "--no-system-trust"}},
+		{"bare login has no no-system-trust flag", []string{"--no-system-trust"}},
 		{"login has no headless flag", []string{"--headless"}},
 	}
 	for _, tt := range tests {

@@ -193,7 +193,7 @@ func LatestEvalBackupSnapshot(backupDir string) (string, error) {
 		abs, _ := filepath.Abs(backupDir)
 		return "", fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
 	}
-	return snapshots[0], nil
+	return snapshots[len(snapshots)-1], nil
 }
 
 // AllEvalBackupSnapshots returns all complete snapshot directories in backupDir,

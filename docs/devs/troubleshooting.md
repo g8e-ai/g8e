@@ -67,7 +67,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | --- | --- |
 | INV-TROUBLE-AUTH-01 | The canonical trust bundle path is `.g8e/pki/trust/g8eg-ca-bundle.pem`. Tests and tools MUST NOT use deprecated bundle paths or mutate host PKI to fix test failures. |
 | INV-TROUBLE-AUTH-02 | CLI sessions and certificates expire in 7 days; web sessions expire in 24 hours. When a CLI certificate is valid but session expired, run `g8e auth refresh` rather than re-enrolling. |
-| INV-TROUBLE-AUTH-03 | Headless enrollment (`g8e login cli`, alias `g8e login headless`, or `g8e auth enroll user --headless`) skips OS trust and passkey ceremony, producing an mTLS-capable CLI identity that does not support web Console sessions. |
+| INV-TROUBLE-AUTH-03 | Headless enrollment (`g8e login`, `g8e login cli`, alias `g8e login headless`, or `g8e auth enroll user --headless`) skips OS trust and passkey ceremony, producing an mTLS-capable CLI identity that does not support web Console sessions. |
 | INV-TROUBLE-AUTH-04 | `g8e logout` ends every web and CLI session of the user on every machine and revokes their CLI certificates. A machine that was logged in elsewhere reports its certificate revoked, and `g8e auth refresh` cannot recover it. Run `g8e logout --local-only` to discard the stale local credentials, then `g8e login`. |
 
 ## Owned surfaces

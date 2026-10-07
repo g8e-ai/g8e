@@ -30,9 +30,8 @@ const flagCatalog = "catalog"
 
 func modelsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "model",
-		Aliases: []string{"models"},
-		Short:   "Operate the model catalog and the frozen model registry",
+		Use:   "models",
+		Short: "Operate the model catalog and the frozen model registry",
 		Long: `Model state lives in two named scopes.
 
   catalog   eval/base-model-inventory.json (checked in): models the project knows about

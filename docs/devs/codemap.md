@@ -160,7 +160,7 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | Group | Package | Path | Alias | Owns |
 | --- | --- | --- | --- | --- |
 | `gw` | `gw` | `internal/cli/cmd/gw/` | `gateway` | Gateway lifecycle, data, security, and tunnel commands. |
-| `login`, `logout` | `authcmd` | `internal/cli/cmd/auth/` | | Top-level sign-in (`login`, `login cli`) and sign-out (`logout`, `logout web`, `logout cli`); share the `auth` package and its enrollment runner. |
+| `login`, `logout` | `authcmd` | `internal/cli/cmd/auth/` | | Top-level sign-in (`login` defaults to headless `login cli`; `login web` uses the browser) and sign-out (`logout`, `logout web`, `logout cli`); share the `auth` package and its enrollment runner. |
 | `auth` | `authcmd` | `internal/cli/cmd/auth/` | | User and platform enrollment, sessions, and approvals. |
 | `mcp` | `mcp` | `internal/cli/cmd/mcp/` | | MCP stdio serving and agent integration. |
 | `operator` | `operatorcmd` | `internal/cli/cmd/operator/` | `operators` | Operator `list`, `show`, `bind`, governed `run` and `stop`, foreground `start`, `reset-identity`, binary copy (`cp`, `scp`), streams, and fleet `deploy`. Local and SSH deploy live in `operator_deploy.go`; Docker-context deploy lives in `operator_deploy_docker.go`. Procedure: [Connect Many Operators](../guides/connect_operator_to_gateway.md#connect-many-operators). |

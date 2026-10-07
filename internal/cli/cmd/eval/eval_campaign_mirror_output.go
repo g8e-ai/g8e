@@ -19,13 +19,15 @@ func WriteCampaignMirrorRestoreProgress(w io.Writer, progress evaluation.Campaig
 	prefix := fmt.Sprintf("[%d/%d] %s", progress.Index, progress.Total, progress.RunID)
 	switch progress.Status {
 	case evaluation.CampaignMirrorReconcileChecking:
-		_, _ = fmt.Fprintf(w, "Checking verified run %d/%d: %s\n", progress.Index, progress.Total, progress.RunID)
+		_, _ = fmt.Fprintf(w, "Checking campaign run %d/%d: %s\n", progress.Index, progress.Total, progress.RunID)
 	case evaluation.CampaignMirrorReconcileRestored:
 		_, _ = fmt.Fprintf(w, "%s restored (%d record(s))\n", prefix, progress.PublishedRecords)
 	case evaluation.CampaignMirrorReconcileRepublished:
 		_, _ = fmt.Fprintf(w, "%s republished (%d record(s))\n", prefix, progress.PublishedRecords)
 	case evaluation.CampaignMirrorReconcilePresent:
 		_, _ = fmt.Fprintf(w, "%s already present\n", prefix)
+	case evaluation.CampaignMirrorReconcileIneligible:
+		_, _ = fmt.Fprintf(w, "%s skipped (campaign is unfinished or lacks passing verification)\n", prefix)
 	case evaluation.CampaignMirrorReconcileHostAbsent:
 		_, _ = fmt.Fprintf(w, "%s skipped (host artifacts absent)\n", prefix)
 	case evaluation.CampaignMirrorReconcileMissing:
@@ -68,6 +70,9 @@ func WriteCampaignMirrorRestoreQueueResult(stdout, stderr io.Writer, result *eva
 		_, _ = fmt.Fprintln(stdout, "Verified campaign mirror restore complete: nothing to do.")
 	}
 
+	if ineligible := len(result.IneligibleRunIDs); ineligible > 0 {
+		_, _ = fmt.Fprintf(stdout, "Skipped %d campaign run(s) that are unfinished or lack passing verification.\n", ineligible)
+	}
 	if hostAbsent > 0 {
 		writeHostAbsentMirrorNote(stdout, result.HostAbsentRunIDs)
 	}
@@ -107,6 +112,9 @@ func WriteCampaignMirrorRestoreInitSummary(stdout io.Writer, result *evaluation.
 	case skipped > 0:
 		_, _ = fmt.Fprintf(stdout, "Verified campaign mirror already contains %d restorable verified dataset(s).\n", skipped)
 	}
+	if ineligible := len(result.IneligibleRunIDs); ineligible > 0 {
+		_, _ = fmt.Fprintf(stdout, "Skipped %d campaign run(s) that are unfinished or lack passing verification.\n", ineligible)
+	}
 	if hostAbsent > 0 {
 		writeHostAbsentMirrorNote(stdout, result.HostAbsentRunIDs)
 	}
@@ -120,11 +128,7 @@ func writeHostAbsentMirrorNote(w io.Writer, runIDs []string) {
 		return
 	}
 	_, _ = fmt.Fprintf(w, "Note: %d verified run(s) were skipped — local campaign artifacts under .g8e/data/eval/runs/ are missing (usually after a .g8e wipe).\n", len(runIDs))
-	_, _ = fmt.Fprintln(w, "Mirror restore cannot recreate them from the queue. Do not run mirror restore again for these runs.")
-	_, _ = fmt.Fprintln(w, "To republish them, run a new init campaign for each model:")
-	_, _ = fmt.Fprintln(w, "  ./g8e eval campaign start --queue <variant_id> --prepare-only --publish")
-	_, _ = fmt.Fprintln(w, "  ./g8e eval campaign execute --publish --daemon")
-	_, _ = fmt.Fprintln(w, "  ./g8e eval campaign verify --require-provider-observation")
+	_, _ = fmt.Fprintln(w, "Restore the local campaign evidence from an evaluation backup before retrying mirror restore.")
 	_, _ = fmt.Fprintf(w, "Skipped run IDs: %s\n", formatRunIDList(runIDs))
 }
 

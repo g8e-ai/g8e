@@ -383,3 +383,19 @@ func TestLatestEvalBackupSnapshot_NoneFound(t *testing.T) {
 		})
 	}
 }
+
+func TestEvalBackup_CreateIfChangedComparesWithNewestSnapshot(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	older := f.create(t)
+	f.write(t, backupRunReportPath, `{"run":2}`)
+	newer := f.create(t)
+
+	report, err := f.backup.CreateIfChanged(context.Background(), f.outRoot)
+
+	require.NoError(t, err)
+	assert.True(t, report.Unchanged)
+	assert.Equal(t, newer.SnapshotDir, report.SnapshotDir)
+	snapshots, err := AllEvalBackupSnapshots(f.outRoot)
+	require.NoError(t, err)
+	assert.Equal(t, []string{older.SnapshotDir, newer.SnapshotDir}, snapshots)
+}

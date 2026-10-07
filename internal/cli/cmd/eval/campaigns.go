@@ -30,9 +30,8 @@ const campaignStatusNoRuns = "no-runs"
 
 func campaignsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "campaign",
-		Aliases: []string{"campaigns"},
-		Short:   "Define, inspect, and archive evaluation campaigns",
+		Use:   "campaigns",
+		Short: "Define, inspect, and archive evaluation campaigns",
 		Long: `A campaign is the frozen definition of an evaluation: which models, which
 scenarios, how many repetitions, and in which lane. Executions of a campaign are
 runs (g8e eval runs).`,
