@@ -550,7 +550,7 @@ class TestFileSystemTools:
                     path="/home/user/file1.txt",
                     is_dir=False,
                     size=100,
-                    mode="0644",
+                    mode=0o644,
                     mod_time=1672531200,
                 )
             ],

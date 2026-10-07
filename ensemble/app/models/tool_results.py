@@ -52,14 +52,16 @@ class PerOperatorResultBase(G8eBaseModel):
 class FsListEntry(G8eBaseModel):
     """A single directory entry returned by an fs_list operation.
 
-    Canonical shape defined in protocol/proto/operator.proto (FsListEntry message).
+    Canonical shape defined in protocol/proto/g8e/operator/v1/operator.proto (FsEntry message).
+    The wire form omits proto3 zero values, so ``is_dir``, ``size``, ``mode`` and
+    ``mod_time`` default to their zero value when absent.
     """
 
     name: str
     path: str
-    is_dir: bool
+    is_dir: bool = False
     size: int = 0
-    mode: str | None = None
+    mode: int = 0
     mod_time: int = 0
     is_symlink: bool = False
     symlink_target: str | None = None

@@ -51,11 +51,25 @@ func VerifyObservationCoverage(window *evalv1.ProviderBoundaryObservationWindow,
 	if window.GetWindowCompletedAtUnixNanos() <= window.GetWindowStartedAtUnixNanos() {
 		failures = append(failures, "observation window has non-positive duration")
 	}
-	if attempt.GetStartedAtUnixMs() > 0 && window.GetAttemptStartedAtUnixMs() != attempt.GetStartedAtUnixMs() {
-		failures = append(failures, "attempt start timestamp mismatch")
+	// The window brackets the attempt on the Gateway dispatch clock; the
+	// Operator stamps its own attempt record when the provider call starts
+	// and ends, so the record lies inside the window rather than equalling
+	// it. A window with no bracket cannot bound a recorded attempt.
+	if attempt.GetStartedAtUnixMs() > 0 {
+		switch {
+		case window.GetAttemptStartedAtUnixMs() <= 0:
+			failures = append(failures, "observation window missing attempt start timestamp")
+		case attempt.GetStartedAtUnixMs() < window.GetAttemptStartedAtUnixMs():
+			failures = append(failures, "attempt start timestamp outside observation window")
+		}
 	}
-	if attempt.GetCompletedAtUnixMs() > 0 && window.GetAttemptCompletedAtUnixMs() != attempt.GetCompletedAtUnixMs() {
-		failures = append(failures, "attempt completion timestamp mismatch")
+	if attempt.GetCompletedAtUnixMs() > 0 {
+		switch {
+		case window.GetAttemptCompletedAtUnixMs() <= 0:
+			failures = append(failures, "observation window missing attempt completion timestamp")
+		case attempt.GetCompletedAtUnixMs() > window.GetAttemptCompletedAtUnixMs():
+			failures = append(failures, "attempt completion timestamp outside observation window")
+		}
 	}
 	if absDuration(time.Duration(window.GetClockSkewNanos())) > DefaultClockSkewTolerance {
 		failures = append(failures, "clock skew exceeds tolerance")

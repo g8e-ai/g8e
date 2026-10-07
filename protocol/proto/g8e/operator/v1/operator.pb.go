@@ -5304,6 +5304,7 @@ type FsEntry struct {
 	Size          int64                  `protobuf:"varint,3,opt,name=size,proto3" json:"size,omitempty"`
 	Mode          int32                  `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`
 	ModTime       int64                  `protobuf:"varint,5,opt,name=mod_time,json=modTime,proto3" json:"mod_time,omitempty"`
+	Path          string                 `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5371,6 +5372,13 @@ func (x *FsEntry) GetModTime() int64 {
 		return x.ModTime
 	}
 	return 0
+}
+
+func (x *FsEntry) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
 }
 
 type FsListResult struct {
@@ -12378,13 +12386,14 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"returnCode\x124\n" +
 	"\x16execution_time_seconds\x18\a \x01(\x02R\x14executionTimeSeconds\x12+\n" +
 	"\x12start_time_unix_ms\x18\b \x01(\x03R\x0fstartTimeUnixMs\x12'\n" +
-	"\x10end_time_unix_ms\x18\t \x01(\x03R\rendTimeUnixMs\"w\n" +
+	"\x10end_time_unix_ms\x18\t \x01(\x03R\rendTimeUnixMs\"\x8b\x01\n" +
 	"\aFsEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x15\n" +
 	"\x06is_dir\x18\x02 \x01(\bR\x05isDir\x12\x12\n" +
 	"\x04size\x18\x03 \x01(\x03R\x04size\x12\x12\n" +
 	"\x04mode\x18\x04 \x01(\x05R\x04mode\x12\x19\n" +
-	"\bmod_time\x18\x05 \x01(\x03R\amodTime\"\xe1\x02\n" +
+	"\bmod_time\x18\x05 \x01(\x03R\amodTime\x12\x12\n" +
+	"\x04path\x18\x06 \x01(\tR\x04path\"\xe1\x02\n" +
 	"\fFsListResult\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
 	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x12\x12\n" +

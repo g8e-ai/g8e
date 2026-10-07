@@ -111,15 +111,64 @@ func TestVerifyObservationCoverage(t *testing.T) {
 			wantFailures: []string{"non-positive duration"},
 		},
 		{
-			name:   "attempt start timestamp mismatch",
+			name:   "operator attempt inside the observation window is complete",
 			window: baseWindow,
 			attempt: &operatorv1.InferenceProviderAttemptRecord{
 				ProviderAttemptId: "attempt-1",
-				StartedAtUnixMs:   baseAttempt.GetStartedAtUnixMs() + 1,
+				StartedAtUnixMs:   baseAttempt.GetStartedAtUnixMs() + 84,
+				CompletedAtUnixMs: baseAttempt.GetCompletedAtUnixMs() - 30,
+			},
+			wantComplete: true,
+		},
+		{
+			name:   "attempt start before the window",
+			window: baseWindow,
+			attempt: &operatorv1.InferenceProviderAttemptRecord{
+				ProviderAttemptId: "attempt-1",
+				StartedAtUnixMs:   baseAttempt.GetStartedAtUnixMs() - 1,
 				CompletedAtUnixMs: baseAttempt.GetCompletedAtUnixMs(),
 			},
 			wantComplete: false,
-			wantFailures: []string{"attempt start timestamp mismatch"},
+			wantFailures: []string{"attempt start timestamp outside observation window"},
+		},
+		{
+			name:   "attempt completion after the window",
+			window: baseWindow,
+			attempt: &operatorv1.InferenceProviderAttemptRecord{
+				ProviderAttemptId: "attempt-1",
+				StartedAtUnixMs:   baseAttempt.GetStartedAtUnixMs(),
+				CompletedAtUnixMs: baseAttempt.GetCompletedAtUnixMs() + 1,
+			},
+			wantComplete: false,
+			wantFailures: []string{"attempt completion timestamp outside observation window"},
+		},
+		{
+			name: "window without attempt start cannot bound a recorded attempt",
+			window: func() *evalv1.ProviderBoundaryObservationWindow {
+				clone := proto.Clone(baseWindow).(*evalv1.ProviderBoundaryObservationWindow)
+				clone.AttemptStartedAtUnixMs = 0
+				digest, err := ComputeObservationDigest(clone)
+				require.NoError(t, err)
+				clone.ObservationDigest = digest
+				return clone
+			}(),
+			attempt:      baseAttempt,
+			wantComplete: false,
+			wantFailures: []string{"observation window missing attempt start timestamp"},
+		},
+		{
+			name: "window without attempt completion cannot bound a recorded attempt",
+			window: func() *evalv1.ProviderBoundaryObservationWindow {
+				clone := proto.Clone(baseWindow).(*evalv1.ProviderBoundaryObservationWindow)
+				clone.AttemptCompletedAtUnixMs = 0
+				digest, err := ComputeObservationDigest(clone)
+				require.NoError(t, err)
+				clone.ObservationDigest = digest
+				return clone
+			}(),
+			attempt:      baseAttempt,
+			wantComplete: false,
+			wantFailures: []string{"observation window missing attempt completion timestamp"},
 		},
 		{
 			name: "clock skew exceeds tolerance",

@@ -1026,18 +1026,20 @@ class CommandResult(_message.Message):
     def __init__(self, execution_id: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., stdout: _Optional[str] = ..., error: _Optional[str] = ..., stderr: _Optional[str] = ..., return_code: _Optional[int] = ..., execution_time_seconds: _Optional[float] = ..., start_time_unix_ms: _Optional[int] = ..., end_time_unix_ms: _Optional[int] = ...) -> None: ...
 
 class FsEntry(_message.Message):
-    __slots__ = ("name", "is_dir", "size", "mode", "mod_time")
+    __slots__ = ("name", "is_dir", "size", "mode", "mod_time", "path")
     NAME_FIELD_NUMBER: _ClassVar[int]
     IS_DIR_FIELD_NUMBER: _ClassVar[int]
     SIZE_FIELD_NUMBER: _ClassVar[int]
     MODE_FIELD_NUMBER: _ClassVar[int]
     MOD_TIME_FIELD_NUMBER: _ClassVar[int]
+    PATH_FIELD_NUMBER: _ClassVar[int]
     name: str
     is_dir: bool
     size: int
     mode: int
     mod_time: int
-    def __init__(self, name: _Optional[str] = ..., is_dir: _Optional[bool] = ..., size: _Optional[int] = ..., mode: _Optional[int] = ..., mod_time: _Optional[int] = ...) -> None: ...
+    path: str
+    def __init__(self, name: _Optional[str] = ..., is_dir: _Optional[bool] = ..., size: _Optional[int] = ..., mode: _Optional[int] = ..., mod_time: _Optional[int] = ..., path: _Optional[str] = ...) -> None: ...
 
 class FsListResult(_message.Message):
     __slots__ = ("execution_id", "status", "path", "entries", "truncated", "total_count", "duration_seconds", "error_message", "error_type")

@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 // CanaryID names one environment canary.
@@ -29,6 +30,7 @@ const (
 	CanaryWorkspaceReachable CanaryID = "workspace-reachable"
 	CanaryGuidanceDelivered  CanaryID = "guidance-delivered"
 	CanaryRegistryMCP        CanaryID = "registry-mcp"
+	CanarySemanticJudge      CanaryID = "semantic-judge"
 )
 
 // EnvironmentCanaryCampaignID is the campaign the canary chat is issued under.
@@ -45,6 +47,10 @@ const (
 	canaryBoundAgentMode  = "g8e.bound"
 	canaryToolGateBypass  = "bypassed_for_eval"
 	canaryChatInstruction = "Reply with exactly: canary-ok"
+	canaryJudgeExpected   = "The reply is exactly the text canary-ok."
+	// canaryJudgeUnavailable is the g8ee EvaluationSemanticOutcome recorded when
+	// no judge could run.
+	canaryJudgeUnavailable = "unavailable"
 )
 
 // WorkspaceFileReader reads one workspace file back through a governed read on
@@ -96,7 +102,8 @@ type CanaryReport struct {
 // RunEnvironmentCanaries proves the evaluation harness is intact before any
 // model is scored: the full tool set reaches the provider, a seed is applied
 // and echoed, the fixture workspace is reachable, seeded guidance is delivered
-// verbatim, and the agent registry and Gateway MCP surface verify. A failure is
+// verbatim, the semantic judge resolves a model and returns a grade, and the
+// agent registry and Gateway MCP surface verify. A failure is
 // always an environment error (ErrEvaluationEnvironmentCanaryFailed naming the
 // canary), never a statement about model behavior, so no canary inspects what
 // the model answered.
@@ -151,9 +158,12 @@ func RunEnvironmentCanaries(ctx context.Context, deps CanaryDeps) (CanaryReport,
 
 	if chatErr != nil {
 		record(CanaryGuidanceDelivered, "", fmt.Errorf("canary chat failed: %w", chatErr))
+		record(CanarySemanticJudge, "", fmt.Errorf("canary chat failed: %w", chatErr))
 	} else {
 		detail, err := checkGuidanceDelivered(trace, vector)
 		record(CanaryGuidanceDelivered, detail, err)
+		detail, err = checkSemanticJudgeAvailable(trace)
+		record(CanarySemanticJudge, detail, err)
 	}
 
 	detail, err = checkRegistryAndMCP(ctx, deps)
@@ -205,6 +215,8 @@ func runCanaryChat(ctx context.Context, deps CanaryDeps, runID, attemptID string
 	probe.EvaluationLane = "system"
 	probe.DesignatedModelRole = ""
 	probe.Message = canaryChatInstruction
+	probe.GradingMethod = evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE
+	probe.GoldSummary = &ChatProbeGoldSummary{UserPrompt: canaryChatInstruction, ExpectedBehavior: canaryJudgeExpected}
 	probe.Seed = seed
 	probe.Workspace = ws
 	chatReq, err := BuildChatProbeRequest(probe, deps.DataOperatorID, deps.DataOperatorSessionID)
@@ -242,6 +254,28 @@ func scoredModelCall(trace EvaluationTrace) (EvaluationTrace, bool) {
 		}
 	}
 	return nil, false
+}
+
+// checkSemanticJudgeAvailable proves g8ee could run the semantic judge for the
+// caller: a model resolved and the Lite binding answered. It reads only whether
+// each grade is available, never the verdict, so a judge that marks the canary
+// reply down still passes. An unavailable judge fails every semantic scenario
+// as a grader failure after the whole matrix has already executed.
+func checkSemanticJudgeAvailable(trace EvaluationTrace) (string, error) {
+	grades, _ := trace["semantic_grades"].([]any)
+	if len(grades) == 0 {
+		return "", fmt.Errorf("trace records no semantic grade, so the judge did not run")
+	}
+	for _, raw := range grades {
+		grade, ok := evaluationTrace(raw)
+		if !ok {
+			return "", fmt.Errorf("trace records a malformed semantic grade")
+		}
+		if stringValue(grade["status"]) == canaryJudgeUnavailable {
+			return "", fmt.Errorf("semantic judge unavailable: %s; set an eval judge model (or a Lite model) in the console settings and serve it on the Inference Operator's Lite binding", stringValue(grade["detail"]))
+		}
+	}
+	return fmt.Sprintf("semantic judge ran and returned %d grade (the grade itself is not inspected)", len(grades)), nil
 }
 
 func checkToolsDeclared(trace EvaluationTrace, registry *AgentToolRegistry) (string, error) {

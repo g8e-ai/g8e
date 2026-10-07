@@ -11,12 +11,15 @@ import json
 
 import pytest
 from g8e.operator.v1 import operator_pb2
+from google.protobuf.json_format import MessageToDict
 
 from app.constants import EventType, ExecutionStatus
 from app.constants.proto_mappings import protobuf_execution_status_to_python
+from app.models.pubsub_messages import FsListResultPayload
 from app.utils.gateway_decoding.result_decoder import (
     decode_g8eo_result_envelope,
     decode_uap_envelope,
+    parse_inbound_g8eo_payload,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -227,6 +230,56 @@ class TestDecodeG8eoResultEnvelope:
         assert payload["path"] == "/test"
         assert payload["total_count"] == 5
         assert payload["truncated"] is False
+
+    def test_decode_fs_list_result_entries_from_proto_wire_shape(self):
+        """A real FsListResult decodes even though the wire drops proto3 zero values.
+
+        A regular file has ``is_dir=false`` and an unset mode, so neither field is
+        on the wire. The entry's own ``path`` must be on the wire because the
+        g8ee entry model requires it; a listing that lacks it fails to decode and
+        the model is shown the validation error instead of the directory.
+        """
+        listing = operator_pb2.FsListResult(
+            execution_id="test-exec-id",
+            status=operator_pb2.ExecutionStatus.EXECUTION_STATUS_COMPLETED,
+            path="/work",
+            total_count=2,
+            entries=[
+                operator_pb2.FsEntry(
+                    name="a.txt", path="/work/a.txt", size=5, mod_time=1_791_397_250
+                ),
+                operator_pb2.FsEntry(
+                    name="sub", path="/work/sub", is_dir=True, mode=0o755, mod_time=1_791_397_251
+                ),
+            ],
+        )
+        intent_data = MessageToDict(
+            listing, preserving_proto_field_name=True, use_integers_for_enums=True
+        )
+        intent_data["payload_type"] = "fs_list_result"
+        assert "is_dir" not in intent_data["entries"][0], "proto3 omits a false bool"
+        assert "mode" not in intent_data["entries"][0], "proto3 omits a zero mode"
+        envelope_data = {
+            "id": "test-id",
+            "event_type": EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED,
+            "operator_id": "op-1",
+            "action_type": "FS_LIST_RESULT",
+            "intent_data": intent_data,
+            "operator_session_id": "sess-1",
+        }
+
+        decoded = decode_g8eo_result_envelope(envelope_data)
+        payload = parse_inbound_g8eo_payload(decoded["payload"])
+
+        assert isinstance(payload, FsListResultPayload)
+        file_entry, dir_entry = payload.entries
+        assert (file_entry.name, file_entry.path) == ("a.txt", "/work/a.txt")
+        assert file_entry.is_dir is False
+        assert file_entry.size == 5
+        assert file_entry.mode == 0
+        assert (dir_entry.name, dir_entry.path) == ("sub", "/work/sub")
+        assert dir_entry.is_dir is True
+        assert dir_entry.mode == 0o755
 
     def test_decode_unknown_action_type(self):
         """Unknown action type returns unknown payload type."""

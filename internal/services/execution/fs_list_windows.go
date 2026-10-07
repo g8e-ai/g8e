@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -107,6 +108,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 
 		fsEntry := models.FsListEntry{
 			Name:  entry.Name(),
+			Path:  filepath.Join(absPath, entry.Name()),
 			IsDir: entry.IsDir(),
 			Size:  entryInfo.Size(),
 			Mode:  entryInfo.Mode().String(),

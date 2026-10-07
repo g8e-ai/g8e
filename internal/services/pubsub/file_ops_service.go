@@ -430,6 +430,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 			for i, entry := range result.Entries {
 				protoEntry := &operatorv1.FsEntry{
 					Name:    entry.Name,
+					Path:    entry.Path,
 					IsDir:   entry.IsDir,
 					Size:    entry.Size,
 					ModTime: entry.ModTime,

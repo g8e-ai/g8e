@@ -1081,6 +1081,7 @@ for L1-L5 verification before the gateway persists them via DocSet.
 | size | [int64](#int64) |  |  |
 | mode | [int32](#int32) |  |  |
 | mod_time | [int64](#int64) |  |  |
+| path | [string](#string) |  |  |
 
 
 

@@ -47,8 +47,9 @@ type mockResultsPublisher struct {
 	publishHeartbeatCalled bool
 	publishHeartbeatError  error
 	heartbeats             []proto.Message
+	fsListResults          []proto.Message
 
-	inferenceCompletions   []*operatorv1.InferenceCompletion
+	inferenceCompletions  []*operatorv1.InferenceCompletion
 	inferenceCompletionErr error
 }
 
@@ -65,6 +66,7 @@ func (m *mockResultsPublisher) PublishFileEditResult(ctx context.Context, result
 }
 
 func (m *mockResultsPublisher) PublishFsListResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
+	m.fsListResults = append(m.fsListResults, result)
 	return nil
 }
 

@@ -756,6 +756,7 @@ message FsEntry {
   int64 size = 3;
   int32 mode = 4;
   int64 mod_time = 5;
+  string path = 6;
 }
 
 message FsListResult {

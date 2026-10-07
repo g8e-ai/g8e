@@ -48,6 +48,49 @@ func TestHandleFsListRequest_ValidPath(t *testing.T) {
 	svc.HandleFsListRequest(context.Background(), msg)
 }
 
+// TestHandleFsListRequest_PublishesEntryPath pins the wire shape g8ee decodes:
+// every published entry carries its own path, because the g8ee entry model
+// requires one and a listing without it fails to decode.
+func TestHandleFsListRequest_PublishesEntryPath(t *testing.T) {
+	t.Parallel()
+	tmpDir := testutil.TempDir(t)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("hello"), 0o600))
+	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "sub"), 0o700))
+	listedDir, err := filepath.EvalSymlinks(tmpDir)
+	require.NoError(t, err)
+
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	client := pubsubtest.NewMockOperatorPubSubClient()
+	svc := NewFileOpsService(cfg, logger, execution.NewFileEditService(cfg, logger), client)
+	results := &mockResultsPublisher{}
+	svc.results = results
+
+	payload, err := proto.Marshal(&operatorv1.FsListRequested{Path: tmpDir, MaxDepth: 1, MaxEntries: 10})
+	require.NoError(t, err)
+	svc.HandleFsListRequest(context.Background(), &PubSubCommandMessage{
+		ID:        "msg-1",
+		EventType: constants.Event.Operator.FsList.Requested,
+		Payload:   payload,
+	})
+
+	require.Len(t, results.fsListResults, 1)
+	listing, ok := results.fsListResults[0].(*operatorv1.FsListResult)
+	require.True(t, ok, "published result is %T", results.fsListResults[0])
+	require.Empty(t, listing.GetErrorMessage())
+	entries := make(map[string]*operatorv1.FsEntry, len(listing.GetEntries()))
+	for _, entry := range listing.GetEntries() {
+		entries[entry.GetName()] = entry
+	}
+	require.Contains(t, entries, "a.txt")
+	require.Contains(t, entries, "sub")
+	assert.Equal(t, filepath.Join(listedDir, "a.txt"), entries["a.txt"].GetPath())
+	assert.False(t, entries["a.txt"].GetIsDir())
+	assert.Equal(t, int64(5), entries["a.txt"].GetSize())
+	assert.Equal(t, filepath.Join(listedDir, "sub"), entries["sub"].GetPath())
+	assert.True(t, entries["sub"].GetIsDir())
+}
+
 func TestHandleFsListRequest_WithVaultWriter(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
