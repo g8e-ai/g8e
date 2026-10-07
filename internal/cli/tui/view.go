@@ -14,20 +14,32 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
+// Layout sizes are outer sizes: a pane's height and width include its border.
 const (
 	defaultTerminalWidth  = 100
 	defaultTerminalHeight = 30
 	leftPaneWidthRatio    = 2 // numerator; left pane = width * leftPaneWidthRatio / leftPaneWidthDivisor
 	leftPaneWidthDivisor  = 5
-	reservedBottomLines   = 7 // consensus pane + status bar
+	headerLines           = 2
+	tabLines              = 1
+	statusBarLines        = 1
+	chromeLines           = headerLines + tabLines + statusBarLines
+	listPaneRows          = 6 // content rows in the overview's approvals and Operators panes, including the pane header
+	listPaneHeight        = listPaneRows + 2
 	minTopHeight          = 10
-	ledgerReservedLines   = 4 // header + border padding
+	minBodyHeight         = minTopHeight + listPaneHeight
+	paneTitleLines        = 2 // a pane's title and the blank line under it
 	hashDisplayLen        = 8
 )
 
-// View implements tea.Model. It renders the three-pane Tactical Governance Console.
+// View implements tea.Model. It renders the header, the view tabs, the
+// active view (or the help or confirmation overlay), and the status bar.
 func (m Model) View() string {
 	if m.quitting {
 		return ""
@@ -41,40 +53,147 @@ func (m Model) View() string {
 	if height == 0 {
 		height = defaultTerminalHeight
 	}
+	bodyHeight := max(height-chromeLines, minBodyHeight)
 
-	// Calculate pane widths: left 40%, right 60%
-	leftWidth := width * leftPaneWidthRatio / leftPaneWidthDivisor
-	rightWidth := width - leftWidth
-
-	// Top section: pipeline + ledger side by side
-	topHeight := height - reservedBottomLines
-	if topHeight < minTopHeight {
-		topHeight = minTopHeight
+	var body string
+	switch {
+	case m.confirm != nil || m.showHelp:
+		body = m.renderOverlay(width, bodyHeight)
+	case m.view == viewApprovals:
+		body = m.renderApprovalsView(width, bodyHeight)
+	case m.view == viewOperators:
+		body = m.renderOperatorsView(width, bodyHeight)
+	case m.view == viewOperatorDetails:
+		body = m.renderOperatorDetailsView(width, bodyHeight)
+	case m.view == viewEnrollments:
+		body = m.renderEnrollmentsView(width, bodyHeight)
+	case m.view == viewAudit:
+		body = m.renderAuditView(width, bodyHeight)
+	case m.view == viewGatewayStatus:
+		body = m.renderGatewayStatusView(width, bodyHeight)
+	case m.view == viewRecovery:
+		body = m.renderRecoveryView(width, bodyHeight)
+	default:
+		body = m.renderOverview(width, bodyHeight)
 	}
 
-	leftPane := m.renderPipeline(leftWidth, topHeight)
-	rightPane := m.renderLedger(rightWidth, topHeight)
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
+	return lipgloss.JoinVertical(lipgloss.Left,
+		m.renderHeader(width),
+		m.renderTabs(width),
+		body,
+		m.renderStatusBar(width),
+	)
+}
 
-	// Bottom section: L2 consensus
-	consensusPane := m.renderConsensus(width)
+// renderOverview renders the overview: the pipeline and ledger over the
+// pending-approval and Operator panes.
+func (m Model) renderOverview(width, height int) string {
+	leftWidth := width * leftPaneWidthRatio / leftPaneWidthDivisor
+	topHeight := max(height-listPaneHeight, minTopHeight)
+	topRow := lipgloss.JoinHorizontal(lipgloss.Top,
+		m.renderPipeline(leftWidth, topHeight),
+		m.renderLedger(width-leftWidth, topHeight),
+	)
+	halfWidth := width / 2
+	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top,
+		m.renderApprovals(halfWidth),
+		m.renderOperators(width-halfWidth),
+	)
+	return lipgloss.JoinVertical(lipgloss.Left, topRow, bottomRow)
+}
 
-	// Status bar
-	statusBar := m.renderStatusBar(width)
+// renderHeader renders two lines: the console title and the Gateway posture,
+// then the same identity 'g8e auth' reports. Each line is cut to width.
+func (m Model) renderHeader(width int) string {
+	title := " g8e TACTICAL GOVERNANCE CONSOLE " + m.version
+	posture := "POSTURE: " + m.postureLabel() + " "
+	gap := max(width-lipgloss.Width(title)-lipgloss.Width(posture), 1)
 
-	return lipgloss.JoinVertical(lipgloss.Left, topRow, consensusPane, statusBar)
+	operator := m.identity.OperatorID
+	if operator == "" {
+		operator = "unbound"
+	}
+	identity := fmt.Sprintf(" USER: %s | CLI SESSION: %s | OPERATOR: %s",
+		m.identity.UserID, shortHash(m.identity.CLISessionID), operator)
+	if m.gatewayVersion != "" {
+		identity += " | GATEWAY: " + m.gatewayVersion
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		fitLine(headerStyle.Render(title+strings.Repeat(" ", gap)+posture), width),
+		fitLine(detailStyle.Render(identity), width),
+	)
+}
+
+// postureLabel names the Gateway posture and which of L2/L3 it enforces.
+func (m Model) postureLabel() string {
+	if m.posture == nil {
+		return "UNKNOWN"
+	}
+	return fmt.Sprintf("%s (L2 %s, L3 %s)", strings.ToUpper(m.posture.Name()),
+		enforcement(m.posture.RequiresL2Signature()), enforcement(m.posture.RequiresL3Proof()))
+}
+
+func enforcement(enforced bool) string {
+	if enforced {
+		return "enforced"
+	}
+	return "audited"
+}
+
+// paneBorder returns the border style for p, highlighted when it has focus.
+func (m Model) paneBorder(p pane) lipgloss.Style {
+	if m.focus == p {
+		return borderFocused
+	}
+	return borderPane
+}
+
+// box renders lines in style's bordered pane at exactly width x height
+// (outer size). Lines are cut to the inner width and the inner height, so
+// content never wraps or pushes the layout past the terminal.
+func box(style lipgloss.Style, width, height int, lines []string) string {
+	innerWidth := max(width-style.GetHorizontalFrameSize(), 1)
+	innerHeight := max(height-style.GetVerticalFrameSize(), 1)
+	if len(lines) > innerHeight {
+		lines = lines[:innerHeight]
+	}
+	fitted := make([]string, len(lines))
+	for i, line := range lines {
+		fitted[i] = fitLine(line, innerWidth)
+	}
+	return style.
+		Width(max(width-style.GetHorizontalBorderSize(), 1)).
+		Height(max(height-style.GetVerticalBorderSize(), 1)).
+		Render(strings.Join(fitted, "\n"))
+}
+
+// fitLine cuts a single (possibly styled) line to width cells.
+func fitLine(line string, width int) string {
+	return lipgloss.NewStyle().MaxWidth(width).Render(line)
+}
+
+// innerWidth is the content width of a pane of outer width.
+func innerWidth(width int) int {
+	return max(width-borderPane.GetHorizontalFrameSize(), 1)
 }
 
 // renderPipeline renders the left pane: the L1-L5 execution pipeline.
 func (m Model) renderPipeline(width, height int) string {
 	header := pipelineHeaderStyle.Render("EXECUTION PIPELINE (L1-L5)")
 
-	var lines []string
-	lines = append(lines, header, "")
+	// Drop the spacer lines when the pane is too short to show every stage
+	// with them: a title, then a label, a detail, and a spacer per stage.
+	spaced := height-borderPane.GetVerticalFrameSize() >= paneTitleLines+3*len(m.pipeline)
+
+	lines := []string{header}
+	if spaced {
+		lines = append(lines, "")
+	}
 
 	for i, stage := range m.pipeline {
 		icon := statusIcon(stage.status)
-		label := PipelineStage(i).String()
+		label := PipelineStage(i).String() + m.stageAnnotation(PipelineStage(i))
 
 		var styled string
 		switch stage.status {
@@ -103,143 +222,186 @@ func (m Model) renderPipeline(width, height int) string {
 		if detail == "" {
 			detail = stage.status.String()
 		}
-		lines = append(lines, "    "+detailStyle.Render(detail), "")
+		lines = append(lines, "    "+detailStyle.Render(detail))
+		if spaced {
+			lines = append(lines, "")
+		}
 	}
 
-	content := strings.Join(lines, "\n")
-	return borderPipeline.Width(width).Height(height).Render(content)
+	return box(borderPane, width, height, lines)
 }
 
-// renderLedger renders the right pane: the Sovereign Audit Ledger.
-func (m Model) renderLedger(width, height int) string {
-	header := ledgerHeaderStyle.Render("SOVEREIGN AUDIT LEDGER")
+// stageAnnotation marks L2 and L3 as audited when the posture does not
+// enforce them, so a passing stage is not mistaken for an enforced gate.
+func (m Model) stageAnnotation(stage PipelineStage) string {
+	if m.posture == nil {
+		return ""
+	}
+	switch {
+	case stage == StageL2 && !m.posture.RequiresL2Signature(),
+		stage == StageL3 && !m.posture.RequiresL3Proof():
+		return " (audited)"
+	default:
+		return ""
+	}
+}
 
-	var lines []string
-	lines = append(lines, header, "")
+// renderLedger renders the right pane: the Sovereign Audit Ledger. Entries
+// wrap to the pane width so long lines (such as an approval URL to visit)
+// stay readable; the newest lines that fit are shown.
+func (m Model) renderLedger(width, height int) string {
+	lines := []string{ledgerHeaderStyle.Render("SOVEREIGN AUDIT LEDGER"), ""}
 
 	visibleEntries := m.ledger
-	scrollOffset := 0
 	if m.ledgerScroll > 0 && m.ledgerScroll < len(m.ledger) {
-		scrollOffset = len(m.ledger) - m.ledgerScroll
-		visibleEntries = m.ledger[:scrollOffset]
+		visibleEntries = m.ledger[:len(m.ledger)-m.ledgerScroll]
 	}
 
-	maxLines := height - ledgerReservedLines
-	start := 0
-	if len(visibleEntries) > maxLines {
-		start = len(visibleEntries) - maxLines
-	}
-	visibleEntries = visibleEntries[start:]
-
-	for _, entry := range visibleEntries {
-		ts := entry.time.Format("15:04:05")
-		var line string
-		switch entry.level {
-		case LevelCritical:
-			line = ledgerCritStyle.Render(fmt.Sprintf("%s %s %s", ts, entry.level.Tag(), entry.message))
-		case LevelWarn:
-			line = ledgerWarnStyle.Render(fmt.Sprintf("%s %s %s", ts, entry.level.Tag(), entry.message))
-		default:
-			line = ledgerInfoStyle.Render(fmt.Sprintf("%s %s %s", ts, entry.level.Tag(), entry.message))
+	wrap := lipgloss.NewStyle().Width(innerWidth(width))
+	maxLines := max(height-borderPane.GetVerticalFrameSize()-paneTitleLines, 1)
+	var body []string
+	// Walk back from the newest entry until the pane is full.
+	for i := len(visibleEntries) - 1; i >= 0 && len(body) < maxLines; i-- {
+		entry := visibleEntries[i]
+		text := fmt.Sprintf("%s %s %s", entry.time.Format("15:04:05"), entry.level.Tag(), entry.message)
+		wrapped := strings.Split(wrap.Render(text), "\n")
+		for j := range wrapped {
+			wrapped[j] = ledgerLevelStyle(entry.level).Render(strings.TrimRight(wrapped[j], " "))
 		}
-		lines = append(lines, line)
+		body = append(wrapped, body...)
 	}
+	if len(body) > maxLines {
+		body = body[len(body)-maxLines:]
+	}
+	lines = append(lines, body...)
 
 	if len(m.ledger) == 0 {
 		lines = append(lines, detailStyle.Render("(awaiting events...)"))
 	}
 
-	content := strings.Join(lines, "\n")
-	return borderLedger.Width(width).Height(height).Render(content)
+	return box(m.paneBorder(paneLedger), width, height, lines)
 }
 
-// renderConsensus renders the bottom pane: the L2 Consensus status.
-func (m Model) renderConsensus(width int) string {
-	header := consensusHeaderStyle.Render(
-		fmt.Sprintf("L2 CONSENSUS (k-of-n: %d/%d required)", m.quorum, m.total),
-	)
-
-	var memberBlocks []string
-	for _, member := range m.consensus {
-		icon := voteIcon(member)
-		name := strings.ToUpper(string(member.name))
-
-		var styled string
-		switch {
-		case !member.signed:
-			styled = consensusPendingStyle.Render(fmt.Sprintf("%s %s", icon, name))
-		case member.decision:
-			styled = consensusApproveStyle.Render(fmt.Sprintf("%s %s", icon, name))
-		default:
-			styled = consensusVetoStyle.Render(fmt.Sprintf("%s %s", icon, name))
-		}
-		memberBlocks = append(memberBlocks, styled)
-	}
-
-	membersLine := lipgloss.JoinHorizontal(lipgloss.Center, memberBlocks...)
-
-	var statusLine string
-	switch m.result {
-	case ConsensusReached:
-		statusLine = consensusApproveStatusStyle.Render(
-			fmt.Sprintf("STATUS: %s. HASH: %s", m.result, shortHash(m.consensusHash)),
-		)
-	case ConsensusRejected:
-		statusLine = consensusRejectStyle.Render(
-			fmt.Sprintf("STATUS: %s. HASH: %s", m.result, shortHash(m.consensusHash)),
-		)
+// ledgerLevelStyle returns the text style for a ledger level.
+func ledgerLevelStyle(level LedgerLevel) lipgloss.Style {
+	switch level {
+	case LevelCritical:
+		return ledgerCritStyle
+	case LevelWarn:
+		return ledgerWarnStyle
 	default:
-		affirmative := m.countAffirmative()
-		statusLine = consensusStatusStyle.Render(
-			fmt.Sprintf("STATUS: %s (%d/%d signed). %s", m.result, affirmative, m.total, "AWAITING VOTES..."),
-		)
+		return ledgerInfoStyle
 	}
-
-	content := header + "\n\n" + membersLine + "\n\n" + statusLine
-	return borderConsensus.Width(width).Render(content)
 }
 
-// renderStatusBar renders the bottom status bar with version, node, network, and connection info.
-func (m Model) renderStatusBar(width int) string {
-	left := fmt.Sprintf(" g8e OPERATOR CONSOLE %s | NODE: %s | NET: %s",
-		m.version, m.nodeName, m.netLabel)
+// renderApprovals renders the pending L3 approval queue with the selection.
+func (m Model) renderApprovals(width int) string {
+	lines := []string{paneHeaderStyle.Render(fmt.Sprintf("PENDING APPROVALS (%d)", len(m.pending)))}
+	if len(m.pending) == 0 {
+		lines = append(lines, detailStyle.Render("(no pending approvals)"))
+	}
+	start, end := listWindow(len(m.pending), m.pendingSelected)
+	now := timeNow()
+	for i := start; i < end; i++ {
+		tx := m.pending[i]
+		row := fmt.Sprintf("%s tx %s", toolLabel(tx.ToolName), shortHash(tx.TransactionHash))
+		if !tx.ExpiresAt.IsZero() {
+			row += " expires " + formatRemaining(tx.ExpiresAt.Sub(now))
+		}
+		if _, ok := m.awaitingApproval[tx.TransactionHash]; ok {
+			row += " [awaiting browser]"
+		}
+		lines = append(lines, m.listRow(paneApprovals, i == m.pendingSelected, row))
+	}
+	return box(m.paneBorder(paneApprovals), width, listPaneHeight, lines)
+}
 
+// renderOperators renders the connected Operators with the selection.
+func (m Model) renderOperators(width int) string {
+	header := "OPERATORS"
+	if m.operatorsLoaded {
+		header = fmt.Sprintf("OPERATORS (%d connected / %d)", len(m.operators), m.operatorsTotal)
+	}
+	lines := []string{paneHeaderStyle.Render(header)}
+	switch {
+	case m.operatorsErr != "":
+		lines = append(lines, ledgerWarnStyle.Render("unavailable: "+m.operatorsErr))
+	case !m.operatorsLoaded:
+		lines = append(lines, detailStyle.Render("(loading...)"))
+	case len(m.operators) == 0:
+		lines = append(lines, detailStyle.Render("(no connected operators)"))
+	}
+	start, end := listWindow(len(m.operators), m.operatorsSelected)
+	for i := start; i < end; i++ {
+		op := m.operators[i]
+		row := fmt.Sprintf("%s %s %s %s", operatorHostname(op), operatorcapability.GetOperatorRoles(op), op.Status, shortHash(op.ID))
+		if op.ID == m.identity.OperatorID {
+			row += " [bound]"
+		}
+		lines = append(lines, m.listRow(paneOperators, i == m.operatorsSelected, row))
+	}
+	return box(m.paneBorder(paneOperators), width, listPaneHeight, lines)
+}
+
+// listRow renders one list row, marking the selection when its pane has focus.
+func (m Model) listRow(p pane, selected bool, row string) string {
+	if selected && m.focus == p {
+		return selectedRowStyle.Render("> " + row)
+	}
+	return ledgerInfoStyle.Render("  " + row)
+}
+
+// listWindow returns the [start, end) rows of an n-row list to show so the
+// selected row stays visible.
+func listWindow(n, selected int) (int, int) {
+	return windowFor(n, selected, listPaneRows-1) // the header takes one row
+}
+
+// operatorHostname names an Operator for display, as 'g8e gw status' does.
+func operatorHostname(op models.OperatorDocumentGo) string {
+	if view := clioperator.ParseHeartbeatView(op.LatestHeartbeat); view != nil && view.SystemIdentity.Hostname != "" {
+		return view.SystemIdentity.Hostname
+	}
+	if op.CurrentHostname != "" {
+		return op.CurrentHostname
+	}
+	if op.Name != "" {
+		return op.Name
+	}
+	return "-"
+}
+
+// formatRemaining renders a time-to-expiry, or "expired".
+func formatRemaining(d time.Duration) string {
+	if d <= 0 {
+		return "expired"
+	}
+	return d.Truncate(time.Second).String()
+}
+
+// renderStatusBar renders the connection state and the key hints.
+func (m Model) renderStatusBar(width int) string {
 	var connPart string
 	switch m.connStatus {
 	case ConnConnected:
-		connPart = "SSE: CONNECTED"
+		connPart = " SSE: CONNECTED"
 	case ConnConnecting:
-		connPart = "SSE: CONNECTING..."
+		connPart = " SSE: CONNECTING..."
 	case ConnReconnecting:
-		connPart = "SSE: RECONNECTING..."
+		connPart = " SSE: RECONNECTING..."
 	case ConnFailed:
-		connPart = "SSE: DISCONNECTED"
+		connPart = " SSE: DISCONNECTED"
 	default:
-		connPart = "SSE: IDLE"
+		connPart = " SSE: IDLE"
 	}
 	if m.connDetail != "" {
 		connPart += " (" + m.connDetail + ")"
 	}
 
-	right := connPart + " | q: quit | j/k: scroll"
+	right := m.statusHints()
 
-	gap := width - len(left) - len(right)
-	if gap < 1 {
-		gap = 1
-	}
-
-	return statusBarStyle.Render(left + strings.Repeat(" ", gap) + right)
-}
-
-// countAffirmative returns the number of consensus members who voted yes.
-func (m Model) countAffirmative() int {
-	count := 0
-	for _, member := range m.consensus {
-		if member.signed && member.decision {
-			count++
-		}
-	}
-	return count
+	gap := max(width-lipgloss.Width(connPart)-lipgloss.Width(right), 1)
+	return fitLine(statusBarStyle.Render(connPart+strings.Repeat(" ", gap)+right), width)
 }
 
 // shortHash truncates a hash to hashDisplayLen characters with ellipsis for display.

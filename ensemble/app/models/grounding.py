@@ -8,7 +8,7 @@
 
 from app.constants.config import GroundingSource
 
-from .base import G8eBaseModel, Field
+from .base import Field, G8eBaseModel
 
 
 class GroundingChunk(G8eBaseModel):

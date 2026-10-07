@@ -34,7 +34,7 @@ func TestRootCommandStructure(t *testing.T) {
 
 func TestCommandRegistration(t *testing.T) {
 	root := NewRootCmd("test", serve.VersionInfo{})
-	for _, name := range []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "audit", "report", "public", "swagger", "tui", "version", "compliance", "eval"} {
+	for _, name := range []string{"gw", "auth", "mcp", "operator", "vault", "test", "docker", "audit", "report", "public", "swagger", "tui", "version", "compliance", "eval"} {
 		assert.NotNil(t, commandNamed(root, name), "root should register %s", name)
 	}
 }

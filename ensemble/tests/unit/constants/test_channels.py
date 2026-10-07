@@ -8,7 +8,6 @@
 """Regression tests for Phase 9 — Channel values sourced from g8e.constants.CHANNELS."""
 
 import pytest
-
 from g8e.constants import channel as _g8e_channel
 
 from app.constants.channels import (

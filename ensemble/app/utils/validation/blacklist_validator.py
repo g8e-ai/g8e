@@ -13,11 +13,10 @@ import logging
 import re
 from pathlib import Path
 
-from app.models.base import BaseModel, ConfigDict
-
+from app.constants.paths import resolve_config_path
 from app.errors import ConfigurationError
+from app.models.base import BaseModel, ConfigDict
 from app.utils.config_loader import load_json_config
-from app.utils.path import resolve_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +106,10 @@ class CommandBlacklistValidator:
             )
 
         command_string = command_string.strip()
+        match = self._find_matching_rule(command_string)
+        return match or CommandBlacklistResult(is_allowed=True)
+
+    def _find_matching_rule(self, command_string: str) -> CommandBlacklistResult | None:
         tokens = command_string.split()
         base_command = tokens[0]
 
@@ -161,7 +164,7 @@ class CommandBlacklistValidator:
                     rule=f"pattern:{entry.get('value')}",
                 )
 
-        return CommandBlacklistResult(is_allowed=True)
+        return None
 
     def get_forbidden_commands(self) -> list[dict[str, str]]:
         """Get list of forbidden base commands with reasons."""
@@ -188,13 +191,21 @@ class CommandBlacklistValidator:
         ]
 
 
-_validator: CommandBlacklistValidator | None = None
+class _ValidatorState:
+    instance: CommandBlacklistValidator | None = None
+
+
+_validator_state = _ValidatorState()
 
 
 def register_blacklist_validator(validator: CommandBlacklistValidator) -> None:
     """Explicitly register the global blacklist validator instance."""
-    global _validator
-    _validator = validator
+    _validator_state.instance = validator
+
+
+def reset_blacklist_validator() -> None:
+    """Clear the registered blacklist validator so it is reloaded on next access."""
+    _validator_state.instance = None
 
 
 def get_blacklist_validator(blacklist_path: str | None = None) -> CommandBlacklistValidator:
@@ -204,14 +215,13 @@ def get_blacklist_validator(blacklist_path: str | None = None) -> CommandBlackli
     the default path (or the provided path). This backward-compatibility mode
     is deprecated; new code should use register_blacklist_validator().
     """
-    global _validator
-    if _validator is None:
+    if _validator_state.instance is None:
         logger.warning(
             "get_blacklist_validator() called without explicit registration; "
             "creating validator implicitly. Use register_blacklist_validator() for explicit DI."
         )
-        _validator = CommandBlacklistValidator(blacklist_path=blacklist_path or "")
-    return _validator
+        _validator_state.instance = CommandBlacklistValidator(blacklist_path=blacklist_path or "")
+    return _validator_state.instance
 
 
 def validate_command_against_blacklist(command: str) -> CommandBlacklistResult:

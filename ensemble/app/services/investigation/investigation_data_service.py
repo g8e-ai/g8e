@@ -7,23 +7,24 @@
 
 import logging
 
-from app.models.base import TypeAdapter
-
-from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
-
+from app.clients.governance_client import GovernanceClient
 from app.constants import (
-    ComponentStatus,
     DB_COLLECTION_INVESTIGATIONS,
+    G8EE_COMPONENT,
+    AITaskId,
+    ComponentStatus,
     EscalationRisk,
     EventType,
     ExecutionStatus,
     FileOperation,
-    G8EE_COMPONENT,
     HistoryActor,
 )
 from app.constants.message_sender import MessageSender
 from app.errors import ResourceNotFoundError
+from app.models.base import TypeAdapter
 from app.models.cache import FieldFilter
+from app.models.command_request_payloads import DocumentUpdateRequestPayload
+from app.models.http_context import RequestContext
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,
@@ -33,16 +34,14 @@ from app.models.investigations import (
     InvestigationModel,
     InvestigationQueryRequest,
 )
-
-from app.models.http_context import RequestContext
 from app.models.operators import CommandInternalResult
+from app.models.pubsub_messages import G8eMessage
 from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
+from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
 from app.utils.keyed_lock import KeyedAsyncLock
 from app.utils.time_ids.timestamp import now
-from app.clients.governance_client import GovernanceClient
-
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +57,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
         """Low-level persistence for a new investigation document via governance envelope."""
-        from app.models.command_request_payloads import DocumentUpdateRequestPayload
-        from app.models.pubsub_messages import G8eMessage
-        from app.constants import AITaskId
-
         investigation = InvestigationModel(
             case_id=request.case_id,
             case_title=request.case_title,
@@ -138,8 +133,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         merge: bool = True,
     ):
         """Authoritative low-level update for the investigations collection via governance envelope."""
-        from app.constants import EventType
-
         await self._governance_client.update_governed_doc(
             collection=self.collection,
             document_id=investigation_id,
@@ -199,8 +192,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def delete_investigation(self, investigation_id: str, context: RequestContext) -> None:
         """Hard-delete an investigation document via governance envelope."""
-        from app.constants import EventType
-
         await self._governance_client.delete_governed_doc(
             collection=self.collection,
             document_id=investigation_id,
@@ -376,7 +367,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         command: str,
         result: CommandInternalResult,
         operator_id: str,
-        operator_session_id: str,
         context: RequestContext,
     ) -> InvestigationModel:
         """Helper to record a command execution result."""
@@ -403,7 +393,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         self,
         investigation_id: str,
         execution_id: str,
-        operator_id: str,
         event_type: EventType,
         file_path: str,
         result: FileEditResult,
@@ -469,7 +458,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             if entry.details:
                 if entry.event_type == EventType.OPERATOR_COMMAND_EXECUTION:
                     status = entry.details.status
-                    if hasattr(status, "value"):
+                    if status is not None and hasattr(status, "value"):
                         status = status.value
                     status = status if status else "unknown"
                 else:

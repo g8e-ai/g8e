@@ -88,7 +88,7 @@ func (f bootstrapFixture) memberKeySeed(t *testing.T, consensusID, appID string)
 	require.NoError(t, err, "member key for %s must be saved for the in-process deliberator", appID)
 	info, err := f.fileSvc.Stat(t.Context(), rel)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "member signing keys must be 0600")
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "member signing keys must be 0600")
 	return string(data)
 }
 

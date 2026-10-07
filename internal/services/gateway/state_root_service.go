@@ -154,7 +154,7 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	// 1. Documents (Authoritative)
 	// Exclude metadata-only timestamps (created_at, updated_at) to ensure
 	// the state root only changes when the content actually changes.
-	if err := s.hashTableToStream(h, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) error {
+	if err := s.hashTableToStream("SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) error {
 		var collection, id, data string
 		if err := r.Scan(&collection, &id, &data); err != nil {
 			return fmt.Errorf("%w: %v", constants.ErrStateRootScanDocuments, err)
@@ -173,7 +173,7 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	// Exclude cache management entries (g8e:cache:*) as they are ephemeral and not authoritative state.
 	// Only include bound-state rows (state_tier = 'bound') — observed-state rows
 	// are hashed separately in calculateObservedStateRoot().
-	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND state_tier = 'bound' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
+	if err := s.hashTableToStream("SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND state_tier = 'bound' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
 		var key, value, expiresAt string
 		if err := r.Scan(&key, &value, &expiresAt); err != nil {
 			return fmt.Errorf("%w: %v", constants.ErrStateRootScanKVStore, err)
@@ -188,7 +188,7 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	// Filter for active entries only. Exclude created_at.
 	// data is included (as hex for determinism).
 	// Only include bound-state rows (state_tier = 'bound').
-	if err := s.hashTableToStream(h, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE state_tier = 'bound' AND (expires_at IS NULL OR expires_at > ?) ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
+	if err := s.hashTableToStream("SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE state_tier = 'bound' AND (expires_at IS NULL OR expires_at > ?) ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
 		var namespace, id, contentType, dataHex, expiresAt string
 		var size int64
 		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
@@ -231,7 +231,7 @@ func (s *StateRootService) calculateObservedStateRoot() (string, error) {
 	now := timesvc.NowTimestamp()
 
 	// Observed KV entries (state_tier = 'observed')
-	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND state_tier = 'observed' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
+	if err := s.hashTableToStream("SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND state_tier = 'observed' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
 		var key, value, expiresAt string
 		if err := r.Scan(&key, &value, &expiresAt); err != nil {
 			return fmt.Errorf("%w: %v", constants.ErrStateRootScanKVStore, err)
@@ -242,7 +242,7 @@ func (s *StateRootService) calculateObservedStateRoot() (string, error) {
 	}
 
 	// Observed blobs (state_tier = 'observed')
-	if err := s.hashTableToStream(h, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE state_tier = 'observed' AND (expires_at IS NULL OR expires_at > ?) ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
+	if err := s.hashTableToStream("SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE state_tier = 'observed' AND (expires_at IS NULL OR expires_at > ?) ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
 		var namespace, id, contentType, dataHex, expiresAt string
 		var size int64
 		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
@@ -290,7 +290,7 @@ func (s *StateRootService) GetObservedStateRoot() (string, error) {
 
 // hashTableToStream executes a query and streams each row to the hash writer.
 // This avoids materializing all rows in memory, which is critical for large databases.
-func (s *StateRootService) hashTableToStream(h hash.Hash, query string, args []interface{}, scan func(*sql.Rows) error) error {
+func (s *StateRootService) hashTableToStream(query string, args []interface{}, scan func(*sql.Rows) error) error {
 	rows, err := s.db.QueryWithRetry(query, args...)
 	if err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrStateRootQueryTable, err)

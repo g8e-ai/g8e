@@ -12,7 +12,6 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -34,7 +33,7 @@ func bytesReader(data []byte) *bytes.Reader {
 }
 
 func newTestResponder() *response.Writer {
-	return response.NewWriter(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return response.NewWriter(slog.New(slog.DiscardHandler))
 }
 
 func eventTypeForAction(actionType string) string {
@@ -87,7 +86,7 @@ func TestConsensusService_Deliberate_HappyPath(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 
@@ -106,7 +105,7 @@ func TestConsensusService_Deliberate_HappyPath(t *testing.T) {
 func TestConsensusService_Deliberate_HashMismatch(t *testing.T) {
 	t.Parallel()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 	env.Id = "wrong-id"
@@ -120,7 +119,7 @@ func TestConsensusService_Deliberate_UnsafeCommand(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeExecuteBash), []byte("rm -rf /"))
 
@@ -135,7 +134,7 @@ func TestConsensusService_Deliberate_MultipleMembers(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 3)
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 
@@ -153,7 +152,7 @@ func TestConsensusService_Deliberate_MultipleMembers(t *testing.T) {
 func TestConsensusService_Deliberate_NilDoctrine_FailClosed(t *testing.T) {
 	t.Parallel()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 
@@ -172,7 +171,7 @@ func TestConsensusService_Deliberate_SignatureVerifiable(t *testing.T) {
 	members := []ConsensusMember{
 		{AppID: "verifiable-member", PrivateKey: priv},
 	}
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 
@@ -191,7 +190,7 @@ func TestConsensusService_Deliberate_WithIntentData(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	intentData, err := structpb.NewStruct(map[string]interface{}{
 		string(constants.ApprovalTypeIntent): "test-intent",
@@ -225,7 +224,7 @@ func TestConsensusService_Deliberate_NoSigningMembers_FailFast(t *testing.T) {
 	members := []ConsensusMember{
 		{AppID: "keyless-member", PrivateKey: nil},
 	}
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 
@@ -242,7 +241,7 @@ func TestConsensusService_Deliberate_MultipleKeylessMembers_FailFast(t *testing.
 		{AppID: "keyless-2", PrivateKey: nil},
 		{AppID: "keyless-3", PrivateKey: nil},
 	}
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 
@@ -255,7 +254,7 @@ func TestConsensusService_Deliberate_InitializesGovernance(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 	require.Nil(t, env.Governance)
@@ -273,7 +272,7 @@ func TestConsensusService_HandleDeliberate_HTTP_HappyPath(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 	body, err := protojson.Marshal(env)
@@ -299,7 +298,7 @@ func TestConsensusService_HandleDeliberate_HTTP_HappyPath(t *testing.T) {
 func TestConsensusService_HandleDeliberate_HTTP_HashMismatch(t *testing.T) {
 	t.Parallel()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 	env.Id = "wrong-id"
@@ -318,7 +317,7 @@ func TestConsensusService_HandleDeliberate_HTTP_HashMismatch(t *testing.T) {
 func TestConsensusService_HandleDeliberate_HTTP_InvalidJSON(t *testing.T) {
 	t.Parallel()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.DiscardHandler), newTestResponder())
 
 	req := httptest.NewRequest(http.MethodPost, "/consensus/v1/deliberate", bytesReader([]byte("not json")))
 	rr := httptest.NewRecorder()
@@ -331,7 +330,7 @@ func TestConsensusService_HandleDeliberate_HTTP_InvalidJSON(t *testing.T) {
 func TestConsensusService_HandleDeliberate_HTTP_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 	members := makeMembers(t, 1)
-	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, nil, slog.New(slog.DiscardHandler), newTestResponder())
 
 	req := httptest.NewRequest(http.MethodGet, "/consensus/v1/deliberate", nil)
 	rr := httptest.NewRecorder()

@@ -15,42 +15,54 @@ All Google GenAI SDK calls are mocked.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 import httpx
+import pytest
 from google.genai import types as genai_types
 
+from app.constants import ThinkingLevel
 from app.llm.llm_types import (
+    AssistantLLMSettings,
     Content,
     GenerateContentResponse,
-    Part,
-    Role,
-    ThoughtSignature,
-    ToolCall,
-    ToolResponse,
-    ToolGroup,
-    ToolDeclaration,
-    ToolConfig,
-    ToolCallingConfig,
-    PrimaryLLMSettings,
-    StreamChunkFromModel,
-    AssistantLLMSettings,
     LiteLLMSettings,
+    Part,
+    PrimaryLLMSettings,
     ResponseFormat,
     ResponseJsonSchema,
+    Role,
     Schema,
+    StreamChunkFromModel,
+    ThinkingConfig,
+    ThoughtSignature,
+    ToolCall,
+    ToolCallingConfig,
+    ToolConfig,
+    ToolDeclaration,
+    ToolGroup,
+    ToolResponse,
     Type,
 )
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.providers.gemini import (
+    GeminiProvider,
     _content_to_genai,
-    _usage_from_sdk,
     _finish_reason_from_candidate,
     _grounding_from_sdk_candidate,
     _parts_from_sdk_candidate,
-    GeminiProvider,
+    _tool_group_to_genai,
+    _usage_from_sdk,
 )
+from app.llm.thinking import GeminiThinkingTranslation
 
 pytestmark = [pytest.mark.unit]
+
+
+class _StatusCodeError(Exception):
+    """SDK-style API error carrying an HTTP status code attribute."""
+
+    def __init__(self, message: str, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class TestContentToGenai:
@@ -195,9 +207,13 @@ class TestGroundingFromSdkCandidate:
         gm.search_entry_point.rendered_content = "<html></html>"
 
         grounding = _grounding_from_sdk_candidate(mock_candidate)
+        assert grounding is not None
         assert grounding.web_search_queries == ["query1"]
-        assert grounding.grounding_chunks[0].web.uri == "https://example.com"
+        web = grounding.grounding_chunks[0].web
+        assert web is not None
+        assert web.uri == "https://example.com"
         assert grounding.grounding_supports[0].segment.text == "segment"
+        assert grounding.search_entry_point is not None
         assert grounding.search_entry_point.rendered_content == "<html></html>"
 
     def test_grounding_chunk_no_web(self):
@@ -210,6 +226,7 @@ class TestGroundingFromSdkCandidate:
         gm.search_entry_point = None
 
         grounding = _grounding_from_sdk_candidate(mock_candidate)
+        assert grounding is not None
         assert grounding.grounding_chunks[0].web is None
 
 
@@ -239,6 +256,7 @@ class TestPartsFromSdkCandidate:
         parts = _parts_from_sdk_candidate(mock_candidate)
         assert parts[0].text == "thinking"
         assert parts[0].thought is True
+        assert parts[0].thought_signature is not None
         assert parts[0].thought_signature.value == "c2ln"
 
     def test_tool_call_part(self):
@@ -252,6 +270,7 @@ class TestPartsFromSdkCandidate:
         mock_candidate.content.parts = [mock_part]
 
         parts = _parts_from_sdk_candidate(mock_candidate)
+        assert parts[0].tool_call is not None
         assert parts[0].tool_call.name == "my_tool"
         assert parts[0].tool_call.args == {"x": 1}
 
@@ -266,6 +285,7 @@ class TestPartsFromSdkCandidate:
 
         parts = _parts_from_sdk_candidate(mock_candidate)
         assert parts[0].text is None
+        assert parts[0].thought_signature is not None
         assert parts[0].thought_signature.value == "c2ln"
 
 
@@ -317,6 +337,7 @@ class TestStreamParsing:
         chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
         assert len(chunks) == 1
         assert chunks[0].tool_calls[0].name == "tool"
+        assert chunks[0].thought_signature is not None
         assert chunks[0].thought_signature.value == "c2ln"
 
 
@@ -350,16 +371,13 @@ class TestGeminiProvider:
     def test_is_retryable(self):
         assert GeminiProvider._is_retryable(httpx.ConnectTimeout("timeout")) is True
 
-        exc429 = Exception("too many requests")
-        exc429.status_code = 429
+        exc429 = _StatusCodeError("too many requests", status_code=429)
         assert GeminiProvider._is_retryable(exc429) is True
 
-        exc500 = Exception("internal error")
-        exc500.status_code = 500
+        exc500 = _StatusCodeError("internal error", status_code=500)
         assert GeminiProvider._is_retryable(exc500) is False
 
     def test_tool_group_to_genai(self):
-        from app.llm.providers.gemini import _tool_group_to_genai
 
         params = Schema(type=Type.OBJECT, properties={"loc": Schema(type=Type.STRING)})
         tool_decl = ToolDeclaration(
@@ -383,14 +401,10 @@ class TestGeminiProvider:
         assert genai_tools[1].google_search is not None
 
     def test_build_thinking_config_gemini3(self):
-        from app.constants import ThinkingLevel
-        from app.llm.llm_types import ThinkingConfig
 
         tc = ThinkingConfig(thinking_level=ThinkingLevel.HIGH, include_thoughts=True)
         # Mock translate_for_gemini to avoid actual model config lookup
         with patch("app.llm.providers.gemini.translate_for_gemini") as mock_translate:
-            from app.llm.thinking import GeminiThinkingTranslation
-
             mock_translate.return_value = GeminiThinkingTranslation(
                 enabled=True, thinking_level="HIGH", include_thoughts=True
             )
@@ -398,18 +412,16 @@ class TestGeminiProvider:
             sdk_tc, translation = GeminiProvider._build_thinking_config_gemini3(
                 tc, "gemini-3.0", genai_types
             )
+            assert sdk_tc is not None
             assert sdk_tc.thinking_level == "HIGH"
             assert sdk_tc.include_thoughts is True
+            assert translation is not None
             assert translation.enabled is True
 
     def test_build_thinking_config_gemini3_off(self):
-        from app.llm.llm_types import ThinkingConfig
-        from app.constants import ThinkingLevel
 
         tc = ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False)
         with patch("app.llm.providers.gemini.translate_for_gemini") as mock_translate:
-            from app.llm.thinking import GeminiThinkingTranslation
-
             mock_translate.return_value = GeminiThinkingTranslation(
                 enabled=False, thinking_level=None, include_thoughts=False
             )
@@ -418,6 +430,7 @@ class TestGeminiProvider:
                 tc, "gemini-3.0", genai_types
             )
             assert sdk_tc is None
+            assert translation is not None
             assert translation.enabled is False
 
     @patch("google.genai.Client")
@@ -467,9 +480,8 @@ class TestGeminiProvider:
         mock_iter = iter([mock_chunk])
 
         with patch.object(provider, "_sync_stream", return_value=mock_iter) as mock_sync:
-            chunks = []
-            async for chunk in provider._stream_with_retry("model", [], {}):
-                chunks.append(chunk)
+            async for _ in provider._stream_with_retry("model", [], {}):
+                pass
 
             # Since mock_chunk has no candidates/usage, it might not yield anything
             # depending on _sdk_chunk_to_stream_from_model_chunks logic.
@@ -485,11 +497,12 @@ class TestGeminiProvider:
             yield StreamChunkFromModel(text="hi")
 
         with patch.object(provider, "_stream_with_retry", side_effect=mock_stream) as mock_retry:
-            chunks = []
-            async for chunk in provider.generate_content_stream_primary(
-                "model", [Content(role=Role.USER, parts=[Part(text="hi")])], settings
-            ):
-                chunks.append(chunk)
+            chunks = [
+                chunk
+                async for chunk in provider.generate_content_stream_primary(
+                    "model", [Content(role=Role.USER, parts=[Part(text="hi")])], settings
+                )
+            ]
             assert len(chunks) == 1
             assert chunks[0].text == "hi"
             mock_retry.assert_called_once()
@@ -503,12 +516,14 @@ class TestGeminiProvider:
             raise Exception("api error")
             yield  # make it a generator
 
-        with patch.object(provider, "_stream_with_retry", side_effect=mock_stream_error):
-            with patch("app.llm.providers.gemini.translate_capability_error") as mock_translate:
-                with pytest.raises(Exception, match="api error"):
-                    async for _ in provider.generate_content_stream_primary("model", [], settings):
-                        pass
-                mock_translate.assert_called_once()
+        with (
+            patch.object(provider, "_stream_with_retry", side_effect=mock_stream_error),
+            patch("app.llm.providers.gemini.translate_capability_error") as mock_translate,
+        ):
+            with pytest.raises(Exception, match="api error"):
+                async for _ in provider.generate_content_stream_primary("model", [], settings):
+                    pass
+            mock_translate.assert_called_once()
 
     @patch("google.genai.Client")
     async def test_generate_content_primary(self, mock_client):
@@ -563,9 +578,8 @@ class TestGeminiProvider:
             yield StreamChunkFromModel(text="hi")
 
         with patch.object(provider, "_stream_with_retry", side_effect=mock_stream) as mock_retry:
-            chunks = []
-            async for chunk in provider.generate_content_stream_primary("model", [], settings):
-                chunks.append(chunk)
+            async for _ in provider.generate_content_stream_primary("model", [], settings):
+                pass
 
             # Verify tools were passed to _build_genai_config via the retry call
             args = mock_retry.call_args[0]
@@ -583,11 +597,15 @@ class TestGeminiProvider:
             yield StreamChunkFromModel(text="hi")
 
         with patch.object(provider, "_stream_with_retry", side_effect=mock_stream):
-            chunks = []
-            async for chunk in provider.generate_content_stream_assistant("model", [], settings):
-                chunks.append(chunk)
+            chunks = [
+                chunk
+                async for chunk in provider.generate_content_stream_assistant("model", [], settings)
+            ]
             assert len(chunks) == 1
             assert chunks[0].text == "hi"
+
+    @patch("google.genai.Client")
+    async def test_generate_content_stream_lite(self, mock_client):
         provider = GeminiProvider(api_key="key")
         settings = LiteLLMSettings(max_output_tokens=100)
 
@@ -595,9 +613,10 @@ class TestGeminiProvider:
             yield StreamChunkFromModel(text="hi")
 
         with patch.object(provider, "_stream_with_retry", side_effect=mock_stream):
-            chunks = []
-            async for chunk in provider.generate_content_stream_lite("model", [], settings):
-                chunks.append(chunk)
+            chunks = [
+                chunk
+                async for chunk in provider.generate_content_stream_lite("model", [], settings)
+            ]
             assert len(chunks) == 1
 
     def test_content_to_genai_thought_only(self):
@@ -623,7 +642,6 @@ class TestGeminiProvider:
 
     def test_tool_group_to_genai_empty(self):
         # Coverage for line 203: funcs is empty
-        from app.llm.providers.gemini import _tool_group_to_genai
 
         tg = ToolGroup(tools=[], google_search=True)
         res = _tool_group_to_genai(tg)
@@ -642,6 +660,7 @@ class TestGeminiProvider:
         gm.search_entry_point = None
 
         grounding = _grounding_from_sdk_candidate(mock_candidate)
+        assert grounding is not None
         assert len(grounding.grounding_supports) == 0
 
     def test_parts_from_sdk_candidate_sig_only(self):
@@ -655,6 +674,7 @@ class TestGeminiProvider:
         mock_cand.content.parts = [mock_part]
         res = _parts_from_sdk_candidate(mock_cand)
         assert len(res) == 1
+        assert res[0].thought_signature is not None
         assert res[0].thought_signature.value == "c2ln"
 
     def test_build_genai_config_primary_tool_config(self):
@@ -666,6 +686,8 @@ class TestGeminiProvider:
             ),
         )
         config = GeminiProvider._build_genai_config(settings, [], "model")
+        assert config.tool_config is not None
+        assert config.tool_config.function_calling_config is not None
         assert config.tool_config.function_calling_config.mode == "ANY"
 
     def test_sdk_chunk_to_stream_thought_text(self):
@@ -699,6 +721,7 @@ class TestGeminiProvider:
         mock_chunk.candidates = [mock_cand]
         mock_chunk.usage_metadata = None
         chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
+        assert chunks[0].thought_signature is not None
         assert chunks[0].thought_signature.value == "c2ln"
 
     def test_sdk_chunk_to_stream_usage_metadata(self):
@@ -775,9 +798,7 @@ class TestGeminiProvider:
 
         mock_iter = iter([mock_chunk])
         with patch.object(provider, "_sync_stream", return_value=mock_iter):
-            chunks = []
-            async for chunk in provider._stream_with_retry("model", [], {}):
-                chunks.append(chunk)
+            chunks = [chunk async for chunk in provider._stream_with_retry("model", [], {})]
             assert len(chunks) == 1
             assert chunks[0].text == "hi"
 
@@ -800,20 +821,24 @@ class TestGeminiProvider:
             assert len(config.tools) == 1
         provider = GeminiProvider(api_key="key")
         settings = PrimaryLLMSettings(max_output_tokens=100)
-        with patch.object(provider, "_generate_with_retry", side_effect=Exception("api error")):
-            with patch("app.llm.providers.gemini.translate_capability_error") as mock_translate:
-                with pytest.raises(Exception, match="api error"):
-                    await provider.generate_content_primary("model", [], settings)
-                mock_translate.assert_called_once()
+        with (
+            patch.object(provider, "_generate_with_retry", side_effect=Exception("api error")),
+            patch("app.llm.providers.gemini.translate_capability_error") as mock_translate,
+        ):
+            with pytest.raises(Exception, match="api error"):
+                await provider.generate_content_primary("model", [], settings)
+            mock_translate.assert_called_once()
 
     @patch("google.genai.Client")
     def test_sync_wrappers(self, mock_client):
         provider = GeminiProvider(api_key="key")
+        sdk_client = mock_client.return_value
+        assert provider._client is sdk_client
         provider._sync_generate("model", [], {})
-        provider._client.models.generate_content.assert_called_once()
+        sdk_client.models.generate_content.assert_called_once()
 
         provider._sync_stream("model", [], {})
-        provider._client.models.generate_content_stream.assert_called_once()
+        sdk_client.models.generate_content_stream.assert_called_once()
 
     def test_sdk_chunk_to_stream_finish_reason(self):
         mock_chunk = MagicMock()
@@ -840,4 +865,5 @@ class TestGeminiProvider:
         gm.search_entry_point = None
 
         grounding = _grounding_from_sdk_candidate(mock_candidate)
+        assert grounding is not None
         assert grounding.grounding_supports[0].grounding_chunk_indices == []

@@ -8,7 +8,6 @@
 """Regression tests for Phase 10 — Intent values sourced from g8e.constants.INTENTS."""
 
 import pytest
-
 from g8e.constants import intent as _g8e_intent
 
 from app.constants.intents import (

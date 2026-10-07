@@ -21,10 +21,10 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     CommandGenerationOutcome,
     EventType,
     ExecutionStatus,
-    G8EE_COMPONENT,
     OperatorToolName,
 )
 from app.llm.llm_types import ToolCall
@@ -92,7 +92,6 @@ class TestReputationPipelineIntegration:
             correlation_id="tribunal_123",
             outcome=CommandGenerationOutcome.VERIFIED,
             final_command="ls",
-            audit_reason="OK",
             request="ls",
         )
         exec_result = CommandExecutionResult(
@@ -181,7 +180,6 @@ class TestReputationPipelineIntegration:
             correlation_id="tribunal_456",
             outcome=CommandGenerationOutcome.VERIFIED,
             final_command="rm",
-            audit_reason="OK",
             request="rm",
         )
         exec_result = CommandExecutionResult(
@@ -241,7 +239,7 @@ class TestReputationPipelineIntegration:
             id="call_abc", name=OperatorToolName.FILE_READ, args={"file_path": "/tmp/test"}
         )
         mock_tool_executor.execute_tool_call = AsyncMock(
-            return_value=FileEditResult(success=True, execution_id="exec_abc")
+            return_value=FileEditResult(success=True)
         )
 
         await orchestrate_tool_execution(

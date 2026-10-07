@@ -1,3 +1,9 @@
+"""
+Operator models for g8e system.
+
+Defines data structures for tracking g8eo operators and their runtime configurations.
+"""
+
 from __future__ import annotations
 
 # Copyright (c) 2026 Lateralus Labs, LLC.
@@ -6,27 +12,8 @@ from __future__ import annotations
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
-
-"""
-Operator models for g8e system.
-
-Defines data structures for tracking g8eo operators and their runtime configurations.
-"""
-
 import asyncio
 import logging
-from typing import Any
-
-from app.models.base import (
-    ConfigDict,
-    Field,
-    PrivateAttr,
-    ValidationInfo,
-    field_validator,
-    model_validator,
-)
-
-from app.models.http_context import G8eHttpContext
 
 from app.constants import (
     ApprovalErrorType,
@@ -36,19 +23,25 @@ from app.constants import (
     CommandErrorType,
     ExecutionStatus,
     FileOperation,
-    HistoryActor,
-    OperatorHistoryEventType,
+    OperatorRole,
     OperatorStatus,
     OperatorType,
     VersionStability,
 )
+from app.models.base import (
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
+from app.models.http_context import G8eHttpContext
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,
     FileOperationRiskAnalysis,
 )
 from app.utils.time_ids.timestamp import now
-from app.utils.hashing.ledger_hash import compute_entry_hash
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
@@ -91,43 +84,24 @@ class CommandResultRecord(G8eBaseModel):
     )
 
 
-class OperatorHistoryEntry(G8eBaseModel):
-    """Single entry in operator history trail."""
+class OperatorRuntimeConfig(G8eBaseModel):
+    """Typed runtime configuration reported by remote and embedded operators."""
 
-    timestamp: UTCDatetime = Field(default_factory=now, description="When this event occurred")
-    event_type: OperatorHistoryEventType = Field(
-        ..., description="Type of event (canonical values from status.json)"
-    )
-    summary: str = Field(..., description="Brief summary of what happened")
-    actor: HistoryActor = Field(
-        default=HistoryActor.SYSTEM, description="Who performed this action"
-    )
-    details: dict[str, object] = Field(
-        default_factory=dict, description="Detailed event information"
-    )
-    prev_hash: str = Field(
-        ..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)"
-    )
-    entry_hash: str | None = Field(
-        default=None, description="Hash of this entry (hex SHA256, 64 chars)"
-    )
-
-    @model_validator(mode="after")
-    def _seal_entry_hash(self) -> OperatorHistoryEntry:
-        """Auto-compute entry_hash if not provided."""
-        if self.entry_hash is None:
-            payload = self.model_dump(mode="json", exclude={"entry_hash"})
-            object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
-        return self
-
-    @field_validator("entry_hash", mode="after")
-    @classmethod
-    def validate_entry_hash(cls, v):
-        if v is None:
-            raise ValueError("entry_hash must be computed and set before use")
-        if len(v) != 64:
-            raise ValueError("entry_hash must be 64 characters (hex SHA256)")
-        return v
+    roles: list[OperatorRole] = Field(default_factory=list)
+    cloud_mode: bool = False
+    cloud_provider: str | None = None
+    local_storage_enabled: bool = False
+    no_git: bool = False
+    log_level: str = "info"
+    http_port: int = 0
+    local_dir: str | None = None
+    account: str | None = None
+    inference_enabled: bool = False
+    inference_ollama_endpoint: str | None = None
+    provider_boundary_observer_enabled: bool = False
+    provenance_operator_enabled: bool = False
+    provenance_operator_model_storage_root: str | None = None
+    platform: str | None = None
 
 
 class OperatorDocument(G8eIdentifiableModel):
@@ -139,16 +113,12 @@ class OperatorDocument(G8eIdentifiableModel):
     """
 
     user_id: str = Field(description="User ID who owns this operator (always set by client)")
-    first_deployed: UTCDatetime | None = Field(
-        default=None, description="When the operator was first deployed"
-    )
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
     status: OperatorStatus = Field(
         default=OperatorStatus.OFFLINE, description="Current Operator status"
     )
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
-    bound_cli_session_id: str | None = Field(default=None, description="Bound CLI session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
     claimed: bool = Field(
         default=False, description="True when the slot has been claimed by a running g8eo process"
@@ -157,84 +127,35 @@ class OperatorDocument(G8eIdentifiableModel):
         default=None,
         description="When the slot was claimed (set at claim time, not heartbeat time)",
     )
-    terminated_at: UTCDatetime | None = Field(
-        default=None, description="When the operator was terminated"
-    )
     latest_heartbeat_snapshot: HeartbeatSnapshot | None = Field(
         default=None, description="Latest heartbeat metrics"
     )
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
     case_id: str | None = Field(default=None, description="Current case ID")
-    api_key: str | None = Field(default=None, description="Operator API key (Gateway-owned)")
     is_active: bool = Field(default=False, description="Whether Operator is in active status")
-    operator_type: OperatorType = Field(
-        default=OperatorType.REMOTE, description="Operator deployment type"
-    )
+    operator_type: OperatorType = Field(description="Operator deployment type")
 
-    @field_validator("operator_type", mode="before")
-    @classmethod
-    def coerce_operator_type(cls, v: object) -> OperatorType:
-        if v == "" or v is None:
-            return OperatorType.REMOTE
-        return OperatorType(v)
-
-    granted_intents: list[str] | None = Field(
-        default=None, description="Granted intent permissions"
+    granted_intents: list[str] = Field(
+        default_factory=list, description="Granted intent permissions"
     )
     current_hostname: str | None = Field(
         default=None,
         description="Denormalized hostname from latest_heartbeat_snapshot for quick access",
     )
-    session_token: str | None = Field(
-        default=None, description="Active session token for session-based auth validation"
-    )
-    session_expires_at: UTCDatetime | None = Field(
-        default=None, description="Session expiration timestamp"
-    )
-    history_trail: list[OperatorHistoryEntry] = Field(
-        default_factory=list,
-        description="Operator lifecycle audit trail (Gateway-owned append-only history).",
-    )
     system_fingerprint: str | None = Field(
         default=None, description="System fingerprint differentiating operator instance"
     )
-    operator_role: str | None = Field(
-        default=None, description="Operational role (inference, provenance, observer, data)"
+    operator_roles: list[OperatorRole] = Field(
+        default_factory=list, description="Complete enabled Operator role set"
     )
-    local_dir: str | None = Field(
-        default=None, description="Local runtime or working directory"
-    )
+    local_dir: str | None = Field(default=None, description="Local runtime or working directory")
     account: str | None = Field(
         default=None, description="OS user account that launched the operator"
     )
-    port: int | None = Field(
-        default=None, description="Port configured for operator"
-    )
-    runtime_config: dict[str, Any] | None = Field(
+    port: int | None = Field(default=None, description="Port configured for operator")
+    runtime_config: OperatorRuntimeConfig | None = Field(
         default=None, description="Active runtime configuration"
     )
-
-    @property
-    def hostname(self) -> str | None:
-        """Get hostname from current_hostname for backward compatibility."""
-        return self.current_hostname
-
-    @field_validator("current_hostname", mode="before")
-    @classmethod
-    def sync_current_hostname(cls, v: object, info: ValidationInfo) -> str | None:
-        """Ensure current_hostname stays in sync with latest_heartbeat_snapshot.system_identity.hostname."""
-        if v is not None:
-            return v
-        snapshot = info.data.get("latest_heartbeat_snapshot")
-        if isinstance(snapshot, HeartbeatSnapshot):
-            return snapshot.system_identity.hostname
-        if isinstance(snapshot, dict):
-            identity = snapshot.get("system_identity")
-            if isinstance(identity, dict):
-                hostname = identity.get("hostname")
-                if isinstance(hostname, str) and hostname:
-                    return hostname
-        return None
 
     @model_validator(mode="after")
     def populate_current_hostname_from_snapshot(self) -> OperatorDocument:
@@ -258,14 +179,40 @@ class OperatorDocument(G8eIdentifiableModel):
                 return None
         return v
 
-    @field_validator("granted_intents", mode="before")
-    @classmethod
-    def coerce_granted_intents(cls, v: object) -> list[str]:
-        if v is None:
-            return []
-        if isinstance(v, list):
-            return [str(item) for item in v]
-        raise TypeError("granted_intents must be a list[str] or None")
+    def resolved_roles(self) -> frozenset[OperatorRole]:
+        """Return every enabled role, mirroring the Gateway's GetOperatorRoles.
+
+        Runtime configuration decides when present; stored role metadata applies
+        only without it. An Operator with neither is a Data Operator.
+        """
+        config = self.runtime_config
+        if config is not None:
+            roles = set(config.roles)
+            if config.inference_enabled:
+                roles.add(OperatorRole.INFERENCE)
+            if config.provenance_operator_enabled:
+                roles.add(OperatorRole.PROVENANCE)
+            if config.provider_boundary_observer_enabled:
+                roles.add(OperatorRole.OBSERVER)
+            if not roles:
+                roles.add(OperatorRole.DATA)
+        else:
+            roles = set(self.operator_roles) or {OperatorRole.DATA}
+        if self.operator_type is OperatorType.EMBEDDED:
+            roles.add(OperatorRole.EMBEDDED)
+        return frozenset(roles)
+
+    def has_active_role(self, role: OperatorRole) -> bool:
+        """Whether this is a live, session-bound Operator that includes ``role``.
+
+        Mirrors the Gateway's HasActiveRole: an active remote Operator, or an
+        active embedded Operator that has reported its runtime configuration.
+        """
+        if self.status != OperatorStatus.ACTIVE or not self.operator_session_id:
+            return False
+        if self.operator_type is OperatorType.EMBEDDED and self.runtime_config is None:
+            return False
+        return role in self.resolved_roles()
 
 
 # =============================================================================
@@ -493,6 +440,7 @@ class HeartbeatSnapshot(G8eBaseModel):
         default=False, description="True when LFAA ledger mirroring is active"
     )
 
+
 class PendingApproval(G8eBaseModel):
     """
     Typed state for a pending approval.
@@ -627,8 +575,6 @@ class CommandApprovalRequest(ApprovalRequestBase):
     task_id: str | None = Field(default=None, description="AI task identifier")
 
 
-
-
 class FileEditApprovalRequest(ApprovalRequestBase):
     """Typed request for file edit approval."""
 
@@ -719,8 +665,6 @@ class CommandApprovalEvent(ApprovalContext):
     def is_batch_execution(self) -> bool:
         """True if targeting multiple systems."""
         return len(self.target_systems) > 1
-
-
 
 
 class AgentContinueApprovalEvent(ApprovalContext):

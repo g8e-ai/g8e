@@ -3,8 +3,8 @@ doc_id: gateway
 title: Gateway Architecture
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-02
-version: v2.3.0
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - internal/services/gateway/
   - internal/cli/cmd/gw/
@@ -43,12 +43,12 @@ Documents the g8e Governance Gateway (g8eg) architecture: its operational modes,
 | ID | Rule |
 | --- | --- |
 | INV-GW-01 | The Gateway runs in one of four postures: `doctrine` (L1 enforced, L2/L3 audited), `consensus` (L1/L2 enforced, L3 audited), `ratify` (L1/L3 enforced, L2 audited), `notary` (L1/L2/L3 strictly enforced). Posture is set once at `gw start` via `--posture` flag with no runtime change. |
-| INV-GW-02 | The Gateway exposes two logical protocol surfaces with distinct authentication requirements. HTTP port 8080 carries plain-text bootstrap, PKI discovery, health, and CLI recovery flows; HTTPS port 8443 carries MCP, API, console, and pub/sub traffic with optional or required client certificates per route. |
+| INV-GW-02 | The Gateway exposes two network surfaces with distinct security roles. The HTTP listener on port 8080 is a bootstrap-and-redirect surface for CA discovery, health, token-scoped enrollment/recovery, and redirecting everything else to HTTPS. The HTTPS listener on port 8443 is the authenticated application surface for console, MCP, SSE, governance, pub/sub, operator management, and web-session flows. |
 | INV-GW-03 | Every transaction dispatched to `POST /api/v1/governance/envelopes` passes through all five governance layers (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator). The Gateway owns L1-L3; the Operator substrate (in-process or remote) owns L4-L5. |
 | INV-GW-04 | The Gateway maintains a native MCP tool registry in [internal/services/mcp/native_tool_registry.go](internal/services/mcp/native_tool_registry.go) containing 32 tools across database, filesystem, network, process, system, cloud, and audit categories. All tools enforce fail-closed input validation per category (SQL, URL, path, protocol, hostname, cloud metadata). |
 | INV-GW-05 | Session types are immutable bindings: `operator_session_id` (mTLS Operator certificate), `cli_session_id` (mTLS CLI certificate), `web_session_id` (WebAuthn passkey), `sub` (JWT user ID from external IdP). A single request carries exactly one session identifier. |
 | INV-GW-06 | Launch profiles written by `gw start` to `.g8e/pids/operator-launch-profile.json` are versioned and mandatory for `gw restart`. Restart fails closed if the profile is missing, malformed, or unknown-version rather than falling back to defaults. |
-| INV-GW-07 | The Gateway's HTTP router assigns each route to one of four auth modes: public (health, PKI, bootstrap), mTLS-only (governance, operator, audit, pub/sub), web-session-only (user profile, approvals, credential management), dual (SSE accepts mTLS or web session). Auth mode mismatches are routing errors. |
+| INV-GW-07 | The Gateway route classifier in [internal/services/gateway/gateway_auth.go](internal/services/gateway/gateway_auth.go) assigns each route one of four auth policies: `RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, and `RouteAuthDual`. The HTTP and HTTPS routers rely on this registry for fail-closed auth enforcement instead of ad hoc endpoint checks. |
 
 ## Owned surfaces
 
@@ -112,18 +112,18 @@ The Gateway exposes two logical protocol surfaces:
 
 **HTTP (Plain Text, Port 8080)**
 
-Routes: health checks, bootstrap and PKI discovery, token-scoped CLI recovery, platform-enrollment request/status/complete, g8e binary download, deploy scripts, and catch-all redirect to HTTPS. No mTLS, MCP, or governed API routes.
+The `buildHTTPRouter()` listener is intentionally narrow: it exposes bootstrap and discovery endpoints, token-scoped CLI and platform-enrollment initiation, binary/deploy helpers, and a catch-all redirect to HTTPS for everything else. The HTTP port does not host the authenticated application routes; it exits early to HTTPS for console, MCP, governance, user sessions, SSE, and pub/sub traffic.
 
 **HTTPS (TLS + Application Auth, Port 8443)**
 
-Client certificates are optional at the TLS handshake (allowing public browser and bootstrap assets) but application middleware requires verified mTLS identity for governance routes. The router classifies routes into four auth modes:
+The `buildPublicRouter()` listener serves the authenticated application surface. TLS verification is `VerifyClientCertIfGiven`, and the application layer decides whether a route is public, mTLS-only, web-session-only, or dual-auth using the route registry in [internal/services/gateway/gateway_auth.go](internal/services/gateway/gateway_auth.go). The active route classifications use the canonical names `RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, and `RouteAuthDual`.
 
-| Auth Mode | Routes | Identity |
+| Auth Mode | Current code shape | Identity |
 | --- | --- | --- |
-| **Public** | Health, state, PKI discovery, landing, logout, Console SPA, browser passkey registration, bootstrap/device enrollment, token-scoped CLI recovery | None required |
-| **mTLS-only** | Data, blob, and KV stores, operator management, governance, consensus, audit, pub/sub, SSE push, PKI management, passkey CLI status, enrollment token generation, CLI rotation, CLI recovery approval via headless `approve-cli` endpoint | Client certificate verified |
-| **Web-session-only** | User profile, approvals, passkey credential management, CLI recovery approval via browser Console SPA, and the ensemble browser proxy prefixes (`/api/v1/chat`, `/api/v1/settings`, `/api/v1/cases`, `/api/v1/investigations`, `/api/v1/operator/`) | Web session cookie with active user |
-| **Dual** | SSE stream and event endpoints | Either valid client certificate or web-session cookie |
+| **RouteAuthNone** | Health, state, PKI bootstrap bundles, console SPA, passkey browser flows, enrollment/bootstrap token validation, CLI recovery discovery, platform enrollment discovery | No identity required |
+| **RouteAuthMTLS** | PKI management, governance and operator paths, audit/pubsub surfaces, observe producer routes, CLI session rotation and refresh, headless approval flows, most protected APIs | Verified client certificate |
+| **RouteAuthWebSession** | User sessions, approvals, passkey management, observe/browser-scoped reads, user profile and configuration endpoints | Valid web-session cookie |
+| **RouteAuthDual** | SSE stream, SSE events, browser-or-CLI operator surfaces such as `/api/v1/operators` and approval-enriched endpoints | Either valid client certificate or web-session cookie |
 
 The full route list and auth assignments are part of the wire contract in [protocol/docs/spec.md](../../protocol/docs/spec.md).
 
@@ -182,11 +182,12 @@ The Gateway provides zero-config ingress for agentic CLI coding tools (Claude Co
 
 Commands:
 
-- `g8e mcp agent list` — Lists supported agent binaries: Claude Code, OpenAI Codex, Devin CLI, Goose, Gemini CLI.
-- `g8e mcp agent show <agent>` — Prints MCP client configuration (g8e.local mTLS, IP address mTLS, stdio transport).
-- `g8e mcp agent run <agent> [--verify] [-- <args...>]` — Launches an agent with automatic MCP configuration and native tool disabling. The stdio proxy bridges stdio MCP transport to gateway mTLS HTTPS endpoint. Runtime verification (`--verify`, enabled by default) checks that tool-disabling configuration was written correctly; use `--verify=false` to skip for pre-validated configs. External MCP servers connect via gateway downstream egress flags (`--mcp-downstream-cmd`, `--mcp-downstream-url`).
+- `g8e mcp agent list` — Lists the supported agent binaries: Claude, Codex, Devin, Gemini, and Goose.
+- `g8e mcp agent show <agent>` — Prints the per-agent MCP client configuration for the managed Gateway setup, including the generated stdio config and mTLS transport details.
+- `g8e mcp agent run <agent> [-- <args...>] [flags]` — Launches an agent with the managed MCP configuration and native tools disabled. The stdio proxy bridges the agent to the Gateway's mTLS HTTPS endpoint. The `--verify` flag is available and defaults to `true`; use `--verify=false` to skip the preflight tool-interception check for an already validated config.
+- `g8e mcp agent verify <agent>` — Writes an isolated temp config, validates the tool-lockdown mapping, and exits without launching the agent binary.
 
-When the Gateway returns an L3 approval response, the stdio proxy auto-opens a browser, subscribes to SSE stream (`GET /api/v1/sse/stream`), waits for the `approval.completed` event (3-minute timeout; Gateway approval request TTL is 2 minutes), and re-sends the original request.
+When the Gateway returns an L3 approval response, the stdio proxy auto-opens a browser, subscribes to the SSE stream (`GET /api/v1/sse/stream`), waits for the `approval.completed` event, and re-sends the original request.
 
 ### Incremental State Tracking
 

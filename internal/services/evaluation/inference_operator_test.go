@@ -107,3 +107,44 @@ func TestSelectInferenceOperatorForHardware(t *testing.T) {
 		require.ErrorIs(t, err, constants.ErrInferenceOperatorNotFound)
 	})
 }
+
+func TestSelectInferenceOperator_BlendedDeploymentTypes(t *testing.T) {
+	for _, kind := range []constants.OperatorType{constants.OperatorTypeRemote, constants.OperatorTypeEmbedded} {
+		t.Run(string(kind), func(t *testing.T) {
+			op := models.OperatorDocumentGo{
+				ID: "blend", OperatorSessionID: "blend-session", Status: constants.OperatorStatusActive,
+				OperatorType: kind, SystemFingerprint: "blend-hardware",
+				RuntimeConfig: &models.RuntimeConfig{
+					Roles:                   constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference, constants.OperatorRoleProvenance, constants.OperatorRoleObserver},
+					InferenceOllamaEndpoint: "http://127.0.0.1:11434",
+				},
+			}
+			operators := []models.OperatorDocumentGo{op}
+			selected, err := SelectInferenceOperatorForHardware(operators, op.OperatorSessionID, op.SystemFingerprint)
+			require.NoError(t, err)
+			assert.Equal(t, op.OperatorSessionID, selected.OperatorSessionID)
+			endpoint, err := GovernedInferenceOllamaEndpoint(operators, op.OperatorSessionID)
+			require.NoError(t, err)
+			assert.Equal(t, op.RuntimeConfig.InferenceOllamaEndpoint, endpoint)
+			_, err = SelectInferenceOperatorForHardware(operators, op.OperatorSessionID, "other-hardware")
+			require.ErrorIs(t, err, constants.ErrInferenceOperatorNotCapable)
+			_, err = SelectInferenceOperator(append(operators, models.OperatorDocumentGo{
+				ID: "other", OperatorSessionID: "other-session", Status: constants.OperatorStatusActive,
+				OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{InferenceEnabled: true},
+			}), "")
+			require.ErrorIs(t, err, constants.ErrInferenceOperatorAmbiguous)
+		})
+	}
+}
+
+func TestActiveInferenceOperators_RejectsUnavailableOrIncapableSessions(t *testing.T) {
+	capable := &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleInference}}
+	operators := []models.OperatorDocumentGo{
+		{ID: "offline", OperatorSessionID: "offline", Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: capable},
+		{ID: "unknown-type", OperatorSessionID: "unknown", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorType("unknown"), RuntimeConfig: capable},
+		{ID: "missing-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: capable},
+		{ID: "missing-config", OperatorSessionID: "missing-config", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}},
+		{ID: "data", OperatorSessionID: "data", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData}}},
+	}
+	assert.Empty(t, ActiveInferenceOperators(operators))
+}

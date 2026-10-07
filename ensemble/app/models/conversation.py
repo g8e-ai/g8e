@@ -9,7 +9,7 @@ from typing import Any
 
 from app.constants import ConversationStatus
 
-from .base import G8eTimestampedModel, ConfigDict, Field
+from .base import ConfigDict, Field, G8eTimestampedModel
 
 
 class Conversation(G8eTimestampedModel):

@@ -10,7 +10,8 @@
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from app.constants import AgentMode, G8EE_COMPONENT, ReasoningAgent
+from app.constants import G8EE_COMPONENT, AgentMode, EventType, LLMProvider, ReasoningAgent
+from app.llm.factory import get_llm_settings
 from app.llm.llm_types import ThoughtSignature
 from app.models.agent import (
     AgentInputs,
@@ -18,15 +19,18 @@ from app.models.agent import (
     StreamChunkFromModel,
     TurnResult,
 )
+from app.models.base import G8eBaseModel
+from app.models.events import SessionEvent
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.settings import G8eeUserSettings, LLMSettings
-from app.services.ai.agent import g8eEnsemble
+from app.services.ai.agent import G8eEnsemble
 from app.services.ai.agent_turn import process_provider_turn
 from app.services.ai.request_builder import AIRequestBuilder
-from tests.fakes.factories import build_g8e_http_context
+from tests.fakes.factories import build_enriched_context, build_g8e_http_context
 
 
 def make_gen_config(
-    settings: G8eeUserSettings = None,
+    settings: G8eeUserSettings | None = None,
     agent_mode: AgentMode = AgentMode.G8E_NOT_BOUND,
     system_instructions: str = "You are a helpful assistant.",
 ):
@@ -37,7 +41,7 @@ def make_gen_config(
     builder = AIRequestBuilder(tool_executor=fn_handler)
     if settings is None:
         settings = G8eeUserSettings(
-            llm=LLMSettings(primary_model="test-model"),
+            llm=LLMSettings(llm_model="test-model"),
         )
     return builder.get_generation_config(
         system_instructions=system_instructions,
@@ -49,7 +53,7 @@ def make_gen_config(
 def make_agent_inputs(
     case_id: str = "case-test-001",
     investigation_id: str = "inv-test-001",
-    web_session_id: str = "web-test-001",
+    web_session_id: str | None = "web-test-001",
     user_id: str = "user-test-001",
     agent_mode: AgentMode = AgentMode.G8E_BOUND,
     sentinel_mode: bool = True,
@@ -66,8 +70,6 @@ def make_agent_inputs(
     ``run_with_sse``'s field-validation (the method now reads these from inputs
     directly rather than accepting them as separate arguments).
     """
-    from tests.fakes.factories import build_enriched_context
-
     if investigation is None:
         investigation = build_enriched_context(
             investigation_id=investigation_id,
@@ -83,20 +85,18 @@ def make_agent_inputs(
         )
 
     if request_settings is None:
-        from app.llm.factory import get_llm_settings
-
         llm_from_env = get_llm_settings()
         if llm_from_env:
             request_settings = G8eeUserSettings(llm=llm_from_env)
         else:
             request_settings = G8eeUserSettings(
                 llm=LLMSettings(
-                    primary_model="test-model",
-                    assistant_model="test-model",
-                    lite_model="test-model",
-                    assistant_provider="ollama",
-                    lite_provider="ollama",
-                    primary_provider="ollama",
+                    llm_model="test-model",
+                    llm_assistant_model="test-model",
+                    llm_lite_model="test-model",
+                    llm_assistant_provider=LLMProvider.OLLAMA,
+                    llm_lite_provider=LLMProvider.OLLAMA,
+                    llm_primary_provider=LLMProvider.OLLAMA,
                 )
             )
 
@@ -132,7 +132,7 @@ def make_agent_stream_state() -> AgentStreamState:
 def make_agent_run_args(
     case_id: str = "case-test-001",
     investigation_id: str = "inv-test-001",
-    web_session_id: str = "web-test-001",
+    web_session_id: str | None = "web-test-001",
     user_id: str = "user-test-001",
     agent_mode: AgentMode = AgentMode.G8E_BOUND,
     sentinel_mode: bool = True,
@@ -166,13 +166,13 @@ def make_agent_run_args(
 def make_g8e_agent(
     fn_handler=None,
     approval_service=None,
-) -> g8eEnsemble:
-    """Build a g8eEnsemble suitable for unit tests."""
+) -> G8eEnsemble:
+    """Build a G8eEnsemble suitable for unit tests."""
     if fn_handler is None:
         fn_handler = MagicMock()
         fn_handler._tool_declarations = {}
 
-    return g8eEnsemble(
+    return G8eEnsemble(
         tool_executor=fn_handler,
         approval_service=approval_service,
     )
@@ -182,7 +182,7 @@ def make_provider_chunk(
     *,
     thought: bool = False,
     text: str = "",
-    thought_signature: ThoughtSignature = None,
+    thought_signature: ThoughtSignature | None = None,
     tool_calls: list | None = None,
     finish_reason: str | None = None,
 ) -> MagicMock:
@@ -192,7 +192,6 @@ def make_provider_chunk(
     chunk.text = text
     chunk.thought_signature = thought_signature
     chunk.tool_calls = tool_calls or []
-    chunk.usage_metadata
     chunk.finish_reason = finish_reason
     return chunk
 
@@ -230,7 +229,7 @@ class FakeMultiTurnStreamProvider:
         return _gen()
 
 
-def patch_stream_response(agent: g8eEnsemble, chunks: list[StreamChunkFromModel]) -> None:
+def patch_stream_response(agent: G8eEnsemble, chunks: list[StreamChunkFromModel]) -> None:
     """Replace agent.stream_response with an async generator that yields chunks."""
 
     async def _fake_stream(*args, **kwargs):
@@ -241,53 +240,50 @@ def patch_stream_response(agent: g8eEnsemble, chunks: list[StreamChunkFromModel]
 
 
 async def collect_stream_from_model_chunks(
-    agent: g8eEnsemble,
+    agent: G8eEnsemble,
     inputs: AgentInputs,
     event_service: Any = None,
     llm_provider: Any = None,
 ) -> list[StreamChunkFromModel]:
     """Consume agent._stream_with_tool_loop and return all yielded chunks."""
     if inputs.generation_config is None:
-        inputs.generation_config = make_gen_config(
-            agent_mode=inputs.agent_mode or AgentMode.G8E_NOT_BOUND
+        agent_mode = (
+            inputs.agent_mode if isinstance(inputs.agent_mode, AgentMode) else AgentMode.G8E_NOT_BOUND
         )
+        inputs.generation_config = make_gen_config(agent_mode=agent_mode)
     if inputs.model_to_use is None:
         inputs.model_to_use = "test-model"
-    chunks: list[StreamChunkFromModel] = []
-    async for chunk in agent._stream_with_tool_loop(
-        inputs=inputs,
-        event_service=event_service or make_event_service(),
-        llm_provider=llm_provider,
-    ):
-        chunks.append(chunk)
-    return chunks
+    return [
+        chunk
+        async for chunk in agent._stream_with_tool_loop(
+            inputs=inputs,
+            event_service=event_service or make_event_service(),
+            llm_provider=llm_provider,
+        )
+    ]
 
 
 def make_event_service():
     """Build a mock EventService for client SSE publishing."""
-    from app.models.events import SessionEvent
-
     svc = MagicMock()
-    published_events = []
+    published_events: list[SessionEvent] = []
 
-    async def capture_publish(event):
+    async def capture_publish(event: SessionEvent) -> str:
         """Capture the published event for test inspection."""
         published_events.append(event)
         return "success"
 
     async def capture_publish_investigation_event(
         investigation_id: str,
-        event_type: str,
-        payload: dict | object,
+        event_type: EventType,
+        payload: G8eBaseModel,
         web_session_id: str | None,
         case_id: str,
         user_id: str,
         *,
         cli_session_id: str | None = None,
-    ):
+    ) -> str:
         """Capture investigation event calls and create proper SessionEvent."""
-        from app.models.http_context import RequestContext
-
         ctx = RequestContext(
             web_session_id=web_session_id,
             cli_session_id=cli_session_id,
@@ -306,7 +302,9 @@ def make_event_service():
     svc.publish = AsyncMock(side_effect=capture_publish)
     svc.publish_investigation_event = AsyncMock(side_effect=capture_publish_investigation_event)
 
-    async def capture_publish_reputation(event_type, data, g8e_context):
+    async def capture_publish_reputation(
+        event_type: EventType, data: G8eBaseModel, g8e_context: G8eHttpContext
+    ) -> str:
         """Capture reputation event calls and create proper SessionEvent."""
         session_event = SessionEvent.from_context(
             context=g8e_context,
@@ -326,7 +324,6 @@ def make_event_service():
 
 async def run_process_provider_turn(
     provider_chunks: list,
-    model_name: str = "test-model",
 ) -> tuple[list[StreamChunkFromModel], list]:
     """Drive process_provider_turn with the given provider chunks."""
 
@@ -335,8 +332,8 @@ async def run_process_provider_turn(
             yield c
 
     result_out: list[TurnResult] = []
-    stream_chunks: list[StreamChunkFromModel] = []
-    async for chunk in process_provider_turn(_gen(), model_name, result_out):
-        stream_chunks.append(chunk)
+    stream_chunks: list[StreamChunkFromModel] = [
+        chunk async for chunk in process_provider_turn(_gen(), result_out)
+    ]
 
     return stream_chunks, result_out[0].model_response_parts

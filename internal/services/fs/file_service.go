@@ -309,6 +309,12 @@ func (fs *localFS) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, 
 		}
 	}
 	absPath := fs.Resolve(relPath)
+	// Windows reports ERROR_PATH_NOT_FOUND when ReadDir targets a regular file.
+	// Distinguish that from a missing directory before mapping the read error.
+	info, statErr := os.Stat(absPath)
+	if statErr == nil && !info.IsDir() {
+		return nil, fmt.Errorf("%w: %s is not a directory", constants.ErrDirectoryRead, absPath)
+	}
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {

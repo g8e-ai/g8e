@@ -19,16 +19,17 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import httpx
-from google.protobuf.message import DecodeError
-
-from app.constants import EventType, LLMProvider
-from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
-from app.models.http_context import G8eHttpContext
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
     OllamaModelInventoryRequested,
     OllamaModelInventoryResult,
 )
+from google.protobuf.message import DecodeError
+
+from app.constants import EventType, LLMProvider, OperatorRole
+from app.errors import ExternalServiceError, ServiceUnavailableError, ValidationError
+from app.models.http_context import G8eHttpContext
+from app.utils.gateway_decoding.gateway_operator_document import operator_document_from_gateway
 
 if TYPE_CHECKING:
     from app.clients.gateway_operator_client import GatewayOperatorClient
@@ -75,17 +76,33 @@ def parse_models(provider: LLMProvider, body: Any) -> list[str]:
     names: list[str] = []
     if isinstance(body, dict):
         if provider is LLMProvider.OLLAMA:
-            names = [m.get("name") for m in body.get("models") or [] if isinstance(m, dict)]
+            names = _string_field_values(body.get("models"), "name")
         elif provider is LLMProvider.GEMINI:
-            names = [
-                str(m.get("name", "")).removeprefix("models/")
-                for m in body.get("models") or []
-                if isinstance(m, dict)
-                and "generateContent" in (m.get("supportedGenerationMethods") or [])
-            ]
+            models = body.get("models")
+            if isinstance(models, list):
+                for model in models:
+                    if not isinstance(model, dict):
+                        continue
+                    methods = model.get("supportedGenerationMethods")
+                    if isinstance(methods, list) and "generateContent" in methods:
+                        name = model.get("name")
+                        if isinstance(name, str):
+                            names.append(name.removeprefix("models/"))
         else:
-            names = [m.get("id") for m in body.get("data") or [] if isinstance(m, dict)]
-    return sorted({n for n in names if isinstance(n, str) and n})
+            names = _string_field_values(body.get("data"), "id")
+    return sorted({name for name in names if name})
+
+
+def _string_field_values(items: object, field: str) -> list[str]:
+    if not isinstance(items, list):
+        return []
+    values: list[str] = []
+    for item in items:
+        if isinstance(item, dict):
+            value = item.get(field)
+            if isinstance(value, str):
+                values.append(value)
+    return values
 
 
 async def list_models(
@@ -130,21 +147,18 @@ async def inference_operator_session_id(
     The browser cannot supply an endpoint for governed inference, so the target
     comes from the Gateway's owner-scoped registry.
     """
-    operators = await operator_client.list(user_id=user_id or "")
-    inference_operators = [
-        op for op in operators
-        if isinstance(op, dict)
-        and op.get("status") == "active"
-        and op.get("operator_type") == "remote"
-        and op.get("operator_session_id")
-        and isinstance(op.get("runtime_config"), dict)
-        and op["runtime_config"].get("inference_enabled") is True
+    operators = [
+        operator_document_from_gateway(op)
+        for op in await operator_client.list(user_id=user_id or "")
     ]
+    inference_operators = [op for op in operators if op.has_active_role(OperatorRole.INFERENCE)]
     if not inference_operators:
         raise ServiceUnavailableError("No active Inference Operator is available to list models")
     if len(inference_operators) != 1:
-        raise ServiceUnavailableError("Multiple Inference Operators are active; model source is ambiguous")
-    return str(inference_operators[0]["operator_session_id"])
+        raise ServiceUnavailableError(
+            "Multiple Inference Operators are active; model source is ambiguous"
+        )
+    return str(inference_operators[0].operator_session_id)
 
 
 async def request_governed_inventory(
@@ -167,7 +181,9 @@ async def request_governed_inventory(
         payload = base64.b64decode(response["result_payload"], validate=True)
         result = OllamaModelInventoryResult.FromString(payload)
     except (ValueError, TypeError, DecodeError) as exc:
-        raise ServiceUnavailableError("The Inference Operator returned an invalid model inventory") from exc
+        raise ServiceUnavailableError(
+            "The Inference Operator returned an invalid model inventory"
+        ) from exc
     if result.status != EXECUTION_STATUS_COMPLETED:
         raise ServiceUnavailableError("The Inference Operator could not list models")
     return result

@@ -13,8 +13,8 @@ import pytest
 
 from app.constants import OperatorStatus
 from app.errors import ValidationError
-from app.models.sessions import CliSessionDocument
 from app.models.operators import OperatorDocument
+from app.models.sessions import CliSessionDocument
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import OperatorDataServiceProtocol
 
@@ -41,6 +41,7 @@ class TestOperatorDataService:
                 {
                     "id": operator_id,
                     "user_id": "user-test",
+                    "operator_type": "remote",
                     "status": OperatorStatus.ACTIVE,
                     "bound_web_session_id": None,
                 }
@@ -60,6 +61,7 @@ class TestOperatorDataService:
             return_value={
                 "id": "op-123",
                 "user_id": "user-test",
+                "operator_type": "remote",
                 "status": OperatorStatus.ACTIVE,
                 "operator_session_id": "sess-123",
             }
@@ -90,6 +92,7 @@ class TestOperatorDataService:
             "id": cli_session_id,
             "session_type": "cli",
             "user_id": "user-test",
+            "operator_type": "remote",
             "operator_session_id": "op-sess-123",
             "absolute_expires_at": "2026-05-17T00:00:00Z",
             "idle_expires_at": "2026-05-17T00:00:00Z",
@@ -110,6 +113,7 @@ class TestOperatorDataService:
             "id": cli_session_id,
             "session_type": "cli",
             "user_id": "user-test",
+            "operator_type": "remote",
             "operator_session_id": operator_session_id,
             "absolute_expires_at": "2026-05-17T00:00:00Z",
             "idle_expires_at": "2026-05-17T00:00:00Z",
@@ -125,6 +129,7 @@ class TestOperatorDataService:
             "id": cli_session_id,
             "session_type": "cli",
             "user_id": "user-test",
+            "operator_type": "remote",
             "operator_session_id": "op-sess-correct",
             "absolute_expires_at": "2026-05-17T00:00:00Z",
             "idle_expires_at": "2026-05-17T00:00:00Z",
@@ -136,8 +141,8 @@ class TestOperatorDataService:
     async def test_query_operators_lists_from_gateway(self, service, mock_gateway_client):
         mock_gateway_client.list = AsyncMock(
             return_value=[
-                {"id": "op-1", "user_id": "user-test", "status": OperatorStatus.ACTIVE},
-                {"id": "op-2", "user_id": "user-test", "status": OperatorStatus.BOUND},
+                {"id": "op-1", "user_id": "user-test", "operator_type": "remote", "status": OperatorStatus.ACTIVE},
+                {"id": "op-2", "user_id": "user-test", "operator_type": "remote", "status": OperatorStatus.BOUND},
             ]
         )
 

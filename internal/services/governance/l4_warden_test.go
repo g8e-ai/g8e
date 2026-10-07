@@ -266,24 +266,26 @@ func TestL4Warden_EventActionMismatchRejected(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrTxEventActionMismatch)
 }
 
-// TestNewGovernancePosture_PanicsOnInvalidPosture verifies that invalid posture
-// strings cause a panic at startup rather than silently defaulting.
-func TestNewGovernancePosture_PanicsOnInvalidPosture(t *testing.T) {
+// TestNewGovernancePosture_ErrorsOnInvalidPosture verifies that invalid posture
+// strings return an error wrapping constants.ErrInvalidPosture rather than
+// panicking or silently defaulting (INV-CODE-06, INV-ERR-01).
+func TestNewGovernancePosture_ErrorsOnInvalidPosture(t *testing.T) {
 	t.Parallel()
-	assert.Panics(t, func() {
-		NewGovernancePosture("invalid-posture")
-	})
+	_, err := NewGovernancePosture("invalid-posture")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidPosture)
 }
 
 // TestNewGovernancePosture_AcceptsValidPostures verifies that all valid posture
-// strings are accepted without panicking.
+// strings are accepted and return no error.
 func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
 	t.Parallel()
 	validPostures := []string{constants.PostureDoctrine, constants.PostureConsensus, constants.PostureRatify, constants.PostureNotary}
 	for _, posture := range validPostures {
 		t.Run(posture, func(t *testing.T) {
 			t.Parallel()
-			p := NewGovernancePosture(posture)
+			p, err := NewGovernancePosture(posture)
+			require.NoError(t, err)
 			assert.NotNil(t, p)
 			assert.Equal(t, posture, p.Name())
 		})

@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -31,9 +32,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-
-	// ─── buildGatewayConn error paths ────────────────────────────────────────────
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
 )
 
 func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
@@ -148,13 +146,31 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 	})
 }
 
+func TestLaunchAgentWithGovernance_UnknownAgentReturnsBeforeEnrollment(t *testing.T) {
+	cmdtest.ChdirTemp(t)
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(constants.PidDirname, constants.OperatorPIDFilename), []byte(strconv.Itoa(os.Getpid())), constants.PermFilePrivate))
+
+	originalLoad := shared.ConfigLoad
+	shared.ConfigLoad = func(string) (*config.Config, error) {
+		return cfg, nil
+	}
+	t.Cleanup(func() { shared.ConfigLoad = originalLoad })
+
+	err := launchAgentWithGovernance("unknown-agent-xyz", nil, false, "", cmdtest.FileSvcFactoryFor(fileSvc), authcmd.PanickingEnrollerFactory())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrAgentNotFound)
+	assert.NotContains(t, err.Error(), "enrollerFactory should not be called on this code path")
+}
+
 // ─── proxySessionToGateway connection refused ────────────────────────────────
 
 func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 	t.Run("returns error when gateway is unreachable", func(t *testing.T) {
 		session := &gatewayConn{
-			client:     &http.Client{Timeout: 1 * time.Second},
-			gatewayURL: "http://127.0.0.1:1/mcp", // port 1 should refuse connections
+			openBrowser: func(string) error { return nil },
+			client:      &http.Client{Timeout: 1 * time.Second},
+			gatewayURL:  "http://127.0.0.1:1/mcp", // port 1 should refuse connections
 		}
 
 		req := JSONRPCRequest{
@@ -166,36 +182,6 @@ func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 		_, err := proxySessionToGateway(session, req)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mcp: execute request")
-	})
-}
-
-// ─── agent_harness.go error paths ────────────────────────────────────────────
-
-func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
-	t.Run("returns error when config file does not exist", func(t *testing.T) {
-		cmdtest.ChdirTemp(t)
-
-		// Reset harness flags to known state
-		demos.HarnessConfigPath = filepath.Join(testutil.TempDir(t), "nonexistent-config.json")
-		demos.HarnessMTLSURL = ""
-		demos.HarnessPublicURL = ""
-		demos.HarnessCert = ""
-		demos.HarnessKey = ""
-		demos.HarnessCA = ""
-		demos.HarnessAPIKey = ""
-		demos.HarnessSessionID = ""
-		demos.HarnessOutDir = ""
-		demos.HarnessVerbose = false
-		demos.HarnessPhase = "all"
-
-		cmd := &cobra.Command{}
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := demos.RunAgentHarness(cmd, []string{})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "scenarios run: load config")
 	})
 }
 

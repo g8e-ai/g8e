@@ -16,39 +16,71 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-// ResolveOperatorRole determines the primary operational role from runtime configuration.
-// Inference, provenance, observer, and data operators are separated by their role and
-// responsibilities triggered by the startup flags.
-func ResolveOperatorRole(cfg *models.RuntimeConfig) constants.OperatorRole {
+// ResolveOperatorRoles returns every enabled role. Ordinary operators default to Data.
+func ResolveOperatorRoles(cfg *models.RuntimeConfig) constants.OperatorRoles {
 	if cfg == nil {
-		return constants.OperatorRoleData
+		return constants.OperatorRoles{constants.OperatorRoleData}
 	}
-	if cfg.Role != "" {
-		return cfg.Role
-	}
+	roles := append(constants.OperatorRoles{}, cfg.Roles...)
 	if cfg.InferenceEnabled {
-		return constants.OperatorRoleInference
+		roles = append(roles, constants.OperatorRoleInference)
 	}
 	if cfg.ProvenanceOperatorEnabled {
-		return constants.OperatorRoleProvenance
+		roles = append(roles, constants.OperatorRoleProvenance)
 	}
 	if cfg.ProviderBoundaryObserverEnabled {
-		return constants.OperatorRoleObserver
+		roles = append(roles, constants.OperatorRoleObserver)
 	}
-	return constants.OperatorRoleData
+	if len(roles) == 0 {
+		roles = append(roles, constants.OperatorRoleData)
+	}
+	return roles.Canonical()
 }
 
-// GetOperatorRole returns the operational role of an operator document.
-func GetOperatorRole(op models.OperatorDocumentGo) constants.OperatorRole {
-	if op.OperatorRole != "" {
-		return op.OperatorRole
+// GetOperatorRoles resolves runtime capabilities; stored role metadata is used only without runtime configuration.
+func GetOperatorRoles(op models.OperatorDocumentGo) constants.OperatorRoles {
+	var roles constants.OperatorRoles
+	if op.RuntimeConfig != nil {
+		roles = ResolveOperatorRoles(op.RuntimeConfig)
+	} else if len(op.OperatorRoles) > 0 {
+		roles = op.OperatorRoles.Canonical()
+	} else {
+		roles = constants.OperatorRoles{constants.OperatorRoleData}
 	}
-	return ResolveOperatorRole(op.RuntimeConfig)
+	if op.OperatorType == constants.OperatorTypeEmbedded {
+		roles = append(roles, constants.OperatorRoleEmbedded).Canonical()
+	}
+	return roles
+}
+
+// IsActiveOperatorSession reports whether op is a live, session-bound Operator
+// that may serve governed work: an active remote Operator, or an active
+// embedded Operator that has reported its runtime configuration.
+func IsActiveOperatorSession(op models.OperatorDocumentGo) bool {
+	if op.Status != constants.OperatorStatusActive || op.OperatorSessionID == "" {
+		return false
+	}
+	switch op.OperatorType {
+	case constants.OperatorTypeRemote:
+		return true
+	case constants.OperatorTypeEmbedded:
+		return op.RuntimeConfig != nil
+	default:
+		return false
+	}
+}
+
+// HasActiveRole reports whether op is an active Operator session whose
+// resolved roles include role.
+func HasActiveRole(op models.OperatorDocumentGo, role constants.OperatorRole) bool {
+	return IsActiveOperatorSession(op) && GetOperatorRoles(op).Has(role)
 }
 
 // RoleResponsibilities returns a human-readable summary of the role's responsibilities.
 func RoleResponsibilities(role constants.OperatorRole) string {
 	switch role {
+	case constants.OperatorRoleEmbedded:
+		return "Gateway in-process operator substrate"
 	case constants.OperatorRoleInference:
 		return "Governed model inference backend (g8ellama), model registry and lifecycle management"
 	case constants.OperatorRoleProvenance:
@@ -64,13 +96,13 @@ func RoleResponsibilities(role constants.OperatorRole) string {
 
 // ValidateOperatorRoleCapabilities verifies that an operator document possesses the required role.
 func ValidateOperatorRoleCapabilities(op models.OperatorDocumentGo, requiredRole constants.OperatorRole) error {
-	actualRole := GetOperatorRole(op)
-	if actualRole != requiredRole {
+	actualRole := GetOperatorRoles(op)
+	if !actualRole.Has(requiredRole) {
 		return fmt.Errorf("%w: operator %s has role %q (%s), but required role is %q (%s)",
 			constants.ErrWitnessCommandNotCapable,
 			op.ID,
 			actualRole,
-			RoleResponsibilities(actualRole),
+			actualRole.String(),
 			requiredRole,
 			RoleResponsibilities(requiredRole),
 		)
@@ -87,9 +119,9 @@ func VerifyOperatorSeparation(op1, op2 models.OperatorDocumentGo) (bool, string)
 		return false, fmt.Sprintf("colliding operator ID: %s", op1.ID)
 	}
 
-	role1 := GetOperatorRole(op1)
-	role2 := GetOperatorRole(op2)
-	if role1 != role2 {
+	role1 := GetOperatorRoles(op1)
+	role2 := GetOperatorRoles(op2)
+	if role1.String() != role2.String() {
 		return true, fmt.Sprintf("separated by role: %s vs %s", role1, role2)
 	}
 

@@ -27,7 +27,6 @@ from app.services.observe.identity import (
     routing_target,
 )
 
-
 pytestmark = pytest.mark.unit
 
 

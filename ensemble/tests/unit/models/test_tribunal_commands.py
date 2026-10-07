@@ -5,19 +5,20 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
 
-from app.constants import CommandGenerationOutcome, AuditorReason, ConsensusMember
+from app.constants import AuditorReason, CommandGenerationOutcome, ConsensusMember
 from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
 from app.models.tribunal_commands import (
     TribunalCommand,
-    TribunalCommandRequestContext,
-    TribunalCommandGenerationResult,
     TribunalCommandAuditor,
-    TribunalCommandPipelineMetadata,
     TribunalCommandErrorContext,
+    TribunalCommandGenerationResult,
+    TribunalCommandPipelineMetadata,
+    TribunalCommandRequestContext,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -130,6 +131,7 @@ class TestTribunalCommandModels:
         assert cmd.case_id == "case-123"
         assert cmd.request_context.request == "test"
         assert len(cmd.candidates) == 1
+        assert cmd.vote_breakdown is not None
         assert cmd.vote_breakdown.winner == "echo hello"
 
         # Test serialization
@@ -147,13 +149,15 @@ class TestTribunalCommandModels:
     def test_tribunal_command_validation_error(self):
         with pytest.raises(ValidationError):
             # Missing required investigation_id
-            TribunalCommand(
-                case_id="case-123",
-                created_at=datetime.now(UTC),
-                request_context=TribunalCommandRequestContext(request="test"),
-                generation_result=TribunalCommandGenerationResult(
-                    outcome=CommandGenerationOutcome.CONSENSUS
-                ),
+            TribunalCommand.model_validate(
+                {
+                    "case_id": "case-123",
+                    "created_at": datetime.now(UTC),
+                    "request_context": TribunalCommandRequestContext(request="test"),
+                    "generation_result": TribunalCommandGenerationResult(
+                        outcome=CommandGenerationOutcome.CONSENSUS
+                    ),
+                }
             )
 
     def test_tribunal_command_error_state(self):
@@ -172,5 +176,6 @@ class TestTribunalCommandModels:
             ),
         )
         assert cmd.generation_result.outcome == CommandGenerationOutcome.CONSENSUS_FAILED
+        assert cmd.error_context is not None
         assert cmd.error_context.error_type == "ConsensusFailed"
         assert len(cmd.error_context.pass_errors) == 2

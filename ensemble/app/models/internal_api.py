@@ -7,26 +7,32 @@
 
 from typing import Literal
 
-from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
 from g8e.models.internal_api import ChatStartedResponse as _G8eChatStartedResponse
+from g8e.models.internal_api import EvaluationInferenceContext
 from g8e.models.internal_api import EvaluationTraceResponse as _G8eEvaluationTraceResponse
-from g8e.models.internal_api import ChatMessageRequest as _G8eChatMessageRequest
+from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
 from g8e.models.observe_api import (
     ObserveProducerAgentStateRequest as _G8eObserveProducerAgentStateRequest,
-    ObserveProducerRunStateRequest as _G8eObserveProducerRunStateRequest,
+)
+from g8e.models.observe_api import (
     ObserveProducerResponse as _G8eObserveProducerResponse,
+)
+from g8e.models.observe_api import (
+    ObserveProducerRunStateRequest as _G8eObserveProducerRunStateRequest,
 )
 from g8e.operator.v1.operator_pb2 import (
     InferenceDispatchRequest as _G8eInferenceDispatchRequest,
+)
+from g8e.operator.v1.operator_pb2 import (
     InferenceDispatchResponse as _G8eInferenceDispatchResponse,
 )
 
-from app.constants import LLMProvider
+from app.constants import LLMProvider, OperatorType
 from app.models.attachments import AttachmentMetadata
 from app.models.base import ConfigDict, Field, G8eBaseModel, model_validator
 from app.models.cases import CaseModel
-from app.models.operators import PendingApproval
 from app.models.http_context import RequestContext
+from app.models.operators import PendingApproval
 
 ResourceCreationRequest = _G8eResourceCreationRequest
 
@@ -162,19 +168,16 @@ class LLMModelListResponse(G8eBaseModel):
     models: list[str]
 
 
-class ChatMessageRequest(_G8eChatMessageRequest, RequestOverrides):
-    """g8ee-specific ChatMessageRequest extending the protocol base.
-
-    Subclasses g8e's ChatMessageRequest (which provides context, message,
-    attachments, sentinel_mode, resource_creation, and LLM override fields)
-    and RequestOverrides (which adds web_search override fields).
-
-    Overrides attachments to use typed AttachmentMetadata list.
-    """
+class ChatMessageRequest(RequestOverrides):
+    """g8ee chat request with typed attachments and web-search overrides."""
 
     context: RequestContext = Field(
         ..., description="Request context with session/case/investigation identity"
     )
+    evaluation_context: EvaluationInferenceContext | None = Field(default=None)
+    message: str = Field(...)
+    sentinel_mode: bool = Field(default=True)
+    resource_creation: _G8eResourceCreationRequest | None = Field(default=None)
     attachments: list[AttachmentMetadata] | None = Field(
         default_factory=list, description="File attachments"
     )
@@ -261,7 +264,7 @@ class OperatorSlotCreationRequest(G8eBaseModel):
         ..., description="Request context with session/user/organization identity"
     )
     slot_number: int = Field(..., description="Slot number")
-    operator_type: str = Field(..., description="Operator type (EMBEDDED, REMOTE)")
+    operator_type: OperatorType = Field(..., description="Operator type (EMBEDDED, REMOTE)")
     name_prefix: str = Field(default="operator", description="Name prefix")
 
 
@@ -291,7 +294,7 @@ class OperatorSlotClaimRequest(G8eBaseModel):
     operator_session_id: str = Field(..., description="Operator session ID")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     bound_cli_session_id: str | None = Field(default=None, description="Bound CLI session ID")
-    operator_type: str = Field(..., description="Operator type")
+    operator_type: OperatorType = Field(..., description="Operator type")
 
 
 class OperatorSlotClaimResponse(G8eBaseModel):
@@ -438,7 +441,7 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     operator_id: str | None = Field(
         default=None, description="Operator ID (optional if creating on-demand)"
     )
-    operator_type: str = Field(default="REMOTE", description="Operator type")
+    operator_type: OperatorType = Field(default=OperatorType.REMOTE, description="Operator type")
     device_link_token: str | None = Field(
         default=None, description="Device link token for on-demand slot creation"
     )

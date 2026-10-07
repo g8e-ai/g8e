@@ -12,7 +12,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -57,7 +56,7 @@ func TestNewNativeToolHandler(t *testing.T) {
 
 	t.Run("with logger", func(t *testing.T) {
 		t.Parallel()
-		logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+		logger := slog.New(slog.DiscardHandler)
 		handler, err := NewNativeToolHandler(logger)
 		require.NoError(t, err)
 		require.NotNil(t, handler)
@@ -121,7 +120,7 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 	t.Run("logging verification", func(t *testing.T) {
 		t.Parallel()
 		// We use io.Discard but ensure it doesn't panic
-		logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+		logger := slog.New(slog.DiscardHandler)
 		registry := NewToolRegistry()
 		mockTool := &mockNativeTool{
 			name:   "log_tool",

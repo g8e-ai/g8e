@@ -12,9 +12,9 @@ from typing import Literal
 
 from g8e.models.internal_api import EvaluationInferenceContext
 
+from app.constants import TriageComplexityClassification
 from app.models.base import Field, G8eBaseModel, model_validator
 from app.models.model_telemetry import ModelCallTelemetry
-from app.constants import TriageComplexityClassification
 
 
 class ToolGate(StrEnum):

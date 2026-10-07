@@ -14,10 +14,10 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// VerifyProviderReady performs the read-only startup readiness check against
+// VerifyProviderReady performs an explicit read-only readiness check against
 // the configured remote inference provider. It queries Backend.Status and
 // verifies the provider is reachable and answers with a well-formed status.
-// It never mutates the provider: no pulls, creates, renames, or deletes. The
+// It does not gate Operator startup. It never mutates the provider: no pulls, creates, renames, or deletes. The
 // Operator configures no models, so there is none to verify here: each
 // request's model is the user's choice and a model the provider lacks fails
 // that request with ErrInferenceModelNotFound. It fails closed with centralized

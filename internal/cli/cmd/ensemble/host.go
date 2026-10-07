@@ -21,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/identityreset"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -132,11 +133,21 @@ func hostLifecycleCmd(name, short string) *cobra.Command {
 }
 
 func localPython() (string, error) {
-	if venv := os.Getenv("VIRTUAL_ENV"); venv != "" {
+	if venv := os.Getenv(string(constants.EnvVar.VirtualEnv)); venv != "" {
+		for _, rel := range []string{filepath.Join("bin", "python"), filepath.Join("Scripts", "python.exe"), filepath.Join("Scripts", "python"), filepath.Join("bin", "python.exe")} {
+			if p, err := exec.LookPath(filepath.Join(venv, rel)); err == nil {
+				return p, nil
+			}
+		}
 		return exec.LookPath(filepath.Join(venv, "bin", "python"))
 	}
-	if _, err := os.Stat(".venv/bin/python"); err == nil {
-		return filepath.Abs(".venv/bin/python")
+	for _, cand := range []string{".venv/bin/python", ".venv/Scripts/python.exe", ".venv/Scripts/python"} {
+		if _, err := os.Stat(cand); err == nil {
+			return filepath.Abs(cand)
+		}
 	}
-	return exec.LookPath("python3")
+	if p, err := exec.LookPath("python3"); err == nil {
+		return p, nil
+	}
+	return exec.LookPath("python")
 }

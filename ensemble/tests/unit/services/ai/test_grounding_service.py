@@ -14,6 +14,7 @@ Pure logic methods (no external dependencies):
 
 import pytest
 
+from app.constants.config import GroundingSource
 from app.llm.llm_types import (
     SdkGroundingChunk,
     SdkGroundingRawData,
@@ -47,7 +48,7 @@ def _make_raw(
     queries: list[str],
     chunks: list[SdkGroundingChunk],
     supports: list[SdkGroundingSupport],
-    entry_point: SdkSearchEntryPoint,
+    entry_point: SdkSearchEntryPoint | None,
 ) -> SdkGroundingRawData:
     return SdkGroundingRawData(
         web_search_queries=queries or [],
@@ -85,7 +86,6 @@ class TestExtractProviderGrounding:
 
     def test_source_is_provider_native(self, service):
         """Provider grounding always sets source=PROVIDER_NATIVE."""
-        from app.constants.config import GroundingSource
 
         raw = _make_raw(
             queries=["query"],

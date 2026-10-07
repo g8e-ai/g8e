@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"io"
 	"log/slog"
 	"math/big"
 	"net/url"
@@ -409,7 +408,7 @@ func newEnrollTestEnv(t *testing.T) *enrollTestEnv {
 		OperatorSessions: env.opSession,
 		Connections:      env.conns,
 		Posture:          "consensus",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, slog.New(slog.DiscardHandler))
 	return env
 }
 

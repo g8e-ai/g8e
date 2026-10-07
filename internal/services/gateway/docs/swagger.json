@@ -276,6 +276,12 @@
                     },
                     {
                         "type": "string",
+                        "description": "Acting app identity filter",
+                        "name": "acting_app_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "description": "Operator session filter for list results",
                         "name": "operator_session_id",
                         "in": "query"
@@ -348,6 +354,12 @@
                         "type": "string",
                         "description": "Inclusive receipt timestamp in RFC3339 format",
                         "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Acting app identity filter",
+                        "name": "acting_app_id",
                         "in": "query"
                     },
                     {
@@ -840,7 +852,7 @@
                         }
                     },
                     "422": {
-                        "description": "Unprocessable Entity — target operator session is not inference-capable",
+                        "description": "Unprocessable Entity — context overflow, unsupported tools, or target operator session is not inference-capable",
                         "schema": {
                             "type": "string"
                         }
@@ -2418,6 +2430,7 @@
                 "g8e.v1.app.task.failed",
                 "g8e.v1.app.task.started",
                 "g8e.v1.app.task.updated",
+                "g8e.v1.inference.model.provenance.preflight.updated",
                 "g8e.v1.operator.a2a.call.requested",
                 "g8e.v1.operator.audit.ai.record.requested",
                 "g8e.v1.operator.audit.ai.recorded",
@@ -2763,6 +2776,7 @@
                 "EventAppTaskFailed",
                 "EventAppTaskStarted",
                 "EventAppTaskUpdated",
+                "EventModelProvenancePreflightProgress",
                 "EventOperatorA2aCallRequested",
                 "EventOperatorAuditAiRecordRequested",
                 "EventOperatorAuditAiRecorded",
@@ -5341,7 +5355,8 @@
                 16,
                 17,
                 18,
-                19
+                19,
+                20
             ],
             "x-enum-varnames": [
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED",
@@ -5363,7 +5378,8 @@
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID",
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID",
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID",
-                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED"
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW"
             ]
         },
         "operatorv1.ReceiptPersistenceAttestation": {

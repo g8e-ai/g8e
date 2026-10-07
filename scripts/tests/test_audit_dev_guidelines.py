@@ -158,9 +158,14 @@ func TestBehavior(t *testing.T) {
         self.write(
             "internal/example.go", 'package example\nfunc execute() { panic("bad") }'
         )
-        (self.root / "linked").symlink_to(
-            self.root / "internal", target_is_directory=True
-        )
+        try:
+            (self.root / "linked").symlink_to(
+                self.root / "internal", target_is_directory=True
+            )
+        except OSError:
+            # Unprivileged Windows environments cannot create symlinks. The
+            # same assertion still covers every directory-pruning case above.
+            pass
         self.assertEqual(
             [f.path for f in self.findings() if f.rule == "panic-production"],
             ["internal/example.go"],

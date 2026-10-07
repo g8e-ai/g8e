@@ -20,6 +20,7 @@ from unittest import mock
 import pytest
 from google.api_core.exceptions import InvalidArgument, ServiceUnavailable
 
+from app.constants.config import GroundingSource
 from app.errors import NetworkError
 from app.models.grounding import (
     GroundingChunk,
@@ -27,6 +28,7 @@ from app.models.grounding import (
     GroundingSegment,
     GroundingSupport,
 )
+from app.models.tool_results import SearchWebResult, WebSearchResultItem
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 
 pytestmark = [pytest.mark.unit]
@@ -202,9 +204,11 @@ class TestWebSearchProviderRetry:
                 raise TimeoutError
             return pager
 
-        with mock.patch.object(provider, "_execute_search_lite", side_effect=exec_side_effect):
-            with mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()):
-                result = await provider.search("query")
+        with (
+            mock.patch.object(provider, "_execute_search_lite", side_effect=exec_side_effect),
+            mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()),
+        ):
+            result = await provider.search("query")
 
         assert result.success is True
         assert call_count == 2
@@ -224,9 +228,11 @@ class TestWebSearchProviderRetry:
                 raise retryable_error
             return pager
 
-        with mock.patch.object(provider, "_execute_search_lite", side_effect=exec_side_effect):
-            with mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()):
-                result = await provider.search("query")
+        with (
+            mock.patch.object(provider, "_execute_search_lite", side_effect=exec_side_effect),
+            mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()),
+        ):
+            result = await provider.search("query")
 
         assert result.success is True
         assert call_count == 2
@@ -236,17 +242,21 @@ class TestWebSearchProviderRetry:
         provider = _make_provider()
         non_retryable = InvalidArgument("bad request")
 
-        with mock.patch.object(provider, "_execute_search_lite", side_effect=non_retryable):
-            with pytest.raises(NetworkError):
-                await provider.search("query")
+        with (
+            mock.patch.object(provider, "_execute_search_lite", side_effect=non_retryable),
+            pytest.raises(NetworkError),
+        ):
+            await provider.search("query")
 
     @pytest.mark.asyncio
     async def test_returns_error_result_after_all_retries_exhausted(self):
         provider = _make_provider()
 
-        with mock.patch.object(provider, "_execute_search_lite", side_effect=TimeoutError()):
-            with mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()):
-                result = await provider.search("query")
+        with (
+            mock.patch.object(provider, "_execute_search_lite", side_effect=TimeoutError()),
+            mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()),
+        ):
+            result = await provider.search("query")
 
         assert result.success is False
         assert result.error is not None
@@ -264,9 +274,11 @@ class TestWebSearchProviderRetry:
                 raise TimeoutError
             return pager
 
-        with mock.patch.object(provider, "_execute_search_lite", side_effect=exec_side_effect):
-            with mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()) as mock_sleep:
-                await provider.search("query")
+        with (
+            mock.patch.object(provider, "_execute_search_lite", side_effect=exec_side_effect),
+            mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()) as mock_sleep,
+        ):
+            await provider.search("query")
 
         assert mock_sleep.call_count == 2
 
@@ -502,7 +514,6 @@ class TestBuildG8eWebSearchGrounding:
     """build_g8e_web_search_grounding constructs GroundingMetadata from SearchWebResult."""
 
     def test_returns_grounding_used_true_with_results(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -518,8 +529,6 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.grounding_used is True
 
     def test_source_is_web_search(self, provider):
-        from app.constants.config import GroundingSource
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -530,7 +539,6 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.source == GroundingSource.WEB_SEARCH
 
     def test_sources_populated_from_results(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -546,7 +554,6 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.sources[1].uri == "https://b.com/2"
 
     def test_citation_numbers_are_sequential_from_one(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -561,7 +568,6 @@ class TestBuildG8eWebSearchGrounding:
         assert [s.citation_num for s in gm.sources] == [1, 2, 3]
 
     def test_grounding_chunks_match_sources(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -576,7 +582,6 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.grounding_chunks[0].title == "x.com"
 
     def test_web_search_query_populated(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -588,7 +593,6 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.search_queries_count == 1
 
     def test_sources_count_matches(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -602,7 +606,6 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.sources_count == 2
 
     def test_grounding_supports_is_empty(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -613,21 +616,18 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.grounding_supports == []
 
     def test_failed_result_returns_grounding_not_used(self, provider):
-        from app.models.tool_results import SearchWebResult
 
         result = SearchWebResult(success=False, query="q", error="timeout")
         gm = provider.build_g8e_web_search_grounding(result)
         assert gm.grounding_used is False
 
     def test_empty_results_returns_grounding_not_used(self, provider):
-        from app.models.tool_results import SearchWebResult
 
         result = SearchWebResult(success=True, query="q", results=[])
         gm = provider.build_g8e_web_search_grounding(result)
         assert gm.grounding_used is False
 
     def test_items_with_no_link_are_skipped(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,
@@ -642,7 +642,6 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.sources[0].uri == "https://has-link.com"
 
     def test_all_items_no_link_returns_grounding_not_used(self, provider):
-        from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
         result = SearchWebResult(
             success=True,

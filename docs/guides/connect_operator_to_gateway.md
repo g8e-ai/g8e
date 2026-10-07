@@ -46,7 +46,7 @@ No inbound port is required on the Operator host.
 
 Use a bare hostname with `g8e operator start --endpoint`, without an `http://` or `https://` scheme and without a port suffix. The worker uses Gateway port 8080 for discovery and enrollment bootstrap and port 8443 for mTLS authentication, state queries, receipt publication, and pub/sub channel subscription. The global `--port` flag does not affect `operator start`; non-default Gateway ports are not supported by this command path.
 
-The hostname must resolve on the Operator host and must match the Gateway certificate identity. For a remote Gateway without DNS, map the Gateway IP to the built-in `g8e.local` identity on the Operator host and use `g8e.local` as the endpoint:
+The hostname must resolve on the Operator host and must match the Gateway certificate identity. A raw IP endpoint remains the network dial target while g8e verifies the Gateway as its built-in `g8e.local` TLS identity. This keeps certificate verification enabled without requiring a hosts-file entry or `InsecureSkipVerify`. You may still map a stable address to `g8e.local` and use that hostname explicitly:
 
 ```text
 192.0.2.10 g8e.local
@@ -228,18 +228,79 @@ ssh user@192.0.2.10 /opt/g8e operator start --endpoint <gateway-host>
 
 `g8e operator deploy --hosts user@192.0.2.10 --remote-dir /opt/g8e-operator --background --endpoint <gateway-host>` performs the same copy and start in one step (see [Build Operator](build_operator.md#deployment-commands)). Approve the resulting enrollment request as described above.
 
-`operator deploy` uploads the binary as `<remote-dir>/g8e.new` and renames it over `<remote-dir>/g8e`, so redeploying into a directory whose Operator is still running does not fail with "text file busy". With `--background` it also stops any Operator previously started from that directory before starting the new one. Each distinct `--remote-dir` is a distinct Operator identity.
+`operator deploy` installs one binary per host in `<dest-dir>/.deploy-bin/g8e`, then hard-links it into each Operator directory. Replacing a binary uses an atomic rename, so running workers remain safe. Each directory has independent runtime state, credentials, logs, and process identity.
+
+### Deploy to a Docker Context
+
+`operator deploy` can create one isolated container and one persistent named volume per Operator on an explicit Docker context. Prepare an image first; deployment never guesses a registry, builds source, changes the current Docker context, publishes ports, or removes an Operator volume.
+
+Build a runtime-only image from an existing Linux amd64 binary. The helper sends an allowlisted temporary context containing only the binary, entrypoint, protocol constants, reference data, and Dockerfile:
+
+```bash
+make build-all
+./scripts/build-operator-image.sh livingroom-node g8e-operator:local bin/g8e-linux-amd64
+```
+
+Then deploy a small batch. Here the owner CLI talks to its local Gateway while containers dial the Gateway through the machine's LAN address:
+
+```bash
+./g8e operator deploy \
+  --docker-context livingroom-node \
+  --docker-image g8e-operator:local \
+  --dest-dir /operators/livingroom-data \
+  --count 10 --roles data \
+  --endpoint localhost --operator-endpoint 192.168.1.2 \
+  --background --approve
+```
+
+Every Docker command names the selected context explicitly. Deployment resolves the image to one immutable image ID for the batch, checks daemon/image platform compatibility, and checks HTTP discovery reachability from a temporary container before creating fleet resources. Stable ownership labels protect containers and volumes from accidental adoption. A redeploy recreates only a matching owned container and retains its volume and enrollment identity. After enrollment and command-channel readiness, its restart policy becomes `unless-stopped`; failed initial enrollment does not enter an unlimited restart loop.
+
+`--dest-dir` is an absolute path inside each container. The private volume is mounted there and is also the container working directory. A repeatable `--docker-mount type=bind,source=/remote/path,target=/container/path,readonly` can expose a remote-host model store to a provenance Operator. Bind source paths belong to the remote Docker host. Mounts must be read-only and cannot cover the private runtime root or `/g8e`. Observer hardware access is host-specific and is not granted automatically; deployment never adds `--privileged`.
+
+Without `--background`, Docker deployment prepares stopped containers. With `--background` but without `--approve`, containers start with restart policy `no` while awaiting manual enrollment. No Operator container has a published port because all Gateway traffic is outbound.
+
+#### Expose a WSL Gateway on the Windows LAN
+
+For WSL in NAT mode, run the checked-in helper from an elevated Windows PowerShell. Inspect first, then apply rules scoped to the Docker machine (or a deliberately selected LAN subnet):
+
+```powershell
+.\scripts\configure-gateway-lan.ps1 -Action Inspect
+.\scripts\configure-gateway-lan.ps1 -Action Apply -RemoteScope 192.168.1.53
+```
+
+The helper discovers the current Windows LAN and WSL addresses unless they are passed as `-LanAddress` and `-WslAddress`, checks WSL listeners and Gateway health, displays existing matching rules, and manages only `192.168.1.2:8080`/`:8443`-style forwards and its two named firewall rules. Use `-WhatIf` for a dry run and `-Action Remove` to remove those rules. WSL addresses can change after restart, so inspect and reapply the helper when that happens. It does not create a scheduled task or change WSL networking mode. With WSL mirrored networking, inspect the current listeners/routing first and do not add redundant NAT forwarding.
+
+Before a fleet rollout, verify both ports from the remote Docker host and deploy one Operator through full mTLS enrollment and WebSocket readiness. A successful HTTP health check alone is not an acceptance test. Increase to ten only after the one-container redeploy preserves its named volume and identity. Measure memory, CPU, file descriptors, startup time, Gateway load, and heartbeat delays before attempting 100 or 1000 containers.
 
 ### Connect Many Operators
 
-The Gateway allows at most three live (non-terminal) Operator enrollment requests at once, platform-wide; further `operator start` processes are rejected with HTTP 429. `operator deploy` handles that pacing itself:
+Deploy up to 5000 Operators per host. Use `--local` to run on this system without SSH, or `--hosts host1,host2` for remote hosts. `--dest-dir` selects the destination; `--remote-dir` remains an alias.
 
 ```bash
-./g8e operator deploy --hosts localhost --endpoint <gateway-host> \
-  --remote-dir ~/fleet --count 10 --background --approve
+./g8e operator deploy --local --endpoint localhost \
+  --dest-dir .local.local/tmp/operator-fleet --count 10 \
+  --roles data --background --approve
+
+# Add another 100 without replacing the first 10.
+./g8e operator deploy --local --endpoint localhost \
+  --dest-dir .local.local/tmp/operator-fleet --start-index 11 --count 100 \
+  --roles data --background --approve
+
+# A separate provenance batch; role flags are forwarded to operator start.
+./g8e operator deploy --hosts storage-host --endpoint gateway-host \
+  --dest-dir /opt/provenance --count 20 --roles provenance \
+  --model-storage-root /srv/models --background --approve
 ```
 
-`--count` puts each Operator in its own `<remote-dir>/op-NNNNN` directory. `--approve` starts them one at a time, reads each worker's enrollment request ID from that directory's `start.log`, approves exactly that request as the owner, restarts a worker the Gateway rejected (up to three attempts), and then waits until every approved Operator is active. It prints each Operator's session ID; pass them to `operator bind` and `operator run` as described in [Bind the CLI to Operators and Run Commands](#bind-the-cli-to-operators-and-run-commands). Redeploying over a directory whose Operator is already enrolled replaces the running worker and needs no new approval. To tear a fleet down, `operator stop <operator-session-id>` each Operator, `auth enroll revoke <request-id>` each printed request ID, and remove the directories.
+`--count N` creates `op-00001` through `op-NNNNN`. A single Operator uses the destination itself, unless `--start-index` is explicitly supplied. The selected numbered range must fit within 1..5000. Repeating the same range replaces only those workers, retaining their enrollment credentials. Use different destinations or non-overlapping ranges for different roles.
+
+`--roles` accepts comma-separated combinations of `data` (default), `provenance`, `inference`, and `observer`. The corresponding `operator start` enable flags and settings are also supported, including `--inference-ollama-endpoint`, `--inference-keep-alive`, `--model-storage-root`, and the provenance/observer ID flags. Roles are additive; one process can enable any combination of these capabilities. Provenance and observer IDs default to stable values unique to the deployment host and directory. Explicit flag values may include `{host}`, `{name}` (directory basename), and `{dir}` (absolute working directory), for example `--provenance-operator-id '{host}-{name}'`.
+
+`--parallel` controls concurrent deployments (default 4, range 1..4). With `--approve`, each worker reads its own request ID from `start.log`, approves that exact request as the authenticated owner, and waits for enrollment completion before starting another. This respects the Gateway's four-live-request limit. Transient enrollment failures receive up to three attempts. Other deployments share that Gateway quota; use fewer parallel workers when sharing capacity. Without `--approve`, deployment only launches workers; owner approval and the Gateway's pending-request limit still apply.
+
+After approval, deployment waits for each new process to establish its command subscription and verifies that every session is active and prints the session IDs for [binding and running commands](#bind-the-cli-to-operators-and-run-commands). Any failed deployment or failed online verification produces a nonzero exit. `--approve` requires info or debug logging to observe startup. A completed enrollment is retained on retry. `start.log` and `operator.pid` are stored in each directory. Stop workers with `operator stop <operator-session-id>` and revoke enrollment with `auth enroll revoke <request-id>` when retiring them.
+
+The 5000 limit is a deployment range, not a promise that every host can sustain 5000 processes. Size host memory, process/file limits, and Gateway capacity for the intended fleet.
 
 ---
 

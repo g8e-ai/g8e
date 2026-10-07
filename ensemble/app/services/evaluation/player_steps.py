@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 
 from app.constants import ConsensusMember, EventType, RiskLevel
+from app.models.agents.triage import TriageResult
 from app.models.agents.tribunal import (
     TribunalAuditorCompletedPayload,
     TribunalAuditorFailedPayload,
@@ -30,7 +31,6 @@ from app.models.agents.tribunal import (
     TribunalVotingCompletedPayload,
     VoteBreakdown,
 )
-from app.models.agents.triage import TriageResult
 from app.models.base import G8eBaseModel
 from app.models.evaluation_trace import (
     DesignatedModelRole,
@@ -39,8 +39,8 @@ from app.models.evaluation_trace import (
     EvaluationPlayer,
     EvaluationPlayerStep,
     EvaluationRiskOutput,
-    EvaluationToolCallRecord,
     EvaluationTextOutput,
+    EvaluationToolCallRecord,
     EvaluationTriageOutput,
     EvaluationVoteOutput,
 )

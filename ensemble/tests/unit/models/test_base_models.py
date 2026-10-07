@@ -21,6 +21,17 @@ from app.models.base import (
     UTCDatetime,
     _to_iso_z,
 )
+from app.models.cases import CaseModel
+from app.models.investigations import (
+    InvestigationCreateRequest,
+    InvestigationCurrentState,
+    InvestigationCustomerContext,
+    InvestigationHistoryEntry,
+    InvestigationModel,
+    InvestigationQueryRequest,
+    InvestigationTechnicalContext,
+    InvestigationUpdateRequest,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -137,7 +148,7 @@ class TestToIsoZ:
         assert "+" not in result
 
     def test_naive_datetime_treated_as_utc(self):
-        dt = datetime(2026, 1, 15, 10, 30, 0)
+        dt = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
         result = _to_iso_z(dt)
         assert result.endswith("Z")
 
@@ -169,13 +180,13 @@ class TestUTCDatetime:
         assert "+" not in dumped["timestamp"]
 
     def test_naive_datetime_treated_as_utc_and_emits_z_suffix(self):
-        dt = datetime(2026, 1, 15, 10, 30, 0)
+        dt = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
         m = self._ModelWithUTCDatetime(timestamp=dt)
         dumped = m.model_dump(mode="json")
         assert dumped["timestamp"].endswith("Z")
 
     def test_none_datetime_emits_none(self):
-        m = self._ModelWithUTCDatetime(timestamp=None)  # type: ignore[arg-type]
+        m = self._ModelWithUTCDatetime(timestamp=None)
         dumped = m.model_dump(mode="json", exclude_none=False)
         assert dumped["timestamp"] is None
 
@@ -446,54 +457,44 @@ class TestHierarchyContracts:
         assert "updated_by" in G8eAuditableModel.model_fields
 
     def test_investigation_model_is_identifiable(self):
-        from app.models.investigations import InvestigationModel
 
         assert issubclass(InvestigationModel, G8eIdentifiableModel)
 
     def test_investigation_model_has_no_standalone_id_override(self):
-        from app.models.investigations import InvestigationModel
 
         assert "id" not in InvestigationModel.__annotations__, (
             "InvestigationModel must not redefine 'id' - it inherits from G8eIdentifiableModel"
         )
 
     def test_case_model_is_identifiable(self):
-        from app.models.cases import CaseModel
 
         assert issubclass(CaseModel, G8eIdentifiableModel)
 
     def test_investigation_create_request_is_not_identifiable(self):
-        from app.models.investigations import InvestigationCreateRequest
 
         assert not issubclass(InvestigationCreateRequest, G8eIdentifiableModel)
         assert issubclass(InvestigationCreateRequest, G8eBaseModel)
 
     def test_investigation_update_request_is_not_identifiable(self):
-        from app.models.investigations import InvestigationUpdateRequest
 
         assert not issubclass(InvestigationUpdateRequest, G8eIdentifiableModel)
 
     def test_investigation_query_request_is_not_identifiable(self):
-        from app.models.investigations import InvestigationQueryRequest
 
         assert not issubclass(InvestigationQueryRequest, G8eIdentifiableModel)
 
     def test_investigation_customer_context_is_not_identifiable(self):
-        from app.models.investigations import InvestigationCustomerContext
 
         assert not issubclass(InvestigationCustomerContext, G8eIdentifiableModel)
 
     def test_investigation_technical_context_is_not_identifiable(self):
-        from app.models.investigations import InvestigationTechnicalContext
 
         assert not issubclass(InvestigationTechnicalContext, G8eIdentifiableModel)
 
     def test_investigation_current_state_is_not_identifiable(self):
-        from app.models.investigations import InvestigationCurrentState
 
         assert not issubclass(InvestigationCurrentState, G8eIdentifiableModel)
 
     def test_investigation_history_entry_is_not_identifiable(self):
-        from app.models.investigations import InvestigationHistoryEntry
 
         assert not issubclass(InvestigationHistoryEntry, G8eIdentifiableModel)

@@ -19,6 +19,7 @@ pattern belongs here, never at a consumer.
 
 from __future__ import annotations
 
+from app.errors import ContextWindowExceededError, ThinkingNotSupportedError, ToolsNotSupportedError
 
 # Fingerprints (lowercased) that mean "model does not support thinking".
 _THINKING_PATTERNS: tuple[str, ...] = (
@@ -49,6 +50,8 @@ _TOOLS_PATTERNS: tuple[str, ...] = (
 # or the failure-frame reason.
 _GOVERNED_TOOLS_UNSUPPORTED = "tools unsupported"
 _GOVERNED_CAPABILITY_UNSUPPORTED = "requested capability unsupported"
+# Public-safe text of the typed ``ErrInferenceContextOverflow`` sentinel.
+_GOVERNED_CONTEXT_OVERFLOW = "context window exceeded"
 
 
 def _governed_rejection_text(exc: BaseException) -> str:
@@ -87,12 +90,36 @@ def translate_governed_tool_rejection(
     ):
         return
 
-    from app.errors import ToolsNotSupportedError
-
     raise ToolsNotSupportedError(
         f"Provider rejected the tool declaration: {rejection_text}",
         model=model,
         service_name=service_name,
+        cause=exc if isinstance(exc, Exception) else None,
+    ) from exc
+
+
+def translate_governed_context_overflow(
+    exc: BaseException,
+    *,
+    service_name: str,
+    model: str,
+    num_ctx: int | None,
+) -> None:
+    """Raise ``ContextWindowExceededError`` when the Gateway reports that the
+    provider's context window was filled by the prompt.
+
+    Returns without raising for any other failure so the caller re-raises the
+    original exception.
+    """
+    rejection_text = _governed_rejection_text(exc)
+    if _GOVERNED_CONTEXT_OVERFLOW not in rejection_text.lower():
+        return
+
+    raise ContextWindowExceededError(
+        f"Provider context window exceeded: {rejection_text}",
+        model=model,
+        service_name=service_name,
+        num_ctx=num_ctx,
         cause=exc if isinstance(exc, Exception) else None,
     ) from exc
 
@@ -114,10 +141,6 @@ def translate_capability_error(
     error mentioning "tools" when tools were not requested is not a tool
     capability error.
     """
-    # Lazy import to avoid circular dependency: app.errors -> app.models ->
-    # app.llm -> providers -> this module.
-    from app.errors import ThinkingNotSupportedError, ToolsNotSupportedError
-
     message = str(exc).lower()
     if not message:
         return

@@ -39,8 +39,8 @@ func TestActiveProvenanceOperatorsFiltersAndProjectsOperators(t *testing.T) {
 	}
 
 	matches := ActiveProvenanceOperators(operators)
-	require.Len(t, matches, 1)
-	assert.Equal(t, ProvenanceOperatorStatus{OperatorID: "provenance-1", OperatorSessionID: "sess-provenance-1", Status: string(constants.OperatorStatusActive), ProvenanceEnabled: true, ModelStorageRoot: "/models", Platform: "linux"}, matches[0])
+	require.Len(t, matches, 2)
+	assert.Equal(t, ProvenanceOperatorStatus{OperatorID: "provenance-1", OperatorSessionID: "sess-provenance-1", Status: string(constants.OperatorStatusActive), ProvenanceEnabled: true, ModelStorageRoot: "/models", Platform: "linux"}, matches[1])
 }
 
 func TestSelectProvenanceOperatorBySessionRejectsUnknownSession(t *testing.T) {

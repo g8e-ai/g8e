@@ -28,8 +28,10 @@ so create_pubsub_ws_session does not wire SSL - the caller resolves it via
 resolve_pubsub_ssl_context(ssl_settings) and passes it to ws_connect().
 """
 
-import os
+import logging
 import ssl
+from pathlib import Path
+
 import aiohttp
 
 from app.utils.json_utils import _json_dumps
@@ -45,27 +47,23 @@ def _resolve_ssl_context(
     for path in ca_cert_paths:
         if path:
             try:
-                import logging
-
                 logger = logging.getLogger(__name__)
-                if not os.path.exists(path):
+                if not Path(path).exists():
                     logger.warning("[SSL] CA cert path does not exist: %s", path)
                     continue
                 logger.info("[SSL] Probing CA cert path: %s", path)
-                with open(path):
+                with Path(path).open():
                     pass
                 ctx = ssl.create_default_context(cafile=path)
                 if certfile and keyfile:
                     logger.info("[SSL] Loading cert chain: cert=%s, key=%s", certfile, keyfile)
                     try:
-                        with open(certfile), open(keyfile):
+                        with Path(certfile).open(), Path(keyfile).open():
                             ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
                     except (OSError, ssl.SSLError) as e:
                         logger.warning("Failed to load client cert chain: %s", e)
                 return ctx
             except OSError as e:
-                import logging
-
                 logging.getLogger(__name__).warning(
                     "[SSL] Failed to open CA cert path %s: %s", path, e
                 )

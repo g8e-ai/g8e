@@ -86,8 +86,8 @@ func newStandaloneReceiptFixture(t *testing.T) *standaloneReceiptFixture {
 	require.NoError(t, err)
 	receiptReference := ContentReferenceForBody(constants.ActionReceiptReferencePrefix, receiptBody)
 	persistenceReference := ContentReferenceForBody(constants.ReceiptPersistenceReferencePrefix, persistenceBody)
-	receiptPath := filepath.Join(constants.DemoRunReceiptsDirname, digestHex(receiptBody)+constants.FileExtJSON)
-	persistencePath := filepath.Join(constants.DemoRunPersistenceDirname, digestHex(persistenceBody)+constants.FileExtJSON)
+	receiptPath := filepath.Join("receipts", digestHex(receiptBody)+constants.FileExtJSON)
+	persistencePath := filepath.Join("persistence", digestHex(persistenceBody)+constants.FileExtJSON)
 	return &standaloneReceiptFixture{
 		reader:             &memoryArtifactReader{files: map[string][]byte{receiptPath: receiptBody, persistencePath: persistenceBody}},
 		trust:              &assessedSignerStub{keys: map[string]ed25519.PublicKey{signerKeyID: publicKey}},
@@ -148,7 +148,7 @@ func TestReceiptImporter_Import_RejectsInvalidConfiguration(t *testing.T) {
 		{name: "nil reader", importer: NewReceiptImporter(nil, fixture.trust, fixture.receiptBinding)},
 		{name: "nil trust", importer: NewReceiptImporter(fixture.reader, nil, fixture.receiptBinding)},
 		{name: "invalid reference", importer: NewReceiptImporter(fixture.reader, fixture.trust, ReceiptImportBinding{Reference: "invalid", Path: fixture.receiptBinding.Path, ScopeID: "scope-1", RunID: "run-1"})},
-		{name: "unsafe path", importer: NewReceiptImporter(fixture.reader, fixture.trust, ReceiptImportBinding{Reference: fixture.receiptBinding.Reference, Path: filepath.Join("..", constants.DemoRunReceiptsDirname), ScopeID: "scope-1", RunID: "run-1"})},
+		{name: "unsafe path", importer: NewReceiptImporter(fixture.reader, fixture.trust, ReceiptImportBinding{Reference: fixture.receiptBinding.Reference, Path: filepath.Join("..", "receipts"), ScopeID: "scope-1", RunID: "run-1"})},
 		{name: "empty scope", importer: NewReceiptImporter(fixture.reader, fixture.trust, ReceiptImportBinding{Reference: fixture.receiptBinding.Reference, Path: fixture.receiptBinding.Path, RunID: "run-1"})},
 		{name: "empty run", importer: NewReceiptImporter(fixture.reader, fixture.trust, ReceiptImportBinding{Reference: fixture.receiptBinding.Reference, Path: fixture.receiptBinding.Path, ScopeID: "scope-1"})},
 	}
@@ -266,7 +266,7 @@ func TestReceiptAndPersistenceImporters_Import_ProduceValidGraph(t *testing.T) {
 	persistenceNodes, err := NewPersistenceImporter(fixture.reader, fixture.trust, fixture.persistenceBinding).Import(context.Background())
 	require.NoError(t, err)
 
-	graph := NewEvidenceGraph(constants.DemoRunMaxArtifactBytes, []string{constants.MediaTypeJSON})
+	graph := NewEvidenceGraph(maxArtifactBytes, []string{constants.MediaTypeJSON})
 	for _, node := range append(receiptNodes, persistenceNodes...) {
 		require.NoError(t, graph.AddNode(node))
 	}
@@ -303,9 +303,9 @@ func TestPersistenceImporter_Import_RejectsInvalidConfiguration(t *testing.T) {
 		{name: "nil reader", importer: NewPersistenceImporter(nil, fixture.trust, fixture.persistenceBinding)},
 		{name: "nil trust", importer: NewPersistenceImporter(fixture.reader, nil, fixture.persistenceBinding)},
 		{name: "invalid persistence reference", importer: NewPersistenceImporter(fixture.reader, fixture.trust, PersistenceImportBinding{Reference: "invalid", Path: fixture.persistenceBinding.Path, ReceiptReference: fixture.persistenceBinding.ReceiptReference, ReceiptPath: fixture.persistenceBinding.ReceiptPath, ScopeID: fixture.persistenceBinding.ScopeID, RunID: fixture.persistenceBinding.RunID})},
-		{name: "unsafe persistence path", importer: NewPersistenceImporter(fixture.reader, fixture.trust, PersistenceImportBinding{Reference: fixture.persistenceBinding.Reference, Path: filepath.Join("..", constants.DemoRunPersistenceDirname), ReceiptReference: fixture.persistenceBinding.ReceiptReference, ReceiptPath: fixture.persistenceBinding.ReceiptPath, ScopeID: fixture.persistenceBinding.ScopeID, RunID: fixture.persistenceBinding.RunID})},
+		{name: "unsafe persistence path", importer: NewPersistenceImporter(fixture.reader, fixture.trust, PersistenceImportBinding{Reference: fixture.persistenceBinding.Reference, Path: filepath.Join("..", "persistence"), ReceiptReference: fixture.persistenceBinding.ReceiptReference, ReceiptPath: fixture.persistenceBinding.ReceiptPath, ScopeID: fixture.persistenceBinding.ScopeID, RunID: fixture.persistenceBinding.RunID})},
 		{name: "invalid receipt reference", importer: NewPersistenceImporter(fixture.reader, fixture.trust, PersistenceImportBinding{Reference: fixture.persistenceBinding.Reference, Path: fixture.persistenceBinding.Path, ReceiptReference: "invalid", ReceiptPath: fixture.persistenceBinding.ReceiptPath, ScopeID: fixture.persistenceBinding.ScopeID, RunID: fixture.persistenceBinding.RunID})},
-		{name: "unsafe receipt path", importer: NewPersistenceImporter(fixture.reader, fixture.trust, PersistenceImportBinding{Reference: fixture.persistenceBinding.Reference, Path: fixture.persistenceBinding.Path, ReceiptReference: fixture.persistenceBinding.ReceiptReference, ReceiptPath: filepath.Join("..", constants.DemoRunReceiptsDirname), ScopeID: fixture.persistenceBinding.ScopeID, RunID: fixture.persistenceBinding.RunID})},
+		{name: "unsafe receipt path", importer: NewPersistenceImporter(fixture.reader, fixture.trust, PersistenceImportBinding{Reference: fixture.persistenceBinding.Reference, Path: fixture.persistenceBinding.Path, ReceiptReference: fixture.persistenceBinding.ReceiptReference, ReceiptPath: filepath.Join("..", "receipts"), ScopeID: fixture.persistenceBinding.ScopeID, RunID: fixture.persistenceBinding.RunID})},
 		{name: "empty scope", importer: NewPersistenceImporter(fixture.reader, fixture.trust, PersistenceImportBinding{Reference: fixture.persistenceBinding.Reference, Path: fixture.persistenceBinding.Path, ReceiptReference: fixture.persistenceBinding.ReceiptReference, ReceiptPath: fixture.persistenceBinding.ReceiptPath, RunID: fixture.persistenceBinding.RunID})},
 		{name: "empty run", importer: NewPersistenceImporter(fixture.reader, fixture.trust, PersistenceImportBinding{Reference: fixture.persistenceBinding.Reference, Path: fixture.persistenceBinding.Path, ReceiptReference: fixture.persistenceBinding.ReceiptReference, ReceiptPath: fixture.persistenceBinding.ReceiptPath, ScopeID: fixture.persistenceBinding.ScopeID})},
 	}

@@ -82,7 +82,7 @@ var phase0ClaimInventory = []ClaimInventoryEntry{
 	{Framework: "HIPAA", ControlID: "Admin: Training", Claim: "Security awareness training documentation", Classification: ClaimClassCustomer, Notes: "documentation-only; customer trains workforce"},
 	{Framework: "HIPAA", ControlID: "Physical Safeguards", Claim: "Facility access controls, workstation use/security", Classification: ClaimClassCustomer, Notes: "explicitly marked customer responsibility / platform design"},
 	{Framework: "HIPAA", ControlID: "Technical Safeguards", Claim: "mTLS access control, audit controls, integrity controls, transmission security", Classification: ClaimClassPlatformTechnical, Notes: "gateway and storage code"},
-	{Framework: "HIPAA", ControlID: "PHI Handling", Claim: "PHI scrubbing, local processing, audit trail", Classification: ClaimClassPlatformTechnical, Notes: "synthetic PHI in demos only"},
+	{Framework: "HIPAA", ControlID: "PHI Handling", Claim: "PHI scrubbing, local processing, audit trail", Classification: ClaimClassPlatformTechnical, Notes: "synthetic PHI in automated tests only"},
 	{Framework: "HIPAA", ControlID: "Covered-entity status", Claim: "No legal determination of covered-entity or business-associate status", Classification: ClaimClassInformational, Notes: "document makes no legal determination"},
 
 	// --- NIST SP 800-53 ---
@@ -106,7 +106,7 @@ var phase0ClaimInventory = []ClaimInventoryEntry{
 	{Framework: "NSA ZIG", ControlID: "Phase Two", Claim: "Policy decision/enforcement, dynamic evaluation, risk-based auth, least privilege, DLP, threat detection, automated response, audit, session mgmt, cert/key mgmt, API security, supply chain", Classification: ClaimClassPlatformTechnical, Notes: "governance, scrubbing, doctrine, ledger"},
 	{Framework: "NSA ZIG", ControlID: "Phase Three", Claim: "Advanced threat hunting and automated response", Classification: ClaimClassPlanned, Notes: "explicitly marked partial alignment / in development"},
 	{Framework: "NSA ZIG", ControlID: "Phase Four", Claim: "Continuous optimization and maturity assessment", Classification: ClaimClassPlanned, Notes: "explicitly marked planned FY 2027"},
-	{Framework: "NSA ZIG", ControlID: "Org maturity", Claim: "Organization-wide zero-trust maturity", Classification: ClaimClassAssessor, Notes: "a demo cannot elevate org maturity; requires assessor evidence"},
+	{Framework: "NSA ZIG", ControlID: "Org maturity", Claim: "Organization-wide zero-trust maturity", Classification: ClaimClassAssessor, Notes: "a test deployment cannot elevate org maturity; requires assessor evidence"},
 
 	// --- NIST SP 800-63B ---
 	{Framework: "NIST SP 800-63B", ControlID: "AAL2", Claim: "WebAuthn passkey plus mTLS client certificate; phishing-resistant", Classification: ClaimClassPlatformTechnical, Notes: "L3 notary and PKI"},

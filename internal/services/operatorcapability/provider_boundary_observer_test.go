@@ -40,8 +40,8 @@ func TestActiveProviderBoundaryObserversFiltersAndProjectsOperators(t *testing.T
 	}
 
 	matches := ActiveProviderBoundaryObservers(operators)
-	require.Len(t, matches, 1)
-	assert.Equal(t, ProviderBoundaryObserverStatus{OperatorID: "observer-1", OperatorSessionID: "sess-observer-1", Status: string(constants.OperatorStatusActive), ObserverEnabled: true, Platform: "linux"}, matches[0])
+	require.Len(t, matches, 2)
+	assert.Equal(t, ProviderBoundaryObserverStatus{OperatorID: "observer-1", OperatorSessionID: "sess-observer-1", Status: string(constants.OperatorStatusActive), ObserverEnabled: true, Platform: "linux"}, matches[1])
 }
 
 func TestSelectProviderBoundaryObserverBySessionRejectsUnknownSession(t *testing.T) {

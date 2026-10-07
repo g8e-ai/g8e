@@ -126,7 +126,6 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 	}
 
 	// L1 screening: decode the typed payload and run doctrine validation.
-	l1Validated := false
 	decoded, err := governance.DecodePayloadForAction(actionType, params.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrTxPayloadDecodeFailed)
@@ -137,7 +136,7 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 	if violations := params.Doctrine.ValidatePayload(decoded); len(violations) > 0 {
 		return nil, fmt.Errorf("gateway: build envelope: %w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
 	}
-	l1Validated = true
+	l1Validated := true
 
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
@@ -248,6 +247,7 @@ type L2ConsensusDeliberator interface {
 // postures that require L3 proof (ratify, notary) are rejected at envelope
 // construction because the gateway dispatch path cannot mint human proofs.
 type DispatchService struct {
+	embeddedProcessor governance.EnvelopeProcessor
 	logger            *slog.Logger
 	pubsub            *GatewayWebSocketHandler
 	stateRootProvider governance.StateRootProvider
@@ -270,8 +270,9 @@ type DispatchService struct {
 // signerStore resolves the operator's actuator public key for inference
 // completion receipt verification; a nil store fails inference dispatch
 // closed.
-func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string, doctrine *governance.L1Doctrine, l2Deliberator L2ConsensusDeliberator, signerStore governance.SignerStore) *DispatchService {
+func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string, doctrine *governance.L1Doctrine, l2Deliberator L2ConsensusDeliberator, signerStore governance.SignerStore, embeddedProcessor governance.EnvelopeProcessor) *DispatchService {
 	return &DispatchService{
+		embeddedProcessor: embeddedProcessor,
 		logger:            logger,
 		pubsub:            pubsubHandler,
 		stateRootProvider: stateRootProvider,
@@ -416,7 +417,18 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	//    is a terminal transport failure: no operator received the command,
 	//    so no result can ever arrive.
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
-	delivered := d.pubsub.Publish(cmdChannel, wire)
+	var delivered int
+	if op.OperatorType == constants.OperatorTypeEmbedded {
+		if d.embeddedProcessor == nil {
+			return nil, fmt.Errorf("dispatch embedded operator: %w", constants.ErrDispatchNoDelivery)
+		}
+		if _, err := d.embeddedProcessor.ProcessEnvelope(ctx, wire); err != nil {
+			return nil, fmt.Errorf("dispatch embedded operator: %w", err)
+		}
+		delivered = 1
+	} else {
+		delivered = d.pubsub.Publish(cmdChannel, wire)
+	}
 	d.logger.Info("dispatch: published command",
 		"transaction_id", txHash,
 		"cmd_channel", cmdChannel,
@@ -614,6 +626,8 @@ func inferenceReceiptFailureError(receipt *operatorv1.ActionReceipt) error {
 		return constants.ErrInferenceCapabilityUnsupported
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED:
 		return constants.ErrInferenceToolsUnsupported
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW:
+		return constants.ErrInferenceContextOverflow
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED:
 		return constants.ErrInferenceProviderAttemptRequired
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH:

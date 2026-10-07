@@ -209,8 +209,9 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 // validates against the CLI session ID, so cliSessionID must be sent as the
 // X-G8E-CLI-Session-ID header on every proxied request.
 type gatewayConn struct {
-	client     *http.Client
-	gatewayURL string
+	client      *http.Client
+	gatewayURL  string
+	openBrowser func(string) error
 
 	// cliSessionID is set when the resolved credential tier is a CLI cert (client
 	// flags or enrolled CLI disk cert). When non-empty, it is attached
@@ -353,6 +354,7 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 	}
 
 	session := &gatewayConn{
+		openBrowser: platform.OpenBrowser,
 		client: &http.Client{
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
 			Timeout:   30 * time.Second,
@@ -528,15 +530,18 @@ func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gateway
 		logger.Info("L3 approval required, waiting for user to authorize...", "url", approvalURL)
 	}
 
-	if err := platform.OpenBrowser(approvalURL); err != nil {
+	if session.sseClient == nil || session.sseBaseURL == "" || session.cliSessionID == "" {
+		return resp, fmt.Errorf("L3 approval: %w", constants.ErrNotAuthenticated)
+	}
+	if session.openBrowser == nil {
+		return resp, fmt.Errorf("L3 approval: browser opener: %w", constants.ErrMissingRequiredField)
+	}
+
+	if err := session.openBrowser(approvalURL); err != nil {
 		if logger != nil {
 			logger.Warn("Failed to auto-open browser", "error", err)
 		}
 		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
-	}
-
-	if session.sseClient == nil || session.sseBaseURL == "" || session.cliSessionID == "" {
-		return resp, fmt.Errorf("L3 approval: %w", constants.ErrNotAuthenticated)
 	}
 
 	txHash := extractTxHashFromApprovalURL(approvalURL)
@@ -1096,6 +1101,11 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
+	integration, err := agent.Lookup(agentID)
+	if err != nil {
+		return fmt.Errorf("mcp: launch agent: %w", err)
+	}
+
 	// Use the shared interactive enrollment coordinator. mcp agent run is an
 	// interactive user-facing caller, so it uses the same trust and passkey
 	// policy as `auth enroll user`. The coordinator inspects local state and
@@ -1104,9 +1114,12 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 	// is idempotent for an existing passkey); if no passkey exists, the
 	// browser ceremony runs after system trust is installed.
 	fmt.Fprintf(os.Stderr, "[g8e] Ensuring CLI credentials and passkey...\n")
-	coordinator := enrollerFactory(func(format string, args ...any) {
+	coordinator, err := enrollerFactory(func(format string, args ...any) {
 		fmt.Fprintf(os.Stderr, format+"\n", args...)
 	}, fileSvc, cfg)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+	}
 	enrollResult, err := coordinator.Enroll(context.Background(), auth.EnrollmentOptions{})
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
@@ -1135,11 +1148,6 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 	}
 	if cleanup != nil {
 		defer cleanup()
-	}
-
-	integration, err := agent.Lookup(agentID)
-	if err != nil {
-		return fmt.Errorf("mcp: launch agent: %w", err)
 	}
 	return launchAgentProcess(integration, extraArgs, launchArgs)
 }

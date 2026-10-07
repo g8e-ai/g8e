@@ -54,15 +54,18 @@ not-ready while approval is pending.
 from __future__ import annotations
 
 import asyncio
+import base64
+import contextlib
 import hashlib
 import json
 import logging
 import os
+import random
 import socket
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -112,6 +115,17 @@ _CA_BUNDLE_PATH = "/.well-known/g8e/pki/ca-bundle"
 _ENROLLMENT_REQUEST_PATH = "/api/v1/auth/platform-enrollments/request"
 _ENROLLMENT_STATUS_PATH = "/api/v1/auth/platform-enrollments/status"
 _ENROLLMENT_COMPLETE_PATH = "/api/v1/auth/platform-enrollments/complete"
+
+
+@dataclass(frozen=True)
+class _EnrollmentAttempt:
+    """Credentials and identifiers for one in-flight enrollment attempt."""
+
+    token: str
+    request_id: str
+    fingerprint: str
+    key_pem: str
+    private_key: ec.EllipticCurvePrivateKey
 
 
 @dataclass(frozen=True)
@@ -178,13 +192,9 @@ class AppEnrollmentService:
         cert_path, key_path = get_app_cert_paths(self._app_name)
 
         if not Path(cert_path).exists():
-            raise ConfigurationError(
-                f"AppEnrollmentService: app cert not found at {cert_path}"
-            )
+            raise ConfigurationError(f"AppEnrollmentService: app cert not found at {cert_path}")
         if not Path(key_path).exists():
-            raise ConfigurationError(
-                f"AppEnrollmentService: app key not found at {key_path}"
-            )
+            raise ConfigurationError(f"AppEnrollmentService: app key not found at {key_path}")
 
         cert = self._load_cert(cert_path)
         expiry = cert.not_valid_after_utc
@@ -220,7 +230,7 @@ class AppEnrollmentService:
     @staticmethod
     def _load_cert(cert_path: str) -> x509.Certificate:
         """Load and parse a PEM cert from disk. Raises on any failure."""
-        with open(cert_path, "rb") as fh:
+        with Path(cert_path).open("rb") as fh:
             return x509.load_pem_x509_certificate(fh.read())
 
     @staticmethod
@@ -343,8 +353,6 @@ class AppEnrollmentService:
         ``base64.RawURLEncoding`` (no padding), so strip the ``=`` padding
         that Python's ``urlsafe_b64encode`` appends.
         """
-        import base64
-
         signature = private_key.sign(transcript, ec.ECDSA(hashes.SHA256()))
         return base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
 
@@ -425,9 +433,7 @@ class AppEnrollmentService:
             raise ConfigurationError(
                 f"AppEnrollmentService: enrollment request rejected by gateway: {err_msg}"
             )
-        raise ConfigurationError(
-            "AppEnrollmentService: exhausted request submission retries"
-        )
+        raise ConfigurationError("AppEnrollmentService: exhausted request submission retries")
 
     async def _poll_until_approved(
         self,
@@ -479,9 +485,7 @@ class AppEnrollmentService:
 
             if not resp.is_success:
                 err_msg = data.get("error", f"HTTP {resp.status_code}")
-                raise ConfigurationError(
-                    f"AppEnrollmentService: status query failed: {err_msg}"
-                )
+                raise ConfigurationError(f"AppEnrollmentService: status query failed: {err_msg}")
 
             state = data.get("state")
             if state == "approved":
@@ -491,9 +495,7 @@ class AppEnrollmentService:
                     "AppEnrollmentService: enrollment request was denied by the owner"
                 )
             if state == "expired":
-                raise ConfigurationError(
-                    "AppEnrollmentService: enrollment request has expired"
-                )
+                raise ConfigurationError("AppEnrollmentService: enrollment request has expired")
             if state == "completed":
                 # Already completed (e.g. by a prior completion attempt).
                 # The caller should proceed to completion, which will return
@@ -608,17 +610,13 @@ class AppEnrollmentService:
         Called after credentials are successfully written. If the file does
         not exist, this is a no-op.
         """
-        try:
+        # Best-effort cleanup; the credentials are already written.
+        with contextlib.suppress(Exception):
             Path(pending_path).unlink(missing_ok=True)
-        except Exception:
-            # Best-effort cleanup; the credentials are already written.
-            pass
 
     @staticmethod
     async def _sleep(base_seconds: float) -> None:
         """Sleep for a given duration with jitter."""
-        import random
-
         jitter = random.uniform(0, _POLL_JITTER_SECONDS)
         await asyncio.sleep(base_seconds + jitter)
 
@@ -640,101 +638,21 @@ class AppEnrollmentService:
         pending_path = self._resolve_pending_path()
 
         # Step 1: Pull gateway CA bundle via HTTP.
-        ca_bundle_pem = ""
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
-            try:
-                ca_bundle_pem = await self._fetch_ca_bundle(client, base_url)
-            except Exception as exc:
-                logger.warning(
-                    "AppEnrollmentService: failed to fetch CA bundle via HTTP in step 1: %s",
-                    exc,
-                )
+        ca_bundle_pem = await self._try_fetch_ca_bundle(base_url, "step 1")
 
         # Step 2: Load persisted pending attempt if it exists.
-        pending = self._load_pending_state(pending_path)
-        if pending and pending.get("expires_at"):
-            if _parse_iso_deadline(pending["expires_at"]) <= datetime.now(UTC):
-                pending = None
+        pending = self._load_unexpired_pending_state(pending_path)
 
-        token: str
-        request_id: str
-        fingerprint: str
-        key_pem: str
-        private_key: ec.EllipticCurvePrivateKey
-
-        if pending and pending.get("token") and pending.get("request_id") and pending.get("fingerprint"):
-            # Resume the existing pending attempt. Do not generate new keys.
-            token = pending["token"]
-            request_id = pending["request_id"]
-            fingerprint = pending["fingerprint"]
-            key_pem = pending["key_pem"]
-            if pending.get("instance_id"):
-                self._instance_id = pending["instance_id"]
-            # Re-load the private key for proof signing.
-            private_key = serialization.load_pem_private_key(
-                key_pem.encode("utf-8"), password=None
-            )
-            logger.info(
-                "AppEnrollmentService: resuming pending enrollment (request_id=%s)",
-                request_id,
-            )
+        if (
+            pending
+            and pending.get("token")
+            and pending.get("request_id")
+            and pending.get("fingerprint")
+        ):
+            attempt = self._resume_pending_attempt(pending)
         else:
-            # Step 3: Generate keys and submit a new request.
-            csr_pem, key_pem, private_key = self._generate_csr()
-            fingerprint = self._csr_fingerprint(csr_pem)
-
-            async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
-                try:
-                    create_resp = await self._submit_enrollment_request(
-                        client, base_url, csr_pem
-                    )
-                except ConfigurationError:
-                    raise
-                except Exception as exc:
-                    raise ConfigurationError(
-                        f"AppEnrollmentService: enrollment request POST to {base_url} failed: {exc}",
-                        cause=exc,
-                    ) from exc
-
-            request_id = create_resp["request_id"]
-            token = create_resp.get("token", "")
-            approval_url = create_resp.get("approval_url", "")
-            expires_at = create_resp.get("expires_at", "")
-
-            # If the response has no token, the request was deduplicated
-            # (the requester must resume with the original token). Since
-            # we have no pending state, we cannot resume. This is an error.
-            if not token:
-                raise ConfigurationError(
-                    "AppEnrollmentService: gateway returned a deduplicated response with no token; "
-                    f"a pending state file is required to resume. Request ID: {request_id}"
-                )
-
-            # Persist the pending state atomically with 0600 permissions.
-            self._persist_pending_state(
-                pending_path,
-                {
-                    "request_id": request_id,
-                    "token": token,
-                    "fingerprint": fingerprint,
-                    "key_pem": key_pem,
-                    "expires_at": expires_at,
-                    "instance_id": self._instance_id,
-                },
-            )
-
-            # Step 4: Print the non-secret approval instructions.
-            logger.info(
-                "AppEnrollmentService: enrollment request submitted. Request ID: %s",
-                request_id,
-            )
-            logger.info("AppEnrollmentService: CSR fingerprint: %s", fingerprint)
-            if approval_url:
-                logger.info("AppEnrollmentService: Approval URL: %s", approval_url)
-            logger.info(
-                "AppEnrollmentService: Approve with: g8e auth enroll approve %s",
-                request_id,
-            )
+            # Steps 3-4: Generate keys, submit a new request, print instructions.
+            attempt = await self._start_enrollment_attempt(base_url, pending_path)
 
         # Step 5: Poll status until approved.
         if pending and pending.get("expires_at"):
@@ -742,62 +660,20 @@ class AppEnrollmentService:
         else:
             deadline = datetime.now(UTC) + timedelta(minutes=30)
 
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
-            await self._poll_until_approved(client, base_url, token, deadline)
-
-            # Step 6: Sign the completion transcript and call completion.
-            token_hash = self._token_hash(token)
-            transcript = self._build_completion_transcript(
-                request_id, token_hash, self._instance_id, fingerprint
-            )
-            proof = self._sign_transcript(private_key, transcript)
-
-            try:
-                completion_resp = await self._submit_completion(
-                    client, base_url, token, proof
-                )
-            except ConfigurationError:
-                raise
-            except Exception as exc:
-                raise ConfigurationError(
-                    f"AppEnrollmentService: completion POST to {base_url} failed: {exc}",
-                    cause=exc,
-                ) from exc
+        # Steps 5-6: Poll, sign the completion transcript and call completion.
+        completion_resp = await self._complete_enrollment_attempt(base_url, attempt, deadline)
 
         # Step 7: Validate the response.
-        app_creds = completion_resp.get("app")
-        if not app_creds:
-            raise ConfigurationError(
-                "AppEnrollmentService: completion response missing app credentials"
-            )
-        if not app_creds.get("app_cert"):
-            raise ConfigurationError(
-                "AppEnrollmentService: completion response missing app_cert"
-            )
-        # Validate the certificate has the expected SPIFFE URI SAN.
-        cert = x509.load_pem_x509_certificate(app_creds["app_cert"].encode("utf-8"))
-        app_id = self._extract_app_id(cert)
-        if self._app_name not in app_id:
-            raise ConfigurationError(
-                f"AppEnrollmentService: cert SPIFFE URI does not contain expected component "
-                f'name "{self._app_name}": {app_id}'
-            )
+        app_creds, app_id = self._validate_completion_response(completion_resp)
 
         # Step 8: Write credentials atomically, then remove pending state.
         trust_bundle = app_creds.get("trust_bundle") or ca_bundle_pem
         if not trust_bundle:
-            try:
-                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
-                    trust_bundle = await self._fetch_ca_bundle(client, base_url)
-            except Exception as exc:
-                logger.warning(
-                    "AppEnrollmentService: failed to fetch CA bundle via HTTP in step 8: %s",
-                    exc,
-                )
+            trust_bundle = await self._try_fetch_ca_bundle(base_url, "step 8")
         self._write_credentials_atomic(
             app_creds["app_cert"],
             app_creds.get("cert_chain", ""),
-            key_pem,
+            attempt.key_pem,
             trust_bundle,
         )
         self._remove_pending_state(pending_path)
@@ -815,6 +691,164 @@ class AppEnrollmentService:
             key_path=key_path,
             ca_cert_path=PATHS["infra"]["ca_cert_path"],
         )
+
+    async def _try_fetch_ca_bundle(self, base_url: str, step: str) -> str:
+        """Best-effort CA bundle fetch; returns an empty string on failure."""
+        try:
+            async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
+                return await self._fetch_ca_bundle(client, base_url)
+        except Exception as exc:
+            logger.warning(
+                "AppEnrollmentService: failed to fetch CA bundle via HTTP in %s: %s",
+                step,
+                exc,
+            )
+            return ""
+
+    def _load_unexpired_pending_state(self, pending_path: str) -> dict[str, Any] | None:
+        pending = self._load_pending_state(pending_path)
+        if (
+            pending
+            and pending.get("expires_at")
+            and _parse_iso_deadline(pending["expires_at"]) <= datetime.now(UTC)
+        ):
+            return None
+        return pending
+
+    def _resume_pending_attempt(self, pending: dict[str, Any]) -> _EnrollmentAttempt:
+        """Resume the existing pending attempt. Do not generate new keys."""
+        key_pem = pending["key_pem"]
+        if pending.get("instance_id"):
+            self._instance_id = pending["instance_id"]
+        # Re-load the private key for proof signing.
+        private_key = serialization.load_pem_private_key(key_pem.encode("utf-8"), password=None)
+        if not isinstance(private_key, ec.EllipticCurvePrivateKey):
+            raise ConfigurationError(
+                "AppEnrollmentService: pending enrollment key is not an EC private key"
+            )
+        attempt = _EnrollmentAttempt(
+            token=pending["token"],
+            request_id=pending["request_id"],
+            fingerprint=pending["fingerprint"],
+            key_pem=key_pem,
+            private_key=private_key,
+        )
+        logger.info(
+            "AppEnrollmentService: resuming pending enrollment (request_id=%s)",
+            attempt.request_id,
+        )
+        return attempt
+
+    async def _start_enrollment_attempt(
+        self, base_url: str, pending_path: str
+    ) -> _EnrollmentAttempt:
+        """Generate keys, submit a new enrollment request, and persist pending state."""
+        # Step 3: Generate keys and submit a new request.
+        csr_pem, key_pem, private_key = self._generate_csr()
+        fingerprint = self._csr_fingerprint(csr_pem)
+
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
+            try:
+                create_resp = await self._submit_enrollment_request(client, base_url, csr_pem)
+            except ConfigurationError:
+                raise
+            except Exception as exc:
+                raise ConfigurationError(
+                    f"AppEnrollmentService: enrollment request POST to {base_url} failed: {exc}",
+                    cause=exc,
+                ) from exc
+
+        request_id = create_resp["request_id"]
+        token = create_resp.get("token", "")
+        approval_url = create_resp.get("approval_url", "")
+        expires_at = create_resp.get("expires_at", "")
+
+        # If the response has no token, the request was deduplicated
+        # (the requester must resume with the original token). Since
+        # we have no pending state, we cannot resume. This is an error.
+        if not token:
+            raise ConfigurationError(
+                "AppEnrollmentService: gateway returned a deduplicated response with no token; "
+                f"a pending state file is required to resume. Request ID: {request_id}"
+            )
+
+        # Persist the pending state atomically with 0600 permissions.
+        self._persist_pending_state(
+            pending_path,
+            {
+                "request_id": request_id,
+                "token": token,
+                "fingerprint": fingerprint,
+                "key_pem": key_pem,
+                "expires_at": expires_at,
+                "instance_id": self._instance_id,
+            },
+        )
+
+        # Step 4: Print the non-secret approval instructions.
+        logger.info(
+            "AppEnrollmentService: enrollment request submitted. Request ID: %s",
+            request_id,
+        )
+        logger.info("AppEnrollmentService: CSR fingerprint: %s", fingerprint)
+        if approval_url:
+            logger.info("AppEnrollmentService: Approval URL: %s", approval_url)
+        logger.info(
+            "AppEnrollmentService: Approve with: g8e auth enroll approve %s",
+            request_id,
+        )
+        return _EnrollmentAttempt(
+            token=token,
+            request_id=request_id,
+            fingerprint=fingerprint,
+            key_pem=key_pem,
+            private_key=private_key,
+        )
+
+    async def _complete_enrollment_attempt(
+        self, base_url: str, attempt: _EnrollmentAttempt, deadline: datetime
+    ) -> dict[str, Any]:
+        """Poll until approved, then sign the completion transcript and submit it."""
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
+            await self._poll_until_approved(client, base_url, attempt.token, deadline)
+
+            # Step 6: Sign the completion transcript and call completion.
+            token_hash = self._token_hash(attempt.token)
+            transcript = self._build_completion_transcript(
+                attempt.request_id, token_hash, self._instance_id, attempt.fingerprint
+            )
+            proof = self._sign_transcript(attempt.private_key, transcript)
+
+            try:
+                return await self._submit_completion(client, base_url, attempt.token, proof)
+            except ConfigurationError:
+                raise
+            except Exception as exc:
+                raise ConfigurationError(
+                    f"AppEnrollmentService: completion POST to {base_url} failed: {exc}",
+                    cause=exc,
+                ) from exc
+
+    def _validate_completion_response(
+        self, completion_resp: dict[str, Any]
+    ) -> tuple[dict[str, Any], str]:
+        """Validate completion credentials and return them with the cert's app ID."""
+        app_creds = completion_resp.get("app")
+        if not app_creds:
+            raise ConfigurationError(
+                "AppEnrollmentService: completion response missing app credentials"
+            )
+        if not app_creds.get("app_cert"):
+            raise ConfigurationError("AppEnrollmentService: completion response missing app_cert")
+        # Validate the certificate has the expected SPIFFE URI SAN.
+        cert = x509.load_pem_x509_certificate(app_creds["app_cert"].encode("utf-8"))
+        app_id = self._extract_app_id(cert)
+        if self._app_name not in app_id:
+            raise ConfigurationError(
+                f"AppEnrollmentService: cert SPIFFE URI does not contain expected component "
+                f'name "{self._app_name}": {app_id}'
+            )
+        return app_creds, app_id
 
 
 # ---------------------------------------------------------------------------
@@ -863,18 +897,16 @@ def _atomic_write_file(file_path: str, data: str, mode: int) -> None:
     target path. This ensures the target file is either fully written or not
     changed at all (no partial writes visible to concurrent readers).
     """
-    directory = os.path.dirname(file_path)
+    directory = Path(file_path).parent
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".tmp_", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(data)
-        os.chmod(tmp_path, mode)
-        os.rename(tmp_path, file_path)
+        Path(tmp_path).chmod(mode)
+        Path(tmp_path).replace(file_path)
     except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        with contextlib.suppress(OSError):
+            Path(tmp_path).unlink()
         raise
 
 

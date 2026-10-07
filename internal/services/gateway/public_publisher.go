@@ -827,14 +827,13 @@ func (s *PublicPublisherService) retransmitUnacknowledgedOutbox(ctx context.Cont
 			continue
 		}
 		expectedSequence := tipSequence + 1
-		if entry.Sequence != expectedSequence {
-			return fmt.Errorf("%w: sequence %d does not continue acknowledged tip %d", constants.ErrPublicFeedOutboxCorrupt, entry.Sequence, tipSequence)
-		}
+		// Outbox entries are indexed by the batch's last sequence; continuity
+		// is determined by its first sequence, including multi-record batches.
 		var batch models.PublicFeedBatch
 		if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
 			return fmt.Errorf("%w: decode unacknowledged batch: %v", constants.ErrPublicFeedOutboxCorrupt, err)
 		}
-		if batch.FirstSequence != expectedSequence || batch.PreviousBatchHash != tipHash {
+		if batch.FirstSequence != expectedSequence || batch.LastSequence != entry.Sequence || batch.PreviousBatchHash != tipHash {
 			return fmt.Errorf("%w: sequence %d hash chain does not match mirror tip", constants.ErrPublicFeedOutboxCorrupt, entry.Sequence)
 		}
 		if err := s.transmitBatch(ctx, batch); err != nil {
@@ -968,14 +967,11 @@ func (s *PublicPublisherService) RepairOutboxFromSnapshot(ctx context.Context) e
 		if entry.Sequence <= tipSequence {
 			continue
 		}
-		if entry.Sequence != tipSequence+1 {
-			break
-		}
 		var batch models.PublicFeedBatch
 		if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
 			break
 		}
-		if batch.FirstSequence != tipSequence+1 || batch.PreviousBatchHash != tipHash {
+		if batch.FirstSequence != tipSequence+1 || batch.LastSequence != entry.Sequence || batch.PreviousBatchHash != tipHash {
 			break
 		}
 		retained = append(retained, entry)

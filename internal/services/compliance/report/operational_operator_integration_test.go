@@ -44,6 +44,15 @@ func (operationalAcceptanceHandler) ExecuteVerifiedTransaction(context.Context, 
 	return "operator fixture completed", nil
 }
 
+// mustUUID returns a fresh UUID string, failing the test on the
+// (practically impossible) failure of the OS random source.
+func mustUUID(t *testing.T) string {
+	t.Helper()
+	id, err := uuid.NewString()
+	require.NoError(t, err)
+	return id
+}
+
 func TestOperationalOperatorEvidence_GeneratesNativeAssuranceAndVerifiesOffline(t *testing.T) {
 	ctx := context.Background()
 	tempDir := testutil.TempDir(t)
@@ -84,7 +93,7 @@ func TestOperationalOperatorEvidence_GeneratesNativeAssuranceAndVerifiesOffline(
 	}
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "operator-transaction-hash",
 		OperatorId:        "operator-1",
 		OperatorSessionId: "operator-session-1",

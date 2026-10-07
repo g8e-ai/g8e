@@ -353,7 +353,11 @@ func TestQueryWithRetry_InvalidSQL(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	_, err = db.QueryWithRetry("INVALID QUERY")
+	rows, err := db.QueryWithRetry("INVALID QUERY")
+	if rows != nil {
+		defer rows.Close()
+		require.NoError(t, rows.Err())
+	}
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "retry", "non-busy errors should not retry")
 }

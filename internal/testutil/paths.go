@@ -8,9 +8,7 @@
 package testutil
 
 import (
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -69,26 +67,12 @@ func NewTestPaths(baseDir string) *TestPaths {
 	}
 }
 
-// TempDir creates a unique temp directory under CWD (./.g8e-test-tmp/) and
-// registers a t.Cleanup to remove it. This replaces t.TempDir() to keep all
-// test artifacts relative to the project root instead of the system TEMP dir.
+// TempDir returns an absolute, test-owned directory in the system temporary
+// directory. Keeping runtime files outside the source tree avoids triggering
+// editor and source watchers. testing owns cleanup independently of CWD.
 func TempDir(t *testing.T) string {
 	t.Helper()
-	base := filepath.Join(constants.PathCurrentDir, constants.TestTempDirname)
-	if err := os.MkdirAll(base, constants.PermDirStandard); err != nil {
-		t.Fatalf("failed to create test temp base dir %s: %v", base, err)
-	}
-	safeName := strings.NewReplacer("/", "_", "\\", "_").Replace(t.Name())
-	dir, err := os.MkdirTemp(base, safeName+"-*")
-	if err != nil {
-		t.Fatalf("failed to create test temp dir: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Logf("TempDir cleanup: failed to remove %s: %v", dir, err)
-		}
-	})
-
+	dir := t.TempDir()
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		t.Fatalf("failed to resolve absolute path for %s: %v", dir, err)

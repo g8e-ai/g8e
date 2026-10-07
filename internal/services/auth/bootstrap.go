@@ -117,21 +117,14 @@ type AuthServicesResponse struct {
 func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*BootstrapConfig, error) {
 	bs.logger.Info("Authenticating with endpoint...", "endpoint", bs.config.Endpoint)
 
-	role := constants.OperatorRoleData
-	if bs.config.Inference.Enabled {
-		role = constants.OperatorRoleInference
-	} else if bs.config.ProvenanceOperator.Enabled {
-		role = constants.OperatorRoleProvenance
-	} else if bs.config.ProviderBoundaryObserver.Enabled {
-		role = constants.OperatorRoleObserver
-	}
+	roles := bs.config.EffectiveOperatorRoles()
 
 	account := ResolveCurrentAccount()
 	fingerprint, err := GenerateOperatorFingerprint(bs.logger, FingerprintOptions{
 		LocalDir: bs.config.WorkDir,
 		Account:  account,
 		Port:     bs.config.HTTPPort,
-		Role:     string(role),
+		Roles:    roles,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapFingerprint, err)
@@ -145,7 +138,7 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 		"local_dir", fingerprint.LocalDir,
 		"account", fingerprint.Account,
 		"port", fingerprint.Port,
-		"role", fingerprint.Role)
+		"role", fingerprint.Roles)
 
 	bootstrapConfig, err := bs.requestHTTPAuth(ctx)
 	if err != nil {
@@ -163,14 +156,7 @@ type operatorAuthRequest struct {
 
 // requestHTTPAuth authenticates via POST /api/v1/operators/reauth with exponential backoff.
 func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConfig, error) {
-	role := constants.OperatorRoleData
-	if bs.config.Inference.Enabled {
-		role = constants.OperatorRoleInference
-	} else if bs.config.ProvenanceOperator.Enabled {
-		role = constants.OperatorRoleProvenance
-	} else if bs.config.ProviderBoundaryObserver.Enabled {
-		role = constants.OperatorRoleObserver
-	}
+	roles := bs.config.EffectiveOperatorRoles()
 
 	account := ResolveCurrentAccount()
 
@@ -182,7 +168,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		LogLevel:              bs.config.LogLevel,
 
 		HTTPPort: bs.config.HTTPPort,
-		Role:     role,
+		Roles:    roles,
 		LocalDir: bs.config.WorkDir,
 		Account:  account,
 
@@ -227,7 +213,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 			delay = min(delay*2, bootstrapMaxDelay)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "POST", authURL, bytes.NewReader(bodyBytes))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL, bytes.NewReader(bodyBytes))
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapRequestBuild, err)
 		}

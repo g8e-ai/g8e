@@ -21,11 +21,11 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import aiohttp  # type: ignore
+    import aiohttp
 
 from app.clients.http_client import HTTPClient
-from app.models.infra import HTTPClientStatus
 from app.errors import ValidationError
+from app.models.infra import HTTPClientStatus
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +104,8 @@ class HTTPService:
                 await client.close()
                 logger.info("[HTTP] Closed HTTP client for service: %s", service_name)
             except Exception as e:
-                logger.error(
-                    "[HTTP] Error closing HTTP client for %s: %s", service_name, e, exc_info=True
+                logger.exception(
+                    "[HTTP] Error closing HTTP client for %s: %s", service_name, e
                 )
 
         self._active_clients.clear()
@@ -145,8 +145,8 @@ class HTTPService:
             await client.close()
             logger.info("[HTTP] Deregistered and closed HTTP client for service: %s", service_name)
         except Exception as e:
-            logger.error(
-                "[HTTP] Error deregistering HTTP client for %s: %s", service_name, e, exc_info=True
+            logger.exception(
+                "[HTTP] Error deregistering HTTP client for %s: %s", service_name, e
             )
 
     def list_active_clients(self) -> list[str]:

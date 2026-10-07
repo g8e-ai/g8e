@@ -19,22 +19,19 @@ var (
 	colorPassed   = lipgloss.Color("34")  // muted green
 	colorWaiting  = lipgloss.Color("226") // bright yellow
 	colorCritical = lipgloss.Color("196") // bright red
-	colorApprove  = lipgloss.Color("34")  // green
-	colorVeto     = lipgloss.Color("196") // red
-	colorPending  = lipgloss.Color("245") // gray
 	colorHeader   = lipgloss.Color("39")  // bright blue
 	colorWarn     = lipgloss.Color("208") // orange
+	colorFocus    = lipgloss.Color("226") // bright yellow
 )
 
-// Border styles for the three panes.
+// Border styles for the panes; the focused pane is highlighted.
 var (
-	baseBorder = lipgloss.NewStyle().
+	borderPane = lipgloss.NewStyle().
 			BorderForeground(colorBorder).
-			Padding(0, 1)
+			Padding(0, 1).
+			Border(lipgloss.RoundedBorder())
 
-	borderPipeline  = baseBorder.Border(lipgloss.RoundedBorder())
-	borderLedger    = baseBorder.Border(lipgloss.RoundedBorder())
-	borderConsensus = baseBorder.Border(lipgloss.RoundedBorder(), false, true, true, true)
+	borderFocused = borderPane.BorderForeground(colorFocus)
 )
 
 // Text styles.
@@ -49,9 +46,17 @@ var (
 				Foreground(colorHeader).
 				MarginBottom(0)
 
-	consensusHeaderStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(colorHeader)
+	paneHeaderStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colorHeader)
+
+	headerStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colorHeader)
+
+	selectedRowStyle = lipgloss.NewStyle().
+				Foreground(colorWaiting).
+				Bold(true)
 
 	stagePassedStyle = lipgloss.NewStyle().
 				Foreground(colorPassed)
@@ -84,30 +89,15 @@ var (
 			Foreground(colorCritical).
 			Bold(true)
 
-	consensusApproveStyle = lipgloss.NewStyle().
-				Foreground(colorApprove).
-				Bold(true)
-
-	consensusVetoStyle = lipgloss.NewStyle().
-				Foreground(colorVeto).
-				Bold(true)
-
-	consensusPendingStyle = lipgloss.NewStyle().
-				Foreground(colorPending)
-
-	consensusStatusStyle = lipgloss.NewStyle().
-				Foreground(colorNormal)
-
-	consensusRejectStyle = lipgloss.NewStyle().
-				Foreground(colorCritical).
-				Bold(true)
-
-	consensusApproveStatusStyle = lipgloss.NewStyle().
-					Foreground(colorPassed).
-					Bold(true)
-
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(colorMuted)
+
+	tabStyle = lipgloss.NewStyle().
+			Foreground(colorMuted)
+
+	tabActiveStyle = lipgloss.NewStyle().
+			Foreground(colorFocus).
+			Bold(true)
 )
 
 // statusIcon returns the display icon for a pipeline stage status.
@@ -124,15 +114,4 @@ func statusIcon(s PipelineStatus) string {
 	default:
 		return "[ ]"
 	}
-}
-
-// voteIcon returns the display icon for a consensus member vote.
-func voteIcon(m consensusMemberState) string {
-	if !m.signed {
-		return "[...]"
-	}
-	if m.decision {
-		return "[YES]"
-	}
-	return "[NO ]"
 }

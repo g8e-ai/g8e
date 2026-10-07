@@ -94,6 +94,7 @@ func getServiceStatus(ctx context.Context, serviceName string, executor commandE
 	// This prevents shell injection by avoiding shell interpretation.
 	output, err := executor.CombinedOutput(ctx, "systemctl", "show", serviceName, "--no-pager")
 	if err != nil {
+		//nolint:nilerr // intentional fallback: systemctl error recorded in SysServiceStatusResult
 		return SysServiceStatusResult{
 			ServiceName: serviceName,
 			Error:       string(output),

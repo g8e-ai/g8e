@@ -128,7 +128,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		_, artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalReceiptsDirname, ArtifactTypeActionReceipt, receipt.TransactionID, 0, receipt.ExecutedAt, receipt.Body)
+		artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalReceiptsDirname, ArtifactTypeActionReceipt, receipt.TransactionID, 0, receipt.ExecutedAt, receipt.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +151,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 		if err != nil {
 			return nil, fmt.Errorf("operational export: canonicalize persistence attestation %s: %w", receipt.TransactionID, err)
 		}
-		_, persistenceArtifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalPersistenceDirname, ArtifactTypeReceiptPersistence, receipt.TransactionID, 0, time.UnixMilli(attestation.GetPersistedAtUnixMs()), body)
+		persistenceArtifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalPersistenceDirname, ArtifactTypeReceiptPersistence, receipt.TransactionID, 0, time.UnixMilli(attestation.GetPersistedAtUnixMs()), body)
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +190,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 		if err != nil {
 			return nil, fmt.Errorf("operational export: marshal audit chain entry %d: %w", entry.Seq, err)
 		}
-		_, artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalAuditChainDirname, ArtifactTypeAuditChainEntry, entry.TransactionID, entry.Seq, entry.Timestamp, body)
+		artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalAuditChainDirname, ArtifactTypeAuditChainEntry, entry.TransactionID, entry.Seq, entry.Timestamp, body)
 		if err != nil {
 			return nil, err
 		}
@@ -213,7 +213,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		_, artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalCommitmentsDirname, ArtifactTypeCommitment, commitment.TransactionID, commitment.Sequence, commitment.CommittedAt, commitment.Body)
+		artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalCommitmentsDirname, ArtifactTypeCommitment, commitment.TransactionID, commitment.Sequence, commitment.CommittedAt, commitment.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -247,18 +247,18 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 	return inventory, nil
 }
 
-func writeOperationalArtifact(outputDir, directory string, artifactType ArtifactType, transactionID string, sequence int64, producedAt time.Time, body []byte) (string, OperationalExportArtifact, error) {
+func writeOperationalArtifact(outputDir, directory string, artifactType ArtifactType, transactionID string, sequence int64, producedAt time.Time, body []byte) (OperationalExportArtifact, error) {
 	digest := sha256.Sum256(body)
 	digestHex := hex.EncodeToString(digest[:])
-	relativePath := filepath.Join(directory, digestHex+constants.FileExtJSON)
+	relativePath := filepath.ToSlash(filepath.Join(directory, digestHex+constants.FileExtJSON))
 	absolutePath := filepath.Join(outputDir, relativePath)
 	if err := os.MkdirAll(filepath.Dir(absolutePath), constants.PermDirPrivate); err != nil {
-		return "", OperationalExportArtifact{}, fmt.Errorf("%w: create operational artifact directory: %w", constants.ErrDirCreateFailed, err)
+		return OperationalExportArtifact{}, fmt.Errorf("%w: create operational artifact directory: %w", constants.ErrDirCreateFailed, err)
 	}
 	if err := os.WriteFile(absolutePath, body, constants.PermFilePrivate); err != nil {
-		return "", OperationalExportArtifact{}, fmt.Errorf("%w: write operational artifact: %w", constants.ErrFileWriteFailed, err)
+		return OperationalExportArtifact{}, fmt.Errorf("%w: write operational artifact: %w", constants.ErrFileWriteFailed, err)
 	}
-	return relativePath, OperationalExportArtifact{
+	return OperationalExportArtifact{
 		ArtifactType:  string(artifactType),
 		ArtifactID:    ContentAddress(artifactType, body),
 		SHA256:        digestHex,

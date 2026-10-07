@@ -10,14 +10,14 @@ import base64
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.operator.v1 import operator_pb2
 
-from app.constants.generated_status import EventType
 from app.constants import ExecutionStatus
+from app.constants.generated_status import EventType
 from app.models.http_context import RequestContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import DirectCommandResult
 from app.services.operator.execution_service import OperatorExecutionService
-from g8e.operator.v1 import operator_pb2
 from tests.fakes.factories import (
     build_bound_operator,
     build_g8e_http_context,
@@ -32,13 +32,13 @@ def _build_execution_service(
     gateway_client = MagicMock()
     gateway_client.dispatch = AsyncMock(return_value=dispatch_result)
 
-    svc = OperatorExecutionService.__new__(OperatorExecutionService)
-    svc._approval_service = None
-    svc._settings = None
-    svc._ai_response_analyzer = None
-    svc._investigation_service = None
-    svc._gateway_operator_client = gateway_client
-    svc._background_tasks = set()
+    svc = OperatorExecutionService(
+        approval_service=MagicMock(),
+        settings=MagicMock(),
+        ai_response_analyzer=MagicMock(),
+        investigation_service=MagicMock(),
+        gateway_operator_client=gateway_client,
+    )
 
     return svc, gateway_client
 

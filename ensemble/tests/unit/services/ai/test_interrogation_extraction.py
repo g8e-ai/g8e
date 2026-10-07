@@ -6,19 +6,22 @@
 # released under the Apache License, Version 2.0.
 
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.services.ai.chat_pipeline import ChatPipelineService
-from app.models.agent import AgentStreamState, AgentInputs
-from app.models.agents.triage import TriageResult
+
+import pytest
+
 from app.constants import (
+    EventType,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
     TriageRequestPosture,
-    EventType,
 )
+from app.models.agent import AgentInputs, AgentStreamState
+from app.models.agents.triage import TriageResult
+from app.models.events import SessionEvent, TriageClarificationQuestionsPayload
 from app.models.http_context import G8eHttpContext
+from app.services.ai.chat_pipeline import ChatPipelineService
 from tests.fakes.fake_event_service import FakeEventService
 
 
@@ -26,7 +29,8 @@ from tests.fakes.fake_event_service import FakeEventService
 async def test_interrogation_questions_published():
     # Setup
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.event_service = FakeEventService()
+    event_service = FakeEventService()
+    svc.event_service = event_service
     svc.investigation_service = MagicMock()
     svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
 
@@ -69,13 +73,15 @@ async def test_interrogation_questions_published():
     )
 
     # Verify
-    events = svc.event_service.published
+    events = event_service.published
     interrogation_events = [
         e for e in events if e.event_type == EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS
     ]
 
     assert len(interrogation_events) == 1
     event = interrogation_events[0]
+    assert isinstance(event, SessionEvent)
+    assert isinstance(event.payload, TriageClarificationQuestionsPayload)
     assert event.payload.questions == [
         "What is the error?",
         "When did it start?",
@@ -89,7 +95,8 @@ async def test_interrogation_questions_published():
 async def test_interrogation_questions_not_published_when_missing():
     # Setup
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.event_service = FakeEventService()
+    event_service = FakeEventService()
+    svc.event_service = event_service
     svc.investigation_service = MagicMock()
     svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
 
@@ -115,7 +122,7 @@ async def test_interrogation_questions_not_published_when_missing():
     )
 
     # Verify
-    events = svc.event_service.published
+    events = event_service.published
     interrogation_events = [
         e for e in events if e.event_type == EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS
     ]

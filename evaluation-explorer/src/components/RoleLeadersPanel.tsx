@@ -7,12 +7,13 @@ import { roleScopeFor } from '../content/roles';
 import {
   UnavailableValue,
   formatLatency,
+  formatDuration,
   formatNumber,
   formatPercent,
   formatThroughput,
 } from './shared';
 import { roleLabel, roleLeaderRows } from '../views/derived';
-import type { CatalogSnapshot, ModelRole, ModelSummary, QualityState } from '../contract/types';
+import type { CatalogSnapshot, EvaluationSummary, ModelRole, ModelSummary, QualityState } from '../contract/types';
 import { qualityStateLabel, qualityStateTone } from '../utils/feed-state';
 
 function agentStatus(state: QualityState): { label: string; tone: string } {
@@ -39,19 +40,21 @@ function roleLeadersUseProvisionalColumns(
   );
 }
 
-/** Top measured model per role across every dataset in the feed. */
+/** Top fully evaluated, verified model per role across datasets. */
 export function RoleLeadersPanel({
   models,
   catalogs,
+  evaluations,
 }: {
   models: ModelSummary[];
   catalogs: CatalogSnapshot[];
+  evaluations: EvaluationSummary[];
 }) {
   const catalogByDataset = useMemo(
     () => new Map(catalogs.map((catalog) => [catalog.dataset_id, catalog])),
     [catalogs],
   );
-  const roleRows = useMemo(() => roleLeaderRows(models), [models]);
+  const roleRows = useMemo(() => roleLeaderRows(models, evaluations), [models, evaluations]);
   const evaluatedRoles = roleRows.filter((row) => row.leader !== undefined);
   const provisional = roleLeadersUseProvisionalColumns(roleRows, catalogByDataset);
 
@@ -61,7 +64,7 @@ export function RoleLeadersPanel({
         <h2>
           Leaderboard{' '}
           <span className="panel-sub">
-            · {evaluatedRoles.length} of {roleRows.length} roles evaluated
+            · {evaluatedRoles.length} of {roleRows.length} roles qualified
           </span>
         </h2>
         <Link to="/models" className="panel-link">
@@ -69,7 +72,7 @@ export function RoleLeadersPanel({
         </Link>
       </div>
       {evaluatedRoles.length === 0 ? (
-        <p className="panel-empty">No evaluated models across datasets.</p>
+        <p className="panel-empty">No fully evaluated, verified models across datasets.</p>
       ) : (
         <div className="table-scroll">
           <table className="lab-table">
@@ -78,6 +81,8 @@ export function RoleLeadersPanel({
                 <th>Model</th>
                 <th>Role</th>
                 <th>Status</th>
+                <th>Size</th>
+                <th>Eval time</th>
                 {provisional ? (
                   <>
                     <th>Coverage</th>
@@ -101,8 +106,8 @@ export function RoleLeadersPanel({
                 if (!leader) {
                   return (
                     <tr key={role} className="role-leader-empty">
-                      <td colSpan={provisional ? 7 : 8}>
-                        <RoleLeaderCell role={role} /> — no measured leader yet
+                      <td colSpan={provisional ? 9 : 10}>
+                        <RoleLeaderCell role={role} /> — no fully evaluated, verified leader yet
                       </td>
                     </tr>
                   );
@@ -126,6 +131,8 @@ export function RoleLeadersPanel({
                         {status.label}
                       </span>
                     </td>
+                    <td>{leader.parameter_billions !== undefined ? `${leader.parameter_billions}B` : <UnavailableValue />}</td>
+                    <td>{leader.elapsed_seconds !== undefined ? formatDuration(leader.elapsed_seconds) : <UnavailableValue />}</td>
                     {provisional ? (
                       <>
                         <td>{formatPercent(leader.coverage, 0)}</td>

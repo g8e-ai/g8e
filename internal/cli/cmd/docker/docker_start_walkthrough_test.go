@@ -146,7 +146,7 @@ func TestPromptApproveComponent_NoPendingRequestSkips(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := promptApproveComponent(cmd, context.Background(), client, models.PlatformComponentEnsemble)
+	err := promptApproveComponent(cmd, client, models.PlatformComponentEnsemble)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "No pending ensemble enrollment request found")
 	assert.Empty(t, client.postCalls, "no POST should be made when there is no pending request")
@@ -174,7 +174,7 @@ func TestPromptApproveComponent_UserDeclinesPostsNothing(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetIn(bytes.NewBufferString("n\n"))
 
-	err := promptApproveComponent(cmd, context.Background(), client, models.PlatformComponentEnsemble)
+	err := promptApproveComponent(cmd, client, models.PlatformComponentEnsemble)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "Skipped ensemble enrollment")
 	assert.Empty(t, client.postCalls, "no POST should be made when user declines")
@@ -207,7 +207,7 @@ func TestPromptApproveComponent_UserApprovesPostsDecision(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetIn(bytes.NewBufferString("y\n"))
 
-	err := promptApproveComponent(cmd, context.Background(), client, models.PlatformComponentEnsemble)
+	err := promptApproveComponent(cmd, client, models.PlatformComponentEnsemble)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "ensemble enrollment request approved")
 	require.Len(t, client.postCalls, 1)
@@ -230,7 +230,7 @@ func TestPromptApproveComponent_GetErrorReturnsError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := promptApproveComponent(cmd, context.Background(), client, models.PlatformComponentEnsemble)
+	err := promptApproveComponent(cmd, client, models.PlatformComponentEnsemble)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fetch pending list")
 }
@@ -258,7 +258,7 @@ func TestPromptApproveComponent_PostErrorWrapsApprovalFailed(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetIn(bytes.NewBufferString("y\n"))
 
-	err := promptApproveComponent(cmd, context.Background(), client, models.PlatformComponentEnsemble)
+	err := promptApproveComponent(cmd, client, models.PlatformComponentEnsemble)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrDockerStartApprovalFailed)
 }
@@ -270,8 +270,8 @@ func TestRunDockerStartWalkthrough_EnrollmentFailureWrapsEnrollmentFailed(t *tes
 	deps := dockerStartDeps{
 		clientFactory:        authcmd.PanickingClientFactory(),
 		checkOperatorRunning: func(*config.Config) error { return nil },
-		enrollerFactory: func(auth.OutputFunc, fs.RuntimeFileService, *config.Config) authcmd.Enroller {
-			return failingEnroller
+		enrollerFactory: func(auth.OutputFunc, fs.RuntimeFileService, *config.Config) (authcmd.Enroller, error) {
+			return failingEnroller, nil
 		},
 		waitGatewayHealthy: func(*cobra.Command) error { return nil },
 		cfg:                cfg,

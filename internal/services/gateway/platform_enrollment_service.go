@@ -253,7 +253,10 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		return nil, err
 	}
 	tokenHash := platformEnrollmentTokenHash(token)
-	requestID := uuid.NewString()
+	requestID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	expiresAt := now.Add(constants.PlatformEnrollmentRequestTTL)
 
@@ -291,7 +294,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 	// Submit the CREATE envelope for audit. The handler is audit-only:
 	// it decodes the payload, returns a receipt summary, and writes
 	// nothing to the doc store.
-	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionCreate, constants.PlatformEnrollmentIntentRequest, &commonv1.PlatformEnrollmentGovernancePayload{
+	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionCreate, &commonv1.PlatformEnrollmentGovernancePayload{
 		Action:        string(constants.PlatformEnrollmentActionCreate),
 		Intent:        string(constants.PlatformEnrollmentIntentRequest),
 		RequestId:     requestID,
@@ -407,7 +410,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 		intent = constants.PlatformEnrollmentIntentDeny
 	}
 
-	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionDecide, intent, &commonv1.PlatformEnrollmentGovernancePayload{
+	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionDecide, &commonv1.PlatformEnrollmentGovernancePayload{
 		Action:        string(constants.PlatformEnrollmentActionDecide),
 		Intent:        string(intent),
 		RequestId:     req.RequestID,
@@ -482,7 +485,7 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 	if existing.ComponentKind == models.PlatformComponentDashboard || existing.ComponentKind == models.PlatformComponentEnsemble || existing.ComponentKind == models.PlatformComponentApplication {
 		targetDocumentID = protocol.NewWorkloadIdentity().AppSPIFFEID(existing.ComponentName)
 	}
-	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionRevoke, constants.PlatformEnrollmentIntentRevoke, &commonv1.PlatformEnrollmentGovernancePayload{
+	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionRevoke, &commonv1.PlatformEnrollmentGovernancePayload{
 		Action:           string(constants.PlatformEnrollmentActionRevoke),
 		Intent:           string(constants.PlatformEnrollmentIntentRevoke),
 		RequestId:        existing.ID,
@@ -639,7 +642,10 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 // material and generated IDs, submits the downstream PERSIST_POLICY
 // or CREATE_SESSION envelope, and returns the issued response.
 func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *models.PlatformEnrollmentRequest) (*models.PlatformEnrollmentCompleteResponse, error) {
-	leaseOwner := uuid.NewString()
+	leaseOwner, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	leaseExpiry := time.Now().UTC().Add(constants.PlatformEnrollmentIssuanceLeaseTTL)
 
 	// Acquire the issuance lease: approved -> issuing with lease owner
@@ -674,7 +680,7 @@ func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *mod
 	// Submit the ISSUE envelope. The handler verifies the issuing
 	// state, signs the certificate(s), stores the issued material, and
 	// transitions issuing -> completed.
-	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionIssue, constants.PlatformEnrollmentIntentIssue, &commonv1.PlatformEnrollmentGovernancePayload{
+	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionIssue, &commonv1.PlatformEnrollmentGovernancePayload{
 		Action:        string(constants.PlatformEnrollmentActionIssue),
 		Intent:        string(constants.PlatformEnrollmentIntentIssue),
 		RequestId:     req.ID,
@@ -727,9 +733,13 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble, models.PlatformComponentApplication:
 		policyID := req.PolicyID
 		if policyID == "" {
-			policyID = uuid.NewString()
+			id, err := uuid.NewString()
+			if err != nil {
+				return err
+			}
+			policyID = id
 		}
-		if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionPersistPolicy, constants.PlatformEnrollmentIntentIssue, &commonv1.PlatformEnrollmentGovernancePayload{
+		if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionPersistPolicy, &commonv1.PlatformEnrollmentGovernancePayload{
 			Action:                 string(constants.PlatformEnrollmentActionPersistPolicy),
 			Intent:                 string(constants.PlatformEnrollmentIntentIssue),
 			RequestId:              req.ID,
@@ -749,7 +759,7 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 		if req.OperatorID == "" || req.OperatorSessionID == "" || req.CLISessionID == "" {
 			return constants.ErrPlatformEnrollmentInvalidPayload
 		}
-		if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionCreateSession, constants.PlatformEnrollmentIntentIssue, &commonv1.PlatformEnrollmentGovernancePayload{
+		if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionCreateSession, &commonv1.PlatformEnrollmentGovernancePayload{
 			Action:                 string(constants.PlatformEnrollmentActionCreateSession),
 			Intent:                 string(constants.PlatformEnrollmentIntentIssue),
 			RequestId:              req.ID,
@@ -929,7 +939,11 @@ func (s *PlatformEnrollmentService) checkQuota(kind models.PlatformComponentKind
 		}
 		live++
 	}
-	if live >= constants.PlatformEnrollmentMaxLiveRequestsPerComponent {
+	limit := constants.PlatformEnrollmentMaxLiveRequestsPerComponent
+	if kind == models.PlatformComponentOperator {
+		limit = constants.PlatformEnrollmentMaxLiveOperatorRequests
+	}
+	if live >= limit {
 		return constants.ErrPlatformEnrollmentQuotaExceeded
 	}
 	return nil
@@ -966,7 +980,7 @@ func platformEnrollmentRequestEvent(action constants.PlatformEnrollmentGovernanc
 // gateway's current state root, a unique nonce, and a near-future
 // expiry. The payload is binary proto (the L4Warden decodes the same
 // way).
-func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action constants.PlatformEnrollmentGovernanceAction, intent constants.PlatformEnrollmentGovernanceIntent, payload *commonv1.PlatformEnrollmentGovernancePayload) (*commonv1.GovernanceEnvelope, error) {
+func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action constants.PlatformEnrollmentGovernanceAction, payload *commonv1.PlatformEnrollmentGovernancePayload) (*commonv1.GovernanceEnvelope, error) {
 	payloadBytes, err := marshalPayload(payload)
 	if err != nil {
 		return nil, fmt.Errorf("marshal payload: %w", err)

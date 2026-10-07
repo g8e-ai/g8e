@@ -186,7 +186,10 @@ func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operat
 		return "", "", fmt.Errorf("gateway: embedded operator: claimed by %s, not %s: %w", op.UserID, userID, constants.ErrEmbeddedOperatorClaimed)
 	}
 
-	operatorSessionID = uuid.NewString()
+	operatorSessionID, err = uuid.NewString()
+	if err != nil {
+		return "", "", err
+	}
 	type claimUpdate struct {
 		UserID            string    `json:"user_id"`
 		OrganizationID    string    `json:"organization_id"`

@@ -16,20 +16,22 @@ were moved from ``app.utils.envelope_builder`` (deleted) into
 removed ``app.models.uap.UAPEnvelope``.
 """
 
+import json
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, UTC
+from g8e.models.governance import GovernanceEnvelope
 
 from app.clients.governance_client import (
+    build_governance_envelope,
+    build_governance_envelope_json,
     generate_nonce,
     get_certificate_fingerprint,
     map_to_canonical_payload_type,
-    build_governance_envelope,
-    build_governance_envelope_json,
 )
-from app.models.pubsub_messages import G8eMessage
-from app.constants import EventType, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, EventType
 from app.models.command_request_payloads import CommandRequestPayload
-from g8e.models.governance import GovernanceEnvelope
+from app.models.pubsub_messages import G8eMessage
 
 pytestmark = [pytest.mark.unit]
 
@@ -260,7 +262,6 @@ class TestBuildGovernanceEnvelope:
         assert len(envelope_json) > 0
 
         # Should be valid JSON
-        import json
 
         parsed = json.loads(envelope_json)
         assert parsed["transaction_hash"] is not None

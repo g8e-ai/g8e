@@ -40,19 +40,29 @@ func (s *ModelSelector) bindFlags(cmd *cobra.Command) {
 }
 
 // withArgs returns a copy of the selector carrying the positional IDs.
-func (s ModelSelector) withArgs(args []string) ModelSelector {
-	s.IDs = normalizeSelectorIDs(args)
-	return s
+func (s *ModelSelector) withArgs(args []string) *ModelSelector {
+	var cp ModelSelector
+	if s != nil {
+		cp = *s
+	}
+	cp.IDs = normalizeSelectorIDs(args)
+	return &cp
 }
 
 // IsSet reports whether the selector names anything.
-func (s ModelSelector) IsSet() bool {
+func (s *ModelSelector) IsSet() bool {
+	if s == nil {
+		return false
+	}
 	return len(s.IDs) > 0 || len(s.Family) > 0 || s.MaxParams != "" || s.All
 }
 
 // describe renders whatever the selector carries, for error messages that
 // need to say what was unexpectedly set rather than just that it was set.
-func (s ModelSelector) describe() string {
+func (s *ModelSelector) describe() string {
+	if s == nil {
+		return ""
+	}
 	var parts []string
 	if len(s.IDs) > 0 {
 		parts = append(parts, fmt.Sprintf("model ID(s) %q", s.IDs))
@@ -69,7 +79,10 @@ func (s ModelSelector) describe() string {
 	return strings.Join(parts, ", ")
 }
 
-func (s ModelSelector) validate() error {
+func (s *ModelSelector) validate() error {
+	if s == nil {
+		return nil
+	}
 	hasFilter := len(s.Family) > 0 || s.MaxParams != ""
 	if len(s.IDs) > 0 && (hasFilter || s.All) {
 		return fmt.Errorf("evaluation: model selector: positional models cannot be combined with --family, --max-params, or --all: %w", constants.ErrEvaluationFlagsInvalid)
@@ -80,8 +93,8 @@ func (s ModelSelector) validate() error {
 	return nil
 }
 
-func (s ModelSelector) maxParameters() (uint64, error) {
-	if s.MaxParams == "" {
+func (s *ModelSelector) maxParameters() (uint64, error) {
+	if s == nil || s.MaxParams == "" {
 		return 0, nil
 	}
 	maxParams, err := evaluation.ParseParameterCount(s.MaxParams)
@@ -96,7 +109,7 @@ func (s ModelSelector) maxParameters() (uint64, error) {
 
 // Resolve applies the selector to variants. An empty selector and an empty
 // result are both errors wrapping constants.ErrEvaluationSelectionEmpty.
-func (s ModelSelector) Resolve(variants []*evalv1.ModelVariant) ([]*evalv1.ModelVariant, error) {
+func (s *ModelSelector) Resolve(variants []*evalv1.ModelVariant) ([]*evalv1.ModelVariant, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
@@ -115,7 +128,7 @@ func (s ModelSelector) Resolve(variants []*evalv1.ModelVariant) ([]*evalv1.Model
 
 // Filter applies the selector as a listing filter. An unset selector returns
 // every variant and an empty result is not an error.
-func (s ModelSelector) Filter(variants []*evalv1.ModelVariant) ([]*evalv1.ModelVariant, error) {
+func (s *ModelSelector) Filter(variants []*evalv1.ModelVariant) ([]*evalv1.ModelVariant, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
@@ -125,7 +138,7 @@ func (s ModelSelector) Filter(variants []*evalv1.ModelVariant) ([]*evalv1.ModelV
 	return s.apply(variants)
 }
 
-func (s ModelSelector) apply(variants []*evalv1.ModelVariant) ([]*evalv1.ModelVariant, error) {
+func (s *ModelSelector) apply(variants []*evalv1.ModelVariant) ([]*evalv1.ModelVariant, error) {
 	if len(s.IDs) > 0 {
 		return selectVariantsByID(variants, s.IDs)
 	}

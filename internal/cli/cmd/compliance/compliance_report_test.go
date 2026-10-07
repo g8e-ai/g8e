@@ -16,13 +16,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +47,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compliancereport.ComplianceReportSigningIdentity, *compliancev1.ComplianceReportTrustPolicy, ed25519.PrivateKey) {
+func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compliancereport.ComplianceReportSigningIdentity, *compliancev1.ComplianceReportTrustPolicy) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -74,11 +75,11 @@ func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compl
 			AllowedScopeRefs: []string{scopeID},
 		}},
 	}
-	return identity, policy, privateKey
+	return identity, policy
 }
 
 func complianceReportSigningIdentityForTest(t *testing.T) *compliancereport.ComplianceReportSigningIdentity {
-	identity, _, _ := complianceReportSigningFixtureForTest(t, evidence.EvalScopeID("evidence-graph-suite"))
+	identity, _ := complianceReportSigningFixtureForTest(t, evidence.EvalScopeID("evidence-graph-suite"))
 	return identity
 }
 
@@ -164,7 +165,7 @@ func configureComplianceReportGenerateCommand(t *testing.T, cmd *cobra.Command) 
 func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte, error) {
 	t.Helper()
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
 	assessmentAsOf := time.Unix(1_700_000_100, 0).UTC()
 	scopePath := writeComplianceAssessmentScopeForTest(t, evidence.EvalScopeID("evidence-graph-suite"), evalRuns, assessmentAsOf)
@@ -179,7 +180,7 @@ func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte
 }
 
 func TestComplianceReportGenerateCmdWithConfig_DefaultsToRestrictedProfile(t *testing.T) {
-	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 
 	profile := cmd.Flags().Lookup("profile")
 	require.NotNil(t, profile)
@@ -312,7 +313,7 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, os.WriteFile(ksiHistoryPath, ksiHistoryBody, constants.PermFileReadOnly))
 	require.NoError(t, os.WriteFile(ksiResultsPath, ksiResultsBody, constants.PermFileReadOnly))
 
-	commitment := &operatorv1.CommitmentAttestation{TransactionId: "transaction-1", TransactionHash: strings.Repeat("1", 64), PriorCommitmentHash: strings.Repeat("2", 64), StateRootAtCommit: strings.Repeat("3", 64), L2SignatureDigest: strings.Repeat("4", 64), WardenIntentSignatureDigest: strings.Repeat("5", 64), HumanSignatureDigest: strings.Repeat("6", 64), ActionType: "FILE_EDIT", TargetResource: constants.DemosTargetDataDir, CommittedAtUnixMs: verifiedAt.Add(-time.Second).UnixMilli(), AuditorKeyId: keyID}
+	commitment := &operatorv1.CommitmentAttestation{TransactionId: "transaction-1", TransactionHash: strings.Repeat("1", 64), PriorCommitmentHash: strings.Repeat("2", 64), StateRootAtCommit: strings.Repeat("3", 64), L2SignatureDigest: strings.Repeat("4", 64), WardenIntentSignatureDigest: strings.Repeat("5", 64), HumanSignatureDigest: strings.Repeat("6", 64), ActionType: "FILE_EDIT", TargetResource: "target-data", CommittedAtUnixMs: verifiedAt.Add(-time.Second).UnixMilli(), AuditorKeyId: keyID}
 	commitmentPayload, err := governance.CanonicalizeCommitmentAttestation(commitment)
 	require.NoError(t, err)
 	commitmentDigest := sha256.Sum256(commitmentPayload)
@@ -411,7 +412,7 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, err)
 	evidencePolicyPath := filepath.Join(root, constants.ComplianceEvidenceTrustPolicyTestFilename)
 	require.NoError(t, os.WriteFile(evidencePolicyPath, evidencePolicyBody, constants.PermFileReadOnly))
-	generateCmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+	generateCmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 		return reportIdentity, nil
 	}, func() time.Time { return reportGeneratedAt })
 	configureComplianceReportGenerateCommand(t, generateCmd)
@@ -445,107 +446,9 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	assert.True(t, verificationReport.GetValid(), verificationReport.GetFailures())
 }
 
-func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailIndependentReplay(t *testing.T) {
-	tests := []struct {
-		name         string
-		relativePath string
-		body         []byte
-	}{
-		{name: "verification report", relativePath: constants.ComplianceBundleSourceVerificationFilename, body: []byte(`{}`)},
-		{name: "run manifest", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunManifestFilename), body: []byte(`{}`)},
-		{name: "scenario results", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunResultsFilename), body: []byte("{}\n")},
-		{name: "provenance artifact", relativePath: path.Join(constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname, constants.DemosComposeFile), body: []byte("services: {tampered: true}")},
-		{name: "scenario definitions", relativePath: path.Join(constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename), body: []byte("{}\n")},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-			projectRoot := writeDemoProvenanceTree(t)
-			runID := persistMinimalDemoRunFixture(t, fileSvc, projectRoot)
-			scopeID := constants.DemoScopeFedRAMP
-			identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
-			cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), func(string) evidence.ProvenanceSource {
-				return evidence.NewDemoDirectoryProvenanceSource(projectRoot)
-			}, func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
-				return identity, nil
-			}, time.Now)
-			configureComplianceReportGenerateCommand(t, cmd)
-			assessmentAsOf := time.Unix(1_700_000_100, 0).UTC()
-			scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{runID}, assessmentAsOf)
-			require.NoError(t, cmd.Flags().Set("scope", scopePath))
-			require.NoError(t, cmd.Flags().Set("demo-run", runID))
-			var output bytes.Buffer
-			cmd.SetOut(&output)
-			require.NoError(t, cmd.RunE(cmd, nil))
-			descriptorAbsolutePath := string(bytes.TrimSpace(output.Bytes()))
-			trustBody, err := compliancev1.MarshalCanonical(policy)
-			require.NoError(t, err)
-			trustPath := filepath.Join(t.TempDir(), constants.ComplianceReportTrustPolicyTestFilename)
-			require.NoError(t, os.WriteFile(trustPath, trustBody, constants.PermFilePublic))
-			verificationTime := time.Now().UTC().Add(time.Minute)
-			verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return verificationTime })
-			require.NoError(t, verifyCmd.Flags().Set("trust-policy", trustPath))
-			verifyCmd.SetOut(io.Discard)
-			require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorAbsolutePath}))
-			descriptorPath, err := fileSvc.Rel(descriptorAbsolutePath)
-			require.NoError(t, err)
-			descriptorBody, err := fileSvc.ReadFile(context.Background(), descriptorPath)
-			require.NoError(t, err)
-			bundle := &compliancev1.ComplianceReportBundle{}
-			require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
-			bundleDir := path.Dir(descriptorPath)
-			sourcePath := path.Join(bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, test.relativePath)
-			require.NoError(t, fileSvc.WriteFile(context.Background(), sourcePath, test.body, constants.PermFileReadOnly))
-			root, err := os.OpenRoot(fileSvc.Resolve(bundleDir))
-			require.NoError(t, err)
-			t.Cleanup(func() { require.NoError(t, root.Close()) })
-
-			report, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{
-				Bundle:      bundle,
-				Reader:      &complianceBundleRootReader{root: root},
-				TrustPolicy: policy,
-				VerifiedAt:  verificationTime,
-			})
-
-			require.NoError(t, err)
-			assert.False(t, report.GetValid())
-			assertComplianceVerificationFailure(t, report, constants.ErrDemoRunVerificationFailed, path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename))
-		})
-	}
-}
-
-func TestBuildDemoVerificationArtifacts_EmbedsValidExistingVerifierResult(t *testing.T) {
-	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	projectRoot := writeDemoProvenanceTree(t)
-	runID := persistMinimalDemoRunFixture(t, fileSvc, projectRoot)
-	verifiedAt := time.Unix(1_800_000_000, 0).UTC()
-
-	artifacts, err := buildDemoVerificationArtifacts(context.Background(), fileSvc, evidence.NewDemoDirectoryProvenanceSource(projectRoot), []string{runID}, verifiedAt)
-
-	require.NoError(t, err)
-	artifactByPath := make(map[string]compliancereport.SourceArtifact, len(artifacts))
-	for _, artifact := range artifacts {
-		artifactByPath[artifact.BundlePath] = artifact
-	}
-	verificationPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
-	report := &compliancev1.ComplianceVerificationReport{}
-	require.NoError(t, compliancev1.UnmarshalCanonical(artifactByPath[verificationPath].Body, report))
-	assert.True(t, report.GetValid())
-	assert.Equal(t, constants.DemoRunVerifierID, report.GetVerifierId())
-	assert.NotEmpty(t, artifactByPath[path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunManifestFilename)].Body)
-	assert.NotEmpty(t, artifactByPath[path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunResultsFilename)].Body)
-	provenanceArtifacts, err := evidence.NewDemoDirectoryProvenanceSource(projectRoot).Artifacts(context.Background(), constants.DemosOrgFedRAMP)
-	require.NoError(t, err)
-	for _, expected := range provenanceArtifacts {
-		bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname, filepath.ToSlash(expected.Name))
-		assert.Equal(t, expected.Body, artifactByPath[bundlePath].Body)
-	}
-	assert.NotEmpty(t, artifactByPath[path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename)].Body)
-}
-
 func TestComplianceReportGenerateCmdWithConfig_RejectsUnsupportedProfile(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
 	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{"run-1"}, time.Unix(1_700_000_001, 0).UTC())
 	require.NoError(t, cmd.Flags().Set("scope", scopePath))
@@ -583,7 +486,7 @@ func TestComplianceReportGenerateCmdWithConfig_RejectsIncompleteCampaignSource(t
 			CampaignId: "campaign-1",
 		},
 	}))
-	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
 	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{runID}, time.Unix(1_700_000_001, 0).UTC())
 	scopeBody, err := os.ReadFile(scopePath)
@@ -694,8 +597,8 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	}))
 	require.NoError(t, fileSvc.MkdirAll(context.Background(), path.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, "incomplete-candidate"), constants.PermDirStandard))
 	scopeID := constants.EvalScopePrefix + req.CampaignID
-	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
-	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+	identity, policy := complianceReportSigningFixtureForTest(t, scopeID)
+	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 		return identity, nil
 	}, func() time.Time { return assessmentAsOf })
 	configureComplianceReportGenerateCommand(t, cmd)
@@ -742,7 +645,7 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	require.Contains(t, selectionDiagnostics, "outside-window-candidate")
 	assert.Equal(t, "evaluation_candidate_outside_window", selectionDiagnostics["outside-window-candidate"].GetCode())
 	assert.Equal(t, "info", selectionDiagnostics["outside-window-candidate"].GetSeverity())
-	inventoryPath := path.Join(path.Dir(descriptorPath), constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, scope.SourceAdmissions[0].AdmissionId, constants.CampaignSourceInventoryFilename)
+	inventoryPath := path.Join(path.Dir(filepath.ToSlash(descriptorPath)), constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, scope.SourceAdmissions[0].AdmissionId, constants.CampaignSourceInventoryFilename)
 	inventoryBody, err := fileSvc.ReadFile(context.Background(), inventoryPath)
 	require.NoError(t, err)
 	inventory := &evalv1.CampaignComplianceSourceInventory{}
@@ -863,8 +766,8 @@ func generateCampaignComplianceBundleFixture(t *testing.T, includeWitnesses bool
 	}
 	assessmentAsOf := time.Now().UTC()
 	scopeID := constants.EvalScopePrefix + req.CampaignID
-	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
-	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+	identity, policy := complianceReportSigningFixtureForTest(t, scopeID)
+	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 		return identity, nil
 	}, func() time.Time { return assessmentAsOf })
 	configureComplianceReportGenerateCommand(t, cmd)
@@ -893,7 +796,7 @@ func generateCampaignComplianceBundleFixture(t *testing.T, includeWitnesses bool
 	require.NoError(t, err)
 	bundle := &compliancev1.ComplianceReportBundle{}
 	require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
-	bundleDir := path.Dir(descriptorPath)
+	bundleDir := path.Dir(filepath.ToSlash(descriptorPath))
 	verificationPath := path.Join(bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, admission.GetAdmissionId(), constants.ComplianceBundleSourceVerificationFilename)
 	verificationBody, err := fileSvc.ReadFile(ctx, verificationPath)
 	require.NoError(t, err)
@@ -1028,7 +931,7 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignWitnessMutationsFailOffli
 
 func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidProtectedAssessmentWindow(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+	cmd := complianceReportGenerateCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
 	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{"run-1"}, time.Unix(1_700_000_001, 0).UTC())
 	scopeBody, err := os.ReadFile(scopePath)
@@ -1309,7 +1212,7 @@ func TestComplianceBundleRootReader_RejectsSymlinkEntries(t *testing.T) {
 	rootPath := t.TempDir()
 	targetPath := filepath.Join(rootPath, constants.ComplianceBundleAnalysisPath)
 	require.NoError(t, os.WriteFile(targetPath, []byte(`{}`), constants.PermFilePublic))
-	require.NoError(t, os.Symlink(constants.ComplianceBundleAnalysisPath, filepath.Join(rootPath, constants.ComplianceBundleUnexpectedTestPath)))
+	testutil.Symlink(t, constants.ComplianceBundleAnalysisPath, filepath.Join(rootPath, constants.ComplianceBundleUnexpectedTestPath))
 	root, err := os.OpenRoot(rootPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, root.Close()) })

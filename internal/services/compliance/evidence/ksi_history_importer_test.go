@@ -309,7 +309,7 @@ func TestKSIHistoryImporter_Import_ProducesValidGraph(t *testing.T) {
 	fixture := newKSIHistoryImporterFixture(t)
 	nodes, err := NewKSIHistoryImporter(fixture.reader, fixture.binding).Import(context.Background())
 	require.NoError(t, err)
-	graph := NewEvidenceGraph(constants.DemoRunMaxArtifactBytes, []string{constants.MediaTypeJSON})
+	graph := NewEvidenceGraph(maxArtifactBytes, []string{constants.MediaTypeJSON})
 	for _, node := range nodes {
 		require.NoError(t, graph.AddNode(node))
 	}

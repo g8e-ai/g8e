@@ -1,12 +1,6 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
-#
-# As of the Change Date listed in the LICENSE file, this software is
-# released under the Apache License, Version 2.0.
-
-from __future__ import annotations
-
 """
 Typed client publish events.
 
@@ -29,7 +23,35 @@ wire models to add from_session_event/from_background_event classmethods that
 accept g8ee's internal SessionEvent/BackgroundEvent routing wrappers.
 """
 
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+from __future__ import annotations
+
 from typing import Any
+
+from g8e.models.events import (
+    AiProcessingStoppedPayload,
+    AIToolLifecyclePayload,
+    ChatCitationsReadyPayload,
+    ChatErrorPayload,
+    ChatProcessingStartedPayload,
+    ChatResponseChunkPayload,
+    ChatResponseCompletePayload,
+    ChatRetryPayload,
+    ChatThinkingPayload,
+    ChatTurnCompletePayload,
+    ScrubbingTelemetry,
+    TriageClarificationQuestionsPayload,
+    _SSEEventBody,
+)
+from g8e.models.events import (
+    BackgroundEventWire as _G8eBackgroundEventWire,
+)
+from g8e.models.events import (
+    SessionEventWire as _G8eSessionEventWire,
+)
 
 from app.constants import EventType
 from app.models.agents.tribunal import (
@@ -49,7 +71,7 @@ from app.models.agents.tribunal import (
     TribunalSessionSystemErrorPayload,
     TribunalVotingCompletedPayload,
 )
-from app.models.base import G8eBaseModel, Field, model_validator
+from app.models.base import Field, G8eBaseModel, model_validator
 from app.models.cases import CaseCreatedPayload, CaseEventPayload
 from app.models.operators import (
     AgentContinueApprovalEvent,
@@ -62,28 +84,6 @@ from app.models.reputation import (
     ReputationCommitmentCreatedPayload,
     ReputationCommitmentFailedPayload,
     StakeResolutionPayload,
-)
-
-from g8e.models.events import (
-    _SSEEventBody,
-    AiProcessingStoppedPayload,
-    AIToolLifecyclePayload,
-    ChatCitationsReadyPayload,
-    ChatErrorPayload,
-    ChatProcessingStartedPayload,
-    ChatResponseChunkPayload,
-    ChatResponseCompletePayload,
-    ChatRetryPayload,
-    ChatThinkingPayload,
-    ChatTurnCompletePayload,
-    TriageClarificationQuestionsPayload,
-)
-from g8e.models.events import (
-    SessionEventWire as _G8eSessionEventWire,
-    ScrubbingTelemetry,
-)
-from g8e.models.events import (
-    BackgroundEventWire as _G8eBackgroundEventWire,
 )
 
 # Registry-backed SSE payload types for every ensemble-produced event on the
@@ -256,7 +256,7 @@ class SessionEventWire(_G8eSessionEventWire):
     """
 
     @classmethod
-    def from_session_event(cls, se: SessionEvent) -> SessionEventWire:
+    def from_routed_session_event(cls, se: SessionEvent) -> SessionEventWire:
         data = se.payload.model_dump(mode="json")
         if se.web_session_id:
             data["web_session_id"] = se.web_session_id
@@ -286,7 +286,7 @@ class BackgroundEventWire(_G8eBackgroundEventWire):
     """
 
     @classmethod
-    def from_background_event(cls, be: BackgroundEvent) -> BackgroundEventWire:
+    def from_routed_background_event(cls, be: BackgroundEvent) -> BackgroundEventWire:
         data = be.payload.model_dump(mode="json")
         data["user_id"] = be.user_id
         if be.investigation_id is not None:

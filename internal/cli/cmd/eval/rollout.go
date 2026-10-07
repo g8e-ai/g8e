@@ -244,7 +244,7 @@ func rolloutSelectorCmd(deps nativeEvalDeps, verb rolloutSelectorVerb) *cobra.Co
 // selectQueueEntries applies a selector to the queue. Positional models name
 // queue entries directly, so an entry whose model has left the registry can
 // still be removed. Filter flags resolve against the registry.
-func selectQueueEntries(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot string, queue *evaluation.CampaignQueue, selector ModelSelector) ([]evaluation.CampaignQueueModel, error) {
+func selectQueueEntries(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot string, queue *evaluation.CampaignQueue, selector *ModelSelector) ([]evaluation.CampaignQueueModel, error) {
 	if err := selector.validate(); err != nil {
 		return nil, err
 	}

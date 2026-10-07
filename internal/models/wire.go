@@ -27,10 +27,10 @@ type RuntimeConfig struct {
 	NoGit                 bool   `json:"no_git"`
 	LogLevel              string `json:"log_level"`
 
-	HTTPPort int                    `json:"http_port"`
-	Role     constants.OperatorRole `json:"role,omitempty"`
-	LocalDir string                 `json:"local_dir,omitempty"`
-	Account  string                 `json:"account,omitempty"`
+	HTTPPort int                     `json:"http_port"`
+	Roles    constants.OperatorRoles `json:"roles,omitempty"`
+	LocalDir string                  `json:"local_dir,omitempty"`
+	Account  string                  `json:"account,omitempty"`
 
 	// InferenceEnabled is true when the Operator started with
 	// --inference-enabled, marking it as an Inference Node in the g8ellama

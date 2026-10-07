@@ -5,25 +5,34 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from g8e.models.internal_api import (
+    EvaluationGoldSummary,
+    EvaluationInferenceContext,
+    InferenceModelVariant,
+)
 
+from app.constants import JEV_DEFAULT_MODEL, LLMProvider
+from app.llm.llm_types import GenerateContentResponse
 from app.models.evaluation_trace import EvaluationToolCallRecord
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
-from app.constants import JEV_DEFAULT_MODEL, LLMProvider
 from app.models.settings import EvalJudgeSettings, G8eeUserSettings, LLMSettings
 from app.services.ai.eval_judge import EvalGrade
 from app.services.evaluation.semantic_grader import (
     _resolve_eval_judge_model,
     grade_campaign_assignment_semantically,
 )
-from g8e.models.internal_api import (
-    EvaluationGoldSummary,
-    EvaluationInferenceContext,
-    InferenceModelVariant,
-)
+
+
+def _gold_summary() -> EvaluationGoldSummary:
+    return EvaluationGoldSummary(
+        user_prompt="Identify the failing service.",
+        expected_behavior="checkout-api is the failing service",
+        required_concepts=["log-analysis"],
+    )
 
 
 def _evaluation_context() -> EvaluationInferenceContext:
@@ -39,20 +48,15 @@ def _evaluation_context() -> EvaluationInferenceContext:
         evaluation_lane="model_role",
         designated_model_role="primary",
         grading_method="semantic_judge",
-        gold_summary=EvaluationGoldSummary(
-            user_prompt="Identify the failing service.",
-            expected_behavior="checkout-api is the failing service",
-            required_concepts=["log-analysis"],
-        ),
+        gold_summary=_gold_summary(),
     )
 
 
 @pytest.mark.asyncio
 async def test_grade_campaign_assignment_semantically_records_passing_grade():
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-    settings = G8eeUserSettings(
-        eval_judge=EvalJudgeSettings(eval_judge_model="judge-model")
-    )
+    evaluation_context = _evaluation_context()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=evaluation_context)
+    settings = G8eeUserSettings(eval_judge=EvalJudgeSettings(eval_judge_model="judge-model"))
     judge_grade = EvalGrade(
         score=4,
         reasoning="checkout-api is identified",
@@ -69,15 +73,16 @@ async def test_grade_campaign_assignment_semantically_records_passing_grade():
             )
         ],
     )
-    with patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()), patch(
-        "app.services.evaluation.semantic_grader.EvalJudge"
-    ) as judge_cls:
+    with (
+        patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()),
+        patch("app.services.evaluation.semantic_grader.EvalJudge") as judge_cls,
+    ):
         judge_cls.return_value.grade_turn = AsyncMock(return_value=judge_grade)
         semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
-            evaluation_context=context.evaluation_context,
+            evaluation_context=evaluation_context,
             g8e_context=context,
             judge_settings=settings,
-            gold_summary=context.evaluation_context.gold_summary,
+            gold_summary=_gold_summary(),
             designated_role_output="checkout-api failed",
             tool_calls=[
                 EvaluationToolCallRecord(
@@ -97,31 +102,37 @@ async def test_grade_campaign_assignment_semantically_records_passing_grade():
 
 def test_resolve_eval_judge_model_prefers_explicit_setting():
     settings = G8eeUserSettings(
-        llm=LLMSettings(lite_model="qwen3:0.6b"),
+        llm=LLMSettings(llm_lite_model="qwen3:0.6b"),
         eval_judge=EvalJudgeSettings(eval_judge_model="judge-model"),
     )
     assert _resolve_eval_judge_model(settings) == "judge-model"
 
 
 def test_resolve_eval_judge_model_falls_back_to_lite_model():
-    settings = G8eeUserSettings(llm=LLMSettings(lite_model="qwen3:0.6b"))
+    settings = G8eeUserSettings(llm=LLMSettings(llm_lite_model="qwen3:0.6b"))
     assert _resolve_eval_judge_model(settings) == "qwen3:0.6b"
 
 
 @pytest.mark.asyncio
 async def test_grade_campaign_assignment_semantically_uses_lite_model_fallback():
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-    settings = G8eeUserSettings(llm=LLMSettings(lite_provider=LLMProvider.OLLAMA, lite_model="qwen3:0.6b"))
+    evaluation_context = _evaluation_context()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=evaluation_context)
+    settings = G8eeUserSettings(
+        llm=LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="qwen3:0.6b")
+    )
     judge_grade = EvalGrade(score=3, reasoning="partial handoff", passed=False, model_calls=[])
-    with patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()) as provider_fn, patch(
-        "app.services.evaluation.semantic_grader.EvalJudge"
-    ) as judge_cls:
+    with (
+        patch(
+            "app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()
+        ) as provider_fn,
+        patch("app.services.evaluation.semantic_grader.EvalJudge") as judge_cls,
+    ):
         judge_cls.return_value.grade_turn = AsyncMock(return_value=judge_grade)
         semantic_grades, _ = await grade_campaign_assignment_semantically(
-            evaluation_context=context.evaluation_context,
+            evaluation_context=evaluation_context,
             g8e_context=context,
             judge_settings=settings,
-            gold_summary=context.evaluation_context.gold_summary,
+            gold_summary=_gold_summary(),
             designated_role_output="delegating to assistant",
             tool_calls=[],
         )
@@ -135,11 +146,12 @@ async def test_grade_campaign_assignment_semantically_uses_lite_model_fallback()
 
 @pytest.mark.asyncio
 async def test_grade_campaign_assignment_semantically_uses_jev_decision_provider():
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    evaluation_context = _evaluation_context()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=evaluation_context)
     settings = G8eeUserSettings(
         llm=LLMSettings(
-            lite_provider=LLMProvider.JEV,
-            lite_model=JEV_DEFAULT_MODEL,
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model=JEV_DEFAULT_MODEL,
         ),
         eval_judge=EvalJudgeSettings(eval_judge_model=JEV_DEFAULT_MODEL),
     )
@@ -149,20 +161,20 @@ async def test_grade_campaign_assignment_semantically_uses_jev_decision_provider
         passed=True,
         model_calls=[],
     )
-    with patch(
-        "app.services.evaluation.semantic_grader.get_decision_provider",
-        return_value=object(),
-    ) as decision_fn, patch(
-        "app.services.evaluation.semantic_grader.get_llm_provider"
-    ) as llm_fn, patch(
-        "app.services.evaluation.semantic_grader.EvalJudge"
-    ) as judge_cls:
+    with (
+        patch(
+            "app.services.evaluation.semantic_grader.get_decision_provider",
+            return_value=object(),
+        ) as decision_fn,
+        patch("app.services.evaluation.semantic_grader.get_llm_provider") as llm_fn,
+        patch("app.services.evaluation.semantic_grader.EvalJudge") as judge_cls,
+    ):
         judge_cls.return_value.grade_turn = AsyncMock(return_value=judge_grade)
         semantic_grades, _ = await grade_campaign_assignment_semantically(
-            evaluation_context=context.evaluation_context,
+            evaluation_context=evaluation_context,
             g8e_context=context,
             judge_settings=settings,
-            gold_summary=context.evaluation_context.gold_summary,
+            gold_summary=_gold_summary(),
             designated_role_output="checkout-api failed",
             tool_calls=[],
         )
@@ -183,23 +195,20 @@ async def test_empty_judge_response_is_unavailable_and_sends_no_output_cap():
     invented output limit, and an empty response must surface as an explicit
     `unavailable` grade, never a silent pass, fail, or zero score.
     """
-    from unittest.mock import MagicMock
-
-    from app.llm.llm_types import GenerateContentResponse
-
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    evaluation_context = _evaluation_context()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=evaluation_context)
     settings = G8eeUserSettings(
-        llm=LLMSettings(lite_provider=LLMProvider.OLLAMA, lite_model="qwen3:0.6b"),
+        llm=LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="qwen3:0.6b"),
     )
     provider = MagicMock()
     provider.generate_content_lite = AsyncMock(return_value=GenerateContentResponse(candidates=[]))
 
     with patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=provider):
         semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
-            evaluation_context=context.evaluation_context,
+            evaluation_context=evaluation_context,
             g8e_context=context,
             judge_settings=settings,
-            gold_summary=context.evaluation_context.gold_summary,
+            gold_summary=_gold_summary(),
             designated_role_output="checkout-api failed",
             tool_calls=[],
         )
@@ -216,13 +225,14 @@ async def test_empty_judge_response_is_unavailable_and_sends_no_output_cap():
 
 @pytest.mark.asyncio
 async def test_grade_campaign_assignment_semantically_returns_unavailable_when_judge_missing():
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    evaluation_context = _evaluation_context()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=evaluation_context)
     settings = G8eeUserSettings()
     semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
-        evaluation_context=context.evaluation_context,
+        evaluation_context=evaluation_context,
         g8e_context=context,
         judge_settings=settings,
-        gold_summary=context.evaluation_context.gold_summary,
+        gold_summary=_gold_summary(),
         designated_role_output="delegating to assistant",
         tool_calls=[],
     )
@@ -241,25 +251,25 @@ async def test_judge_is_called_with_grader_context_without_evaluation_attempt_id
     The judge should not set the judged assignment's evaluation_attempt_id
     as a scored-chain member, so grader calls are excluded from scored aggregates.
     """
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-    settings = G8eeUserSettings(
-        eval_judge=EvalJudgeSettings(eval_judge_model="judge-model")
-    )
+    evaluation_context = _evaluation_context()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=evaluation_context)
+    settings = G8eeUserSettings(eval_judge=EvalJudgeSettings(eval_judge_model="judge-model"))
     judge_grade = EvalGrade(
         score=4,
         reasoning="checkout-api is identified",
         passed=True,
         model_calls=[],
     )
-    with patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()), patch(
-        "app.services.evaluation.semantic_grader.EvalJudge"
-    ) as judge_cls:
+    with (
+        patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()),
+        patch("app.services.evaluation.semantic_grader.EvalJudge") as judge_cls,
+    ):
         judge_cls.return_value.grade_turn = AsyncMock(return_value=judge_grade)
         await grade_campaign_assignment_semantically(
-            evaluation_context=context.evaluation_context,
+            evaluation_context=evaluation_context,
             g8e_context=context,
             judge_settings=settings,
-            gold_summary=context.evaluation_context.gold_summary,
+            gold_summary=_gold_summary(),
             designated_role_output="checkout-api failed",
             tool_calls=[],
         )

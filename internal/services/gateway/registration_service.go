@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
@@ -138,16 +139,16 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 		return constants.ErrMissingRequiredField
 	}
 	type configUpdatePayload struct {
-		RuntimeConfig *models.RuntimeConfig  `json:"runtime_config"`
-		OperatorRole  constants.OperatorRole `json:"operator_role,omitempty"`
-		LocalDir      string                 `json:"local_dir,omitempty"`
-		Account       string                 `json:"account,omitempty"`
-		Port          int                    `json:"port,omitempty"`
-		UpdatedAt     time.Time              `json:"updated_at"`
+		RuntimeConfig *models.RuntimeConfig   `json:"runtime_config"`
+		OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
+		LocalDir      string                  `json:"local_dir,omitempty"`
+		Account       string                  `json:"account,omitempty"`
+		Port          int                     `json:"port,omitempty"`
+		UpdatedAt     time.Time               `json:"updated_at"`
 	}
 	payload := configUpdatePayload{
 		RuntimeConfig: runtimeConfig,
-		OperatorRole:  runtimeConfig.Role,
+		OperatorRoles: operatorcapability.ResolveOperatorRoles(runtimeConfig),
 		LocalDir:      runtimeConfig.LocalDir,
 		Account:       runtimeConfig.Account,
 		Port:          runtimeConfig.HTTPPort,
@@ -344,7 +345,10 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 // completeRegistration performs the common registration logic after Operator slot is resolved.
 func (s *RegistrationService) completeRegistration(operator *models.OperatorDocumentGo, userID, organizationID string, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
 	// Create Operator session
-	operatorSessionID := uuid.NewString()
+	operatorSessionID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	operatorSessionSummary := &models.SessionSummary{
 		OperatorSessionID: operatorSessionID,
 		CreatedAt:         time.Now().UTC(),
@@ -353,24 +357,24 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// Update Operator document
 	type operatorClaimUpdate struct {
-		Status             string                 `json:"status"`
-		OperatorSessionID  string                 `json:"operator_session_id"`
-		SystemFingerprint  string                 `json:"system_fingerprint"`
-		OperatorRole       constants.OperatorRole `json:"operator_role,omitempty"`
-		LocalDir           string                 `json:"local_dir,omitempty"`
-		Account            string                 `json:"account,omitempty"`
-		Port               int                    `json:"port,omitempty"`
-		Claimed            bool                   `json:"claimed"`
-		ClaimedAt          time.Time              `json:"claimed_at"`
-		OperatorCert       string                 `json:"operator_cert,omitempty"`
-		OperatorCertChain  string                 `json:"operator_cert_chain,omitempty"`
-		OperatorCertSerial string                 `json:"operator_cert_serial,omitempty"`
+		Status             string                  `json:"status"`
+		OperatorSessionID  string                  `json:"operator_session_id"`
+		SystemFingerprint  string                  `json:"system_fingerprint"`
+		OperatorRoles      constants.OperatorRoles `json:"operator_roles,omitempty"`
+		LocalDir           string                  `json:"local_dir,omitempty"`
+		Account            string                  `json:"account,omitempty"`
+		Port               int                     `json:"port,omitempty"`
+		Claimed            bool                    `json:"claimed"`
+		ClaimedAt          time.Time               `json:"claimed_at"`
+		OperatorCert       string                  `json:"operator_cert,omitempty"`
+		OperatorCertChain  string                  `json:"operator_cert_chain,omitempty"`
+		OperatorCertSerial string                  `json:"operator_cert_serial,omitempty"`
 	}
 	update := operatorClaimUpdate{
 		Status:            string(constants.OperatorStatusActive),
 		OperatorSessionID: operatorSessionID,
 		SystemFingerprint: sanitizedFingerprint,
-		OperatorRole:      req.OperatorRole,
+		OperatorRoles:     req.OperatorRoles,
 		LocalDir:          req.LocalDir,
 		Account:           req.Account,
 		Port:              req.Port,
@@ -384,7 +388,11 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	// Only generate CLI session ID if CLI CSR is provided
 	var cliSessionID string
 	if req.CLICSR != "" {
-		cliSessionID = uuid.NewString()
+		id, err := uuid.NewString()
+		if err != nil {
+			return nil, err
+		}
+		cliSessionID = id
 	}
 
 	// CSR-based enrollment
@@ -517,7 +525,10 @@ func (s *RegistrationService) toOperatorDoc(doc *models.Document) (*models.Opera
 }
 
 func (s *RegistrationService) createSlot(userID, orgID string) (*models.OperatorDocumentGo, error) {
-	id := uuid.NewString()
+	id, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	if orgID == "" {
 		orgID = userID
 	}

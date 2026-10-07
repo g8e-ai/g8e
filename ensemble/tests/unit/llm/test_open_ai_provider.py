@@ -22,6 +22,7 @@ from app.llm.llm_types import (
     ToolCall,
     ToolDeclaration,
     ToolGroup,
+    ToolResponse,
     Type,
 )
 from app.llm.model_evidence import model_boundary_hash
@@ -74,7 +75,6 @@ class TestContentsToMessages:
         ]
 
     def test_tool_response_conversion(self):
-        from app.llm.llm_types import ToolResponse
 
         contents = [
             Content(
@@ -92,7 +92,6 @@ class TestContentsToMessages:
         ]
 
     def test_text_and_tool_parts(self):
-        from app.llm.llm_types import ToolCall
 
         contents = [
             Content(role="user", parts=[Part(text="hello")]),
@@ -131,6 +130,7 @@ class TestToolsToOpenAI:
             )
         ]
         openai_tools = _tools_to_openai(tools)
+        assert openai_tools is not None
         assert len(openai_tools) == 1
         assert openai_tools[0]["type"] == "function"
         assert openai_tools[0]["function"]["name"] == "get_weather"
@@ -218,13 +218,14 @@ class TestOpenAIProvider:
             system_instructions="be helpful",
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary(
-            model="gpt-4",
-            contents=[Content(role="user", parts=[Part(text="weather in London")])],
-            primary_llm_settings=settings,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                model="gpt-4",
+                contents=[Content(role="user", parts=[Part(text="weather in London")])],
+                primary_llm_settings=settings,
+            )
+        ]
 
         assert len(chunks) == 4  # thought, content, tool_calls, finish+usage
         assert chunks[0].text == "Thinking about weather..."
@@ -270,13 +271,14 @@ class TestOpenAIProvider:
 
         settings = PrimaryLLMSettings(max_output_tokens=100)
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary(
-            model="gpt-4",
-            contents=[Content(role="user", parts=[Part(text="hi")])],
-            primary_llm_settings=settings,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                model="gpt-4",
+                contents=[Content(role="user", parts=[Part(text="hi")])],
+                primary_llm_settings=settings,
+            )
+        ]
 
         # 1st chunk: reasoning content
         assert chunks[0].text == "thinking"
@@ -421,13 +423,14 @@ class TestOpenAIProvider:
 
         settings = AssistantLLMSettings(max_output_tokens=100)
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_assistant(
-            model="gpt-4",
-            contents=[Content(role="user", parts=[Part(text="hi")])],
-            assistant_llm_settings=settings,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_assistant(
+                model="gpt-4",
+                contents=[Content(role="user", parts=[Part(text="hi")])],
+                assistant_llm_settings=settings,
+            )
+        ]
 
         assert chunks[0].text == "assistant stream"
         assert chunks[1].finish_reason == "stop"
@@ -513,13 +516,14 @@ class TestOpenAIProvider:
 
         settings = LiteLLMSettings(max_output_tokens=100)
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_lite(
-            model="gpt-4",
-            contents=[Content(role="user", parts=[Part(text="hi")])],
-            lite_llm_settings=settings,
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_lite(
+                model="gpt-4",
+                contents=[Content(role="user", parts=[Part(text="hi")])],
+                lite_llm_settings=settings,
+            )
+        ]
 
         assert chunks[0].text == "lite stream"
         assert chunks[1].finish_reason == "stop"

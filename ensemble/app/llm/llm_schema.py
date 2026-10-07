@@ -18,9 +18,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from app.llm.llm_dataclasses import Type, Schema
+from app.llm.llm_dataclasses import Schema, Type
 from app.models.base import G8eBaseModel
-
 
 _JSON_TYPE_MAP: dict[str, Type] = {
     "string": Type.STRING,

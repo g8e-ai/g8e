@@ -10,7 +10,7 @@ package evaluation
 import (
 	"context"
 	"fmt"
-	"path/filepath"
+	"path"
 	"testing"
 	"time"
 
@@ -22,7 +22,7 @@ import (
 
 func TestComposeTargetReader_ObservesPresentAndAbsentControlledTargetState(t *testing.T) {
 	observedAt := time.Date(2026, time.September, 15, 12, 0, 0, 0, time.UTC)
-	target := filepath.Join(constants.EvaluationTargetContainerDir, constants.TestEvaluationTargetFilename)
+	target := path.Join(constants.EvaluationTargetContainerDir, constants.TestEvaluationTargetFilename)
 	tests := []struct {
 		name        string
 		result      observerCommandResult
@@ -76,8 +76,8 @@ func TestComposeTargetReader_FailsClosedForInvalidTargetAndCommandFailure(t *tes
 		wantCalls int
 	}{
 		{name: "relative target is rejected before execution", target: constants.TestEvaluationTargetFilename},
-		{name: "target outside controlled directory is rejected before execution", target: filepath.Join(constants.TestPathVarLibDataDir, constants.TestEvaluationTargetFilename)},
-		{name: "observer command failure is unavailable", target: filepath.Join(constants.EvaluationTargetContainerDir, constants.TestEvaluationTargetFilename), result: observerCommandResult{exitCode: 1, err: errCommand}, wantCalls: 1},
+		{name: "target outside controlled directory is rejected before execution", target: path.Join(constants.TestPathVarLibDataDir, constants.TestEvaluationTargetFilename)},
+		{name: "observer command failure is unavailable", target: path.Join(constants.EvaluationTargetContainerDir, constants.TestEvaluationTargetFilename), result: observerCommandResult{exitCode: 1, err: errCommand}, wantCalls: 1},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

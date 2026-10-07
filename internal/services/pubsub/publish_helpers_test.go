@@ -273,7 +273,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 			},
 		}
 
-		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsList.Completed, payload, auditStore, nil)
+		publishObservedStateEvidence(logger, msg, constants.Event.Operator.FsList.Completed, payload, auditStore, nil)
 
 		events := auditStore.GetEvents()
 		require.Len(t, events, 1)
@@ -296,7 +296,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 			Content: "file content here",
 		}
 
-		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
+		publishObservedStateEvidence(logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
 
 		events := auditStore.GetEvents()
 		require.Len(t, events, 1)
@@ -320,7 +320,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 			},
 		}
 
-		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.PortCheck.Completed, payload, auditStore, nil)
+		publishObservedStateEvidence(logger, msg, constants.Event.Operator.PortCheck.Completed, payload, auditStore, nil)
 
 		events := auditStore.GetEvents()
 		require.Len(t, events, 1)
@@ -344,7 +344,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 			Content: "password=secret123 api_key=ghp_test_token",
 		}
 
-		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, scrubbingSvc)
+		publishObservedStateEvidence(logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, scrubbingSvc)
 
 		events := auditStore.GetEvents()
 		require.Len(t, events, 1)
@@ -370,7 +370,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 		}
 
 		// Command events should not be recorded via publishObservedStateEvidence
-		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.Command.Completed, payload, auditStore, nil)
+		publishObservedStateEvidence(logger, msg, constants.Event.Operator.Command.Completed, payload, auditStore, nil)
 
 		events := auditStore.GetEvents()
 		assert.Empty(t, events, "command events should not be recorded via observed-state path")
@@ -393,7 +393,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 
 		// Should not panic despite store error
 		assert.NotPanics(t, func() {
-			publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
+			publishObservedStateEvidence(logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
 		})
 	})
 
@@ -412,7 +412,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 
 		// Should not panic with nil auditStore
 		assert.NotPanics(t, func() {
-			publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, nil, nil)
+			publishObservedStateEvidence(logger, msg, constants.Event.Operator.FsRead.Completed, payload, nil, nil)
 		})
 	})
 
@@ -430,7 +430,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 			Entries: []*operatorv1.FsEntry{}, // Empty list
 		}
 
-		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsList.Completed, payload, auditStore, nil)
+		publishObservedStateEvidence(logger, msg, constants.Event.Operator.FsList.Completed, payload, auditStore, nil)
 
 		events := auditStore.GetEvents()
 		assert.Empty(t, events, "empty content should not be recorded")
@@ -450,7 +450,7 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 			Content: "password=secret123",
 		}
 
-		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
+		publishObservedStateEvidence(logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
 
 		events := auditStore.GetEvents()
 		require.Len(t, events, 1)

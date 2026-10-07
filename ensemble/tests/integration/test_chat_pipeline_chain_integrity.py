@@ -8,9 +8,9 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.enums import HistoryActor
 
 from app.constants import EventType
-from g8e.enums import HistoryActor
 from app.models.http_context import RequestContext
 from app.models.investigations import (
     ConversationMessageMetadata,
@@ -105,6 +105,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
 
     # Verify the chain
     updated_investigation = await investigation_data_service.get_investigation(investigation.id)
+    assert updated_investigation is not None
     entries = [msg.model_dump(mode="json") for msg in updated_investigation.conversation_history]
 
     valid, bad_index = verify_chain(entries, investigation.id, investigation.created_at.isoformat())
@@ -142,7 +143,6 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
 
     # Add history entry
 
-
     history_details = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
         investigation_id=investigation.id,
@@ -169,6 +169,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
 
     # Verify conversation_history chain (primary ledger)
     updated_investigation = await investigation_data_service.get_investigation(investigation.id)
+    assert updated_investigation is not None
 
     chat_entries = [
         msg.model_dump(mode="json") for msg in updated_investigation.conversation_history
@@ -219,6 +220,7 @@ async def test_chain_persists_across_retrieval(fake_cache_aside_service):
 
     # Retrieve and verify chain
     retrieved = await investigation_data_service.get_investigation(investigation.id)
+    assert retrieved is not None
     entries = [msg.model_dump(mode="json") for msg in retrieved.conversation_history]
 
     valid, bad_index = verify_chain(entries, investigation.id, investigation.created_at.isoformat())
@@ -226,6 +228,7 @@ async def test_chain_persists_across_retrieval(fake_cache_aside_service):
 
     # Retrieve again to ensure persistence
     retrieved_again = await investigation_data_service.get_investigation(investigation.id)
+    assert retrieved_again is not None
     entries_again = [msg.model_dump(mode="json") for msg in retrieved_again.conversation_history]
 
     valid_again, bad_index_again = verify_chain(

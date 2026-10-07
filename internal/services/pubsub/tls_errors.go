@@ -16,22 +16,13 @@ import (
 )
 
 func containsAny(s string, patterns []string) bool {
+	sLower := strings.ToLower(s)
 	for _, p := range patterns {
-		if len(s) >= len(p) && findSubstring(s, p) {
+		if strings.Contains(sLower, strings.ToLower(p)) {
 			return true
 		}
 	}
 	return false
-}
-
-func findSubstring(s, substr string) bool {
-	sLower := toLower(s)
-	subLower := toLower(substr)
-	return strings.Contains(sLower, subLower)
-}
-
-func toLower(s string) string {
-	return strings.ToLower(s)
 }
 
 // IsTLSCertError returns true if the error indicates a TLS certificate trust failure.

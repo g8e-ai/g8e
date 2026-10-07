@@ -126,6 +126,7 @@ Check Gateway status:
 This reports:
 - Gateway process status (running or stopped)
 - Listening ports and endpoint URLs
+- An Enrollments section with Pending requests, connected Operators, Applications (completed application and ensemble enrollments), and Dashboard, followed by Users
 
 The Gateway provides a unified health endpoint across all services for consistent health checking.
 
@@ -442,7 +443,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.4
+go get github.com/g8e-ai/g8e/v2@v2.3.2
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -450,7 +451,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.2.4
+pip install g8e==2.3.2
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.

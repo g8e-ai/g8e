@@ -33,7 +33,9 @@ func protocolChainStages(txID, txHash string, rejected bool) []*operatorv1.Deter
 	return stages
 }
 
-func fullProtocolChainStages(txID, txHash string) []*operatorv1.DeterministicStageEvidence {
+func fullProtocolChainStages(_, _ string) []*operatorv1.DeterministicStageEvidence {
+	txID := "tx-1"
+	txHash := "hash-1"
 	l4ID := txID + ":L4"
 	l5ID := txID + ":L5"
 	stages := []*operatorv1.DeterministicStageEvidence{

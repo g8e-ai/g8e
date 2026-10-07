@@ -16,11 +16,13 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+from g8e.models.context import BoundOperator as G8eBoundOperator
+from g8e.models.context import RequestContext as G8eRequestContext
 
 from app.constants import (
+    G8EE_COMPONENT,
     AuthMethod,
     ComponentName,
-    G8EE_COMPONENT,
     HealthStatus,
     OperatorStatus,
 )
@@ -60,7 +62,7 @@ class TestDependencyStatus:
 
     def test_status_required(self):
         with pytest.raises(ValidationError):
-            DependencyStatus()
+            DependencyStatus.model_validate({})
 
     def test_all_health_statuses_accepted(self):
         for status in HealthStatus:
@@ -78,7 +80,7 @@ class TestDependencyStatus:
         assert "error" not in dumped
 
     def test_extra_fields_ignored(self):
-        dep = DependencyStatus(status=HealthStatus.HEALTHY, injected="bad")
+        dep = DependencyStatus.model_validate({"status": HealthStatus.HEALTHY, "injected": "bad"})
         assert not hasattr(dep, "injected")
 
 
@@ -237,15 +239,15 @@ class TestAuthenticatedUser:
 
     def test_uid_required(self):
         with pytest.raises(ValidationError):
-            AuthenticatedUser(user_id="u", auth_method=AuthMethod.PROXY)
+            AuthenticatedUser.model_validate({"user_id": "u", "auth_method": AuthMethod.PROXY})
 
     def test_user_id_required(self):
         with pytest.raises(ValidationError):
-            AuthenticatedUser(uid="u", auth_method=AuthMethod.PROXY)
+            AuthenticatedUser.model_validate({"uid": "u", "auth_method": AuthMethod.PROXY})
 
     def test_auth_method_required(self):
         with pytest.raises(ValidationError):
-            AuthenticatedUser(uid="u", user_id="u")
+            AuthenticatedUser.model_validate({"uid": "u", "user_id": "u"})
 
     def test_auth_method_is_enum(self):
         user = self._make(auth_method=AuthMethod.PROXY)
@@ -300,7 +302,7 @@ class TestBoundOperator:
 
     def test_operator_id_required(self):
         with pytest.raises(ValidationError):
-            BoundOperator()
+            BoundOperator.model_validate({})
 
     def test_optional_fields_default_to_none(self):
         op = BoundOperator(operator_id="op-123")
@@ -341,7 +343,7 @@ class TestBoundOperator:
         assert "operator_session_id" not in dumped
 
     def test_extra_fields_ignored(self):
-        op = BoundOperator(operator_id="op-123", injected="value")
+        op = BoundOperator.model_validate({"operator_id": "op-123", "injected": "value"})
         assert not hasattr(op, "injected")
 
 
@@ -722,12 +724,10 @@ class TestG8eCompatibility:
     """Regression tests verifying g8e package integration (Phase 4)."""
 
     def test_bound_operator_is_g8e_package_class(self):
-        from g8e.models.context import BoundOperator as G8eBoundOperator
 
         assert BoundOperator is G8eBoundOperator
 
     def test_request_context_subclasses_g8e_base(self):
-        from g8e.models.context import RequestContext as G8eRequestContext
 
         assert issubclass(RequestContext, G8eRequestContext)
 

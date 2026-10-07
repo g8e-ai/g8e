@@ -31,31 +31,47 @@ Run with:
     ./g8e test g8ee -- tests/unit/services/ai/test_agent_orchestrate_tool_execution.py
 """
 
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import app.services.ai.agent_tool_loop as agent_tool_loop_module
-from app.constants import CommandErrorType, OperatorStatus, OperatorToolName, OperatorType
+from app.constants import (
+    CommandErrorType,
+    CommandGenerationOutcome,
+    EventType,
+    OperatorStatus,
+    OperatorToolName,
+    OperatorType,
+    ReasoningAgent,
+    StreamChunkFromModelType,
+)
 from app.llm.llm_types import ToolCall
-from app.models.agent import StreamChunkData
+from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.models.agents.tribunal import TribunalSystemError
-from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.operators import (
     HeartbeatNetworkInfo,
     HeartbeatSnapshot,
     HeartbeatSystemIdentity,
     OperatorDocument,
 )
-from app.models.settings import G8eeUserSettings, LLMSettings
+from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
 from app.models.tool_results import CommandExecutionResult
+from app.models.tribunal_commands import TribunalGenerationRequest
+from app.services.ai.agent_sse import deliver_via_sse
 from app.services.ai.agent_tool_loop import ToolCallResult, orchestrate_tool_execution
+from app.services.ai.generator import CommandGenerationResult
+from app.services.ai.reputation_service import ResolveStakesResult
 from app.services.ai.tool_service import AIToolService
+from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
+from tests.fakes.agent_helpers import make_agent_run_args
 from tests.fakes.factories import (
     build_bound_operator,
     build_enriched_context,
     build_g8e_http_context,
 )
+from tests.fakes.fake_event_service import FakeEventService
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
@@ -77,22 +93,24 @@ def mock_tool_executor():
     executor.operator_command_service = mock_exec_svc
 
     # Mock user settings and validators for command constraints
-    from app.models.settings import CommandValidationSettings
 
     mock_user_settings = MagicMock()
-    mock_user_settings.command_validation = CommandValidationSettings()
+    mock_user_settings.command_validation = CommandValidationSettings(
+        enable_whitelisting=False,
+        whitelisted_commands="",
+        enable_blacklisting=True,
+        enable_auto_approve=True,
+        auto_approved_commands="",
+    )
     executor._user_settings = mock_user_settings
 
-    from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
-
-    executor._whitelist_validator = get_whitelist_validator()
-    executor._blacklist_validator = get_blacklist_validator()
+    executor.whitelist_validator = get_whitelist_validator()
+    executor.blacklist_validator = get_blacklist_validator()
 
     executor.reputation_data_service = MagicMock()
     executor.ai_response_analyzer = None
 
     # Mock reputation_service with async resolve_stakes
-    from app.services.ai.reputation_service import ResolveStakesResult
 
     mock_reputation_service = MagicMock()
     mock_reputation_service.resolve_stakes = AsyncMock(
@@ -137,7 +155,7 @@ def sample_investigation(
                         cpu_count=2,
                         memory_mb=4096,
                     ),
-                    network=HeartbeatNetworkInfo(),
+                    network_info=HeartbeatNetworkInfo(),
                 ),
                 user_id=unique_user_id,
                 bound_web_session_id=unique_web_session_id,
@@ -195,7 +213,6 @@ def _noop_generate_command(request: TribunalGenerationRequest, **_kwargs):
     In production the Tribunal would never return the raw natural-language
     request as a shell command; tests only care that the pipeline flows.
     """
-    from app.services.ai.generator import CommandGenerationOutcome, CommandGenerationResult
 
     return CommandGenerationResult(
         request=request.request,
@@ -207,7 +224,6 @@ def _noop_generate_command(request: TribunalGenerationRequest, **_kwargs):
 
 def _refining_generate_command(request: TribunalGenerationRequest, refined: str, **_kwargs):
     """Mock Tribunal that produces a refined command distinct from the request."""
-    from app.services.ai.generator import CommandGenerationOutcome, CommandGenerationResult
 
     return CommandGenerationResult(
         request=request.request,
@@ -317,9 +333,9 @@ class TestExecutionIdGeneration:
         )
 
         assert result.call_info.execution_id is not None
-        import re
 
         pattern = r"^cmd_[0-9a-f]{12}_\d+$"
+        assert result.call_info.execution_id is not None
         assert re.match(pattern, result.call_info.execution_id), (
             f"execution_id '{result.call_info.execution_id}' does not match expected format"
         )
@@ -333,7 +349,6 @@ class TestExecutionIdGeneration:
         mock_event_service,
     ):
         """execution_id must be 'cmd_<12hex>_<timestamp_int>'."""
-        import re
 
         _mock_executor_success(mock_tool_executor)
 
@@ -355,6 +370,7 @@ class TestExecutionIdGeneration:
             )
 
         pattern = r"^cmd_[0-9a-f]{12}_\d+$"
+        assert result.call_info.execution_id is not None
         assert re.match(pattern, result.call_info.execution_id), (
             f"execution_id '{result.call_info.execution_id}' does not match expected format"
         )
@@ -725,6 +741,7 @@ class TestToolCallResultStructure:
             )
 
         assert result.result is raw
+        assert isinstance(result.result, CommandExecutionResult)
         assert result.result.output == "hello from cmd"
 
     async def test_result_info_success_reflects_handler_success(
@@ -861,10 +878,9 @@ class TestToolCallResultStructure:
         # The exact event structure depends on the SSE event format, but the key
         # invariant is that the same execution_id appears in related events
         if captured_events:
-            execution_ids_in_events = []
-            for event in captured_events:
-                if hasattr(event, "execution_id"):
-                    execution_ids_in_events.append(event.execution_id)
+            execution_ids_in_events = [
+                event.execution_id for event in captured_events if hasattr(event, "execution_id")
+            ]
 
             # All events for this tool call should share the same execution_id
             if execution_ids_in_events:
@@ -941,7 +957,6 @@ class TestTribunalResultSurfaced:
         assert result.tribunal_result is not None
         assert result.tribunal_result.request == "list files recursively"
         assert result.tribunal_result.final_command == "ls -lhR"
-        from app.constants import CommandGenerationOutcome
 
         assert result.tribunal_result.outcome == CommandGenerationOutcome.CONSENSUS
 
@@ -1076,7 +1091,7 @@ class TestToolNameExtraction:
 
         assert result.tool_name == NON_OPERATOR_FUNCTION
 
-    async def test_name_none_uses_empty_string(
+    async def test_empty_name_uses_empty_string(
         self,
         mock_tool_executor,
         sample_investigation,
@@ -1084,16 +1099,12 @@ class TestToolNameExtraction:
         request_settings,
         mock_event_service,
     ):
-        """When .name is None, tool_name is an empty string."""
+        """When .name is empty, tool_name is an empty string."""
         result = CommandExecutionResult(success=True, output="ok")
         mock_tool_executor.execute_tool_call = AsyncMock(return_value=result)
 
-        class NoNameToolCall:
-            name = None
-            args = {}
-
         result = await orchestrate_tool_execution(
-            NoNameToolCall(),
+            ToolCall(name="", args={}),
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
@@ -1396,6 +1407,7 @@ class TestTribunalSystemErrorHaltsExecution:
         assert isinstance(result, ToolCallResult)
         assert result.result_info.success is False
         assert result.result.success is False
+        assert result.result.error is not None
         assert "401 Unauthorized" in result.result.error
         assert "Connection refused" in result.result.error
         assert result.result.error_type == CommandErrorType.EXECUTION_ERROR
@@ -1667,17 +1679,16 @@ class TestTargetOperatorResolution:
 
 
 async def test_producer_result_chunk_drives_universal_tool_completed_event(
-    mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service
+    mock_tool_executor,
+    sample_investigation,
+    sample_g8e_context,
+    request_settings,
+    mock_event_service,
 ):
     """The TOOL_RESULT chunk orchestrate_tool_execution builds must identify its
     tool. deliver_via_sse keys universal-tool *_COMPLETED events (and trace
     evidence) on chunk.data.tool_name; before the producer set it, those events
     never fired. Tests that hand-build result chunks cannot catch that."""
-    from app.constants import EventType, ReasoningAgent, StreamChunkFromModelType
-    from app.models.agent import StreamChunkFromModel
-    from app.services.ai.agent_sse import deliver_via_sse
-    from tests.fakes.agent_helpers import make_agent_run_args
-    from tests.fakes.fake_event_service import FakeEventService
 
     _mock_executor_success(mock_tool_executor, output="allowed: ls, cat")
     args = {"reason": "check what I may run"}
@@ -1696,8 +1707,12 @@ async def test_producer_result_chunk_drives_universal_tool_completed_event(
 
     async def _stream():
         yield StreamChunkFromModel(type=StreamChunkFromModelType.TOOL_CALL, data=produced.call_info)
-        yield StreamChunkFromModel(type=StreamChunkFromModelType.TOOL_RESULT, data=produced.result_info)
-        yield StreamChunkFromModel(type=StreamChunkFromModelType.COMPLETE, data=StreamChunkData(finish_reason="STOP"))
+        yield StreamChunkFromModel(
+            type=StreamChunkFromModelType.TOOL_RESULT, data=produced.result_info
+        )
+        yield StreamChunkFromModel(
+            type=StreamChunkFromModelType.COMPLETE, data=StreamChunkData(finish_reason="STOP")
+        )
 
     inputs, state = make_agent_run_args(
         case_id="case-producer-sse",

@@ -200,8 +200,8 @@ func (rr *PubSubResultsService) PublishInferenceCompletion(ctx context.Context, 
 // provider-boundary observation window on the observer operator results
 // channel. The completion is correlated with the originating command by
 // transaction ID.
-func (rr *PubSubResultsService) PublishProviderBoundaryObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ProviderBoundaryObservationCompleted) error {
-	if originalMsgID == "" || completion == nil || completion.GetWindow() == nil {
+func (rr *PubSubResultsService) PublishProviderBoundaryObservationCompleted(ctx context.Context, origin *commonv1.GovernanceEnvelope, completion *evalv1.ProviderBoundaryObservationCompleted) error {
+	if origin == nil || origin.GetId() == "" || completion == nil || completion.GetWindow() == nil {
 		return fmt.Errorf("pubsub: publish provider boundary observation completion: %w", constants.ErrMissingRequiredField)
 	}
 
@@ -215,33 +215,34 @@ func (rr *PubSubResultsService) PublishProviderBoundaryObservationCompleted(ctx 
 		constants.Event.Operator.ProviderBoundaryObservation.Completed,
 		originatingAction,
 		completion,
-		originalMsgID,
-		rr.config.OperatorID,
-		"",
-		"",
-		nil,
-		"",
-		"",
+		origin.Id,
+		origin.OperatorId,
+		origin.CaseId,
+		origin.InvestigationId,
+		&origin.TaskId,
+		origin.WebSessionId,
+		origin.CliSessionId,
 	)
 	if err != nil {
 		return fmt.Errorf("pubsub: build provider boundary observation completion envelope: %w", err)
 	}
 
-	if err := rr.publishUniversal(ctx, resultEnv, rr.config.OperatorID, rr.config.OperatorSessionId); err != nil {
+	resultEnv.OperatorSessionId = origin.OperatorSessionId
+	if err := rr.publishUniversal(ctx, resultEnv, origin.OperatorId, origin.OperatorSessionId); err != nil {
 		return fmt.Errorf("pubsub: publish provider boundary observation completion: %w", err)
 	}
 
 	rr.logger.Info("Provider-boundary observation completion transmitted",
-		"operator_session_id", rr.config.OperatorSessionId,
+		"operator_session_id", origin.OperatorSessionId,
 		"provider_attempt_id", completion.GetWindow().GetProviderAttemptId(),
-		"transaction_id", originalMsgID)
+		"transaction_id", origin.Id)
 	return nil
 }
 
 // PublishModelProvenanceObservationCompleted publishes a completed model
 // provenance attestation window on the provenance operator results channel.
-func (rr *PubSubResultsService) PublishModelProvenanceObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ModelProvenanceObservationCompleted) error {
-	if originalMsgID == "" || completion == nil || completion.GetWindow() == nil {
+func (rr *PubSubResultsService) PublishModelProvenanceObservationCompleted(ctx context.Context, origin *commonv1.GovernanceEnvelope, completion *evalv1.ModelProvenanceObservationCompleted) error {
+	if origin == nil || origin.GetId() == "" || completion == nil || completion.GetWindow() == nil {
 		return fmt.Errorf("pubsub: publish model provenance observation completion: %w", constants.ErrMissingRequiredField)
 	}
 
@@ -255,26 +256,27 @@ func (rr *PubSubResultsService) PublishModelProvenanceObservationCompleted(ctx c
 		constants.Event.Operator.ModelProvenanceObservation.Completed,
 		originatingAction,
 		completion,
-		originalMsgID,
-		rr.config.OperatorID,
-		"",
-		"",
-		nil,
-		"",
-		"",
+		origin.Id,
+		origin.OperatorId,
+		origin.CaseId,
+		origin.InvestigationId,
+		&origin.TaskId,
+		origin.WebSessionId,
+		origin.CliSessionId,
 	)
 	if err != nil {
 		return fmt.Errorf("pubsub: build model provenance observation completion envelope: %w", err)
 	}
 
-	if err := rr.publishUniversal(ctx, resultEnv, rr.config.OperatorID, rr.config.OperatorSessionId); err != nil {
+	resultEnv.OperatorSessionId = origin.OperatorSessionId
+	if err := rr.publishUniversal(ctx, resultEnv, origin.OperatorId, origin.OperatorSessionId); err != nil {
 		return fmt.Errorf("pubsub: publish model provenance observation completion: %w", err)
 	}
 
 	rr.logger.Info("Model provenance observation completion transmitted",
-		"operator_session_id", rr.config.OperatorSessionId,
+		"operator_session_id", origin.OperatorSessionId,
 		"provider_attempt_id", completion.GetWindow().GetProviderAttemptId(),
-		"transaction_id", originalMsgID)
+		"transaction_id", origin.Id)
 	return nil
 }
 

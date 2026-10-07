@@ -13,8 +13,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
-from app.constants.prompts import PromptFile
 from app.constants.generated_status import OperatorToolName
+from app.constants.prompts import PromptFile
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
 from app.models.http_context import G8eHttpContext
@@ -45,6 +45,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del request_settings, execution_id
     args = RevokeIntentArgs.model_validate(tool_args)
     logger.info("[REVOKE_INTENT] Intent: %s", args.intent_name)
     result = await svc.operator_command_service.execute_intent_revocation(

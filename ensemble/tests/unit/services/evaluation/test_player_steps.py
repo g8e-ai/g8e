@@ -14,6 +14,7 @@ from app.constants import (
     AuditorReason,
     ConsensusMember,
     EventType,
+    InvestigationStatus,
     RiskLevel,
     TriageComplexityClassification,
     TriageConfidence,
@@ -31,6 +32,7 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.evaluation_trace import (
+    DesignatedModelRole,
     EvaluationErrorAnalysisSummary,
     EvaluationPlayerStep,
     EvaluationTextOutput,
@@ -55,7 +57,11 @@ from app.services.evaluation.player_steps import (
 
 
 def _call(
-    agent_role: str, model_role: str, *, succeeded: bool = True, error_type: str | None = None
+    agent_role: str,
+    model_role: DesignatedModelRole,
+    *,
+    succeeded: bool = True,
+    error_type: str | None = None,
 ):
     return ModelCallTelemetry(
         agent_role=agent_role,
@@ -357,7 +363,7 @@ def test_memory_text_joins_every_field_codex_wrote():
         case_id="c",
         investigation_id="i",
         user_id="u",
-        status="Open",
+        status=InvestigationStatus.OPEN,
         case_title="t",
         investigation_summary="a Linux host with a failing service",
         response_style="short",

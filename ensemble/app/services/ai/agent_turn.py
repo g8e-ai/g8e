@@ -18,9 +18,8 @@ the TurnResult alongside streamed chunks.
 from __future__ import annotations
 
 import logging
-
-from app.models.base import BaseModel, ConfigDict, Field
 from collections.abc import AsyncGenerator
+
 from httpx import HTTPStatusError as HttpxHTTPStatusError
 from httpx import TimeoutException as HttpxTimeout
 
@@ -36,9 +35,18 @@ from app.models.agent import (
     StreamChunkFromModel,
     TurnResult,
 )
+from app.models.base import BaseModel, ConfigDict, Field
 from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_model_response_parts() -> list[types.Part]:
+    return []
+
+
+def _empty_pending_tool_calls() -> list[types.ToolCall]:
+    return []
 
 
 class TurnState(BaseModel):
@@ -46,8 +54,8 @@ class TurnState(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
-    model_response_parts: list[types.Part] = Field(default_factory=list)
-    pending_tool_calls: list[types.ToolCall] = Field(default_factory=list)
+    model_response_parts: list[types.Part] = Field(default_factory=_empty_model_response_parts)
+    pending_tool_calls: list[types.ToolCall] = Field(default_factory=_empty_pending_tool_calls)
     thinking_active: bool = False
     thinking_text_parts: list[str] = Field(default_factory=list)
     thinking_signature: types.ThoughtSignature | None = None
@@ -200,7 +208,6 @@ def handle_text_chunk(
 
 async def process_provider_turn(
     stream_response: AsyncGenerator[types.StreamChunkFromModel],
-    model_name: str,
     result_out: list[TurnResult],
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """
@@ -337,7 +344,6 @@ class GatedTurnResult(BaseModel):
 
 async def process_turn_with_gate(
     stream_response: AsyncGenerator[types.StreamChunkFromModel],
-    model_name: str,
     result_out: list[GatedTurnResult],
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Consume one provider stream turn, applying the interrogation gate.
@@ -353,7 +359,7 @@ async def process_turn_with_gate(
     """
     inner_result_out: list[TurnResult] = []
 
-    async for chunk in process_provider_turn(stream_response, model_name, inner_result_out):
+    async for chunk in process_provider_turn(stream_response, inner_result_out):
         yield chunk
 
     turn_result = inner_result_out[0]
@@ -382,10 +388,7 @@ async def process_turn_with_gate(
     )
 
 
-def consolidate_model_parts(
-    parts: list[types.Part],
-    model_name: str,
-) -> list[types.Part]:
+def consolidate_model_parts(parts: list[types.Part]) -> list[types.Part]:
     """
     Consolidate model response parts for the tool calling loop.
 
@@ -476,9 +479,12 @@ def should_retry_error(error: Exception) -> bool:
 def extract_status_code(error: Exception) -> int | None:
     """Extract an HTTP status code from an exception, if present."""
     # Handle known library exceptions explicitly
-    if isinstance(error, HttpxHTTPStatusError):
-        if hasattr(error, "response") and hasattr(error.response, "status_code"):
-            return error.response.status_code
+    if (
+        isinstance(error, HttpxHTTPStatusError)
+        and hasattr(error, "response")
+        and hasattr(error.response, "status_code")
+    ):
+        return error.response.status_code
 
     # For other exceptions with status_code attribute
     status_code = getattr(error, "status_code", None)

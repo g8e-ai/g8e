@@ -58,7 +58,7 @@ func TestHandleInternalSSEStream_BadRequestFromMultipleTargets(t *testing.T) {
 
 func TestHandleInternalSSEStream_SSEHeadersSet(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, _, _, _ := seedCLISessionCtx(t, h, "stream-headers")
+	ctx, _, _ := seedCLISessionCtx(t, h, "stream-headers")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 	req.Header.Set("Origin", "https://example.com")
 
@@ -72,7 +72,7 @@ func TestHandleInternalSSEStream_SSEHeadersSet(t *testing.T) {
 
 func TestHandleInternalSSEStream_SSEHeadersNoOrigin(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, _, _, _ := seedCLISessionCtx(t, h, "stream-wildcard")
+	ctx, _, _ := seedCLISessionCtx(t, h, "stream-wildcard")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 	// No Origin header → SSE headers still set, no CORS headers
 
@@ -86,7 +86,7 @@ func TestHandleInternalSSEStream_SSEHeadersNoOrigin(t *testing.T) {
 
 func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, userID, cliSessionID, _ := seedCLISessionCtx(t, h, "last-event")
+	ctx, userID, cliSessionID := seedCLISessionCtx(t, h, "last-event")
 
 	// Push two events
 	route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
@@ -113,7 +113,7 @@ func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
 
 func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, userID, cliSessionID, _ := seedCLISessionCtx(t, h, "replay")
+	ctx, userID, cliSessionID := seedCLISessionCtx(t, h, "replay")
 
 	route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 	// Push a dummy event first so the real event gets ID > 1
@@ -142,7 +142,7 @@ func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
 
 func TestHandleInternalSSEStream_NoReplayWhenSinceIDZero(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, userID, cliSessionID, _ := seedCLISessionCtx(t, h, "no-replay")
+	ctx, userID, cliSessionID := seedCLISessionCtx(t, h, "no-replay")
 
 	route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 	_, err := h.dataController.sseStore.SSEEventsAppend(route, "no_replay_event", `{"event":{"type":"no_replay_event"}}`, "app1")
@@ -159,7 +159,7 @@ func TestHandleInternalSSEStream_NoReplayWhenSinceIDZero(t *testing.T) {
 
 func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, _, cliSessionID, _ := seedCLISessionCtx(t, h, "pubsub")
+	ctx, _, cliSessionID := seedCLISessionCtx(t, h, "pubsub")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
@@ -201,7 +201,7 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 // persisted event has advanced the dedup cursor.
 func TestHandleInternalSSEStream_EphemeralEventDelivered(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, _, cliSessionID, _ := seedCLISessionCtx(t, h, "ephemeral")
+	ctx, _, cliSessionID := seedCLISessionCtx(t, h, "ephemeral")
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(streamCtx)
@@ -240,7 +240,7 @@ func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
 	// Override to a short interval so the test can observe a real heartbeat.
 	h.sseController.heartbeat = 50 * time.Millisecond
 
-	ctx, _, _, _ := seedCLISessionCtx(t, h, "heartbeat")
+	ctx, _, _ := seedCLISessionCtx(t, h, "heartbeat")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 
 	// Wait long enough for at least one heartbeat tick (50ms interval).
@@ -252,7 +252,7 @@ func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
 
 func TestHandleInternalSSEStream_ClientLabelOperatorSession(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, _, _, _ := seedCLISessionCtx(t, h, "label")
+	ctx, _, _ := seedCLISessionCtx(t, h, "label")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 
 	rr, _ := runStreamWithCancel(t, h, req, 100*time.Millisecond)
@@ -283,7 +283,7 @@ func TestHandleInternalSSEStream_ClientLabelWebSession(t *testing.T) {
 
 func TestHandleInternalSSEStream_ReplayEmitsNoEventField(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, userID, cliSessionID, _ := seedCLISessionCtx(t, h, "no-event-field")
+	ctx, userID, cliSessionID := seedCLISessionCtx(t, h, "no-event-field")
 
 	route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 	_, err := h.dataController.sseStore.SSEEventsAppend(route, "test_type", `{"event":{"type":"test_type"}}`, "app1")
@@ -314,7 +314,7 @@ func TestHandleInternalSSEStream_ReplayEmitsNoEventField(t *testing.T) {
 
 func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, userID, cliSessionID, _ := seedCLISessionCtx(t, h, "dedup")
+	ctx, userID, cliSessionID := seedCLISessionCtx(t, h, "dedup")
 
 	route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 	// Insert two events: event1 (ID 1) and event2 (ID 2).
@@ -378,7 +378,7 @@ func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
 
 func TestHandleInternalSSEStream_WriteErrorTerminatesGoroutine(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, userID, cliSessionID, _ := seedCLISessionCtx(t, h, "write-err")
+	ctx, userID, cliSessionID := seedCLISessionCtx(t, h, "write-err")
 
 	route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 	_, err := h.dataController.sseStore.SSEEventsAppend(route, "test_type", `{"event":{"type":"test_type"}}`, "app1")
@@ -417,7 +417,7 @@ func TestHandleInternalSSEStream_WriteErrorTerminatesGoroutine(t *testing.T) {
 
 func TestHandleInternalSSEStream_TruncationSentinelOnFullReplay(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	ctx, userID, cliSessionID, _ := seedCLISessionCtx(t, h, "truncation")
+	ctx, userID, cliSessionID := seedCLISessionCtx(t, h, "truncation")
 
 	route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 	// Insert exactly 1000 events to trigger the truncation sentinel.

@@ -30,7 +30,7 @@ func reportWorkloadIdentities(cmd *cobra.Command) {
 		}
 	}
 	home, _ := os.UserHomeDir()
-	for _, role := range []string{"provenance", "observer", "inference", "g8ee"} {
+	for _, role := range []string{"provenance", "observer", "inference", "data", "g8ee"} {
 		dir := filepath.Join(home, ".ollama/g8e", role)
 		if role == "g8ee" {
 			dir, _ = filepath.Abs(".local.dev/full/ensemble")
@@ -47,7 +47,7 @@ func reportWorkloadIdentities(cmd *cobra.Command) {
 			continue
 		}
 		switch workload.Role {
-		case "provenance", "observer", "inference", "g8ee":
+		case "provenance", "observer", "inference", "data", "g8ee":
 		default:
 			continue
 		}
@@ -62,6 +62,6 @@ func reportWorkloadIdentities(cmd *cobra.Command) {
 		cmd.Printf("  %s: %s\n", workload.Role, workload.Directory)
 	}
 	if printed {
-		cmd.Println("Run make full to review stale identities, or use operator/ensemble reset-identity. Working data is preserved.")
+		cmd.Println("Recover with make full RESET_IDENTITIES=1 or interactive make full-setup; operator/ensemble reset-identity can reset individual workloads. Working data is preserved.")
 	}
 }

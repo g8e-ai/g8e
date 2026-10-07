@@ -16,34 +16,53 @@ Verifies:
 """
 
 import pytest
-
+from g8e.models.events import (
+    AiProcessingStoppedPayload as G8eAiProcessingStoppedPayload,
+)
+from g8e.models.events import (
+    AIToolLifecyclePayload as G8eAIToolLifecyclePayload,
+)
 from g8e.models.events import (
     BackgroundEventWire as G8eBackgroundEventWire,
+)
+from g8e.models.events import (
+    ChatCitationsReadyPayload as G8eChatCitationsReadyPayload,
+)
+from g8e.models.events import (
+    ChatErrorPayload as G8eChatErrorPayload,
+)
+from g8e.models.events import (
+    ChatProcessingStartedPayload as G8eChatProcessingStartedPayload,
+)
+from g8e.models.events import (
+    ChatResponseChunkPayload as G8eChatResponseChunkPayload,
+)
+from g8e.models.events import (
+    ChatResponseCompletePayload as G8eChatResponseCompletePayload,
+)
+from g8e.models.events import (
+    ChatRetryPayload as G8eChatRetryPayload,
+)
+from g8e.models.events import (
+    ChatThinkingPayload as G8eChatThinkingPayload,
+)
+from g8e.models.events import (
+    ChatTurnCompletePayload as G8eChatTurnCompletePayload,
 )
 from g8e.models.events import (
     SessionEventWire as G8eSessionEventWire,
 )
 from g8e.models.events import (
-    _SSEEventBody as G8eSSEEventBody,
-    AiProcessingStoppedPayload as G8eAiProcessingStoppedPayload,
-    AIToolLifecyclePayload as G8eAIToolLifecyclePayload,
-    ChatCitationsReadyPayload as G8eChatCitationsReadyPayload,
-    ChatErrorPayload as G8eChatErrorPayload,
-    ChatProcessingStartedPayload as G8eChatProcessingStartedPayload,
-    ChatResponseChunkPayload as G8eChatResponseChunkPayload,
-    ChatResponseCompletePayload as G8eChatResponseCompletePayload,
-    ChatRetryPayload as G8eChatRetryPayload,
-    ChatThinkingPayload as G8eChatThinkingPayload,
-    ChatTurnCompletePayload as G8eChatTurnCompletePayload,
     TriageClarificationQuestionsPayload as G8eTriageClarificationQuestionsPayload,
+)
+from g8e.models.events import (
+    _SSEEventBody as G8eSSEEventBody,
 )
 
 from app.models.events import (
-    BackgroundEventWire,
-    SessionEventWire,
-    _SSEEventBody,
     AiProcessingStoppedPayload,
     AIToolLifecyclePayload,
+    BackgroundEventWire,
     ChatCitationsReadyPayload,
     ChatErrorPayload,
     ChatProcessingStartedPayload,
@@ -52,7 +71,9 @@ from app.models.events import (
     ChatRetryPayload,
     ChatThinkingPayload,
     ChatTurnCompletePayload,
+    SessionEventWire,
     TriageClarificationQuestionsPayload,
+    _SSEEventBody,
 )
 
 pytestmark = pytest.mark.unit

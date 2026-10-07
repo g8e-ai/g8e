@@ -558,18 +558,16 @@ func TestFileReadTool_Execute_RelativePath(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := testutil.TempDir(t)
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
+	// This test exercises CWD-relative discovery. Change CWD to the isolated
+	// fixture so it also works when system temp and the checkout use different drives.
+	t.Chdir(tmpDir)
 
 	testContent := "test content"
 	absFile := filepath.Join(tmpDir, "relative.txt")
-	err = os.WriteFile(absFile, []byte(testContent), 0644)
+	err := os.WriteFile(absFile, []byte(testContent), 0644)
 	require.NoError(t, err)
 
-	relPath, err := filepath.Rel(cwd, absFile)
-	require.NoError(t, err)
-
-	req := FileReadRequest{Path: relPath}
+	req := FileReadRequest{Path: "relative.txt"}
 	args, err := json.Marshal(req)
 	require.NoError(t, err)
 

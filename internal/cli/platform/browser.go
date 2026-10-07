@@ -29,11 +29,9 @@ func (e *realBrowserCommandExecutor) start(name string, args ...string) error {
 	return cmd.Start()
 }
 
-var defaultBrowserExecutor browserCommandExecutor = &realBrowserCommandExecutor{}
-
 // OpenBrowser opens the default web browser to the specified URL.
 func OpenBrowser(urlStr string) error {
-	return openBrowserWithExecutor(urlStr, defaultBrowserExecutor)
+	return openBrowserWithExecutor(urlStr, &realBrowserCommandExecutor{})
 }
 
 // openBrowserWithExecutor opens the browser using the provided command executor.

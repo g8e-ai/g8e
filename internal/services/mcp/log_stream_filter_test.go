@@ -236,9 +236,9 @@ func TestLogStreamFilterTool_Execute_Limit(t *testing.T) {
 	var content strings.Builder
 	for i := 0; i < 50; i++ {
 		content.WriteString("2024-01-01 10:00:0")
-		content.WriteString(string(rune('0' + i%10)))
+		content.WriteRune(rune('0' + i%10))
 		content.WriteString(" ERROR Test error ")
-		content.WriteString(string(rune('0' + i)))
+		content.WriteRune(rune('0' + i))
 		content.WriteString("\n")
 	}
 	err := os.WriteFile(logFile, []byte(content.String()), 0644)

@@ -37,3 +37,12 @@ const (
 	// Go inference backend connects to this port over loopback HTTP.
 	InferenceOllamaDefaultPort = 11434
 )
+
+// GatewayReservedLoopbackPorts are ports the gateway process binds for its own
+// auxiliary listeners. HTTP/HTTPS port fallback must skip them, or a busy 8080
+// falls back to 8081 and collides with the public spectator ingest listener.
+var GatewayReservedLoopbackPorts = map[int]struct{}{
+	PublicSpectatorPrivatePort: {},
+	PublicSpectatorPublicPort:  {},
+	EvalExplorerDefaultPort:    {},
+}

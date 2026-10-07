@@ -8,9 +8,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
-
 import os
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from app.constants import (
     ErrorCode,
@@ -25,18 +24,17 @@ from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PathConstants, PortConstants
 from app.constants.paths import PATHS
 from app.errors import ConfigurationError
+from app.models.base import G8eBaseModel
+from app.models.internal_api import LLMRoleSettingsResponse, LLMRoleSettingsUpdateRequest
 from app.models.settings import (
+    AppSettingsDocument,
     AuthSettings,
-    LLMSettings,
     G8eeAppSettings,
     G8eeUserSettings,
-    AppSettingsDocument,
-    UserSettingsDocument,
+    LLMSettings,
     SearchSettings,
+    UserSettingsDocument,
 )
-from app.models.base import G8eBaseModel
-
-from app.models.internal_api import LLMRoleSettingsResponse, LLMRoleSettingsUpdateRequest
 from app.services.infra.llm_role_settings import (
     apply_provider_updates,
     apply_role_updates,
@@ -64,7 +62,6 @@ class SettingsServiceProtocol(Protocol):
         ...
 
 
-
 class SettingsService:
     """Service for managing g8ee settings with bootstrap loading and cache-aside logic."""
 
@@ -74,6 +71,10 @@ class SettingsService:
     ) -> None:
         self._cache_aside = cache_aside_service
         self._logger = logging.getLogger(__name__)
+
+    def attach_cache_aside(self, cache_aside_service: CacheAsideService) -> None:
+        """Attach the cache-aside service once it is constructed after bootstrap."""
+        self._cache_aside = cache_aside_service
 
     def get_local_settings(self) -> G8eeAppSettings:
         """Load canonical defaults and local LLM credentials."""
@@ -236,7 +237,7 @@ class SettingsService:
 
         if not user_doc_dict:
             self._logger.info(
-                "No user settings document for user %s; using empty defaults so request overrides can complete validation",
+                "No user settings document for user %s; using governed inference defaults with caller-selected models",
                 user_id,
             )
             app_settings = await self.get_app_settings()
@@ -305,4 +306,4 @@ class SettingsService:
         self, settings: G8eeAppSettings | G8eeUserSettings
     ) -> SearchSettings:
         """Build SearchSettings from platform or user settings."""
-        return settings.search
+        return SearchSettings.model_validate(settings.search.model_dump())

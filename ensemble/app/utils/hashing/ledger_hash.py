@@ -8,6 +8,7 @@
 import hashlib
 import json
 from datetime import datetime
+from typing import Any
 
 
 def canonical_json(obj: dict) -> bytes:
@@ -40,7 +41,7 @@ def canonical_json(obj: dict) -> bytes:
     ).encode("utf-8")
 
 
-def compute_entry_hash(entry: dict, prev_hash: str | None) -> str:
+def compute_entry_hash(entry: dict[str, Any], prev_hash: str | None) -> str:
     """Compute the hash for a ledger entry.
 
     The hash is computed from the entry content (excluding prev_hash and entry_hash

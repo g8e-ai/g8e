@@ -6,8 +6,8 @@
 # released under the Apache License, Version 2.0.
 
 from app.constants import ConsensusMember
-from app.models.settings import LLMSettings
 from app.models.agents.tribunal import TribunalModelNotConfiguredError
+from app.models.settings import LLMSettings
 
 
 def is_system_error(error_message: str) -> bool:

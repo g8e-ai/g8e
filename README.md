@@ -64,18 +64,30 @@ You can try the project in a few ways.
 The default workflow is native on your machine with the repo's Makefile targets:
 
 ```bash
-git clone https://github.com/g8e-ai/g8e.git
+git clone --depth 1 https://github.com/g8e-ai/g8e.git
 cd g8e
 make up
 ```
 
 This builds the binary and starts the Gateway on localhost.
 
-For the full local setup with the Operator roles and the first-party ensemble, use:
+This Gateway-only track needs Git, Go 1.26.6, Make, and Node.js 22+ for the
+embedded explorer build. It has no Python, Ollama, or model SDK requirement.
+For setup details, see the [Getting Started guide](docs/guides/getting_started.md#native-host-build).
+
+For interactive setup with the Operator roles and the first-party ensemble, use:
 
 ```bash
-make full
+make ensemble-env
+make full-setup
 ```
+
+The full platform adds four Operators and the Python Ensemble. It requires
+Python 3.12+ (provisioned by `uv` as needed); `make ensemble-env` installs only the runtime dependencies needed
+by `make full`, while `make dev-python` also installs Ensemble test and lint
+dependencies. Both targets bootstrap `uv` when it is not already installed.
+
+For unattended startup, set `G8E_OLLAMA_ENDPOINT` in `.env` and run `make full`. It also reuses `G8E_HOSTNAME`; see [native startup settings](docs/guides/getting_started.md#run-natively-on-localhost).
 
 Then enroll the first owner and approve workloads:
 
@@ -84,6 +96,8 @@ Then enroll the first owner and approve workloads:
 ./g8e auth enroll pending
 ./g8e auth enroll approve <request-id> --yes
 ```
+
+On a headless machine, use `./g8e auth enroll user -e localhost --headless`. This creates a CLI-only mTLS identity; it does not register a passkey, install OS trust, or enable browser console sign-in.
 
 If you want the Docker Compose stack instead, that's still supported, but it is not the primary path for local development or evaluation.
 
@@ -106,7 +120,7 @@ go get github.com/g8e-ai/g8e/v2@v2.3.1
 If you specifically want the containerized stack:
 
 ```bash
-git clone https://github.com/g8e-ai/g8e.git
+git clone --depth 1 https://github.com/g8e-ai/g8e.git
 cd g8e
 cp .env.example .env
 make docker-up
@@ -130,7 +144,6 @@ This repository includes the main platform and supporting pieces:
 - `ensemble/` — Python agentic reasoning service
 - `console/` — browser console frontend
 - `eval/` — evaluation and compliance harnesses
-- `demos/` — sealed demo environments and org-specific scenarios
 - `docs/` — architecture, guides, and reference material
 
 ## What makes this different
@@ -188,11 +201,14 @@ If this resonates, I would love to hear from people who want to:
 If you want to contribute, the best ways to start are:
 
 - run the project locally and report issues
-- try a demo environment and document what was confusing
+- run an evaluation or deployment workflow and document what was confusing
 - review the docs and architecture for gaps
 - help build examples for real use cases
 - propose better security or UX patterns
 - help shape the roadmap around actual deployments
+
+For local setup, test selection, and pull request guidelines, see
+[Contributing](.github/CONTRIBUTING.md).
 
 ## Roadmap themes
 
@@ -217,7 +233,7 @@ For deeper detail, start here:
 - [docs/guides/getting_started.md](docs/guides/getting_started.md)
 - [docs/guides/unified_stack.md](docs/guides/unified_stack.md)
 - [docs/architecture/agents.md](docs/architecture/agents.md)
-- [demos/README.md](demos/README.md)
+- [docs/architecture/evals.md](docs/architecture/evals.md)
 - [ensemble/README.md](ensemble/README.md)
 
 If you are curious, try the stack, poke around the docs, and reach out with a concrete use case.

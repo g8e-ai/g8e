@@ -71,7 +71,9 @@ def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(
     paths = load_paths()
 
     assert paths["infra"]["pki_dir"] == str(runtime_dir / "pki")
-    assert paths["infra"]["ca_cert_path"] == str(runtime_dir / "pki" / "trust" / "g8eg-ca-bundle.pem")
+    assert paths["infra"]["ca_cert_path"] == str(
+        runtime_dir / "pki" / "trust" / "g8eg-ca-bundle.pem"
+    )
     assert paths["infra"]["app_cert_dir"] == str(runtime_dir / "pki" / "issued" / "apps")
     assert paths["g8ee"]["cert_name"] == "g8ee"
 

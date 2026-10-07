@@ -17,7 +17,10 @@ import (
 var uuidV4Regex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 func TestNewString(t *testing.T) {
-	s := NewString()
+	s, err := NewString()
+	if err != nil {
+		t.Fatalf("NewString() error = %v", err)
+	}
 	if !uuidV4Regex.MatchString(s) {
 		t.Fatalf("NewString() = %q, want a valid RFC 4122 v4 UUID", s)
 	}
@@ -26,7 +29,10 @@ func TestNewString(t *testing.T) {
 func TestNewStringUniqueness(t *testing.T) {
 	seen := make(map[string]struct{}, 1000)
 	for i := 0; i < 1000; i++ {
-		s := NewString()
+		s, err := NewString()
+		if err != nil {
+			t.Fatalf("NewString() error = %v", err)
+		}
 		if _, dup := seen[s]; dup {
 			t.Fatalf("duplicate UUID generated: %s", s)
 		}
@@ -35,7 +41,10 @@ func TestNewStringUniqueness(t *testing.T) {
 }
 
 func TestNewStringLength(t *testing.T) {
-	s := NewString()
+	s, err := NewString()
+	if err != nil {
+		t.Fatalf("NewString() error = %v", err)
+	}
 	if len(s) != 36 {
 		t.Fatalf("NewString() length = %d, want 36", len(s))
 	}

@@ -8,9 +8,12 @@
 """Unit tests for agent_turn.py - provider turn processing functions."""
 
 import pytest
+from httpx import HTTPStatusError, Request, Response
 
 import app.llm.llm_types as types
 from app.constants import (
+    AGENT_RETRYABLE_ERROR_SUBSTRINGS,
+    AGENT_RETRYABLE_STATUS_CODES,
     DEFAULT_FINISH_REASON,
     StreamChunkFromModelType,
 )
@@ -104,16 +107,10 @@ class TestHandleUsageChunk:
         assert state.cache_tokens == 6
         assert state.usage_reported is True
 
-    def test_handles_none_values_in_usage(self):
-        """Test handle_usage_chunk handles None values gracefully."""
+    def test_handles_default_values_in_usage(self):
+        """Test handle_usage_chunk handles unset (default) usage counts gracefully."""
         state = TurnState()
-        chunk = types.StreamChunkFromModel(
-            usage_metadata=UsageMetadata(
-                prompt_token_count=None,
-                candidates_token_count=None,
-                total_token_count=None,
-            )
-        )
+        chunk = types.StreamChunkFromModel(usage_metadata=UsageMetadata())
 
         handle_usage_chunk(chunk, state)
 
@@ -190,9 +187,7 @@ class TestHandleUsageChunk:
                 eval_duration_seconds=0.04,
             )
         )
-        chunk2 = types.StreamChunkFromModel(
-            usage_metadata=UsageMetadata(prompt_token_count=10)
-        )
+        chunk2 = types.StreamChunkFromModel(usage_metadata=UsageMetadata(prompt_token_count=10))
 
         handle_usage_chunk(chunk1, state)
         handle_usage_chunk(chunk2, state)
@@ -438,9 +433,9 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        chunks = []
-        async for chunk in process_provider_turn(stream(), "test-model", result_out):
-            chunks.append(chunk)
+        chunks = [
+            chunk async for chunk in process_provider_turn(stream(), result_out)
+        ]
 
         assert len(chunks) == 2
         assert chunks[0].type == StreamChunkFromModelType.TEXT
@@ -460,9 +455,9 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        chunks = []
-        async for chunk in process_provider_turn(stream(), "test-model", result_out):
-            chunks.append(chunk)
+        chunks = [
+            chunk async for chunk in process_provider_turn(stream(), result_out)
+        ]
 
         assert len(chunks) == 3
         assert chunks[0].type == StreamChunkFromModelType.THINKING
@@ -481,9 +476,9 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        chunks = []
-        async for chunk in process_provider_turn(stream(), "test-model", result_out):
-            chunks.append(chunk)
+        chunks = [
+            chunk async for chunk in process_provider_turn(stream(), result_out)
+        ]
 
         assert len(chunks) == 2
         assert chunks[0].type == StreamChunkFromModelType.THINKING
@@ -501,7 +496,7 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        async for _ in process_provider_turn(stream(), "test-model", result_out):
+        async for _ in process_provider_turn(stream(), result_out):
             pass
 
         assert len(result_out[0].pending_tool_calls) == 2
@@ -525,7 +520,7 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        async for _ in process_provider_turn(stream(), "test-model", result_out):
+        async for _ in process_provider_turn(stream(), result_out):
             pass
 
         assert result_out[0].input_tokens == 15
@@ -554,7 +549,7 @@ class TestProcessProviderTurn:
             )
 
         result_out = []
-        async for _ in process_provider_turn(stream(), "test-model", result_out):
+        async for _ in process_provider_turn(stream(), result_out):
             pass
 
         result = result_out[0]
@@ -572,9 +567,9 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(thought=True, text="thinking")
 
         result_out = []
-        chunks = []
-        async for chunk in process_provider_turn(stream(), "test-model", result_out):
-            chunks.append(chunk)
+        chunks = [
+            chunk async for chunk in process_provider_turn(stream(), result_out)
+        ]
 
         assert chunks[0].type == StreamChunkFromModelType.THINKING
         assert chunks[1].type == StreamChunkFromModelType.THINKING_END
@@ -591,7 +586,7 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        async for _ in process_provider_turn(stream(), "test-model", result_out):
+        async for _ in process_provider_turn(stream(), result_out):
             pass
 
         assert len(result_out[0].model_response_parts) == 1
@@ -612,9 +607,9 @@ class TestProcessTurnWithGate:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out: list[GatedTurnResult] = []
-        chunks = []
-        async for chunk in process_turn_with_gate(stream(), "test-model", result_out):
-            chunks.append(chunk)
+        chunks = [
+            chunk async for chunk in process_turn_with_gate(stream(), result_out)
+        ]
 
         assert len(result_out) == 1
         gated = result_out[0]
@@ -643,9 +638,9 @@ class TestProcessTurnWithGate:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out: list[GatedTurnResult] = []
-        chunks = []
-        async for chunk in process_turn_with_gate(stream(), "test-model", result_out):
-            chunks.append(chunk)
+        chunks = [
+            chunk async for chunk in process_turn_with_gate(stream(), result_out)
+        ]
 
         assert len(result_out) == 1
         gated = result_out[0]
@@ -664,9 +659,9 @@ class TestProcessTurnWithGate:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out: list[GatedTurnResult] = []
-        chunks = []
-        async for chunk in process_turn_with_gate(stream(), "test-model", result_out):
-            chunks.append(chunk)
+        chunks = [
+            chunk async for chunk in process_turn_with_gate(stream(), result_out)
+        ]
 
         assert len(result_out) == 1
         gated = result_out[0]
@@ -685,7 +680,7 @@ class TestProcessTurnWithGate:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out: list[GatedTurnResult] = []
-        async for _ in process_turn_with_gate(stream(), "test-model", result_out):
+        async for _ in process_turn_with_gate(stream(), result_out):
             pass
 
         gated = result_out[0]
@@ -695,7 +690,6 @@ class TestProcessTurnWithGate:
     @pytest.mark.asyncio
     async def test_token_counts_propagate_through_gate(self):
         """Token counts from the inner turn are preserved in GatedTurnResult."""
-        from app.llm.llm_types import UsageMetadata
 
         async def stream():
             yield types.StreamChunkFromModel(
@@ -707,7 +701,7 @@ class TestProcessTurnWithGate:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out: list[GatedTurnResult] = []
-        async for _ in process_turn_with_gate(stream(), "test-model", result_out):
+        async for _ in process_turn_with_gate(stream(), result_out):
             pass
 
         gated = result_out[0]
@@ -726,7 +720,7 @@ class TestConsolidateModelParts:
             types.Part(text="world "),
             types.Part(text="foo"),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 1
         assert result[0].text == "hello world foo"
@@ -738,7 +732,7 @@ class TestConsolidateModelParts:
             types.Part(text="thinking", thought=True),
             types.Part(text="more plain", thought=False),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 3
         assert result[0].text == "plain"
@@ -754,7 +748,7 @@ class TestConsolidateModelParts:
             types.Part(tool_call=tool_call),
             types.Part(text="more plain"),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 3
         assert result[1].tool_call == tool_call
@@ -767,14 +761,14 @@ class TestConsolidateModelParts:
             types.Part(thought_signature=sig),
             types.Part(text="more plain"),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 3
         assert result[1].thought_signature == sig
 
     def test_handles_empty_list(self):
         """Test empty parts list returns empty list."""
-        result = consolidate_model_parts([], "test-model")
+        result = consolidate_model_parts([])
         assert result == []
 
     def test_does_not_merge_non_adjacent_text(self):
@@ -785,7 +779,7 @@ class TestConsolidateModelParts:
             types.Part(tool_call=tool_call),
             types.Part(text="second"),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 3
         assert result[0].text == "first"
@@ -829,27 +823,31 @@ class TestNormalizeFinishReason:
         assert normalize_finish_reason("  stop  ") == "STOP"
 
 
+class _StatusCodeError(Exception):
+    """Exception carrying an arbitrary ``status_code`` attribute, as SDK errors do."""
+
+    def __init__(self, message: str, status_code: object) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class TestShouldRetryError:
     """Test should_retry_error retry classification."""
 
     def test_retryable_status_codes(self):
         """Test retryable status codes return True."""
-        from app.constants import AGENT_RETRYABLE_STATUS_CODES
 
         for code in AGENT_RETRYABLE_STATUS_CODES:
-            error = Exception(f"HTTP {code}")
-            error.status_code = code
+            error = _StatusCodeError(f"HTTP {code}", code)
             assert should_retry_error(error) is True
 
     def test_non_retryable_status_codes(self):
         """Test non-retryable status codes return False."""
-        error = Exception("HTTP 400")
-        error.status_code = 400
+        error = _StatusCodeError("HTTP 400", 400)
         assert should_retry_error(error) is False
 
     def test_retryable_error_substrings(self):
         """Test retryable error substrings return True."""
-        from app.constants import AGENT_RETRYABLE_ERROR_SUBSTRINGS
 
         for substring in AGENT_RETRYABLE_ERROR_SUBSTRINGS:
             error = Exception(f"Error: {substring} occurred")
@@ -867,8 +865,7 @@ class TestShouldRetryError:
 
     def test_status_code_takes_precedence(self):
         """Test status code check happens first."""
-        error = Exception("Invalid API key")
-        error.status_code = 429
+        error = _StatusCodeError("Invalid API key", 429)
         assert should_retry_error(error) is True
 
 
@@ -877,19 +874,14 @@ class TestExtractStatusCode:
 
     def test_extracts_from_httpx_error(self):
         """Test extracts status code from httpx.HTTPStatusError."""
-        try:
-            from httpx import HTTPStatusError, Response
-
-            response = Response(status_code=429, request=None)
-            error = HTTPStatusError("Rate limited", request=None, response=response)
-            assert extract_status_code(error) == 429
-        except ImportError:
-            pytest.skip("httpx not available")
+        request = Request("GET", "https://example.test")
+        response = Response(status_code=429, request=request)
+        error = HTTPStatusError("Rate limited", request=request, response=response)
+        assert extract_status_code(error) == 429
 
     def test_extracts_from_status_code_attribute(self):
         """Test extracts from status_code attribute."""
-        error = Exception("Error")
-        error.status_code = 500
+        error = _StatusCodeError("Error", 500)
         assert extract_status_code(error) == 500
 
     def test_returns_none_when_no_status_code(self):
@@ -899,16 +891,14 @@ class TestExtractStatusCode:
 
     def test_returns_none_for_non_int_status_code(self):
         """Test returns None when status_code is not an int."""
-        error = Exception("Error")
-        error.status_code = "500"
+        error = _StatusCodeError("Error", "500")
         assert extract_status_code(error) is None
 
     def test_handles_missing_response_attribute(self):
         """Test handles HTTPStatusError without response."""
-        try:
-            from httpx import HTTPStatusError
-
-            error = HTTPStatusError("Error", request=None, response=None)
-            assert extract_status_code(error) is None
-        except ImportError:
-            pytest.skip("httpx not available")
+        request = Request("GET", "https://example.test")
+        error = HTTPStatusError(
+            "Error", request=request, response=Response(status_code=500, request=request)
+        )
+        del error.response
+        assert extract_status_code(error) is None

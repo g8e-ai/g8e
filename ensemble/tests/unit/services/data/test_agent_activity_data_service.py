@@ -35,9 +35,7 @@ class TestAgentActivityDataService:
     def context(self):
         return RequestContext(web_session_id="web-session-123", user_id="user-123")
 
-    async def test_record_activity_submits_governed_document_update(
-        self, mock_cache_aside_service
-    ):
+    async def test_record_activity_submits_governed_document_update(self, mock_cache_aside_service):
         governance_client = AsyncMock()
         service = AgentActivityDataService(mock_cache_aside_service, governance_client)
         metadata = AgentActivityMetadata(

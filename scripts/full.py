@@ -5,10 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Interactive host stack launcher for `make full`."""
+"""Host stack launcher: unattended `make full`, interactive `make full-setup`."""
 
 import argparse
+import ctypes
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -18,13 +20,77 @@ import ssl
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-ROLES = ("provenance", "observer", "inference")
+ROLES = ("provenance", "observer", "inference", "data")
 TRUST_PATH = Path(".g8e/pki/trust/g8eg-ca-bundle.pem")
 WORKLOADS_PATH = Path(".local.dev/full/workloads.json")
 LAUNCHES = {}
+GATEWAY_HOST = "g8e.local"
+
+
+# Names come from the canonical registry; unrelated .env settings never reach
+# the launcher or get exported to its subprocesses.
+ENV_REGISTRY = ROOT / "protocol/constants/env_vars.json"
+LAUNCHER_ENV_FIELDS = (
+    "Hostname",
+    "OllamaEndpoint",
+    *(role.title() + "Host" for role in ROLES),
+)
+
+
+def load_environment(path):
+    try:
+        from dotenv import dotenv_values
+    except ImportError as exc:
+        raise RuntimeError("python-dotenv is missing; run make ensemble-env") from exc
+    registry = json.loads(ENV_REGISTRY.read_text())["env_vars"]
+    values = dotenv_values(path, interpolate=False) if path.exists() else {}
+    result = {}
+    for field in LAUNCHER_ENV_FIELDS:
+        entry = registry[field]
+        if entry["category"] != "user_endpoint":
+            raise ValueError(f"Invalid launcher env category for {field}")
+        key = entry["value"]
+        if key in os.environ:
+            result[field] = os.environ[key].strip()
+        elif key in values:
+            result[field] = (values[key] or "").strip()
+    return result
+
+
+def validate_host(host):
+    # A host identity, never a URL, port, shell expression, or arbitrary option.
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?", host):
+            raise ValueError(f"Expected a hostname or IP address, got {host!r}")
+    return host
+
+
+def url_host(host):
+    return f"[{host}]" if ":" in host else host
+
+
+def validate_ollama(endpoint):
+    url = urlsplit(endpoint)
+    if (
+        url.scheme not in ("http", "https")
+        or not url.hostname
+        or url.username
+        or url.password
+        or url.query
+        or url.fragment
+    ):
+        raise ValueError("G8E_OLLAMA_ENDPOINT must be an HTTP(S) provider URL")
+    # Accessing port also validates its syntax and range.
+    _ = url.port
+    return endpoint
 
 
 def certificate_fingerprints(pem):
@@ -44,8 +110,9 @@ def local_workloads(plan):
     ] + [("g8ee", ROOT / ".local.dev/full/ensemble")]
 
 
-def prepare_identities(plan, reset=False, dry_run=False):
+def prepare_identities(plan, reset=False, dry_run=False, interactive=True):
     """Trust changes are authorized from local disk, never from a TLS failure."""
+    reset = reset or (os.environ.get("RESET_IDENTITIES") == "1")
     workloads = local_workloads(plan)
     root_path = ROOT / ".g8e/pki/root/root_ca.crt"
     if dry_run:
@@ -98,12 +165,17 @@ def prepare_identities(plan, reset=False, dry_run=False):
         print(
             "Working data, model files, vault keys, configuration, and logs will be preserved."
         )
+        if not reset and not interactive:
+            raise RuntimeError(
+                "Stale workload identities require an explicit reset; "
+                "retry with make full RESET_IDENTITIES=1, make full-reset, or use make full-setup"
+            )
         if not reset and prompt(
             "Reset their identities and request fresh enrollment? (y/N)", "n"
         ).lower() not in ("y", "yes"):
             raise RuntimeError("Identity reset declined; no workloads launched")
         for role, directory in stale:
-            command = [str(ROOT / "g8e")]
+            command = [resolve_g8e_binary()]
             if role == "g8ee":
                 command += ["ensemble", "reset-identity", "--yes"]
             else:
@@ -155,22 +227,39 @@ def workload_state(name, directory, offset=0):
     log_path = directory / "full.log"
     if not running:
         return "failed", f"see {log_path}"
+    if name == "g8ee" and check_g8ee_health():
+        return "ready", ""
+    if not log_path.exists():
+        return "starting", ""
     with log_path.open("rb") as log:
         log.seek(offset)
         recent = log.read().decode(errors="replace")
-    if "operator pub/sub WebSocket connected" in recent:
-        return "connected", ""
-    if "Application startup complete" in recent:
-        return "ready", ""
-    if (
-        "request submitted" in recent
-        or "approval url" in recent.lower()
-        or "resuming pending" in recent
-        or "polling for approval" in recent
-    ):
-        return "awaiting approval", "run ./g8e auth enroll pending"
-    if "gateway not yet bootstrapped" in recent:
-        return "awaiting enrollment", "run ./g8e auth enroll user -e localhost"
+    # Reused processes have append-only logs spanning earlier launches. The
+    # newest state marker must win over a previous connection or ready message.
+    states = (
+        ("operator pub/sub websocket connected", "connected", ""),
+        ("application startup complete", "ready", ""),
+        *(
+            (marker, "awaiting approval", "run ./g8e auth enroll pending")
+            for marker in (
+                "request submitted",
+                "approval url",
+                "resuming pending",
+                "polling for approval",
+            )
+        ),
+        (
+            "gateway not yet bootstrapped",
+            "awaiting enrollment",
+            "enroll the owner with ./g8e auth enroll user",
+        ),
+    )
+    recent = recent.lower()
+    position, state, detail = max(
+        (recent.rfind(marker), state, detail) for marker, state, detail in states
+    )
+    if position >= 0:
+        return state, detail
     return "starting", f"see {log_path}"
 
 
@@ -195,10 +284,8 @@ def report_workloads(timeout=20):
 
 def model_root():
     """Consult configuration/storage only; never start or probe Ollama."""
-    configured = os.environ.get("OLLAMA_MODELS")
-    if configured:
-        return str(Path(configured).expanduser())
-    # Snap's configured model location takes precedence over its default.
+    # Consider Snap configuration first, but verify storage before choosing it.
+    snap_models = None
     if Path("/snap/ollama/current").exists():
         try:
             result = subprocess.run(
@@ -209,18 +296,48 @@ def model_root():
                 check=False,
             )
             if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
+                snap_models = Path(result.stdout.strip()).expanduser()
         except (OSError, subprocess.TimeoutExpired):
             # Snap query is best-effort; if unavailable or slow, continue with fallback paths.
             pass
-    for path in (
+    candidates = [
         Path("/var/snap/ollama/common/models"),
         Path("/usr/share/ollama/.ollama/models"),
-        Path.home() / ".ollama/models",
-    ):
+    ]
+    try:
+        home_models = Path.home() / ".ollama/models"
+    except RuntimeError:
+        # A deliberately minimal environment (including tests and containers)
+        # may not have HOME/USERPROFILE. Other configured stores remain usable.
+        home_models = None
+    if home_models is not None:
+        candidates.append(home_models)
+    if snap_models is not None:
+        candidates.insert(0, snap_models)
+    # Windows Ollama storage may be exposed through WSL drive mounts.
+    drives = sorted(
+        drive
+        for drive in Path("/mnt").glob("*")
+        if len(drive.name) == 1 and drive.name in "abcdefghijklmnopqrstuvwxyz"
+    )
+    candidates.extend(drive / "ai/Ollama/models" for drive in drives)
+    for drive in drives:
+        candidates.extend(sorted(drive.glob("Users/*/.ollama/models")))
+    # Empty Snap manifests/blobs directories should not hide a populated store.
+    for path in candidates:
+        if (path / "blobs").is_dir() and any(
+            manifest.is_file() for manifest in (path / "manifests").rglob("*")
+        ):
+            return str(path)
+    for path in candidates:
+        if (path / "manifests").is_dir() and (path / "blobs").is_dir():
+            return str(path)
+    for path in candidates:
         if path.is_dir():
             return str(path)
-    return str(Path.home() / ".ollama/models")
+    if home_models is not None:
+        return str(home_models)
+    raise RuntimeError("Could not determine an Ollama model storage directory")
 
 
 def prompt(label, default):
@@ -228,7 +345,7 @@ def prompt(label, default):
         return input(f"{label} [{default}]: ").strip() or default
     except EOFError as exc:
         raise ValueError(
-            "make full requires interactive input; use --dry-run to preview commands"
+            "make full-setup requires interactive input; use --dry-run to preview commands"
         ) from exc
 
 
@@ -248,12 +365,14 @@ def operator_args(role, gateway, directory, storage, ollama):
         ]
     elif role == "inference":
         args += ["--inference-enabled", "--inference-ollama-endpoint", ollama]
-    else:
+    elif role == "observer":
         args += [
             "--provider-boundary-observer-enabled",
             "--provider-boundary-observer-id",
             "g8e-provider-boundary-observer",
         ]
+    elif role == "data":
+        pass
     return args
 
 
@@ -338,8 +457,9 @@ def start_local(name, directory, command, dry_run=False):
     print(f"  {name:<12} started; checking startup")
 
 
-def start_ensemble(dry_run=False):
+def start_ensemble(dry_run=False, gateway=GATEWAY_HOST):
     ensemble_dir = ROOT / ".local.dev/full/ensemble"
+    gateway = url_host(gateway)
     start_local(
         "g8ee",
         ensemble_dir,
@@ -352,19 +472,54 @@ def start_ensemble(dry_run=False):
             "--runtime-dir",
             str(ensemble_dir / ".g8e"),
             "--gateway-http-url",
-            "http://localhost:8080",
+            f"http://{gateway}:8080",
             "--gateway-url",
-            "https://localhost:8443",
+            f"https://{gateway}:8443",
             "--gateway-https-url",
-            "https://localhost:8443",
+            f"https://{gateway}:8443",
             "--gateway-pubsub-url",
-            "wss://localhost:8443",
+            f"wss://{gateway}:8443",
         ],
         dry_run,
     )
 
 
+def windows_kernel32():
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = ctypes.c_void_p
+    dword = ctypes.c_ulong
+    kernel32.OpenProcess.argtypes = (dword, ctypes.c_int, dword)
+    kernel32.OpenProcess.restype = handle
+    kernel32.GetExitCodeProcess.argtypes = (handle, ctypes.POINTER(dword))
+    kernel32.GetExitCodeProcess.restype = ctypes.c_int
+    kernel32.TerminateProcess.argtypes = (handle, ctypes.c_uint)
+    kernel32.TerminateProcess.restype = ctypes.c_int
+    kernel32.WaitForSingleObject.argtypes = (handle, dword)
+    kernel32.WaitForSingleObject.restype = dword
+    kernel32.CloseHandle.argtypes = (handle,)
+    kernel32.CloseHandle.restype = ctypes.c_int
+    return kernel32
+
+
 def ensemble_running(pid):
+    if os.name == "nt":
+        # os.kill(pid, 0) raises WinError 87 for a stale PID on Windows and the
+        # POSIX /proc checks below do not exist there. Query the process handle
+        # without sending a console signal.
+        process_query_limited_information = 0x1000
+        still_active = 259
+        kernel32 = windows_kernel32()
+        handle = kernel32.OpenProcess(
+            process_query_limited_information, False, pid
+        )
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            queried = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            return bool(queried) and exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
     # Linux signal-0 also sees zombies; treat them as stopped.
     stat = Path(f"/proc/{pid}/stat")
     try:
@@ -380,7 +535,87 @@ def ensemble_running(pid):
     return True
 
 
-def stop_ensemble():
+def terminate_process(pid, force=False):
+    if os.name != "nt":
+        os.kill(pid, signal.SIGKILL if force else signal.SIGTERM)
+        return
+    process_terminate = 0x0001
+    synchronize = 0x00100000
+    kernel32 = windows_kernel32()
+    handle = kernel32.OpenProcess(process_terminate | synchronize, False, pid)
+    if not handle:
+        raise ProcessLookupError(pid)
+    try:
+        if not kernel32.TerminateProcess(handle, 1):
+            raise ctypes.WinError()
+        kernel32.WaitForSingleObject(handle, 5000)
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def resolve_g8e_binary():
+    for candidate in (ROOT / "g8e", ROOT / "bin" / "g8e"):
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    bin_dir = ROOT / "bin"
+    if bin_dir.exists():
+        matches = [
+            p
+            for p in bin_dir.glob("g8e-*")
+            if os.access(p, os.X_OK)
+            and not p.name.endswith(".sha256")
+            and not p.name.endswith(".json")
+        ]
+        if matches:
+            return str(matches[0])
+    return str(ROOT / "g8e")
+
+
+def get_recorded_workloads():
+    """Load recorded local workloads, or fallback to default locations."""
+    registry = ROOT / WORKLOADS_PATH
+    if registry.exists():
+        try:
+            entries = json.loads(registry.read_text())
+            if isinstance(entries, list) and entries:
+                return [
+                    (item["role"], Path(item["directory"]))
+                    for item in entries
+                    if "role" in item and "directory" in item
+                ]
+        except (ValueError, KeyError):
+            pass
+    results = [(role, Path.home() / ".ollama/g8e" / role) for role in ROLES]
+    results.append(("g8ee", ROOT / ".local.dev/full/ensemble"))
+    return results
+
+
+def check_g8ee_health(url="http://127.0.0.1:8000/health", timeout=1.0):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "g8e-launcher/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                return data.get("status") == "ok"
+    except Exception:
+        pass
+    return False
+
+
+def check_gateway_health(url="http://127.0.0.1:8080/api/v1/health", timeout=1.0):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "g8e-launcher/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except Exception:
+        pass
+    return False
+
+
+def stop_ensemble(dry_run=False):
+    if dry_run:
+        print("g8ee: stop the local Python process")
+        return
     pid_file = ROOT / ".local.dev/full/ensemble/full.pid"
     if not pid_file.exists():
         print("  g8ee       stopped (host)")
@@ -392,7 +627,7 @@ def stop_ensemble():
         cmdline = Path(f"/proc/{pid}/cmdline")
         if cmdline.exists() and b"app.serve" not in cmdline.read_bytes().split(b"\0"):
             raise RuntimeError(f"PID {pid} is not the ensemble; refusing to stop it")
-        os.kill(pid, signal.SIGTERM)
+        terminate_process(pid)
         deadline = time.monotonic() + 10
         while ensemble_running(pid):
             if time.monotonic() >= deadline:
@@ -404,81 +639,407 @@ def stop_ensemble():
     print("  g8ee       stopped (host)")
 
 
+def stop_operator(role, directory, dry_run=False):
+    directory = Path(directory).expanduser().resolve()
+    pid_file = directory / "full.pid"
+    if dry_run:
+        print(f"{role}: stop the local operator process in {directory}")
+        return
+    if not pid_file.exists():
+        print(f"  {role:<12} stopped (host)")
+        return
+    try:
+        pid = int(pid_file.read_text().strip())
+    except (ValueError, FileNotFoundError):
+        pid_file.unlink(missing_ok=True)
+        print(f"  {role:<12} stopped (host)")
+        return
+    if pid <= 0:
+        pid_file.unlink(missing_ok=True)
+        print(f"  {role:<12} stopped (host)")
+        return
+    if ensemble_running(pid):
+        try:
+            cmdline = Path(f"/proc/{pid}/cmdline")
+            if cmdline.exists():
+                tokens = cmdline.read_bytes().split(b"\0")
+                if not any(b"g8e" in t for t in tokens if t):
+                    raise RuntimeError(
+                        f"PID {pid} in {pid_file} is not a g8e process; refusing to stop it"
+                    )
+        except OSError:
+            pass
+        terminate_process(pid)
+        deadline = time.monotonic() + 5
+        while ensemble_running(pid):
+            if time.monotonic() >= deadline:
+                try:
+                    terminate_process(pid, force=True)
+                except ProcessLookupError:
+                    pass
+                break
+            time.sleep(0.1)
+    pid_file.unlink(missing_ok=True)
+    print(f"  {role:<12} stopped (host)")
+
+
+def stop_operators(dry_run=False):
+    workloads = get_recorded_workloads()
+    for role, directory in workloads:
+        if role != "g8ee":
+            stop_operator(role, directory, dry_run)
+    if not dry_run:
+        binary = resolve_g8e_binary()
+        if Path(binary).exists() and os.access(binary, os.X_OK):
+            try:
+                subprocess.run(
+                    [binary, "operator", "stop"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    check=False,
+                )
+            except OSError:
+                pass
+
+
+def stop_gateway(dry_run=False):
+    if dry_run:
+        print("Gateway: stop running Gateway service")
+        return
+    binary = resolve_g8e_binary()
+    if Path(binary).exists() and os.access(binary, os.X_OK):
+        try:
+            subprocess.run(
+                [binary, "gw", "stop"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            print("  g8e-gw       stopped (host)")
+        except OSError:
+            print("  g8e-gw       stopped (host)")
+    else:
+        print("  g8e-gw       stopped (host)")
+
+
+def stop_all(dry_run=False, stop_gw=True):
+    if dry_run:
+        print("\nStop preview")
+    else:
+        print("\nStopping workloads")
+    stop_ensemble(dry_run)
+    stop_operators(dry_run)
+    if stop_gw:
+        stop_gateway(dry_run)
+    if not dry_run:
+        print("\nHost platform stopped. Runtime state in .g8e/ is preserved.")
+
+
+def show_status(dry_run=False):
+    print("\nPlatform status")
+    if dry_run:
+        print("  Status preview (no network probes)")
+        return
+
+    gw_reported = False
+    binary = resolve_g8e_binary()
+    if Path(binary).exists() and os.access(binary, os.X_OK):
+        try:
+            result = subprocess.run(
+                [binary, "gw", "status", "--brief"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                print(result.stdout.rstrip())
+                gw_reported = True
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    if not gw_reported:
+        if check_gateway_health():
+            print("  g8e-gw       online")
+        else:
+            print("  g8e-gw       stopped (host)")
+
+    print("\nLocal workloads")
+    workloads = get_recorded_workloads()
+    for role, directory in workloads:
+        pid_file = directory / "full.pid"
+        pid = None
+        if pid_file.exists():
+            try:
+                p = int(pid_file.read_text().strip())
+                if p > 0 and ensemble_running(p):
+                    pid = p
+            except (ValueError, FileNotFoundError):
+                pass
+
+        if role == "g8ee":
+            if pid is None:
+                print("  g8ee         stopped (host)")
+            elif check_g8ee_health():
+                print(f"  g8ee         ready (PID {pid}) · http://127.0.0.1:8000")
+            else:
+                state, detail = workload_state("g8ee", directory)
+                msg = f"  g8ee         {state} (PID {pid})"
+                if detail:
+                    msg += f"; {detail}"
+                print(msg)
+        else:
+            if pid is None:
+                print(f"  {role:<12} stopped (host)")
+            else:
+                state, detail = workload_state(role, directory)
+                msg = f"  {role:<12} {state} (PID {pid})"
+                if detail:
+                    msg += f"; {detail}"
+                print(msg)
+
+    print("\nManage with g8e (from this repository)")
+    print("  make full                        Bring up the full host stack")
+    print("  make down                        Bring down the full host stack")
+    print("  make status                      Show platform and workload status")
+    print("  ./g8e gw status                  Gateway and connected operators")
+    print("  ./g8e ensemble status            g8ee readiness")
+    print("  ./g8e operator list              Operator IDs and sessions")
+
+
+def ensemble_status(dry_run=False):
+    if dry_run:
+        print("  g8ee       status preview")
+        return
+    ensemble_dir = ROOT / ".local.dev/full/ensemble"
+    pid_file = ensemble_dir / "full.pid"
+    pid = None
+    if pid_file.exists():
+        try:
+            p = int(pid_file.read_text().strip())
+            if p > 0 and ensemble_running(p):
+                pid = p
+        except (ValueError, FileNotFoundError):
+            pass
+
+    if pid is None:
+        print("  g8ee       stopped (host)")
+    elif check_g8ee_health():
+        print(f"  g8ee       ready (PID {pid}) · http://127.0.0.1:8000")
+    else:
+        state, detail = workload_state("g8ee", ensemble_dir)
+        msg = f"  g8ee       {state} (PID {pid})"
+        if detail:
+            msg += f"; {detail}"
+        print(msg)
+
+
+def operator_status(dry_run=False):
+    if dry_run:
+        print("  operators  status preview")
+        return
+    workloads = get_recorded_workloads()
+    for role, directory in workloads:
+        if role == "g8ee":
+            continue
+        pid_file = directory / "full.pid"
+        pid = None
+        if pid_file.exists():
+            try:
+                p = int(pid_file.read_text().strip())
+                if p > 0 and ensemble_running(p):
+                    pid = p
+            except (ValueError, FileNotFoundError):
+                pass
+
+        if pid is None:
+            print(f"  {role:<12} stopped (host)")
+        else:
+            state, detail = workload_state(role, directory)
+            msg = f"  {role:<12} {state} (PID {pid})"
+            if detail:
+                msg += f"; {detail}"
+            print(msg)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Prompt and print without starting processes",
+        help="Print without starting processes or writing runtime state",
     )
-    parser.add_argument("--ensemble-action", choices=("start", "stop", "restart"))
+    parser.add_argument(
+        "--setup", action="store_true", help="Prompt for operator settings"
+    )
+    parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
+    parser.add_argument("--start-gateway", action="store_true")
+    parser.add_argument("--model-storage-root", help="Explicit model store path")
+    for role in ROLES:
+        parser.add_argument(
+            f"--{role}-working-dir", help=f"Explicit {role} runtime directory"
+        )
+    parser.add_argument(
+        "--ensemble-action",
+        choices=("start", "stop", "restart", "status"),
+        help="Lifecycle action for g8ee ensemble",
+    )
+    parser.add_argument(
+        "--operator-action",
+        choices=("start", "stop", "restart", "status"),
+        help="Lifecycle action for local operators",
+    )
+    parser.add_argument(
+        "--action",
+        choices=("up", "down", "stop", "status", "restart"),
+        help="Orchestration action for the full platform stack",
+    )
+    parser.add_argument(
+        "--down",
+        action="store_true",
+        help="Stop all running local workloads (g8ee and operators) and the Gateway",
+    )
+    parser.add_argument(
+        "--stop",
+        action="store_true",
+        help="Stop all running local workloads (g8ee and operators) and the Gateway",
+    )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show status of the Gateway, local operators, and g8ee",
+    )
+    parser.add_argument(
+        "--keep-gateway",
+        action="store_true",
+        help="When stopping workloads with --down/--stop, leave the Gateway running",
+    )
     parser.add_argument(
         "--reset-identities",
         action="store_true",
         help="Confirm reset of stale identities in the selected local workload directories",
     )
     args = parser.parse_args()
+
+    if args.down or args.stop or args.action in ("down", "stop"):
+        stop_all(args.dry_run, stop_gw=not args.keep_gateway)
+        return
+
+    if args.status or args.action == "status":
+        show_status(args.dry_run)
+        return
+
+    if args.operator_action:
+        if args.operator_action == "status":
+            operator_status(args.dry_run)
+            return
+        if args.operator_action == "stop":
+            print("\nStopping local operators" if not args.dry_run else "\nStop preview")
+            stop_operators(args.dry_run)
+            return
+        if args.operator_action == "restart":
+            print("\nRestarting local operators" if not args.dry_run else "\nRestart preview")
+            stop_operators(args.dry_run)
+
     if args.ensemble_action:
+        if args.ensemble_action == "status":
+            ensemble_status(args.dry_run)
+            return
+        gateway = GATEWAY_HOST
+        if args.ensemble_action in ("start", "restart"):
+            gateway = validate_host(
+                load_environment(args.env_file).get("Hostname", GATEWAY_HOST)
+            )
         if args.dry_run and args.ensemble_action in ("stop", "restart"):
             print("g8ee: stop the local Python process")
             if args.ensemble_action == "restart":
-                start_ensemble(True)
+                start_ensemble(True, gateway)
             return
         if args.ensemble_action in ("stop", "restart"):
             stop_ensemble()
         if args.ensemble_action in ("start", "restart"):
             prepare_identities([], args.reset_identities, args.dry_run)
-            start_ensemble(args.dry_run)
+            start_ensemble(args.dry_run, gateway)
             if not args.dry_run and report_workloads():
                 raise RuntimeError("g8ee failed during startup; see its log")
         return
-    print("\nSet up operators · press Enter to use the defaults.")
-    print("Choose localhost or a remote host for each role.")
+    environment = {} if args.setup else load_environment(args.env_file)
+    gateway_host = validate_host(environment.get("Hostname", GATEWAY_HOST))
+    if not args.setup:
+        if not environment.get("OllamaEndpoint"):
+            raise ValueError(
+                "Set G8E_OLLAMA_ENDPOINT in .env or the process environment"
+            )
+        validate_ollama(environment["OllamaEndpoint"])
+        systems = {
+            role: validate_host(environment.get(role.title() + "Host", "localhost"))
+            for role in ROLES
+        }
+    if args.setup:
+        print("\nSet up operators · press Enter to use the defaults.")
+        print("Choose localhost or a remote host for each role.")
     plan = []
     storage = ollama = None
     descriptions = {
         "provenance": "tracks model files; place it where models are stored",
         "observer": "observes provider activity; place it on the Ollama/GPU host",
-        "inference": "runs inference through your Ollama endpoint",
+        "inference": "runs inference",
+        "data": "executes governed tools and file operations; place it on the target host",
     }
     for role in ROLES:
-        print(f"\n{role.title()} · {descriptions[role]}")
-        system = prompt(
-            f"{role.title()} system (localhost or remote host)", "localhost"
-        )
+        if args.setup:
+            print(f"\n{role.title()} · {descriptions[role]}")
+            system = prompt(
+                f"{role.title()} system (localhost or remote host)", "localhost"
+            )
+        else:
+            system = systems[role]
         default_dir = (
             str(Path.home() / ".ollama/g8e" / role)
             if is_local(system)
             else f"~/.ollama/g8e/{role}"
         )
-        directory = prompt(
-            f"{role.title()} working directory (on {system})", default_dir
-        )
+        directory = getattr(args, role + "_working_dir") or default_dir
+        if args.setup:
+            directory = prompt(
+                f"{role.title()} working directory (on {system})", directory
+            )
+        if not directory.strip():
+            raise ValueError(f"{role} working directory must not be empty")
         if is_local(system):
             directory = str(Path(directory).expanduser().resolve())
         plan.append((role, system, directory))
         if role == "provenance":
             storage_default = model_root() if is_local(system) else "~/.ollama/models"
-            storage = prompt(
-                f"Provenance Ollama models directory (on {system})", storage_default
-            )
+            storage = args.model_storage_root or storage_default
+            if args.setup:
+                storage = prompt(
+                    f"Provenance Ollama models directory (on {system})", storage
+                )
             if is_local(system):
                 storage = str(Path(storage).expanduser().resolve())
         elif role == "inference":
-            ollama = prompt(
-                "Inference Ollama URL (Windows provider example: http://192.168.1.2:11434)",
-                "http://localhost:11434",
+            ollama = (
+                prompt(
+                    "Inference Ollama URL (Windows provider example: http://192.168.1.2:11434)",
+                    "http://localhost:11434",
+                )
+                if args.setup
+                else environment["OllamaEndpoint"]
             )
+            validate_ollama(ollama)
     # Sharing a cwd would share the operator's .g8e runtime and credentials.
     locations = [(system.lower(), directory) for _, system, directory in plan]
     local_dirs = [directory for _, system, directory in plan if is_local(system)]
     if len(set(locations)) != len(locations) or len(set(local_dirs)) != len(local_dirs):
         raise ValueError("Each operator needs a separate working directory")
-    remote_gateway = "localhost"
-    if any(not is_local(system) for _, system, _ in plan):
+    remote_gateway = gateway_host
+    if args.setup and any(not is_local(system) for _, system, _ in plan):
         remote_gateway = prompt(
             "Gateway hostname reachable from remote operators (TLS certificate name)",
-            "g8e.local",
+            GATEWAY_HOST,
         )
     if not args.dry_run:
         try:
@@ -491,42 +1052,67 @@ def main():
             )
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(
-                "g8ee dependencies are missing; run make dev-python and retry"
+                "g8ee dependencies are missing; run make ensemble-env and retry"
             ) from exc
-    prepare_identities(plan, args.reset_identities, args.dry_run)
+    if args.start_gateway:
+        binary = resolve_g8e_binary()
+        gateway_command = [binary, "gw", "start", "--quiet"]
+        if not args.setup:
+            gateway_command += [
+                "--public-base-url",
+                f"https://{url_host(gateway_host)}:8443",
+                "--passkey-rp-id",
+                gateway_host,
+                "--passkey-rp-origin",
+                f"https://{url_host(gateway_host)}:8443",
+                "--cors-origin",
+                f"https://{url_host(gateway_host)}:8443",
+            ]
+        if args.dry_run:
+            print("Gateway: " + shlex.join(gateway_command))
+        else:
+            subprocess.run(gateway_command, cwd=ROOT, check=True)
+    prepare_identities(
+        plan, args.reset_identities, args.dry_run, interactive=args.setup
+    )
     print("\nLaunching workloads" if not args.dry_run else "\nLaunch preview")
+    binary = resolve_g8e_binary()
     for role, system, directory in plan:
-        gateway = "localhost" if is_local(system) else remote_gateway
+        gateway = gateway_host if is_local(system) else remote_gateway
         command_args = operator_args(role, gateway, directory, storage, ollama)
         if is_local(system):
             start_local(
-                role, directory, [str(ROOT / "g8e"), *command_args], args.dry_run
+                role, directory, [binary, *command_args], args.dry_run
             )
         else:
             remote_commands(system, directory, command_args)
-    start_ensemble(args.dry_run)
+    if args.operator_action not in ("start", "restart"):
+        start_ensemble(args.dry_run, gateway_host)
     failed = report_workloads() if not args.dry_run else False
-    print_summary(args.dry_run, any(not is_local(system) for _, system, _ in plan))
+    print_summary(
+        args.dry_run, any(not is_local(system) for _, system, _ in plan), gateway_host
+    )
     if failed:
         raise RuntimeError(
             "One or more workloads failed during startup; see the logs listed above"
         )
 
 
-def print_summary(dry_run=False, has_remote=False):
+def print_summary(dry_run=False, has_remote=False, gateway=GATEWAY_HOST):
     print(
         "\nPlatform status"
         if not dry_run
         else "\nPreview complete · no workloads started"
     )
     if not dry_run:
+        binary = resolve_g8e_binary()
         for command, label in (
             (["gw", "status", "--brief"], "Gateway / operators"),
             (["ensemble", "status"], "g8ee"),
         ):
             try:
                 result = subprocess.run(
-                    [str(ROOT / "g8e"), *command],
+                    [binary, *command],
                     cwd=ROOT,
                     capture_output=True,
                     text=True,
@@ -552,10 +1138,10 @@ def print_summary(dry_run=False, has_remote=False):
     print("  ./g8e operator show <id>         Operator details")
     print("  ./g8e ensemble logs              g8ee startup issues")
     print("\nIf workloads need approval")
-    print("  ./g8e auth enroll user -e localhost   Enroll your CLI identity first")
+    print(f"  ./g8e auth enroll user -e {gateway}   Enroll your CLI identity first")
     print("  ./g8e auth enroll pending             Review requests")
     print("  ./g8e auth enroll approve <id> --yes   Approve an intended request")
-    print("\nConsole: https://localhost:8443/console/")
+    print(f"\nConsole: https://{url_host(gateway)}:8443/console/")
 
 
 if __name__ == "__main__":

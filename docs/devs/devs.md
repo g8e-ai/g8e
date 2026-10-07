@@ -3,17 +3,19 @@ doc_id: devs
 title: Developer Guidelines
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.1
 owners:
   - go.mod
   - Makefile
   - docker-compose.yml
   - internal/cli/cmd/main.go
   - internal/cli/cmd/test/test.go
+  - internal/cli/config/config.go
   - internal/constants/errors.go
   - internal/constants/paths.go
   - internal/services/fs/file_service.go
+  - internal/services/g8eo.go
   - internal/services/pubsub/mode_deps.go
   - internal/services/pubsub/pubsub_commands.go
   - internal/services/gateway/gateway_service.go
@@ -91,7 +93,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-CODE-03 | A function MUST do one job: reads read, writes write, validation validates, and orchestration composes explicit dependencies. |
 | INV-CODE-04 | A security check MUST fail closed and MUST propagate its error. |
 | INV-CODE-05 | MUST pass explicit dependencies and state transitions. MUST NOT add package globals, lazy adapters, reflection, or hidden side effects for control flow. |
-| INV-CODE-06 | A production path MUST return errors. MUST NOT panic for a recoverable production failure. |
+| INV-CODE-06 | A production path MUST return errors. MUST NOT panic for a recoverable production failure. A `panic` in non-test code is permitted ONLY for an unrecoverable runtime failure (the process cannot safely continue), and the panic site MUST carry a comment citing INV-CODE-06 so deterministic linters can allowlist it. |
 | INV-CODE-07 | MUST use `context.Context` for cancellation. Every goroutine MUST have an owner, cancellation, and completion via channels or `sync.WaitGroup`. |
 | INV-CODE-08 | Go MUST be formatted with `gofmt`. Imports MUST be grouped as standard library, external modules, then internal packages. |
 | INV-CODE-09 | MUST pass a pointer for a mutable or large struct and a value for a small read-only struct. |
@@ -101,6 +103,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-CODE-13 | MUST reproduce a bug with a failing regression test before changing production code, then show that the test passes with the fix. |
 | INV-CODE-14 | MUST update the documentation and generated artifacts in the same change as the behavior they describe. |
 | INV-CODE-15 | A change SHOULD stay on one coherent behavior and SHOULD leave the affected code easier to follow. |
+| INV-CODE-16 | A constructor (any `New*` function) MUST return an error for invalid input or missing required dependencies. MUST NOT panic. A factory that wraps a constructor MUST itself return `(T, error)` and propagate the construction error. |
 
 ### Errors (`INV-ERR`)
 
@@ -169,7 +172,7 @@ Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing 
 | INV-TEST-09 | Assertions MUST use typed constants for statuses, reasons, paths, and permissions. |
 | INV-TEST-10 | The canonical trust bundle path is `.g8e/pki/trust/g8eg-ca-bundle.pem`. A test MUST NOT repair a failure by mutating developer PKI state. |
 | INV-TEST-11 | MUST NOT use `os.Chdir` to line up runtime state. A working-directory change is allowed only for behavior that discovers source-tree or configuration files, and that file MUST explain the change and clean it up. |
-| INV-TEST-12 | `./g8e test e2e-full` MUST be described from `internal/cli/cmd/test/test.go`: it runs `docker compose up -d` with profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds profile `cross-enrollment` when `--cross-enrollment` is set, waits up to 60 seconds for HTTP 200 from Gateway `http://localhost:8080/api/v1/health` and Ensemble `http://localhost:8000/health`, runs the same `go test` arguments as `./g8e test e2e`, and tears the stack down with `docker compose down -v`. |
+| INV-TEST-12 | `./g8e test e2e-docker` MUST be described from `internal/cli/cmd/test/test.go`: it runs `docker compose up -d` with profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds profile `cross-enrollment` when `--cross-enrollment` is set, waits up to 60 seconds for HTTP 200 from Gateway `http://localhost:8080/api/v1/health` and Ensemble `http://localhost:8000/health`, runs the same `go test` arguments as `./g8e test e2e`, and tears the stack down with `docker compose down -v`. |
 | INV-TEST-13 | `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Unprofiled services (gateway, data operator, inference operator, ensemble) start on `docker compose up -d`. Named profiles are `cross-enrollment` and `g8ellama`. MUST NOT describe `bootstrapped` as a Compose profile that selects those workloads. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist; the Compose file does not assign them. |
 
 ### Generated artifacts (`INV-GEN`)
@@ -185,8 +188,7 @@ Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing 
 | Go, Python, TypeScript, and Markdown protobuf output | `protocol/proto/g8e/` | `make proto-generate` (runs `proto-go`, `proto-python`, `proto-node`, `proto-lockfiles`; bare `make proto` is a legacy alias of `proto-generate`) plus the affected conformance tests |
 | Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
 | Website | Root `README.md` | `make website-test` and `make website-build` when rendering changes |
-| Doctrine references | `protocol/constants/doctrine/` and demo doctrine inputs | `make doctrines-validate` |
-| COSAiS overlays | Canonical overlay and doctrine references | `make cosais-validate` |
+| Doctrine references | `protocol/constants/doctrine/` | `make doctrines-validate` |
 
 The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full matrix. The [Release Process](release_process.md) owns native evaluation and signed compliance evidence.
 
@@ -236,7 +238,7 @@ The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full m
 | Doctrine flag and env | `internal/cli/cmd/gw/gateway.go`, `internal/constants/env_vars.go` | `--doctrine-dir` wins over `G8E_DOCTRINE_DIR` |
 | Native tool contract and registry | `internal/services/mcp/registry.go`, `internal/services/mcp/native_tool_registry.go`, `protocol/docs/mcp_tool_template.go` | `NativeTool`, `RegisterNativeTools` |
 | Compose profiles | `docker-compose.yml` | Header comment plus `profiles:` keys: `cross-enrollment`, `g8ellama` |
-| `e2e-full` | `internal/cli/cmd/test/test.go` | `./g8e test e2e-full --help` |
+| `e2e-docker` | `internal/cli/cmd/test/test.go` | `./g8e test e2e-docker --help` |
 
 ## Procedures
 
@@ -262,16 +264,19 @@ make lint
 ./g8e test unit
 ./g8e test integration
 ./g8e test e2e
-./g8e test e2e-full
+./g8e test e2e-docker
 ./g8e test coverage
 ./g8e test lint
 ./g8e test chaos
 ./g8e test summary
+./g8e test public-loop --candidate candidate.json --output evidence.json
 ```
 
-2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
+2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI (`./g8e test public-loop` requires `--candidate` and `--output`). Reproduce a CI failure through the same entry point.
 3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make ensemble-test-external`, `make console-test`.
-4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-full` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
+4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-docker` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
+
+On native Windows, `make dev-setup` and `make ci` use Git for Windows Bash and GNU Make. Keep `/usr/bin` ahead of the Windows system PATH inside Bash so npm helpers resolve Git Bash. Test fixtures that discover user configuration must isolate both `HOME` and `USERPROFILE`; see [Native Windows Tests](tests.md#native-windows-tests) for application-data isolation, cross-drive fixtures, file modes, symlink privileges, browser stubs, and race-detector limits.
 
 ### Add a runtime-file CLI command
 
@@ -311,6 +316,7 @@ make lint
 
 - A compatibility shim that keeps a broken path alive (INV-CODE-01).
 - An `ensure*` or `getOrCreate*` helper (INV-CODE-12).
+- Panicking in production code or constructors for recoverable failures (INV-CODE-06, INV-CODE-16).
 - `errors.New` or a package-level sentinel outside `internal/constants/errors.go` (INV-ERR-01, INV-ERR-02).
 - Protobuf `Any` or `map[string]interface{}` for a known contract (INV-TYPE-02).
 - `os.ReadFile`, `os.WriteFile`, or a hardcoded `.g8e/` path outside `internal/services/fs` (INV-FS-01).

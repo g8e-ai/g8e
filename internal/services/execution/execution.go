@@ -389,6 +389,18 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	return result, nil
 }
 
+// resolveCommandBinary maps the embedded model client's canonical container
+// path to this operator's executable, which may live elsewhere on native hosts.
+// Resolution happens at the executing operator; the governed command and
+// recorded evidence retain the canonical command text.
+func resolveCommandBinary(parts []string) (string, error) {
+	if len(parts) >= 3 && parts[0] == constants.ContainerBinaryPath &&
+		parts[1] == "operator" && parts[2] == "model" {
+		return os.Executable()
+	}
+	return exec.LookPath(parts[0])
+}
+
 // executeCommandInternal performs the actual command execution
 func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx *ExecutionContext) error {
 	request := execCtx.Request
@@ -423,11 +435,10 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	// This reduces the risk of command injection and satisfies security scanners.
 
 	var cmd *exec.Cmd
-	useShell := false
 
 	// Check for shell-specific characters that might require a shell
 	// Or if the original command explicitly requested a shell (e.g. for builtins like 'exit')
-	useShell = isShellCommand || security.IsShellRequired(fullCommand)
+	useShell := isShellCommand || security.IsShellRequired(fullCommand)
 
 	if useShell {
 		// Apply memory limit via ulimit if configured - only on Linux
@@ -463,7 +474,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 			return fmt.Errorf("execution: command validation: %w", constants.ErrEmptyCommand)
 		}
 
-		bin, err := exec.LookPath(parts[0])
+		bin, err := resolveCommandBinary(parts)
 		if err != nil {
 			return fmt.Errorf("execution: command lookup: %w", constants.ErrCommandLookup)
 		}

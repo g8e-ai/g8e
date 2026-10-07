@@ -50,7 +50,9 @@ async def test_fetch_proxy_signing_key_returns_typed_key_from_exact_path():
 @pytest.mark.parametrize("status", [401, 403, 503])
 async def test_fetch_proxy_signing_key_fails_on_non_2xx(status):
     client = _client()
-    client._http.get = AsyncMock(return_value=AiohttpResponse(status=status, body=b"{}", headers={}))
+    client._http.get = AsyncMock(
+        return_value=AiohttpResponse(status=status, body=b"{}", headers={})
+    )
 
     with pytest.raises(NetworkError):
         await client.fetch_proxy_signing_key()

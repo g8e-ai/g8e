@@ -1,13 +1,7 @@
 {
-  "include": ["app/services"],
-  "pythonVersion": "3.12",
-  "typeCheckingMode": "strict",
-  "reportMissingTypeStubs": "none",
-  "venvPath": "/opt",
-  "venv": "venv",
-  "extraPaths": [
-    ".",
-    "../../protocol",
-    "../.."
-  ]
+  "extends": "./pyrightconfig.json",
+  "include": [
+    "app/services"
+  ],
+  "typeCheckingMode": "strict"
 }

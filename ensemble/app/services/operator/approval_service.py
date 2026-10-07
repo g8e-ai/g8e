@@ -20,25 +20,22 @@ persistent backing store, pod-restart safe).
 import logging
 from collections.abc import Callable
 
-from app.errors import ExternalServiceError, ResourceNotFoundError, ValidationError
-from app.services.protocols import (
-    EventServiceProtocol,
-    InvestigationDataServiceProtocol,
-    OperatorDataServiceProtocol,
+from app.constants import EventType, FileOperation
+from app.constants.config import (
+    ApprovalErrorType,
 )
-from app.constants import FileOperation, EventType
 from app.constants.intents import (
     CLOUD_INTENT_QUESTIONS,
     CloudIntent,
 )
-from app.constants.config import (
-    ApprovalErrorType,
-)
+from app.errors import ExternalServiceError, ResourceNotFoundError, ValidationError
+from app.models.events import SessionEvent
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import (
     ApprovalMetadata,
-    FileEditMetadata,
     ConversationMessageMetadata,
+    FileEditMetadata,
 )
 from app.models.operators import (
     AgentContinueApprovalEvent,
@@ -56,8 +53,11 @@ from app.models.operators import (
     PendingApproval,
     TargetSystem,
 )
-from app.models.events import SessionEvent
-from app.models.http_context import G8eHttpContext, RequestContext
+from app.services.protocols import (
+    EventServiceProtocol,
+    InvestigationDataServiceProtocol,
+    OperatorDataServiceProtocol,
+)
 from app.utils.time_ids.ids import generate_approval_id, generate_intent_approval_id
 from app.utils.time_ids.timestamp import now
 
@@ -202,12 +202,11 @@ class OperatorApprovalService:
             try:
                 self._on_approval_requested(approval_id, pending)
             except Exception as e:
-                logger.error("[APPROVAL] on_approval_requested callback failed: %s", e)
+                logger.exception("[APPROVAL] on_approval_requested callback failed: %s", e)
 
     async def _audit(
         self,
         *,
-        operator_id: str | None,
         event_type: EventType,
         metadata: ConversationMessageMetadata,
         context: RequestContext,
@@ -217,8 +216,12 @@ class OperatorApprovalService:
         metadata.event_type = event_type
 
         try:
+            investigation_id = context.investigation_id
+            if investigation_id is None:
+                logger.info("[%s] Skipping audit without an investigation ID", log_tag)
+                return
             await self.investigation_data_service.add_approval_record(
-                investigation_id=context.investigation_id,
+                investigation_id=investigation_id,
                 event_type=event_type,
                 metadata=metadata,
                 context=context,
@@ -234,12 +237,15 @@ class OperatorApprovalService:
 
     async def request_command_approval(self, request: CommandApprovalRequest) -> ApprovalResult:
         """Request operator approval for a command execution."""
+        user_id = request.g8e_context.user_id
+        if user_id is None:
+            raise ValidationError("An authenticated user ID is required for approval")
         return await self._request_command_approval(
             command=request.command,
             justification=request.justification,
             g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.g8e_context.user_id,
+            user_id=user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
@@ -252,13 +258,16 @@ class OperatorApprovalService:
 
     async def request_file_edit_approval(self, request: FileEditApprovalRequest) -> ApprovalResult:
         """Request operator approval for a file edit operation."""
+        user_id = request.g8e_context.user_id
+        if user_id is None:
+            raise ValidationError("An authenticated user ID is required for approval")
         return await self._request_file_edit_approval(
             file_path=request.file_path,
             operation=request.operation,
             justification=request.justification,
             g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.g8e_context.user_id,
+            user_id=user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
@@ -268,12 +277,15 @@ class OperatorApprovalService:
 
     async def request_intent_approval(self, request: IntentApprovalRequest) -> ApprovalResult:
         """Request operator approval for an intent (IAM) permission grant."""
+        user_id = request.g8e_context.user_id
+        if user_id is None:
+            raise ValidationError("An authenticated user ID is required for approval")
         return await self._grant_intent_permission(
             intent_name=request.intent_name,
             justification=request.justification,
             g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.g8e_context.user_id,
+            user_id=user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
@@ -333,8 +345,8 @@ class OperatorApprovalService:
                 logger.info("[AGENT_CONTINUE_APPROVAL] Published to client")
             except Exception as publish_error:
                 error_msg = f"Failed to publish agent continuation approval request to client: {publish_error}"
-                logger.error(
-                    "[AGENT_CONTINUE_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True
+                logger.exception(
+                    "[AGENT_CONTINUE_APPROVAL-PUBLISH-FAILURE] %s", error_msg
                 )
                 return ApprovalResult(
                     approved=False,
@@ -345,7 +357,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=None,
                 event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
                 metadata=ApprovalMetadata(
                     execution_id=request.execution_id,
@@ -381,7 +392,6 @@ class OperatorApprovalService:
 
             if pending.feedback:
                 await self._audit(
-                    operator_id=None,
                     event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REJECTED,
                     metadata=ApprovalMetadata(
                         execution_id=request.execution_id,
@@ -400,7 +410,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=None,
                 event_type=(
                     EventType.AI_AGENT_CONTINUE_APPROVAL_GRANTED
                     if pending.approved
@@ -424,10 +433,9 @@ class OperatorApprovalService:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[AGENT_CONTINUE_APPROVAL-EXCEPTION] Failed to request agent continuation approval: %s",
                 e,
-                exc_info=True,
             )
             return ApprovalResult(
                 approved=False,
@@ -436,8 +444,6 @@ class OperatorApprovalService:
                 error_type=ApprovalErrorType.APPROVAL_EXCEPTION,
                 approval_id=approval_id,
             )
-
-
 
     async def _request_command_approval(
         self,
@@ -525,7 +531,7 @@ class OperatorApprovalService:
             except Exception as publish_error:
                 self._pending_approvals.pop(approval_id, None)
                 error_msg = f"Failed to publish approval request to client: {publish_error}"
-                logger.error("[APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
+                logger.error("[APPROVAL-PUBLISH-FAILURE] %s", error_msg)
                 return ApprovalResult(
                     approved=False,
                     reason=error_msg,
@@ -535,7 +541,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
                 metadata=ApprovalMetadata(
                     execution_id=execution_id,
@@ -572,7 +577,6 @@ class OperatorApprovalService:
                     "[APPROVAL] User provided feedback: %s", pending.reason or "User sent a message"
                 )
                 await self._audit(
-                    operator_id=operator_id,
                     event_type=EventType.OPERATOR_COMMAND_APPROVAL_REJECTED,
                     metadata=ApprovalMetadata(
                         execution_id=execution_id,
@@ -594,7 +598,6 @@ class OperatorApprovalService:
             logger.info("[APPROVAL] User response: approved=%s", pending.approved)
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_COMMAND_APPROVAL_GRANTED
                 if pending.approved
                 else EventType.OPERATOR_COMMAND_APPROVAL_REJECTED,
@@ -619,8 +622,8 @@ class OperatorApprovalService:
             )
 
         except Exception as e:
-            logger.error(
-                "[APPROVAL-EXCEPTION] Failed to request command approval: %s", e, exc_info=True
+            logger.exception(
+                "[APPROVAL-EXCEPTION] Failed to request command approval: %s", e
             )
             logger.error(
                 "[APPROVAL-EXCEPTION] command=%s approval_id=%s case_id=%s investigation_id=%s user_id=%s web_session_id=%s operator_id=%s",
@@ -710,7 +713,7 @@ class OperatorApprovalService:
                 error_msg = (
                     f"Failed to publish file edit approval request to client: {publish_error}"
                 )
-                logger.error("[FILE_EDIT_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
+                logger.error("[FILE_EDIT_APPROVAL-PUBLISH-FAILURE] %s", error_msg)
                 return ApprovalResult(
                     approved=False,
                     reason=error_msg,
@@ -720,7 +723,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED,
                 metadata=FileEditMetadata(
                     execution_id=execution_id,
@@ -743,7 +745,6 @@ class OperatorApprovalService:
                     pending.reason or "User sent a message",
                 )
                 await self._audit(
-                    operator_id=operator_id,
                     event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_REJECTED,
                     metadata=FileEditMetadata(
                         execution_id=execution_id,
@@ -764,7 +765,6 @@ class OperatorApprovalService:
             logger.info("[FILE_EDIT_APPROVAL] User response: approved=%s", pending.approved)
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_GRANTED
                 if pending.approved
                 else EventType.OPERATOR_FILE_EDIT_APPROVAL_REJECTED,
@@ -786,10 +786,9 @@ class OperatorApprovalService:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[FILE_EDIT_APPROVAL-EXCEPTION] Failed to request file edit approval: %s",
                 e,
-                exc_info=True,
             )
             logger.error(
                 "[FILE_EDIT_APPROVAL-EXCEPTION] file_path=%s approval_id=%s case_id=%s investigation_id=%s operator_id=%s",
@@ -887,7 +886,7 @@ class OperatorApprovalService:
                 logger.info("[INTENT_APPROVAL] Published to client")
             except Exception as publish_error:
                 error_msg = f"Failed to publish intent approval request to client: {publish_error}"
-                logger.error("[INTENT_APPROVAL] %s", error_msg, exc_info=True)
+                logger.error("[INTENT_APPROVAL] %s", error_msg)
                 return ApprovalResult(
                     approved=False,
                     reason=error_msg,
@@ -897,7 +896,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
                 metadata=ApprovalMetadata(
                     execution_id=execution_id,
@@ -933,7 +931,6 @@ class OperatorApprovalService:
             if pending.feedback:
                 logger.info("[INTENT_APPROVAL] User provided feedback")
                 await self._audit(
-                    operator_id=operator_id,
                     event_type=EventType.OPERATOR_INTENT_APPROVAL_REJECTED,
                     metadata=ApprovalMetadata(
                         execution_id=execution_id,
@@ -955,7 +952,6 @@ class OperatorApprovalService:
             logger.info("[INTENT_APPROVAL] User response: approved=%s", pending.approved)
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_INTENT_APPROVAL_GRANTED
                 if pending.approved
                 else EventType.OPERATOR_INTENT_APPROVAL_REJECTED,
@@ -984,8 +980,8 @@ class OperatorApprovalService:
             )
 
         except Exception as e:
-            logger.error(
-                "[INTENT_APPROVAL] Failed to request intent permission: %s", e, exc_info=True
+            logger.exception(
+                "[INTENT_APPROVAL] Failed to request intent permission: %s", e
             )
             return ApprovalResult(
                 approved=False,

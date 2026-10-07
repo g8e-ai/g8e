@@ -46,13 +46,13 @@ func TestGovernedCapabilityProbeRunner_RecordsDescriptiveOutcomesWithoutExclusio
 		ContextLimit:   4096,
 	}
 	dispatcher := &stubGovernedCapabilityProbeDispatcher{bySuffix: map[string]func(InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error){
-		"completion": func(req InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {
+		"completion": func(req InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) { //nolint:unparam // The dispatcher contract returns an error; this fixture covers the successful branch.
 			return probeResponse(req.ProviderAttemptID, "capability-probe-ok"), nil
 		},
 		"tools": func(InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {
 			return nil, fmt.Errorf("tools unsupported")
 		},
-		"structured": func(req InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {
+		"structured": func(req InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) { //nolint:unparam // The dispatcher contract returns an error; this fixture covers the successful branch.
 			return probeResponse(req.ProviderAttemptID, "not-json"), nil
 		},
 		"thinking": func(InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {

@@ -128,7 +128,7 @@ func TestL4Warden_Consensus_BootstrapActionPassesWithoutL2(t *testing.T) {
 	}
 
 	for _, actionType := range bootstrapActions {
-		actionType := actionType
+
 		t.Run(string(actionType), func(t *testing.T) {
 			t.Parallel()
 			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))

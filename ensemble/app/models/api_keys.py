@@ -7,7 +7,8 @@
 
 from app.constants import APIKeyStatus
 from app.utils.time_ids.timestamp import now
-from .base import G8eBaseModel, UTCDatetime, Field
+
+from .base import Field, G8eBaseModel, UTCDatetime
 
 
 class APIKeyDocument(G8eBaseModel):

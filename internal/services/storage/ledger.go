@@ -678,6 +678,7 @@ func (s *GitLedgerService) GetFileHistory(filePath string, limit int, operatorSe
 		// Check if this commit modified the file
 		files, err := c.Files()
 		if err != nil {
+			//nolint:nilerr // intentional fallback: skip unreadable commit and continue history traversal
 			return nil
 		}
 
@@ -694,6 +695,7 @@ func (s *GitLedgerService) GetFileHistory(filePath string, limit int, operatorSe
 			return nil
 		})
 		if err != nil {
+			//nolint:nilerr // intentional fallback: skip commit on file iteration error and continue history traversal
 			return nil
 		}
 

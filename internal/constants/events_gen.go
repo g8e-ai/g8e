@@ -156,6 +156,7 @@ const EventAppTaskCreated EventType = "g8e.v1.app.task.created"
 const EventAppTaskFailed EventType = "g8e.v1.app.task.failed"
 const EventAppTaskStarted EventType = "g8e.v1.app.task.started"
 const EventAppTaskUpdated EventType = "g8e.v1.app.task.updated"
+const EventModelProvenancePreflightProgress EventType = "g8e.v1.inference.model.provenance.preflight.updated"
 const EventOperatorA2aCallRequested EventType = "g8e.v1.operator.a2a.call.requested"
 const EventOperatorAuditAiRecordRequested EventType = "g8e.v1.operator.audit.ai.record.requested"
 const EventOperatorAuditAiRecorded EventType = "g8e.v1.operator.audit.ai.recorded"
@@ -1498,6 +1499,13 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers:   []string{"ensemble"},
 		Persistence: "gateway.docstore",
 		Reserved:    true,
+	},
+	EventModelProvenancePreflightProgress: {
+		Key:         "ModelProvenancePreflightProgress",
+		Kind:        EventKindFact,
+		Transport:   []string{"sse"},
+		Producers:   []string{"gateway"},
+		Persistence: "ephemeral",
 	},
 	EventOperatorA2aCallRequested: {
 		Key:               "OperatorA2aCallRequested",

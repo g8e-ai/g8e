@@ -118,7 +118,14 @@ async function build() {
   ]);
   const html = renderWebsite(readme, template);
   if (process.argv.includes('--check')) {
-    if (!html.includes('id="why-g8e-exists"') || !html.includes('id="how-it-works"') || !html.includes('id="the-platform-suite"') || !html.includes('id="what-the-platform-can-do"') || !html.includes('id="quick-start"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
+    if (
+      !html.includes('id="what-g8e-does"') ||
+      !html.includes('id="why-this-exists"') ||
+      !html.includes('id="try-it"') ||
+      !html.includes('id="what-is-in-the-repo"') ||
+      !html.includes('id="what-makes-this-different"') ||
+      html.includes('href="docs/')
+    ) throw new Error('generated website validation failed');
     return;
   }
   await rm(OUTPUT_DIRECTORY, { recursive: true, force: true });

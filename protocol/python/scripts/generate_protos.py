@@ -39,13 +39,14 @@ GENERATED_FILES = tuple(
 
 
 def generate(output_root: Path) -> None:
+    grpc_proto_dir = Path(files("grpc_tools") / "_proto")
     args = [
         "grpc_tools.protoc",
-        f"--proto_path={PROTO_ROOT}",
-        f"--proto_path={files('grpc_tools') / '_proto'}",
-        f"--python_out={output_root}",
-        f"--pyi_out={output_root}",
-        *(str(path) for path in PROTO_FILES),
+        f"--proto_path={PROTO_ROOT.as_posix()}",
+        f"--proto_path={grpc_proto_dir.as_posix()}",
+        f"--python_out={output_root.as_posix()}",
+        f"--pyi_out={output_root.as_posix()}",
+        *(path.as_posix() for path in PROTO_FILES),
     ]
     result = protoc.main(args)
     if result != 0:

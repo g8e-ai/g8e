@@ -8,30 +8,63 @@
 package tui
 
 import (
-	"net/http"
+	"context"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
+
+// Identity is the enrolled CLI identity the TUI runs as: the same fields
+// 'g8e auth' reports.
+type Identity struct {
+	UserID            string
+	CLISessionID      string
+	OperatorID        string // bound Operator, empty when the CLI session is unbound
+	OperatorSessionID string // primary bound Operator session, when present
+}
 
 // Options configures the TUI at launch.
 type Options struct {
-	Version      string
-	NodeName     string
-	NetLabel     string
-	Quorum       int
-	Total        int
-	SSEURL       string
-	Token        string
-	CLISessionID string
-	HTTPClient   *http.Client
+	Version  string
+	Identity Identity
+
+	// Session is the CLI's authenticated Gateway session (*api.Client). When
+	// nil the TUI runs without a live event source.
+	Session Session
+
+	// RebuildSession reloads the persisted CLI identity and constructs a fresh
+	// authenticated session after an action issues replacement credentials.
+	RebuildSession func(context.Context, Identity) (Session, error)
+
+	// ApprovalURL returns the browser WebAuthn approval page for a pending
+	// transaction (auth.ApprovalPageURL), and OpenBrowser opens it
+	// (platform.OpenBrowser) — the same flow as 'g8e auth approve'. When
+	// either is nil, approving from the TUI is disabled.
+	ApprovalURL func(txHash string) string
+	OpenBrowser func(url string) error
 
 	// ProgramOptions are appended to the default bubbletea program options
 	// (AltScreen, MouseCellMotion). Tests use this to inject headless options.
 	ProgramOptions []tea.ProgramOption
+
+	// sessionManager is shared by Run's model and adapter; it is kept private
+	// so callers use RebuildSession rather than managing stream state directly.
+	sessionManager *sessionManager
 }
+
+// pane identifies a focusable pane.
+type pane int
+
+const (
+	paneLedger pane = iota
+	paneApprovals
+	paneOperators
+	paneCount
+)
 
 // Model is the bubbletea state container for the Tactical Governance Console.
 type Model struct {
@@ -40,8 +73,21 @@ type Model struct {
 
 	// Configuration
 	version  string
-	nodeName string
-	netLabel string
+	identity Identity
+
+	// Gateway access and the approve flow. gw is nil without a session.
+	gw          *gateway
+	approvalURL func(string) string
+	openBrowser func(string) error
+
+	// view is the main-area view; focus is the focused pane of the overview.
+	view  viewID
+	focus pane
+
+	// showHelp shows the key help over the main area; confirm, when set, is
+	// a y/N prompt guarding a mutating action and takes every key.
+	showHelp bool
+	confirm  *confirmation
 
 	// Pipeline state — 5 entries: L1-L5
 	pipeline []pipelineStageState
@@ -51,12 +97,63 @@ type Model struct {
 	ledger       []ledgerEntry
 	ledgerScroll int // 0 = auto-scroll to bottom; >0 = manual offset from bottom
 
-	// Consensus state
-	consensus     []consensusMemberState
-	quorum        int
-	total         int
-	result        ConsensusResult
-	consensusHash string
+	// Pending L3 approvals in Gateway order from the last successful refresh,
+	// the selected row, and the transactions whose browser approval page was
+	// opened from the TUI and are awaiting approval.completed.
+	pending          []models.SuspendedTxResponse
+	pendingSelected  int
+	awaitingApproval map[string]struct{}
+
+	// Operators from the last successful refresh: connected ones only, plus
+	// the total the Gateway listed.
+	operators            []models.OperatorDocumentGo
+	operatorsTotal       int
+	operatorsLoaded      bool
+	operatorsErr         string
+	operatorsSelected    int
+	operatorDetailScroll int
+
+	// Platform enrollments from the last successful refresh: pending
+	// requests and completed enrollments. The enrollments view selects in one
+	// section at a time.
+	enrollPending          []models.PlatformEnrollmentPendingRequest
+	enrollEnrolled         []models.PlatformEnrollmentEnrolledRequest
+	enrollmentsLoaded      bool
+	enrollmentsErr         string
+	enrollSection          enrollSection
+	enrollPendingSelected  int
+	enrollEnrolledSelected int
+
+	// Audit data from the last successful refresh. Events are paged because the
+	// Gateway endpoint returns a bounded slice, while summary and verification
+	// are independent read-only views of the same ledger.
+	auditEvents        []models.AuditEventRow
+	auditEventsCount   int
+	auditEventsLoaded  bool
+	auditEventsErr     string
+	auditOffset        int
+	auditSelected      int
+	auditSummary       models.AuditSummaryResponse
+	auditSummaryLoaded bool
+	auditSummaryErr    string
+	auditVerify        *models.AuditVerifyResponse
+	auditVerifyErr     string
+
+	gatewayStatusSelected int
+
+	// CLI recovery approval form. The token is entered locally and is never
+	// placed in the ledger or confirmation prompt in full.
+	recoveryTokenInput textinput.Model
+	recoveryApprove    bool
+	recoveryState      models.CLIRecoveryState
+	recoveryErr        string
+	rebuildSession     func(context.Context, Identity) (Session, error)
+	sessionManager     *sessionManager
+
+	// Gateway health: posture is nil until health is fetched.
+	health         models.HealthResponse
+	posture        governance.GovernancePosture
+	gatewayVersion string
 
 	// Animation
 	blinkOn bool
@@ -69,30 +166,18 @@ type Model struct {
 	quitting bool
 }
 
-// NewModel constructs a Model with all pipeline stages idle and consensus
-// members in pending state.
+// NewModel constructs a Model with all pipeline stages idle.
 func NewModel(opts Options) Model {
-	members := []consensusMemberState{
-		{name: constants.ConsensusMemberAxiom},
-		{name: constants.ConsensusMemberConcord},
-		{name: constants.ConsensusMemberVariance},
-		{name: constants.ConsensusMemberPragma},
-		{name: constants.ConsensusMemberNemesis},
-	}
-
-	quorum := opts.Quorum
-	if quorum == 0 {
-		quorum = 3
-	}
-	total := opts.Total
-	if total == 0 {
-		total = 5
-	}
-
-	return Model{
-		version:  opts.Version,
-		nodeName: opts.NodeName,
-		netLabel: opts.NetLabel,
+	recoveryInput := textinput.New()
+	recoveryInput.Prompt = "> "
+	recoveryInput.Placeholder = "paste CLI recovery token"
+	recoveryInput.CharLimit = 512
+	recoveryInput.Width = 48
+	m := Model{
+		version:     opts.Version,
+		identity:    opts.Identity,
+		approvalURL: opts.ApprovalURL,
+		openBrowser: opts.OpenBrowser,
 		pipeline: []pipelineStageState{
 			{status: StatusIdle},
 			{status: StatusIdle},
@@ -100,12 +185,19 @@ func NewModel(opts Options) Model {
 			{status: StatusIdle},
 			{status: StatusIdle},
 		},
-		ledger:    make([]ledgerEntry, 0, 64),
-		consensus: members,
-		quorum:    quorum,
-		total:     total,
-		result:    ConsensusPending,
+		ledger:             make([]ledgerEntry, 0, 64),
+		awaitingApproval:   make(map[string]struct{}),
+		recoveryTokenInput: recoveryInput,
+		recoveryApprove:    true,
+		rebuildSession:     opts.RebuildSession,
 	}
+	if opts.sessionManager != nil {
+		m.sessionManager = opts.sessionManager
+		m.gw, _, _ = opts.sessionManager.snapshot()
+	} else if opts.Session != nil {
+		m.gw = &gateway{session: opts.Session, userID: opts.Identity.UserID}
+	}
+	return m
 }
 
 // Init implements tea.Model.

@@ -6,14 +6,16 @@
 # released under the Apache License, Version 2.0.
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.models.agent import ToolCall, StreamChunkData
-from app.models.settings import G8eeUserSettings, LLMSettings
-from app.services.ai import agent_tool_loop
-from app.services.ai.agent_tool_loop import execute_turn_tool_calls, ToolCallResult
+
+import pytest
+
+from app.models.agent import StreamChunkData, ToolCall
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.services.ai import agent_tool_loop
+from app.services.ai.agent_tool_loop import ToolCallResult, execute_turn_tool_calls
 
 
 @pytest.mark.asyncio
@@ -52,17 +54,18 @@ async def test_execute_turn_tool_calls_parallel():
         new=mock_orchestrate,
     ):
         result_out = []
-        chunks = []
-        async for chunk in execute_turn_tool_calls(
-            pending_tool_calls=pending_tool_calls,
-            tool_executor=tool_executor,
-            investigation=investigation,
-            g8e_context=g8e_context,
-            result_out=result_out,
-            request_settings=request_settings,
-            event_service=event_service,
-        ):
-            chunks.append(chunk)
+        _chunks = [
+            chunk
+            async for chunk in execute_turn_tool_calls(
+                pending_tool_calls=pending_tool_calls,
+                tool_executor=tool_executor,
+                investigation=investigation,
+                g8e_context=g8e_context,
+                result_out=result_out,
+                request_settings=request_settings,
+                event_service=event_service,
+            )
+        ]
 
     # Verify results
     assert len(result_out[0]) == 2

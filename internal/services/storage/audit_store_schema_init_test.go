@@ -25,7 +25,7 @@ import (
 func TestSQLAuditStore_InitDatabase_CommitmentLedgerWardenIntentColumn(t *testing.T) {
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestMigrateCommitmentColumns_RenamesActuatorIntentWithoutLosingData(t *test
 
 func TestSQLAuditStore_StartupMigratesPopulatedCommitmentLedger(t *testing.T) {
 	tempDir := testutil.TempDir(t)
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, fileSvc, privKey)

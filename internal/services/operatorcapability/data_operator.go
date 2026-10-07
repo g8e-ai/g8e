@@ -26,16 +26,10 @@ type DataOperatorStatus struct {
 	WorkingDirectory  string
 }
 
-// IsDataOperator reports whether op is an active remote session whose role is
-// data. Inference, observer, and provenance Operators have their own roles.
+// IsDataOperator reports whether an active remote or configured embedded
+// session includes Data, even when other roles are enabled.
 func IsDataOperator(op models.OperatorDocumentGo) bool {
-	if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
-		return false
-	}
-	if op.OperatorSessionID == "" {
-		return false
-	}
-	return GetOperatorRole(op) == constants.OperatorRoleData
+	return HasActiveRole(op, constants.OperatorRoleData)
 }
 
 // IsStackDataOperator reports whether op is the data-operator the unified
@@ -45,23 +39,34 @@ func IsStackDataOperator(op models.OperatorDocumentGo) bool {
 	return IsDataOperator(op) && op.CurrentHostname == constants.DataOperatorHostname
 }
 
-// ActiveDataOperators returns every active stack data-operator session. Other
-// enrolled data Operators are not data-operators in this sense.
+// ActiveDataOperators returns every active data-operator session. When stack
+// data-operators (constants.DataOperatorHostname) are present, it returns them;
+// otherwise, it falls back to active remote operators whose role is data (for
+// example, in host-native local development).
 func ActiveDataOperators(operators []models.OperatorDocumentGo) []DataOperatorStatus {
-	matches := make([]DataOperatorStatus, 0, 1)
+	var stackMatches []DataOperatorStatus
+	var fallbackMatches []DataOperatorStatus
 	for _, op := range operators {
-		if !IsStackDataOperator(op) {
+		if !IsDataOperator(op) {
 			continue
 		}
 		wd := extractWorkingDirectory(op.LatestHeartbeat)
-		matches = append(matches, DataOperatorStatus{
+		status := DataOperatorStatus{
 			OperatorID:        op.ID,
 			OperatorSessionID: op.OperatorSessionID,
 			Status:            string(op.Status),
 			WorkingDirectory:  wd,
-		})
+		}
+		if op.CurrentHostname == constants.DataOperatorHostname {
+			stackMatches = append(stackMatches, status)
+		} else {
+			fallbackMatches = append(fallbackMatches, status)
+		}
 	}
-	return matches
+	if len(stackMatches) > 0 {
+		return stackMatches
+	}
+	return fallbackMatches
 }
 
 // extractWorkingDirectory reads the pwd from the operator's heartbeat.

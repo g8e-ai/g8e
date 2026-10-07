@@ -32,7 +32,9 @@ from app.models.auth import ProxySigningKeyResponse
 from app.services.auth.proxy_stamp import BrowserProxyStamp, ProxyStampVerifier
 
 VECTORS = json.loads(
-    (Path(__file__).parents[5] / "protocol" / "conformance" / "browser_proxy_stamp_vectors.json").read_text()
+    (
+        Path(__file__).parents[5] / "protocol" / "conformance" / "browser_proxy_stamp_vectors.json"
+    ).read_text()
 )
 NOW = 1_790_000_000.0
 KEY_ID = "gateway-key-1"
@@ -46,7 +48,9 @@ def make_key(seed_byte: int = 1) -> SigningKey:
 
 
 def key_response(key: SigningKey, key_id: str = KEY_ID) -> ProxySigningKeyResponse:
-    return ProxySigningKeyResponse(key_id=key_id, public_key=bytes(key.verify_key).hex(), algorithm="ed25519")
+    return ProxySigningKeyResponse(
+        key_id=key_id, public_key=bytes(key.verify_key).hex(), algorithm="ed25519"
+    )
 
 
 class KeySource:

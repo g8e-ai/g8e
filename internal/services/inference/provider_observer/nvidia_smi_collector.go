@@ -42,6 +42,7 @@ func (c *NvidiaSMICollector) Collect(ctx context.Context, observedAt time.Time) 
 	cmd := exec.CommandContext(ctx, c.Command, c.Args...)
 	output, err := cmd.Output()
 	if err != nil {
+		//nolint:nilerr // intentional fallback: nvidia-smi execution error yields unavailable sample
 		return unavailableGPUSample(observedAt), nil
 	}
 	line := strings.TrimSpace(string(output))
@@ -59,6 +60,7 @@ func (c *NvidiaSMICollector) Collect(ctx context.Context, observedAt time.Time) 
 	power, err5 := parseFloatField(fields[4])
 	clock, err6 := parseFloatField(fields[5])
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil {
+		//nolint:nilerr // intentional fallback: parse error yields unavailable sample
 		return unavailableGPUSample(observedAt), nil
 	}
 	return &evalv1.ProviderBoundaryHardwareSample{

@@ -44,10 +44,11 @@ import (
 // component that submits two CSRs (operator + CLI) and signs the
 // completion transcript with both private keys.
 const (
-	operatorEnrollHTTPTimeout     = 10 * time.Second
-	operatorEnrollPollInitial     = 2 * time.Second
+	operatorEnrollHTTPTimeout = 10 * time.Second
+	// Catch automated owner approval promptly, then back off for interactive enrollment.
+	operatorEnrollPollInitial     = 500 * time.Millisecond
 	operatorEnrollPollMax         = 30 * time.Second
-	operatorEnrollPollJitter      = 500 * time.Millisecond
+	operatorEnrollPollJitter      = 100 * time.Millisecond
 	operatorEnrollDefaultDeadline = 30 * time.Minute
 
 	// Request submission retry. The gateway starts with zero users; workloads
@@ -157,6 +158,12 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		operatorKeyPEM, cliKeyPEM string
 		operatorKey, cliKey       *ecdsa.PrivateKey
 	)
+
+	if pending != nil && !pending.ExpiresAt.IsZero() && !time.Now().Before(pending.ExpiresAt) {
+		c.logger.Info("operator enrollment: pending attempt expired; starting fresh", "request_id", pending.RequestID)
+		_ = c.removePendingState(pendingPath)
+		pending = nil
+	}
 
 	if pending != nil && pending.Token != "" && pending.RequestID != "" {
 		// Resume the existing pending attempt. Do not generate new keys.
@@ -432,6 +439,7 @@ func (c *OperatorPlatformEnrollmentClient) pollUntilApproved(ctx context.Context
 			return ctx.Err()
 		}
 		if time.Now().After(deadlineTime) {
+			_ = c.removePendingState(c.pendingStatePath())
 			return fmt.Errorf("operator enrollment: polling deadline reached before approval")
 		}
 
@@ -476,6 +484,10 @@ func (c *OperatorPlatformEnrollmentClient) pollUntilApproved(ctx context.Context
 		if err != nil {
 			return fmt.Errorf("operator enrollment: read status response: %w", err)
 		}
+		if resp.StatusCode == http.StatusGone {
+			_ = c.removePendingState(c.pendingStatePath())
+			return fmt.Errorf("operator enrollment: request has expired (HTTP 410)")
+		}
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("operator enrollment: status query failed: HTTP %d: %s", resp.StatusCode, string(respBody))
 		}
@@ -491,6 +503,7 @@ func (c *OperatorPlatformEnrollmentClient) pollUntilApproved(ctx context.Context
 		case models.PlatformEnrollmentStateDenied:
 			return fmt.Errorf("operator enrollment: request was denied by the owner")
 		case models.PlatformEnrollmentStateExpired:
+			_ = c.removePendingState(c.pendingStatePath())
 			return fmt.Errorf("operator enrollment: request has expired")
 		}
 
@@ -766,7 +779,7 @@ func (c *OperatorPlatformEnrollmentClient) sleep(ctx context.Context, base time.
 
 func doHTTPRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
 	client := &http.Client{}
-	return client.Do(req)
+	return client.Do(req.WithContext(ctx))
 }
 
 func parseRetryAfter(value string) time.Duration {

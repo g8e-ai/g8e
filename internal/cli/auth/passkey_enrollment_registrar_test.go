@@ -41,11 +41,11 @@ type mockProgram struct {
 	runCalled int32
 }
 
-func newMockProgram(final tea.Model, runErr error) *mockProgram {
+func newMockProgram(final tea.Model) *mockProgram {
 	return &mockProgram{
 		sendCh: make(chan tea.Msg, 64),
 		final:  final,
-		runErr: runErr,
+		runErr: nil,
 	}
 }
 
@@ -145,7 +145,7 @@ func TestRegister_BrowserOpenFailure_ContinuesToTUI(t *testing.T) {
 	// the user pressing q after seeing the URL). The program IS called now
 	// because browser failure is no longer fatal. Use runFn so the factory's
 	// overwrite of prog.final doesn't clobber our error model.
-	prog := newMockProgram(enrollModel{}, nil)
+	prog := newMockProgram(enrollModel{})
 	prog.runFn = func() (tea.Model, error) {
 		return enrollModel{err: context.Canceled}, nil
 	}
@@ -222,7 +222,7 @@ func TestRegister_SSEReadyBeforeBrowserLaunch(t *testing.T) {
 		case browserCalled <- struct{}{}:
 		default:
 		}
-		// Return an error to stop the flow — we only need to verify ordering.
+		// Browser failure keeps the TUI open; its Run stub exits explicitly.
 		return fmt.Errorf("test browser: stop")
 	}
 
@@ -231,10 +231,16 @@ func TestRegister_SSEReadyBeforeBrowserLaunch(t *testing.T) {
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {
-		return newMockProgram(m, nil)
+		prog := newMockProgram(m)
+		// Ordering is established before Run; simulate the user exiting the TUI.
+		prog.runFn = func() (tea.Model, error) {
+			return enrollModel{err: context.Canceled}, nil
+		}
+		return prog
 	}
 
-	_ = r.Register(context.Background(), "test-user", "test-session")
+	err := r.Register(t.Context(), "test-user", "test-session")
+	require.ErrorIs(t, err, context.Canceled)
 
 	// The browser must have been called.
 	select {
@@ -311,7 +317,7 @@ func TestMonitorPasskeyRegistration_UnrelatedEventIgnored(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -359,7 +365,7 @@ func TestMonitorPasskeyRegistration_MalformedEventIgnored(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -406,7 +412,7 @@ func TestMonitorPasskeyRegistration_SuccessCancelsSSEContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -461,7 +467,7 @@ func TestMonitorPasskeyRegistration_MatchingEventCompletesOnce(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -497,7 +503,7 @@ func TestRegister_ValidateInputs(t *testing.T) {
 	fileSvc, cfg := newAuthTestEnv(t)
 	writeTestCLICert(t, fileSvc, cfg)
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 
 	err := r.Register(context.Background(), "", "test-session")
 	require.Error(t, err)
@@ -533,10 +539,11 @@ func TestRegister_ContextCancelledBeforeEnrollment(t *testing.T) {
 	startTLSEnrollServer(t, cfg, rh.ServeHTTP)
 
 	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{
+		Browser: func(string) error { return nil },
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {
-		return newMockProgram(m, nil)
+		return newMockProgram(m)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -582,6 +589,11 @@ func TestPasskeyRegistrar_Out_EmitsURLBeforeBrowser(t *testing.T) {
 
 	browserCalled := make(chan struct{}, 1)
 	browser := func(url string) error {
+		outMu.Lock()
+		printed := append([]string(nil), outLines...)
+		outMu.Unlock()
+		require.NotEmpty(t, printed, "the URL must already be printed when the browser opens")
+		assert.Equal(t, "Passkey enrollment URL: "+url, printed[0])
 		select {
 		case browserCalled <- struct{}{}:
 		default:
@@ -595,10 +607,16 @@ func TestPasskeyRegistrar_Out_EmitsURLBeforeBrowser(t *testing.T) {
 		Timeout: 5 * time.Second,
 	})
 	r.programFactory = func(m enrollModel) programRunner {
-		return newMockProgram(m, nil)
+		prog := newMockProgram(m)
+		// Ordering is established before Run; simulate the user exiting the TUI.
+		prog.runFn = func() (tea.Model, error) {
+			return enrollModel{err: context.Canceled}, nil
+		}
+		return prog
 	}
 
-	_ = r.Register(context.Background(), "test-user", "test-session")
+	err := r.Register(t.Context(), "test-user", "test-session")
+	require.ErrorIs(t, err, context.Canceled)
 
 	// The browser must have been called (so we know the URL print happened
 	// before it).
@@ -664,7 +682,7 @@ func TestPasskeyRegistrar_Out_EmitsBrowserErrorOnOpenFailure(t *testing.T) {
 		Out:     outFunc,
 		Timeout: 5 * time.Second,
 	})
-	prog := newMockProgram(enrollModel{}, nil)
+	prog := newMockProgram(enrollModel{})
 	prog.runFn = func() (tea.Model, error) {
 		return enrollModel{err: context.Canceled}, nil
 	}

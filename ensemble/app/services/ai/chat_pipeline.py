@@ -22,48 +22,50 @@ Does NOT own:
 import asyncio
 import logging
 import time
+from collections.abc import Sequence
+
+from g8e.models.internal_api import DesignatedModelRole
 
 import app.llm.llm_types as types
-from app.models.settings import G8eeUserSettings
-from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
-    ReasoningAgent,
-    AITaskId,
     EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
+    LLM_OLLAMA_DEFAULT_NUM_CTX,
+    LLM_OLLAMA_HISTORY_BUDGET_FRACTION,
+    AgentMode,
+    AITaskId,
     EventType,
     LLMProvider,
-    TriageComplexityClassification,
-    AgentMode,
     OperatorStatus,
+    ReasoningAgent,
+    TriageComplexityClassification,
 )
-from app.models.model_telemetry import ModelCallTelemetry
 from app.constants.message_sender import MessageSender
+from app.decision.providers.jev import JevProvider
+from app.decision.validation import validate_jev_lite_coexistence
+from app.errors import BusinessLogicError, ConfigurationError
 from app.llm import get_llm_provider
-from app.llm.providers.open_ai import OpenAIProvider
-from app.llm.providers.anthropic import AnthropicProvider
-from app.llm.providers.gemini import GeminiProvider
-from app.llm.providers.ollama import OllamaProvider
-from app.llm.providers.llama_cpp import LlamaCppProvider
-from app.llm.providers.fake import FakeProvider
-from app.llm.providers.g8e import G8EProvider
+from app.llm.factory import get_llm_provider_class
+from app.llm.prompts import build_modular_system_prompt
+from app.llm.utils import ModelOverrideResolver, resolve_model
 from app.models.agent import AgentInputs, AgentStreamState
+from app.models.agent_activity import AgentActivityMetadata
+from app.models.agents.triage import TriageRequest
+from app.models.attachments import ChatAttachment, ProcessedAttachment
 from app.models.evaluation_trace import EvaluationSeedApplication
-from app.models.attachments import AttachmentMetadata, ProcessedAttachment
+from app.models.events import (
+    ChatErrorPayload,
+    TriageClarificationQuestionsPayload,
+)
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import (
-    ConversationMessageMetadata,
     ConversationHistoryMessage,
+    ConversationMessageMetadata,
     EnrichedInvestigationContext,
 )
-from app.models.agent_activity import AgentActivityMetadata
-from app.llm.prompts import build_modular_system_prompt
-from app.llm.utils import resolve_model, ModelOverrideResolver
-
-from app.services.infra.event_service import EventService
-from .agent import g8eEnsemble
-from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
-from app.services.evaluation.tool_gate import resolve_tool_gate
-from app.services.evaluation.trace_service import EvaluationTraceService
+from app.models.memory import InvestigationMemory
+from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import G8eeUserSettings
+from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.services.evaluation.player_steps import (
     assemble_player_steps,
     memory_step,
@@ -75,22 +77,22 @@ from app.services.evaluation.role_control import (
     resolve_role_outcome,
     resolve_scored_model_role,
 )
+from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
+from app.services.evaluation.tool_gate import resolve_tool_gate
+from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.investigation.investigation_service import (
-    extract_all_operators_context,
     InvestigationService,
+    extract_all_operators_context,
 )
 from app.services.investigation.memory_data_service import MemoryDataService
-from .memory_generation_service import MemoryGenerationService
+from app.services.protocols import EventServiceProtocol
+from app.utils.interrogation import extract_interrogation_questions
+
+from .agent import G8eEnsemble
 from .chat_task_manager import BackgroundTaskManager
+from .memory_generation_service import MemoryGenerationService
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
-from app.services.data.agent_activity_data_service import AgentActivityDataService
-from app.models.agents.triage import TriageRequest
-from app.models.events import (
-    ChatErrorPayload,
-    TriageClarificationQuestionsPayload,
-)
-from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +109,10 @@ class ChatPipelineService:
 
     def __init__(
         self,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         investigation_service: InvestigationService,
         request_builder: AIRequestBuilder,
-        g8e_agent: g8eEnsemble,
+        g8e_agent: G8eEnsemble,
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
         agent_activity_data_service: AgentActivityDataService,
@@ -159,21 +161,7 @@ class ChatPipelineService:
             )
 
         # Validate credentials for each configured tier
-        validation_errors = []
-
-        from app.decision.providers.jev import JevProvider
-        from app.decision.validation import validate_jev_lite_coexistence
-
-        # Provider class mapping for validation
-        provider_classes = {
-            LLMProvider.OPENAI.value: OpenAIProvider,
-            LLMProvider.ANTHROPIC.value: AnthropicProvider,
-            LLMProvider.GEMINI.value: GeminiProvider,
-            LLMProvider.OLLAMA.value: OllamaProvider,
-            LLMProvider.LLAMACPP.value: LlamaCppProvider,
-            LLMProvider.FAKE.value: FakeProvider,
-            LLMProvider.G8E.value: G8EProvider,
-        }
+        validation_errors: list[str] = []
 
         def check_tier(
             tier_name: str,
@@ -181,7 +169,7 @@ class ChatPipelineService:
             provider: str | None,
             api_key: str | None,
             endpoint: str | None,
-        ):
+        ) -> None:
             if not model:
                 return
 
@@ -199,18 +187,22 @@ class ChatPipelineService:
 
             if provider == LLMProvider.JEV.value:
                 provider_errors = JevProvider.validate_config(api_key, endpoint)
-                for error in provider_errors:
-                    validation_errors.append(f"{tier_name.capitalize()} {error}")
+                validation_errors.extend(
+                    f"{tier_name.capitalize()} {error}" for error in provider_errors
+                )
                 return
 
-            provider_class = provider_classes.get(provider)
-            if not provider_class:
+            try:
+                provider_type = LLMProvider(provider)
+            except ValueError:
                 validation_errors.append(f"Unsupported {tier_name} provider '{provider}'.")
                 return
 
+            provider_class = get_llm_provider_class(provider_type)
             provider_errors = provider_class.validate_config(api_key, endpoint)
-            for error in provider_errors:
-                validation_errors.append(f"{tier_name.capitalize()} {error}")
+            validation_errors.extend(
+                f"{tier_name.capitalize()} {error}" for error in provider_errors
+            )
 
         # Provider connections are stored once per provider. A role override
         # changes which saved connection is resolved, but never carries its
@@ -263,7 +255,7 @@ class ChatPipelineService:
         message: str,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        attachments: list[AttachmentMetadata],
+        attachments: Sequence[ChatAttachment],
         sentinel_mode: bool,
         model_overrides: ModelOverrideResolver,
     ) -> AgentInputs:
@@ -293,36 +285,10 @@ class ChatPipelineService:
         keep request inputs immutable.
         """
         case_id = g8e_context.case_id
-        investigation_id = g8e_context.investigation_id
+        investigation_id = self._require_investigation_id(g8e_context)
         user_id = g8e_context.user_id
-
-        logger.info(
-            "[SSE-CHAT] _prepare_chat_context started: investigation_id=%s case_id=%s",
-            investigation_id,
-            case_id,
-        )
-
-        logger.info(
-            "[SSE-CHAT] Extracted context: case_id=%s investigation_id=%s web_session_id=%s user_id=%s",
-            case_id,
-            investigation_id,
-            g8e_context.web_session_id,
-            user_id,
-        )
-
-        if not investigation_id:
-            raise BusinessLogicError(
-                "_prepare_chat_context requires investigation_id",
-                details={"investigation_id": investigation_id},
-            )
-
-        investigation = await self.investigation_service.get_investigation_context(
-            context=RequestContext.from_app_context(g8e_context),
-            investigation_id=investigation_id,
-            user_id=user_id or "",
-        )
-        investigation = await self.investigation_service.get_enriched_investigation_context(
-            investigation=investigation, user_id=user_id or "", g8e_context=g8e_context
+        investigation = await self._load_investigation_context(
+            g8e_context, investigation_id, user_id
         )
 
         current_sentinel_mode = investigation.sentinel_mode
@@ -349,7 +315,7 @@ class ChatPipelineService:
             message=message,
             agent_mode=agent_mode,
             conversation_history=prior_history,
-            attachments=attachments,
+            attachments=list(attachments),
             settings=request_settings,
             model_override=model_overrides.for_triage(),
             g8e_context=g8e_context,
@@ -423,24 +389,9 @@ class ChatPipelineService:
             )
         )
 
-        user_memories = []
-        case_memories = []
-        # A scored request does not read user-wide memories: they are artifacts
-        # of other assignments and would leak one scenario into the next. Case
-        # memories (including any the seed wrote) are still read. The
-        # divergence is keyed on evaluation_context and recorded in the trace.
-        user_memories_suppressed = g8e_context.evaluation_context is not None
-        try:
-            if investigation.user_id and not user_memories_suppressed:
-                user_memories = await self.memory_service.get_user_memories(
-                    user_id=investigation.user_id
-                )
-            if case_id and investigation.user_id:
-                case_memories = await self.memory_service.get_case_memories(
-                    case_id=case_id, user_id=investigation.user_id
-                )
-        except Exception as e:
-            logger.warning("Failed to retrieve memories for chat context: %s", e, exc_info=True)
+        user_memories, case_memories, user_memories_suppressed = await self._load_chat_memories(
+            g8e_context, investigation, case_id
+        )
 
         all_operator_contexts = extract_all_operators_context(investigation)
         system_instructions, context_sizes = build_modular_system_prompt(
@@ -464,20 +415,30 @@ class ChatPipelineService:
 
         attachment_parts: list[types.Part] = []
         if attachments:
-            processed: list[ProcessedAttachment] = [
-                ProcessedAttachment(
-                    filename=a.filename,
-                    content_type=a.content_type,
+            processed = [
+                attachment
+                if isinstance(attachment, ProcessedAttachment)
+                else ProcessedAttachment(
+                    filename=attachment.filename,
+                    content_type=attachment.content_type,
                 )
-                for a in attachments
+                for attachment in attachments
             ]
             attachment_parts = self.request_builder.format_attachment_parts(processed)
 
         investigation_sentinel_mode = investigation.sentinel_mode if investigation else True
+        # Both Ollama-backed providers send num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX, so that
+        # is the real window; other providers have their own, larger windows.
+        history_token_budget = (
+            int(LLM_OLLAMA_DEFAULT_NUM_CTX * LLM_OLLAMA_HISTORY_BUDGET_FRACTION)
+            if request_settings.llm.primary_provider in (LLMProvider.OLLAMA, LLMProvider.G8E)
+            else None
+        )
         built_contents = self.request_builder.build_contents_from_history(
             conversation_history=conversation_history,
             attachments=attachment_parts if attachment_parts else [],
             sentinel_mode=investigation_sentinel_mode,
+            history_token_budget=history_token_budget,
         )
 
         return AgentInputs(
@@ -515,6 +476,63 @@ class ChatPipelineService:
             ),
         )
 
+    @staticmethod
+    def _require_investigation_id(g8e_context: G8eHttpContext) -> str:
+        investigation_id = g8e_context.investigation_id
+        if not investigation_id:
+            raise BusinessLogicError(
+                "_prepare_chat_context requires investigation_id",
+                details={"investigation_id": investigation_id},
+            )
+        return investigation_id
+
+    async def _load_investigation_context(
+        self, g8e_context: G8eHttpContext, investigation_id: str, user_id: str | None
+    ):
+        logger.info(
+            "[SSE-CHAT] _prepare_chat_context started: investigation_id=%s case_id=%s",
+            investigation_id,
+            g8e_context.case_id,
+        )
+        logger.info(
+            "[SSE-CHAT] Extracted context: case_id=%s investigation_id=%s web_session_id=%s user_id=%s",
+            g8e_context.case_id,
+            investigation_id,
+            g8e_context.web_session_id,
+            user_id,
+        )
+        investigation = await self.investigation_service.get_investigation_context(
+            context=RequestContext.from_app_context(g8e_context),
+            investigation_id=investigation_id,
+            user_id=user_id or "",
+        )
+        return await self.investigation_service.get_enriched_investigation_context(
+            investigation=investigation, user_id=user_id or "", g8e_context=g8e_context
+        )
+
+    async def _load_chat_memories(
+        self,
+        g8e_context: G8eHttpContext,
+        investigation: EnrichedInvestigationContext,
+        case_id: str | None,
+    ) -> tuple[list[InvestigationMemory], list[InvestigationMemory], bool]:
+        # A scored request avoids user-wide memories from other assignments.
+        user_memories: list[InvestigationMemory] = []
+        case_memories: list[InvestigationMemory] = []
+        suppressed = g8e_context.evaluation_context is not None
+        try:
+            if investigation.user_id and not suppressed:
+                user_memories = await self.memory_service.get_user_memories(
+                    user_id=investigation.user_id
+                )
+            if case_id and investigation.user_id:
+                case_memories = await self.memory_service.get_case_memories(
+                    case_id=case_id, user_id=investigation.user_id
+                )
+        except Exception as exc:
+            logger.warning("Failed to retrieve memories for chat context: %s", exc, exc_info=True)
+        return user_memories, case_memories, suppressed
+
     async def _persist_ai_response(
         self,
         g8e_context: G8eHttpContext,
@@ -535,7 +553,7 @@ class ChatPipelineService:
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
             getattr(g8e_context, "investigation_id", None) if g8e_context else "None",
-            len(state.response_text) if state.response_text is not None else 0,
+            len(state.response_text),
         )
 
         sender = inputs.message_sender
@@ -614,7 +632,7 @@ class ChatPipelineService:
         inputs: AgentInputs,
         state: AgentStreamState,
         start_time: float,
-        attachments: list[AttachmentMetadata],
+        attachments: Sequence[ChatAttachment],
         context_sizes: dict[str, int] | None = None,
         error: str | None = None,
     ) -> None:
@@ -645,7 +663,9 @@ class ChatPipelineService:
                 investigation_id=inputs.investigation_id,
                 case_id=inputs.case_id,
                 web_session_id=inputs.web_session_id,
-                agent_mode=inputs.agent_mode,
+                agent_mode=(
+                    inputs.agent_mode if isinstance(inputs.agent_mode, AgentMode) else None
+                ),
                 model_name=inputs.model_to_use,
                 provider=inputs.request_settings.llm.primary_provider.value
                 if inputs.request_settings.llm.primary_provider
@@ -681,7 +701,7 @@ class ChatPipelineService:
                 bound_operator_count=len(inputs.g8e_context.bound_operators)
                 if inputs.g8e_context.bound_operators
                 else 0,
-                response_length=len(state.response_text) if state.response_text is not None else 0,
+                response_length=len(state.response_text),
                 context_sizes=context_sizes,
                 attachment_total_bytes=attachment_total_bytes
                 if attachment_total_bytes > 0
@@ -729,7 +749,10 @@ class ChatPipelineService:
 
         async def _run_memory_update() -> None:
             try:
-                memory, model_call = await self.memory_generation_service.update_memory_from_conversation(
+                (
+                    memory,
+                    model_call,
+                ) = await self.memory_generation_service.update_memory_from_conversation(
                     conversation_history=conversation_history,
                     investigation=investigation,
                     settings=user_settings,
@@ -795,25 +818,11 @@ class ChatPipelineService:
 
         background_calls: list[ModelCallTelemetry] = []
         memory_task = memory_holder.get("task") if memory_holder else None
-        if memory_task is not None:
-            try:
-                async with asyncio.timeout(EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS):
-                    await memory_task
-            except TimeoutError:
-                logger.warning(
-                    "Evaluation background memory barrier timed out after %.0fs for assignment %s",
-                    EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
-                    g8e_context.evaluation_context.assignment_id,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Evaluation background memory barrier failed for assignment %s: %s",
-                    g8e_context.evaluation_context.assignment_id,
-                    exc,
-                    exc_info=True,
-                )
-            model_call = memory_holder.get("model_call") if memory_holder else None
-            if isinstance(model_call, ModelCallTelemetry):
+        if isinstance(memory_task, asyncio.Task):
+            model_call = await self._await_evaluation_memory_task(
+                memory_task, memory_holder, g8e_context.evaluation_context.assignment_id
+            )
+            if model_call is not None:
                 background_calls.append(model_call)
 
         model_calls = list(state.model_calls)
@@ -830,10 +839,16 @@ class ChatPipelineService:
         reasoning = None
         if inputs.active_agent is not None:
             active_agent = ReasoningAgent(inputs.active_agent)
+            model_role: DesignatedModelRole
+            if inputs.designated_model_role in ("primary", "assistant", "lite"):
+                model_role = inputs.designated_model_role
+            elif active_agent == ReasoningAgent.DASH:
+                model_role = "assistant"
+            else:
+                model_role = "primary"
             reasoning = reasoning_step(
                 player=active_agent.value,
-                model_role=inputs.designated_model_role
-                or ("assistant" if active_agent == ReasoningAgent.DASH else "primary"),
+                model_role=model_role,
                 model=inputs.model_to_use or "",
                 text=state.response_text or "",
                 succeeded=not state.stream_failed,
@@ -864,8 +879,7 @@ class ChatPipelineService:
         grader_calls = []
         evaluation_context = g8e_context.evaluation_context
         if (
-            evaluation_context is not None
-            and evaluation_context.grading_method == "semantic_judge"
+            evaluation_context.grading_method == "semantic_judge"
             and evaluation_context.gold_summary is not None
         ):
             semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
@@ -901,6 +915,31 @@ class ChatPipelineService:
             error=state.error,
         )
 
+    @staticmethod
+    async def _await_evaluation_memory_task(
+        memory_task: asyncio.Task[None],
+        memory_holder: MemoryHolder | None,
+        assignment_id: str,
+    ) -> ModelCallTelemetry | None:
+        try:
+            async with asyncio.timeout(EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS):
+                await memory_task
+        except TimeoutError:
+            logger.warning(
+                "Evaluation background memory barrier timed out after %.0fs for assignment %s",
+                EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
+                assignment_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Evaluation background memory barrier failed for assignment %s: %s",
+                assignment_id,
+                exc,
+                exc_info=True,
+            )
+        model_call = memory_holder.get("model_call") if memory_holder else None
+        return model_call if isinstance(model_call, ModelCallTelemetry) else None
+
     def _finalize_crashed_evaluation_assignment(
         self,
         g8e_context: G8eHttpContext,
@@ -923,24 +962,23 @@ class ChatPipelineService:
                 seed_application=seed_application,
             )
         except Exception as finalize_err:
-            logger.error(
+            logger.exception(
                 "[SSE-CHAT] Failed to finalize crashed evaluation trace: %s",
                 finalize_err,
-                exc_info=True,
             )
 
     async def run_chat(
         self,
         message: str,
         g8e_context: G8eHttpContext,
-        attachments: list[AttachmentMetadata],
+        attachments: Sequence[ChatAttachment],
         sentinel_mode: bool,
         llm_primary_provider: str | None,
         llm_assistant_provider: str | None,
         llm_lite_provider: str | None,
-        llm_primary_model: str,
-        llm_assistant_model: str,
-        llm_lite_model: str,
+        llm_primary_model: str | None,
+        llm_assistant_model: str | None,
+        llm_lite_model: str | None,
         _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
         _track_task: bool = True,
@@ -959,7 +997,7 @@ class ChatPipelineService:
             getattr(g8e_context, "web_session_id", None) if g8e_context else "None",
         )
 
-        investigation_id = g8e_context.investigation_id if g8e_context else ""
+        investigation_id = g8e_context.investigation_id or ""
         logger.info("[SSE-CHAT] Extracted investigation_id: %s", investigation_id)
 
         task = None
@@ -1006,11 +1044,10 @@ class ChatPipelineService:
             logger.info("[SSE-CHAT] Task cancelled for investigation %s", investigation_id)
             raise
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[SSE-CHAT] Background task crashed for investigation %s: %s",
                 investigation_id,
                 e,
-                exc_info=True,
             )
             self._finalize_crashed_evaluation_assignment(g8e_context, e, seed_application)
             try:
@@ -1033,14 +1070,14 @@ class ChatPipelineService:
         self,
         message: str,
         g8e_context: G8eHttpContext,
-        attachments: list[AttachmentMetadata],
+        attachments: Sequence[ChatAttachment],
         sentinel_mode: bool,
         llm_primary_provider: str | None,
         llm_assistant_provider: str | None,
         llm_lite_provider: str | None,
-        llm_primary_model: str,
-        llm_assistant_model: str,
-        llm_lite_model: str,
+        llm_primary_model: str | None,
+        llm_assistant_model: str | None,
+        llm_lite_model: str | None,
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None = None,
         seed_application: EvaluationSeedApplication | None = None,
@@ -1056,12 +1093,10 @@ class ChatPipelineService:
         # Resolve effective provider/key/endpoint per tier.
         resolved_settings = user_settings
 
-        primary_provider, _, _, primary_model = (
-            user_settings.llm.resolve(
-                "primary",
-                provider_override=llm_primary_provider,
-                model_override=llm_primary_model,
-            )
+        primary_provider, _, _, primary_model = user_settings.llm.resolve(
+            "primary",
+            provider_override=llm_primary_provider,
+            model_override=llm_primary_model,
         )
         if primary_provider:
             resolved_settings = resolved_settings.model_copy(
@@ -1078,12 +1113,10 @@ class ChatPipelineService:
                 }
             )
 
-        assistant_provider, _, _, assistant_model = (
-            resolved_settings.llm.resolve(
-                "assistant",
-                provider_override=llm_assistant_provider,
-                model_override=llm_assistant_model,
-            )
+        assistant_provider, _, _, assistant_model = resolved_settings.llm.resolve(
+            "assistant",
+            provider_override=llm_assistant_provider,
+            model_override=llm_assistant_model,
         )
         if assistant_provider:
             resolved_settings = resolved_settings.model_copy(
@@ -1184,7 +1217,6 @@ class ChatPipelineService:
                 event_service=self.event_service,
                 llm_provider=llm_provider,
                 on_iteration_text=_persist_iteration_text,
-                evaluation_trace_service=self.evaluation_trace_service,
             )
             logger.info("[SSE-CHAT] Agent execution completed")
 
@@ -1221,5 +1253,5 @@ class ChatPipelineService:
 
         logger.info(
             "[SSE-CHAT] Completed: %d chars",
-            len(state.response_text) if state.response_text is not None else 0,
+            len(state.response_text),
         )

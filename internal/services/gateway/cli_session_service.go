@@ -149,7 +149,7 @@ func (s *CLISessionService) DeactivateCLISession(sessionID string) error {
 		// and the only competing writer also flips it to false.
 		return fmt.Errorf("deactivate CLI session: %w", constants.ErrCLISessionInvalid)
 	}
-	s.logger.Info("CLI session deactivated", "cli_session_id_prefix", safeTruncateID(sessionID, 8))
+	s.logger.Info("CLI session deactivated", "cli_session_id_prefix", safeTruncateID(sessionID))
 	return nil
 }
 
@@ -256,7 +256,7 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 		if delErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
 			s.logger.Error("ReplaceCLISession: failed to clean up orphaned new session after deactivate error",
 				"error", delErr,
-				"new_session_id_prefix", safeTruncateID(newSessionID, 8),
+				"new_session_id_prefix", safeTruncateID(newSessionID),
 			)
 		}
 		return nil, fmt.Errorf("replace CLI session: deactivate old: %w", err)
@@ -268,19 +268,19 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 		if delErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
 			s.logger.Error("ReplaceCLISession: failed to clean up orphaned new session after race loss",
 				"error", delErr,
-				"new_session_id_prefix", safeTruncateID(newSessionID, 8),
+				"new_session_id_prefix", safeTruncateID(newSessionID),
 			)
 		}
 		s.logger.Warn("ReplaceCLISession: old session already deactivated by concurrent caller",
-			"old_session_id_prefix", safeTruncateID(oldSessionID, 8),
-			"new_session_id_prefix", safeTruncateID(newSessionID, 8),
+			"old_session_id_prefix", safeTruncateID(oldSessionID),
+			"new_session_id_prefix", safeTruncateID(newSessionID),
 		)
 		return nil, constants.ErrCLISessionAlreadyDeactivated
 	}
 
 	s.logger.Info("CLI session replaced",
-		"old_session_id_prefix", safeTruncateID(oldSessionID, 8),
-		"new_session_id_prefix", safeTruncateID(newSessionID, 8),
+		"old_session_id_prefix", safeTruncateID(oldSessionID),
+		"new_session_id_prefix", safeTruncateID(newSessionID),
 		"user_id", newFields.UserID,
 	)
 	return &created, nil
@@ -356,7 +356,7 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 					// A concurrent caller already deactivated it. Not an
 					// error — proceed to persist the new session.
 					s.logger.Info("RefreshCLISession: old session already deactivated by concurrent caller",
-						"old_session_id_prefix", safeTruncateID(oldSessionID, 8),
+						"old_session_id_prefix", safeTruncateID(oldSessionID),
 					)
 				}
 			}
@@ -390,8 +390,8 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 	}
 
 	s.logger.Info("CLI session refreshed",
-		"old_session_id_prefix", safeTruncateID(oldSessionID, 8),
-		"new_session_id_prefix", safeTruncateID(newSessionID, 8),
+		"old_session_id_prefix", safeTruncateID(oldSessionID),
+		"new_session_id_prefix", safeTruncateID(newSessionID),
 		"user_id", fields.UserID,
 	)
 	return &created, nil
@@ -435,7 +435,7 @@ func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, 
 				}
 				if !applied {
 					s.logger.Info("UnbindCLISession: old session already deactivated by concurrent caller",
-						"old_session_id_prefix", safeTruncateID(oldSessionID, 8),
+						"old_session_id_prefix", safeTruncateID(oldSessionID),
 					)
 				}
 			}
@@ -467,8 +467,8 @@ func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, 
 	}
 
 	s.logger.Info("CLI session unbound from operator",
-		"old_session_id_prefix", safeTruncateID(oldSessionID, 8),
-		"new_session_id_prefix", safeTruncateID(newSessionID, 8),
+		"old_session_id_prefix", safeTruncateID(oldSessionID),
+		"new_session_id_prefix", safeTruncateID(newSessionID),
 		"user_id", fields.UserID,
 	)
 	return &created, nil

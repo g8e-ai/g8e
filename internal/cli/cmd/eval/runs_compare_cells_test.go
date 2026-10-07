@@ -141,3 +141,32 @@ func TestSummarizeRunCells_InvalidEvidenceDoesNotLowerTheMean(t *testing.T) {
 	assert.Equal(t, 1, side.InvalidEvidence)
 	assert.InDelta(t, 0.75, side.MeanScore, 1e-9, "the mean reads the two cells that measured the model")
 }
+
+func TestCellFromResult_FlagsProviderToolRejection(t *testing.T) {
+	t.Parallel()
+	result := completedResult(cellPassRate(0),
+		cellGrade("scenario-content", basisObservation, gradeFail),
+		cellGrade("trajectory", basisObservation, gradeFail))
+	result.TrajectoryOutcome = evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION
+
+	cell := cellFromResult(result)
+
+	assert.True(t, cell.ToolRejected)
+	assert.Equal(t, "fail", cell.Verdict, "a rejected declaration still scores as a failure")
+	assert.False(t, cell.Passed)
+}
+
+func TestSummarizeRunCells_CountsToolRejectedCellsSeparately(t *testing.T) {
+	t.Parallel()
+	cells := map[string]runCell{
+		"a": {Status: "completed", Verdict: "pass", Passed: true, Score: 1},
+		"b": {Status: "completed", Verdict: "fail", ToolRejected: true},
+		"c": {Status: "completed", Verdict: "fail", ToolRejected: true},
+		"d": {Status: "completed", Verdict: "fail", Score: 0.5},
+	}
+
+	side := summarizeRunCells("run-1", "campaign-1", cells)
+
+	assert.Equal(t, 2, side.ToolRejected)
+	assert.InDelta(t, 0.375, side.MeanScore, 1e-9, "rejected cells keep their failing score")
+}

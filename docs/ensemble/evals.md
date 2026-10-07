@@ -3,8 +3,8 @@ doc_id: ensemble-evals
 title: Ensemble Evaluations
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.7
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - ensemble/app/services/evaluation/
   - protocol/python/g8e/models/internal_api.py
@@ -93,7 +93,7 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | ID | Rule |
 | --- | --- |
 | INV-EVAL-GRADE-01 | For `grading_method: "semantic_judge"`, g8ee invokes `EvalJudge` after the interaction completes, before finalizing the trace. Deterministic assignments do not invoke the judge. |
-| INV-EVAL-GRADE-02 | The judge model comes from `eval_judge.model` when configured and otherwise falls back to the resolved lite model, both read from the caller's settings before request overrides. A campaign's overrides bind the scored model, so the scored model never judges itself; under governed inference the judge, which dispatches without campaign authority, runs on the Inference Operator's Lite binding. Judge calls are retried up to 3 times with exponential backoff (2s initial, 2x multiplier) on transient failures. |
+| INV-EVAL-GRADE-02 | The judge model comes from `eval_judge.model` when configured and otherwise falls back to the resolved lite model, both read from the caller's settings before request overrides. A campaign's overrides bind the scored model, so the scored model never judges itself; under governed inference the judge, which dispatches without campaign authority, runs on the Inference Operator's Lite binding. Judge calls are retried up to 3 times with exponential backoff (2s initial, 2x multiplier) on transient failures. A `ContextWindowExceededError` is never retried: the judge raises `EvalJudgeError`, so the case is recorded as errored and is not scored. |
 | INV-EVAL-GRADE-03 | The judge must return JSON with an integer score from 1 through 5 and non-empty reasoning. Scores of 3 or higher pass. Invalid or empty responses and failures after all retries produce an `unavailable` semantic grade rather than a fabricated score. |
 | INV-EVAL-GRADE-04 | The semantic judge is a grader, not a policy gate. Its score is persisted for the Go campaign verifier and aggregate projections; it cannot approve a tool call or substitute for required governance proof. |
 

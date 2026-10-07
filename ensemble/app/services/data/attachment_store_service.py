@@ -1,12 +1,6 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
-#
-# As of the Change Date listed in the LICENSE file, this software is
-# released under the Apache License, Version 2.0.
-
-from __future__ import annotations
-
 """
 Attachment Service for g8ee
 
@@ -20,6 +14,12 @@ Blob ID format: att:{investigation_id}/{attachment_id}
 This service is read-only from g8ee's perspective - client handles writes.
 """
 
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+from __future__ import annotations
+
 import base64
 import json
 import logging
@@ -28,11 +28,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.db.blob_service import BlobService
 
-from app.models.settings import G8eeAppSettings
 from app.constants import AttachmentType
 from app.errors import NetworkError
 from app.models.attachments import AttachmentData, AttachmentMetadata, ProcessedAttachment
 from app.models.operators import AttachmentRecord
+from app.models.settings import G8eeAppSettings
 
 logger = logging.getLogger(__name__)
 

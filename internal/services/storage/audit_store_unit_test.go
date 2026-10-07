@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -495,7 +496,7 @@ func TestGetActionReceipt_NilDB(t *testing.T) {
 func TestListActionReceipts_NilStore(t *testing.T) {
 	var ass *SQLAuditStore
 
-	receipts, err := ass.ListActionReceipts("session-id", 10, 0)
+	receipts, err := ass.ListActionReceipts(models.AuditScope{OperatorSessionID: "session-id"}, 10, 0)
 	if err == nil {
 		t.Error("ListActionReceipts on nil store should return error")
 	}
@@ -513,7 +514,7 @@ func TestListActionReceipts_NilDB(t *testing.T) {
 		db: nil,
 	}
 
-	receipts, err := ass.ListActionReceipts("session-id", 10, 0)
+	receipts, err := ass.ListActionReceipts(models.AuditScope{OperatorSessionID: "session-id"}, 10, 0)
 	if err == nil {
 		t.Error("ListActionReceipts with nil db should return error")
 	}
@@ -534,7 +535,7 @@ func TestListActionReceipts_DefaultLimit(t *testing.T) {
 	}
 
 	// Test with zero limit (should default to 50)
-	receipts, err := ass.ListActionReceipts("session-id", 0, 0)
+	receipts, err := ass.ListActionReceipts(models.AuditScope{OperatorSessionID: "session-id"}, 0, 0)
 	if err == nil {
 		t.Error("ListActionReceipts with nil db should return error")
 	}

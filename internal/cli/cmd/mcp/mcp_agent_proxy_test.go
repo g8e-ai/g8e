@@ -41,6 +41,7 @@ func TestAgentVerify_PassesForEveryRegisteredAgentWithoutTheAgentInstalled(t *te
 	t.Setenv("PATH", "")
 	home := testutil.TempDir(t)
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	for _, integration := range agent.All() {
 		t.Run(string(integration.ID), func(t *testing.T) {

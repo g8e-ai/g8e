@@ -26,9 +26,7 @@ from urllib.parse import quote
 
 import aiohttp
 
-from app.models.settings import GatewaySettings, TLSConfig
-from app.services.infra.settings_service import SettingsService
-from app.constants import BatchWriteOpType, AUTHORIZATION, GatewayAPIPaths
+from app.constants import AUTHORIZATION, BatchWriteOpType, GatewayAPIPaths
 from app.errors import (
     DatabaseError,
     ErrorCode,
@@ -44,6 +42,8 @@ from app.models.cache import (
     DocumentResult,
     QueryResult,
 )
+from app.models.settings import GatewaySettings, TLSConfig
+from app.services.infra.settings_service import SettingsService
 from app.utils.aiohttp_session import create_component_http_session
 
 logger = logging.getLogger(__name__)
@@ -118,6 +118,12 @@ class DBClient:
             if resp.status >= 400:
                 raise NetworkError(f"client HTTP {resp.status}: {text}", component="g8ee")
             return json.loads(text)
+
+    async def request_json(
+        self, method: str, path: str, **kwargs: Any
+    ) -> dict[str, object] | None:
+        """Execute a JSON request for services using an operator-owned endpoint."""
+        return await self._request_json(method, path, **kwargs)
 
     async def _request_list(self, method: str, path: str, **kwargs: Any) -> list[dict[str, object]]:
         """Execute a request and return the parsed JSON array."""

@@ -23,7 +23,6 @@ from app.constants import (
 )
 from app.utils.time_ids.timestamp import now, to_timestamp
 
-
 # Canonical shape of a command execution ID: ``cmd_{hex12}_{unix_timestamp}``.
 # Exposed as a module constant so event consumers (frontend routers, cross-
 # component wire validators) have a single source of truth instead of

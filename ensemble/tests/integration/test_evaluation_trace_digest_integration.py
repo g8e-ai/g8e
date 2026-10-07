@@ -9,13 +9,13 @@ import json
 from pathlib import Path
 
 import pytest
+from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.services.evaluation.trace_service import EvaluationTraceService, compute_trace_digest
-from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 PROTOCOL_ROOT = Path(__file__).resolve().parents[3] / "protocol"
 CHAT_PROBE_TRACE_VECTOR_PATH = PROTOCOL_ROOT / "vectors" / "eval" / "chat_probe_trace.json"
@@ -69,5 +69,7 @@ def test_evaluation_trace_service_persists_digest_binding(trace_service):
     )
     loaded = trace_service.load("assignment-1", "attempt-1")
     assert loaded.trace_digest == finalized.trace_digest
-    assert compute_trace_digest(loaded.model_copy(update={"trace_digest": ""})) == loaded.trace_digest
+    assert (
+        compute_trace_digest(loaded.model_copy(update={"trace_digest": ""})) == loaded.trace_digest
+    )
     assert trace_service.trace_file("assignment-1", "attempt-1").exists()

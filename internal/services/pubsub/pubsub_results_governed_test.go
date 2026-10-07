@@ -269,15 +269,15 @@ func TestPubSubResultsService_PublishInferenceCompletion_SurfacesTransportFailur
 }
 
 func TestPubSubResultsService_PublishProviderBoundaryObservationCompleted_PublishesWindowOnObserverChannel(t *testing.T) {
-	svc, client, cfg := newResultsTestService(t)
+	svc, client, _ := newResultsTestService(t)
 	completion := &evalv1.ProviderBoundaryObservationCompleted{
 		Window: &evalv1.ProviderBoundaryObservationWindow{ProviderAttemptId: "attempt-pb", ObserverId: "observer-1"},
 	}
 
-	require.NoError(t, svc.PublishProviderBoundaryObservationCompleted(t.Context(), "pb-cmd-1", completion))
+	require.NoError(t, svc.PublishProviderBoundaryObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "pb-cmd-1", OperatorId: "op-1", OperatorSessionId: "sess-1"}, completion))
 
 	channel, env := requireSinglePublished(t, client)
-	assert.Equal(t, ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId), channel)
+	assert.Equal(t, ResultsChannel("op-1", "sess-1"), channel)
 	assert.Equal(t, string(constants.Event.Operator.ProviderBoundaryObservation.Completed), env.EventType)
 	assert.Equal(t, "pb-cmd-1", env.Id, "the completion is correlated with the command by transaction id")
 	var decoded evalv1.ProviderBoundaryObservationCompleted
@@ -287,15 +287,15 @@ func TestPubSubResultsService_PublishProviderBoundaryObservationCompleted_Publis
 }
 
 func TestPubSubResultsService_PublishModelProvenanceObservationCompleted_PublishesWindowOnProvenanceChannel(t *testing.T) {
-	svc, client, cfg := newResultsTestService(t)
+	svc, client, _ := newResultsTestService(t)
 	completion := &evalv1.ModelProvenanceObservationCompleted{
 		Window: &evalv1.ModelProvenanceAttestationWindow{ProviderAttemptId: "attempt-mp", ServedModelTag: "qwen3:4b"},
 	}
 
-	require.NoError(t, svc.PublishModelProvenanceObservationCompleted(t.Context(), "mp-cmd-1", completion))
+	require.NoError(t, svc.PublishModelProvenanceObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "mp-cmd-1", OperatorId: "op-1", OperatorSessionId: "sess-1"}, completion))
 
 	channel, env := requireSinglePublished(t, client)
-	assert.Equal(t, ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId), channel)
+	assert.Equal(t, ResultsChannel("op-1", "sess-1"), channel)
 	assert.Equal(t, string(constants.Event.Operator.ModelProvenanceObservation.Completed), env.EventType)
 	assert.Equal(t, "mp-cmd-1", env.Id)
 	var decoded evalv1.ModelProvenanceObservationCompleted
@@ -313,22 +313,22 @@ func TestPubSubResultsService_ObservationCompletions_RejectMissingCorrelationOrW
 		call func(svc *PubSubResultsService, t *testing.T) error
 	}{
 		{"boundary: empty command id", func(s *PubSubResultsService, t *testing.T) error {
-			return s.PublishProviderBoundaryObservationCompleted(t.Context(), "", &evalv1.ProviderBoundaryObservationCompleted{Window: boundaryWindow})
+			return s.PublishProviderBoundaryObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "", OperatorId: "op-1", OperatorSessionId: "sess-1"}, &evalv1.ProviderBoundaryObservationCompleted{Window: boundaryWindow})
 		}},
 		{"boundary: nil completion", func(s *PubSubResultsService, t *testing.T) error {
-			return s.PublishProviderBoundaryObservationCompleted(t.Context(), "cmd", nil)
+			return s.PublishProviderBoundaryObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "cmd", OperatorId: "op-1", OperatorSessionId: "sess-1"}, nil)
 		}},
 		{"boundary: completion without a window", func(s *PubSubResultsService, t *testing.T) error {
-			return s.PublishProviderBoundaryObservationCompleted(t.Context(), "cmd", &evalv1.ProviderBoundaryObservationCompleted{})
+			return s.PublishProviderBoundaryObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "cmd", OperatorId: "op-1", OperatorSessionId: "sess-1"}, &evalv1.ProviderBoundaryObservationCompleted{})
 		}},
 		{"provenance: empty command id", func(s *PubSubResultsService, t *testing.T) error {
-			return s.PublishModelProvenanceObservationCompleted(t.Context(), "", &evalv1.ModelProvenanceObservationCompleted{Window: provenanceWindow})
+			return s.PublishModelProvenanceObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "", OperatorId: "op-1", OperatorSessionId: "sess-1"}, &evalv1.ModelProvenanceObservationCompleted{Window: provenanceWindow})
 		}},
 		{"provenance: nil completion", func(s *PubSubResultsService, t *testing.T) error {
-			return s.PublishModelProvenanceObservationCompleted(t.Context(), "cmd", nil)
+			return s.PublishModelProvenanceObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "cmd", OperatorId: "op-1", OperatorSessionId: "sess-1"}, nil)
 		}},
 		{"provenance: completion without a window", func(s *PubSubResultsService, t *testing.T) error {
-			return s.PublishModelProvenanceObservationCompleted(t.Context(), "cmd", &evalv1.ModelProvenanceObservationCompleted{})
+			return s.PublishModelProvenanceObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "cmd", OperatorId: "op-1", OperatorSessionId: "sess-1"}, &evalv1.ModelProvenanceObservationCompleted{})
 		}},
 	}
 	for _, tt := range tests {
@@ -348,7 +348,7 @@ func TestPubSubResultsService_ObservationCompletions_SurfaceTransportFailure(t *
 		svc, client, _ := newResultsTestService(t)
 		client.SetPublishError(true)
 
-		err := svc.PublishProviderBoundaryObservationCompleted(t.Context(), "cmd",
+		err := svc.PublishProviderBoundaryObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "cmd", OperatorId: "op-1", OperatorSessionId: "sess-1"},
 			&evalv1.ProviderBoundaryObservationCompleted{Window: &evalv1.ProviderBoundaryObservationWindow{ProviderAttemptId: "a"}})
 
 		require.ErrorIs(t, err, constants.ErrClientClosed)
@@ -359,7 +359,7 @@ func TestPubSubResultsService_ObservationCompletions_SurfaceTransportFailure(t *
 		svc, client, _ := newResultsTestService(t)
 		client.SetPublishError(true)
 
-		err := svc.PublishModelProvenanceObservationCompleted(t.Context(), "cmd",
+		err := svc.PublishModelProvenanceObservationCompleted(t.Context(), &commonv1.GovernanceEnvelope{Id: "cmd", OperatorId: "op-1", OperatorSessionId: "sess-1"},
 			&evalv1.ModelProvenanceObservationCompleted{Window: &evalv1.ModelProvenanceAttestationWindow{ProviderAttemptId: "a"}})
 
 		require.ErrorIs(t, err, constants.ErrClientClosed)

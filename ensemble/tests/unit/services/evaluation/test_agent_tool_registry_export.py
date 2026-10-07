@@ -43,7 +43,11 @@ def test_committed_registry_matches_what_g8ee_generates_today():
 def test_registry_declares_required_arguments_from_the_real_tool_schemas():
     tools = {tool.name: tool for tool in build_agent_tool_registry().tools}
 
-    assert tools["recursive_grep_search"].required_arguments == ["path", "pattern", "target_operators"]
+    assert tools["recursive_grep_search"].required_arguments == [
+        "path",
+        "pattern",
+        "target_operators",
+    ]
     assert tools["file_read_on_operator"].required_arguments == [
         "file_path",
         "justification",
@@ -62,7 +66,9 @@ def test_guidance_vectors_carry_the_text_the_model_is_shown():
     assert "path\n  Field required" in grep.error
 
     escalation = vectors["run_commands_with_operator.privilege_escalation"]
-    assert escalation.error.startswith("SECURITY VIOLATION: Command contains forbidden pattern 'sudo'.")
+    assert escalation.error.startswith(
+        "SECURITY VIOLATION: Command contains forbidden pattern 'sudo'."
+    )
     assert escalation.error_type == "security.violation"
 
 
@@ -74,7 +80,10 @@ def test_registry_exports_the_error_types_g8ee_records_as_a_deny_decision():
     assert {"approval.denied", "user.denied"}.isdisjoint(exported)
 
 
-@pytest.mark.parametrize("error_type", sorted(CommandErrorType, key=lambda value: value.value))
+_ALL_ERROR_TYPES = sorted(CommandErrorType, key=lambda value: value.value)
+
+
+@pytest.mark.parametrize("error_type", _ALL_ERROR_TYPES)
 def test_policy_outcome_is_deny_exactly_for_the_exported_error_types(error_type):
     result = CommandExecutionResult(success=False, error_type=error_type)
 

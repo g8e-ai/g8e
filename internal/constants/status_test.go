@@ -154,6 +154,7 @@ func TestAuditorReasonConstants(t *testing.T) {
 		{AuditorReasonNoValidRevision, "no_valid_revision"},
 		{AuditorReasonAuditorError, "auditor_error"},
 		{AuditorReasonEmptyResponse, "empty_response"},
+		{AuditorReasonContextOverflow, "context_overflow"},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.value, string(tc.goConst))
@@ -390,5 +391,14 @@ func TestToolCallStatusConstants(t *testing.T) {
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.value, string(tc.goConst))
+	}
+}
+
+func TestStatusJSONOperatorRolesMatchesCentralVocabulary(t *testing.T) {
+	category := loadStatusJSON(t)["operator_role"]
+	roles := OperatorRoles{OperatorRoleEmbedded, OperatorRoleData, OperatorRoleInference, OperatorRoleProvenance, OperatorRoleObserver}
+	require.Len(t, category, len(roles))
+	for _, role := range roles {
+		require.Equal(t, string(role), category[string(role)].Value)
 	}
 }

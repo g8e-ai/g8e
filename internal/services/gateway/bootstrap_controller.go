@@ -138,7 +138,12 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	var cliCertPEM, cliCertChainPEM string
 	var cliCertFingerprint, cliCertSerial string
 
-	cliSessionID := uuid.NewString()
+	cliSessionID, err := uuid.NewString()
+	if err != nil {
+		c.logger.Error("Failed to generate CLI session ID", "error", err, "user_id", user.ID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to generate session ID")
+		return
+	}
 
 	if req.CLICSRPEM != "" {
 		cliCertPEM, cliCertChainPEM, err = c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
@@ -212,7 +217,7 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	response.OperatorID = operatorID
 	response.OperatorSessionID = operatorSessionID
 
-	c.logger.Info("[BOOTSTRAP] System initialized with user, embedded operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", safeTruncateID(cliSessionID, 8))
+	c.logger.Info("[BOOTSTRAP] System initialized with user, embedded operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", safeTruncateID(cliSessionID))
 
 	c.responder.JSON(w, http.StatusCreated, response)
 }

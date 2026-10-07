@@ -22,29 +22,26 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-func resolveEvaluationInventorySource(explicitPath, projectRoot string) (runtimePath string, externalPath string, err error) {
+func resolveEvaluationInventorySource(explicitPath, projectRoot string) (runtimePath string, externalPath string) {
 	explicitPath = strings.TrimSpace(explicitPath)
 	if explicitPath == "" {
-		return "", "", nil
+		return "", ""
 	}
 	if filepath.IsAbs(explicitPath) {
-		return "", explicitPath, nil
+		return "", explicitPath
 	}
 	normalized := filepath.ToSlash(explicitPath)
 	if strings.HasPrefix(normalized, constants.RuntimeDirname+"/") {
-		return strings.TrimPrefix(normalized, constants.RuntimeDirname+"/"), "", nil
+		return strings.TrimPrefix(normalized, constants.RuntimeDirname+"/"), ""
 	}
 	if normalized == evaluation.DefaultBaseModelInventoryRelPath {
-		return "", filepath.Join(projectRoot, normalized), nil
+		return "", filepath.Join(projectRoot, normalized)
 	}
-	return normalized, "", nil
+	return normalized, ""
 }
 
 func loadEvaluationInventoryFreeze(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) (*evaluation.ModelInventoryFreeze, error) {
-	runtimePath, externalPath, err := resolveEvaluationInventorySource(explicitPath, projectRoot)
-	if err != nil {
-		return nil, err
-	}
+	runtimePath, externalPath := resolveEvaluationInventorySource(explicitPath, projectRoot)
 	if externalPath != "" {
 		return evaluation.LoadModelInventoryFreezeFile(externalPath)
 	}

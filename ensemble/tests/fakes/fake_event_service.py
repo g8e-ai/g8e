@@ -5,14 +5,21 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from __future__ import annotations
-
 """Typed fake for EventServiceProtocol."""
+
+from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from app.constants import EventType, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, EventType
+from app.models.base import G8eBaseModel
 from app.models.events import BackgroundEvent, SessionEvent
+from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.internal_api import (
+    ObserveProducerAgentStateRequest,
+    ObserveProducerRunStateRequest,
+)
+from app.services.protocols import EventServiceProtocol
 
 
 class FakeEventService:
@@ -24,9 +31,9 @@ class FakeEventService:
 
     def __init__(self) -> None:
         self.published: list[SessionEvent | BackgroundEvent] = []
-        self.command_events: list[dict] = []
-        self.agent_state_requests: list = []
-        self.run_state_requests: list = []
+        self.command_events: list[dict[str, object]] = []
+        self.agent_state_requests: list[ObserveProducerAgentStateRequest] = []
+        self.run_state_requests: list[ObserveProducerRunStateRequest] = []
 
         # Initialize as a proper AsyncMock for call assertions
         # We manually record to self.published in the side_effect
@@ -40,7 +47,6 @@ class FakeEventService:
             self.published.append(event)
         return "fake-publish-id"
 
-
     async def publish_reputation_event(
         self,
         event_type: EventType,
@@ -48,8 +54,6 @@ class FakeEventService:
         g8e_context: G8eHttpContext,
     ) -> None:
         """Typed fake for publish_reputation_event."""
-        from app.models.http_context import RequestContext
-
         event = SessionEvent.from_context(
             context=RequestContext.from_app_context(g8e_context),
             event_type=event_type,
@@ -61,7 +65,7 @@ class FakeEventService:
         self,
         investigation_id: str,
         event_type: EventType,
-        payload: dict[str, object] | G8eBaseModel,
+        payload: G8eBaseModel,
         web_session_id: str | None,
         case_id: str,
         user_id: str,
@@ -70,9 +74,6 @@ class FakeEventService:
     ) -> None:
         """Typed fake for publish_investigation_event."""
         # We can just record this as a SessionEvent in self.published
-        from app.models.http_context import RequestContext
-
-
         ctx = RequestContext(
             web_session_id=web_session_id,
             cli_session_id=cli_session_id,
@@ -88,10 +89,13 @@ class FakeEventService:
         )
         await self.publish(event)
 
-    async def publish_agent_state(self, request) -> None:
+    async def publish_agent_state(self, request: ObserveProducerAgentStateRequest) -> None:
         """Typed fake for publish_agent_state. Records the request."""
         self.agent_state_requests.append(request)
 
-    async def publish_run_state(self, request) -> None:
+    async def publish_run_state(self, request: ObserveProducerRunStateRequest) -> None:
         """Typed fake for publish_run_state. Records the request."""
         self.run_state_requests.append(request)
+
+
+_: EventServiceProtocol = FakeEventService()

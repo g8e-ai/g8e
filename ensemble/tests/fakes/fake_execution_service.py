@@ -7,25 +7,34 @@
 
 """Typed fake for ExecutionServiceProtocol."""
 
-from typing import Any
-
-from app.constants import ExecutionStatus
+from app.constants import ExecutionStatus, OperatorType
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import DirectCommandResult, OperatorDocument, TargetSystem
 from app.models.pubsub_messages import (
+    ExecutionResultsPayload,
     G8eMessage,
     G8eoResultEnvelope,
-    ExecutionResultsPayload,
     PortCheckResultPayload,
 )
 from app.models.tool_results import CommandInternalResult
-from app.services.protocols import ExecutionServiceProtocol
+from app.services.protocols import (
+    AIResponseAnalyzerProtocol,
+    ApprovalServiceProtocol,
+    ExecutionServiceProtocol,
+    InvestigationServiceProtocol,
+)
 from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
 from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+
+from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
+from .fake_approval_service import FakeApprovalService
+from .fake_investigation_service import FakeInvestigationService
 
 # Create a default operator for the protocol instance
 _default_operator = OperatorDocument(
+    operator_type=OperatorType.REMOTE,
     id="fake-operator",
     user_id="fake-user",
     operator_session_id="fake-session",
@@ -47,7 +56,9 @@ class FakeExecutionService:
         output: str = "fake output",
         resolved_operator: OperatorDocument = _default_operator,
         resolve_error: Exception | None = None,
-        ai_response_analyzer: Any = None,
+        ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
+        investigation_service: InvestigationServiceProtocol | None = None,
+        approval_service: ApprovalServiceProtocol | None = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
         envelope: G8eoResultEnvelope | None = None,
@@ -56,13 +67,23 @@ class FakeExecutionService:
         self._output = output
         self._resolved_operator = resolved_operator
         self._resolve_error = resolve_error
-        self._ai_response_analyzer = ai_response_analyzer
-        self.whitelist_validator = whitelist_validator
-        self.blacklist_validator = blacklist_validator
+        self._ai_response_analyzer: AIResponseAnalyzerProtocol = (
+            ai_response_analyzer or FakeAIResponseAnalyzer()
+        )
+        self._investigation_service: InvestigationServiceProtocol = (
+            investigation_service or FakeInvestigationService()
+        )
+        self._approval_service: ApprovalServiceProtocol = approval_service or FakeApprovalService()
+        self.whitelist_validator: CommandWhitelistValidator = (
+            whitelist_validator or get_whitelist_validator()
+        )
+        self.blacklist_validator: CommandBlacklistValidator = (
+            blacklist_validator or get_blacklist_validator()
+        )
         self._envelope = envelope
-        self.execute_calls: list[dict] = []
-        self.resolve_calls: list[dict] = []
-        self.send_command_calls: list[dict] = []
+        self.execute_calls: list[dict[str, object]] = []
+        self.resolve_calls: list[dict[str, object]] = []
+        self.send_command_calls: list[dict[str, object]] = []
 
     async def execute(
         self,
@@ -105,7 +126,7 @@ class FakeExecutionService:
             exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED
         ), self._envelope
 
-    async def execute_command_internal(self, **kwargs) -> CommandInternalResult:
+    async def execute_command_internal(self, **kwargs: object) -> CommandInternalResult:
         self.execute_calls.append(kwargs)
         return CommandInternalResult(
             exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED
@@ -120,17 +141,16 @@ class FakeExecutionService:
         self._envelope = value
 
     @property
-    def ai_response_analyzer(self):
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
         return self._ai_response_analyzer
 
     @property
-    def investigation_service(self):
-        return None
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
 
     @property
-    @property
-    def approval_service(self):
-        return None
+    def approval_service(self) -> ApprovalServiceProtocol:
+        return self._approval_service
 
     def resolve_operators(
         self,
@@ -149,7 +169,7 @@ class FakeExecutionService:
             return [self._resolved_operator]
         if "all" in target_operators:
             return operator_documents
-        resolved = []
+        resolved: list[OperatorDocument] = []
         for target_id in target_operators:
             for op in operator_documents:
                 if op.id == target_id:
@@ -182,7 +202,10 @@ class FakeExecutionService:
         )
         return DirectCommandResult(
             execution_id=command_payload.execution_id,
+            status=ExecutionStatus.EXECUTING,
         )
 
 
-_: ExecutionServiceProtocol = FakeExecutionService(resolved_operator=_default_operator)
+def _conforms_to_protocol(fake: FakeExecutionService) -> ExecutionServiceProtocol:
+    """Static conformance check; avoids constructing validators at import time."""
+    return fake

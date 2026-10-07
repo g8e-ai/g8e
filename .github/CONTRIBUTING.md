@@ -9,7 +9,7 @@ Before contributing, ensure you understand the core platform architecture:
 - **g8e Gateway (g8eg)**: The central Policy Decision Point (PDP) for identity, policy admission, and posture-aware governance.
 - **g8e Operator (g8eo)**: The host-side Policy Execution Point (PEP) and MCP server.
 - **g8e Protocol**: The canonical protocol definitions (protobuf schemas and constant registries).
-- **5-Layer Verification Gauntlet**:
+- **5-Layer Governance Gauntlet**:
     - **L1 Doctrine (L1Doctrine)**: Technical hard gates (forbidden patterns, threat detection).
     - **L2 Consensus (L2Consensus)**: Multi-agent consensus via Ed25519 signatures.
     - **L3 Notary (L3Notary)**: Human-in-the-loop authorization through WebAuthn or signed CLI proofs.
@@ -26,7 +26,7 @@ New here? Start with [Early testers](../EARLY_TESTERS.md) — small cohorts, asy
 3. **README cold read.** Read the README as a stranger and report the first sentence that made you want to stop. One sentence is a complete contribution.
 
 **For Python folks (protocol only, ~30 min)**
-4. **Run the protocol examples.** `pip install g8e==2.3.0`, run `protocol/python/examples/`, and report Python version, OS, and anything surprising.
+4. **Run the protocol examples.** `pip install g8e==2.3.1`, run `protocol/python/examples/`, and report Python version, OS, and anything surprising.
 5. **Conformance test report.** Run `protocol/conformance/` tests and file the result. A green run on a new environment is useful signal.
 
 **For careful readers (~1 hr)**
@@ -34,6 +34,51 @@ New here? Start with [Early testers](../EARLY_TESTERS.md) — small cohorts, asy
 7. **Threat-model question.** Read `docs/architecture/overview.md` and `governance.md`, then file one question about the trust boundary the docs don't answer. A good unanswered question becomes a docs fix.
 
 Look for issues labeled `first-run`, `good-first-task`, and `docs`. Experienced contributors can also search the Go source for architectural work, but newcomers should start above — the starter tasks are the curated on-ramp.
+
+## Local Development Setup
+
+Choose the smallest environment that fits your work:
+
+- **Gateway only:** clone the repository, then run `make up`. A native build
+  needs Go 1.26.6, Make, and Node.js 22+ for the embedded explorer. Python,
+  Ollama, and model SDKs are not needed for this track.
+- **Full platform:** run `make ensemble-env` once, then `make full`. This
+  provisions Python 3.12+ through `uv` and installs the Ensemble runtime
+  dependencies. Use `make dev-python` when you also need Ensemble test and lint
+  dependencies.
+
+`make full` also needs an approved `G8E_OLLAMA_ENDPOINT` in `.env` or the process environment. For interactive configuration, use `make full-setup`. Linux and macOS contributors can install the complete development toolchain with their platform's setup script; use `--build-only` for Gateway evaluation. See the [setup instructions](../docs/guides/getting_started.md#clone-the-repository).
+
+For browser enrollment, run `./g8e auth enroll user -e localhost`; for a
+headless environment, add `--headless`. The [Getting Started guide](../docs/guides/getting_started.md)
+covers setup, enrollment, and runtime configuration.
+
+## Selecting Checks
+
+Run the narrowest check that covers your changes, then the broader owning
+suite when practical:
+
+| Change | Command |
+|---|---|
+| Go unit tests | `./g8e test unit` |
+| Ensemble tests | `make ensemble-test` |
+| Setup and CI helper scripts | `make ci-scripts` |
+
+`make ensemble-test` needs `make dev-python` first. `make ci-scripts` runs the complete `make dev-check` preflight; for isolated script checks with the Python dependencies installed, use `.venv/bin/python -m unittest discover -s scripts/tests`.
+
+Platform test suites go through `./g8e test ...` or their owning Make target,
+as required by [INV-TEST-01](../docs/devs/devs.md#testing-inv-test).
+
+## Pull Requests
+
+- Read the [Developer Guidelines](../docs/devs/devs.md) and follow the
+  relevant invariants for the code and tests you change.
+- Keep each pull request focused; update current-state documentation with
+  behavior changes and generated artifacts through their owning generators.
+- Describe the user-visible behavior, implementation, and checks run. Include
+  exact commands and note any checks that could not run.
+- Confirm the CI workflow passes and respond to review feedback with follow-up
+  commits on the same pull request.
 
 ## Filing Issues
 

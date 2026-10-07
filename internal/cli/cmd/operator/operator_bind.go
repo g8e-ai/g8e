@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
 type operatorBindClient interface {
@@ -53,6 +54,7 @@ type operatorBindingEntry struct {
 	OperatorID        string                   `json:"operator_id"`
 	OperatorSessionID string                   `json:"operator_session_id"`
 	OperatorType      constants.OperatorType   `json:"operator_type"`
+	OperatorRoles     constants.OperatorRoles  `json:"operator_roles"`
 	Status            constants.OperatorStatus `json:"status"`
 	Hostname          string                   `json:"hostname,omitempty"`
 	Name              string                   `json:"name,omitempty"`
@@ -344,6 +346,7 @@ func runOperatorBindList(
 				OperatorID:        op.ID,
 				OperatorSessionID: op.OperatorSessionID,
 				OperatorType:      op.OperatorType,
+				OperatorRoles:     operatorcapability.GetOperatorRoles(op),
 				Status:            op.Status,
 				Hostname:          operatorHostnameValue(op),
 				Name:              op.Name,

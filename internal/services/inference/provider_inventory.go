@@ -29,16 +29,16 @@ const providerClassOllama = "ollama"
 // ProviderModelInventoryEntry is one discovered provider model identity with
 // normalized metadata used to materialize eval ModelVariant records.
 type ProviderModelInventoryEntry struct {
-	ProviderClass          string
-	ServedModelTag         string
-	ModelDigest            string
-	ModelFamily            string
-	ParameterSize          string
-	ParameterCount         uint64
-	Quantization           string
-	Format                 string
-	ContextLimit           uint32
-	AdvertisedCapabilities []string
+	ProviderClass          string   `json:"provider_class,omitempty"`
+	ServedModelTag         string   `json:"served_model_tag,omitempty"`
+	ModelDigest            string   `json:"model_digest,omitempty"`
+	ModelFamily            string   `json:"model_family,omitempty"`
+	ParameterSize          string   `json:"parameter_size,omitempty"`
+	ParameterCount         uint64   `json:"parameter_count,omitempty"`
+	Quantization           string   `json:"quantization,omitempty"`
+	Format                 string   `json:"format,omitempty"`
+	ContextLimit           uint32   `json:"context_limit,omitempty"`
+	AdvertisedCapabilities []string `json:"advertised_capabilities,omitempty"`
 }
 
 type ollamaShowRequest struct {

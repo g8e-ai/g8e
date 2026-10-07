@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 from app.constants.agents import PersonaCapability
-from app.models.base import BaseModel, Field, ConfigDict
+from app.models.base import BaseModel, ConfigDict, Field
 
 
 class AgentPersonaModel(BaseModel):

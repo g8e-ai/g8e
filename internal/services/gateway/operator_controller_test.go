@@ -78,12 +78,12 @@ func seedStopOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessi
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 }
 
-func stopOperatorRequest(t *testing.T, controller *OperatorController, userID, sessionID, reason string) *httptest.ResponseRecorder {
+func stopOperatorRequest(t *testing.T, controller *OperatorController, _, sessionID, reason string) *httptest.ResponseRecorder {
 	t.Helper()
 	body, err := json.Marshal(models.StopOperatorRequest{OperatorSessionID: sessionID, Reason: reason})
 	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsStop, strings.NewReader(string(body)))
-	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, userID))
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "stop-owner"))
 	rr := httptest.NewRecorder()
 	controller.handleStopOperator(rr, req)
 	return rr
@@ -91,7 +91,7 @@ func stopOperatorRequest(t *testing.T, controller *OperatorController, userID, s
 
 func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
+	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore, nil)
 	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Dispatch: dispatch, Responder: infra.Responder})
 
 	seedStopOperator(t, infra, "stop-remote", "stop-remote-session", "stop-owner", constants.OperatorTypeRemote, constants.OperatorStatusActive)
@@ -934,11 +934,11 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 func TestWithResolvedOperatorRole(t *testing.T) {
 	t.Run("keeps a stored role", func(t *testing.T) {
 		op := models.OperatorDocumentGo{
-			OperatorRole:  constants.OperatorRoleObserver,
+			OperatorRoles: constants.OperatorRoles{constants.OperatorRoleObserver},
 			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
 		}
-		withResolvedOperatorRole(&op)
-		assert.Equal(t, constants.OperatorRoleObserver, op.OperatorRole)
+		withResolvedOperatorRoles(&op)
+		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, op.OperatorRoles)
 	})
 
 	t.Run("resolves a missing role from runtime config", func(t *testing.T) {
@@ -946,13 +946,13 @@ func TestWithResolvedOperatorRole(t *testing.T) {
 			Claimed:       true,
 			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
 		}
-		withResolvedOperatorRole(&op)
-		assert.Equal(t, constants.OperatorRoleProvenance, op.OperatorRole)
+		withResolvedOperatorRoles(&op)
+		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, op.OperatorRoles)
 	})
 
 	t.Run("leaves an unclaimed slot without a role", func(t *testing.T) {
 		op := models.OperatorDocumentGo{IsSlot: true}
-		withResolvedOperatorRole(&op)
-		assert.Empty(t, op.OperatorRole)
+		withResolvedOperatorRoles(&op)
+		assert.Empty(t, op.OperatorRoles)
 	})
 }

@@ -7,6 +7,7 @@
 
 import asyncio
 import logging
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -23,7 +24,7 @@ def manager():
     return ChatTaskManager()
 
 
-def _make_event_service() -> EventService:
+def _make_event_service() -> MagicMock:
     svc = MagicMock(spec=EventService)
     svc.publish = AsyncMock()
     return svc
@@ -185,7 +186,6 @@ class TestCancelBehaviour:
         event = event_service.publish.call_args[0][0]
         assert event.event_type == EventType.AI_LLM_CHAT_ITERATION_STOPPED
         assert event.payload.reason == "Test cancellation"
-        from datetime import datetime
 
         assert isinstance(event.payload.timestamp, datetime)
         assert event.web_session_id == "web-session-456"

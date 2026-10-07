@@ -2,9 +2,9 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { EvaluationSummary, SnapshotRecord } from '../src/contract/types';
+import type { EvaluationSummary, ModelSummary, SnapshotRecord } from '../src/contract/types';
 import { evalStore } from '../src/state/store';
 import { EvaluationDetailView } from '../src/views/EvaluationDetailView';
 import { EvaluationsView } from '../src/views/EvaluationsView';
@@ -45,6 +45,31 @@ describe('EvaluationsView', () => {
       ] as unknown as SnapshotRecord[],
       [],
     );
+  });
+
+  it('shows only fully evaluated, verified role leaders and their ranking evidence', () => {
+    const model: ModelSummary = {
+      schema_version: '1.6.0', kind: 'model_summary', dataset_id: 'ds-leader',
+      observed_at: '2026-10-06T00:00:00Z', quality_state: 'exploratory_verified',
+      variant_id: 'leader', served_model_tag: 'qwen:4b', display_name: 'Qualified model',
+      role: 'assistant', inventory_only: false, evaluation_coverage: 1,
+      pass_rate: { estimate: 0.8, lower: 0.8, upper: 0.8, denominator: 10 },
+    };
+    evalStore.loadFixtures([
+      model,
+      { ...model, variant_id: 'unverified', display_name: 'Unverified model', role: 'primary', quality_state: 'exploratory_partial' },
+      { ...model, variant_id: 'partial', display_name: 'Partial model', role: 'lite', evaluation_coverage: 0.5 },
+      { ...evaluation('ds-leader', 'run-leader', '2026-10-06T00:00:00Z'),
+        evaluation_unit: 'model', lifecycle_state: 'completed', elapsed_seconds: 60 },
+    ] as SnapshotRecord[], []);
+    render(<MemoryRouter initialEntries={['/?release=all']}><EvaluationsView /></MemoryRouter>);
+    const panel = within(screen.getByRole('region', { name: 'Leaderboard' }));
+    expect(panel.getByRole('link', { name: 'Qualified model' })).toBeInTheDocument();
+    expect(panel.queryByRole('link', { name: 'Unverified model' })).not.toBeInTheDocument();
+    expect(panel.queryByRole('link', { name: 'Partial model' })).not.toBeInTheDocument();
+    expect(panel.getByText(/1 of 3 roles qualified/)).toBeInTheDocument();
+    expect(panel.getByText('4B')).toBeInTheDocument();
+    expect(panel.getByRole('columnheader', { name: 'Eval time' })).toBeInTheDocument();
   });
 
   it('only lists quality filter options that exist in the current runs', () => {

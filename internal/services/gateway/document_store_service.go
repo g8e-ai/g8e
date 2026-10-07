@@ -532,13 +532,23 @@ func (s *DocumentStoreService) docQuery(collection string, filters []models.DocF
 
 		// Identifier is validated, dir is whitelisted to ASC/DESC.
 		// Use validated hardcoded branch to satisfy CodeQL sql-injection rule.
-		query.WriteString(" ORDER BY json_extract(data, ?)")
+		switch orderField {
+		case "created_at":
+			query.WriteString(" ORDER BY created_at")
+		case "updated_at":
+			query.WriteString(" ORDER BY updated_at")
+		default:
+			query.WriteString(" ORDER BY json_extract(data, ?)")
+			args = append(args, "$."+orderField)
+		}
 		if dir == "DESC" {
 			query.WriteString(" DESC")
 		} else {
 			query.WriteString(" ASC")
 		}
-		args = append(args, "$."+orderField)
+		// Creation timestamps can match on a coarse host clock. SQLite's
+		// insertion order keeps the original owner first when that happens.
+		query.WriteString(", rowid ASC")
 	}
 
 	if limit > 0 {

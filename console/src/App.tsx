@@ -8,15 +8,16 @@ import { ApprovalsView } from './features/approvals/ApprovalsView';
 import { AuthScreen } from './features/auth/AuthScreen';
 import { CasesView } from './features/cases/CasesView';
 import { InferenceView } from './features/inference/InferenceView';
-import { ROLE_INFO, ROLES } from './lib/inference';
-import type { LlmRole } from './lib/types';
+import { ROLE_INFO, ROLES, effectiveRole, type RoleUpdateBody } from './lib/inference';
+import type { LlmRole, LlmSettings } from './lib/types';
 import { OperatorsView } from './features/operators/OperatorsView';
 import type { FragmentIntent } from './lib/fragment';
 import { ApprovalsProvider, useApprovals } from './state/approvals';
-import { InferenceProvider } from './state/inference';
+import { InferenceProvider, useInference } from './state/inference';
 import { OperatorsProvider, useOperators } from './state/operators';
 import { useSession } from './state/session';
 import { StreamProvider, useStream } from './state/stream';
+import { errorText, useToast } from './state/toast';
 
 export type View = 'cases' | 'operators' | 'inference' | 'approvals' | 'api' | 'account';
 const VIEWS: readonly View[] = ['cases', 'operators', 'inference', 'approvals', 'api', 'account'];
@@ -27,17 +28,11 @@ export function initialView(search: string, intent: FragmentIntent): View {
   return VIEWS.includes(v as View) ? (v as View) : 'cases';
 }
 
-function initialRole(search: string): LlmRole | undefined {
-  const role = new URLSearchParams(search).get('role');
-  return ROLES.includes(role as LlmRole) ? (role as LlmRole) : undefined;
-}
-
-function writeView(view: View, role?: LlmRole): void {
+function writeView(view: View): void {
   const p = new URLSearchParams(window.location.search);
   if (view === 'cases') p.delete('view');
   else p.set('view', view);
-  if (view === 'inference' && role) p.set('role', role);
-  else p.delete('role');
+  p.delete('role');
   const qs = p.toString();
   history.replaceState(history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
 }
@@ -78,22 +73,29 @@ const STREAM_LABEL = { open: 'Live', connecting: 'Connecting', closed: 'Disconne
 
 function Shell({ intent }: { intent: FragmentIntent }) {
   const [view, setViewState] = useState<View>(() => initialView(window.location.search, intent));
-  const [inferenceRole, setInferenceRole] = useState<LlmRole | undefined>(() => initialRole(window.location.search));
+  const [savingRole, setSavingRole] = useState<LlmRole | null>(null);
   const { total } = useApprovals();
   const { bound } = useOperators();
   const { state } = useStream();
   const { user, version } = useSession();
+  const { settings, modelsByProvider, modelsLoading, save } = useInference();
+  const toast = useToast();
 
   const setView = (v: View) => {
     writeView(v);
     setViewState(v);
-    setInferenceRole(undefined);
   };
 
-  const selectInferenceRole = (role: LlmRole) => {
-    writeView('inference', role);
-    setViewState('inference');
-    setInferenceRole(role);
+  const handleRoleSave = async (role: LlmRole, update: RoleUpdateBody) => {
+    setSavingRole(role);
+    try {
+      await save({ [role]: update });
+      toast('success', 'Model selection saved. The next message uses it.');
+    } catch (err) {
+      toast('error', errorText(err));
+    } finally {
+      setSavingRole(null);
+    }
   };
 
   const afterInference: { id: View; label: string; count?: number }[] = [
@@ -107,7 +109,7 @@ function Shell({ intent }: { intent: FragmentIntent }) {
       key={n.id}
       type="button"
       className="nav-item"
-      aria-current={view === n.id && (n.id !== 'inference' || !inferenceRole) ? 'page' : undefined}
+      aria-current={view === n.id ? 'page' : undefined}
       onClick={() => setView(n.id)}
     >
       {n.label}
@@ -121,7 +123,7 @@ function Shell({ intent }: { intent: FragmentIntent }) {
 
   return (
     <div className="shell">
-      <nav className="sidebar" aria-label="Primary">
+      <nav className="sidebar" aria-label="Sidebar">
         <div className="brand">
           <span className="brand-mark">g8e</span>
           <span>
@@ -135,15 +137,15 @@ function Shell({ intent }: { intent: FragmentIntent }) {
         <div className="nav-section" aria-label="Model roles">
           <div className="nav-section-label">MODEL ROLES</div>
           {ROLES.map((role) => (
-            <button
+            <NavRoleSelect
               key={role}
-              type="button"
-              className="nav-item nav-subitem"
-              aria-current={view === 'inference' && inferenceRole === role ? 'page' : undefined}
-              onClick={() => selectInferenceRole(role)}
-            >
-              {ROLE_INFO[role].label}
-            </button>
+              role={role}
+              settings={settings}
+              modelsByProvider={modelsByProvider}
+              modelsLoading={modelsLoading}
+              saving={savingRole === role}
+              onSave={handleRoleSave}
+            />
           ))}
         </div>
         {afterInference.map(renderNavItem)}
@@ -161,12 +163,16 @@ function Shell({ intent }: { intent: FragmentIntent }) {
         {view === 'cases' && (
           <CasesView
             onManageOperators={() => setView('operators')}
-            onManageInference={() => selectInferenceRole('primary')}
+            onManageInference={() => {
+              const el = document.getElementById('role-select-primary');
+              if (el) el.focus();
+              else setView('inference');
+            }}
             onViewApprovals={() => setView('approvals')}
           />
         )}
         {view === 'operators' && <OperatorsView />}
-        {view === 'inference' && <InferenceView role={inferenceRole} onViewApprovals={() => setView('approvals')} />}
+        {view === 'inference' && <InferenceView onViewApprovals={() => setView('approvals')} />}
         {view === 'approvals' && (
           <ApprovalsView
             autoApproveTxHash={intent.approveTxHash}
@@ -177,6 +183,98 @@ function Shell({ intent }: { intent: FragmentIntent }) {
         {view === 'api' && <ApiView />}
         {view === 'account' && <AccountView />}
       </main>
+    </div>
+  );
+}
+
+function NavRoleSelect({
+  role,
+  settings,
+  modelsByProvider,
+  modelsLoading,
+  saving,
+  onSave,
+}: {
+  role: LlmRole;
+  settings: LlmSettings | null;
+  modelsByProvider: Record<string, string[]>;
+  modelsLoading: boolean;
+  saving: boolean;
+  onSave: (role: LlmRole, update: RoleUpdateBody) => Promise<void>;
+}) {
+  const current = settings ? settings[role] : { provider: null, model: null };
+  const inherited = settings ? effectiveRole(settings, role) : { provider: null, model: null, inherited: false };
+  const providers = settings?.providers ?? [];
+  const selectedValue = current.provider && current.model ? `${current.provider}::${current.model}` : '';
+
+  const providerGroups = providers
+    .map((p) => {
+      const list = modelsByProvider[p.provider] ?? [];
+      const currentForThis = current.provider === p.provider && current.model ? current.model : null;
+      const models = currentForThis && !list.includes(currentForThis) ? [currentForThis, ...list] : list;
+      return { provider: p, models };
+    })
+    .filter((g) => g.models.length > 0);
+
+  const hasSelectedGroup = providerGroups.some((g) => g.provider.provider === current.provider);
+  const orphanCurrent = current.provider && current.model && !hasSelectedGroup;
+  const totalModels = providerGroups.reduce((acc, g) => acc + g.models.length, 0);
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (!val) {
+      if (role === 'primary') return;
+      void onSave(role, { provider: null, model: null });
+      return;
+    }
+    const idx = val.indexOf('::');
+    if (idx === -1) return;
+    const provider = val.slice(0, idx);
+    const model = val.slice(idx + 2);
+    void onSave(role, { provider, model });
+  };
+
+  return (
+    <div className="nav-role">
+      <div className="nav-role-header">
+        <label htmlFor={`role-select-${role}`} className="nav-role-label" title={ROLE_INFO[role].description}>
+          {ROLE_INFO[role].label}
+        </label>
+        {saving && <span className="nav-role-saving">Saving…</span>}
+      </div>
+      <select
+        id={`role-select-${role}`}
+        className="nav-role-select"
+        value={selectedValue}
+        disabled={saving || !settings}
+        onChange={handleChange}
+      >
+        {role === 'primary' ? (
+          (!current.provider || !current.model) && (
+            <option value="" disabled>
+              {modelsLoading && totalModels === 0 ? 'Loading models…' : 'Choose a model'}
+            </option>
+          )
+        ) : (
+          <option value="">
+            {inherited.model ? `Fallback (${inherited.model})` : 'Use fallback'}
+          </option>
+        )}
+        {providerGroups.map(({ provider, models }) => (
+          <optgroup key={provider.provider} label={provider.label}>
+            {models.map((m) => (
+              <option key={`${provider.provider}::${m}`} value={`${provider.provider}::${m}`}>
+                {m}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+        {orphanCurrent && (
+          <optgroup label={current.provider!}>
+            <option value={selectedValue}>{current.model}</option>
+          </optgroup>
+        )}
+      </select>
     </div>
   );
 }

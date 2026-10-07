@@ -38,25 +38,34 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.constants import (
+    ExecutionStatus,
+    FileOperation,
     InvestigationStatus,
+    NetworkProtocol,
     OperatorType,
 )
 from app.constants.generated_status import OperatorToolName
 from app.errors import ExternalServiceError, ValidationError
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.settings import G8eeUserSettings
+from app.models.operators import HeartbeatSnapshot, HeartbeatSystemIdentity, OperatorDocument
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import (
     CommandExecutionResult,
     FetchFileDiffToolResult,
     FetchFileHistoryToolResult,
+    FileDiffEntry,
     FileEditResult,
+    FileHistoryEntry,
+    FsGrepMatch,
     FsGrepToolResult,
+    FsListEntry,
     FsListToolResult,
     FsReadToolResult,
     IntentPermissionResult,
     PortCheckToolResult,
     SearchWebResult,
     ToolResult,
+    WebSearchResultItem,
 )
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tool_service import AIToolService
@@ -66,6 +75,7 @@ from tests.fakes.factories import (
     build_bound_operator,
     build_g8e_http_context,
 )
+from tests.fakes.tool_helpers import create_tool_service_fake
 
 pytestmark = [pytest.mark.integration]
 
@@ -135,7 +145,6 @@ def sample_g8e_context():
 @pytest.fixture
 def sample_investigation():
     """Sample investigation for testing."""
-    from app.models.operators import HeartbeatSnapshot, HeartbeatSystemIdentity
 
     return EnrichedInvestigationContext(
         id="inv-101",
@@ -147,17 +156,17 @@ def sample_investigation():
         sentinel_mode=True,
         conversation_history=[],
         operator_documents=[
-            {
-                "id": "op-123",
-                "user_id": "user-303",
-                "operator_session_id": "session-456",
-                "operator_type": OperatorType.REMOTE,
-                "latest_heartbeat_snapshot": HeartbeatSnapshot(
+            OperatorDocument(
+                id="op-123",
+                user_id="user-303",
+                operator_session_id="session-456",
+                operator_type=OperatorType.REMOTE,
+                latest_heartbeat_snapshot=HeartbeatSnapshot(
                     system_identity=HeartbeatSystemIdentity(
                         os="linux", hostname="g8ebuntu", current_user="g8e", architecture="amd64"
                     )
                 ),
-            }
+            )
         ],
     )
 
@@ -165,7 +174,6 @@ def sample_investigation():
 @pytest.fixture
 def request_settings():
     """Sample request settings for testing."""
-    from app.models.settings import LLMSettings
 
     return G8eeUserSettings(llm=LLMSettings())
 
@@ -192,12 +200,11 @@ class TestCommandExecutionTools:
         # Mock successful command execution
         mock_result = CommandExecutionResult(
             execution_id="exec-123",
-            status="completed",
+            execution_status=ExecutionStatus.COMPLETED,
             exit_code=0,
-            stdout="File listing successful",
+            output="File listing successful",
             stderr="",
-            command="ls -la",
-            execution_time_ms=150,
+            command_executed="ls -la",
             success=True,
         )
         mock_operator_command_service.execute_command.return_value = mock_result
@@ -321,11 +328,10 @@ class TestFileOperationTools:
         """Test file_create_on_operator tool processes payloads correctly."""
         # Mock successful file creation
         mock_result = FileEditResult(
-            operation="write",
+            operation=FileOperation.WRITE,
             file_path="/tmp/test.txt",
             success=True,
-            message="File created successfully",
-            size_bytes=100,
+            bytes_written=100,
         )
         mock_operator_command_service.execute_file_edit.return_value = mock_result
 
@@ -373,11 +379,10 @@ class TestFileOperationTools:
         """Test file_write_on_operator tool processes payloads correctly."""
         # Mock successful file write
         mock_result = FileEditResult(
-            operation="write",
+            operation=FileOperation.WRITE,
             file_path="/tmp/test.txt",
             success=True,
-            message="File written successfully",
-            size_bytes=200,
+            bytes_written=200,
         )
         mock_operator_command_service.execute_file_edit.return_value = mock_result
 
@@ -425,10 +430,9 @@ class TestFileOperationTools:
         """Test file_read_on_operator tool processes payloads correctly."""
         # Mock successful file read
         mock_result = FsReadToolResult(
-            file_path="/tmp/test.txt",
+            path="/tmp/test.txt",
             content="File content here",
-            size_bytes=100,
-            encoding="utf-8",
+            size=100,
             success=True,
         )
         mock_operator_command_service.execute_file_edit.return_value = mock_result
@@ -476,11 +480,10 @@ class TestFileOperationTools:
         """Test file_update_on_operator tool processes payloads correctly."""
         # Mock successful file update
         mock_result = FileEditResult(
-            operation="replace",
+            operation=FileOperation.REPLACE,
             file_path="/tmp/test.txt",
             success=True,
-            message="File updated successfully",
-            size_bytes=150,
+            bytes_written=150,
         )
         mock_operator_command_service.execute_file_edit.return_value = mock_result
 
@@ -542,14 +545,14 @@ class TestFileSystemTools:
         mock_result = FsListToolResult(
             path="/home/user",
             entries=[
-                {
-                    "name": "file1.txt",
-                    "path": "/home/user/file1.txt",
-                    "is_dir": False,
-                    "size": 100,
-                    "mode": "0644",
-                    "mod_time": 1672531200,  # 2026-01-01T00:00:00Z as timestamp
-                }
+                FsListEntry(
+                    name="file1.txt",
+                    path="/home/user/file1.txt",
+                    is_dir=False,
+                    size=100,
+                    mode="0644",
+                    mod_time=1672531200,
+                )
             ],
             success=True,
         )
@@ -597,10 +600,9 @@ class TestFileSystemTools:
         """Test read_file_content tool processes payloads correctly."""
         # Mock successful file content read
         mock_result = FsReadToolResult(
-            file_path="/tmp/test.txt",
+            path="/tmp/test.txt",
             content="File content here",
-            size_bytes=100,
-            encoding="utf-8",
+            size=100,
             success=True,
         )
         mock_operator_command_service.execute_file_edit.return_value = mock_result
@@ -651,11 +653,11 @@ class TestFileSystemTools:
             success=True,
             file_path="/tmp/test.txt",
             history=[
-                {
-                    "commit_hash": "abc123",
-                    "timestamp": "2026-01-01T00:00:00Z",
-                    "message": "Initial commit",
-                }
+                FileHistoryEntry(
+                    commit_hash="abc123",
+                    timestamp="2026-01-01T00:00:00Z",
+                    message="Initial commit",
+                )
             ],
         )
         mock_operator_command_service.execute_fetch_file_history.return_value = mock_result
@@ -703,10 +705,9 @@ class TestFileSystemTools:
         """Test restore_file tool processes payloads correctly."""
         # Mock successful file restore
         mock_result = FileEditResult(
-            operation="replace",
+            operation=FileOperation.REPLACE,
             file_path="/tmp/test.txt",
             success=True,
-            message="File restored successfully",
             bytes_written=100,
         )
         mock_operator_command_service.execute_file_edit.return_value = mock_result
@@ -757,18 +758,18 @@ class TestFileSystemTools:
         mock_result = FetchFileDiffToolResult(
             success=True,
             diffs=[
-                {
-                    "id": "diff123",
-                    "file_path": "/tmp/test.txt",
-                    "timestamp": "2026-01-01T00:00:00Z",
-                    "operation": "modify",
-                    "ledger_hash_before": "hash123",
-                    "ledger_hash_after": "hash456",
-                    "diff_stat": "1 file changed",
-                    "diff_content": "--- a/test.txt\n+++ b/test.txt\n@@ -1 +1 @@\n-old\n+new",
-                    "diff_size": 20,
-                    "operator_session_id": "session-789",
-                }
+                FileDiffEntry(
+                    id="diff123",
+                    file_path="/tmp/test.txt",
+                    timestamp="2026-01-01T00:00:00Z",
+                    operation="modify",
+                    ledger_hash_before="hash123",
+                    ledger_hash_after="hash456",
+                    diff_stat="1 file changed",
+                    diff_content="--- a/test.txt\n+++ b/test.txt\n@@ -1 +1 @@\n-old\n+new",
+                    diff_size=20,
+                    operator_session_id="session-789",
+                )
             ],
             total=1,
         )
@@ -823,7 +824,11 @@ class TestFileSystemTools:
             path="/home/user",
             pattern="test",
             matches=[
-                {"path": "/home/user/file1.txt", "line_number": 10, "content": "test line content"}
+                FsGrepMatch(
+                    path="/home/user/file1.txt",
+                    line_number=10,
+                    content="test line content",
+                )
             ],
             total_matches=1,
             truncated=False,
@@ -888,9 +893,9 @@ class TestNetworkSearchTools:
         mock_result = PortCheckToolResult(
             host="example.com",
             port=443,
-            protocol="tcp",
+            protocol=NetworkProtocol.TCP,
             is_open=True,
-            response_time_ms=50,
+            latency_ms=50,
             success=True,
         )
         mock_operator_command_service.execute_port_check.return_value = mock_result
@@ -940,12 +945,11 @@ class TestNetworkSearchTools:
         mock_result = SearchWebResult(
             query="Kubernetes troubleshooting",
             results=[
-                {
-                    "title": "Kubernetes Troubleshooting Guide",
-                    "url": "https://kubernetes.io/docs/tasks/debug-application-cluster/",
-                    "snippet": "Common issues and solutions for Kubernetes clusters",
-                    "relevance_score": 0.95,
-                }
+                WebSearchResultItem(
+                    title="Kubernetes Troubleshooting Guide",
+                    link="https://kubernetes.io/docs/tasks/debug-application-cluster/",
+                    snippet="Common issues and solutions for Kubernetes clusters",
+                )
             ],
             total_results="1",
             success=True,
@@ -987,7 +991,6 @@ class TestNetworkSearchTools:
     ):
         """Test g8e_web_search tool handles unavailable provider correctly."""
         # Create tool service without web search provider
-        from tests.fakes.tool_helpers import create_tool_service_fake
 
         tool_service_no_search = create_tool_service_fake(
             web_search_provider=None, auto_approve=True
@@ -1035,10 +1038,9 @@ class TestPermissionSessionTools:
         """Test grant_intent_permission tool processes payloads correctly."""
         # Mock successful intent grant
         mock_result = IntentPermissionResult(
-            intent="file_access",
-            granted=True,
-            reason="User explicitly granted permission",
-            expires_at=None,
+            intent_name="file_access",
+            approved=True,
+            message="User explicitly granted permission",
             success=True,
         )
         mock_operator_command_service.execute_intent_permission_request.return_value = mock_result
@@ -1084,9 +1086,8 @@ class TestPermissionSessionTools:
         """Test revoke_intent_permission tool processes payloads correctly."""
         # Mock successful intent revoke
         mock_result = IntentPermissionResult(
-            intent="s3_read",
-            granted=False,
-            reason="Permission revoked by user",
+            revoked_intents=["s3_read"],
+            message="Permission revoked by user",
             success=True,
         )
         mock_operator_command_service.execute_intent_revocation.return_value = mock_result
@@ -1172,12 +1173,11 @@ class TestToolIntegration:
         mock_result = CommandExecutionResult(
             success=True,
             execution_id="exec-123",
-            status="completed",
+            execution_status=ExecutionStatus.COMPLETED,
             exit_code=0,
-            stdout="Test output",
+            output="Test output",
             stderr="",
-            command="echo test",
-            execution_time_ms=100,
+            command_executed="echo test",
         )
         mock_operator_command_service.execute_command.return_value = mock_result
 

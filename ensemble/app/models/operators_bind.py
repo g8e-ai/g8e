@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from .base import G8eBaseModel, Field
+from .base import Field, G8eBaseModel
 
 
 class BindOperatorsRequest(G8eBaseModel):
@@ -23,7 +23,7 @@ class BindOperatorsResponse(G8eBaseModel):
     bound_operator_ids: list[str] = Field(default_factory=list)
     failed_operator_ids: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
-    statusCode: int = Field(default=200)
+    status_code: int = Field(default=200, alias="statusCode")
     error: str | None = Field(default=None)
 
 
@@ -42,5 +42,5 @@ class UnbindOperatorsResponse(G8eBaseModel):
     unbound_operator_ids: list[str] = Field(default_factory=list)
     failed_operator_ids: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
-    statusCode: int = Field(default=200)
+    status_code: int = Field(default=200, alias="statusCode")
     error: str | None = Field(default=None)

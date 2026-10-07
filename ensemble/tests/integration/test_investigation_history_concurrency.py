@@ -75,18 +75,17 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(
 
     # Launch 20 concurrent appends
     num_concurrent = 20
-    tasks = []
-    for i in range(num_concurrent):
-        tasks.append(
-            service.add_chat_message(
-                investigation_id=investigation_id,
-                sender="user.chat",
-                content=f"Concurrent message {i}",
-                metadata=ConversationMessageMetadata(
-                    event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER
-                ),
-            )
+    tasks = [
+        service.add_chat_message(
+            investigation_id=investigation_id,
+            sender="user.chat",
+            content=f"Concurrent message {i}",
+            metadata=ConversationMessageMetadata(
+                event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER
+            ),
         )
+        for i in range(num_concurrent)
+    ]
 
     await asyncio.gather(*tasks)
 

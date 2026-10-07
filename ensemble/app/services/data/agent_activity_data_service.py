@@ -11,9 +11,9 @@ from uuid import uuid4
 from app.clients.governance_client import GovernanceClient
 from app.constants import (
     DB_COLLECTION_AGENT_ACTIVITY_METADATA,
+    G8EE_COMPONENT,
     ErrorCode,
     EventType,
-    G8EE_COMPONENT,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.agent_activity import AgentActivityMetadata
@@ -92,9 +92,7 @@ class AgentActivityDataService:
             return metadata
 
         except Exception as e:
-            logger.error(
-                "Failed to record agent activity metadata %s: %s", metadata.id, e, exc_info=True
-            )
+            logger.exception("Failed to record agent activity metadata %s: %s", metadata.id, e)
             raise DatabaseError(
                 message=f"Failed to record agent activity metadata: {e}",
                 code=ErrorCode.DB_WRITE_ERROR,
@@ -129,9 +127,7 @@ class AgentActivityDataService:
             return AgentActivityMetadata.model_validate(doc_data)
 
         except Exception as e:
-            logger.error(
-                "Failed to retrieve agent activity metadata %s: %s", activity_id, e, exc_info=True
-            )
+            logger.exception("Failed to retrieve agent activity metadata %s: %s", activity_id, e)
             raise DatabaseError(
                 message=f"Failed to retrieve agent activity metadata: {e}",
                 code=ErrorCode.DB_QUERY_ERROR,
@@ -162,7 +158,7 @@ class AgentActivityDataService:
         Returns:
             List of matching activity metadata records
         """
-        filters = []
+        filters: list[FieldFilter] = []
 
         if user_id:
             filters.append(FieldFilter(field="user_id", op="==", value=user_id))
@@ -186,7 +182,7 @@ class AgentActivityDataService:
             return [AgentActivityMetadata.model_validate(data) for data in results]
 
         except Exception as e:
-            logger.error("Failed to query agent activity metadata: %s", e, exc_info=True)
+            logger.error("Failed to query agent activity metadata: %s", e)
             raise DatabaseError(
                 message=f"Failed to query agent activity metadata: {e}",
                 code=ErrorCode.DB_QUERY_ERROR,
@@ -225,9 +221,7 @@ class AgentActivityDataService:
             logger.info("Agent activity metadata deleted: %s", activity_id)
 
         except Exception as e:
-            logger.error(
-                "Failed to delete agent activity metadata %s: %s", activity_id, e, exc_info=True
-            )
+            logger.exception("Failed to delete agent activity metadata %s: %s", activity_id, e)
             raise DatabaseError(
                 message=f"Failed to delete agent activity metadata: {e}",
                 code=ErrorCode.DB_WRITE_ERROR,

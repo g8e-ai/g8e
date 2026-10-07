@@ -3,8 +3,8 @@ doc_id: codemap
 title: g8e Code Map
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - cmd/g8e/main.go
   - internal/cli/cmd/main.go
@@ -96,14 +96,14 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-PROTO-01 | Root `buf.gen.yaml` MUST be described as the Go and Markdown protobuf generator only (`make proto-go`, output beside `protocol/proto/g8e/` and under `protocol/docs/reference/api/`). Python stubs MUST be attributed to `protocol/python/scripts/generate_protos.py` (`make proto-python`, modules under `protocol/python/g8e/`). TypeScript stubs MUST be attributed to `protocol/node/buf.gen.yaml` (`make proto-node`, output under `protocol/node/src/gen/`). `make proto-generate` runs Go, Python, TypeScript, and `proto-lockfiles`. MUST NOT attribute Python or TypeScript generation to the root `buf.gen.yaml`. Hand-editing generated output is INV-GEN-01. |
+| INV-PROTO-01 | Root `buf.gen.yaml` MUST be described as the Go and Markdown protobuf generator only (`make proto-go`, output beside `protocol/proto/g8e/` and under `protocol/docs/reference/api/`). Python stubs MUST be attributed to `protocol/python/scripts/generate_protos.py` (`make proto-python`, modules under `protocol/python/g8e/`). TypeScript stubs MUST be attributed to `protocol/node/buf.gen.yaml` (`make proto-node`, output under `protocol/node/src/gen/`). `make proto-python` also runs `protocol/python/scripts/generate_enum_stubs.py`, which writes the `protocol/python/g8e/enums.pyi` type stub; `make constants-check` runs it with `--check`. `make proto-generate` runs Go, Python, TypeScript, and `proto-lockfiles`. MUST NOT attribute Python or TypeScript generation to the root `buf.gen.yaml`. Hand-editing generated output is INV-GEN-01. |
 
 ### Test commands (`INV-TESTMAP`)
 
 | ID | Rule |
 | --- | --- |
 | INV-TESTMAP-01 | This file maps test commands to tiers and directories. Selection, fixtures, `testutil` path rules, race, coverage, timeouts, and CI MUST be taken from [Testing](tests.md). Platform suites still enter through `./g8e test ...` or the owning Makefile target (INV-TEST-01). |
-| INV-TESTMAP-02 | `./g8e test e2e-full` MUST be described from `internal/cli/cmd/test/test.go`: it passes Compose profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds `cross-enrollment` (`constants.DockerCrossEnrollProfile`) when `--cross-enrollment` is set, then runs the same `go test` arguments as `./g8e test e2e`. `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Named `profiles:` keys are `cross-enrollment` and `g8ellama`. Unprofiled services start on `docker compose up -d`. Procedure detail is INV-TEST-12 and INV-TEST-13. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist in `internal/constants/paths.go`. |
+| INV-TESTMAP-02 | `./g8e test e2e-docker` MUST be described from `internal/cli/cmd/test/test.go`: it passes Compose profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds `cross-enrollment` (`constants.DockerCrossEnrollProfile`) when `--cross-enrollment` is set, then runs the same `go test` arguments as `./g8e test e2e`. `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Named `profiles:` keys are `cross-enrollment` and `g8ellama`. Unprofiled services start on `docker compose up -d`. Procedure detail is INV-TEST-12 and INV-TEST-13. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist in `internal/constants/paths.go`. |
 
 ## Owned surfaces
 
@@ -115,8 +115,9 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `internal/cli/` | CLI commands, API client, authentication, configuration, frontend-origin checks, process management, foreground Gateway and Operator startup, SSE, streams, platform helpers, the TUI, and the onboarding wizard. |
 | `internal/services/` | Gateway, outbound Operator, governance, transport, persistence, execution, evaluation, compliance, inference, public disclosure, and supporting services. |
 | `internal/adapters/` | Optional external adapters. The current adapter is Anduril Lattice. |
-| `internal/constants/` | Go constants for paths, errors, protocol identifiers, permissions, runtime behavior, and Docker profile name constants. |
+| `internal/constants/` | Go constants for paths, errors, protocol identifiers, permissions, Operator roles (`OperatorRoles`), runtime behavior, and Docker profile name constants. |
 | `internal/config/`, `internal/models/`, `internal/paths/` | Typed configuration, internal service models, and runtime paths derived from the project root. |
+| `internal/netutil/` | Wildcard TCP port availability probes shared by configuration and process startup; Windows binds without listening to avoid firewall prompts. |
 | `internal/governance/` | Envelope hash helpers over the canonical protobuf `GovernanceEnvelope`. L1 through L5 services live under `internal/services/governance/`. |
 | `internal/ollama/` | Minimal HTTP client for Ollama model-maintenance endpoints. |
 | `internal/infra/cloudflaredns/` | Cloudflare DNS client. |
@@ -129,18 +130,19 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `console/` | Gateway-embedded browser console (React + TypeScript). Docs: [Console Architecture & Development](../architecture/console.md). |
 | `g8e-adapter/` | Audited browser adapter and deterministic contract pack for generated observe frontends. |
 | `evaluation-explorer/` | Evaluation explorer SPA; its build is embedded in `internal/services/gateway/explorer/static`. |
-| `demos/` | Healthcare, finance, DHS, and FedRAMP demo environments. Index: [Demo index](../../demos/README.md). |
+| `examples/` | Runnable Go and Python platform examples, external console app, and MCP client configuration templates. |
+| `deploy/` | Runtime-only Operator container image and Gateway preflight assets (`deploy/operator-runtime/`). `scripts/build-operator-image.sh` assembles the build context for `operator deploy --docker-context`. |
+| `release-evidence/` | Immutable release compliance evidence bundles and signatures. |
 | `docs/` | Architecture, guides, references, developer docs, and release notes. |
-| `scripts/` | Validation, generation, release, and build support scripts. |
+| `scripts/` | Validation, generation, release, onboarding, and build support scripts. `scripts/full.py` is the host launcher behind `make full`. `scripts/configure-gateway-lan.ps1` is the Windows-to-WSL Gateway LAN helper. `scripts/ci/` and `scripts/tests/` hold the onboarding smoke workflow and script unit tests. Catalog: [Automation Scripts](../architecture/scripts.md). |
 | `website/` | Static site generator and Cloudflare Worker packaging. Source overview is the root `README.md`. |
 | `third_party/` | Vendored inputs generated into internal adapters. Lattice protobuf provenance is under `third_party/anduril/`. |
 | `vendor/` | Third-party Go modules. Not a g8e product owner. |
 | `Makefile`, `Dockerfile`, `docker-compose.yml` | Repository build, image, and Compose orchestration. |
-| `ROADMAP.md` | Public roadmap for the line. Not a runtime owner. |
 
 ### Process entry
 
-The executable starts in `cmd/g8e/main.go`. Command registration and process-level error handling live in `internal/cli/cmd/main.go`. `NewRootCmd` registers groups in this order: `gw`, `auth`, `mcp`, `operator`, `vault`, `test`, `demos`, `docker`, `audit`, `report`, `public`, `swagger`, `tui`, `version`, `compliance`, `eval`.
+The executable starts in `cmd/g8e/main.go`. Command registration and process-level error handling live in `internal/cli/cmd/main.go`. `NewRootCmd` registers the public command groups; confirm the current inventory with `./g8e --help` rather than duplicating its ordering here.
 
 | Path | Owns |
 | --- | --- |
@@ -161,41 +163,43 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | `gw` | `gw` | `internal/cli/cmd/gw/` | `gateway` | Gateway lifecycle, data, security, and tunnel commands. |
 | `auth` | `authcmd` | `internal/cli/cmd/auth/` | | User and platform enrollment, sessions, and approvals. |
 | `mcp` | `mcp` | `internal/cli/cmd/mcp/` | | MCP stdio serving and agent integration. |
-| `operator` | `operatorcmd` | `internal/cli/cmd/operator/` | `operators` | Operator discovery, startup, deploy, copy, and streams. |
+| `operator` | `operatorcmd` | `internal/cli/cmd/operator/` | `operators` | Operator `list`, `show`, `bind`, governed `run` and `stop`, foreground `start`, `reset-identity`, binary copy (`cp`, `scp`), streams, and fleet `deploy`. Local and SSH deploy live in `operator_deploy.go`; Docker-context deploy lives in `operator_deploy_docker.go`. Procedure: [Connect Many Operators](../guides/connect_operator_to_gateway.md#connect-many-operators). |
 | `vault` | `vaultcmd` | `internal/cli/cmd/vault/` | | Local vault init, unlock, rekey, status, reset, export, and import. |
-| `test` | `testcmd` | `internal/cli/cmd/test/` | | Unit, integration, e2e, e2e-full, coverage, lint, chaos, summary, and `public-loop`. |
-| `demos` | `demos` | `internal/cli/cmd/demos/` | `demo` | Demo environment and scenario lifecycle. |
+| `test` | `testcmd` | `internal/cli/cmd/test/` | | Unit, integration, e2e, e2e-docker, coverage, lint, chaos, summary, and `public-loop`. |
 | `docker` | `docker` | `internal/cli/cmd/docker/` | | Unified Compose stack lifecycle. |
-| `ensemble` | `ensemblecmd` | `internal/cli/cmd/ensemble/` | | g8ee service lifecycle in the unified Compose stack. |
-| `audit` | `audit` | `internal/cli/cmd/audit/` | | Receipt, event, summary, export, and report queries against a running Gateway. |
+| `ensemble` | `ensemble` | `internal/cli/cmd/ensemble/` | | Local host Python g8ee service lifecycle (start, stop, restart, status, logs, and reset-identity). |
+| `audit` | `audit` | `internal/cli/cmd/audit/` | | Receipt, event, summary, export, report, and verify queries against a running Gateway. |
 | `report` | `report` | `internal/cli/cmd/report/` | | Deterministic CSV evidence generation and offline verification. |
 | `public` | `public` | `internal/cli/cmd/public/` | | Public spectator feed. `restore` is constructed in the eval package (INV-PKG-02). |
 | `swagger` | `swagger` | `internal/cli/cmd/swagger/` | | OpenAPI generation, serving, and validation. |
 | `tui` | `tuicmd` | `internal/cli/cmd/tui/` | | Tactical Governance Console. |
 | `version` | `version` | `internal/cli/cmd/version/` | | Build metadata. Optional FIPS module status is `./g8e version --help`. |
-| `compliance` | `compliancecmd` | `internal/cli/cmd/compliance/` | | `ksi`, `ksi-history`, `overlay`, `demo-run`, `release-evidence`, `release-prepare`, `evidence`, `evidence-graph`, and `report`. |
-| `eval` | `eval` | `internal/cli/cmd/eval/` | `evals` | `models`, `campaigns`, `runs`, `rollout`, `formations`, `gates`, `boundary`, `suites`, `backup`, and `restore`. Also constructs `public restore`. |
+| `compliance` | `compliancecmd` | `internal/cli/cmd/compliance/` | | `ksi`, `ksi-history`, `overlay`, `release-evidence`, `release-prepare`, `evidence`, `evidence-graph`, and `report`. |
+| `eval` | `eval` | `internal/cli/cmd/eval/` | | `models`, `campaigns`, `runs`, `rollout`, `formations`, `gates`, `boundary`, `suites`, `backup`, and `restore`. Also constructs `public restore`. |
 
 Files at `internal/cli/cmd/` root are the root command, its tests, and shared file-service and config-load tests. Factory-error tests live beside the group they cover (`factory_error_<group>_test.go`). The factory rule is INV-FS-08.
 
 | Path | Package | Owns |
 | --- | --- | --- |
-| `internal/cli/cmd/shared/` | `shared` | Config load, `NewFileSvc` (`fs.NewRuntimeFileService`), source-root lookup, command context, and version-info context. Exists so group packages do not import the root `cmd` package. |
+| `internal/cli/cmd/shared/` | `shared` | Config load, `NewFileSvc` (`fs.NewRuntimeFileService`), source-root lookup, command context, version-info context, and destructive-action confirmation with pre-clean backups. Exists so group packages do not import the root `cmd` package. |
 | `internal/cli/cmd/gwremote/` | `gwremote` | Gateway HTTP publication, model provenance, provider observation, and health hook used by `eval`, `public`, and `docker`. Exists so those packages do not import `gw`. |
 | `internal/cli/cmd/cmdtest/` | `cmdtest` | Cross-package test helpers. Not a Cobra group. |
-| `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/verify` and the harness `agent-launcher-config` scenario. |
+| `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/show/verify`. |
 | `internal/cli/api/` | | Typed CLI HTTP client. |
-| `internal/cli/auth/` | | CLI enrollment, credential staging, key generation, passkey registration, trust bundles, and mTLS clients. |
+| `internal/cli/auth/` | | CLI enrollment, credential staging, key generation, passkey registration, trust bundles, and mTLS clients. `approval.go` owns the L3 approval page URL and status verification shared by `auth approve` and the TUI; `platform_enrollment.go` owns the enrollment fingerprint, issued-identity, and response helpers shared by `auth enroll` and the TUI; `operator_binding.go` owns bind/unbind response validation shared by the CLI and TUI. |
 | `internal/cli/browserorigin/` | | Frontend-origin validation and normalization. |
 | `internal/cli/config/` | | CLI configuration resolution and endpoint overrides. |
 | `internal/cli/frontendverify/` | | Frontend connection and running-Gateway verification. |
-| `internal/cli/operator/` | | Operator discovery and management helpers. |
+| `internal/cli/gateway/` | | Shared Gateway inventory helpers, including completed platform-enrollment filtering used by `gw status` and the TUI status view. |
+| `internal/cli/identityreset/` | `identityreset` | Workload enrollment identity removal for operator and ensemble (`Reset`). Consumed by `operator reset-identity` and `ensemble reset-identity`. |
+| `internal/cli/mcptransport/` | `mcptransport` | Standard JSON-RPC 2.0 stdio framing, dispatch handler, and transport for CLI MCP serving (`mcp stdio`). |
+| `internal/cli/operator/` | | Operator discovery and management helpers: governed command dispatch types, the inventory helper `IsConnected`, the stop helpers (`CheckStoppable`, `NewStopRequest`, `DecodeStopResponse`) shared by `operator stop` and the TUI, and the normalized heartbeat parser shared by `operator show` and the TUI. |
 | `internal/cli/output/` | | Human-readable and JSON command output. |
 | `internal/cli/platform/` | | Cross-platform process, browser, and system trust operations. |
 | `internal/cli/serve/` | | Foreground Gateway and Operator runtimes. See [Process entry](#process-entry). |
-| `internal/cli/sse/` | | CLI SSE client. |
-| `internal/cli/stream/` | | Local and SSH streams for Operator management. |
-| `internal/cli/tui/` | | Tactical Governance Console implementation. |
+| `internal/cli/sse/` | | CLI SSE client: reconnect with capped backoff, connect/disconnect callbacks, and a stop on CLI session rejection. |
+| `internal/cli/stream/` | | Local and SSH streams for Operator management, with per-platform proxy-command and transient-network-error helpers. |
+| `internal/cli/tui/` | | Tactical Governance Console implementation. Every TUI Gateway request lives in `gateway.go` and mirrors the CLI command that makes it. |
 | `internal/cli/wizard/` | | Interactive Gateway setup flow. |
 
 ### Runtime modes
@@ -205,16 +209,16 @@ Mode dependency types live in `internal/services/pubsub/mode_deps.go`. Wiring ru
 | Mode | Type | Path | Owns |
 | --- | --- | --- | --- |
 | Gateway HTTP and control plane | `gateway.GatewayModeService` | `internal/services/gateway/gateway_service.go` | Policy decision point: HTTP, PKI, persistence, MCP, pub/sub, and governance wiring. Builder assembles dependencies before start. |
-| Embedded Operator substrate | `embedded.Service` | `internal/services/gateway/embedded/operator.go` | In-process operator document: `embedded.New`, `RegisterPending`, `Claim`. Not the outbound runtime. |
+| Embedded Operator substrate | `embedded.Service` | `internal/services/gateway/embedded/operator.go` | In-process operator document: `embedded.New`, `RegisterPending`, `Claim`. Not the outbound runtime. The Gateway builder wires enabled Gateway-local role handlers through `pubsub.NewRoleHandlers`. |
 | Outbound Operator | `services.G8eoService` | `internal/services/g8eo.go` | Authenticated connection to the Gateway and approved work on the Operator host. Started from `internal/cli/serve/operator.go`. Calls `pubsub.NewOutboundModeDeps`. MUST NOT construct `mcp.GatewayService` (INV-BOUND-04). |
 
 | Deps type | Adds beyond `GovernanceCoreDeps` |
 | --- | --- |
-| `pubsub.GovernanceCoreDeps` | Shared replay store, state-root provider, transaction audit, L3 notary, signer store, and L1 doctrine. |
+| `pubsub.GovernanceCoreDeps` | Shared execution target, replay store, state-root provider, transaction audit, L3 notary, signer store, and L1 doctrine. |
 | `pubsub.GatewayModeDeps` | Governed document store, consensus policy store, field reader, consensus service, platform enrollment, and posture. |
 | `pubsub.OutboundModeDeps` | Nothing. The type embeds only the shared core. |
 
-Outbound groups owned by `G8eoService`: `auth.BootstrapService` and mTLS pub/sub; `ExecutionService` and `FileEditService`; `CanonicalDBService` plus vault, execution vault, suspended transactions, replay, SQL audit, and optional Git ledger; local L1 doctrine, outbound L3 notary, L4, and L5; optional Lattice adapter on the same governed path.
+Outbound groups owned by `G8eoService`: `auth.BootstrapService` and mTLS pub/sub; `ExecutionService` and `FileEditService`; `CanonicalDBService` plus vault, execution vault, suspended transactions, replay, SQL audit, and optional Git ledger; local L1 doctrine, outbound L3 notary, L4, and L5; enabled inference, provider-boundary observer, and model-provenance role handlers from `pubsub.NewRoleHandlers`; optional Lattice adapter on the same governed path.
 
 Compose profile assignment is INV-TESTMAP-02. Service names are the Compose keys:
 
@@ -239,7 +243,7 @@ Mutations that traverse a g8e ingress use a typed `GovernanceEnvelope` (INV-BOUN
 
 ### Gateway HTTP boundary
 
-`gateway.HTTPHandler` in `internal/services/gateway/gateway_http.go` is the routing shell. `initHTTPHandler` in `gateway_service.go` builds two listeners:
+`gateway.HTTPHandler` in `internal/services/gateway/gateway_http.go` is the routing shell. `initHTTPHandler` in `gateway_service.go` builds two listeners, both bound to `Gateway.ListenHost` (empty binds all interfaces):
 
 | Field | Listener | Handler | Role |
 | --- | --- | --- | --- |
@@ -308,7 +312,7 @@ Route and auth inventories stay in the router and `gateway_auth.go`. This map do
 | `internal/services/gateway/` | Gateway HTTP and control plane, including the child packages in the HTTP boundary table. |
 | `internal/services/gateway/embedded/` | In-process Operator substrate (INV-MODE-02). |
 | `internal/services/governance/` | L1, L3, L4, L5, governance interfaces, state-root providers, signer stores, and public-key export. |
-| `internal/services/inference/` | Inference dispatch (`inference/dispatch/`), provider backends, and attempt storage. |
+| `internal/services/inference/` | Inference dispatch (`internal/services/inference/dispatch/`), provider backends, and attempt storage. |
 | `internal/services/inference/provider_observer/` | Provider-boundary GPU and RAM sampling. |
 | `internal/services/inference/model_provenance/` | Storage-side model weight attestation. |
 | `internal/services/keystore/` | Encrypted key storage for Gateway secrets and PKI. |
@@ -317,7 +321,7 @@ Route and auth inventories stay in the router and `gateway_auth.go`. This map do
 | `internal/services/network/` | Network identity detection and endpoint construction. |
 | `internal/services/operatorcapability/` | Role selection for provider-boundary observer, provenance operator, inference, and governed data operators, plus Ollama command construction. |
 | `internal/services/publicdisclosure/` | Validation of public-disclosure records. Gateway publisher and mirror orchestration stay in `internal/services/gateway/`. |
-| `internal/services/pubsub/` | Gateway and Operator pub/sub clients, command dispatch, results, heartbeats, and mode dependency types. |
+| `internal/services/pubsub/` | Gateway and Operator pub/sub clients, command dispatch, results, heartbeats, mode dependency types, and the role handlers (`NewRoleHandlers`) shared by the Gateway-local executor and the outbound Operator. |
 | `internal/services/reporting/` | Deterministic CSV evidence reports and verification. Exposed by `g8e report`. |
 | `internal/services/scrubbing/` | Sensitive-value detection, tokenization, and rehydration. |
 | `internal/services/sqliteutil/` | Shared SQLite configuration and connection helpers. |
@@ -345,6 +349,7 @@ Schemas live under `protocol/proto/g8e/`. Wire requirements: [Protocol Specifica
 | Markdown under `protocol/docs/reference/api/` | Root `buf.gen.yaml` (`protoc-gen-doc`) | `make proto-go` |
 | Python modules under `protocol/python/g8e/` | `protocol/python/scripts/generate_protos.py` | `make proto-python` |
 | TypeScript under `protocol/node/src/gen/` | `protocol/node/buf.gen.yaml` | `make proto-node` |
+| Python enum type stub `protocol/python/g8e/enums.pyi` | `protocol/python/scripts/generate_enum_stubs.py` | `make proto-python` (verified by `make constants-check`) |
 | Ensemble `uv.lock` after the Python package changes | `make proto-lockfiles` | `make proto-generate` runs all four |
 
 | Path | Owns |
@@ -355,9 +360,10 @@ Schemas live under `protocol/proto/g8e/`. Wire requirements: [Protocol Specifica
 | `protocol/conformance/` | Cross-language constants, model, and hash parity tests. |
 | `protocol/python/` | Python protocol package. |
 | `protocol/node/` | TypeScript protocol package. |
-| `examples/` | Runnable Go/Python examples, external-console app, and MCP client configuration templates (demo environments stay in `demos/`). |
+| `examples/` | Runnable Go/Python examples, external-console app, and MCP client configuration templates. |
 | `protocol/docs/` | Protocol specifications and generated API references. |
 | `internal/tools/constgen/` | Regenerates event and action-type constants from `protocol/constants/events.json` and `protocol/constants/status.json`. `make constants-generate` writes. `make constants-check` verifies. Outputs include `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `console/src/generated/events.ts`, and `protocol/python/g8e/_data/events.json`. |
+| `protocol/constants/agenttools/` | Frozen agent tool schemas and model guidance vectors. Regenerated from g8ee via `make agent-tool-registry-generate` and checked via `make agent-tool-registry-check`. |
 
 ### Adapters and native tools
 
@@ -383,19 +389,18 @@ Evidence scope and signed artifacts are owned by the [Release Process](release_p
 | --- | --- | --- |
 | Ensemble (g8ee) | `ensemble/app/main.py` | Application code in `ensemble/app/`. Tests in `ensemble/tests/`. Docs: [g8ee index](../ensemble/index.md). |
 | Console | `console/src/main.tsx` | React + TypeScript SPA; the Gateway serves its embedded build (`internal/services/gateway/console/`) at `/console/`. The browser calls only the Gateway. Tests in `console/src/**/*.test.ts(x)` and `console/tests/`. Docs: [Console Architecture & Development](../architecture/console.md). |
-| Demos | `demos/` | Containerized services and verification scripts. CLI: `internal/cli/cmd/demos/`. Reference client: `internal/tools/agent_harness/`. |
 | Website | `website/` | Renders the root `README.md`. `make website-test`, `make website-build`. Generation policy: [Documentation Guide](docs.md#generated-outputs-inv-doc-gen). |
 
 ### Test map
 
-Depth is [Testing](tests.md). `e2e-full` and Compose profiles: INV-TESTMAP-02, INV-TEST-12, INV-TEST-13.
+Depth is [Testing](tests.md). `e2e-docker` and Compose profiles: INV-TESTMAP-02, INV-TEST-12, INV-TEST-13.
 
 | Command | Tier | Where the work lives |
 | --- | --- | --- |
 | `./g8e test unit` | 1 | Delegates to `make test-unit` by default; supports `--pkg` and `--run` for targeted testing. Go tests sit beside packages. `make test-unit` depends on `constants-check`. |
 | `./g8e test integration` | 2 | `integration` build tag. Cross-package suites in `test/`. Reusable setup in `test/fixtures/`. |
 | `./g8e test e2e` | 3 | `e2e` build tag. Tests in `test/e2e/`. Expects an already running platform. |
-| `./g8e test e2e-full` | 3 | Same `go test` arguments as `e2e`, wrapped in `docker compose up -d` and `docker compose down -v`. Profile names: INV-TESTMAP-02. |
+| `./g8e test e2e-docker` | 3 | Same `go test` arguments as `e2e`, wrapped in `docker compose up -d` and `docker compose down -v`. Profile names: INV-TESTMAP-02. |
 | `./g8e test coverage` | | Coverage entry in `internal/cli/cmd/test/test.go`. Report layout: [Testing](tests.md). |
 | `./g8e test lint` | | CLI lint entry. Repository lint target is `make lint`. |
 | `./g8e test chaos` | | Chaos command in `internal/cli/cmd/test/chaos.go`. Engine: `internal/tools/chaos/`. |
@@ -410,19 +415,20 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 
 | Target | Owns |
 | --- | --- |
-| `make build` | Host binary. Writes `bin/g8e-<os>-<arch>` and a repo-root copy. Depends on `explorer-embed`. |
+| `make build` | Host binary. Writes `bin/g8e-<os>-<arch>` and a repo-root copy. Refreshes the explorer and console embeds from `dist/` when built, else uses the committed embeds. |
 | `make proto-generate` | Go, Python, TypeScript, and Ensemble lockfile refresh (INV-PROTO-01). |
 | `make constants-generate`, `make constants-check` | `internal/tools/constgen` write and verify. |
-| `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `doctrines-validate`, `cosais-validate`, `swagger-generate`, then `golangci-lint run`. |
+| `make agent-tool-registry-generate`, `make agent-tool-registry-check` | `protocol/constants/agenttools/agent-tool-registry.json` export and verification from g8ee. |
+| `make explorer-catalog-generate`, `make explorer-catalog-check` | `evaluation-explorer/src/content/scenario-catalog.generated.ts` generation and verification via `internal/tools/explorercatalog`. |
+| `make lint` | `lint-no-embedded-newlines`, `vulncheck`, `doctrines-validate`, then `golangci-lint run`. |
 | `make test`, `make test-unit`, `make test-integration`, `make test-docker` | Platform tiers. `make test` is unit plus integration. |
 | `make protocol-python-build` | Python protocol distribution with bundled registries. |
 | `make console-test`, `make ensemble-test`, `make ensemble-test-external`, `make website-test` | Console, Ensemble, external-provider, and website checks. |
 | `make fips-build`, `make fips-verify` | Pinned Linux AMD64 FIPS variant. Reference: [FIPS 140-3](../reference/fips140-3.md). |
 | `make doctrines-validate` | Doctrine JSON under `protocol/constants/doctrine/`. |
-| `make cosais-validate` | `go run ./internal/tools/cosais_validator`. |
 | `make swagger-generate` | Gateway OpenAPI from Swagger annotations. |
 
-Other tools under `internal/tools/`: `agent_harness` (scripted Go governance client and demo scenarios, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `constgen`, `doctrine_validator`, `explorercatalog` (evaluation-explorer scenario catalog generation, see `make explorer-catalog`), `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
+Other tools under `internal/tools/`: `agent_harness` (shared typed Go client used by evaluation and integration workflows, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `constgen`, `explorercatalog` (evaluation-explorer scenario catalog generation, see `make explorer-catalog`), `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
 
 ## Procedures
 
@@ -473,12 +479,12 @@ make swagger-generate
 
 4. Do not hand-edit generated protobuf, constgen, or OpenAPI output (INV-GEN-01).
 
-### Confirm Compose profiles before describing `e2e-full`
+### Confirm Compose profiles before describing `e2e-docker`
 
 1. Read the live command text:
 
 ```bash
-./g8e test e2e-full --help
+./g8e test e2e-docker --help
 ```
 
 2. Read the profile slice in `internal/cli/cmd/test/test.go` and every `profiles:` key in `docker-compose.yml`.
@@ -497,7 +503,7 @@ make swagger-generate
 
 ## Links out
 
-- [Developer Guidelines](devs.md): coding invariants. CLI group placement is INV-CLI-01. Gateway construction is [Gateway governance construction](devs.md#gateway-governance-construction). `e2e-full` procedure is INV-TEST-12 and INV-TEST-13.
+- [Developer Guidelines](devs.md): coding invariants. CLI group placement is INV-CLI-01. Gateway construction is [Gateway governance construction](devs.md#gateway-governance-construction). `e2e-docker` procedure is INV-TEST-12 and INV-TEST-13.
 - [Testing](tests.md): tiers, fixtures, selection, race, coverage, and CI.
 - [Documentation Guide](docs.md): audit, catalog, style, generation, and this format.
 - [Release Process](release_process.md): versioning, native evaluation acceptance, and signed evidence.
@@ -506,4 +512,4 @@ make swagger-generate
 - [AI Agents and the g8e Governance Boundary](../architecture/agents.md): ingress limits.
 - [Protocol README](../../protocol/README.md) and [Protocol Specification](../../protocol/docs/spec.md).
 - [Getting Started](../guides/getting_started.md): deployment and enrollment.
-- Component indexes: [Ensemble](../ensemble/index.md), [Console](../architecture/console.md), [Demos](../../demos/README.md).
+- Component indexes: [Ensemble](../ensemble/index.md), [Console](../architecture/console.md).

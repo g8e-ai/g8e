@@ -388,7 +388,7 @@ func matchAssertionRequirements(assertion *compliancev1.ControlAssertionDefiniti
 	for _, required := range assertion.GetRequiredGraderRefs() {
 		matches := requirementMatches(nodes, func(node *EvidenceNode) (bool, bool) { return nodeMatchesGrader(node, required) }, "L2")
 		for idx := range matches {
-			matches[idx].isMetric = matches[idx].node.ArtifactType == ArtifactTypeEvalMetric || matches[idx].node.ArtifactType == ArtifactTypeDemoMetric
+			matches[idx].isMetric = matches[idx].node.ArtifactType == ArtifactTypeEvalMetric
 		}
 		requirements = append(requirements, matches)
 		available = append(available, matches...)
@@ -486,7 +486,7 @@ func sameAssertionSubject(left, right *EvidenceNode) bool {
 }
 
 func isMetricNode(node *EvidenceNode) bool {
-	return node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric
+	return node.ArtifactType == ArtifactTypeEvalMetric
 }
 
 func isObservationNode(node *EvidenceNode) bool {
@@ -571,7 +571,7 @@ func nodeMatchesEvidenceType(node *EvidenceNode, required string) bool {
 	case "state_observation":
 		return node.ArtifactType == ArtifactTypeEvalObservation
 	case "metric", "eval_metric":
-		return node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric
+		return node.ArtifactType == ArtifactTypeEvalMetric
 	default:
 		return false
 	}
@@ -593,13 +593,13 @@ func nodeMatchesVerifier(node *EvidenceNode, required *compliancev1.VersionedRef
 	case "state_observation":
 		return node.ArtifactType == ArtifactTypeStateObservation || node.ArtifactType == ArtifactTypeEvalObservation
 	case "eval_metric":
-		return node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric
+		return node.ArtifactType == ArtifactTypeEvalMetric
 	case "identity_attestation":
 		return node.ArtifactType == ArtifactTypeCustomerAttestation || node.ArtifactType == ArtifactTypeAssessorAttestation
 	case "build_provenance":
 		return node.ArtifactType == ArtifactTypeBuildAttestation
 	case "compliance_bundle":
-		return node.ArtifactType == ArtifactTypeDemoManifest || node.ArtifactType == ArtifactTypeEvalManifest
+		return node.ArtifactType == ArtifactTypeEvalManifest
 	default:
 		return false
 	}
@@ -609,7 +609,7 @@ func nodeMatchesGrader(node *EvidenceNode, required *compliancev1.VersionedRefer
 	if required == nil {
 		return false, false
 	}
-	if node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric {
+	if node.ArtifactType == ArtifactTypeEvalMetric {
 		return metricNodePassed(node, required)
 	}
 	switch required.GetId() {

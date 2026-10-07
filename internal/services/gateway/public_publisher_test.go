@@ -579,6 +579,41 @@ func TestRepairOutboxFromSnapshot_CompactsPrefixGap(t *testing.T) {
 	assert.Empty(t, repaired)
 }
 
+func TestRepairOutboxFromSnapshot_RetransmitsMultiRecordTail(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	var accepted atomic.Int64
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		accepted.Store(req.Batch.LastSequence)
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{
+			Accepted: true, HighWaterSequence: req.Batch.LastSequence, FeedChainHash: req.Batch.ContentHash,
+		}))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+	require.NoError(t, publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "first"})),
+	}))
+	batch, err := publisher.BuildBatch([]models.PublicFeedRecord{
+		makeProjectionRecord(t, 2, models.NewPublicFeedObject(map[string]string{"campaign_id": "second"})),
+		makeProjectionRecord(t, 3, models.NewPublicFeedObject(map[string]string{"campaign_id": "third"})),
+	})
+	require.NoError(t, err)
+	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch))
+	require.NoError(t, publisher.RepairOutboxFromSnapshot(context.Background()))
+	entries, err := publisher.outbox.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "the pending multi-record batch must survive recovery")
+	assert.Equal(t, int64(3), entries[0].Sequence)
+	require.NoError(t, publisher.RetransmitOutbox(context.Background()))
+	assert.Equal(t, int64(3), accepted.Load())
+	snapshot, err := publisher.GetSnapshot(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), snapshot.HighWaterSequence)
+	assert.Equal(t, batch.ContentHash, snapshot.FeedChainHash)
+}
+
 func TestRepairOutboxFromSnapshot_DropsDiscontinuousTail(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 

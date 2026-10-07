@@ -34,29 +34,27 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from app.models.base import ConfigDict, Field, PrivateAttr
-
 from app.constants import (
     ANTHROPIC_CLAUDE_HAIKU_4_5,
     ANTHROPIC_CLAUDE_OPUS_4_6,
     ANTHROPIC_CLAUDE_SONNET_4_6,
     ANTHROPIC_DEFAULT_MODEL,
+    GEMINI_3_1_FLASH_LITE,
     GEMINI_3_1_PRO,
     GEMINI_3_1_PRO_CUSTOM_TOOLS,
-    GEMINI_3_1_FLASH_LITE,
     GEMINI_3_FLASH,
-    OLLAMA_SYSTEM_ONE_NIMBLE,
     OLLAMA_DEFAULT_MODEL,
+    OLLAMA_GEMMA4_12B,
     OLLAMA_GEMMA4_E2B,
     OLLAMA_GEMMA4_E2B_G8EA,
     OLLAMA_GEMMA4_E4B,
-    OLLAMA_GEMMA4_12B,
-    OLLAMA_GRANITE4_2_8B,
     OLLAMA_GRANITE4_2_3B,
+    OLLAMA_GRANITE4_2_8B,
     OLLAMA_LLAMA_3_2_3B,
     OLLAMA_QWEN3_1_7B,
     OLLAMA_QWEN3_5_0_8B,
     OLLAMA_QWEN3_5_2B,
+    OLLAMA_SYSTEM_ONE_NIMBLE,
     OPENAI_DEFAULT_MODEL,
     OPENAI_GPT_5_4_MINI,
     OPENAI_QWEN3_8_FLASH_NEXT,
@@ -64,7 +62,7 @@ from app.constants import (
     ThinkingDialect,
     ThinkingLevel,
 )
-from app.models.base import G8eBaseModel
+from app.models.base import ConfigDict, Field, G8eBaseModel, PrivateAttr
 
 
 class LLModelConfig(G8eBaseModel):
@@ -667,8 +665,8 @@ MODEL_REGISTRY = LLModelRegistry(
         OLLAMA_GRANITE4_2_3B_CONFIG,
         OLLAMA_LLAMA_3_2_3B_CONFIG,
         OLLAMA_QWEN3_5_2B_CONFIG,
-    OLLAMA_QWEN3_1_7B_CONFIG,
-    OLLAMA_QWEN3_5_0_8B_CONFIG,
+        OLLAMA_QWEN3_1_7B_CONFIG,
+        OLLAMA_QWEN3_5_0_8B_CONFIG,
         OLLAMA_DEFAULT_CONFIG,
         GEMINI_3_1_PRO_CONFIG,
         GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG,

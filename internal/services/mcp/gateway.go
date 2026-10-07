@@ -542,11 +542,19 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 
 	executionID := callParams.ExecutionID
 	if executionID == "" {
-		executionID = uuid.NewString()
+		id, err := uuid.NewString()
+		if err != nil {
+			return nil, err
+		}
+		executionID = id
 	}
 	investigationID := callParams.InvestigationID
 	if investigationID == "" {
-		investigationID = uuid.NewString()
+		id, err := uuid.NewString()
+		if err != nil {
+			return nil, err
+		}
+		investigationID = id
 	}
 	mcpPayload := &operatorv1.McpCallRequested{
 		ToolName:      callParams.Name,
@@ -630,7 +638,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 }
 
 // handleReadField processes the read_field tool with governed access controls
-func (g *GatewayService) handleReadField(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
+func (g *GatewayService) handleReadField(arguments json.RawMessage) (interface{}, error) {
 	if g.fieldPathRegistry == nil {
 		return nil, constants.ErrGatewayFieldPathRegistryNotInit
 	}
@@ -738,9 +746,13 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 		return nil, constants.ErrGatewayURIRequired
 	}
 
+	executionID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	mcpPayload := &operatorv1.McpResourceReadRequested{
 		Uri:         readParams.URI,
-		ExecutionId: uuid.NewString(),
+		ExecutionId: executionID,
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -791,9 +803,13 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 		return nil, constants.ErrGatewayNameRequired
 	}
 
+	executionID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 	mcpPayload := &operatorv1.McpPromptGetRequested{
 		Name:        getParams.Name,
-		ExecutionId: uuid.NewString(),
+		ExecutionId: executionID,
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -936,6 +952,10 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	}
 
 	now := time.Now().UTC()
+	nonce, err := uuid.NewString()
+	if err != nil {
+		return "", nil, "", err
+	}
 	env := &commonv1.GovernanceEnvelope{
 		Timestamp:       timestamppb.New(now),
 		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
@@ -946,7 +966,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		TargetResource:  opts.targetResource,
 		Payload:         opts.payloadBytes,
 		ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
-		Nonce:           uuid.NewString(),
+		Nonce:           nonce,
 		StateMerkleRoot: stateRoot,
 		Posture:         g.posture,
 		Governance:      &commonv1.GovernanceMetadata{},
@@ -1280,7 +1300,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage, operatorSessionID string) (string, error) {
 	// Handle read_field tool locally (JIT field resolution)
 	if toolName == "read_field" {
-		result, err := g.handleReadField(ctx, toolArgs)
+		result, err := g.handleReadField(toolArgs)
 		if err != nil {
 			return "", err
 		}

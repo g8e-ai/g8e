@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     CommandGenerationOutcome,
     EventType,
-    G8EE_COMPONENT,
     LLMProvider,
 )
 from app.models.http_context import G8eHttpContext
@@ -21,8 +21,8 @@ from app.services.ai.generator import (
     generate_command,
 )
 from tests.unit.services.ai.tribunal.conftest import (
-    make_tribunal_generation_request,
     _make_mock_provider,
+    make_tribunal_generation_request,
 )
 
 
@@ -30,9 +30,9 @@ from tests.unit.services.ai.tribunal.conftest import (
 async def test_generate_command_round_2_triggered():
     """Test that Round 2 is triggered when consensus is low and enabled."""
     llm = LLMSettings(
-        primary_provider=LLMProvider.OLLAMA,
-        lite_provider=LLMProvider.OLLAMA,
-        lite_model="gemma3:1b",
+        llm_primary_provider=LLMProvider.OLLAMA,
+        llm_lite_provider=LLMProvider.OLLAMA,
+        llm_lite_model="gemma3:1b",
         llm_command_gen_passes=3,
     )
     settings = G8eeUserSettings(llm=llm)

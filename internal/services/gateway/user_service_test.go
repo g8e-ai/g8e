@@ -222,6 +222,17 @@ func TestUserService_FirstUserID(t *testing.T) {
 	})
 }
 
+func TestUserService_FirstUserRetainsOwnershipWhenCreationTimestampsMatch(t *testing.T) {
+	db := newTestCanonicalDBService(t)
+	createdAt := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, db.DocSetWithTimestamps(string(constants.CollectionUsers), "z-first", []byte(`{}`), createdAt, createdAt))
+	require.NoError(t, db.DocSetWithTimestamps(string(constants.CollectionUsers), "a-second", []byte(`{}`), createdAt, createdAt))
+	svc := NewUserService(db, newNoopLogger())
+	first, err := svc.FirstUserID()
+	require.NoError(t, err)
+	assert.Equal(t, "z-first", first)
+}
+
 func TestUserService_IsFirstUser(t *testing.T) {
 	t.Run("True - sole user is the first user", func(t *testing.T) {
 		mockDB := newTestCanonicalDBService(t)

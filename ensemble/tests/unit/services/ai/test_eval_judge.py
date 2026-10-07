@@ -22,8 +22,10 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from app.constants import ANTHROPIC_CLAUDE_HAIKU_4_5
+from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.settings import EvalJudgeSettings
 from app.services.ai.eval_judge import (
@@ -95,19 +97,19 @@ class TestEvalGradeModel:
         assert EvalGrade(**data) == g
 
     def test_score_below_range_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             EvalGrade(score=0, reasoning="Too low", passed=False)
 
     def test_score_above_range_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             EvalGrade(score=6, reasoning="Too high", passed=True)
 
     def test_empty_reasoning_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="reasoning must not be empty"):
             EvalGrade(score=3, reasoning="", passed=True)
 
     def test_whitespace_only_reasoning_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="reasoning must not be empty"):
             EvalGrade(score=3, reasoning="   ", passed=True)
 
 
@@ -134,6 +136,14 @@ class TestExtractJson:
             _extract_json("not json at all")
 
 
+class _StatusCodeError(Exception):
+    """Exception carrying a ``status_code`` attribute, as SDK errors do."""
+
+    def __init__(self, message: str, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class TestIsRetryable:
     """Transient error classification."""
 
@@ -147,8 +157,7 @@ class TestIsRetryable:
         assert _is_retryable(Exception("RESOURCE_EXHAUSTED: quota exceeded")) is True
 
     def test_status_code_attribute(self):
-        exc = Exception("fail")
-        exc.status_code = 429
+        exc = _StatusCodeError("fail", 429)
         assert _is_retryable(exc) is True
 
     def test_non_retryable_error(self):
@@ -182,13 +191,13 @@ class TestEvalJudgeConstruction:
 
     def test_construction_with_settings(self):
         provider = MagicMock()
-        settings = EvalJudgeSettings(model="settings-model")
+        settings = EvalJudgeSettings(eval_judge_model="settings-model")
         judge = EvalJudge(provider=provider, settings=settings)
         assert judge._model == "settings-model"
 
     def test_construction_with_model_overrides_settings(self):
         provider = MagicMock()
-        settings = EvalJudgeSettings(model="settings-model")
+        settings = EvalJudgeSettings(eval_judge_model="settings-model")
         judge = EvalJudge(provider=provider, model="override-model", settings=settings)
         assert judge._model == "override-model"
 
@@ -308,7 +317,7 @@ class TestGradeTurnErrorPaths:
 
     async def test_none_response_raises(self, judge, mock_provider):
         mock_provider.generate_content_lite.return_value = None
-        with pytest.raises(EvalJudgeError, match="NoneType.*has no attribute"):
+        with pytest.raises(EvalJudgeError, match=r"NoneType.*has no attribute"):
             await judge.grade_turn(**GRADE_KWARGS)
 
     async def test_invalid_json_raises(self, judge, mock_provider):
@@ -341,6 +350,26 @@ class TestGradeTurnErrorPaths:
         )
         with pytest.raises(EvalJudgeError, match="out-of-range score"):
             await judge.grade_turn(**GRADE_KWARGS)
+
+    async def test_context_overflow_raises_judge_error_without_retry(self, judge, mock_provider):
+        mock_provider.generate_content_lite.side_effect = ContextWindowExceededError(
+            "prompt filled the context window",
+            model="gemini-3.1-pro-preview",
+            service_name="ollama",
+            num_ctx=65536,
+            prompt_tokens=65536,
+            channel="lite",
+        )
+        with pytest.raises(EvalJudgeError, match="context window") as exc_info:
+            await judge.grade_turn(**GRADE_KWARGS)
+
+        # Not scored, not empty-response, and retrying the same prompt cannot succeed.
+        assert "empty" not in str(exc_info.value).lower()
+        assert mock_provider.generate_content_lite.await_count == 1
+        assert isinstance(exc_info.value.__cause__, ContextWindowExceededError)
+        assert len(exc_info.value.model_calls) == 1
+        assert exc_info.value.model_calls[0].succeeded is False
+        assert exc_info.value.model_calls[0].error_type == "ContextWindowExceededError"
 
     async def test_non_retryable_api_error_raises_immediately(self, judge, mock_provider):
         mock_provider.generate_content_lite.side_effect = Exception("401 Unauthorized")
@@ -401,7 +430,7 @@ class TestGradeTurnRetry:
     async def test_eval_judge_error_not_retried(self, judge, mock_provider):
         """EvalJudgeError from _call_and_parse propagates immediately."""
         mock_provider.generate_content_lite.return_value = None
-        with pytest.raises(EvalJudgeError, match="NoneType.*has no attribute"):
+        with pytest.raises(EvalJudgeError, match=r"NoneType.*has no attribute"):
             await judge.grade_turn(**GRADE_KWARGS)
         assert mock_provider.generate_content_lite.call_count == 1
 

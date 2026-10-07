@@ -10,8 +10,10 @@ package model_provenance
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -178,4 +180,26 @@ func TestOllamaStorageAttestor_AttestUntaggedModelTag(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, window.GetDigestMatch())
 	assert.Equal(t, modelTag, window.GetServedModelTag())
+}
+
+func TestOllamaStorageAttestor_BlobHashingHonorsCancellationBetweenReads(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	reader := &cancelAfterRead{reader: strings.NewReader("first chunk"), cancel: cancel}
+	_, err := io.Copy(io.Discard, &provenanceContextReader{ctx: ctx, reader: reader})
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 1, reader.reads)
+}
+
+type cancelAfterRead struct {
+	reader io.Reader
+	cancel context.CancelFunc
+	reads  int
+}
+
+func (r *cancelAfterRead) Read(p []byte) (int, error) {
+	r.reads++
+	n, err := r.reader.Read(p)
+	r.cancel()
+	return n, err
 }

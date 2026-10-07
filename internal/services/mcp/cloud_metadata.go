@@ -109,7 +109,7 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 	case "instance_type":
 		marshalTarget, err = getInstanceType(ctx, provider)
 	case "all":
-		marshalTarget, err = getAllMetadata(ctx, provider)
+		marshalTarget = getAllMetadata(ctx, provider)
 	default:
 		return CallToolResult{}, fmt.Errorf("cloud_metadata: invalid operation: %w: %s", constants.ErrMCPValidateCloudMetadataInvalidOperation, req.Operation)
 	}
@@ -151,7 +151,7 @@ func detectCloudProvider(ctx context.Context) string {
 
 	client := &http.Client{Timeout: 2 * time.Second}
 
-	awsReq, err := http.NewRequestWithContext(ctx, "GET", "http://169.254.169.254/latest/meta-data/", nil)
+	awsReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://169.254.169.254/latest/meta-data/", nil)
 	if err == nil {
 		if resp, err := client.Do(awsReq); err == nil {
 			resp.Body.Close()
@@ -159,7 +159,7 @@ func detectCloudProvider(ctx context.Context) string {
 		}
 	}
 
-	azureReq, err := http.NewRequestWithContext(ctx, "GET", "http://169.254.169.254/metadata/instance?api-version=2021-02-01", nil)
+	azureReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://169.254.169.254/metadata/instance?api-version=2021-02-01", nil)
 	if err == nil {
 		if resp, err := client.Do(azureReq); err == nil {
 			resp.Body.Close()
@@ -167,7 +167,7 @@ func detectCloudProvider(ctx context.Context) string {
 		}
 	}
 
-	gcpReq, err := http.NewRequestWithContext(ctx, "GET", "http://metadata.google.internal/computeMetadata/v1/", nil)
+	gcpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://metadata.google.internal/computeMetadata/v1/", nil)
 	if err == nil {
 		if resp, err := client.Do(gcpReq); err == nil {
 			resp.Body.Close()
@@ -180,7 +180,7 @@ func detectCloudProvider(ctx context.Context) string {
 
 func httpGetWithTimeout(ctx context.Context, url string, headers map[string]string) (string, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
@@ -419,7 +419,7 @@ func getInstanceType(ctx context.Context, provider string) (CloudMetadataInstanc
 	}
 }
 
-func getAllMetadata(ctx context.Context, provider string) (CloudMetadataAllResult, error) {
+func getAllMetadata(ctx context.Context, provider string) CloudMetadataAllResult {
 	instance, err := getInstanceMetadata(ctx, provider)
 	if err != nil {
 		instance = CloudMetadataInstanceResult{Error: err.Error()}
@@ -446,5 +446,5 @@ func getAllMetadata(ctx context.Context, provider string) (CloudMetadataAllResul
 		Region:           region,
 		AvailabilityZone: az,
 		InstanceType:     instanceType,
-	}, nil
+	}
 }

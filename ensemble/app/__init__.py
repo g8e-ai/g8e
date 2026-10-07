@@ -23,3 +23,10 @@ Application structure:
 - prompts_data/: Prompt templates and data
 - proto/: Protocol buffer definitions
 """
+
+# Normalize ambient NO_PROXY/no_proxy before any third-party import reads them:
+# the ollama package builds an httpx client at import time and httpx crashes
+# on bracketed IPv6 literals (e.g. [::1]). See app/utils/proxy_env.py.
+from app.utils.proxy_env import sanitize_proxy_env
+
+sanitize_proxy_env()

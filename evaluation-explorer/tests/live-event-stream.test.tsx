@@ -984,6 +984,7 @@ describe('LiveEventStream', () => {
           events={[
             liveEvent({
               event_id: 'evt-running-timer',
+              assignment_id: 'assignment-running-timer',
               kind: 'assignment_started',
               lifecycle_status: 'running',
               observed_at: startedAgo,

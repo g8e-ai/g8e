@@ -32,7 +32,7 @@ pytestmark = [pytest.mark.unit]
 
 def test_discriminator_parsing_execution_result():
     """Verify that discriminator-based parsing works for execution results."""
-    payload_raw = {
+    payload_raw: dict[str, object] = {
         "payload_type": "execution_result",
         "execution_id": "exec-123",
         "status": "completed",
@@ -46,7 +46,7 @@ def test_discriminator_parsing_execution_result():
 
 def test_discriminator_parsing_port_check():
     """Verify that discriminator-based parsing works for port check results."""
-    payload_raw = {
+    payload_raw: dict[str, object] = {
         "payload_type": "port_check_result",
         "execution_id": "exec-456",
         "host": "localhost",
@@ -61,7 +61,7 @@ def test_discriminator_parsing_port_check():
 
 def test_discriminator_parsing_fs_list():
     """Verify that discriminator-based parsing works for filesystem list results."""
-    payload_raw = {
+    payload_raw: dict[str, object] = {
         "payload_type": "fs_list_result",
         "execution_id": "exec-789",
         "path": "/tmp",
@@ -76,7 +76,7 @@ def test_discriminator_parsing_fs_list():
 
 def test_invalid_payload_type_raises_validation_error():
     """Verify that invalid payload_type raises ValidationError."""
-    payload_raw = {
+    payload_raw: dict[str, object] = {
         "payload_type": "invalid_type",
         "execution_id": "exec-123",
     }
@@ -166,7 +166,7 @@ def test_discriminator_parsing_fetch_history_success():
 
 def test_discriminator_parsing_fetch_history_error():
     """Verify that FetchHistoryErrorPayload parses correctly."""
-    payload_raw = {
+    payload_raw: dict[str, object] = {
         "payload_type": "fetch_history_error",
         "execution_id": "exec-hist-err",
         "error": "history handler not available",
@@ -191,7 +191,7 @@ def test_discriminator_parsing_fetch_file_history_success():
 
 def test_discriminator_parsing_restore_file_success():
     """Verify that RestoreFileSuccessPayload parses correctly."""
-    payload_raw = {
+    payload_raw: dict[str, object] = {
         "payload_type": "restore_file_success",
         "execution_id": "exec-restore-1",
         "file_path": "/tmp/foo.py",

@@ -11,7 +11,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -24,19 +23,19 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func newConsensusTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
+func newConsensusTestFileService(t *testing.T) fs.RuntimeFileService {
 	t.Helper()
 	root := testutil.TempDir(t)
 	fileSvc, err := fs.NewRuntimeFileService(root, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
-	return fileSvc, fileSvc.Resolve(constants.SecretsDirname)
+	return fileSvc
 }
 
 func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 	t.Parallel()
 
-	fileSvc, _ := newConsensusTestFileService(t)
+	fileSvc := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 	memberAppID := "member-1"
 
@@ -58,7 +57,7 @@ func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 	t.Parallel()
 
-	fileSvc, _ := newConsensusTestFileService(t)
+	fileSvc := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 
 	provider, err := NewFileKeyProvider(fileSvc, consensusID)
@@ -71,7 +70,7 @@ func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
 	t.Parallel()
 
-	fileSvc, _ := newConsensusTestFileService(t)
+	fileSvc := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 	memberAppID := "member-bad"
 
@@ -90,7 +89,7 @@ func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 	t.Parallel()
 
-	fileSvc, _ := newConsensusTestFileService(t)
+	fileSvc := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 	memberAppID := "member-bad-hex"
 
@@ -109,7 +108,7 @@ func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 	t.Parallel()
 
-	fileSvc, _ := newConsensusTestFileService(t)
+	fileSvc := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 	memberAppID := "member-1"
 
@@ -125,7 +124,7 @@ func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 	info, err := fileSvc.Stat(context.Background(), keyPath)
 	require.NoError(t, err)
 	if runtime.GOOS != "windows" {
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "key file should have private permissions")
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "key file should have private permissions")
 	}
 
 	seedHex, err := fileSvc.ReadFile(context.Background(), keyPath)
@@ -142,7 +141,7 @@ func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 func TestFileKeyProvider_MultipleMembers(t *testing.T) {
 	t.Parallel()
 
-	fileSvc, _ := newConsensusTestFileService(t)
+	fileSvc := newConsensusTestFileService(t)
 	consensusID := "multi-consensus"
 
 	members := []string{"member-0", "member-1", "member-2"}

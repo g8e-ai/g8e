@@ -8,7 +8,7 @@
 
 from app.constants import AttachmentType
 
-from .base import G8eBaseModel, Field
+from .base import Field, G8eBaseModel
 
 
 class AttachmentMetadata(G8eBaseModel):
@@ -61,3 +61,6 @@ class ProcessedAttachment(G8eBaseModel):
     content: str | None = Field(
         default=None, description="Pre-decoded UTF-8 text content (text files only)"
     )
+
+
+ChatAttachment = AttachmentMetadata | ProcessedAttachment

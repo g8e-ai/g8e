@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestSignerController(t *testing.T) (*SignerController, *DocumentStoreService, *SignerStoreService) {
+func setupTestSignerController(t *testing.T) (*SignerController, *DocumentStoreService) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 
@@ -34,7 +34,7 @@ func setupTestSignerController(t *testing.T) (*SignerController, *DocumentStoreS
 		Responder:   infra.Responder,
 	})
 
-	return signerController, infra.DocStore, infra.SignerStore
+	return signerController, infra.DocStore
 }
 
 func TestNewSignerController_AllDepsProvidedNoNilFields(t *testing.T) {
@@ -62,7 +62,7 @@ func TestNewSignerController_AllDepsProvidedNoNilFields(t *testing.T) {
 }
 
 func TestSignerControllerHandleGovernanceSigners(t *testing.T) {
-	signerController, docStore, _ := setupTestSignerController(t)
+	signerController, docStore := setupTestSignerController(t)
 
 	t.Run("GET - success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers", nil)
@@ -127,7 +127,7 @@ func TestSignerControllerHandleGovernanceSigners(t *testing.T) {
 }
 
 func TestSignerControllerHandleGovernanceSignerByID(t *testing.T) {
-	signerController, docStore, _ := setupTestSignerController(t)
+	signerController, docStore := setupTestSignerController(t)
 
 	t.Run("GET - not found", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/nonexistent", nil)

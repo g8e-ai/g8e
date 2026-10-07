@@ -34,7 +34,7 @@ func TestActionTypeIsMutation_MutationTypesReturnTrue(t *testing.T) {
 	}
 
 	for _, at := range mutations {
-		at := at
+
 		t.Run(string(at), func(t *testing.T) {
 			t.Parallel()
 			assert.True(t, at.IsMutation(), "%s should be a mutation", at)
@@ -68,7 +68,7 @@ func TestActionTypeIsMutation_ReadTypesReturnFalse(t *testing.T) {
 	}
 
 	for _, at := range readTypes {
-		at := at
+
 		t.Run(string(at), func(t *testing.T) {
 			t.Parallel()
 			assert.False(t, at.IsMutation(), "%s should not be a mutation", at)
@@ -161,7 +161,7 @@ func TestActionTypeIsBootstrapAction_PlatformEnrollmentReturnsTrue(t *testing.T)
 	}
 
 	for _, at := range bootstrapActions {
-		at := at
+
 		t.Run(string(at), func(t *testing.T) {
 			t.Parallel()
 			assert.True(t, at.IsBootstrapAction(), "%s should be a bootstrap action", at)
@@ -176,7 +176,7 @@ func TestActionTypeIsBootstrapAction_NonPlatformEnrollmentReturnsFalse(t *testin
 		if at.IsBootstrapAction() {
 			continue
 		}
-		at := at
+
 		t.Run(string(at), func(t *testing.T) {
 			t.Parallel()
 			assert.False(t, at.IsBootstrapAction(), "%s should not be a bootstrap action", at)

@@ -163,7 +163,7 @@ func TestVerifyPublishACL(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			err := verifyPublishACL(tt.channel, tt.operatorID, tt.spiffeID)
 			if tt.wantErr {

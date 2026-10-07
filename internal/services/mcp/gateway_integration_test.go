@@ -498,7 +498,7 @@ func TestHandleReadField(t *testing.T) {
 			"field_path":          "status",
 			"operator_session_id": "valid-session-123",
 		})
-		result, err := g.handleReadField(context.Background(), args)
+		result, err := g.handleReadField(args)
 		require.NoError(t, err)
 		r, ok := result.(CallToolResult)
 		require.True(t, ok)
@@ -517,7 +517,7 @@ func TestHandleReadField(t *testing.T) {
 			"field_path":          "status",
 			"operator_session_id": "invalid-session",
 		})
-		_, err := g.handleReadField(context.Background(), args)
+		_, err := g.handleReadField(args)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "operator session is invalid or expired")
 	})
@@ -529,7 +529,7 @@ func TestHandleReadField(t *testing.T) {
 			"field_path":          "suspect_ip_addresses",
 			"operator_session_id": "valid-session-123",
 		})
-		_, err := g.handleReadField(context.Background(), args)
+		_, err := g.handleReadField(args)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "forbidden pattern")
 	})

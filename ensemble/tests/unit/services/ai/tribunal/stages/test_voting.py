@@ -6,10 +6,11 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
-from app.constants import TieBreakReason, ConsensusMember
+
+from app.constants import ConsensusMember, TieBreakReason
 from app.models.agents.tribunal import CandidateCommand
 from app.services.ai.tribunal.emitter import TribunalEmitter
-from app.services.ai.tribunal.stages.voting import _run_voting_stage
+from app.services.ai.tribunal.stages.voting import run_voting_stage
 
 
 @pytest.mark.asyncio
@@ -24,7 +25,7 @@ class TestRunVotingStage:
         ]
         emitter = TribunalEmitter(None, mock_g8e_context)
 
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+        winner, score, vote_breakdown, tied_candidates = await run_voting_stage(
             candidates=candidates,
             request="list files",
             emitter=emitter,
@@ -49,7 +50,7 @@ class TestRunVotingStage:
         ]
         emitter = TribunalEmitter(None, mock_g8e_context)
 
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+        winner, score, vote_breakdown, tied_candidates = await run_voting_stage(
             candidates=candidates,
             request="list files",
             emitter=emitter,
@@ -71,7 +72,7 @@ class TestRunVotingStage:
         ]
         emitter = TribunalEmitter(None, mock_g8e_context)
 
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+        winner, score, vote_breakdown, tied_candidates = await run_voting_stage(
             candidates=candidates,
             request="list files",
             emitter=emitter,
@@ -102,7 +103,7 @@ class TestRunVotingStage:
         ]
         emitter = TribunalEmitter(None, mock_g8e_context)
 
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+        winner, score, vote_breakdown, tied_candidates = await run_voting_stage(
             candidates=candidates,
             request="check docker state",
             emitter=emitter,
@@ -129,7 +130,7 @@ class TestRunVotingStage:
         ]
         emitter = TribunalEmitter(None, mock_g8e_context)
 
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+        winner, score, vote_breakdown, tied_candidates = await run_voting_stage(
             candidates=candidates,
             request="list files",
             emitter=emitter,

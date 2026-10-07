@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import CommandGenerationOutcome, EventType, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, CommandGenerationOutcome, ConsensusMember, EventType
 from app.models.agents.tribunal import (
     CandidateCommand,
 )
@@ -48,8 +48,6 @@ class TestTribunalApprovalCorrelation:
         )
         event_svc = make_event_service()
 
-        from app.constants import ConsensusMember
-
         mock_candidates = [
             CandidateCommand(command="ls -la", pass_index=0, member=ConsensusMember.AXIOM),
             CandidateCommand(command="ls -la", pass_index=1, member=ConsensusMember.CONCORD),
@@ -57,7 +55,7 @@ class TestTribunalApprovalCorrelation:
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class,
         ):
@@ -134,13 +132,13 @@ class TestTribunalApprovalCorrelation:
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class,
         ):
             mock_gen.return_value = [
-                CandidateCommand(command="ls", pass_index=0, member="axiom"),
-                CandidateCommand(command="ls", pass_index=1, member="concord"),
+                CandidateCommand(command="ls", pass_index=0, member=ConsensusMember.AXIOM),
+                CandidateCommand(command="ls", pass_index=1, member=ConsensusMember.CONCORD),
             ]
             # Mock auditor to pass
             mock_auditor = mock_auditor_class.return_value

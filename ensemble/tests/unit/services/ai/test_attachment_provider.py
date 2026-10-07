@@ -17,6 +17,7 @@ import base64
 import pytest
 
 from app.constants.config import AttachmentType
+from app.errors import ValidationError
 from app.models.attachments import ProcessedAttachment
 from app.services.ai.grounding.attachment_provider import AttachmentGroundingProvider
 
@@ -183,7 +184,6 @@ class TestFormatParts:
         assert len(parts) == 2
 
     def test_invalid_base64_raises_operation_error_for_pdf(self, provider):
-        from app.errors import ValidationError
 
         att = _make_att(
             "bad.pdf",
@@ -195,7 +195,6 @@ class TestFormatParts:
             provider.format_parts([att])
 
     def test_invalid_base64_raises_operation_error_for_text(self, provider):
-        from app.errors import ValidationError
 
         att = _make_att(
             "bad.txt",

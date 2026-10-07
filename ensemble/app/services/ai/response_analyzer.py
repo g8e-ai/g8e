@@ -5,25 +5,26 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import json
 import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
 
+from pydantic import Field
+
 import app.llm.llm_types as types
-from app.models.settings import G8eeUserSettings
-from app.errors import OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
-from app.llm import get_generative_lite_provider, Role
-from app.llm.model_evidence import model_boundary_hash
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm import Role, get_generative_lite_provider
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.provider import LLMProvider
 from app.llm.structured import parse_structured_response
 from app.models.base import G8eBaseModel
-from app.llm.provider import LLMProvider
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
@@ -33,30 +34,48 @@ from app.models.tool_results import (
     FileOperationRiskContext,
 )
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
+from app.utils.agent_persona_loader import AgentPersona, get_agent_persona
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=G8eBaseModel)
 
 
-def _load_security_constraints() -> dict:
+_DEFAULT_SYSTEM_PATH_PREFIXES: list[str] = [
+    "/etc/",
+    "/usr/",
+    "/sys/",
+    "/proc/",
+    "/bin/",
+    "/sbin/",
+    "/boot/",
+    "/lib/",
+]
+
+
+class _SystemPathPrefixesConfig(G8eBaseModel):
+    prefixes: list[str] = Field(default_factory=lambda: list(_DEFAULT_SYSTEM_PATH_PREFIXES))
+
+
+class _SecurityConstraintsConfig(G8eBaseModel):
+    system_path_prefixes: _SystemPathPrefixesConfig = Field(
+        default_factory=_SystemPathPrefixesConfig
+    )
+    high_risk_system_files: dict[str, object] = Field(default_factory=dict)
+
+
+def _load_security_constraints() -> _SecurityConstraintsConfig:
     """Load security constraints from local config."""
     try:
         config_path = Path(__file__).parent.parent.parent / "config" / "security_constraints.json"
-        with open(config_path) as f:
-            return json.load(f)
+        return _SecurityConstraintsConfig.model_validate_json(config_path.read_text())
     except Exception:
-        return {}
+        return _SecurityConstraintsConfig()
 
 
 _SECURITY_CONSTRAINTS = _load_security_constraints()
-SYSTEM_PATH_PREFIXES = tuple(
-    _SECURITY_CONSTRAINTS.get("system_path_prefixes", {}).get(
-        "prefixes", ["/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/"]
-    )
-)
-HIGH_RISK_SYSTEM_FILES = _SECURITY_CONSTRAINTS.get("high_risk_system_files", {})
+SYSTEM_PATH_PREFIXES = tuple(_SECURITY_CONSTRAINTS.system_path_prefixes.prefixes)
+HIGH_RISK_SYSTEM_FILES = _SECURITY_CONSTRAINTS.high_risk_system_files
 
 
 def _build_marshal_command_template(
@@ -69,7 +88,7 @@ def _build_marshal_command_template(
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
-    parts = []
+    parts: list[str] = []
 
     parts.append(AgentPersona.format_xml_tag("command", command))
     parts.append(AgentPersona.format_xml_tag("justification", justification))
@@ -96,7 +115,7 @@ def _build_marshal_error_template(
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
-    parts = []
+    parts: list[str] = []
 
     parts.append(AgentPersona.format_xml_tag("failed_command", command))
     parts.append(AgentPersona.format_xml_tag("exit_code", str(exit_code)))
@@ -139,7 +158,7 @@ def _build_marshal_file_template(
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
-    parts = []
+    parts: list[str] = []
 
     parts.append(AgentPersona.format_xml_tag("operation", operation))
     parts.append(AgentPersona.format_xml_tag("file_path", file_path))
@@ -191,6 +210,7 @@ class AIResponseAnalyzer:
         settings: G8eeUserSettings,
         fallback_no_model: Callable[[], T],
         fallback_no_response: Callable[[], T],
+        fallback_context_overflow: Callable[[], T],
         fallback_exception: Callable[[Exception], T],
         log_context: str,
         agent_role: str,
@@ -213,13 +233,15 @@ class AIResponseAnalyzer:
             )
             contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
             prepare_provider_call(client, g8e_context=g8e_context)
-            input_artifact_hash = model_boundary_hash({
-                "model": lite_model,
-                "contents": contents,
-                "settings": config,
-            })
+            input_artifact_hash = model_boundary_hash(
+                {
+                    "model": lite_model,
+                    "contents": contents,
+                    "settings": config,
+                }
+            )
         except Exception as exc:
-            logger.error("%s setup failed: %s", log_context, exc, exc_info=True)
+            logger.exception("%s setup failed: %s", log_context, exc)
             return fallback_exception(exc)
 
         monotonic_start = time.monotonic()
@@ -252,10 +274,17 @@ class AIResponseAnalyzer:
                 response_text=response_text,
                 error=exc,
             )
+            if isinstance(exc, ContextWindowExceededError):
+                logger.exception(
+                    "%s: prompt exceeded the model context window, not retrying: %s",
+                    log_context,
+                    exc,
+                )
+                return fallback_context_overflow().model_copy(update={"model_call": telemetry})
             if isinstance(exc, OllamaEmptyResponseError):
                 logger.error("%s: LLM returned no text content: %s", log_context, exc)
                 return fallback_no_response().model_copy(update={"model_call": telemetry})
-            logger.error("%s failed: %s", log_context, exc, exc_info=True)
+            logger.error("%s failed: %s", log_context, exc)
             return fallback_exception(exc).model_copy(update={"model_call": telemetry})
 
         telemetry = self._model_call_telemetry(
@@ -288,7 +317,9 @@ class AIResponseAnalyzer:
         error: Exception | None = None,
     ) -> ModelCallTelemetry:
         usage = response.usage_metadata if response else types.UsageMetadata()
-        finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
+        finish_reason = (
+            response.candidates[0].finish_reason if response and response.candidates else None
+        )
         return build_model_call_telemetry(
             provider=provider,
             agent_role=agent_role,
@@ -322,8 +353,8 @@ class AIResponseAnalyzer:
     ) -> CommandRiskAnalysis:
         analysis_start_time = time.time()
         context = context or CommandRiskContext()
-        working_dir = context.working_directory
-        investigation_context = context.investigation_context
+        working_dir = context.working_directory or ""
+        investigation_context = context.investigation_context or ""
         resolved_settings = settings
 
         prompt_build_start = time.time()
@@ -360,7 +391,8 @@ class AIResponseAnalyzer:
             settings=resolved_settings,
             fallback_no_model=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_no_response=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
-            fallback_exception=lambda e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
+            fallback_context_overflow=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
+            fallback_exception=lambda _e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             log_context="Command risk analysis",
             agent_role="marshal_command",
             post_process=log_result,
@@ -378,7 +410,7 @@ class AIResponseAnalyzer:
         analysis_start_time = time.time()
         context = context or ErrorAnalysisContext()
         retry_count = context.retry_count
-        working_dir = context.working_directory
+        working_dir = context.working_directory or ""
         resolved_settings = settings
 
         if retry_count >= 2:
@@ -455,6 +487,14 @@ class AIResponseAnalyzer:
                 reasoning="LLM response contained no text parts",
                 user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
             ),
+            fallback_context_overflow=lambda: ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause="Error analysis prompt exceeded the model's context window",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning="The conversation exceeded the model's context window",
+                user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable because the conversation exceeded the model's context window - manual intervention required.",
+            ),
             fallback_exception=lambda e: ErrorAnalysisResult(
                 error_category=ErrorAnalysisCategory.UNKNOWN,
                 root_cause="Error analysis failed",
@@ -478,7 +518,7 @@ class AIResponseAnalyzer:
     ) -> FileOperationRiskAnalysis:
         analysis_start_time = time.time()
         context = context or FileOperationRiskContext()
-        git_status = context.git_status
+        git_status = context.git_status or ""
         backup_available = context.backup_available
         resolved_settings = settings
 
@@ -542,7 +582,16 @@ class AIResponseAnalyzer:
                 blocking_issues=["Risk analysis failed - LLM returned no content"],
                 approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
             ),
-            fallback_exception=lambda e: FileOperationRiskAnalysis(
+            fallback_context_overflow=lambda: FileOperationRiskAnalysis(
+                risk_level=RiskLevel.HIGH,
+                is_system_file=False,
+                safe_to_proceed=False,
+                blocking_issues=[
+                    "Risk analysis failed - the conversation exceeded the model's context window"
+                ],
+                approval_prompt=f"Risk analysis failed because the conversation exceeded the model's context window. File operation: {operation} on {file_path}\nProceed with extreme caution?",
+            ),
+            fallback_exception=lambda _e: FileOperationRiskAnalysis(
                 risk_level=RiskLevel.HIGH,
                 is_system_file=False,
                 safe_to_proceed=False,

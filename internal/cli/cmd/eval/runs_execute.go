@@ -149,7 +149,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	}
 	store := evaluation.NewStore(fileSvc)
 	controllerFactory := func(executor evaluation.CampaignAssignmentExecutor) *evaluation.CampaignController {
-		return evaluation.NewCampaignController(store, executor, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+		return evaluation.NewCampaignController(store, executor, deps.now, adaptNewID(deps.newID))
 	}
 	summary, err := controllerFactory(nil).RunSummary(cmd.Context(), opts.RunID)
 	if err != nil {
@@ -191,7 +191,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: run execute: %w", err)
 	}
-	ensembleClient, err := chatEvalEnsembleClient(cfg, authContext, resolveChatEvalEnsembleURL(opts.EnsembleURL), chatDeps)
+	ensembleClient, err := chatEvalEnsembleClient(authContext, resolveChatEvalEnsembleURL(opts.EnsembleURL), chatDeps)
 	if err != nil {
 		return 0, err
 	}
@@ -212,7 +212,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	waitForTrace := func(ctx context.Context, fetch func(context.Context) (evaluation.EvaluationTrace, error)) (evaluation.EvaluationTrace, error) {
 		return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), opts.JSONOutput))
 	}
-	newID := func(prefix string) string { return prefix + "-" + deps.newID() }
+	newID := adaptNewID(deps.newID)
 	chatExecutor := evaluation.NewCampaignChatExecutor(
 		chatClient,
 		persona,
@@ -226,12 +226,10 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	)
 	formationExecutor := evaluation.NewLazyCampaignFormationExecutor(func() (evaluation.CampaignAssignmentExecutor, error) {
 		productionDeps, err := buildCampaignFormationProductionDeps(
-			cmd,
 			deps,
 			cfg,
 			fileSvc,
 			authContext,
-			dataOperator,
 			operators,
 			spec.GetModelRegistry(),
 			spec.GetModelRegistryDigest(),
@@ -292,7 +290,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 			if runErr == nil {
 				return
 			}
-			cleanupErr := releaseRunModels(cmd, deps, opts, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec)
+			cleanupErr := releaseRunModels(cmd, deps, opts, cfg, authContext, operators, selected.OperatorSessionID, spec)
 			if cleanupErr == nil {
 				return
 			}
@@ -302,7 +300,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		if err != nil {
 			return executed, fmt.Errorf("evaluation: run execute: %w", err)
 		}
-		if err := releaseResidentProviderModels(cmd, deps, opts, cfg, authContext, dataOperator, selected.OperatorSessionID, endpoint); err != nil {
+		if err := releaseResidentProviderModels(cmd, deps, opts, cfg, authContext, selected.OperatorSessionID, endpoint); err != nil {
 			return executed, fmt.Errorf("evaluation: run execute: %w", err)
 		}
 	}
@@ -310,7 +308,25 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	if err != nil {
 		return executed, fmt.Errorf("evaluation: run execute: %w", err)
 	}
-	if err := gwremote.PreflightCampaignModelProvenance(fileSvc, cfg, modelBindings); err != nil {
+	var preflightProgress func(models.ModelProvenancePreflightProgress)
+	if !opts.JSONOutput {
+		fmt.Fprintf(cmd.OutOrStdout(), "Preflight: model storage attestation (operator acknowledgement: %s; maximum per model: %s)\n", constants.ModelProvenanceCommandAcknowledgementTimeout, constants.ModelProvenanceAttestationPreflightTimeout)
+		preflightProgress = func(event models.ModelProvenancePreflightProgress) {
+			phase := event.Phase
+			switch phase {
+			case "awaiting_operator":
+				phase = "waiting for operator acknowledgement"
+			case "attesting_storage":
+				phase = "hashing model storage"
+			case "ready":
+				phase = "storage attestation ready"
+			case "failed":
+				phase = "storage attestation failed"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", event.ServedModelTag, phase)
+		}
+	}
+	if err := gwremote.PreflightCampaignModelProvenanceContext(cmd.Context(), fileSvc, cfg, modelBindings, preflightProgress); err != nil {
 		return executed, fmt.Errorf("evaluation: run execute: %w", err)
 	}
 	iterations := int64(opts.Limit)
@@ -350,7 +366,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		return executed, fmt.Errorf("evaluation: run execute: %w", err)
 	}
 	if summary.QueuedCount == 0 && summary.RunningCount == 0 {
-		if err := releaseRunModels(cmd, deps, opts, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec); err != nil {
+		if err := releaseRunModels(cmd, deps, opts, cfg, authContext, operators, selected.OperatorSessionID, spec); err != nil {
 			return executed, fmt.Errorf("evaluation: run execute: %w", err)
 		}
 		if publication != nil {
@@ -372,11 +388,10 @@ func releaseResidentProviderModels(
 	opts runExecuteOptions,
 	cfg *config.Config,
 	authContext *auth.ClientAuthContext,
-	dataOperator *operatorcapability.DataOperatorStatus,
 	inferenceSessionID string,
 	endpoint string,
 ) error {
-	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, deps.chatDeps())
+	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, deps.chatDeps())
 	if err != nil {
 		return err
 	}
@@ -384,7 +399,7 @@ func releaseResidentProviderModels(
 		TargetOperatorSessionID: inferenceSessionID,
 		Environment:             modelCommandEnvironment(endpoint),
 		CaseID:                  opts.RunID,
-		NewID:                   func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID:                   adaptNewID(deps.newID),
 	}
 	residency, err := evaluation.ReadOllamaProviderResidency(cmd.Context(), dispatcher, maintenance)
 	if err != nil {
@@ -417,7 +432,6 @@ func releaseRunModels(
 	opts runExecuteOptions,
 	cfg *config.Config,
 	authContext *auth.ClientAuthContext,
-	dataOperator *operatorcapability.DataOperatorStatus,
 	operators []models.OperatorDocumentGo,
 	inferenceSessionID string,
 	spec *evalv1.EvaluationCampaignSpec,
@@ -435,7 +449,7 @@ func releaseRunModels(
 			modelTags = append(modelTags, variant.GetServedModelTag())
 		}
 	}
-	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, deps.chatDeps())
+	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, deps.chatDeps())
 	if err != nil {
 		return err
 	}
@@ -443,7 +457,7 @@ func releaseRunModels(
 		TargetOperatorSessionID: inferenceSessionID,
 		Environment:             modelCommandEnvironment(endpoint),
 		CaseID:                  opts.RunID,
-		NewID:                   func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID:                   adaptNewID(deps.newID),
 	}
 	residency, err := evaluation.ReadOllamaProviderResidency(cmd.Context(), dispatcher, maintenance)
 	if err != nil {

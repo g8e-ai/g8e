@@ -1,52 +1,35 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-// Provider credentials live here. Each model role has a separate view and saves
-// its own provider/model pair to the caller's user settings.
+// Provider credentials live here. Provider connections configure endpoints and
+// credentials used by the model roles in the left navigation menu.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '../../lib/api';
+import { useEffect, useState } from 'react';
 import {
-  ROLE_INFO,
-  effectiveRole,
-  formErrors,
-  formFromSettings,
   isProviderDirty,
-  isRoleDirty,
   providerForm,
   providerOption,
   providerUpdateBody,
-  roleUpdateBody,
-  withProvider,
-  type InferenceForm,
   type ProviderForm,
-  type RoleForm,
 } from '../../lib/inference';
-import { Paths } from '../../lib/paths';
-import type { LlmModelList, LlmProviderOption, LlmRole, LlmSettings } from '../../lib/types';
+import type { LlmProviderOption } from '../../lib/types';
 import { useInference } from '../../state/inference';
 import { errorText, useToast } from '../../state/toast';
 
-const MANUAL = '__manual__';
-
-export function InferenceView({ role, onViewApprovals }: { role?: LlmRole; onViewApprovals?: () => void } = {}) {
+export function InferenceView({ onViewApprovals }: { onViewApprovals?: () => void } = {}) {
   const { settings, loaded, error, ensembleStatus, reload, save } = useInference();
   const toast = useToast();
-  const [roleForms, setRoleForms] = useState<InferenceForm | null>(null);
   const [providerForms, setProviderForms] = useState<Record<string, ProviderForm> | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
-    setRoleForms(formFromSettings(settings));
     setProviderForms(Object.fromEntries(settings.providers.map((option) => [option.provider, providerForm(option)])));
   }, [settings]);
 
   useEffect(() => {
     if (!settings) void reload();
   }, [settings, reload]);
-
-  const title = role ? `${ROLE_INFO[role].label} model` : 'Inference';
 
   if (!loaded) {
     return (
@@ -56,14 +39,14 @@ export function InferenceView({ role, onViewApprovals }: { role?: LlmRole; onVie
     );
   }
 
-  if (!settings || !roleForms || !providerForms) {
+  if (!settings || !providerForms) {
     if (ensembleStatus !== 'ready') {
       return (
         <div className="page">
           <div className="page-head">
             <div>
-              <h1>{title}</h1>
-              <p>{role ? ROLE_INFO[role].description : 'Configure provider connections for your model roles.'}</p>
+              <h1>Inference</h1>
+              <p>Configure provider connections for your model roles.</p>
             </div>
           </div>
           <div className="empty" style={{ margin: '48px auto', textAlign: 'center', maxWidth: 480 }}>
@@ -88,7 +71,7 @@ export function InferenceView({ role, onViewApprovals }: { role?: LlmRole; onVie
       <div className="page">
         <div className="page-head">
           <div>
-            <h1>{title}</h1>
+            <h1>Inference</h1>
           </div>
         </div>
         <div className="notice notice-error">
@@ -116,73 +99,26 @@ export function InferenceView({ role, onViewApprovals }: { role?: LlmRole; onVie
     }
   };
 
-  const onSaveRole = async () => {
-    if (!role) return;
-    setSaving(true);
-    try {
-      await save(roleUpdateBody(roleForms, role));
-      toast('success', 'Model selection saved. The next message uses it.');
-    } catch (err) {
-      toast('error', errorText(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!role) {
-    return (
-      <div className="page">
-        <div className="page-head">
-          <div>
-            <h1>Inference</h1>
-            <p>Set up provider connections once, then choose a provider and model for each role.</p>
-          </div>
-        </div>
-        <div className="provider-list">
-          {settings.providers.map((option) => (
-            <ProviderCard
-              key={option.provider}
-              option={option}
-              form={providerForms[option.provider] ?? providerForm(option)}
-              disabled={saving}
-              onSave={() => void onSaveProvider(option.provider)}
-              onChange={(next) => setProviderForms((forms) => (forms ? { ...forms, [option.provider]: next } : forms))}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const roleFormValue = roleForms[role];
-  const errors = formErrors(roleForms);
-  const dirty = isRoleDirty(roleFormValue, settings, role);
-  const canSave = dirty && !errors[role] && !saving;
-
   return (
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>{title}</h1>
-          <p>{ROLE_INFO[role].description} Changes apply to the next chat message.</p>
-        </div>
-        <div className="row">
-          <button type="button" className="btn" disabled={!dirty || saving} onClick={() => setRoleForms(formFromSettings(settings))}>
-            Revert
-          </button>
-          <button type="button" className="btn btn-primary" disabled={!canSave} onClick={() => void onSaveRole()}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          <h1>Inference</h1>
+          <p>Set up provider connections once, then choose a provider and model for each role.</p>
         </div>
       </div>
-
-      <RoleCard
-        role={role}
-        form={roleFormValue}
-        settings={settings}
-        error={errors[role]}
-        onChange={(next) => setRoleForms((forms) => (forms ? { ...forms, [role]: next } : forms))}
-      />
+      <div className="provider-list">
+        {settings.providers.map((option) => (
+          <ProviderCard
+            key={option.provider}
+            option={option}
+            form={providerForms[option.provider] ?? providerForm(option)}
+            disabled={saving}
+            onSave={() => void onSaveProvider(option.provider)}
+            onChange={(next) => setProviderForms((forms) => (forms ? { ...forms, [option.provider]: next } : forms))}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -279,156 +215,3 @@ function ProviderCard({
   );
 }
 
-interface RoleCardProps {
-  role: LlmRole;
-  form: RoleForm;
-  settings: LlmSettings;
-  error?: string;
-  onChange: (next: RoleForm) => void;
-}
-
-function RoleCard({ role, form, settings, error, onChange }: RoleCardProps) {
-  const info = ROLE_INFO[role];
-  const id = `llm-${role}`;
-  const inherited = effectiveRole(settings, role);
-  const inheritedProvider = providerOption(settings, inherited.provider ?? '');
-
-  return (
-    <section className="card" aria-labelledby={`${id}-title`}>
-      <div className="card-head">
-        <div>
-          <h2 id={`${id}-title`}>{info.label}</h2>
-          <div className="muted">Select a provider and model for this role.</div>
-        </div>
-      </div>
-
-      <div className="field-grid">
-        <div className="field">
-          <label htmlFor={`${id}-provider`}>Provider</label>
-          <select
-            id={`${id}-provider`}
-            className="input"
-            value={form.provider}
-            onChange={(event) => onChange(withProvider(form, event.target.value, settings[role]))}
-          >
-            {role === 'primary' ? (
-              <option value="" disabled>Choose a provider</option>
-            ) : (
-              <option value="">Use the fallback model</option>
-            )}
-            {settings.providers.map((provider) => (
-              <option key={provider.provider} value={provider.provider}>{provider.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {form.provider && (
-          <ModelField
-            role={role}
-            provider={form.provider}
-            model={form.model}
-            lists={providerOption(settings, form.provider)?.lists_models ?? false}
-            onChange={(model) => onChange({ ...form, model })}
-          />
-        )}
-      </div>
-
-      {!form.provider && role !== 'primary' && (
-        <div className="muted role-fallback">
-          {inherited.provider ? (
-            <>Currently uses <span className="mono">{inherited.model}</span> via {inheritedProvider?.label ?? inherited.provider}.</>
-          ) : (
-            'Uses the primary model once one is chosen.'
-          )}
-        </div>
-      )}
-      {error && <div className="hint hint-error">{error}</div>}
-    </section>
-  );
-}
-
-function ModelField({
-  role,
-  provider,
-  model,
-  lists,
-  onChange,
-}: {
-  role: LlmRole;
-  provider: string;
-  model: string;
-  lists: boolean;
-  onChange: (model: string) => void;
-}) {
-  const [models, setModels] = useState<string[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
-  const [manual, setManual] = useState(false);
-  const latest = useRef(0);
-  const fieldId = `llm-${role}-model`;
-
-  const load = useCallback(async () => {
-    const sequence = ++latest.current;
-    setLoading(true);
-    setListError(null);
-    try {
-      const response = await api.post<LlmModelList>(Paths.llmModels, { context: {}, provider });
-      if (sequence !== latest.current) return;
-      setModels(response.models ?? []);
-    } catch (err) {
-      if (sequence !== latest.current) return;
-      setModels(null);
-      setListError(errorText(err));
-    } finally {
-      if (sequence === latest.current) setLoading(false);
-    }
-  }, [provider, role]);
-
-  useEffect(() => {
-    setModels(null);
-    setListError(null);
-    setManual(false);
-    if (lists) void load();
-  }, [lists, load]);
-
-  const listed = models && models.length > 0 && !manual;
-  const options = listed && model && !models.includes(model) ? [model, ...models] : (models ?? []);
-
-  return (
-    <div className="field field-wide">
-      <label htmlFor={fieldId}>Model</label>
-      <div className="row nowrap">
-        {listed ? (
-          <select id={fieldId} className="input mono" value={model} onChange={(event) => {
-            if (event.target.value === MANUAL) setManual(true);
-            else onChange(event.target.value);
-          }}>
-            <option value="" disabled>Choose a model ({models.length} available)</option>
-            {options.map((name) => <option key={name} value={name}>{name}</option>)}
-            <option value={MANUAL}>Enter a model name…</option>
-          </select>
-        ) : (
-          <input
-            id={fieldId}
-            className="input mono"
-            value={model}
-            placeholder={lists ? 'Model name' : 'Model name served by the inference node'}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => onChange(event.target.value)}
-          />
-        )}
-        {lists && (
-          <button type="button" className="btn btn-sm" disabled={loading} onClick={() => void load()}>
-            {loading ? 'Loading…' : models ? 'Refresh' : 'Load models'}
-          </button>
-        )}
-        {lists && manual && models && models.length > 0 && (
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setManual(false)}>Pick from list</button>
-        )}
-      </div>
-      {listError && <span className="hint hint-warn">Could not list models: {listError}</span>}
-      {models && models.length === 0 && !listError && <span className="hint">The endpoint reported no models.</span>}
-    </div>
-  );
-}

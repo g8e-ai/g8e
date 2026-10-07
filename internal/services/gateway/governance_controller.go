@@ -88,6 +88,7 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	var envelope commonv1.GovernanceEnvelope
 	if err := protojson.Unmarshal(envelopeBody, &envelope); err != nil {
 		// If we can't parse the envelope, let the downstream processor handle the parsing/decode error
+		//nolint:nilerr // intentional fallback: unparseable envelope delegated to downstream processor
 		return nil
 	}
 

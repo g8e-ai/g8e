@@ -22,5 +22,5 @@ def test_model_cannot_invoke_docker_stream_executor():
 
 
 def test_ensemble_settings_hold_no_operator_secrets_or_docker_identity():
-    assert "auditor_hmac_key" not in G8eeAppSettings().model_dump_json()
+    assert "auditor_hmac_key" not in G8eeAppSettings.model_validate({}).model_dump_json()
     assert "docker_gid" not in SettingsService().get_local_settings().model_dump_json()

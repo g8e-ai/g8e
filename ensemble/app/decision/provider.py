@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from contextvars import ContextVar
 
 from app.decision.types import DecisionState, EvaluateResponse, Question
@@ -54,7 +55,7 @@ class DecisionProvider(ABC):
         *,
         model: str,
         state: DecisionState,
-        questions: dict[str, Question],
+        questions: Mapping[str, Question],
     ) -> EvaluateResponse:
         """Evaluate typed questions against the given state."""
 
@@ -65,6 +66,10 @@ class DecisionProvider(ABC):
 
     async def _close_resources(self) -> None:  # noqa: B027
         """Close provider-specific resources."""
+
+    def mark_cached_singleton(self) -> None:
+        """Mark this instance as a shared cached singleton that ``close`` must not release."""
+        self._is_cached_singleton = True
 
     async def close(self) -> None:
         """Close provider resources when not cached as a singleton."""

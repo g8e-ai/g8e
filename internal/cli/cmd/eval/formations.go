@@ -106,7 +106,7 @@ func extractModelName(tag string) string {
 	return tag
 }
 
-func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func formationsListEvalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the checked-in execution-topology formation catalog",
@@ -231,7 +231,7 @@ func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	return jsonLeaf(cmd)
 }
 
-func formationsShowEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func formationsShowEvalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <formation-id>",
 		Short: "Show one catalog formation and its role bindings",
@@ -366,7 +366,7 @@ func (f *formationRoleFlagSet) toFormationModel() (evaluation.FormationModel, er
 	}, nil
 }
 
-func formationsAddEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func formationsAddEvalCmd() *cobra.Command {
 	var displayName, description string
 	var maxVRAM uint64
 	var relaxedValidation bool
@@ -469,7 +469,7 @@ Example:
 	return jsonLeaf(cmd)
 }
 
-func formationsRemoveEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func formationsRemoveEvalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "remove <formation-id>",
 		Aliases: []string{"rm"},
@@ -700,7 +700,7 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	if err := gwremote.PreflightCampaignModelProvenance(fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation)); err != nil {
+	if err := gwremote.PreflightCampaignModelProvenanceContext(cmd.Context(), fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation), nil); err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
 	chatDeps := deps.chatDeps()
@@ -716,11 +716,11 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	dataOperator, err := operatorcapability.SelectDataOperator(operators)
+	_, err = operatorcapability.SelectDataOperator(operators)
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatDeps)
+	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, chatDeps)
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
@@ -732,9 +732,20 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	runID := "formation-" + deps.newID()
-	assignmentID := "formation-assignment-" + deps.newID()
-	evaluationAttemptID := deps.newID()
+	runIDPart, err := deps.newID()
+	if err != nil {
+		return nil, "", err
+	}
+	runID := "formation-" + runIDPart
+	assignmentIDPart, err := deps.newID()
+	if err != nil {
+		return nil, "", err
+	}
+	assignmentID := "formation-assignment-" + assignmentIDPart
+	evaluationAttemptID, err := deps.newID()
+	if err != nil {
+		return nil, "", err
+	}
 	productionDeps := evaluation.FormationProductionDependencies{
 		RunContext: evaluation.FormationRunContext{
 			CampaignID:          freeze.CampaignID,
@@ -751,7 +762,7 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 		InferenceDispatcher:    &harnessFormationInferenceDispatcher{client: appClient},
 		ModelCommandDispatcher: modelDispatcher,
 		OllamaEnvironment:      modelCommandEnvironment(endpoint),
-		NewID:                  func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID:                  adaptNewID(deps.newID),
 		Now:                    deps.now,
 	}
 	ctx, cancel := context.WithTimeout(cmd.Context(), 20*time.Minute)
@@ -852,12 +863,10 @@ type campaignFormationProductionOptions struct {
 // observation, allocation, and release dependencies every campaign formation
 // run uses, whichever runner executes the roles.
 func buildCampaignFormationProductionDeps(
-	cmd *cobra.Command,
 	deps nativeEvalDeps,
 	cfg *config.Config,
 	fileSvc fs.RuntimeFileService,
 	authContext *auth.ClientAuthContext,
-	dataOperator *operatorcapability.DataOperatorStatus,
 	operators []models.OperatorDocumentGo,
 	variants []*evalv1.ModelVariant,
 	registryDigest string,
@@ -867,7 +876,7 @@ func buildCampaignFormationProductionDeps(
 	if err != nil {
 		return evaluation.FormationProductionDependencies{}, fmt.Errorf("evaluation: campaign formation dependencies: %w", err)
 	}
-	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
+	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, chatEvalDeps{
 		configLoader:   deps.configLoader,
 		fileSvcFactory: deps.fileSvcFactory,
 		authLoader:     deps.authLoader,
@@ -893,7 +902,7 @@ func buildCampaignFormationProductionDeps(
 		InferenceDispatcher:    &harnessFormationInferenceDispatcher{client: appClient},
 		ModelCommandDispatcher: modelDispatcher,
 		OllamaEnvironment:      modelCommandEnvironment(endpoint),
-		NewID:                  func(prefix string) string { return prefix + "-" + deps.newID() },
+		NewID:                  adaptNewID(deps.newID),
 		Now:                    deps.now,
 		RunContext: evaluation.FormationRunContext{
 			ModelRegistryDigest: registryDigest,

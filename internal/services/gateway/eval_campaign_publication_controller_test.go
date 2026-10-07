@@ -24,7 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func newEvalCampaignPublicationControllerTest(t *testing.T) (*EvalCampaignPublicationController, *EvalCampaignPublicationService) {
+func newEvalCampaignPublicationControllerTest(t *testing.T) *EvalCampaignPublicationController {
 	t.Helper()
 	logger := testutil.NewTestLogger()
 	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(":memory:"), logger)
@@ -39,11 +39,11 @@ func newEvalCampaignPublicationControllerTest(t *testing.T) (*EvalCampaignPublic
 		Responder: response.NewWriter(logger),
 		Service:   service,
 	})
-	return controller, service
+	return controller
 }
 
 func TestEvalCampaignPublicationController_HandlePublicationState_GetEmptyState(t *testing.T) {
-	controller, _ := newEvalCampaignPublicationControllerTest(t)
+	controller := newEvalCampaignPublicationControllerTest(t)
 	runID := "eval-init-qwen3-4b-1789739892"
 	path := constants.APIPaths.EvalCampaignPublicationStateByRun + runID + "/publication-state"
 
@@ -59,7 +59,7 @@ func TestEvalCampaignPublicationController_HandlePublicationState_GetEmptyState(
 }
 
 func TestEvalCampaignPublicationController_HandlePublicationState_PutAndGet(t *testing.T) {
-	controller, _ := newEvalCampaignPublicationControllerTest(t)
+	controller := newEvalCampaignPublicationControllerTest(t)
 	runID := "eval-init-gemma3-4b-1789739892"
 	path := constants.APIPaths.EvalCampaignPublicationStateByRun + runID + "/publication-state"
 	body := models.EvalCampaignPublicationState{
@@ -88,7 +88,7 @@ func TestEvalCampaignPublicationController_HandlePublicationState_PutAndGet(t *t
 }
 
 func TestEvalCampaignPublicationController_HandlePublicationState_RejectsInvalidRequests(t *testing.T) {
-	controller, _ := newEvalCampaignPublicationControllerTest(t)
+	controller := newEvalCampaignPublicationControllerTest(t)
 	runID := "eval-init-qwen3-4b-1789739892"
 	path := constants.APIPaths.EvalCampaignPublicationStateByRun + runID + "/publication-state"
 

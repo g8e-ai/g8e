@@ -28,8 +28,8 @@ func TestTUI_FileSvcFactoryError(t *testing.T) {
 
 	deps := stubTUIDeps(t, cfg)
 	deps.fileSvcFactory = cmdtest.FailingFileSvcFactory(errFactory)
-	deps.loadCredentials = func(_ fs.RuntimeFileService, _ *config.Config) (*auth.Credentials, error) {
-		panic("loadCredentials should not be called when fileSvcFactory fails")
+	deps.loadAuthContext = func(_ fs.RuntimeFileService, _ *config.Config) (*auth.ClientAuthContext, error) {
+		panic("loadAuthContext should not be called when fileSvcFactory fails")
 	}
 
 	cmd := tuiCmdWithDeps(deps)

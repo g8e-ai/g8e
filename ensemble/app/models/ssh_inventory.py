@@ -21,7 +21,7 @@ and the inventory exposes them only via the flat ``hosts`` list.
 
 from __future__ import annotations
 
-from .base import G8eBaseModel, Field
+from .base import Field, G8eBaseModel
 
 
 class SshHost(G8eBaseModel):

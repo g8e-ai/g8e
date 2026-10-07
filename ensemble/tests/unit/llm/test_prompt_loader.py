@@ -248,7 +248,8 @@ class TestPromptFileIntegrity:
     @staticmethod
     def _prompt_files() -> list[Path]:
         return [
-            p for p in PROMPTS_DIR.rglob("*.txt")
+            p
+            for p in PROMPTS_DIR.rglob("*.txt")
             if not any(part.startswith(".") for part in p.parts) and "venv" not in p.parts
         ]
 

@@ -8,7 +8,6 @@
 package consensus
 
 import (
-	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -30,7 +29,7 @@ func TestConsensusService_Deliberate_ConcurrentIdempotency(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 3)
-	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.DiscardHandler), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 

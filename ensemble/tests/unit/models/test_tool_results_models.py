@@ -101,7 +101,7 @@ class TestFileOperationRiskContext:
         assert ctx.backup_available is False
 
     def test_backup_available_coerces_truthy_string(self):
-        ctx = FileOperationRiskContext(backup_available="yes")
+        ctx = FileOperationRiskContext.model_validate({"backup_available": "yes"})
         assert ctx.backup_available is True
 
 
@@ -124,10 +124,12 @@ class TestCommandInternalResultCompletedAt:
         assert result.completed_at is None
 
     def test_accepts_iso_string_coerced_to_datetime(self):
-        result = CommandInternalResult(
-            execution_id="exec-iso",
-            status=ExecutionStatus.COMPLETED,
-            completed_at="2026-03-04T12:00:00Z",
+        result = CommandInternalResult.model_validate(
+            {
+                "execution_id": "exec-iso",
+                "status": ExecutionStatus.COMPLETED,
+                "completed_at": "2026-03-04T12:00:00Z",
+            }
         )
         assert isinstance(result.completed_at, datetime)
 
@@ -161,7 +163,7 @@ class TestCommandRiskAnalysis:
 
     def test_risk_level_is_required(self):
         with pytest.raises(ValidationError):
-            CommandRiskAnalysis()
+            CommandRiskAnalysis.model_validate({})
 
 
 class TestErrorAnalysisResult:
@@ -253,11 +255,13 @@ class TestSshInventoryToolResult:
         assert result.total_count == 0
 
     def test_explicit_values(self):
-        result = SshInventoryToolResult(
-            success=True,
-            source_path="/etc/ssh/config",
-            hosts=[{"host": "web-1", "hostname": "10.0.0.1"}],
-            total_count=1,
+        result = SshInventoryToolResult.model_validate(
+            {
+                "success": True,
+                "source_path": "/etc/ssh/config",
+                "hosts": [{"host": "web-1", "hostname": "10.0.0.1"}],
+                "total_count": 1,
+            }
         )
         assert result.success is True
         assert result.source_path == "/etc/ssh/config"

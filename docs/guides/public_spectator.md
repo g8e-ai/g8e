@@ -1,7 +1,7 @@
 # Public Spectator Operations Guide
 
-Last Updated: 2026-10-01
-Version: v2.2.6
+Last Updated: 2026-10-06
+Version: v2.3.2
 
 This guide covers the gateway-owned anonymous public mirror and evaluation explorer. It is separate from the passkey-authenticated owner-local observe frontend connected with `./g8e gw connect <origin>`; see [Generator-Neutral Builder Guide](./build_observe_frontend.md) and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend).
 
@@ -162,7 +162,7 @@ Evaluation campaigns use gateway-mediated publication instead.
 
 `public publish` durably appends before transmission.
 `public push` retries ordered outbox and proof delivery without running inference.
-`public repair-outbox` compacts a host publisher outbox against its local snapshot; when the Gateway owns the public mirror, it reports that the Gateway manages the outbox instead of requiring host export configuration.
+`public repair-outbox` compacts a host publisher outbox against its local snapshot and keeps pending multi-record batches whose first sequence and prior-batch hash continue the acknowledged tip; when the Gateway owns the public mirror, it reports that the Gateway manages the outbox instead of requiring host export configuration.
 A failed transmission remains retryable.
 
 ## Related documentation

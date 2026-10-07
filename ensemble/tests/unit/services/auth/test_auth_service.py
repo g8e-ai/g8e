@@ -5,27 +5,33 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from fastapi import Request
+from proxy_stamp_support import (
+    KeySource,
+    key_response,
+    make_key,
+    make_request,
+    stamped_headers,
+    verifier,
+)
 
 from app.constants import (
     AUTHORIZATION,
     CLI_SESSION_ID,
-    AuthMethod,
-    OperatorStatus,
     WEB_SESSION_ID,
     X_PROXY_CLI_SESSION_ID,
-    X_PROXY_ORGANIZATION_ID,
     X_PROXY_USER_EMAIL,
     X_PROXY_USER_ID,
-    X_PROXY_WEB_SESSION_ID,
+    AuthMethod,
+    OperatorStatus,
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser, OperatorSessionValidationResponse
 from app.models.http_context import BoundOperator, G8eHttpContext
 from app.services.auth.auth_service import AuthService
-from proxy_stamp_support import KeySource, key_response, make_key, make_request, stamped_headers, verifier
 
 
 @pytest.fixture
@@ -51,7 +57,9 @@ class TestAuthServiceProxyAuthentication:
         )
 
     @pytest.mark.asyncio
-    async def test_signed_proxy_auth_extracts_user_and_cli_session_id(self, stamped_auth_service, gateway_key):
+    async def test_signed_proxy_auth_extracts_user_and_cli_session_id(
+        self, stamped_auth_service, gateway_key
+    ):
         request = make_request(
             stamped_headers(
                 gateway_key,
@@ -61,7 +69,7 @@ class TestAuthServiceProxyAuthentication:
             )
         )
 
-        user = await stamped_auth_service.authenticate_request(request, MagicMock())
+        user = await stamped_auth_service.authenticate_request(request)
 
         assert user.uid == "user-123"
         assert user.user_id == "user-123"
@@ -72,22 +80,26 @@ class TestAuthServiceProxyAuthentication:
         assert user.auth_method == AuthMethod.PROXY
 
     @pytest.mark.asyncio
-    async def test_signed_proxy_auth_ignores_unsigned_session_headers(self, stamped_auth_service, gateway_key):
+    async def test_signed_proxy_auth_ignores_unsigned_session_headers(
+        self, stamped_auth_service, gateway_key
+    ):
         headers = stamped_headers(gateway_key)
         headers[WEB_SESSION_ID] = "web-forged"
         headers[CLI_SESSION_ID] = "cli-forged"
 
-        user = await stamped_auth_service.authenticate_request(make_request(headers), MagicMock())
+        user = await stamped_auth_service.authenticate_request(make_request(headers))
 
         assert user.web_session_id == "web-1"
         assert user.cli_session_id is None
 
     @pytest.mark.asyncio
     async def test_proxy_headers_without_a_signature_are_rejected(self, stamped_auth_service):
-        request = make_request({X_PROXY_USER_ID: "user-123", X_PROXY_USER_EMAIL: "user-123@g8e.local"})
+        request = make_request(
+            {X_PROXY_USER_ID: "user-123", X_PROXY_USER_EMAIL: "user-123@g8e.local"}
+        )
 
         with pytest.raises(AuthenticationError, match="Gateway signature"):
-            await stamped_auth_service.authenticate_request(request, MagicMock())
+            await stamped_auth_service.authenticate_request(request)
 
     @pytest.mark.asyncio
     async def test_static_marker_header_no_longer_authenticates(self, stamped_auth_service):
@@ -100,22 +112,24 @@ class TestAuthServiceProxyAuthentication:
         )
 
         with pytest.raises(AuthenticationError, match="Gateway signature"):
-            await stamped_auth_service.authenticate_request(request, MagicMock())
+            await stamped_auth_service.authenticate_request(request)
 
     @pytest.mark.asyncio
     async def test_tampered_body_is_rejected(self, stamped_auth_service, gateway_key):
         request = make_request(stamped_headers(gateway_key), body=b'{"message":"different"}')
 
         with pytest.raises(AuthenticationError, match="Gateway signature"):
-            await stamped_auth_service.authenticate_request(request, MagicMock())
+            await stamped_auth_service.authenticate_request(request)
 
     @pytest.mark.asyncio
-    async def test_replayed_stamp_is_rejected_on_a_second_request(self, stamped_auth_service, gateway_key):
+    async def test_replayed_stamp_is_rejected_on_a_second_request(
+        self, stamped_auth_service, gateway_key
+    ):
         headers = stamped_headers(gateway_key)
-        await stamped_auth_service.authenticate_request(make_request(headers), MagicMock())
+        await stamped_auth_service.authenticate_request(make_request(headers))
 
         with pytest.raises(AuthenticationError, match="Gateway signature"):
-            await stamped_auth_service.authenticate_request(make_request(headers), MagicMock())
+            await stamped_auth_service.authenticate_request(make_request(headers))
 
     @pytest.mark.asyncio
     async def test_one_request_can_be_authenticated_by_several_dependencies(
@@ -123,24 +137,22 @@ class TestAuthServiceProxyAuthentication:
     ):
         request = make_request(stamped_headers(gateway_key))
 
-        first = await stamped_auth_service.authenticate_request(request, MagicMock())
-        second = await stamped_auth_service.authenticate_request(request, MagicMock())
+        first = await stamped_auth_service.authenticate_request(request)
+        second = await stamped_auth_service.authenticate_request(request)
 
         assert first.user_id == second.user_id == "user-1"
 
     @pytest.mark.asyncio
     async def test_without_a_verifier_proxy_identity_is_rejected(self, auth_service, gateway_key):
         with pytest.raises(AuthenticationError, match="Gateway signature"):
-            await auth_service.authenticate_request(
-                make_request(stamped_headers(gateway_key)), MagicMock()
-            )
+            await auth_service.authenticate_request(make_request(stamped_headers(gateway_key)))
 
     @pytest.mark.asyncio
     async def test_proxy_auth_missing_email_fails(self, stamped_auth_service):
         request = make_request({X_PROXY_USER_ID: "user-123"})
 
         with pytest.raises(AuthenticationError):
-            await stamped_auth_service.authenticate_request(request, MagicMock())
+            await stamped_auth_service.authenticate_request(request)
 
 
 class TestAuthServiceOperatorSessionAuthentication:
@@ -167,7 +179,7 @@ class TestAuthServiceOperatorSessionAuthentication:
             )
         )
 
-        user = await auth_service.authenticate_request(request, MagicMock())
+        user = await auth_service.authenticate_request(request)
 
         assert user.user_id == "user-123"
         assert user.operator_id == "operator-456"
@@ -198,7 +210,7 @@ class TestAuthServiceOperatorSessionAuthentication:
             )
         )
 
-        user = await auth_service.authenticate_request(request, MagicMock())
+        user = await auth_service.authenticate_request(request)
 
         assert user.auth_method == AuthMethod.OPERATOR_SESSION
         assert user.operator_session_id == "operator-session-123"
@@ -223,7 +235,7 @@ class TestAuthServiceOperatorSessionAuthentication:
             )
         )
 
-        user = await auth_service.authenticate_request(request, MagicMock())
+        user = await auth_service.authenticate_request(request)
 
         assert user.user_id == "user-123"
         assert user.operator_session_id == "operator-session-123"
@@ -250,7 +262,7 @@ class TestAuthServiceOperatorSessionAuthentication:
         mock_internal_http_client.validate_operator_session.return_value = None
 
         with pytest.raises(AuthenticationError):
-            await auth_service.authenticate_request(request, MagicMock())
+            await auth_service.authenticate_request(request)
 
 
 class TestAuthServiceGetValidatedContext:

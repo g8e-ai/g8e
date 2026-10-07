@@ -21,10 +21,14 @@ pytestmark = pytest.mark.unit
 @pytest.mark.asyncio
 async def test_reputation_signing_uses_mtls_and_typed_gateway_response():
     client = GovernanceClient(
-        tls_config=TLSConfig(client_cert_path="app.pem", client_key_path="app.key"),
-        gateway_settings=GatewaySettings(http_url="https://gateway.test"),
+        tls_config=TLSConfig.model_validate(
+            {"client_cert_path": "app.pem", "client_key_path": "app.key"}
+        ),
+        gateway_settings=GatewaySettings.model_validate({"http_url": "https://gateway.test"}),
     )
-    request = ReputationSignRequest(merkle_root="a" * 64, prev_root="0" * 64, tribunal_command_id="verdict-1")
+    request = ReputationSignRequest(
+        merkle_root="a" * 64, prev_root="0" * 64, tribunal_command_id="verdict-1"
+    )
     response = MagicMock()
     response.status = 200
     response.json = AsyncMock(return_value={"signature": "b" * 64})
@@ -34,7 +38,10 @@ async def test_reputation_signing_uses_mtls_and_typed_gateway_response():
     client._get_http_session = AsyncMock(return_value=session)
     signed = await client.sign_reputation_commitment(request)
     assert signed.signature == "b" * 64
-    session.post.assert_called_once_with("https://gateway.test" + GatewayAPIPaths.GATEWAY_REPUTATION_SIGN, json=request.model_dump(mode="json"))
+    session.post.assert_called_once_with(
+        "https://gateway.test" + GatewayAPIPaths.GATEWAY_REPUTATION_SIGN,
+        json=request.model_dump(mode="json"),
+    )
 
     response.status = 503
     with pytest.raises(NetworkError):
@@ -43,7 +50,11 @@ async def test_reputation_signing_uses_mtls_and_typed_gateway_response():
 
 @pytest.mark.asyncio
 async def test_reputation_signing_refuses_missing_app_credentials():
-    client = GovernanceClient(gateway_settings=GatewaySettings(http_url="https://gateway.test"))
-    request = ReputationSignRequest(merkle_root="a" * 64, prev_root="0" * 64, tribunal_command_id="verdict-1")
+    client = GovernanceClient(
+        gateway_settings=GatewaySettings.model_validate({"http_url": "https://gateway.test"})
+    )
+    request = ReputationSignRequest(
+        merkle_root="a" * 64, prev_root="0" * 64, tribunal_command_id="verdict-1"
+    )
     with pytest.raises(ValidationError):
         await client.sign_reputation_commitment(request)

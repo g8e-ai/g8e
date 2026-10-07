@@ -3,8 +3,8 @@ doc_id: getting_started
 title: Getting Started
 audience: new users and platform evaluators
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - docs/guides/getting_started.md
   - Makefile
@@ -47,25 +47,33 @@ Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcomm
 - Go 1.26.6
 - Make
 - Git
-- Node.js 22+ with npm (for the evaluation explorer)
+- Node.js 22+ with npm (only to rebuild the Console or evaluation explorer; a fresh clone builds from the committed embeds)
 - A modern browser with WebAuthn support (or use headless enrollment)
 
-If you don't have these tools, run the setup script for your platform:
-
-- **Linux:** `bash scripts/linux-setup.sh`
-- **macOS:** `bash scripts/macos-setup.sh`
-- **Windows:** `pwsh scripts/windows-setup.ps1`
-
-### 1. Clone the repository
+### Clone the repository
 
 ```bash
-git clone https://github.com/g8e-ai/g8e.git
+git clone --depth 1 https://github.com/g8e-ai/g8e.git
 cd g8e
 ```
 
-### 2. Start the Gateway only
+If build tools are missing, run the setup script from this checkout:
 
-The simplest path: build and start the Gateway on localhost.
+- **Linux:** `bash scripts/linux-setup.sh --build-only`
+- **macOS:** `bash scripts/macos-setup.sh --build-only`
+- **Windows:** `pwsh scripts/windows-setup.ps1`
+
+For a Gateway in WSL that LAN Operators must reach, see the Windows-to-WSL port-forwarding helper `scripts/configure-gateway-lan.ps1` in [Connect Operator to Gateway](connect_operator_to_gateway.md).
+
+Linux and macOS setup without `--build-only` also installs the contributor toolchain, including Python test and lint dependencies. Pass `-y` to accept installs without prompting, for example `bash scripts/linux-setup.sh --build-only -y`. After setup, open a new terminal or source the shell profile printed by the script, then return to the repository root.
+
+### Gateway-only track
+
+The Gateway-only track has no Python, Ollama, or model SDK requirement. It
+requires Git, Go 1.26.6, and Make. When `console/dist` and
+`evaluation-explorer/dist` are absent (a fresh clone), `make build` uses the
+committed Console and explorer embeds, so Node.js is not needed.
+Build and start the Gateway on localhost:
 
 ```bash
 make up
@@ -82,13 +90,19 @@ The Gateway starts on:
 - **HTTP (discovery):** `http://localhost:8080`
 - **HTTPS/mTLS (API):** `https://localhost:8443`
 
-### 3. Or: Start the full stack (Gateway + Operators + Ensemble)
+### Full platform track: Gateway + Operators + Ensemble
 
-For the complete platform with local Operators and the agentic Ensemble (g8ee):
+For the complete platform with local Operators and the agentic Ensemble
+(g8ee), install Python 3.12+ dependencies once, then start the workloads:
 
 ```bash
-make full
+make ensemble-env # runtime only; bootstraps uv and installs Python 3.12+ as needed
+make full-setup
 ```
+
+Use `make dev-python` instead when you also need the Ensemble test and lint
+dependencies. The Gateway and Operator build alone does not need either Python
+target.
 
 This interactively prompts you for:
 - Operator working directories
@@ -97,10 +111,10 @@ This interactively prompts you for:
 
 Then it:
 - Starts the Gateway in the background
-- Launches three Operators (Data, Provenance, Observer) and the Ensemble
+- Launches four Operators (Provenance, Observer, Inference, Data) and the Ensemble
 - Prints commands to enroll and approve workloads
 
-### 4. Enroll the first owner
+### Enroll the first owner
 
 From another terminal, authenticate with the Gateway:
 
@@ -110,7 +124,17 @@ From another terminal, authenticate with the Gateway:
 
 This opens your browser for the WebAuthn passkey ceremony and installs the Gateway Root CA in your OS trust store.
 
-### 5. Approve workload enrollments
+No browser on this machine (SSH session, container, CI)? Enroll headless instead:
+
+```bash
+./g8e auth enroll user -e localhost --headless
+```
+
+This creates an mTLS-only CLI identity with no passkey ceremony and no OS
+trust-store changes. It cannot sign in to the browser console, but it fully
+drives the CLI.
+
+### Approve workload enrollments
 
 List pending enrollment requests and approve them:
 
@@ -125,13 +149,16 @@ Or approve all at once:
 ./g8e auth enroll approve --all --yes
 ```
 
-### 6. Verify the stack is healthy
+### Verify the stack is healthy
 
 ```bash
+make status
 ./g8e gw status
 ./g8e operator list
 ./g8e tui
 ```
+
+`g8e tui` needs an enrolled CLI (`g8e auth enroll user`). It lists pending L3 approvals and can approve them: press `tab` to focus the queue, then `enter` to open the browser WebAuthn page.
 
 Visit the browser console at `https://localhost:8443/console/` to see the passkey sign-in and approvals UI.
 
@@ -156,8 +183,8 @@ There are two ways to run g8e: **natively on your host** (compile and run direct
 | Go | 1.26.6 | Required to build from source |
 | Make | Any recent | Required to run Makefile targets |
 | Git | Any recent | Required to clone the repository |
-| Node.js and npm | 22+ | Required to build the evaluation explorer (once, at build time) |
-| Python | 3.10+ | Optional, only for protocol library development |
+| Node.js and npm | 22+ | Required only to rebuild the Console or evaluation explorer embeds; `make build` and `make up` use the committed embeds when `dist/` is absent |
+| Python | 3.12+ | Required for `make full` / `make full-setup` (Ensemble); `make ensemble-env` installs runtime dependencies, and `make dev-python` adds test and lint dependencies. Also used for protocol library development |
 
 ### Docker path (no local toolchain required)
 
@@ -175,7 +202,7 @@ The Docker build compiles inside the builder stage. No local Go installation nee
 Clone the repository:
 
 ```bash
-git clone https://github.com/g8e-ai/g8e.git
+git clone --depth 1 https://github.com/g8e-ai/g8e.git
 cd g8e
 ```
 
@@ -251,10 +278,26 @@ make up
 **Start the Gateway + Operators + Ensemble:**
 
 ```bash
+make ensemble-env # one-time runtime setup
 make full
 ```
 
-`make full` prompts interactively for operator configuration, then launches everything in the background.
+`make full` reads the repository-root `.env` and starts without launcher prompts. Set `G8E_OLLAMA_ENDPOINT` to the approved HTTP(S) provider URL. `G8E_HOSTNAME` selects the Gateway hostname for Operators, Ensemble, browser approval links, CORS, and passkey origins; if omitted, the host launcher retains `g8e.local`. Exported process variables take precedence, including empty values. Missing or empty Ollama endpoints and invalid hostnames fail before Gateway startup. The launcher parses quoted values and comments as data, without shell execution or variable interpolation, and leaves `.env` unchanged.
+
+The four roles run locally by default. Optional `G8E_PROVENANCE_HOST`, `G8E_OBSERVER_HOST`, `G8E_INFERENCE_HOST`, and `G8E_DATA_HOST` select remote hosts. Remote roles print commands to run on those hosts; the launcher does not connect to them. The Gateway and Ensemble always run locally. The hostname must resolve to this Gateway, be reachable by the selected hosts, and match its existing TLS certificate.
+
+Operator working directories default to `~/.ollama/g8e/<role>`, and the local Ollama model store is detected from host storage. Paths, ports, and model roles are not read from `.env`, following [INV-ENV-04](../devs/devs.md#environment-inv-env). Override paths with explicit launcher flags:
+
+```bash
+make full FULL_ARGS='--model-storage-root /srv/ollama/models --data-working-dir /srv/g8e/data'
+make full FULL_ARGS='--dry-run'
+```
+
+`--dry-run` previews the Gateway and workloads without launching services or writing runtime state; Make still builds the binary. Use `--<role>-working-dir` for any role and `--env-file` for another dotenv file. Each Operator requires a separate directory. The Ensemble uses `.local.dev/full/ensemble`.
+
+Use `make full-setup` for the previous interactive flow, which prompts for Operator hosts, working directories, model storage, and the Ollama endpoint. It does not read `.env`.
+
+Workloads may still await owner enrollment and approval. Stale local identities fail unattended startup with instructions to use `make full RESET_IDENTITIES=1`; see [workload identity recovery](reset_workload_identity.md).
 
 ### Gateway configuration
 
@@ -266,6 +309,8 @@ The gateway starts in Doctrine mode by default (L1 enforced, L2/L3 audited). To 
 ./g8e gw start --posture ratify      # L1/L3 enforced, L2 audited
 ./g8e gw start --posture notary      # L1/L2/L3 strictly enforced
 ```
+
+`make clean` removes build and test artifacts and does not reset runtime state, trust, or databases. To intentionally reset the Gateway runtime, run `./g8e gw clean`, which archives `.g8e/` and requires fresh owner and workload enrollment.
 
 The default plain-HTTP port is `8080` and serves bootstrap and PKI discovery. The default HTTPS port is `8443` and serves authenticated APIs, MCP, and the Web Console.
 
@@ -358,7 +403,7 @@ Service endpoints:
 docker compose down
 ```
 
-Preserve volumes:
+Remove volumes (deletes persisted runtime data):
 
 ```bash
 docker compose down -v
@@ -373,7 +418,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 ### Go module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.3
+go get github.com/g8e-ai/g8e/v2@v2.3.2
 ```
 
 Import in your Go code:
@@ -388,7 +433,7 @@ import (
 ### Python package
 
 ```bash
-pip install g8e==2.2.3
+pip install g8e==2.3.2
 ```
 
 Or pinned to latest:
@@ -423,8 +468,10 @@ This installs the gateway Root CA into your OS trust store and opens the browser
 For Docker deployments where the Gateway serves HTTPS on a different port than the default:
 
 ```bash
-./g8e auth enroll user -e localhost:8443
+./g8e auth enroll user -e localhost --port 9443
 ```
+
+Replace `9443` with the published HTTPS port. `--endpoint` (`-e`) selects the HTTP discovery endpoint, not the HTTPS API port; when discovery is also remapped, use `-e localhost:<http-port>`.
 
 ---
 
@@ -467,43 +514,12 @@ g8e integrates with popular AI agent binaries to provide governed MCP tool acces
 
 ---
 
-## Industry Demos
-
-The `demos/` directory contains four Docker Compose environments: healthcare, finance, DHS, and FedRAMP.
-
-### Run a demo
-
-```bash
-./g8e demos list
-./g8e demos start healthcare
-
-# Follow the enrollment commands, then check readiness
-./g8e demos status healthcare
-
-# Run scenarios
-./g8e demos run healthcare 1
-./g8e demos run healthcare
-```
-
-Demo ports:
-
-| Demo | HTTP | HTTPS | Additional UI |
-|---|---|---|---|
-| healthcare | 8081 | 8444 | 3001 |
-| finance | 8082 | 8445 | 3002 |
-| dhs | 8087 | 8450 | - |
-| fedramp | 8088 | 8451 | - |
-
-See [demos/README.md](../../demos/README.md) for full details.
-
----
-
 ## Post-Bootstrap Actions
 
 After the Gateway is running and the CLI is authenticated:
 
 ```bash
-./g8e gw status           # Gateway health and endpoint info
+./g8e gw status           # Gateway health, endpoints, enrollments
 ./g8e gw data operators   # List enrolled operators
 ./g8e gw data users       # List users
 ./g8e gw data audit list  # Inspect the audit vault

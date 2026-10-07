@@ -14,33 +14,33 @@ LLM-based analysis system.
 
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
-from app.constants import ChatSessionStatus, InvestigationStatus, MessageSender, EventType
-from app.errors import ResourceNotFoundError
+from app.constants import ChatSessionStatus, EventType, InvestigationStatus, MessageSender
+from app.dependencies import (
+    get_g8ee_case_data_service,
+    get_g8ee_chat_pipeline,
+    get_g8ee_chat_task_manager,
+    get_g8ee_chat_user_settings,
+    get_g8ee_investigation_service,
+    get_request_context,
+    require_authenticated_context,
+)
+from app.errors import ResourceNotFoundError, ValidationError
 from app.models import InvestigationModel
 from app.models.chat_api import (
     ChatSessionDetailsResponse,
     ChatSessionResponse,
     LatestChatSessionResponse,
 )
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import ConversationMessageMetadata
+from app.models.settings import G8eeUserSettings
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
-from app.dependencies import (
-    get_g8ee_case_data_service,
-    get_g8ee_chat_user_settings,
-    get_g8ee_investigation_service,
-    require_authenticated_context,
-    get_g8ee_chat_pipeline,
-    get_g8ee_chat_task_manager,
-    get_request_context,
-)
-from app.services.investigation.investigation_service import InvestigationService
-from app.services.data.case_data_service import CaseDataService
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
-from app.models.http_context import G8eHttpContext, RequestContext
-from app.models.settings import G8eeUserSettings
+from app.services.data.case_data_service import CaseDataService
+from app.services.investigation.investigation_service import InvestigationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -48,6 +48,16 @@ logger = logging.getLogger(__name__)
 
 def _is_chat_session_active(status: InvestigationStatus) -> bool:
     return status == InvestigationStatus.OPEN
+
+
+def _require_investigation_id(investigation_id: str | None) -> str:
+    if investigation_id is None:
+        raise ValidationError(
+            "Triage requests require context.investigation_id",
+            field="context.investigation_id",
+            constraint="required",
+        )
+    return investigation_id
 
 
 @router.post("/chat/triage/answer")
@@ -70,7 +80,7 @@ async def answer_triage_question(
         lite_model_override=None,
     )
 
-    investigation_id = request.context.investigation_id
+    investigation_id = _require_investigation_id(request.context.investigation_id)
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError(
@@ -134,7 +144,7 @@ async def skip_triage_questions(
         lite_model_override=None,
     )
 
-    investigation_id = request.context.investigation_id
+    investigation_id = _require_investigation_id(request.context.investigation_id)
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError(
@@ -182,7 +192,9 @@ async def timeout_triage_questions(
     """
     Record that triage clarifying questions timed out.
     """
-    investigation_id = g8e_context.investigation_id
+    # Keep the typed request body in the route contract; validation happens in FastAPI.
+    _ = request
+    investigation_id = _require_investigation_id(g8e_context.investigation_id)
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError(
@@ -204,7 +216,6 @@ async def timeout_triage_questions(
 @router.get("/chat/sessions/{web_session_id}")
 async def get_chat_session(
     web_session_id: str,
-    request: Request,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ) -> ChatSessionResponse:
@@ -257,7 +268,6 @@ async def get_chat_session(
 @router.get("/chat/cases/{case_id}/latest-session")
 async def get_latest_chat_session_for_case(
     case_id: str,
-    request: Request,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
@@ -306,7 +316,10 @@ async def get_latest_chat_session_for_case(
 
     if latest_investigation:
         logger.info(
-            f"Found latest investigation for case {case_id}: {latest_investigation.id} with {len(latest_investigation.conversation_history)} messages",
+            "Found latest investigation for case %s: %s with %s messages",
+            case_id,
+            latest_investigation.id,
+            len(latest_investigation.conversation_history),
             extra={
                 "case_id": case_id,
                 "investigation_id": latest_investigation.id,
@@ -332,7 +345,8 @@ async def get_latest_chat_session_for_case(
         )
 
     logger.info(
-        f"No investigations with conversation history found for case {case_id}",
+        "No investigations with conversation history found for case %s",
+        case_id,
         extra={"case_id": case_id, "user_id": authenticated_user_id},
     )
 

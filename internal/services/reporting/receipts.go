@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
@@ -26,7 +27,7 @@ func reportReceipts(ctx context.Context, outDir string, store *storage.SQLAuditS
 		if ctx.Err() != nil {
 			return FileResult{}, ctx.Err()
 		}
-		batch, err := store.ListActionReceipts("", batchSize, offset)
+		batch, err := store.ListActionReceipts(models.AuditScope{OperatorSessionID: ""}, batchSize, offset)
 		if err != nil {
 			return FileResult{}, fmt.Errorf("%w: receipts: %w", constants.ErrReportStoreUnavailable, err)
 		}

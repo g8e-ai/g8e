@@ -85,11 +85,11 @@ func (m *mockResultsPublisher) PublishInferenceProgress(ctx context.Context, ori
 	return nil
 }
 
-func (m *mockResultsPublisher) PublishProviderBoundaryObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ProviderBoundaryObservationCompleted) error {
+func (m *mockResultsPublisher) PublishProviderBoundaryObservationCompleted(ctx context.Context, origin *commonv1.GovernanceEnvelope, completion *evalv1.ProviderBoundaryObservationCompleted) error {
 	return nil
 }
 
-func (m *mockResultsPublisher) PublishModelProvenanceObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ModelProvenanceObservationCompleted) error {
+func (m *mockResultsPublisher) PublishModelProvenanceObservationCompleted(ctx context.Context, origin *commonv1.GovernanceEnvelope, completion *evalv1.ModelProvenanceObservationCompleted) error {
 	return nil
 }
 

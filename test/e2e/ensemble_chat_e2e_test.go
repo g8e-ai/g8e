@@ -13,7 +13,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -99,16 +99,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	require.NotEmpty(t, chatResp.InvestigationID, "ensemble chat must return investigation_id")
 	t.Logf("chat started: case_id=%s investigation_id=%s", chatResp.CaseID, chatResp.InvestigationID)
 
-	var foundReceipt *struct {
-		TransactionID   string
-		EventType       string
-		ActionType      string
-		TargetResource  string
-		Signature       string
-		RequestorUserID string
-		ActingAppID     string
-		ActionReceipt   *operatorv1.ActionReceipt
-	}
+	var foundReceipt *models.ActionReceiptRecord
 
 	require.Eventually(t, func() bool {
 		receiptsResp, err := e2eClient.GetAuditReceipts(ctx, "")
@@ -132,45 +123,37 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 			if r.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 				continue
 			}
-			foundReceipt = &struct {
-				TransactionID   string
-				EventType       string
-				ActionType      string
-				TargetResource  string
-				Signature       string
-				RequestorUserID string
-				ActingAppID     string
-				ActionReceipt   *operatorv1.ActionReceipt
-			}{
-				TransactionID:   r.TransactionID,
-				EventType:       string(r.EventType),
-				ActionType:      string(r.ActionType),
-				TargetResource:  r.TargetResource,
-				Signature:       r.Signature,
-				RequestorUserID: r.RequestorUserID,
-				ActingAppID:     r.ActingAppID,
-				ActionReceipt:   r.ActionReceipt,
-			}
+			foundReceipt = r
 			return true
 		}
 		return false
 	}, 60*time.Second, 2*time.Second, "FILE_EDIT receipt for %s must be recorded within 60s", filePath)
 
 	require.NotNil(t, foundReceipt, "correlated FILE_EDIT receipt must be found")
-	assert.Equal(t, string(constants.EventOperatorFileEditRequested), foundReceipt.EventType,
-		"receipt must carry the originating governed request event_type")
-	assert.Equal(t, string(constants.ActionTypeFileEdit), foundReceipt.ActionType,
+	// The audit row describes the remote relay envelope; the signed payload
+	// describes the originating governed request. Check both contracts.
+	assert.Equal(t, constants.EventOperatorReceiptRecorded, foundReceipt.EventType,
+		"remote receipt audit row must carry the relay event_type")
+	assert.Equal(t, constants.ActionTypeFileEdit, foundReceipt.ActionType,
 		"receipt must carry the registry-derived action_type")
 	assert.NotEmpty(t, foundReceipt.TransactionID, "receipt must carry transaction_id")
 	assert.GreaterOrEqual(t, len(foundReceipt.Signature), 64, "receipt signature must be valid hex Ed25519 signature")
 	assert.Equal(t, e2eClient.userID, foundReceipt.RequestorUserID, "receipt requestor_user_id must match authenticated user")
 	assert.NotEmpty(t, foundReceipt.ActingAppID, "receipt acting_app_id must not be empty")
-	if foundReceipt.ActionReceipt != nil {
-		canonical, err := governance.CanonicalizeActionReceipt(foundReceipt.ActionReceipt)
-		require.NoError(t, err, "receipt v2 canonicalization must succeed")
-		assert.Contains(t, string(canonical), `"event_type":"`+string(constants.EventOperatorFileEditRequested)+`"`)
-		assert.Contains(t, string(canonical), `"action_type":"`+string(constants.ActionTypeFileEdit)+`"`)
-	}
+	require.NotNil(t, foundReceipt.ActionReceipt, "audit projection must include the signed ActionReceipt")
+	receipt := foundReceipt.ActionReceipt
+	assert.Equal(t, string(constants.EventOperatorFileEditRequested), receipt.EventType,
+		"signed receipt must carry the originating governed request event_type")
+	assert.Equal(t, string(constants.ActionTypeFileEdit), receipt.ActionType,
+		"signed receipt must carry the registry-derived action_type")
+	assert.Equal(t, foundReceipt.TransactionID, receipt.TransactionId)
+	assert.Equal(t, foundReceipt.Signature, receipt.Signature)
+	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status)
+	publicKey, err := governance.SignerPublicKey(receipt.SignerKeyId)
+	require.NoError(t, err, "receipt signer key must encode an Ed25519 public key")
+	require.NoError(t, governance.VerifyActionReceiptSignature(receipt, publicKey),
+		"originating event and action types must be covered by a valid receipt signature")
+
 	t.Logf("correlated receipt: tx=%s signature_len=%d requestor=%s app=%s",
 		foundReceipt.TransactionID, len(foundReceipt.Signature), foundReceipt.RequestorUserID, foundReceipt.ActingAppID)
 
@@ -224,7 +207,6 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	var fsReadResult operatorv1.FsReadResult
 	require.NoError(t, proto.Unmarshal(readResp.ResultPayload, &fsReadResult), "unmarshal FsReadResult")
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, fsReadResult.Status, "fs.read status must be COMPLETED")
-	assert.True(t, strings.Contains(string(fsReadResult.Content), fileContent),
-		"read-back file content %q must contain expected %q", string(fsReadResult.Content), fileContent)
+	assert.Equal(t, fileContent, string(fsReadResult.Content), "read-back must match the exact requested file content")
 	t.Logf("governed read-back verified exact content at %s", filePath)
 }

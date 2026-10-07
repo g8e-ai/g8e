@@ -87,7 +87,7 @@ class TestSafeWaitForMock:
     async def test_custom_side_effect_called(self):
         call_count = 0
 
-        async def custom_side_effect(coro, timeout):
+        async def custom_side_effect(coro, timeout_seconds):
             nonlocal call_count
             call_count += 1
             return "custom_value"
@@ -104,7 +104,7 @@ class TestSafeWaitForMock:
 
     @pytest.mark.asyncio
     async def test_custom_side_effect_can_raise(self):
-        async def custom_side_effect(coro, timeout):
+        async def custom_side_effect(coro, timeout_seconds):
             raise TimeoutError
 
         mock_obj = SafeWaitForMock(side_effect=custom_side_effect)

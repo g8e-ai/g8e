@@ -29,8 +29,8 @@ from pathlib import Path
 
 import pytest
 
-from app.constants.generated_status import EventType
 from app.constants import G8EE_COMPONENT
+from app.constants.generated_status import EventType
 from app.models.agent import ExecutorCommandArgs
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -40,6 +40,7 @@ from app.models.settings import (
     G8eeUserSettings,
     LLMSettings,
 )
+from app.services.operator.command_service import OperatorCommandService
 from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
 from tests.fakes.builder import build_command_service
 from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
@@ -105,7 +106,7 @@ def _write_auto_approved_json(tmp_path: Path, base_commands: list[str]) -> Path:
 def _build_service(
     auto_approved_path: Path,
 ) -> tuple[
-    object,  # OperatorCommandService
+    OperatorCommandService,
     FakeApprovalService,
     FakeEventService,
 ]:
@@ -148,6 +149,9 @@ class TestAutoApproveJsonIntegration:
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
             command_validation=CommandValidationSettings(
+                enable_whitelisting=False,
+                whitelisted_commands="",
+                enable_blacklisting=True,
                 enable_auto_approve=True,
                 auto_approved_commands="",  # CSV intentionally empty
             ),
@@ -180,6 +184,9 @@ class TestAutoApproveJsonIntegration:
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
             command_validation=CommandValidationSettings(
+                enable_whitelisting=False,
+                whitelisted_commands="",
+                enable_blacklisting=True,
                 enable_auto_approve=True,
                 auto_approved_commands="uptime",
             ),
@@ -201,11 +208,14 @@ class TestAutoApproveJsonIntegration:
     async def test_unlisted_verb_with_json_present_still_requires_approval(self, tmp_path):
         """A verb absent from BOTH JSON and CSV must still require approval."""
         json_path = _write_auto_approved_json(tmp_path, ["uptime"])
-        service, approval_service, event_service = _build_service(json_path)
+        service, approval_service, _event_service = _build_service(json_path)
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
             command_validation=CommandValidationSettings(
+                enable_whitelisting=False,
+                whitelisted_commands="",
+                enable_blacklisting=True,
                 enable_auto_approve=True,
                 auto_approved_commands="",
             ),

@@ -12,16 +12,15 @@ from __future__ import annotations
 import base64
 from typing import Any
 
+from g8e.operator.v1 import operator_pb2
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import Message
 
-from app.constants import EventType
-from app.constants import ExecutionStatus
+from app.constants import EventType, ExecutionStatus
 from app.constants.proto_mappings import protobuf_execution_status_to_python
 from app.models.http_context import G8eHttpContext
 from app.models.pubsub_messages import G8eoResultEnvelope
 from app.utils.gateway_decoding.result_decoder import parse_inbound_g8eo_payload
-from g8e.operator.v1 import operator_pb2
 
 _EVENT_TYPE_TO_RESULT_PROTO: dict[str, type[Message]] = {
     EventType.OPERATOR_COMMAND_COMPLETED: operator_pb2.CommandResult,
@@ -82,9 +81,7 @@ def gateway_result_payload_dict(
     if "status" in payload_dict:
         status_val = payload_dict["status"]
         if isinstance(status_val, (int, float)):
-            payload_dict["status"] = protobuf_execution_status_to_python(
-                int(status_val)
-            ).value
+            payload_dict["status"] = protobuf_execution_status_to_python(int(status_val)).value
         elif isinstance(status_val, str):
             if status_val.startswith("EXECUTION_STATUS_"):
                 enum_val = getattr(operator_pb2, status_val, None)

@@ -132,7 +132,7 @@ func (c *CampaignPublicationCoordinator) PublishFormationRoleInvocationLiveEvent
 	if err := publicdisclosure.ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, body); err != nil {
 		return fmt.Errorf("evaluation: publish formation role invocation live event: validate invocation event: %w", err)
 	}
-	_, err = c.exportFeedRecordsOneAtATime(ctx, assignment.GetRunId(), []campaignFeedPublishRequest{{
+	err = c.exportFeedRecordsOneAtATime(ctx, assignment.GetRunId(), []campaignFeedPublishRequest{{
 		IdempotencyKey: ModelRoleInvocationIdempotencyKey(signal.RunID, signal.AssignmentID, roleLabel),
 		RecordType:     models.PublicFeedRecordTypeEvent,
 		Body:           body,
@@ -162,7 +162,7 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentInvocationLiveEvents(c
 	if len(requests) == 0 {
 		return nil
 	}
-	_, err = c.exportFeedRecordsOneAtATime(ctx, assignment.GetRunId(), requests)
+	err = c.exportFeedRecordsOneAtATime(ctx, assignment.GetRunId(), requests)
 	return err
 }
 
@@ -188,20 +188,17 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentScoredInferenceLiveEve
 	if len(requests) == 0 {
 		return nil
 	}
-	_, err = c.exportFeedRecordsOneAtATime(ctx, assignment.GetRunId(), requests)
+	err = c.exportFeedRecordsOneAtATime(ctx, assignment.GetRunId(), requests)
 	return err
 }
 
-func (c *CampaignPublicationCoordinator) exportFeedRecordsOneAtATime(ctx context.Context, runID string, requests []campaignFeedPublishRequest) (int, error) {
-	published := 0
+func (c *CampaignPublicationCoordinator) exportFeedRecordsOneAtATime(ctx context.Context, runID string, requests []campaignFeedPublishRequest) error {
 	for _, request := range requests {
-		count, err := c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{request})
-		if err != nil {
-			return published, err
+		if _, err := c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{request}); err != nil {
+			return err
 		}
-		published += count
 	}
-	return published, nil
+	return nil
 }
 
 func (c *CampaignPublicationCoordinator) buildPlannedModelRoleInvocationPublishRequests(

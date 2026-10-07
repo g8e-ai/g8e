@@ -14,27 +14,27 @@ authority for shell command generation.
 
 import logging
 
-from app.errors import ConfigurationError
-from app.models.http_context import RequestContext
-from app.models.agent import OperatorContext
 from app.constants import (
-    CommandGenerationOutcome,
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    EventType,
     AuditorReason,
+    CommandGenerationOutcome,
+    EventType,
 )
-from app.services.ai.voter import TRIBUNAL_MIN_CONSENSUS
+from app.errors import ConfigurationError
+from app.llm.factory import get_llm_provider
+from app.llm.model_call_attribution import prepare_provider_call
 from app.llm.prompts import (
     build_command_constraints_message,
     build_tribunal_prompt_fields,
 )
-from app.llm.factory import get_llm_provider
-from app.llm.model_call_attribution import prepare_provider_call
+from app.llm.provider import LLMProvider
+from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
+    ConsensusMember,
     TribunalConsensusFailedError,
     TribunalConsensusFailedPayload,
     TribunalDisabledError,
@@ -48,26 +48,163 @@ from app.models.agents.tribunal import (
     TribunalVotingCompletedPayload,
     VoteBreakdown,
 )
-from app.models.tribunal_commands import TribunalGenerationRequest
-from app.utils.time_ids.ids import generate_tribunal_correlation_id
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.tool_results import CommandRiskAnalysis
-from app.utils.validation.safety import validate_command_safety
-
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.generation import (
-    _anonymize_clusters,
-    _run_generation_stage,
+    anonymize_clusters,
+    run_generation_stage,
 )
-from app.services.ai.tribunal.stages.voting import _run_voting_stage
-from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
+from app.services.ai.tribunal.stages.marshal import run_marshal_stage
+from app.services.ai.tribunal.stages.voting import run_voting_stage
 from app.services.ai.tribunal.utils import (
     member_for_pass,
     resolve_model,
 )
+from app.services.ai.voter import TRIBUNAL_MIN_CONSENSUS
 from app.services.observe.payloads import agent_state_sequence, build_agent_state_request
+from app.utils.time_ids.ids import generate_tribunal_correlation_id
+from app.utils.validation.safety import validate_command_safety
 
 logger = logging.getLogger(__name__)
+
+
+async def _run_peer_review_round(
+    request: TribunalGenerationRequest,
+    emitter: TribunalEmitter,
+    investigation_id: str,
+    generation_model: str,
+    members: list[ConsensusMember],
+    correlation_id: str,
+    num_passes: int,
+    candidates: list[CandidateCommand],
+    vote_breakdown: VoteBreakdown,
+    generation_provider: LLMProvider,
+    command_constraints_message: str,
+) -> tuple[
+    str | None,
+    float,
+    VoteBreakdown,
+    list[CandidateCommand] | None,
+    list[CandidateCommand],
+    VoteBreakdown,
+]:
+    """Run anonymized peer review after a weak first-round vote."""
+    logger.info(
+        "[TRIBUNAL] Consensus strength too low (%.2f < %d), initiating Round 2 peer review",
+        vote_breakdown.consensus_strength,
+        TRIBUNAL_MIN_CONSENSUS,
+    )
+    started_payload = TribunalSessionStartedPayload(
+        request=request.request,
+        guidelines=request.guidelines,
+        model=generation_model,
+        num_passes=num_passes,
+        members=members,
+        correlation_id=correlation_id,
+    )
+    await emitter.emit(EventType.AI_CONSENSUS_VOTING_ROUND_STARTED, started_payload)
+    await _push_tribunal_agent_state(
+        emitter, "running", run_id=investigation_id, model=generation_model
+    )
+    r1_clusters, _, _ = anonymize_clusters(candidates)
+    await emitter.emit(
+        EventType.AI_CONSENSUS_VOTING_ROUND_2_STARTED,
+        TribunalSessionStartedPayload(
+            request=request.request,
+            guidelines=request.guidelines,
+            model=generation_model,
+            num_passes=num_passes,
+            members=members,
+            correlation_id=correlation_id,
+        ),
+    )
+    round_2_candidates = await run_generation_stage(
+        provider=generation_provider,
+        model=generation_model,
+        request=request.request,
+        guidelines=request.guidelines,
+        operator_context=request.operator_context,
+        num_passes=num_passes,
+        emitter=emitter,
+        command_constraints_message=command_constraints_message,
+        round_num=2,
+        r1_clusters=r1_clusters,
+    )
+    vote_winner, vote_score, vote_breakdown, tied_candidates = await run_voting_stage(
+        candidates=round_2_candidates,
+        request=request.request,
+        emitter=emitter,
+        total_members=num_passes,
+    )
+    await emitter.emit(
+        EventType.AI_CONSENSUS_VOTING_ROUND_2_CONSENSUS_REACHED
+        if vote_winner is not None
+        else EventType.AI_CONSENSUS_VOTING_ROUND_2_CONSENSUS_FAILED,
+        TribunalVotingCompletedPayload(
+            vote_winner=vote_winner,
+            vote_score=vote_score,
+            num_candidates=len(round_2_candidates),
+            request=request.request,
+            vote_breakdown=vote_breakdown,
+        )
+        if vote_winner is not None
+        else TribunalConsensusFailedPayload(
+            request=request.request,
+            vote_breakdown=vote_breakdown,
+        ),
+    )
+    await emitter.emit(
+        EventType.AI_CONSENSUS_VOTING_ROUND_COMPLETED,
+        TribunalSessionCompletedPayload(
+            request=request.request,
+            final_command=vote_winner or "",
+            outcome=CommandGenerationOutcome.CONSENSUS
+            if vote_winner
+            else CommandGenerationOutcome.CONSENSUS_FAILED,
+            vote_score=vote_score or 0.0,
+        ),
+    )
+    return (
+        vote_winner,
+        vote_score,
+        vote_breakdown,
+        tied_candidates,
+        round_2_candidates,
+        vote_breakdown,
+    )
+
+
+async def _get_generation_provider(
+    request: TribunalGenerationRequest, emitter: TribunalEmitter, investigation_id: str | None
+) -> LLMProvider:
+    """Resolve the lite provider and preserve Tribunal's failure events."""
+    settings = request.settings
+    if settings is None:
+        raise ConfigurationError("LLM settings are missing")
+    try:
+        generation_provider = get_llm_provider(settings.llm, is_lite=True)
+    except Exception as exc:
+        lite_provider = settings.llm.lite_provider
+        provider_name = lite_provider.value if lite_provider else "not_configured"
+        await emitter.emit(
+            EventType.AI_CONSENSUS_SESSION_PROVIDER_UNAVAILABLE,
+            TribunalSessionProviderUnavailablePayload(
+                request=request.request,
+                provider=provider_name,
+                error=str(exc),
+            ),
+        )
+        await _push_tribunal_agent_state(emitter, "failed", run_id=investigation_id)
+        raise TribunalProviderUnavailableError(
+            provider=provider_name,
+            error=str(exc),
+            request=request.request,
+        ) from exc
+
+    return generation_provider
 
 
 async def _push_tribunal_agent_state(
@@ -184,8 +321,10 @@ async def _build_and_emit_result(
     return result
 
 
-async def generate_command(request: TribunalGenerationRequest) -> CommandGenerationResult:
-    """Run the Tribunal pipeline to generate a command from the caller's request."""
+def _prepare_generation_request(
+    request: TribunalGenerationRequest,
+) -> tuple[str, str, TribunalEmitter, str | None]:
+    """Normalize request text and initialize prompt, event, and run metadata."""
     request.request = request.request.strip()
     request.guidelines = request.guidelines.strip()
     fields = build_tribunal_prompt_fields(
@@ -196,7 +335,6 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         default_shell=DEFAULT_SHELL,
         default_working_directory=DEFAULT_WORKING_DIRECTORY,
     )
-
     logger.info(
         "[TRIBUNAL-ENTRY] generate_command called: request_len=%d guidelines_len=%d os=%s shell=%s user=%s hostname=%s arch=%s",
         len(request.request),
@@ -207,14 +345,12 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         request.operator_context.hostname if request.operator_context else None,
         request.operator_context.architecture if request.operator_context else None,
     )
-
-    command_constraints_message = build_command_constraints_message(
+    constraints = build_command_constraints_message(
         whitelisting_enabled=request.whitelisting_enabled,
         blacklisting_enabled=request.blacklisting_enabled,
         whitelisted_commands=request.whitelisted_commands,
-        blacklisted_commands=request.blacklisted_commands,
+        blacklisted_commands=[{"command": command} for command in request.blacklisted_commands],
     )
-
     correlation_id = generate_tribunal_correlation_id()
     emitter = TribunalEmitter(
         request.event_service,
@@ -223,10 +359,18 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         observer=request.step_observer,
     )
     investigation_id = request.g8e_context.investigation_id if request.g8e_context else None
+    return constraints, correlation_id, emitter, investigation_id
 
-    if request.settings.llm is None:
+
+async def _start_generation_session(
+    request: TribunalGenerationRequest,
+    emitter: TribunalEmitter,
+    investigation_id: str | None,
+    correlation_id: str,
+) -> tuple[G8eHttpContext, str, str, str, int, list[ConsensusMember]]:
+    """Validate configuration and publish the session start transition."""
+    if request.settings is None:
         raise ConfigurationError("LLM settings are missing")
-
     if not request.settings.llm.llm_command_gen_enabled:
         await emitter.emit(
             EventType.AI_CONSENSUS_SESSION_DISABLED,
@@ -235,6 +379,10 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         await _push_tribunal_agent_state(emitter, "offline", run_id=investigation_id)
         raise TribunalDisabledError(request=request.request)
 
+    context = request.g8e_context
+    if context is None or not context.investigation_id:
+        raise ConfigurationError("A g8e context with an investigation ID is required")
+    investigation_id = context.investigation_id
     try:
         generation_model = resolve_model(request.settings.llm, tier="lite", request=request.request)
         auditor_model = resolve_model(request.settings.llm, tier="primary", request=request.request)
@@ -252,7 +400,6 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
 
     num_passes = max(1, request.settings.llm.llm_command_gen_passes)
     members = [member_for_pass(i) for i in range(num_passes)]
-
     await emitter.emit(
         EventType.AI_CONSENSUS_SESSION_STARTED,
         TribunalSessionStartedPayload(
@@ -264,39 +411,43 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
             correlation_id=correlation_id,
         ),
     )
-    # Tribunal persona enters running state at consensus start.
     await _push_tribunal_agent_state(
         emitter, "running", run_id=investigation_id, model=generation_model
     )
+    return context, investigation_id, generation_model, auditor_model, num_passes, members
 
-    try:
-        generation_provider = get_llm_provider(request.settings.llm, is_lite=True)
-    except Exception as exc:
-        lite_provider = request.settings.llm.lite_provider
-        provider_name = lite_provider.value if lite_provider else "not_configured"
-        await emitter.emit(
-            EventType.AI_CONSENSUS_SESSION_PROVIDER_UNAVAILABLE,
-            TribunalSessionProviderUnavailablePayload(
-                request=request.request,
-                provider=provider_name,
-                error=str(exc),
-            ),
-        )
-        await _push_tribunal_agent_state(emitter, "failed", run_id=investigation_id)
-        raise TribunalProviderUnavailableError(
-            provider=lite_provider,
-            error=str(exc),
-            request=request.request,
-        ) from exc
 
-    if generation_provider is None:
-        lite_provider = request.settings.llm.lite_provider
-        provider_name = lite_provider.value if lite_provider else "not_configured"
-        raise ConfigurationError(f"Failed to initialize generation provider for {provider_name}")
+async def generate_command(request: TribunalGenerationRequest) -> CommandGenerationResult:
+    """Run the Tribunal pipeline to generate a command from the caller's request."""
+    (
+        command_constraints_message,
+        correlation_id,
+        emitter,
+        investigation_id,
+    ) = _prepare_generation_request(request)
+
+    (
+        g8e_context,
+        investigation_id,
+        generation_model,
+        auditor_model,
+        num_passes,
+        members,
+    ) = await _start_generation_session(request, emitter, investigation_id, correlation_id)
+
+    settings = request.settings
+    if settings is None:
+        raise ConfigurationError("LLM settings are missing")
+
+    generation_provider = await _get_generation_provider(request, emitter, investigation_id)
+
+    reputation_data_service = request.reputation_data_service
+    if reputation_data_service is None:
+        raise ConfigurationError("Reputation data service is required for Tribunal auditing")
 
     prepare_provider_call(generation_provider, g8e_context=request.g8e_context)
 
-    candidates = await _run_generation_stage(
+    candidates = await run_generation_stage(
         provider=generation_provider,
         model=generation_model,
         request=request.request,
@@ -309,7 +460,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
     )
 
     # Run Round 1 voting
-    vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
+    vote_winner, vote_score, vote_breakdown, _ = await run_voting_stage(
         candidates=candidates,
         request=request.request,
         emitter=emitter,
@@ -320,99 +471,26 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
     # Round 2: anonymized peer review if consensus is low
     round_2_candidates = None
     round_2_vote_breakdown = None
-
     if vote_winner is None:
-        logger.info(
-            "[TRIBUNAL] Consensus strength too low (%.2f < %d), initiating Round 2 peer review",
-            vote_breakdown.consensus_strength,
-            TRIBUNAL_MIN_CONSENSUS,
-        )
-
-        await emitter.emit(
-            EventType.AI_CONSENSUS_VOTING_ROUND_STARTED,
-            TribunalSessionStartedPayload(
-                request=request.request,
-                guidelines=request.guidelines,
-                model=generation_model,
-                num_passes=num_passes,
-                members=members,
-                correlation_id=correlation_id,
-            ),
-        )
-        # First-round no-consensus is not terminal; Tribunal continues running.
-        await _push_tribunal_agent_state(
-            emitter, "running", run_id=investigation_id, model=generation_model
-        )
-
-        # Anonymize R1 clusters for peer review context
-        r1_clusters, _, _ = _anonymize_clusters(candidates)
-
-        await emitter.emit(
-            EventType.AI_CONSENSUS_VOTING_ROUND_2_STARTED,
-            TribunalSessionStartedPayload(
-                request=request.request,
-                guidelines=request.guidelines,
-                model=generation_model,
-                num_passes=num_passes,
-                members=members,
-                correlation_id=correlation_id,
-            ),
-        )
-
-        # Run Round 2 generation with anonymized cluster context
-        round_2_candidates = await _run_generation_stage(
-            provider=generation_provider,
-            model=generation_model,
-            request=request.request,
-            guidelines=request.guidelines,
-            operator_context=request.operator_context,
+        (
+            vote_winner,
+            vote_score,
+            vote_breakdown,
+            _,
+            round_2_candidates,
+            round_2_vote_breakdown,
+        ) = await _run_peer_review_round(
+            request=request,
+            emitter=emitter,
+            investigation_id=investigation_id,
+            generation_model=generation_model,
+            members=members,
+            correlation_id=correlation_id,
             num_passes=num_passes,
-            emitter=emitter,
+            candidates=candidates,
+            vote_breakdown=vote_breakdown,
+            generation_provider=generation_provider,
             command_constraints_message=command_constraints_message,
-            round_num=2,
-            r1_clusters=r1_clusters,
-        )
-
-        # Run Round 2 voting
-        vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=round_2_candidates,
-            request=request.request,
-            emitter=emitter,
-            total_members=num_passes,
-        )
-
-        if vote_winner is not None:
-            await emitter.emit(
-                EventType.AI_CONSENSUS_VOTING_ROUND_2_CONSENSUS_REACHED,
-                TribunalVotingCompletedPayload(
-                    vote_winner=vote_winner,
-                    vote_score=vote_score,
-                    num_candidates=len(round_2_candidates),
-                    request=request.request,
-                    vote_breakdown=vote_breakdown,
-                ),
-            )
-            round_2_vote_breakdown = vote_breakdown
-        else:
-            await emitter.emit(
-                EventType.AI_CONSENSUS_VOTING_ROUND_2_CONSENSUS_FAILED,
-                TribunalConsensusFailedPayload(
-                    request=request.request,
-                    vote_breakdown=vote_breakdown,
-                ),
-            )
-            round_2_vote_breakdown = vote_breakdown
-
-        await emitter.emit(
-            EventType.AI_CONSENSUS_VOTING_ROUND_COMPLETED,
-            TribunalSessionCompletedPayload(
-                request=request.request,
-                final_command=vote_winner or "",
-                outcome=CommandGenerationOutcome.CONSENSUS
-                if vote_winner
-                else CommandGenerationOutcome.CONSENSUS_FAILED,
-                vote_score=vote_score or 0.0,
-            ),
         )
 
     if vote_winner is None:
@@ -440,21 +518,19 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         raise TribunalConsensusFailedError(request=request.request, vote_breakdown=vote_breakdown)
 
     try:
-        auditor_provider = get_llm_provider(request.settings.llm, is_assistant=False, is_lite=False)
+        auditor_provider = get_llm_provider(settings.llm, is_assistant=False, is_lite=False)
     except Exception as exc:
-        primary_provider = request.settings.llm.primary_provider
-        provider_name = primary_provider.value if primary_provider else "not_configured"
         logger.warning("[TRIBUNAL] Auditor provider unavailable: %s", exc)
         # Auditor failure is non-fatal if consensus was reached, but here we can't even start it
         auditor_provider = None
 
-    marshal_risk_analysis = await _run_marshal_stage(
+    marshal_risk_analysis = await run_marshal_stage(
         request=request.request,
         guidelines=request.guidelines,
         vote_winner=vote_winner,
         operator_context=request.operator_context,
         emitter=emitter,
-        settings=request.settings,
+        settings=settings,
         investigation_id=investigation_id,
         ai_response_analyzer=request.ai_response_analyzer,
         investigation_state=request.investigation_state,
@@ -463,7 +539,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
 
     auditor = TribunalAuditor(
         emitter=emitter,
-        reputation_data_service=request.reputation_data_service,
+        reputation_data_service=reputation_data_service,
     )
     audit_result = await auditor.run(
         provider=auditor_provider or generation_provider,
@@ -472,12 +548,11 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         guidelines=request.guidelines,
         vote_winner=vote_winner,
         vote_breakdown=vote_breakdown,
-        tied_candidates=tied_candidates,
         operator_context=request.operator_context,
-        auditor_enabled=request.settings.llm.llm_command_gen_auditor,
+        auditor_enabled=settings.llm.llm_command_gen_auditor,
         command_constraints_message=command_constraints_message,
         investigation_id=investigation_id,
-        context=RequestContext.from_app_context(request.g8e_context),
+        context=RequestContext.from_app_context(g8e_context),
         whitelisting_enabled=request.whitelisting_enabled,
         blacklisting_enabled=request.blacklisting_enabled,
         model_role="primary" if auditor_provider else "lite",

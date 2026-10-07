@@ -41,10 +41,11 @@ func modelProvenanceControllerDeps(logger *slog.Logger, responder *response.Writ
 // ModelProvenanceController serves owner mTLS reads of model provenance
 // attestation evidence stored in the gateway runtime volume.
 type ModelProvenanceController struct {
-	logger    *slog.Logger
-	responder *response.Writer
-	windows   model_provenance.WindowStore
-	preflight modelProvenancePreflight
+	logger            *slog.Logger
+	responder         *response.Writer
+	windows           model_provenance.WindowStore
+	preflight         modelProvenancePreflight
+	progressPublisher *SSEEventPublisher
 }
 
 type modelProvenancePreflight interface {
@@ -58,14 +59,16 @@ type ModelProvenanceControllerDeps struct {
 	Responder             *response.Writer
 	Windows               model_provenance.WindowStore
 	ProvenanceCoordinator modelProvenancePreflight
+	ProgressPublisher     *SSEEventPublisher
 }
 
 func newModelProvenanceController(d ModelProvenanceControllerDeps) *ModelProvenanceController {
 	return &ModelProvenanceController{
-		logger:    d.Logger,
-		responder: d.Responder,
-		windows:   d.Windows,
-		preflight: d.ProvenanceCoordinator,
+		logger:            d.Logger,
+		responder:         d.Responder,
+		windows:           d.Windows,
+		preflight:         d.ProvenanceCoordinator,
+		progressPublisher: d.ProgressPublisher,
 	}
 }
 
@@ -167,8 +170,29 @@ func (c *ModelProvenanceController) handleModelProvenanceAttestPreflight(w http.
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
 		c.logger.Warn("model provenance attestation preflight: failed to clear WriteTimeout", "error", err)
 	}
-	window, err := c.preflight.PreflightStorageAttestation(r.Context(), servedModelTag, expectedModelDigest)
+	requestID := strings.TrimSpace(r.URL.Query().Get("request_id"))
+	route := buildSSERouteFromContext(r.Context())
+	publish := func(phase, message string) {
+		if c.progressPublisher == nil || requestID == "" || route.validate() != nil {
+			return
+		}
+		if err := c.progressPublisher.PublishEphemeral(route, string(constants.EventModelProvenancePreflightProgress), models.ModelProvenancePreflightProgress{
+			RequestID: requestID, ServedModelTag: servedModelTag, Phase: phase, Error: message,
+		}); err != nil {
+			c.logger.Warn("model provenance preflight progress delivery failed", "error", err)
+		}
+	}
+	var window *evalv1.ModelProvenanceAttestationWindow
+	var err error
+	if coordinator, ok := c.preflight.(interface {
+		PreflightStorageAttestationWithProgress(context.Context, string, string, func(string)) (*evalv1.ModelProvenanceAttestationWindow, error)
+	}); ok {
+		window, err = coordinator.PreflightStorageAttestationWithProgress(r.Context(), servedModelTag, expectedModelDigest, func(phase string) { publish(phase, "") })
+	} else {
+		window, err = c.preflight.PreflightStorageAttestation(r.Context(), servedModelTag, expectedModelDigest)
+	}
 	if err != nil {
+		publish("failed", err.Error())
 		if errors.Is(err, constants.ErrEvaluationObservationUnavailable) ||
 			errors.Is(err, constants.ErrProvenanceOperatorNotFound) ||
 			errors.Is(err, constants.ErrProvenanceOperatorAmbiguous) ||

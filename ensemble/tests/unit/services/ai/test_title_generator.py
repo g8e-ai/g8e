@@ -12,12 +12,15 @@ Unit tests for the Title Generator service.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
+from app.constants import LLMProvider
+from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.http_context import G8eHttpContext
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.title_generator import _create_fallback_title, generate_case_title
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 pytestmark = [pytest.mark.unit]
 
@@ -32,10 +35,8 @@ def create_real_llm_response(text: str | None) -> GenerateContentResponse:
 
 @pytest.fixture
 def mock_settings():
-    from app.models.settings import G8eeUserSettings, LLMSettings
-
     llm = LLMSettings()
-    llm.lite_provider = "ollama"
+    llm.lite_provider = LLMProvider.OLLAMA
     llm.lite_model = "lite-model"
     return G8eeUserSettings(llm=llm)
 
@@ -53,7 +54,9 @@ def mock_provider():
     provider.input_artifact_hash = ""
     provider.model_boundary_privacy = None
     provider.governed_dispatch_evidence = None
-    with patch("app.services.ai.title_generator.get_generative_lite_provider", return_value=provider):
+    with patch(
+        "app.services.ai.title_generator.get_generative_lite_provider", return_value=provider
+    ):
         yield provider
 
 
@@ -65,7 +68,7 @@ def mock_provider():
 @pytest.mark.asyncio
 async def test_generate_title_returns_default_for_empty_description(mock_settings):
     """Test that empty or whitespace descriptions return a default title with fallback=True."""
-    result = await generate_case_title(None, max_length=80, settings=mock_settings)
+    result = await generate_case_title("\n\t", max_length=80, settings=mock_settings)
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "New Technical Support Case"
     assert result.fallback is True
@@ -192,6 +195,31 @@ async def test_generate_title_uses_fallback_on_short_llm_response(mock_provider,
 
 
 @pytest.mark.asyncio
+async def test_generate_title_uses_fallback_on_context_overflow_without_retry(
+    mock_provider, mock_settings
+):
+    """Overflow falls back to the description title, records the typed error, and is not retried."""
+    mock_provider.generate_content_lite.side_effect = ContextWindowExceededError(
+        "prompt filled the context window",
+        model="lite-model",
+        service_name="ollama",
+        num_ctx=65536,
+        prompt_tokens=65536,
+        channel="lite",
+    )
+
+    description = "Nginx service is failing to start on port 80"
+    result = await generate_case_title(description, max_length=80, settings=mock_settings)
+
+    assert result.generated_title == "Nginx service is failing to start on port 80"
+    assert result.fallback is True
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type == "ContextWindowExceededError"
+    assert mock_provider.generate_content_lite.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_generate_title_uses_fallback_on_exception(mock_provider, mock_settings):
     """Test fallback when an exception occurs during generation."""
     mock_provider.generate_content_lite.side_effect = Exception("LLM connection failed")
@@ -210,7 +238,7 @@ async def test_generate_title_uses_fallback_on_exception(mock_provider, mock_set
 
 
 def test_fallback_title_returns_default_for_empty():
-    assert _create_fallback_title(None, 80) == "New Technical Support Case"
+    assert _create_fallback_title("  \n ", 80) == "New Technical Support Case"
     assert _create_fallback_title("", 80) == "New Technical Support Case"
 
 

@@ -7,10 +7,12 @@
 
 import json
 import logging
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from app.models.http_context import RequestContext, G8eHttpContext
+
+from app.models.http_context import G8eHttpContext, RequestContext
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +47,9 @@ class G8eHttpContextMiddleware(BaseHTTPMiddleware):
                     request.state.g8e_context = g8e_context
                     request.state.request_context = rc
                 except Exception as e:
-                    logger.warning(f"Failed to parse context: {e}")
+                    logger.warning("Failed to parse context: %s", e)
 
         except Exception as e:
-            logger.warning(f"Error in context middleware: {e}")
+            logger.warning("Error in context middleware: %s", e)
 
         return await call_next(request)

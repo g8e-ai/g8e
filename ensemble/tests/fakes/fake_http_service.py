@@ -11,9 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.models.infra import HTTPClientStatus
+from app.services.protocols import HTTPServiceProtocol
+
 if TYPE_CHECKING:
     from app.clients.http_client import HTTPClient
-from app.services.protocols import HTTPServiceProtocol
 
 
 class FakeHTTPService:
@@ -69,17 +71,17 @@ class FakeHTTPService:
         """Capture all registered clients for verification in tests."""
         return self._http_clients.copy()
 
-    def get_client_status(self) -> dict[str, dict[str, object]]:
+    def get_client_status(self) -> dict[str, HTTPClientStatus]:
         """Mock implementation of client status for tests."""
-        status = {}
-        for service_name in self._http_clients:
-            status[service_name] = {
-                "service_name": service_name,
-                "base_url": "mock-url",
-                "is_session_closed": False,
-                "circuit_breakers": 0,
-            }
-        return status
+        return {
+            service_name: HTTPClientStatus(
+                service_name=service_name,
+                base_url="mock-url",
+                is_session_closed=False,
+                circuit_breaker_count=0,
+            )
+            for service_name in self._http_clients
+        }
 
 
 _: HTTPServiceProtocol = FakeHTTPService()

@@ -3847,6 +3847,14 @@
       ],
       "persistence": "ephemeral"
     },
+    "ModelProvenancePreflightProgress": {
+      "_go_const": "EventModelProvenancePreflightProgress",
+      "value": "g8e.v1.inference.model.provenance.preflight.updated",
+      "kind": "fact",
+      "transport": ["sse"],
+      "producers": ["gateway"],
+      "persistence": "ephemeral"
+    },
     "PlatformApprovalsChanged": {
       "_go_const": "EventPlatformApprovalsChanged",
       "value": "g8e.v1.platform.approvals.changed",

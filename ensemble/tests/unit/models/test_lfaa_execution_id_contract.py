@@ -117,10 +117,11 @@ class TestAllResultPayloadsHaveExecutionId:
             FetchHistorySuccessPayload,
         ]
 
-        missing_fields = []
-        for payload_type in result_payload_types:
-            if "execution_id" not in payload_type.model_fields:
-                missing_fields.append(payload_type.__name__)
+        missing_fields = [
+            payload_type.__name__
+            for payload_type in result_payload_types
+            if "execution_id" not in payload_type.model_fields
+        ]
 
         assert not missing_fields, (
             f"The following result payload types are missing execution_id field: {missing_fields}. "
@@ -178,7 +179,7 @@ class TestLFAAExecutionIdFieldParsing:
             "file_path": "/etc/hosts",
             "commit_hash": "deadbeef",
         }
-        payload = RestoreFileSuccessPayload(**payload_dict)
+        payload = RestoreFileSuccessPayload.model_validate(payload_dict)
         assert payload.execution_id == "test-exec-abc"
 
     def test_fetch_history_success_parses_execution_id(self):
@@ -205,5 +206,5 @@ class TestLFAAExecutionIdFieldParsing:
             "execution_id": "test-exec-error",
             "error": "test error",
         }
-        payload = FetchFileHistoryErrorPayload(**payload_dict)
+        payload = FetchFileHistoryErrorPayload.model_validate(payload_dict)
         assert payload.execution_id == "test-exec-error"

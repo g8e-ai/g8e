@@ -19,14 +19,13 @@ the user wrote in their config.
 from __future__ import annotations
 
 import functools
-import glob
 import logging
-import os
+from collections.abc import Iterator
 from pathlib import Path
 
 from app.errors import ConfigurationError
-from app.utils.security import validate_safe_path
 from app.models.ssh_inventory import SshHost, SshInventory
+from app.utils.security import validate_safe_path
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +111,10 @@ def _load_cached(ssh_config_path: str, mtime: float) -> SshInventory:
 
     hosts = list(_parse_ssh_config(raw, config_dir=path.parent))
     logger.info(
-        "[SSH_INVENTORY] Parsed %d host blocks from %s",
+        "[SSH_INVENTORY] Parsed %d host blocks from %s (mtime=%s)",
         len(hosts),
         ssh_config_path,
+        mtime,
     )
     return SshInventory(source_path=ssh_config_path, hosts=hosts)
 
@@ -159,13 +159,14 @@ def _resolve_include_path(pattern: str, config_dir: Path) -> list[Path]:
     Returns an empty list if no files match the pattern.
     """
     # Expand ~ to home directory
-    expanded = os.path.expanduser(pattern)
+    expanded = Path(pattern).expanduser()
 
     # If the path is absolute, use it as-is; otherwise, make it relative to config_dir
-    glob_pattern = expanded if os.path.isabs(expanded) else str(config_dir / expanded)
-
-    # Resolve the glob pattern
-    matched = glob.glob(glob_pattern)
+    if expanded.is_absolute():
+        glob_root = Path(expanded.anchor)
+        matched = glob_root.glob(str(expanded.relative_to(glob_root)))
+    else:
+        matched = config_dir.glob(str(expanded))
 
     # Sort for deterministic ordering and validate paths
     safe_paths: list[Path] = []
@@ -184,7 +185,7 @@ def _parse_ssh_config(
     raw: str,
     config_dir: Path,
     included_files: set[str] | None = None,
-):
+) -> Iterator[SshHost]:
     """Yield :class:`SshHost` instances for every ``Host`` block in *raw*.
 
     A ``Host`` line may declare multiple aliases (e.g. ``Host web-1 web-2``);
@@ -228,33 +229,7 @@ def _parse_ssh_config(
         key, value = kv
 
         if key == "include":
-            # Handle Include directive
-            include_paths = _resolve_include_path(value, config_dir)
-            for include_path in include_paths:
-                # Prevent circular includes
-                canonical_path = str(include_path.resolve())
-                if canonical_path in included_files:
-                    logger.debug(
-                        "[SSH_INVENTORY] Skipping circular include: %s",
-                        canonical_path,
-                    )
-                    continue
-
-                included_files.add(canonical_path)
-
-                try:
-                    included_raw = include_path.read_text(encoding="utf-8", errors="replace")
-                    yield from _parse_ssh_config(
-                        included_raw,
-                        config_dir=include_path.parent,
-                        included_files=included_files,
-                    )
-                except OSError as exc:
-                    logger.warning(
-                        "[SSH_INVENTORY] Failed to read included file %s: %s",
-                        include_path,
-                        exc,
-                    )
+            yield from _parse_ssh_includes(value, config_dir, included_files)
             continue
 
         if key == "match":
@@ -298,6 +273,28 @@ def _parse_ssh_config(
                 )
 
     yield from flush()
+
+
+def _parse_ssh_includes(
+    value: str, config_dir: Path, included_files: set[str]
+) -> Iterator[SshHost]:
+    """Yield hosts found in Include paths, skipping cycles and unreadable files."""
+    for include_path in _resolve_include_path(value, config_dir):
+        canonical_path = str(include_path.resolve())
+        if canonical_path in included_files:
+            logger.debug("[SSH_INVENTORY] Skipping circular include: %s", canonical_path)
+            continue
+
+        included_files.add(canonical_path)
+        try:
+            included_raw = include_path.read_text(encoding="utf-8", errors="replace")
+            yield from _parse_ssh_config(
+                included_raw,
+                config_dir=include_path.parent,
+                included_files=included_files,
+            )
+        except OSError as exc:
+            logger.warning("[SSH_INVENTORY] Failed to read included file %s: %s", include_path, exc)
 
 
 def default_ssh_inventory_service() -> SshInventoryService:

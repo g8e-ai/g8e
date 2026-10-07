@@ -59,7 +59,6 @@ func extractCommandData(env *governance.GovernanceEnvelope) (string, error) {
 			return "", fmt.Errorf("consensus: extract command data: %w", err)
 		}
 		cmdData = string(jsonBytes)
-
 	} else {
 		cmdData = string(env.Payload)
 	}

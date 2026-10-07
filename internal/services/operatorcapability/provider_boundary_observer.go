@@ -29,13 +29,7 @@ type ProviderBoundaryObserverStatus struct {
 func ActiveProviderBoundaryObservers(operators []models.OperatorDocumentGo) []ProviderBoundaryObserverStatus {
 	matches := make([]ProviderBoundaryObserverStatus, 0)
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
-			continue
-		}
-		if op.RuntimeConfig == nil || !op.RuntimeConfig.ProviderBoundaryObserverEnabled {
-			continue
-		}
-		if op.OperatorSessionID == "" {
+		if op.RuntimeConfig == nil || !HasActiveRole(op, constants.OperatorRoleObserver) {
 			continue
 		}
 		matches = append(matches, ProviderBoundaryObserverStatus{

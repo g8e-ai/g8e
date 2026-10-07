@@ -12,12 +12,13 @@ Tests SSL verification strategy, close behavior, construction, and content gener
 """
 
 from contextvars import copy_context
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
-from app.errors import OllamaEmptyResponseError
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Content,
@@ -31,7 +32,7 @@ from app.llm.llm_types import (
     ToolConfig,
 )
 from app.llm.model_evidence import model_boundary_hash
-from app.llm.providers.ollama import OllamaProvider
+from app.llm.providers.ollama import OllamaProvider, _prompt_filled_context
 from app.models.model_telemetry import ModelResponseArtifact
 
 PATCH_TARGET = "app.llm.providers.ollama.AsyncClient"
@@ -191,7 +192,10 @@ class TestOllamaProviderGeneration:
         assert provider.model_boundary_privacy.raw_sensitive_types == []
         unsanitized_kwargs = {
             **call_kwargs,
-            "messages": [*call_kwargs["messages"][:-1], {"role": "user", "content": "canary@example.com"}],
+            "messages": [
+                *call_kwargs["messages"][:-1],
+                {"role": "user", "content": "canary@example.com"},
+            ],
         }
         assert "[REDACTED_EMAIL]" in str(call_kwargs)
         assert "canary@example.com" not in str(call_kwargs)
@@ -245,9 +249,12 @@ class TestOllamaProviderGeneration:
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary("llama3", contents, settings):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "llama3", contents, settings
+            )
+        ]
 
         mock_client.chat.assert_called_once()
         assert mock_client.chat.call_args.kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX
@@ -766,9 +773,7 @@ class TestOllamaNativeDurations:
         )
         chunks = [
             chunk
-            async for chunk in provider.generate_content_stream_lite(
-                "llama3", contents, settings
-            )
+            async for chunk in provider.generate_content_stream_lite("llama3", contents, settings)
         ]
 
         terminal = chunks[-1]
@@ -829,6 +834,163 @@ class TestOllamaEmptyResponseError:
         assert error.ctx_overflow_suspected is False
         assert error.thinking_len == 0
         assert error.tool_calls_count == 0
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_raises_context_window_exceeded_when_prompt_fills_num_ctx(
+        self, provider
+    ):
+        provider, mock_client = provider
+
+        mock_response = MagicMock()
+        mock_response.message.content = ""
+        mock_response.message.thinking = None
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = LLM_OLLAMA_DEFAULT_NUM_CTX
+        mock_response.eval_count = 0
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.OFF, include_thoughts=False
+            ),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
+        )
+
+        with pytest.raises(ContextWindowExceededError) as exc_info:
+            await provider.generate_content_primary("llama3", contents, settings)
+
+        error = exc_info.value
+        assert not isinstance(error, OllamaEmptyResponseError)
+        assert error.model == "llama3"
+        assert error.channel == "primary"
+        assert error.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
+        assert error.prompt_tokens == LLM_OLLAMA_DEFAULT_NUM_CTX
+
+    @staticmethod
+    def _answered_response(prompt_eval_count):
+        response = MagicMock()
+        response.message.content = "Hello World"
+        response.message.thinking = None
+        response.message.tool_calls = None
+        response.done_reason = "stop"
+        response.prompt_eval_count = prompt_eval_count
+        response.eval_count = 5
+        return response
+
+    @staticmethod
+    def _lite_settings():
+        return LiteLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            response_format=ResponseFormat(
+                json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")
+            ),
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "prompt_eval_count", [LLM_OLLAMA_DEFAULT_NUM_CTX, LLM_OLLAMA_DEFAULT_NUM_CTX + 50]
+    )
+    async def test_generate_content_lite_raises_context_window_exceeded_on_answered_prompt_at_limit(
+        self, provider, prompt_eval_count
+    ):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(return_value=self._answered_response(prompt_eval_count))
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+
+        with pytest.raises(ContextWindowExceededError) as exc_info:
+            await provider.generate_content_lite("llama3", contents, self._lite_settings())
+
+        error = exc_info.value
+        assert not isinstance(error, OllamaEmptyResponseError)
+        assert error.model == "llama3"
+        assert error.channel == "lite"
+        assert error.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
+        assert error.prompt_tokens == prompt_eval_count
+
+    @pytest.mark.asyncio
+    async def test_generate_content_lite_accepts_answered_prompt_below_limit(self, provider):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(
+            return_value=self._answered_response(LLM_OLLAMA_DEFAULT_NUM_CTX - 1)
+        )
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+
+        response = await provider.generate_content_lite("llama3", contents, self._lite_settings())
+
+        assert response.candidates[0].content.parts[0].text == "Hello World"
+
+    @pytest.mark.asyncio
+    async def test_generate_content_lite_accepts_answered_prompt_when_prompt_eval_count_unset(
+        self, provider
+    ):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(return_value=self._answered_response(None))
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+
+        response = await provider.generate_content_lite("llama3", contents, self._lite_settings())
+
+        assert response.candidates[0].content.parts[0].text == "Hello World"
+
+    @pytest.mark.asyncio
+    async def test_generate_content_assistant_raises_context_window_exceeded_on_answered_prompt_at_limit(
+        self, provider
+    ):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(
+            return_value=self._answered_response(LLM_OLLAMA_DEFAULT_NUM_CTX)
+        )
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = AssistantLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            response_format=ResponseFormat(
+                json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")
+            ),
+        )
+
+        with pytest.raises(ContextWindowExceededError) as exc_info:
+            await provider.generate_content_assistant("llama3", contents, settings)
+
+        assert exc_info.value.channel == "assistant"
+        assert exc_info.value.prompt_tokens == LLM_OLLAMA_DEFAULT_NUM_CTX
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_raises_context_window_exceeded_on_answered_prompt_at_limit(
+        self, provider
+    ):
+        provider, mock_client = provider
+        mock_client.chat = AsyncMock(
+            return_value=self._answered_response(LLM_OLLAMA_DEFAULT_NUM_CTX)
+        )
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.OFF, include_thoughts=False
+            ),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
+        )
+
+        with pytest.raises(ContextWindowExceededError) as exc_info:
+            await provider.generate_content_primary("llama3", contents, settings)
+
+        assert exc_info.value.channel == "primary"
+        assert exc_info.value.prompt_tokens == LLM_OLLAMA_DEFAULT_NUM_CTX
 
     @pytest.mark.asyncio
     async def test_generate_content_assistant_raises_on_empty_content(self, provider):
@@ -931,12 +1093,14 @@ class TestOllamaEmptyResponseError:
         assert error.ctx_overflow_suspected is False
 
     @pytest.mark.asyncio
-    async def test_generate_content_primary_with_tool_calls_raises_on_empty_content(self, provider):
+    async def test_generate_content_primary_accepts_tool_calls_without_text(self, provider):
         provider, mock_client = provider
 
         mock_response = MagicMock()
         mock_response.message.content = ""
-        mock_response.message.tool_calls = [MagicMock()]
+        mock_response.message.tool_calls = [
+            SimpleNamespace(function=SimpleNamespace(name="inspect", arguments={"path": "a"}))
+        ]
         mock_response.done_reason = "stop"
         mock_response.prompt_eval_count = 100
         mock_response.eval_count = 0
@@ -957,8 +1121,66 @@ class TestOllamaEmptyResponseError:
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
-        with pytest.raises(OllamaEmptyResponseError) as exc_info:
-            await provider.generate_content_primary("llama3", contents, settings)
+        result = await provider.generate_content_primary("llama3", contents, settings)
+        call = result.candidates[0].content.parts[-1].tool_call
+        assert call is not None
+        assert call.name == "inspect"
+        assert call.args == {"path": "a"}
 
-        error = exc_info.value
-        assert error.tool_calls_count == 1
+
+class TestOllamaStreamingOverflow:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("channel", ["primary", "assistant", "lite"])
+    @pytest.mark.parametrize("has_text", [False, True])
+    async def test_stream_rejects_overflow_before_emitting_output(self, channel, has_text):
+        message = SimpleNamespace(
+            content="answer" if has_text else "", thinking=None, tool_calls=[]
+        )
+        terminal = SimpleNamespace(
+            message=message,
+            done=True,
+            done_reason="stop",
+            prompt_eval_count=LLM_OLLAMA_DEFAULT_NUM_CTX,
+            eval_count=1,
+        )
+
+        async def upstream():
+            yield terminal
+
+        client = MagicMock()
+        client.chat = AsyncMock(return_value=upstream())
+        settings = {
+            "primary": PrimaryLLMSettings(),
+            "assistant": AssistantLLMSettings(),
+            "lite": LiteLLMSettings(),
+        }[channel]
+        with patch(PATCH_TARGET, return_value=client):
+            provider = OllamaProvider(endpoint="http://localhost:11434", api_key="")
+            stream = getattr(provider, f"generate_content_stream_{channel}")(
+                "llama3",
+                [Content(role="user", parts=[Part(text="hi")])],
+                settings,
+            )
+            with pytest.raises(ContextWindowExceededError) as raised:
+                await anext(stream)
+        assert raised.value.channel == channel
+        assert raised.value.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
+
+
+class TestPromptFilledContext:
+    """The single predicate behind both the empty-content and the answered-prompt checks."""
+
+    @pytest.mark.parametrize(
+        ("prompt_eval_count", "num_ctx", "expected"),
+        [
+            (32768, 32768, True),
+            (40000, 32768, True),
+            (32767, 32768, False),
+            (None, 32768, False),
+            (32768, None, False),
+            (32768, 0, False),
+            (0, 32768, False),
+        ],
+    )
+    def test_predicate(self, prompt_eval_count, num_ctx, expected):
+        assert _prompt_filled_context(prompt_eval_count, num_ctx) is expected

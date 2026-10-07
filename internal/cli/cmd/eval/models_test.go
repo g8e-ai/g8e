@@ -130,7 +130,7 @@ func TestModelsList_JSONReportsScopes(t *testing.T) {
 
 func TestModelsList_ReadsRegistryWithoutDigest(t *testing.T) {
 	root := testutil.TempDir(t)
-	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath,
+	writeTestFrozenInventory(t, root,
 		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest", ProviderClass: "ollama"},
 	)
 
@@ -165,8 +165,8 @@ func TestModelsShow(t *testing.T) {
 	out, err = runModelsJSON(t, root, "show", "gemma3:1b")
 	require.NoError(t, err)
 	var payload struct {
-		Scopes      []string
-		DigestDrift bool `json:"digest_drift"`
+		Scopes      []string `json:"scopes"`
+		DigestDrift bool     `json:"digest_drift"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(out), &payload))
 	assert.Equal(t, []string{"catalog", "registry"}, payload.Scopes)
@@ -371,22 +371,6 @@ func TestShortDigest(t *testing.T) {
 	assert.Equal(t, "-", shortDigest(""))
 	assert.Equal(t, "abc", shortDigest("abc"))
 	assert.Equal(t, "0123456789ab", shortDigest("0123456789abcdef"))
-}
-
-func TestModelsDiff_RejectsSeveralInferenceOperators(t *testing.T) {
-	root := testutil.TempDir(t)
-	seedModelScopes(t, root)
-
-	// A second inference session makes the provider ambiguous.
-	deps := newGatewayTestDeps(t, root, append(campaignOrchestrateOperators(), inferenceOperatorFixture("infer-op-2", "infer-session-2")))
-
-	command := evalCmdWithConfig(deps)
-	var out bytes.Buffer
-	command.SetOut(&out)
-	command.SetErr(&out)
-	command.SetArgs([]string{"models", "diff", "--project-root", root})
-	err := command.Execute()
-	require.ErrorIs(t, err, constants.ErrInferenceOperatorAmbiguous)
 }
 
 func TestModelsPull_SelectorAndFormationsAreExclusive(t *testing.T) {

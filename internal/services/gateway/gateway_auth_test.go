@@ -10,7 +10,6 @@
 package gateway
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -1674,9 +1673,9 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 		wid := protocol.NewWorkloadIdentity()
 		cliURI, _ := wid.CLISPIFFEURL(userID, cliSessionID)
 
-		var capturedCtx context.Context
+		var capturedReq *http.Request
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedCtx = r.Context()
+			capturedReq = r
 			w.WriteHeader(http.StatusOK)
 		})
 
@@ -1695,7 +1694,8 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 
 		middleware.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		require.NotNil(t, capturedCtx)
+		require.NotNil(t, capturedReq)
+		capturedCtx := capturedReq.Context()
 
 		// Verify identity info in context
 		assert.Equal(t, userID, capturedCtx.Value(constants.ContextKeyUserID))
@@ -1776,9 +1776,9 @@ func TestHandleCLIAuth_StampsPersistedOperatorBinding(t *testing.T) {
 	cliSessionID := "cli-sess-bound-1"
 	seedBoundCLIAuthFixture(t, db, userID, operatorID, operatorSessionID, cliSessionID)
 
-	var capturedCtx context.Context
+	var capturedReq *http.Request
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedCtx = r.Context()
+		capturedReq = r
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -1788,7 +1788,8 @@ func TestHandleCLIAuth_StampsPersistedOperatorBinding(t *testing.T) {
 
 	require.True(t, handled)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.NotNil(t, capturedCtx)
+	require.NotNil(t, capturedReq)
+	capturedCtx := capturedReq.Context()
 	assert.Equal(t, userID, capturedCtx.Value(constants.ContextKeyUserID))
 	assert.Equal(t, cliSessionID, capturedCtx.Value(constants.ContextKeyCLISessionID))
 	assert.Equal(t, operatorID, capturedCtx.Value(constants.ContextKeyOperatorID))
@@ -1916,9 +1917,9 @@ func TestHandleCLIAuth_AdmitsEveryBoundOperatorSession(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), strayID, strayBytes))
 
-			var capturedCtx context.Context
+			var capturedReq *http.Request
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				capturedCtx = r.Context()
+				capturedReq = r
 				w.WriteHeader(http.StatusOK)
 			})
 			req := cliAuthRequest(t, userID, cliSessionID)
@@ -1938,7 +1939,8 @@ func TestHandleCLIAuth_AdmitsEveryBoundOperatorSession(t *testing.T) {
 				assert.Contains(t, rr.Body.String(), constants.ErrOperatorBindingMismatch.Error())
 				return
 			}
-			require.NotNil(t, capturedCtx)
+			require.NotNil(t, capturedReq)
+			capturedCtx := capturedReq.Context()
 			assert.Equal(t, tt.wantOperatorID, capturedCtx.Value(constants.ContextKeyOperatorID))
 			assert.Equal(t, tt.wantSessionID, capturedCtx.Value(constants.ContextKeyOperatorSessionID))
 			assert.Equal(t, []string{primarySessionID, secondSessionID}, capturedCtx.Value(constants.ContextKeyBoundOperatorSessionIDs))

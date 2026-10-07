@@ -12,11 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // mockAuditStore is a mock implementation of auditStoreInterface for unit testing
@@ -40,11 +42,11 @@ func (m *mockAuditStore) GetOperatorSession(sessionID string) (*OperatorSession,
 	return nil, nil
 }
 
-func (m *mockAuditStore) GetEvents(sessionID string, limit, offset int) ([]*Event, error) {
+func (m *mockAuditStore) GetEvents(scope models.AuditScope, limit, offset int) ([]*Event, error) {
 	m.getEventsCalled++
-	m.lastSessionID = sessionID
+	m.lastSessionID = scope.OperatorSessionID
 	if m.getEventsFunc != nil {
-		return m.getEventsFunc(sessionID, limit, offset)
+		return m.getEventsFunc(scope.OperatorSessionID, limit, offset)
 	}
 	return nil, nil
 }

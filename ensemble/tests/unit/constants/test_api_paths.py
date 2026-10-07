@@ -16,7 +16,6 @@ Verifies that:
 """
 
 import g8e.constants as _g8e_constants
-
 import pytest
 
 from app.constants.api_paths import (
@@ -43,8 +42,9 @@ def test_gateway_api_paths_matches_g8e_constants():
 
 
 def test_gateway_api_paths_raises_on_unknown_key():
+    unknown_name = "".join(("NONEXISTENT", "_PATH"))
     with pytest.raises(AttributeError, match="NONEXISTENT_PATH"):
-        GatewayAPIPaths.NONEXISTENT_PATH
+        getattr(GatewayAPIPaths, unknown_name)
 
 
 def test_gateway_api_paths_governance_envelopes_value():
@@ -79,38 +79,22 @@ def test_internal_api_paths_client_sse_paths_removed():
 
 def test_internal_api_paths_client_grant_intent_exists():
     """CLIENT_GRANT_INTENT must be accessible (was previously missing)."""
-    assert (
-        InternalAPIPaths.CLIENT_GRANT_INTENT
-        == "/api/operators/{operator_id}/intents/grant"
-    )
-    assert (
-        InternalAPIPaths.FULL_CLIENT_GRANT_INTENT
-        == "/api/operators/{operator_id}/intents/grant"
-    )
+    assert InternalAPIPaths.CLIENT_GRANT_INTENT == "/api/operators/{operator_id}/intents/grant"
+    assert InternalAPIPaths.FULL_CLIENT_GRANT_INTENT == "/api/operators/{operator_id}/intents/grant"
 
 
 def test_internal_api_paths_client_revoke_intent_exists():
     """CLIENT_REVOKE_INTENT must be accessible (was previously missing)."""
+    assert InternalAPIPaths.CLIENT_REVOKE_INTENT == "/api/operators/{operator_id}/intents/revoke"
     assert (
-        InternalAPIPaths.CLIENT_REVOKE_INTENT
-        == "/api/operators/{operator_id}/intents/revoke"
-    )
-    assert (
-        InternalAPIPaths.FULL_CLIENT_REVOKE_INTENT
-        == "/api/operators/{operator_id}/intents/revoke"
+        InternalAPIPaths.FULL_CLIENT_REVOKE_INTENT == "/api/operators/{operator_id}/intents/revoke"
     )
 
 
 def test_internal_api_paths_client_create_operator_link_exists():
     """CLIENT_CREATE_OPERATOR_LINK must be accessible (was previously missing)."""
-    assert (
-        InternalAPIPaths.CLIENT_CREATE_OPERATOR_LINK
-        == "/api/operators/device-link/create"
-    )
-    assert (
-        InternalAPIPaths.FULL_CLIENT_CREATE_OPERATOR_LINK
-        == "/api/operators/device-link/create"
-    )
+    assert InternalAPIPaths.CLIENT_CREATE_OPERATOR_LINK == "/api/operators/device-link/create"
+    assert InternalAPIPaths.FULL_CLIENT_CREATE_OPERATOR_LINK == "/api/operators/device-link/create"
 
 
 def test_validate_api_paths_sync_passes():
@@ -121,8 +105,7 @@ def test_validate_api_paths_sync_passes():
 def test_api_paths_json_client_section_has_all_expected_keys():
     """api_paths.json client section must contain all keys referenced by internal_http_client."""
     client_keys = set(API_PATHS["client"].keys())
-    expected = {"chat", "health",
-                "grant_intent", "revoke_intent", "create_operator_link"}
+    expected = {"chat", "health", "grant_intent", "revoke_intent", "create_operator_link"}
     assert expected.issubset(client_keys), (
         f"Missing client paths in api_paths.json: {expected - client_keys}"
     )

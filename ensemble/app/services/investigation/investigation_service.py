@@ -10,38 +10,38 @@ import asyncio
 import logging
 
 from app.constants import (
-    EventType,
     G8EE_COMPONENT,
-    HistoryActor,
     INVESTIGATION_LOOKUP_MAX_RETRIES,
     INVESTIGATION_LOOKUP_RETRY_DELAYS_MS,
+    EventType,
+    HistoryActor,
     OperatorStatus,
 )
+from app.constants.message_sender import MessageSender
 from app.errors import ExternalServiceError, ResourceNotFoundError
 from app.models.agent import OperatorContext
-from app.models.http_context import G8eHttpContext, RequestContext
-from app.constants.message_sender import MessageSender
 from app.models.grounding import GroundingMetadata
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import (
     AIResponseMetadata,
+    ConversationHistoryMessage,
+    ConversationMessageMetadata,
     EnrichedInvestigationContext,
+    InvestigationCreateRequest,
     InvestigationModel,
     InvestigationUpdateRequest,
-    ConversationMessageMetadata,
-    ConversationHistoryMessage,
-    InvestigationCreateRequest,
 )
 from app.models.operators import OperatorDocument
 from app.models.tool_results import TokenUsage
-from app.services.protocols import (
-    EventServiceProtocol,
-    InvestigationDataServiceProtocol,
-    OperatorDataServiceProtocol,
-    MemoryDataServiceProtocol,
-)
 from app.services.observe.payloads import (
     build_investigation_run_state_request,
     map_investigation_status_to_run_lifecycle,
+)
+from app.services.protocols import (
+    EventServiceProtocol,
+    InvestigationDataServiceProtocol,
+    MemoryDataServiceProtocol,
+    OperatorDataServiceProtocol,
 )
 
 logger = logging.getLogger(__name__)
@@ -252,6 +252,11 @@ class InvestigationService:
 
         has_bound = len(operator_docs) > 0
         investigation.operator_documents = operator_docs
+        # Tool-arg defaulting (``convert_args_to_payload``) reads this field, so it
+        # must mirror the BOUND operators the tool gate sees in ``g8e_context``.
+        investigation.bound_operators = [
+            op for op in bound_in_context if op.status == OperatorStatus.BOUND
+        ]
 
         if has_bound:
             logger.info(
@@ -325,45 +330,7 @@ class InvestigationService:
                 resource_id=investigation_id,
             )
 
-        changes: dict[str, object] = {}
-
-        if request.status is not None and request.status != investigation.status:
-            changes["status"] = {"old": investigation.status, "new": request.status}
-            investigation.update_status(
-                request.status, actor, f"Status updated to {request.status}"
-            )
-
-        if request.priority is not None and request.priority != investigation.priority:
-            changes["priority"] = {"old": investigation.priority, "new": request.priority}
-            investigation.priority = request.priority
-
-        if request.case_title is not None and request.case_title != investigation.case_title:
-            changes["case_title"] = {"old": investigation.case_title, "new": request.case_title}
-            investigation.case_title = request.case_title
-
-        if (
-            request.customer_context is not None
-            and request.customer_context != investigation.customer_context
-        ):
-            changes["customer_context"] = True
-            investigation.customer_context = request.customer_context
-
-        if (
-            request.technical_context is not None
-            and request.technical_context != investigation.technical_context
-        ):
-            changes["technical_context"] = True
-            investigation.technical_context = request.technical_context
-
-        if (
-            request.sentinel_mode is not None
-            and request.sentinel_mode != investigation.sentinel_mode
-        ):
-            changes["sentinel_mode"] = {
-                "old": investigation.sentinel_mode,
-                "new": request.sentinel_mode,
-            }
-            investigation.sentinel_mode = request.sentinel_mode
+        changes = self._apply_investigation_update(investigation, request, actor)
 
         if not changes:
             return investigation
@@ -399,6 +366,37 @@ class InvestigationService:
             run_status = map_investigation_status_to_run_lifecycle(investigation.status)
             await self._push_run_projection(investigation, run_status)
         return investigation
+
+    @staticmethod
+    def _apply_investigation_update(
+        investigation: InvestigationModel,
+        request: InvestigationUpdateRequest,
+        actor: HistoryActor,
+    ) -> dict[str, object]:
+        """Apply requested field changes and return the change audit payload."""
+        changes: dict[str, object] = {}
+        fields = (
+            ("priority", request.priority),
+            ("case_title", request.case_title),
+            ("customer_context", request.customer_context),
+            ("technical_context", request.technical_context),
+            ("sentinel_mode", request.sentinel_mode),
+        )
+        if request.status is not None and request.status != investigation.status:
+            changes["status"] = {"old": investigation.status, "new": request.status}
+            investigation.update_status(
+                request.status, actor, f"Status updated to {request.status}"
+            )
+        for field, value in fields:
+            if value is not None and value != getattr(investigation, field):
+                old_value = getattr(investigation, field)
+                changes[field] = (
+                    {"old": old_value, "new": value}
+                    if field in {"priority", "case_title", "sentinel_mode"}
+                    else True
+                )
+                setattr(investigation, field, value)
+        return changes
 
     async def persist_ai_message(
         self,
@@ -457,7 +455,6 @@ class InvestigationService:
             run_id=investigation.id,
             display_name=investigation.case_title or "",
             status=status,
-            user_id=investigation.user_id or "",
             web_session_id=investigation.web_session_id,
             cli_session_id=None,
         )
@@ -634,7 +631,7 @@ def extract_operator_context_by_target(
 
     # Try to find operator by hostname
     for operator_doc in investigation.operator_documents:
-        if operator_doc.hostname == target_operator:
+        if operator_doc.current_hostname == target_operator:
             return extract_single_operator_context(operator_doc)
 
     # Try to parse as index (e.g., "0", "1", "2")

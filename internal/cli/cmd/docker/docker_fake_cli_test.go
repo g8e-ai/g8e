@@ -18,13 +18,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
@@ -89,6 +93,11 @@ func runDockerCommand(t *testing.T, cmd *cobra.Command, args ...string) (string,
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
+	// Build/export tests use a stamped binary identity, as the root command
+	// does in production, rather than discovering the developer's source tree.
+	cmd.SetContext(shared.ContextWithVersionInfo(t.Context(), serve.VersionInfo{
+		SourceTreeStateHash: strings.Repeat("a", 64),
+	}))
 	err := cmd.RunE(cmd, args)
 	return buf.String(), err
 }
@@ -614,7 +623,7 @@ func TestDockerBuildCmd_BuildsImagesAndExportsTheRuntimeBinaryToBothLocations(t 
 		assert.Equal(t, "exported-runtime-binary", string(data), rel)
 		info, statErr := os.Stat(path)
 		require.NoError(t, statErr)
-		assert.Equal(t, os.FileMode(constants.PermFileExecutable), info.Mode().Perm(), "%s must be executable", rel)
+		assert.Equal(t, testutil.FileMode(constants.PermFileExecutable, info.IsDir()), info.Mode().Perm(), "%s must be executable", rel)
 	}
 	assert.Contains(t, out, "Docker images built and runtime binary exported to ./g8e.")
 }

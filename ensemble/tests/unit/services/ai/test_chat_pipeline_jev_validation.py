@@ -27,8 +27,8 @@ class TestChatPipelineJevRoleValidation:
     def test_rejects_jev_on_primary_role(self):
         settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.JEV,
-                primary_model="nimble",
+                llm_primary_provider=LLMProvider.JEV,
+                llm_model="nimble",
             )
         )
 
@@ -38,10 +38,10 @@ class TestChatPipelineJevRoleValidation:
     def test_rejects_jev_on_assistant_role(self):
         settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA,
-                primary_model="qwen3:0.6b",
-                assistant_provider=LLMProvider.JEV,
-                assistant_model="nimble",
+                llm_primary_provider=LLMProvider.OLLAMA,
+                llm_model="qwen3:0.6b",
+                llm_assistant_provider=LLMProvider.JEV,
+                llm_assistant_model="nimble",
             )
         )
 
@@ -53,10 +53,10 @@ class TestChatPipelineJevLiteCoexistence:
     def test_rejects_jev_lite_when_tribunal_enabled(self):
         settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA,
-                primary_model="qwen3:0.6b",
-                lite_provider=LLMProvider.JEV,
-                lite_model="nimble",
+                llm_primary_provider=LLMProvider.OLLAMA,
+                llm_model="qwen3:0.6b",
+                llm_lite_provider=LLMProvider.JEV,
+                llm_lite_model="nimble",
                 llm_command_gen_enabled=True,
             )
         )
@@ -67,10 +67,10 @@ class TestChatPipelineJevLiteCoexistence:
     def test_accepts_jev_lite_when_tribunal_disabled(self):
         settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA,
-                primary_model="qwen3:0.6b",
-                lite_provider=LLMProvider.JEV,
-                lite_model="nimble",
+                llm_primary_provider=LLMProvider.OLLAMA,
+                llm_model="qwen3:0.6b",
+                llm_lite_provider=LLMProvider.JEV,
+                llm_lite_model="nimble",
                 llm_command_gen_enabled=False,
             )
         )

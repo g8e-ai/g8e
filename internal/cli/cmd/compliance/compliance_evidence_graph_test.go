@@ -21,12 +21,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-func runEvidenceGraphVerifyCommand(t *testing.T, fileSvc fs.RuntimeFileService, source evidence.ProvenanceSource, demoRuns, evalRuns []string) (*evidence.EvidenceGraphReport, error) {
+func runEvidenceGraphVerifyCommand(t *testing.T, fileSvc fs.RuntimeFileService, evalRuns []string) (*evidence.EvidenceGraphReport, error) {
 	t.Helper()
-	cmd := complianceEvidenceGraphVerifyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), func(string) evidence.ProvenanceSource { return source })
-	for _, runID := range demoRuns {
-		require.NoError(t, cmd.Flags().Set("demo-run", runID))
-	}
+	cmd := complianceEvidenceGraphVerifyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
 	for _, runID := range evalRuns {
 		require.NoError(t, cmd.Flags().Set("eval-run", runID))
 	}
@@ -39,24 +36,10 @@ func runEvidenceGraphVerifyCommand(t *testing.T, fileSvc fs.RuntimeFileService, 
 	return &report, err
 }
 
-func TestComplianceEvidenceGraphVerifyCmdWithConfig_AcceptsValidDemoRun(t *testing.T) {
-	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	projectRoot := writeDemoProvenanceTree(t)
-	runID := persistMinimalDemoRunFixture(t, fileSvc, projectRoot)
-
-	report, err := runEvidenceGraphVerifyCommand(t, fileSvc, evidence.NewDemoDirectoryProvenanceSource(projectRoot), []string{runID}, nil)
-	require.NoError(t, err)
-	assert.True(t, report.Valid)
-	assert.Positive(t, report.NodeCount)
-	assert.Positive(t, report.NodesByType[string(evidence.ArtifactTypeDemoManifest)])
-	assert.Equal(t, constants.EvidenceGraphVerifierID, report.VerifierID)
-	assert.Equal(t, constants.EvidenceGraphVerifierVersion, report.VerifierVersion)
-}
-
 func TestComplianceEvidenceGraphVerifyCmdWithConfig_RecordsImporterFailureAndFailsClosed(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
 
-	report, err := runEvidenceGraphVerifyCommand(t, fileSvc, &stubProvenanceSource{}, nil, []string{"missing-eval-run"})
+	report, err := runEvidenceGraphVerifyCommand(t, fileSvc, []string{"missing-eval-run"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReportVerificationFailed)
 	assert.False(t, report.Valid)
@@ -67,45 +50,28 @@ func TestComplianceEvidenceGraphVerifyCmdWithConfig_RecordsImporterFailureAndFai
 }
 
 func TestComplianceEvidenceGraphVerifyCmdWithConfig_RejectsInvalidRunIDs(t *testing.T) {
-	tests := []struct {
-		name string
-		flag string
-	}{
-		{name: "demo run traversal", flag: "demo-run"},
-		{name: "eval run traversal", flag: "eval-run"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-			cmd := complianceEvidenceGraphVerifyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil))
-			require.NoError(t, cmd.Flags().Set(tt.flag, "../invalid"))
+	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+	cmd := complianceEvidenceGraphVerifyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+	require.NoError(t, cmd.Flags().Set("eval-run", "../invalid"))
 
-			err := cmd.RunE(cmd, nil)
-			require.Error(t, err)
-			assert.ErrorIs(t, err, constants.ErrPathValidation)
-		})
-	}
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPathValidation)
 }
 
 func TestComplianceEvidenceGraphVerifyCmdWithConfig_RejectsMissingRunFlags(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	cmd := complianceEvidenceGraphVerifyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil))
+	cmd := complianceEvidenceGraphVerifyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
 
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 }
 
-func TestComplianceEvidenceGraphVerifyCmdWithConfig_PrintsTypedReportJSON(t *testing.T) {
+func TestComplianceEvidenceGraphVerifyCmdWithConfig_RemovedDemoRunFlag(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-	projectRoot := writeDemoProvenanceTree(t)
-	runID := persistMinimalDemoRunFixture(t, fileSvc, projectRoot)
+	cmd := complianceEvidenceGraphVerifyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
 
-	report, err := runEvidenceGraphVerifyCommand(t, fileSvc, evidence.NewDemoDirectoryProvenanceSource(projectRoot), []string{runID}, nil)
-	require.NoError(t, err)
-	assert.False(t, report.VerifiedAt.IsZero())
-	assert.NotNil(t, report.NodesByType)
-	assert.NotNil(t, report.NodesByScope)
-	assert.Empty(t, report.Failures)
-	assert.Empty(t, report.ImporterErrors)
+	assert.Nil(t, cmd.Flags().Lookup("demo-run"), "the legacy --demo-run flag must not exist")
+	require.Error(t, cmd.Flags().Set("demo-run", "any-run"), "setting --demo-run must fail on an unknown flag")
 }

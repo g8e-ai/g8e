@@ -15,12 +15,12 @@ Coverage:
 """
 
 import pytest
+from g8e.models.events import ChatProcessingStartedPayload
 
 from app.constants import EventType
 from app.models.base import Field, G8eBaseModel
 from app.models.cases import CaseCreatedPayload
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
-from g8e.models.events import ChatProcessingStartedPayload
 
 pytestmark = pytest.mark.unit
 
@@ -53,7 +53,7 @@ class TestSessionEventWireStructure:
             user_id="user-456",
         )
 
-        wire = SessionEventWire.from_session_event(se).model_dump(mode="json")
+        wire = SessionEventWire.from_routed_session_event(se).model_dump(mode="json")
 
         assert set(wire.keys()) == {"web_session_id", "user_id", "event"}
         assert set(wire["event"].keys()) == {"type", "data"}
@@ -71,7 +71,7 @@ class TestSessionEventWireStructure:
             investigation_id="inv-101",
         )
 
-        wire = SessionEventWire.from_session_event(se).model_dump(mode="json")
+        wire = SessionEventWire.from_routed_session_event(se).model_dump(mode="json")
 
         assert "case_id" in wire["event"]["data"]
         assert "investigation_id" in wire["event"]["data"]
@@ -89,7 +89,7 @@ class TestBackgroundEventWireStructure:
             user_id="user-456",
         )
 
-        wire = BackgroundEventWire.from_background_event(be).model_dump(mode="json")
+        wire = BackgroundEventWire.from_routed_background_event(be).model_dump(mode="json")
 
         assert set(wire.keys()) == {"user_id", "event"}
         assert set(wire["event"].keys()) == {"type", "data"}
@@ -104,7 +104,7 @@ class TestBackgroundEventWireStructure:
             case_id="case-789",
         )
 
-        wire = BackgroundEventWire.from_background_event(be).model_dump(mode="json")
+        wire = BackgroundEventWire.from_routed_background_event(be).model_dump(mode="json")
 
         assert "case_id" in wire["event"]["data"]
         assert "investigation_id" in wire["event"]["data"]

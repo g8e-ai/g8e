@@ -24,6 +24,9 @@ import json
 from datetime import UTC
 from typing import Any
 
+from g8e.common.v1 import common_pb2
+from google.protobuf.json_format import MessageToDict, ParseDict
+
 from app.constants.proto_mappings import protobuf_execution_status_to_python
 from app.errors import ValidationError
 from app.models.base import ValidationError as PydanticValidationError
@@ -32,8 +35,6 @@ from app.models.pubsub_messages import (
     G8eoResultPayload,
     G8eoResultPayloadAdapter,
 )
-from g8e.common.v1 import common_pb2
-from google.protobuf.json_format import MessageToDict, ParseDict
 
 
 def decode_uap_envelope(data: bytes | str) -> dict[str, Any]:

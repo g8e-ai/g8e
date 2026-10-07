@@ -6,9 +6,8 @@
 # released under the Apache License, Version 2.0.
 
 import logging
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Mapping
 from typing import Any
-from fastapi import Request
 
 from app.constants import G8EE_COMPONENT, HealthStatus
 from app.models.health import DependencyStatus, HealthCheckResult
@@ -21,41 +20,23 @@ class HealthService:
     """Service for checking the health of g8ee and its dependencies."""
 
     @staticmethod
-    async def check_dependencies(request_context: Request) -> HealthCheckResult:
+    async def check_dependencies(
+        checks: Mapping[str, Coroutine[Any, Any, Any]],
+    ) -> HealthCheckResult:
         """
         Check the health of all registered g8ee dependencies.
 
-        request_context should be an object (like FastAPI Request) that provides access
-        to the dependency getters.
+        ``checks`` maps each dependency name to an un-awaited dependency getter
+        coroutine; a getter that raises marks that dependency unhealthy.
         """
-        from app.dependencies import (
-            get_g8ee_app_settings,
-            get_g8ee_cache_aside_service,
-            get_g8ee_investigation_data_service,
-            get_g8ee_investigation_service,
-            get_g8ee_memory_service,
-            get_g8ee_chat_pipeline,
-            get_g8ee_attachment_service,
-        )
-
         dependencies: dict[str, DependencyStatus] = {}
 
-        async def _check(name: str, coro: Coroutine[Any, Any, Any]) -> None:
+        for name, coro in checks.items():
             try:
                 await coro
                 dependencies[name] = DependencyStatus(status=HealthStatus.HEALTHY)
             except Exception as e:
                 dependencies[name] = DependencyStatus(status=HealthStatus.UNHEALTHY, error=str(e))
-
-        await _check("settings", get_g8ee_app_settings(request_context))
-        await _check("cache_aside_service", get_g8ee_cache_aside_service(request_context))
-        await _check(
-            "investigation_data_service", get_g8ee_investigation_data_service(request_context)
-        )
-        await _check("investigation_service", get_g8ee_investigation_service(request_context))
-        await _check("memory_service", get_g8ee_memory_service(request_context))
-        await _check("chat_pipeline", get_g8ee_chat_pipeline(request_context))
-        await _check("attachment_service", get_g8ee_attachment_service(request_context))
 
         unhealthy_deps = [
             name for name, dep in dependencies.items() if dep.status != HealthStatus.HEALTHY

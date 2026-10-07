@@ -75,10 +75,11 @@ class TestOutboundPayloadUnionContract:
         outbound_union_types = set(get_args(G8eOutboundPayload))
 
         # Check that every command payload is present
-        missing_payloads = []
-        for payload_type in command_payloads:
-            if payload_type not in outbound_union_types:
-                missing_payloads.append(payload_type.__name__)
+        missing_payloads = [
+            payload_type.__name__
+            for payload_type in command_payloads
+            if payload_type not in outbound_union_types
+        ]
 
         assert not missing_payloads, (
             f"The following command request payload types are missing from G8eOutboundPayload: {missing_payloads}. "

@@ -5,6 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+import inspect
 from datetime import datetime
 
 import pytest
@@ -338,7 +339,7 @@ class TestErrorSubclasses:
 
     def test_resource_not_found_without_resource_fields(self):
         with pytest.raises(TypeError):
-            ResourceNotFoundError("not found")
+            inspect.signature(ResourceNotFoundError).bind("not found")
 
     def test_resource_not_found_with_fields(self):
         e = ResourceNotFoundError("not found", resource_type="user", resource_id="123")

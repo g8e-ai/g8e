@@ -11,19 +11,19 @@ import time
 
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
-from app.errors import OllamaEmptyResponseError
-from app.llm import get_generative_lite_provider, Role
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm import Role, get_generative_lite_provider
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.structured import parse_structured_response
-from app.utils.agent_persona_loader import get_agent_persona
-from app.models.settings import G8eeUserSettings
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import ConversationHistoryMessage, InvestigationModel
 from app.models.memory import InvestigationMemory, MemoryAnalysis
-from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import G8eeUserSettings
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.protocols import MemoryDataServiceProtocol
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,41 @@ All fields are optional but try to populate each one.
 CONVERSATION_HISTORY_LIMIT = 20
 FALLBACK_TEXT_LIMIT = 2000
 PAST_MEMORIES_LIMIT = 10
+MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS = 2048
+
+
+def _format_past_memories(
+    past_memories: list[InvestigationMemory] | None,
+) -> str:
+    """Format recent user memories as compact baseline context."""
+    if not past_memories:
+        return ""
+
+    past_lines: list[str] = []
+    for i, memory in enumerate(past_memories[:PAST_MEMORIES_LIMIT], 1):
+        attributes = [
+            label + value
+            for label, value in (
+                ("technical: ", memory.technical_background),
+                ("communication: ", memory.communication_preferences),
+                ("interaction: ", memory.interaction_style),
+                ("response: ", memory.response_style),
+                ("approach: ", memory.problem_solving_approach),
+            )
+            if value
+        ]
+        if attributes:
+            past_lines.append(
+                f"- Past memory {i} ({memory.case_title or 'Investigation'}): "
+                f"{'; '.join(attributes)}"
+            )
+    if not past_lines:
+        return ""
+    return (
+        "RECENT PAST MEMORIES (for context on user temperature and knowledge baseline):\n"
+        + "\n".join(past_lines)
+        + "\n\n"
+    )
 
 
 class MemoryGenerationService:
@@ -118,10 +153,14 @@ class MemoryGenerationService:
                 user_id=investigation.user_id,
                 status=investigation.status,
                 case_title=investigation.case_title,
-                communication_preferences=latest_past.communication_preferences if latest_past else "",
+                communication_preferences=latest_past.communication_preferences
+                if latest_past
+                else "",
                 technical_background=latest_past.technical_background if latest_past else "",
                 response_style=latest_past.response_style if latest_past else "",
-                problem_solving_approach=latest_past.problem_solving_approach if latest_past else "",
+                problem_solving_approach=latest_past.problem_solving_approach
+                if latest_past
+                else "",
                 interaction_style=latest_past.interaction_style if latest_past else "",
             )
         else:
@@ -195,17 +234,19 @@ class MemoryGenerationService:
 
         config = AIGenerationConfigBuilder.build_lite_settings(
             model=lite_model,
-            max_tokens=None,
+            max_tokens=MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS,
             system_instructions=system_instructions,
             response_format=types.ResponseFormat.from_pydantic_schema(
                 MemoryAnalysis.model_json_schema()
             ),
         )
-        input_artifact_hash = model_boundary_hash({
-            "model": lite_model,
-            "contents": contents,
-            "settings": config,
-        })
+        input_artifact_hash = model_boundary_hash(
+            {
+                "model": lite_model,
+                "contents": contents,
+                "settings": config,
+            }
+        )
         monotonic_start = time.monotonic()
         try:
             response = await provider.generate_content_lite(
@@ -252,6 +293,22 @@ class MemoryGenerationService:
                     ctx_overflow_suspected=False,
                 )
             ai_analysis = self._parse_memory_analysis(response.text)
+        except ContextWindowExceededError as exc:
+            logger.warning(
+                "Prompt exceeded the model context window during memory update for %s, skipping preference update without retry: %s",
+                memory.investigation_id,
+                exc,
+            )
+            return build_model_call_telemetry(
+                provider=provider,
+                agent_role="codex",
+                model_role="lite",
+                model=lite_model,
+                monotonic_start=monotonic_start,
+                input_artifact_hash=input_artifact_hash,
+                succeeded=False,
+                error_type=type(exc).__name__,
+            )
         except OllamaEmptyResponseError as exc:
             logger.warning(
                 "AI response was empty during memory update for %s, skipping preference update: %s",
@@ -311,30 +368,7 @@ class MemoryGenerationService:
     ) -> list[types.Content]:
         contents: list[types.Content] = []
 
-        # Add past memories context if present (5-10 recent memories for baseline context)
-        past_context = ""
-        if past_memories:
-            past_lines = []
-            for i, pm in enumerate(past_memories[:PAST_MEMORIES_LIMIT], 1):
-                attrs = []
-                if pm.technical_background:
-                    attrs.append(f"technical: {pm.technical_background}")
-                if pm.communication_preferences:
-                    attrs.append(f"communication: {pm.communication_preferences}")
-                if pm.interaction_style:
-                    attrs.append(f"interaction: {pm.interaction_style}")
-                if pm.response_style:
-                    attrs.append(f"response: {pm.response_style}")
-                if pm.problem_solving_approach:
-                    attrs.append(f"approach: {pm.problem_solving_approach}")
-                if attrs:
-                    past_lines.append(f"- Past memory {i} ({pm.case_title or 'Investigation'}): {'; '.join(attrs)}")
-            if past_lines:
-                past_context = (
-                    "RECENT PAST MEMORIES (for context on user temperature and knowledge baseline):\n"
-                    + "\n".join(past_lines)
-                    + "\n\n"
-                )
+        past_context = _format_past_memories(past_memories)
 
         # Add existing memory context first
         memory_context = (
@@ -405,8 +439,8 @@ class MemoryGenerationService:
         current_key: str | None = None
         current_value: list[str] = []
 
-        for line in lines:
-            line = line.strip()
+        for raw_line in lines:
+            line = raw_line.strip()
             if not line:
                 continue
             if line.startswith(("#", "//", "/*")):
@@ -430,9 +464,8 @@ class MemoryGenerationService:
                 current_value = [value_part] if value_part else []
             elif current_key:
                 # Remove trailing commas from continuation lines
-                if line.endswith(","):
-                    line = line[:-1].strip()
-                current_value.append(line)
+                continuation = line[:-1].strip() if line.endswith(",") else line
+                current_value.append(continuation)
 
         if current_key and current_value:
             result[current_key] = " ".join(current_value).strip()

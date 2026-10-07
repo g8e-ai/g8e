@@ -1,12 +1,6 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
-#
-# As of the Change Date listed in the LICENSE file, this software is
-# released under the Apache License, Version 2.0.
-
-from __future__ import annotations
-
 """
 G8eMessage models for operator pub/sub messaging.
 
@@ -14,41 +8,47 @@ This module defines the standardized message format for all g8e component
 communication via operator pub/sub.
 """
 
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Literal, Union
+from typing import Literal
 from uuid import uuid4
+
 from app.constants import ComponentName, EventType, ExecutionStatus
 
-from .base import G8eBaseModel, UTCDatetime, Field, field_validator, model_validator, TypeAdapter
+# Import outbound payload types
+from app.models.command_request_payloads import (
+    CheckPortRequestPayload,
+    CommandCancelRequestPayload,
+    CommandRequestPayload,
+    DirectCommandAuditRequestPayload,
+    DocumentDeleteRequestPayload,
+    DocumentUpdateRequestPayload,
+    FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchHistoryRequestPayload,
+    FetchLogsRequestPayload,
+    FileEditRequestPayload,
+    FsGrepRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+    HeartbeatRequestPayload,
+    RestoreFileRequestPayload,
+)
+from app.utils.time_ids.timestamp import now, parse_iso
+
+from .base import Field, G8eBaseModel, TypeAdapter, UTCDatetime, field_validator, model_validator
 from .tool_results import (
     AuditEvent,
     AuditSessionMetadata,
     FileDiffEntry,
     FileHistoryEntry,
-    FsListEntry,
     FsGrepMatch,
-)
-
-from app.utils.time_ids.timestamp import now, parse_iso
-
-# Import outbound payload types
-from app.models.command_request_payloads import (
-    CommandRequestPayload,
-    CommandCancelRequestPayload,
-    CheckPortRequestPayload,
-    FileEditRequestPayload,
-    FsListRequestPayload,
-    FsGrepRequestPayload,
-    FsReadRequestPayload,
-    FetchLogsRequestPayload,
-    FetchHistoryRequestPayload,
-    FetchFileHistoryRequestPayload,
-    FetchFileDiffRequestPayload,
-    RestoreFileRequestPayload,
-    DirectCommandAuditRequestPayload,
-    HeartbeatRequestPayload,
-    DocumentUpdateRequestPayload,
-    DocumentDeleteRequestPayload,
+    FsListEntry,
 )
 
 
@@ -437,51 +437,51 @@ class PortCheckResultPayload(G8eBaseModel):
     error: str | None = Field(default=None, description="Error message on failure")
 
 
-G8eoResultPayload = Union[
-    ExecutionResultsPayload,
-    ExecutionStatusPayload,
-    CancellationResultPayload,
-    FileEditResultPayload,
-    FsListResultPayload,
-    FsGrepResultPayload,
-    FsReadResultPayload,
-    FetchLogsResultPayload,
-    FetchLogsErrorPayload,
-    FetchHistorySuccessPayload,
-    FetchHistoryErrorPayload,
-    FetchFileHistorySuccessPayload,
-    FetchFileHistoryErrorPayload,
-    RestoreFileSuccessPayload,
-    RestoreFileErrorPayload,
-    FetchFileDiffByIdSuccessPayload,
-    FetchFileDiffBySessionSuccessPayload,
-    FetchFileDiffErrorPayload,
-    PortCheckResultPayload,
-]
+G8eoResultPayload = (
+    ExecutionResultsPayload
+    | ExecutionStatusPayload
+    | CancellationResultPayload
+    | FileEditResultPayload
+    | FsListResultPayload
+    | FsGrepResultPayload
+    | FsReadResultPayload
+    | FetchLogsResultPayload
+    | FetchLogsErrorPayload
+    | FetchHistorySuccessPayload
+    | FetchHistoryErrorPayload
+    | FetchFileHistorySuccessPayload
+    | FetchFileHistoryErrorPayload
+    | RestoreFileSuccessPayload
+    | RestoreFileErrorPayload
+    | FetchFileDiffByIdSuccessPayload
+    | FetchFileDiffBySessionSuccessPayload
+    | FetchFileDiffErrorPayload
+    | PortCheckResultPayload
+)
 
 G8eoResultPayloadAdapter = TypeAdapter(G8eoResultPayload)
 
 
 # Union type for all outbound payloads from g8ee to g8eo
 # Uses discriminator field 'payload_type' for type-safe parsing
-G8eOutboundPayload = Union[
-    CommandRequestPayload,
-    CommandCancelRequestPayload,
-    CheckPortRequestPayload,
-    FileEditRequestPayload,
-    FsListRequestPayload,
-    FsGrepRequestPayload,
-    FsReadRequestPayload,
-    FetchLogsRequestPayload,
-    FetchHistoryRequestPayload,
-    FetchFileHistoryRequestPayload,
-    FetchFileDiffRequestPayload,
-    RestoreFileRequestPayload,
-    DirectCommandAuditRequestPayload,
-    HeartbeatRequestPayload,
-    DocumentUpdateRequestPayload,
-    DocumentDeleteRequestPayload,
-]
+G8eOutboundPayload = (
+    CommandRequestPayload
+    | CommandCancelRequestPayload
+    | CheckPortRequestPayload
+    | FileEditRequestPayload
+    | FsListRequestPayload
+    | FsGrepRequestPayload
+    | FsReadRequestPayload
+    | FetchLogsRequestPayload
+    | FetchHistoryRequestPayload
+    | FetchFileHistoryRequestPayload
+    | FetchFileDiffRequestPayload
+    | RestoreFileRequestPayload
+    | DirectCommandAuditRequestPayload
+    | HeartbeatRequestPayload
+    | DocumentUpdateRequestPayload
+    | DocumentDeleteRequestPayload
+)
 
 
 class G8eoResultEnvelope(G8eBaseModel):
@@ -544,9 +544,7 @@ class G8eMessage(G8eBaseModel):
         default_factory=now, description="When the message was created (UTC)"
     )
 
-    source_component: str = Field(
-        ..., description="Source component that published this message"
-    )
+    source_component: str = Field(..., description="Source component that published this message")
     instance_id: str | None = Field(
         default=None, description="Optional instance identifier for the source component"
     )

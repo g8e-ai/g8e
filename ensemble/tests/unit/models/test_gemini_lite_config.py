@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 from app.constants import GEMINI_3_1_FLASH_LITE, ThinkingLevel
-from app.models.model_configs import get_model_config
+from app.models.model_configs import get_available_models, get_model_config
 
 
 def test_gemini_3_1_flash_lite_config():
@@ -37,7 +37,6 @@ def test_gemini_3_1_flash_lite_config():
 
 def test_gemini_3_1_flash_lite_in_registry():
     """Verify the model is present in the global registry."""
-    from app.models.model_configs import get_available_models
 
     models = get_available_models()
     assert GEMINI_3_1_FLASH_LITE in models

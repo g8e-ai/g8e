@@ -848,7 +848,7 @@ wheels = [
 
 [[package]]
 name = "g8e"
-version = "2.3.1"
+version = "2.3.2"
 source = { directory = "../protocol/python" }
 dependencies = [
     { name = "protobuf" },

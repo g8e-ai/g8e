@@ -154,7 +154,7 @@ func TestIsRetryable_ClassifiesRetryableCodes(t *testing.T) {
 	}
 
 	for _, code := range retryable {
-		code := code
+
 		t.Run(code.String(), func(t *testing.T) {
 			t.Parallel()
 			assert.True(t, isRetryable(status.Error(code, "test")))
@@ -174,7 +174,7 @@ func TestIsRetryable_ClassifiesTerminalCodesAsNotRetryable(t *testing.T) {
 	}
 
 	for _, code := range terminal {
-		code := code
+
 		t.Run(code.String(), func(t *testing.T) {
 			t.Parallel()
 			assert.False(t, isRetryable(status.Error(code, "test")))

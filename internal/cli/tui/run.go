@@ -16,9 +16,13 @@ import (
 )
 
 // Run starts the Tactical Governance TUI. It blocks until the user presses
-// q or ctrl+c. When an SSE URL is configured, the adapter runs in a
-// goroutine and feeds events from the SSE stream into the program.
+// q or ctrl+c. When a CLI session is configured, the adapter runs in a
+// goroutine and feeds the session's SSE stream and pending approvals into
+// the program.
 func Run(ctx context.Context, opts Options) error {
+	if opts.Session != nil && opts.sessionManager == nil {
+		opts.sessionManager = newSessionManager(opts.Session, opts.Identity.UserID)
+	}
 	m := NewModel(opts)
 	programOpts := append(
 		[]tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()},
@@ -30,8 +34,8 @@ func Run(ctx context.Context, opts Options) error {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	if opts.SSEURL != "" {
-		adapter := NewAdapter(opts.SSEURL, opts.Token, opts.CLISessionID, p, opts.HTTPClient)
+	if opts.Session != nil {
+		adapter := newAdapterWithManager(opts.sessionManager, p)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

@@ -36,7 +36,7 @@ import (
 
 func TestHandlePublicAuthLogout(t *testing.T) {
 	t.Run("Success - clears cookie", func(t *testing.T) {
-		c, _ := setupTestSessionController(t)
+		c := setupTestSessionController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 		req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "test-session"})
 		rr := httptest.NewRecorder()
@@ -51,7 +51,7 @@ func TestHandlePublicAuthLogout(t *testing.T) {
 	})
 
 	t.Run("Success - no cookie present", func(t *testing.T) {
-		c, _ := setupTestSessionController(t)
+		c := setupTestSessionController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 		rr := httptest.NewRecorder()
 
@@ -63,7 +63,7 @@ func TestHandlePublicAuthLogout(t *testing.T) {
 
 func TestHandleWebSession(t *testing.T) {
 	t.Run("Failure - missing user_id in context", func(t *testing.T) {
-		c, _ := setupTestSessionController(t)
+		c := setupTestSessionController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
 		rr := httptest.NewRecorder()
 
@@ -74,7 +74,7 @@ func TestHandleWebSession(t *testing.T) {
 	})
 
 	t.Run("Success - returns session data with cookie", func(t *testing.T) {
-		c, _ := setupTestSessionController(t)
+		c := setupTestSessionController(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-test-1"))
@@ -93,7 +93,7 @@ func TestHandleWebSession(t *testing.T) {
 	})
 
 	t.Run("Success - returns session data without cookie", func(t *testing.T) {
-		c, _ := setupTestSessionController(t)
+		c := setupTestSessionController(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-test-2"))

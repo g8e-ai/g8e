@@ -13,22 +13,16 @@ and result assembly.
 
 import asyncio
 import logging
+
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants import EventType
+from app.constants.config import ExecutionStatus
 from app.constants.generated_status import (
     CommandErrorType,
 )
-from app.constants.config import ExecutionStatus
-from app.errors import BusinessLogicError, NetworkError, ValidationError
-from app.services.protocols import (
-    AIResponseAnalyzerProtocol,
-    ApprovalServiceProtocol,
-    ExecutionServiceProtocol,
-    InvestigationServiceProtocol,
-)
-
-from app.models.tool_results import CommandExecutionResult
+from app.errors import BusinessLogicError, NetworkError, ServiceUnavailableError, ValidationError
 from app.models.command_request_payloads import CommandCancelRequestPayload, CommandRequestPayload
+from app.models.http_context import G8eHttpContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CancelCommandResult,
@@ -36,12 +30,26 @@ from app.models.operators import (
     OperatorDocument,
     TargetSystem,
 )
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, ExecutionResultsPayload
-from app.models.tool_results import CommandInternalResult
-from app.models.http_context import G8eHttpContext
+from app.models.pubsub_messages import (
+    ExecutionResultsPayload,
+    FileEditResultPayload,
+    FsGrepResultPayload,
+    FsListResultPayload,
+    FsReadResultPayload,
+    G8eMessage,
+    G8eoResultEnvelope,
+    PortCheckResultPayload,
+)
 from app.models.settings import G8eeAppSettings
-from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
+from app.models.tool_results import CommandInternalResult
+from app.services.protocols import (
+    AIResponseAnalyzerProtocol,
+    ApprovalServiceProtocol,
+    ExecutionServiceProtocol,
+    InvestigationServiceProtocol,
+)
 from app.utils.gateway_decoding.gateway_dispatch_result import envelope_from_gateway_dispatch
+from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
 
 logger = logging.getLogger(__name__)
 
@@ -78,37 +86,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
         return self._investigation_service
-
-    # -------------------------------------------------------------------------
-    # Failure helper
-    # -------------------------------------------------------------------------
-
-    async def _fail_command(
-        self,
-        error_msg: str,
-        error_type: CommandErrorType,
-        command: str,
-        g8e_context: G8eHttpContext,
-        *,
-        execution_id: str,
-        operator_session_id: str,
-        status: ExecutionStatus,
-        approval_id: str,
-        rule: str,
-        violations: list[str],
-        denial_reason: str,
-        feedback_reason: str,
-    ) -> CommandExecutionResult:
-
-        return CommandExecutionResult(
-            success=False,
-            error=error_msg,
-            error_type=error_type,
-            execution_id=execution_id,
-            rule=rule,
-            denial_reason=denial_reason,
-            feedback_reason=feedback_reason,
-        )
 
     # -------------------------------------------------------------------------
     # Operator resolution
@@ -258,12 +235,36 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 error_type=CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY,
             ), None
 
+        return await self._dispatch_and_build_result(
+            g8e_message=g8e_message,
+            operator_id=operator_id,
+            operator_session_id=operator_session_id,
+            g8e_context=g8e_context,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def _dispatch_and_build_result(
+        self,
+        *,
+        g8e_message: G8eMessage,
+        operator_id: str,
+        operator_session_id: str,
+        g8e_context: G8eHttpContext,
+        timeout_seconds: int,
+    ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]:
+        """Dispatch a validated message and translate the gateway response."""
+        gateway_operator_client = self._gateway_operator_client
+        assert gateway_operator_client is not None
+        payload = g8e_message.payload
+        if payload is None:
+            raise ValidationError("g8e_message.payload is required", component="g8ee")
+        execution_id = getattr(payload, "execution_id", None) or g8e_message.id
         payload_bytes = payload.to_protobuf().SerializeToString()
         target_resource = getattr(payload, "file_path", None) or getattr(payload, "path", None)
 
         try:
             dispatch_result = await asyncio.wait_for(
-                self._gateway_operator_client.dispatch(
+                gateway_operator_client.dispatch(
                     context=g8e_context,
                     operator_session_id=operator_session_id,
                     event_type=g8e_message.event_type,
@@ -303,11 +304,50 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             g8e_context=g8e_context,
         )
 
-        if envelope is None or not isinstance(envelope.payload, ExecutionResultsPayload):
+        if envelope is None:
             return CommandInternalResult(
                 execution_id=execution_id,
-                status=ExecutionStatus.COMPLETED,
-                output="",
+                status=ExecutionStatus.FAILED,
+                error="Gateway dispatch returned no operator result payload",
+                error_type=CommandErrorType.EXECUTION_FAILED,
+                operator_id=operator_id,
+            ), None
+
+        return self._result_from_envelope(envelope, execution_id, operator_id)
+
+    @staticmethod
+    def _result_from_envelope(
+        envelope: G8eoResultEnvelope, execution_id: str, operator_id: str
+    ) -> tuple[CommandInternalResult, G8eoResultEnvelope]:
+        """Convert supported gateway payloads to the internal execution result."""
+        if isinstance(
+            envelope.payload,
+            (FileEditResultPayload, FsListResultPayload, FsReadResultPayload, FsGrepResultPayload),
+        ):
+            result_payload = envelope.payload
+            return CommandInternalResult(
+                execution_id=execution_id,
+                status=result_payload.status,
+                error=result_payload.error_message or "",
+                operator_id=operator_id,
+            ), envelope
+
+        if isinstance(envelope.payload, PortCheckResultPayload):
+            return CommandInternalResult(
+                execution_id=execution_id,
+                status=ExecutionStatus.FAILED
+                if envelope.payload.error
+                else ExecutionStatus.COMPLETED,
+                error=envelope.payload.error or "",
+                operator_id=operator_id,
+            ), envelope
+
+        if not isinstance(envelope.payload, ExecutionResultsPayload):
+            return CommandInternalResult(
+                execution_id=execution_id,
+                status=ExecutionStatus.FAILED,
+                error="Gateway dispatch returned an unsupported operator result payload",
+                error_type=CommandErrorType.EXECUTION_FAILED,
                 operator_id=operator_id,
             ), envelope
 
@@ -318,7 +358,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             status=status,
             output=result_payload.stdout or "",
             stderr=result_payload.stderr or "",
-            error=result_payload.error_message or "",
+            error=result_payload.error or "",
             exit_code=result_payload.return_code,
             execution_time_seconds=result_payload.duration_seconds or 0,
             operator_id=operator_id,
@@ -348,14 +388,18 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 payload=cancel_payload.to_protobuf().SerializeToString(),
             )
         except NetworkError as exc:
-            logger.error("[EXECUTION] Cancel command failed: %s", exc, exc_info=True)
+            logger.exception(
+                "[EXECUTION] Cancel command failed: %s", exc, extra={"operator_id": operator_id}
+            )
             return CancelCommandResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.FAILED,
                 error=f"Command cancellation failed: {exc}. Check operator status and retry.",
             )
         except Exception as e:
-            logger.error("[EXECUTION] Cancel command failed: %s", e, exc_info=True)
+            logger.exception(
+                "[EXECUTION] Cancel command failed: %s", e, extra={"operator_id": operator_id}
+            )
             return CancelCommandResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.FAILED,
@@ -419,6 +463,9 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         timeout_seconds = 300
         request_payload = CommandRequestPayload(command=command, execution_id=execution_id)
 
+        if self._gateway_operator_client is None:
+            raise ServiceUnavailableError("Gateway operator client is not configured")
+
         try:
             dispatch_result = await asyncio.wait_for(
                 self._gateway_operator_client.dispatch(
@@ -433,22 +480,23 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             logger.warning(
                 "[EXECUTION] Direct command timed out waiting for Gateway result for %s",
                 execution_id,
+                extra={"operator_id": operator_id},
             )
             return
         except NetworkError as exc:
-            logger.error(
+            logger.exception(
                 "[EXECUTION] Direct command Gateway dispatch failed for %s: %s",
                 execution_id,
                 exc,
-                exc_info=True,
+                extra={"operator_id": operator_id},
             )
             return
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[EXECUTION] Direct command dispatch failed for %s: %s",
                 execution_id,
                 e,
-                exc_info=True,
+                extra={"operator_id": operator_id},
             )
             return
 
@@ -457,7 +505,12 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 "[EXECUTION] Direct command Gateway dispatch failed for %s: %s",
                 execution_id,
                 dispatch_result.get("error"),
+                extra={"operator_id": operator_id},
             )
             return
 
-        logger.info("[EXECUTION] Direct command dispatched successfully for %s", execution_id)
+        logger.info(
+            "[EXECUTION] Direct command dispatched successfully for %s",
+            execution_id,
+            extra={"operator_id": operator_id},
+        )

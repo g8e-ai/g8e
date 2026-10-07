@@ -36,7 +36,7 @@ func setupBootstrapLedger(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -259,7 +259,7 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -333,7 +333,7 @@ func TestBootstrap_BootstrapFailureOnUnwritableBaseDir(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	tempDir := testutil.TempDir(t)
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 	require.NoError(t, err)
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)

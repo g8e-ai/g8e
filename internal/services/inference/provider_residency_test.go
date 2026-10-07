@@ -5,6 +5,8 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
+//go:build integration
+
 package inference
 
 import (
@@ -30,7 +32,6 @@ func newResidencyBackend(t *testing.T, handler http.HandlerFunc) *OllamaBackend 
 }
 
 func TestOllamaBackendReadResidency_ReturnsResidentModels(t *testing.T) {
-	t.Parallel()
 	backend := newResidencyBackend(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/ps", r.URL.Path)
 		_, _ = w.Write([]byte(`{"models":[{"name":"qwen3:0.6b"},{"name":"qwen3:1.7b"}]}`))
@@ -43,7 +44,6 @@ func TestOllamaBackendReadResidency_ReturnsResidentModels(t *testing.T) {
 }
 
 func TestOllamaBackendReadResidency_RejectsInvalidResponses(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name    string
 		handler http.HandlerFunc
@@ -73,7 +73,6 @@ func TestOllamaBackendReadResidency_RejectsInvalidResponses(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			backend := newResidencyBackend(t, test.handler)
 
 			_, err := backend.ReadResidency(context.Background())

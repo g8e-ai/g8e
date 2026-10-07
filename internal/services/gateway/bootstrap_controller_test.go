@@ -26,7 +26,7 @@ import (
 
 func TestHandleBootstrapWithURL(t *testing.T) {
 	t.Run("Success - Bootstrap with CLI CSR creates the first real user", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
+		c := setupTestBootstrapController(t)
 		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
 		body := map[string]string{
 			"name":               "Owner",
@@ -59,7 +59,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 	})
 
 	t.Run("Failure - Rejects bootstrap if ANY other users exist", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
+		c := setupTestBootstrapController(t)
 		c.userSvc.CreateUser()
 
 		body := map[string]string{
@@ -79,7 +79,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 
 func TestHandleBootstrapStatus(t *testing.T) {
 	t.Run("Fresh gateway is not bootstrapped", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
+		c := setupTestBootstrapController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 		rr := httptest.NewRecorder()
 		c.handleBootstrapStatus(rr, req)
@@ -93,7 +93,7 @@ func TestHandleBootstrapStatus(t *testing.T) {
 	})
 
 	t.Run("Bootstrapped after creating the first user", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
+		c := setupTestBootstrapController(t)
 		_, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
 

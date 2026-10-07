@@ -271,7 +271,7 @@ func TestInferenceDispatch_ProcessEnvelope_PrimaryRole_PersistsReceiptAndAudit(t
 	assert.Equal(t, wantDigest, receipt.ResultSummary, "receipt result_summary must be the result digest")
 	assert.Equal(t, wantDigest, completion.Receipt.ResultSummary, "completion receipt must bind the result digest")
 
-	receipts, err := auditStore.ListActionReceipts("", 10, 0)
+	receipts, err := auditStore.ListActionReceipts(models.AuditScope{OperatorSessionID: ""}, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, receipts, 1, "exactly one inference receipt must be persisted in the audit store")
 	persisted := receipts[0]

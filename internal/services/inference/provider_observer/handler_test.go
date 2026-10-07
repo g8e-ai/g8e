@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -28,7 +29,7 @@ type stubObservationPublisher struct {
 	err         error
 }
 
-func (s *stubObservationPublisher) PublishProviderBoundaryObservationCompleted(_ context.Context, _ string, completion *evalv1.ProviderBoundaryObservationCompleted) error {
+func (s *stubObservationPublisher) PublishProviderBoundaryObservationCompleted(_ context.Context, _ *commonv1.GovernanceEnvelope, completion *evalv1.ProviderBoundaryObservationCompleted) error {
 	if s.err != nil {
 		return s.err
 	}
@@ -118,7 +119,7 @@ func TestHandler_HandleCommand(t *testing.T) {
 				}
 				beginPayload, err := proto.Marshal(begin)
 				require.NoError(t, err)
-				_, err = handler.HandleCommand(ctx, "msg-begin", beginPayload)
+				_, err = handler.HandleCommand(ctx, &commonv1.GovernanceEnvelope{Id: "msg-begin"}, beginPayload)
 				require.NoError(t, err)
 
 				finalize := &evalv1.ProviderBoundaryObservationCommand{
@@ -162,7 +163,7 @@ func TestHandler_HandleCommand(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			handler, publisher := testProviderObserverHandler(t)
 			payload := test.setup(t, handler)
-			id, err := handler.HandleCommand(ctx, "msg-1", payload)
+			id, err := handler.HandleCommand(ctx, &commonv1.GovernanceEnvelope{Id: "msg-1"}, payload)
 			if test.wantErr {
 				require.Error(t, err)
 				if test.wantSubstr != "" {
@@ -192,7 +193,7 @@ func TestHandler_PublishFailure(t *testing.T) {
 	}
 	beginPayload, err := proto.Marshal(begin)
 	require.NoError(t, err)
-	_, err = handler.HandleCommand(ctx, "msg-begin", beginPayload)
+	_, err = handler.HandleCommand(ctx, &commonv1.GovernanceEnvelope{Id: "msg-begin"}, beginPayload)
 	require.NoError(t, err)
 
 	finalize := &evalv1.ProviderBoundaryObservationCommand{
@@ -203,7 +204,7 @@ func TestHandler_PublishFailure(t *testing.T) {
 	}
 	finalizePayload, err := proto.Marshal(finalize)
 	require.NoError(t, err)
-	_, err = handler.HandleCommand(ctx, "msg-finalize", finalizePayload)
+	_, err = handler.HandleCommand(ctx, &commonv1.GovernanceEnvelope{Id: "msg-finalize"}, finalizePayload)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "publish completion")
 }

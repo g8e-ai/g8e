@@ -26,12 +26,12 @@ import (
 )
 
 // setupTestExecutionVault creates a test environment for ExecutionVaultService
-func setupTestExecutionVault(t *testing.T) (*ExecutionVaultService, string) {
+func setupTestExecutionVault(t *testing.T) *ExecutionVaultService {
 	t.Helper()
 
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	// Create vault
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -66,7 +66,7 @@ func setupTestExecutionVault(t *testing.T) (*ExecutionVaultService, string) {
 		ev.Close()
 	})
 
-	return ev, tempDir
+	return ev
 }
 
 func TestExecutionVault_DefaultExecutionVaultConfig(t *testing.T) {
@@ -103,7 +103,7 @@ func TestExecutionVault_NewExecutionVaultService_NilVault(t *testing.T) {
 
 func TestExecutionVault_StoreExecution_Basic(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -131,7 +131,7 @@ func TestExecutionVault_StoreExecution_Basic(t *testing.T) {
 
 func TestExecutionVault_StoreExecution_WithStderr(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 1
 	record := &models.ExecutionRecord{
@@ -169,7 +169,7 @@ func TestExecutionVault_StoreExecution_NilService(t *testing.T) {
 
 func TestExecutionVault_StoreExecution_UpdateExisting(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode1 := 0
 	record1 := &models.ExecutionRecord{
@@ -209,7 +209,7 @@ func TestExecutionVault_StoreExecution_UpdateExisting(t *testing.T) {
 
 func TestExecutionVault_GetExecution_Basic(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -250,7 +250,7 @@ func TestExecutionVault_GetExecution_Basic(t *testing.T) {
 
 func TestExecutionVault_GetExecution_NotFound(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	retrieved, err := ev.GetExecution(context.Background(), "non-existent-id")
 	require.NoError(t, err)
@@ -270,7 +270,7 @@ func TestExecutionVault_GetExecution_NilService(t *testing.T) {
 
 func TestExecutionVault_StoreFileDiff_Basic(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	record := &models.FileDiffRecord{
 		ID:                "diff-123",
@@ -296,7 +296,7 @@ func TestExecutionVault_StoreFileDiff_Basic(t *testing.T) {
 
 func TestExecutionVault_StoreFileDiff_DeleteOperation(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	record := &models.FileDiffRecord{
 		ID:                "diff-delete",
@@ -337,7 +337,7 @@ func TestExecutionVault_StoreFileDiff_NilService(t *testing.T) {
 
 func TestExecutionVault_StoreFileDiff_UpdateExisting(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	record1 := &models.FileDiffRecord{
 		ID:             "diff-update",
@@ -372,7 +372,7 @@ func TestExecutionVault_StoreFileDiff_UpdateExisting(t *testing.T) {
 
 func TestExecutionVault_GetFileDiff_Basic(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	record := &models.FileDiffRecord{
 		ID:                "diff-get-123",
@@ -412,7 +412,7 @@ func TestExecutionVault_GetFileDiff_Basic(t *testing.T) {
 
 func TestExecutionVault_GetFileDiff_NotFound(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	retrieved, err := ev.GetFileDiff(context.Background(), "non-existent-diff")
 	require.NoError(t, err)
@@ -432,7 +432,7 @@ func TestExecutionVault_GetFileDiff_NilService(t *testing.T) {
 
 func TestExecutionVault_GetFileDiffsBySession_Basic(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	sessionID := "session-query-123"
 
@@ -465,7 +465,7 @@ func TestExecutionVault_GetFileDiffsBySession_Basic(t *testing.T) {
 
 func TestExecutionVault_GetFileDiffsBySession_WithLimit(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	sessionID := "session-limit-123"
 
@@ -491,7 +491,7 @@ func TestExecutionVault_GetFileDiffsBySession_WithLimit(t *testing.T) {
 
 func TestExecutionVault_GetFileDiffsBySession_DefaultLimit(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	sessionID := "session-default-123"
 
@@ -517,7 +517,7 @@ func TestExecutionVault_GetFileDiffsBySession_DefaultLimit(t *testing.T) {
 
 func TestExecutionVault_GetFileDiffsBySession_EmptySession(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	diffs, err := ev.GetFileDiffsBySession(context.Background(), "empty-session", 10)
 	require.NoError(t, err)
@@ -537,7 +537,7 @@ func TestExecutionVault_GetFileDiffsBySession_NilService(t *testing.T) {
 
 func TestExecutionVault_Close(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	err := ev.Close()
 	require.NoError(t, err)
@@ -555,7 +555,7 @@ func TestExecutionVault_Close_NilService(t *testing.T) {
 
 func TestExecutionVault_Wait(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -586,7 +586,7 @@ func TestExecutionVault_Wait_NilService(t *testing.T) {
 
 func TestExecutionVault_ConcurrentStoreExecution(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	concurrency := 10
 	done := make(chan bool, concurrency)
@@ -624,7 +624,7 @@ func TestExecutionVault_ConcurrentStoreExecution(t *testing.T) {
 
 func TestExecutionVault_ConcurrentStoreFileDiff(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	concurrency := 10
 	sessionID := "concurrent-session"
@@ -660,7 +660,7 @@ func TestExecutionVault_ConcurrentStoreFileDiff(t *testing.T) {
 
 func TestExecutionVault_LargeStdout(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	largeOutput := make([]byte, 1024*1024) // 1MB
 	for i := range largeOutput {
@@ -689,7 +689,7 @@ func TestExecutionVault_LargeStdout(t *testing.T) {
 
 func TestExecutionVault_EmptyOutput(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -716,7 +716,7 @@ func TestExecutionVault_EmptyOutput(t *testing.T) {
 
 func TestExecutionVault_MultipleExecutionsSameCase(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	caseID := "case-multi-123"
 
@@ -746,7 +746,7 @@ func TestExecutionVault_MultipleExecutionsSameCase(t *testing.T) {
 
 func TestExecutionVault_MultipleDiffsSameSession(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	sessionID := "session-multi-123"
 
@@ -772,7 +772,7 @@ func TestExecutionVault_MultipleDiffsSameSession(t *testing.T) {
 
 func TestExecutionVault_ExecutionWithAllFields(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -810,7 +810,7 @@ func TestExecutionVault_ExecutionWithAllFields(t *testing.T) {
 
 func TestExecutionVault_FileDiffWithAllFields(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	record := &models.FileDiffRecord{
 		ID:                "diff-all-fields",
@@ -850,7 +850,7 @@ func TestExecutionVault_StoreExecution_LockedVault(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -905,7 +905,7 @@ func TestExecutionVault_StoreFileDiff_LockedVault(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -959,7 +959,7 @@ func TestExecutionVault_PruneRetention(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -1040,7 +1040,7 @@ func TestExecutionVault_PruneSizeLimit(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -1108,7 +1108,7 @@ func TestExecutionVault_PruneSizeLimit(t *testing.T) {
 
 func TestExecutionVault_SpecialCharacters(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -1134,7 +1134,7 @@ func TestExecutionVault_SpecialCharacters(t *testing.T) {
 
 func TestExecutionVault_UnicodeCharacters(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -1159,7 +1159,7 @@ func TestExecutionVault_UnicodeCharacters(t *testing.T) {
 
 func TestExecutionVault_VeryLongCommand(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	// Create a very long command (10KB)
 	longCommand := make([]byte, 10*1024)
@@ -1188,7 +1188,7 @@ func TestExecutionVault_VeryLongCommand(t *testing.T) {
 
 func TestExecutionVault_NilExitCode(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	record := &models.ExecutionRecord{
 		ID:               "exec-nil-exit",
@@ -1210,7 +1210,7 @@ func TestExecutionVault_NilExitCode(t *testing.T) {
 
 func TestExecutionVault_ContextCancellation(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	// Create a cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1242,7 +1242,7 @@ func TestExecutionVault_DatabaseInitFailure(t *testing.T) {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	fileSvc, _ := newTestFileSvc(t, testutil.TempDir(t))
+	fileSvc := newTestFileSvc(t, testutil.TempDir(t))
 	testVault := CreateTestVault(t, fileSvc, privKey)
 
 	// Create a file (not a directory) and try to use a path inside it
@@ -1267,7 +1267,7 @@ func TestExecutionVault_SchemaInitFailure(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -1311,7 +1311,7 @@ func TestExecutionVault_GetExecution_DecryptFailure(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -1374,7 +1374,7 @@ func TestExecutionVault_GetFileDiff_DecryptFailure(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	fileSvc, _ := newTestFileSvc(t, tempDir)
+	fileSvc := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -1434,7 +1434,7 @@ func TestExecutionVault_GetFileDiff_DecryptFailure(t *testing.T) {
 
 func TestExecutionVault_ZeroDuration(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -1458,7 +1458,7 @@ func TestExecutionVault_ZeroDuration(t *testing.T) {
 
 func TestExecutionVault_NegativeDuration(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -1482,7 +1482,7 @@ func TestExecutionVault_NegativeDuration(t *testing.T) {
 
 func TestExecutionVault_EmptyFields(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	exitCode := 0
 	record := &models.ExecutionRecord{
@@ -1514,7 +1514,7 @@ func TestExecutionVault_EmptyFields(t *testing.T) {
 
 func TestExecutionVault_FileDiffEmptyFields(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	record := &models.FileDiffRecord{
 		ID:                "diff-empty-fields",

@@ -9,10 +9,17 @@
 Unit tests for OperatorPortService (port_service.py).
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 
-from app.constants import CommandErrorType, EventType, OperatorStatus
-from app.constants import ExecutionStatus
+from app.constants import (
+    CommandErrorType,
+    EventType,
+    ExecutionStatus,
+    OperatorStatus,
+    OperatorType,
+)
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.operators import (
@@ -23,6 +30,7 @@ from app.models.operators import (
 )
 from app.models.pubsub_messages import (
     ExecutionResultsPayload,
+    G8eMessage,
     G8eoResultEnvelope,
     PortCheckResultPayload,
 )
@@ -44,10 +52,11 @@ pytestmark = pytest.mark.unit
 
 def _make_operator(
     operator_id: str = "op-1",
-    operator_session_id: str = "session-1",
+    operator_session_id: str | None = "session-1",
     hostname: str = "host-1",
 ) -> OperatorDocument:
     return OperatorDocument(
+        operator_type=OperatorType.REMOTE,
         id=operator_id,
         user_id="user-1",
         bound_web_session_id="ws-1",
@@ -58,7 +67,7 @@ def _make_operator(
             system_identity=HeartbeatSystemIdentity(
                 hostname=hostname, os="linux", architecture="x86_64"
             ),
-            network=HeartbeatNetworkInfo(),
+            network_info=HeartbeatNetworkInfo(),
         ),
     )
 
@@ -108,7 +117,8 @@ def _make_success_envelope(
     host: str = "google.com",
     port: int = 443,
     is_open: bool = True,
-    latency_ms: float = 12.5,
+    latency_ms: float | None = 12.5,
+    protocol: str = "tcp",
 ) -> G8eoResultEnvelope:
     return build_g8eo_result_envelope(
         event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
@@ -118,7 +128,7 @@ def _make_success_envelope(
             execution_id=execution_id,
             host=host,
             port=port,
-            protocol="tcp",
+            protocol=protocol,
             is_open=is_open,
             latency_ms=latency_ms,
         ),
@@ -192,6 +202,7 @@ class TestPortCheckSuccess:
 
         assert len(execution.execute_calls) == 1
         msg = execution.execute_calls[0]["g8e_message"]
+        assert isinstance(msg, G8eMessage)
         assert msg.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED
         assert msg.operator_id == "op-1"
         assert msg.operator_session_id == "session-1"
@@ -213,6 +224,7 @@ class TestPortValidation:
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
+        assert result.error is not None
         assert "Invalid port" in result.error
 
     @pytest.mark.asyncio
@@ -285,6 +297,7 @@ class TestOperatorResolution:
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.G8E_RESOLUTION_ERROR
+        assert result.error is not None
         assert "No operators" in result.error
 
     @pytest.mark.asyncio
@@ -315,6 +328,7 @@ class TestOperatorResolution:
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.NO_OPERATORS_AVAILABLE
+        assert result.error is not None
         assert "session not found" in result.error
 
     @pytest.mark.asyncio
@@ -382,6 +396,7 @@ class TestTimeout:
 
         assert result.success is False
         assert result.error_type == CommandErrorType.OPERATION_TIMEOUT
+        assert result.error is not None
         assert "timed out" in result.error
 
 
@@ -402,6 +417,7 @@ class TestG8eoResultHandling:
 
         assert result.success is False
         assert result.error_type == CommandErrorType.PORT_CHECK_FAILED
+        assert result.error is not None
         assert "Connection refused" in result.error
 
     @pytest.mark.asyncio
@@ -426,12 +442,14 @@ class TestG8eoResultHandling:
         service, execution = _make_service()
         investigation = _make_investigation()
 
-        execution.envelope = "not_an_envelope"
+        # An object with no ``payload`` attribute stands in for a malformed envelope.
+        execution.envelope = MagicMock(spec=[])
 
         result = await service.execute_port_check(_make_args(), investigation, _make_context())
 
         assert result.success is False
         assert result.error_type == CommandErrorType.EXECUTION_ERROR
+        assert result.error is not None
         assert "Unexpected" in result.error
 
     @pytest.mark.asyncio
@@ -474,6 +492,7 @@ class TestExceptionHandling:
 
         assert result.success is False
         assert result.error_type == CommandErrorType.EXECUTION_ERROR
+        assert result.error is not None
         assert "boom" in result.error
 
     @pytest.mark.asyncio
@@ -488,6 +507,7 @@ class TestExceptionHandling:
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.G8E_RESOLUTION_ERROR
+        assert result.error is not None
         assert "bad target" in result.error
 
     @pytest.mark.asyncio
@@ -526,9 +546,7 @@ class TestProtocol:
         service, execution = _make_service()
         investigation = _make_investigation()
 
-        envelope = _make_success_envelope()
-        envelope.payload.protocol = "udp"
-        execution.envelope = envelope
+        execution.envelope = _make_success_envelope(protocol="udp")
 
         result = await service.execute_port_check(
             _make_args(protocol="udp"),

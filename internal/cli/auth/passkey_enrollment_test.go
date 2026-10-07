@@ -33,7 +33,7 @@ func TestGenerateEnrollmentToken_Success(t *testing.T) {
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 
@@ -51,7 +51,7 @@ func TestGenerateEnrollmentToken_NonCreatedStatusReturnsError(t *testing.T) {
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 
@@ -71,7 +71,7 @@ func TestGenerateEnrollmentToken_EmptyTokenReturnsErrEnrollmentTokenGenerationFa
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 
@@ -91,7 +91,7 @@ func TestGenerateEnrollmentToken_InvalidJSONReturnsErrInvalidJSONResponse(t *tes
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 

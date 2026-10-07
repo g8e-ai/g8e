@@ -127,7 +127,7 @@ func TestPasskeyCredentialValidateAllAttestationTypes(t *testing.T) {
 	t.Parallel()
 
 	for _, att := range []string{"none", "indirect", "direct", "enterprise"} {
-		att := att
+
 		t.Run(att, func(t *testing.T) {
 			t.Parallel()
 			c := PasskeyCredential{

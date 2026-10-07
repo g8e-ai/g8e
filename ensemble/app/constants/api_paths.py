@@ -5,25 +5,24 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from typing import Any
 
 import g8e.constants as _g8e_constants
+from g8e.models.base import G8eBaseModel
 
 from app.constants.models import APIPathsConstants
 
 
-def _load[T](filename: str, model_cls: type[T]) -> T:
+def _load[T: G8eBaseModel](filename: str, model_cls: type[T]) -> T:
     # Load from local app/constants directory
     path = Path(__file__).parent / filename
     try:
-        with open(path) as f:
+        with path.open() as f:
             data = json.load(f)
-            # Use Pydantic to validate and parse the JSON data
-            if hasattr(model_cls, "model_validate"):
-                return model_cls.model_validate(data)
-            return model_cls(**data)
+            return model_cls.model_validate(data)
     except FileNotFoundError as e:
         raise RuntimeError(f"API paths file not found: {path}") from e
     except (json.JSONDecodeError, Exception) as e:
@@ -32,6 +31,11 @@ def _load[T](filename: str, model_cls: type[T]) -> T:
 
 _API_PATHS_DATA = _load("api_paths.json", APIPathsConstants)
 API_PATHS = _API_PATHS_DATA.model_dump()
+_G8EE_PATHS: dict[str, str] = _API_PATHS_DATA.g8ee
+_G8EE_FULL_PATHS: dict[str, str] = _API_PATHS_DATA.g8ee_full
+_CLIENT_PATHS: dict[str, str] = _API_PATHS_DATA.client
+_CLIENT_FULL_PATHS: dict[str, str] = _API_PATHS_DATA.client_full
+_INTERNAL_PREFIX = _API_PATHS_DATA.internal_prefix
 
 
 class _InternalAPIPathsMeta(type):
@@ -41,28 +45,28 @@ class _InternalAPIPathsMeta(type):
             sub_name = name.removeprefix("FULL_")
             if sub_name.startswith("G8EE_"):
                 key = sub_name.removeprefix("G8EE_").lower()
-                if key in cls._G8EE_FULL_PATHS:
-                    return cls._G8EE_FULL_PATHS[key]
+                if key in _G8EE_FULL_PATHS:
+                    return _G8EE_FULL_PATHS[key]
             elif sub_name.startswith("CLIENT_"):
                 key = sub_name.removeprefix("CLIENT_").lower()
-                if key in cls._CLIENT_FULL_PATHS:
-                    return cls._CLIENT_FULL_PATHS[key]
+                if key in _CLIENT_FULL_PATHS:
+                    return _CLIENT_FULL_PATHS[key]
 
         # Priority 2: G8EE_ prefix (try full then sub)
         if name.startswith("G8EE_"):
             key = name.removeprefix("G8EE_").lower()
-            if key in cls._G8EE_FULL_PATHS:
-                return cls._G8EE_FULL_PATHS[key]
-            if key in cls._G8EE_PATHS:
-                return cls.PREFIX + cls._G8EE_PATHS[key]
+            if key in _G8EE_FULL_PATHS:
+                return _G8EE_FULL_PATHS[key]
+            if key in _G8EE_PATHS:
+                return _INTERNAL_PREFIX + _G8EE_PATHS[key]
 
         # Priority 3: CLIENT_ prefix (try full then sub)
         elif name.startswith("CLIENT_"):
             key = name.removeprefix("CLIENT_").lower()
-            if key in cls._CLIENT_FULL_PATHS:
-                return cls._CLIENT_FULL_PATHS[key]
-            if key in cls._CLIENT_PATHS:
-                return cls.PREFIX + cls._CLIENT_PATHS[key]
+            if key in _CLIENT_FULL_PATHS:
+                return _CLIENT_FULL_PATHS[key]
+            if key in _CLIENT_PATHS:
+                return _INTERNAL_PREFIX + _CLIENT_PATHS[key]
 
         raise AttributeError(f"'{cls.__name__}' object has no attribute '{name}'")
 
@@ -82,7 +86,7 @@ class InternalAPIPaths(metaclass=_InternalAPIPathsMeta):
 # GatewayAPIPaths — Gateway-side API paths sourced from g8e.constants.API_PATHS
 # ---------------------------------------------------------------------------
 
-_G8E_API_PATHS: dict[str, Any] = _g8e_constants.API_PATHS
+_G8E_API_PATHS: dict[str, object] = _g8e_constants.API_PATHS
 
 
 class _GatewayAPIPathsMeta(type):

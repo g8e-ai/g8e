@@ -10,6 +10,8 @@ package evaluation
 import (
 	"context"
 	"fmt"
+	"sort"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -142,6 +144,77 @@ func (r *CampaignModelProvenanceReader) CaptureAssignmentEvidence(ctx context.Co
 
 func isModelProvenanceEvidenceNotFound(err error) bool {
 	return isGatewayEvidenceNotFound(err)
+}
+
+// WaitForEvidence captures durable completion windows before strict verification.
+// Only missing windows are retried; malformed evidence and read failures return
+// immediately. The caller owns the deadline for the whole run, not each attempt.
+func (r *CampaignModelProvenanceReader) WaitForEvidence(ctx context.Context, attemptIDs []string, interval time.Duration) error {
+	if r == nil || interval <= 0 {
+		return fmt.Errorf("evaluation: wait for model provenance: %w", constants.ErrMissingRequiredField)
+	}
+	pending := make(map[string]struct{}, len(attemptIDs))
+	for _, id := range attemptIDs {
+		if id != "" {
+			pending[id] = struct{}{}
+		}
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for len(pending) > 0 {
+		for id := range pending {
+			if ctx.Err() != nil {
+				return missingProvenanceError(ctx.Err(), pending)
+			}
+			_, err := r.local.Load(ctx, id)
+			if err == nil {
+				delete(pending, id)
+				continue
+			}
+			if !isModelProvenanceEvidenceNotFound(err) {
+				return fmt.Errorf("evaluation: wait for model provenance %s: %w", id, err)
+			}
+			if r.remote == nil {
+				continue
+			}
+			window, err := r.remote.Load(ctx, id)
+			if err != nil {
+				if ctx.Err() != nil {
+					return missingProvenanceError(ctx.Err(), pending)
+				}
+				if isModelProvenanceEvidenceNotFound(err) {
+					continue
+				}
+				return fmt.Errorf("evaluation: wait for model provenance %s: %w", id, err)
+			}
+			if err := r.local.Save(ctx, window); err != nil {
+				return fmt.Errorf("evaluation: capture model provenance %s: %w", id, err)
+			}
+			delete(pending, id)
+		}
+		if len(pending) == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return missingProvenanceError(ctx.Err(), pending)
+		case <-ticker.C:
+		}
+	}
+	return nil
+}
+
+func missingProvenanceError(cause error, pending map[string]struct{}) error {
+	ids := make([]string, 0, len(pending))
+	for id := range pending {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	count := len(ids)
+	if len(ids) > 5 {
+		ids = ids[:5]
+	}
+	return fmt.Errorf("evaluation: wait for model provenance: %w: %d missing attestation windows (sample attempts: %v); check Provenance Operator logs and storage throughput", cause, count, ids)
 }
 
 // VerifyAssignmentModelProvenance independently checks model provenance

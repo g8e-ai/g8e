@@ -17,23 +17,30 @@ This test verifies the full Phase 2 pipeline:
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock as _MagicMock
 
 import pytest
 
 from app.constants import (
+    G8EE_COMPONENT,
     AuditorReason,
     CommandGenerationOutcome,
     ConsensusMember,
     EventType,
-    G8EE_COMPONENT,
 )
 from app.models.agents.tribunal import (
     CandidateCommand,
-    VoteBreakdown,
     TribunalAuditResult,
+    VoteBreakdown,
 )
+from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext, RequestContext
-from app.models.reputation import ReputationSignResponse, ReputationState
+from app.models.reputation import (
+    ReputationCommitmentCreatedPayload,
+    ReputationCommitmentFailedPayload,
+    ReputationSignResponse,
+    ReputationState,
+)
 from app.services.ai.generator import generate_command
 from app.services.data.reputation_data_service import ReputationDataService
 from tests.fakes.agent_helpers import (
@@ -59,10 +66,11 @@ class TestCommandGeneratorWithCommitment:
             web_session_id="commitment-test-sess-001",
             user_id="commitment-test-user-001",
         )
+        assert inputs.investigation_id is not None
+        investigation_id = inputs.investigation_id
         event_svc = make_event_service()
 
         # Use real ReputationDataService with fake cache/db
-        from unittest.mock import MagicMock as _MagicMock
 
         async def _write_through(collection, document_id, updates, **kwargs):
             return await fake_cache_aside_service.db_client.update_document(
@@ -73,7 +81,9 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = _MagicMock()
-        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
+        gov.sign_reputation_commitment = AsyncMock(
+            return_value=ReputationSignResponse(signature="a" * 64)
+        )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
@@ -94,10 +104,10 @@ class TestCommandGeneratorWithCommitment:
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch(
-                "app.services.ai.generator._run_voting_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_voting_stage", new_callable=AsyncMock
             ) as mock_vote,
             patch(
                 "app.services.ai.generator.TribunalAuditor.run", new_callable=AsyncMock
@@ -118,27 +128,24 @@ class TestCommandGeneratorWithCommitment:
             # Mock auditor to pass and emit event
             async def mock_audit_side_effect(*args, **kwargs):
                 # Simulate side effects that are now internal to TribunalAuditor.run
-                from app.models.reputation import ReputationCommitmentCreatedPayload
-                from app.models.events import SessionEvent
 
                 correlation_id = "mock-correlation-id"
 
                 payload = ReputationCommitmentCreatedPayload(
                     commitment_id="mock-commitment-id",
                     tribunal_command_id=correlation_id,
-                    investigation_id=inputs.investigation_id,
+                    investigation_id=investigation_id,
                     merkle_root="a" * 64,
                     prev_root="b" * 64,
                     leaves_count=1,
                     correlation_id=correlation_id,
                 )
-                from app.models.http_context import RequestContext
 
                 ctx = RequestContext(
                     web_session_id=inputs.web_session_id,
                     user_id=inputs.user_id,
                     case_id=inputs.case_id,
-                    investigation_id=inputs.investigation_id,
+                    investigation_id=investigation_id,
                     source_component=G8EE_COMPONENT,
                 )
                 event = SessionEvent.from_context(
@@ -170,7 +177,7 @@ class TestCommandGeneratorWithCommitment:
                         web_session_id=inputs.web_session_id,
                         user_id=inputs.user_id,
                         case_id=inputs.case_id,
-                        investigation_id=inputs.investigation_id,
+                        investigation_id=investigation_id,
                         source_component=G8EE_COMPONENT,
                     ),
                     settings=inputs.request_settings,
@@ -199,6 +206,8 @@ class TestCommandGeneratorWithCommitment:
             case_id="commitment-fail-case-001",
             investigation_id="commitment-fail-inv-001",
         )
+        assert inputs.investigation_id is not None
+        investigation_id = inputs.investigation_id
         event_svc = make_event_service()
 
         async def _write_through2(collection, document_id, updates, **kwargs):
@@ -210,16 +219,18 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = MagicMock()
-        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
+        gov.sign_reputation_commitment = AsyncMock(
+            return_value=ReputationSignResponse(signature="a" * 64)
+        )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through2)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch(
-                "app.services.ai.generator._run_voting_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_voting_stage", new_callable=AsyncMock
             ) as mock_vote,
             patch(
                 "app.services.ai.generator.TribunalAuditor.run", new_callable=AsyncMock
@@ -254,7 +265,7 @@ class TestCommandGeneratorWithCommitment:
                         web_session_id=inputs.web_session_id,
                         user_id=inputs.user_id,
                         case_id=inputs.case_id,
-                        investigation_id=inputs.investigation_id,
+                        investigation_id=investigation_id,
                         source_component=G8EE_COMPONENT,
                     ),
                     settings=inputs.request_settings,
@@ -277,6 +288,8 @@ class TestCommandGeneratorWithCommitment:
     ):
         """A failure in the commitment step should crash the generator (prevents ghost verdicts)."""
         inputs, _ = make_agent_run_args()
+        assert inputs.investigation_id is not None
+        investigation_id = inputs.investigation_id
         event_svc = make_event_service()
 
         async def _write_through3(collection, document_id, updates, **kwargs):
@@ -288,22 +301,21 @@ class TestCommandGeneratorWithCommitment:
             )
 
         gov = MagicMock()
-        gov.sign_reputation_commitment = AsyncMock(return_value=ReputationSignResponse(signature="a" * 64))
+        gov.sign_reputation_commitment = AsyncMock(
+            return_value=ReputationSignResponse(signature="a" * 64)
+        )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through3)
         reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
 
         # Force commitment failure by mocking create_commitment to raise
         reputation_svc.create_commitment = AsyncMock(side_effect=RuntimeError("DB Offline"))
 
-        from app.models.reputation import ReputationCommitmentFailedPayload
-        from app.constants import EventType
-
         with (
             patch(
-                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_generation_stage", new_callable=AsyncMock
             ) as mock_gen,
             patch(
-                "app.services.ai.generator._run_voting_stage", new_callable=AsyncMock
+                "app.services.ai.generator.run_voting_stage", new_callable=AsyncMock
             ) as mock_vote,
             patch(
                 "app.services.ai.generator.TribunalAuditor.run", new_callable=AsyncMock
@@ -320,23 +332,21 @@ class TestCommandGeneratorWithCommitment:
 
             # Mock auditor to fail during commitment by raising RuntimeError
             async def mock_audit_fatal_failure(*args, **kwargs):
-                from app.models.events import SessionEvent
 
                 correlation_id = "test-correlation-id"
 
                 payload = ReputationCommitmentFailedPayload(
                     tribunal_command_id=correlation_id,
-                    investigation_id=inputs.investigation_id,
+                    investigation_id=investigation_id,
                     error="DB Offline",
                     correlation_id=correlation_id,
                 )
-                from app.models.http_context import RequestContext
 
                 ctx = RequestContext(
                     web_session_id=inputs.web_session_id,
                     user_id=inputs.user_id,
                     case_id=inputs.case_id,
-                    investigation_id=inputs.investigation_id,
+                    investigation_id=investigation_id,
                     source_component=G8EE_COMPONENT,
                 )
                 event = SessionEvent.from_context(
@@ -363,7 +373,7 @@ class TestCommandGeneratorWithCommitment:
                             web_session_id=inputs.web_session_id,
                             user_id=inputs.user_id,
                             case_id=inputs.case_id,
-                            investigation_id=inputs.investigation_id,
+                            investigation_id=investigation_id,
                             source_component=G8EE_COMPONENT,
                         ),
                         settings=inputs.request_settings,

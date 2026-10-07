@@ -88,7 +88,7 @@ func TestBuildTunnelRunArgs_ConfigPrecedesTunnelSubcommand(t *testing.T) {
 			name:      "explicit config directory",
 			tunnel:    "opendevops-feed",
 			configDir: "/home/user/.cloudflared",
-			expected:  []string{"--config", "/home/user/.cloudflared/config.yml", "tunnel", "run", "opendevops-feed"},
+			expected:  []string{"--config", filepath.Join("/home/user/.cloudflared", "config.yml"), "tunnel", "run", "opendevops-feed"},
 		},
 		{
 			name:     "default config discovery",

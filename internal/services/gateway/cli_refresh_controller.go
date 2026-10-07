@@ -139,7 +139,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		if err != nil && !errors.Is(err, constants.ErrCLISessionNotFound) {
 			c.logger.Error("CLI refresh: failed to load old session",
 				"error", err,
-				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 			)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to load old session")
 			return
@@ -213,7 +213,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	if operatorSessionID == "" {
 		c.logger.Warn("CLI refresh: no operator session binding available",
 			"user_id", userID,
-			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 		)
 		c.responder.Error(w, http.StatusConflict, "no active operator session found for user; re-enroll with 'auth enroll user' to establish a fresh operator binding")
 		return
@@ -225,7 +225,11 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		boundOperatorSessionIDs = oldSession.BoundOperatorSessionIDs
 	}
 
-	newCLISessionID := uuid.NewString()
+	newCLISessionID, err := uuid.NewString()
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to generate session ID")
+		return
+	}
 	_, err = c.cliSessionSvc.RefreshCLISession(
 		oldCLISessionID,
 		newCLISessionID,
@@ -243,8 +247,8 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		c.logger.Warn("CLI refresh: RefreshCLISession failed",
 			"error", err,
 			"user_id", userID,
-			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
+			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
 		)
 		c.writeRefreshError(w, err)
 		return
@@ -252,8 +256,8 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 
 	c.logger.Info("CLI session refreshed via controller",
 		"user_id", userID,
-		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
+		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
 	)
 
 	c.responder.JSON(w, http.StatusCreated, models.CLIRefreshResponse{

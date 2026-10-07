@@ -294,7 +294,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	}, time.Second, 10*time.Millisecond)
 	payload, err := proto.Marshal(&operatorv1.ShutdownRequested{Reason: "planned maintenance"})
 	require.NoError(t, err)
-	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
+	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore, nil)
 	result, err := dispatch.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: sessionID,
 		EventType:               string(constants.Event.Operator.ShutdownRequested),
@@ -602,7 +602,7 @@ func startFileEditOperator(t *testing.T, infra *TestInfrastructure, operatorID, 
 }
 
 func newInferenceBoundaryDispatchService(infra *TestInfrastructure, posture config.GatewayPosture) *inferdispatch.DispatchService {
-	commandSvc := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(posture), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
+	commandSvc := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(posture), govsvc.NewL1Doctrine(), nil, infra.SignerStore, nil)
 	return inferdispatch.NewDispatchService(
 		&gatewayDispatcherAdapter{svc: commandSvc},
 		&gatewayOperatorListerAdapter{svc: infra.Reg},
@@ -664,7 +664,7 @@ func TestDispatch_FileMutationExecutesOnceAndReplayProducesSignedRejection(t *te
 		NewContent:  seed + "\n" + marker,
 	})
 	require.NoError(t, err)
-	dispatchSvc := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
+	dispatchSvc := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore, nil)
 	result, err := dispatchSvc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: sessionID,
 		EventType:               string(constants.Event.Operator.FileEdit.Requested),
@@ -765,7 +765,7 @@ func TestDispatchController_HandleDispatch_DoctrineProhibitedRequestRejectedBefo
 
 	h, _, infra := setupTestHTTPHandler(t)
 	h.dispatchController = newDispatchController(DispatchControllerDeps{
-		DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore),
+		DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore, nil),
 		Responder:   infra.Responder,
 		Logger:      infra.Logger,
 	})

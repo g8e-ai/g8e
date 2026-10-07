@@ -10,31 +10,32 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 
-from ollama import AsyncClient, Message as OllamaMessage
+from ollama import AsyncClient
+from ollama import Message as OllamaMessage
 
 from app.constants import (
     LLM_OLLAMA_DEFAULT_NUM_CTX,
-    OLLAMA_DEFAULT_PROTOCOL,
     ThinkingLevel,
 )
-from app.llm.thinking import translate_for_ollama
-from app.models.model_configs import get_model_config
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError, ValidationError
+from app.llm.endpoints import normalize_ollama_host
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
     Content,
-    LiteLLMSettings,
-    PrimaryLLMSettings,
-    ToolCall,
     GenerateContentResponse,
+    LiteLLMSettings,
     Part,
+    PrimaryLLMSettings,
     StreamChunkFromModel,
-    UsageMetadata,
+    ToolCall,
     ToolGroup,
+    UsageMetadata,
 )
-
 from app.llm.provider import LLMProvider
 from app.llm.providers._capability import translate_capability_error
+from app.llm.thinking import translate_for_ollama
+from app.models.model_configs import get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ def _first_token_seen(msg) -> bool:
 
 def _contents_to_messages(
     contents: list[Content],
-    system_instructions: str,
+    system_instructions: str | None,
 ) -> list[OllamaMessage]:
     messages = []
 
@@ -142,23 +143,70 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
         return None
 
     ollama_tools = []
-    for tool in tools:
-        for decl in tool.tools:
-            ollama_tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": decl.name,
-                        "description": decl.description,
-                        "parameters": decl.parameters.to_json_schema(),
-                    },
-                }
-            )
+    ollama_tools.extend(
+        {
+            "type": "function",
+            "function": {
+                "name": decl.name,
+                "description": decl.description,
+                "parameters": decl.parameters.to_json_schema(),
+            },
+        }
+        for tool in tools
+        for decl in tool.tools
+    )
 
     return ollama_tools if ollama_tools else None
 
 
-def _raise_on_empty_content(
+def _prompt_filled_context(prompt_eval_count: int | None, num_ctx: int | None) -> bool:
+    """Return True when the evaluated prompt consumed the whole context window.
+
+    Ollama silently truncates a prompt that fills ``num_ctx`` (dropping the
+    oldest tokens) or leaves no room to generate, so the answer is empty or
+    degraded. The Gateway applies the same ``prompt_eval_count >= num_ctx`` rule
+    in ``internal/services/inference/ollama_backend.go``. Unset counts cannot
+    prove overflow.
+    """
+    return bool(num_ctx) and prompt_eval_count is not None and prompt_eval_count >= num_ctx
+
+
+def _raise_on_context_overflow(
+    response,
+    *,
+    model: str,
+    channel: str,
+    num_ctx: int,
+) -> None:
+    """Reject truncated prompts on unary responses and terminal stream frames."""
+    message = getattr(response, "message", None)
+    content = getattr(message, "content", None) if message else None
+    done_reason = getattr(response, "done_reason", None)
+    prompt_eval_count = getattr(response, "prompt_eval_count", None)
+
+    if _prompt_filled_context(prompt_eval_count, num_ctx):
+        logger.warning(
+            "[OLLAMA] Prompt filled the context window: channel=%s model=%s "
+            "done_reason=%s prompt_eval_count=%s num_ctx=%s has_content=%s",
+            channel,
+            model,
+            done_reason,
+            prompt_eval_count,
+            num_ctx,
+            bool(content),
+        )
+        raise ContextWindowExceededError(
+            f"Ollama prompt filled the context window (channel={channel}, model={model}, "
+            f"prompt_tokens={prompt_eval_count}, num_ctx={num_ctx})",
+            model=model,
+            service_name="ollama",
+            num_ctx=num_ctx,
+            prompt_tokens=prompt_eval_count,
+            channel=channel,
+        )
+
+
+def _raise_on_unusable_response(
     response,
     *,
     model: str,
@@ -166,38 +214,26 @@ def _raise_on_empty_content(
     num_ctx: int,
     num_predict: int | None,
 ) -> None:
-    """Raise OllamaEmptyResponseError when Ollama returns HTTP 200 with no content.
+    """Reject overflow and empty answers; primary tool-only output is usable."""
 
-    Context-window overflow, load failures, and thinking-only output all surface
-    as ``message.content == ""`` with a 200 response. This error captures the
-    diagnostic context needed to identify the root cause.
-
-    Raises:
-        OllamaEmptyResponseError: If response.message.content is empty or falsy.
-    """
+    _raise_on_context_overflow(response, model=model, channel=channel, num_ctx=num_ctx)
     message = getattr(response, "message", None)
     content = getattr(message, "content", None) if message else None
-    if content:
-        return
-
     done_reason = getattr(response, "done_reason", None)
     prompt_eval_count = getattr(response, "prompt_eval_count", None)
+    tool_calls = getattr(message, "tool_calls", None) if message else None
+    tool_calls_count = len(tool_calls) if tool_calls else 0
+    if content or (channel == "primary" and tool_calls_count):
+        return
+
     eval_count = getattr(response, "eval_count", None)
     thinking = getattr(message, "thinking", None) if message else None
     thinking_len = len(thinking) if thinking else 0
-    tool_calls = getattr(message, "tool_calls", None) if message else None
-    tool_calls_count = len(tool_calls) if tool_calls else 0
-
-    from app.errors import OllamaEmptyResponseError
-
-    ctx_overflow_suspected = (
-        prompt_eval_count is not None and num_ctx is not None and prompt_eval_count >= num_ctx
-    )
 
     logger.warning(
         "[OLLAMA] Empty message.content on 200 OK: channel=%s model=%s "
         "done_reason=%s prompt_eval_count=%s eval_count=%s num_ctx=%s "
-        "num_predict=%s thinking_chars=%d tool_calls=%d ctx_overflow_suspected=%s",
+        "num_predict=%s thinking_chars=%d tool_calls=%d",
         channel,
         model,
         done_reason,
@@ -207,7 +243,6 @@ def _raise_on_empty_content(
         num_predict,
         thinking_len,
         tool_calls_count,
-        ctx_overflow_suspected,
     )
 
     raise OllamaEmptyResponseError(
@@ -221,38 +256,16 @@ def _raise_on_empty_content(
         num_predict=num_predict,
         thinking_len=thinking_len,
         tool_calls_count=tool_calls_count,
-        ctx_overflow_suspected=ctx_overflow_suspected,
+        ctx_overflow_suspected=False,
     )
-
-
-def _normalize_ollama_host(endpoint: str) -> str:
-    """Normalize a user-supplied Ollama host into a base URL.
-
-    Accepts:
-      - "host:port"              -> "http://host:port"
-      - "http://host:port"       -> "http://host:port"
-
-    The Ollama native API lives at /api/chat. Endpoints containing a `/v1`
-    path segment are rejected with a clear error so misconfigured settings
-    fail fast instead of silently producing the wrong outbound URL.
-    """
-    cleaned = (endpoint or "").strip().rstrip("/")
-    if "/v1" in cleaned:
-        raise ValueError(
-            f"Invalid Ollama endpoint {endpoint!r}: must not contain '/v1'. "
-            "Ollama uses its native /api/chat surface; configure 'host:port' "
-            "or 'http(s)://host:port' only."
-        )
-    if cleaned and not cleaned.startswith(("http://", "https://")):
-        cleaned = OLLAMA_DEFAULT_PROTOCOL + cleaned
-    return cleaned
 
 
 class OllamaProvider(LLMProvider):
     def __init__(self, endpoint: str, api_key: str):
         super().__init__()
+        _ = api_key
 
-        host = _normalize_ollama_host(endpoint)
+        host = normalize_ollama_host(endpoint)
         self._client = AsyncClient(host=host)
         # CodeQL: Don't log full host strings to avoid accidental leakage
         logger.info("Ollama provider initialized")
@@ -276,6 +289,7 @@ class OllamaProvider(LLMProvider):
             List of validation error messages. Empty if configuration is valid.
         """
         errors = []
+        _ = api_key
         if not endpoint:
             errors.append("Provider 'ollama' requires an endpoint URL.")
         return errors
@@ -370,6 +384,11 @@ class OllamaProvider(LLMProvider):
 
         first_token_at: float | None = None
         chunks = await self._receive_stream(stream)
+        for chunk in chunks:
+            if chunk.done:
+                _raise_on_context_overflow(
+                    chunk, model=model, channel="primary", num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX
+                )
         for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):
@@ -382,9 +401,10 @@ class OllamaProvider(LLMProvider):
                 calls = []
                 for tc in msg.tool_calls:
                     if not isinstance(tc.function.arguments, dict):
-                        from app.errors import ValidationError
                         raise ValidationError("Provider tool arguments must be a JSON object")
-                    calls.append(ToolCall(name=tc.function.name, args=tc.function.arguments, id=None))
+                    calls.append(
+                        ToolCall(name=tc.function.name, args=tc.function.arguments, id=None)
+                    )
                 yield StreamChunkFromModel(tool_calls=calls)
             if chunk.done:
                 usage = _ollama_usage_metadata(chunk)
@@ -432,7 +452,7 @@ class OllamaProvider(LLMProvider):
             )
             raise
 
-        _raise_on_empty_content(
+        _raise_on_unusable_response(
             response,
             model=model,
             channel="primary",
@@ -446,14 +466,14 @@ class OllamaProvider(LLMProvider):
         if getattr(response.message, "content", None):
             parts.append(Part(text=response.message.content))
         if getattr(response.message, "tool_calls", None):
-            for tc in response.message.tool_calls:
-                parts.append(
-                    Part(
-                        tool_call=ToolCall(
-                            name=tc.function.name, args=tc.function.arguments, id=None
-                        )
+            parts.extend(
+                Part(
+                    tool_call=ToolCall(
+                        name=tc.function.name, args=tc.function.arguments, id=None
                     )
                 )
+                for tc in response.message.tool_calls
+            )
 
         usage = _ollama_usage_metadata(response)
 
@@ -498,6 +518,11 @@ class OllamaProvider(LLMProvider):
 
         first_token_at: float | None = None
         chunks = await self._receive_stream(stream)
+        for chunk in chunks:
+            if chunk.done:
+                _raise_on_context_overflow(
+                    chunk, model=model, channel="assistant", num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX
+                )
         for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):
@@ -542,7 +567,7 @@ class OllamaProvider(LLMProvider):
         response = await self._client.chat(**chat_kwargs)
         self._record_response(response, complete=True)
 
-        _raise_on_empty_content(
+        _raise_on_unusable_response(
             response,
             model=model,
             channel="assistant",
@@ -597,6 +622,11 @@ class OllamaProvider(LLMProvider):
 
         first_token_at: float | None = None
         chunks = await self._receive_stream(stream)
+        for chunk in chunks:
+            if chunk.done:
+                _raise_on_context_overflow(
+                    chunk, model=model, channel="lite", num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX
+                )
         for index, chunk in enumerate(chunks):
             msg = chunk.message
             if first_token_at is None and _first_token_seen(msg):
@@ -641,7 +671,7 @@ class OllamaProvider(LLMProvider):
         response = await self._client.chat(**chat_kwargs)
         self._record_response(response, complete=True)
 
-        _raise_on_empty_content(
+        _raise_on_unusable_response(
             response,
             model=model,
             channel="lite",

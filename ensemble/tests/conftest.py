@@ -16,15 +16,45 @@ tests/fixtures/operators.py.
 E2E fixtures are in tests/e2e/conftest.py.
 """
 
+import asyncio
+import contextlib
 import logging
 import os
+import shutil
+import uuid
+from importlib import import_module
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 import pytest_asyncio
 
-import contextlib
-from app.constants import G8EE_COMPONENT, OLLAMA_DEFAULT_ENDPOINT
+from app.clients.db_client import DBClient
+from app.clients.kv_cache_client import KVCacheClient
+from app.constants import (
+    G8EE_COMPONENT,
+    OLLAMA_DEFAULT_ENDPOINT,
+    InvestigationStatus,
+    LLMProvider,
+    LogLevel,
+    OperatorType,
+)
+from app.constants.bootstrap import reset_bootstrap
+from app.constants.env_vars import EnvVar
+from app.db.db_service import DBService
+from app.db.kv_service import KVService
+from app.llm.factory import (
+    get_llm_settings,
+    get_search_settings,
+    get_settings,
+    set_llm_settings,
+    set_search_settings,
+    set_settings,
+)
+from app.models.settings import TLSConfig
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.infra.settings_service import SettingsService
+from app.utils.path import resolve_project_root
 
 # Lazy imports for protocol-dependent modules to prevent pytest collection crashes
 # when protocol JSON files are missing or malformed.
@@ -36,8 +66,6 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(autouse=True)
 def _reset_paths_cache():
     """Reset bootstrap settings (and the PATHS cache they feed) before and after every test."""
-    from app.constants.bootstrap import reset_bootstrap
-
     reset_bootstrap()
     yield
     reset_bootstrap()
@@ -46,10 +74,6 @@ def _reset_paths_cache():
 @pytest.fixture
 def test_runtime_dir():
     """Isolated test directory under project root .g8e-test-tmp (avoiding system /tmp)."""
-    import shutil
-    import uuid
-    from app.utils.path import resolve_project_root
-
     root = resolve_project_root()
     base = root / ".g8e-test-tmp"
     base.mkdir(parents=True, exist_ok=True)
@@ -63,22 +87,16 @@ def test_runtime_dir():
 
 def _has_llm_credentials(llm) -> bool:
     """Return True if the given LLMSettings has the credentials it needs."""
-    from app.constants import LLMProvider
-
     if llm is None:
         return False
-    provider = llm.primary_provider
-    if provider == LLMProvider.GEMINI:
-        return bool(llm.gemini_api_key)
-    if provider == LLMProvider.ANTHROPIC:
-        return bool(llm.anthropic_api_key)
-    if provider == LLMProvider.OPENAI:
-        return bool(llm.openai_api_key and llm.openai_endpoint)
-    if provider == LLMProvider.OLLAMA:
-        return bool(llm.ollama_endpoint)
-    if provider == LLMProvider.LLAMACPP:
-        return bool(llm.llamacpp_endpoint)
-    return False
+    credentials_by_provider = {
+        LLMProvider.GEMINI: bool(llm.gemini_api_key),
+        LLMProvider.ANTHROPIC: bool(llm.anthropic_api_key),
+        LLMProvider.OPENAI: bool(llm.openai_api_key and llm.openai_endpoint),
+        LLMProvider.OLLAMA: bool(llm.ollama_endpoint),
+        LLMProvider.LLAMACPP: bool(llm.llamacpp_endpoint),
+    }
+    return credentials_by_provider.get(llm.primary_provider, False)
 
 
 def _llm_settings_from_env():
@@ -87,45 +105,19 @@ def _llm_settings_from_env():
     Returns None when no --llm-provider flag was supplied, which means
     ai_integration tests should be skipped.
     """
-    from app.constants.env_vars import EnvVar
-    from app.constants import LLMProvider
-    from app.models.settings import LLMSettings
-
-    provider_str = os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip()
-    if not provider_str:
+    if not os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip():
         return None
 
-    try:
-        provider = LLMProvider(provider_str)
-    except ValueError:
-        logger.warning("G8E_TEST_LLM_PRIMARY_PROVIDER=%s is not a valid provider", provider_str)
+    llm_settings = import_module("app.models.settings").LLMSettings
+    provider = _test_provider(EnvVar.TEST_LLM_PRIMARY_PROVIDER)
+    if provider is None:
         return None
-
-    assistant_provider_str = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_PROVIDER, "").strip()
-    if assistant_provider_str:
-        try:
-            assistant_provider = LLMProvider(assistant_provider_str)
-        except ValueError:
-            logger.warning(
-                "G8E_TEST_LLM_ASSISTANT_PROVIDER=%s is not a valid provider, falling back to primary",
-                assistant_provider_str,
-            )
-            assistant_provider = provider
-    else:
-        assistant_provider = provider
-
-    lite_provider_str = os.environ.get(EnvVar.TEST_LLM_LITE_PROVIDER, "").strip()
-    if lite_provider_str:
-        try:
-            lite_provider = LLMProvider(lite_provider_str)
-        except ValueError:
-            logger.warning(
-                "G8E_TEST_LLM_LITE_PROVIDER=%s is not a valid provider, falling back to assistant",
-                lite_provider_str,
-            )
-            lite_provider = assistant_provider
-    else:
-        lite_provider = assistant_provider
+    assistant_provider = _test_provider(
+        EnvVar.TEST_LLM_ASSISTANT_PROVIDER, fallback=provider
+    )
+    lite_provider = _test_provider(
+        EnvVar.TEST_LLM_LITE_PROVIDER, fallback=assistant_provider
+    )
 
     primary = os.environ.get(EnvVar.TEST_LLM_PRIMARY_MODEL, "").strip() or None
     assistant = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_MODEL, "").strip() or None
@@ -133,22 +125,7 @@ def _llm_settings_from_env():
 
     # Fallback to defaults if not provided but provider is set
     if not primary:
-        from app.constants.config import (
-            ANTHROPIC_DEFAULT_MODEL,
-            GEMINI_DEFAULT_MODEL,
-            LLAMACPP_DEFAULT_MODEL,
-            OLLAMA_DEFAULT_MODEL,
-            OPENAI_DEFAULT_MODEL,
-        )
-
-        _DEFAULT_MODELS = {
-            LLMProvider.GEMINI: GEMINI_DEFAULT_MODEL,
-            LLMProvider.OPENAI: OPENAI_DEFAULT_MODEL,
-            LLMProvider.ANTHROPIC: ANTHROPIC_DEFAULT_MODEL,
-            LLMProvider.OLLAMA: OLLAMA_DEFAULT_MODEL,
-            LLMProvider.LLAMACPP: LLAMACPP_DEFAULT_MODEL,
-        }
-        primary = _DEFAULT_MODELS.get(provider)
+        primary = _default_test_model(provider)
 
     if not assistant:
         assistant = primary
@@ -161,34 +138,11 @@ def _llm_settings_from_env():
         "assistant_provider": assistant_provider,
         "lite_provider": lite_provider,
     }
-    if primary:
-        kwargs["primary_model"] = primary
-    if assistant:
-        kwargs["assistant_model"] = assistant
-    if lite:
-        kwargs["lite_model"] = lite
-
-    _PROVIDER_MODEL_FIELD = {
-        LLMProvider.GEMINI: "gemini_model",
-        LLMProvider.OPENAI: "openai_model",
-        LLMProvider.ANTHROPIC: "anthropic_model",
-        LLMProvider.OLLAMA: "ollama_model",
-        LLMProvider.LLAMACPP: "llamacpp_model",
-    }
-
-    if primary:
-        kwargs["primary_model"] = primary
-        mod_field = _PROVIDER_MODEL_FIELD.get(provider)
-        if mod_field:
-            kwargs[mod_field] = primary
-
-    if assistant:
-        kwargs["assistant_model"] = assistant
-        mod_field = _PROVIDER_MODEL_FIELD.get(assistant_provider)
-        if mod_field:
-            kwargs[mod_field] = assistant
-
-    kwargs["lite_model"] = lite or assistant or primary
+    _apply_provider_models(
+        kwargs,
+        (primary, assistant, lite),
+        (provider, assistant_provider),
+    )
 
     # Connections are configured once per provider, using the same environment
     # variables as the running service. Role-specific test credentials no
@@ -207,7 +161,55 @@ def _llm_settings_from_env():
         if value := os.environ.get(env_var, "").strip():
             kwargs[field] = value
 
-    return LLMSettings(**kwargs)
+    return llm_settings(**kwargs)
+
+
+def _test_provider(env_var: str, fallback: LLMProvider | None = None) -> LLMProvider | None:
+    """Read a provider override, warning and using its configured fallback if invalid."""
+    provider_str = os.environ.get(env_var, "").strip()
+    if not provider_str:
+        return fallback
+    try:
+        return LLMProvider(provider_str)
+    except ValueError:
+        fallback_text = f", falling back to {fallback.value}" if fallback else ""
+        logger.warning("%s=%s is not a valid provider%s", env_var, provider_str, fallback_text)
+        return fallback
+
+
+def _default_test_model(provider: LLMProvider) -> str | None:
+    """Return the standard model name for a test provider."""
+    config = import_module("app.constants.config")
+    defaults = {
+        LLMProvider.GEMINI: config.GEMINI_DEFAULT_MODEL,
+        LLMProvider.OPENAI: config.OPENAI_DEFAULT_MODEL,
+        LLMProvider.ANTHROPIC: config.ANTHROPIC_DEFAULT_MODEL,
+        LLMProvider.OLLAMA: config.OLLAMA_DEFAULT_MODEL,
+        LLMProvider.LLAMACPP: config.LLAMACPP_DEFAULT_MODEL,
+    }
+    return defaults.get(provider)
+
+
+def _apply_provider_models(kwargs, models, providers):
+    """Apply role model names and provider-specific compatibility fields."""
+    primary, assistant, lite = models
+    provider, assistant_provider = providers
+    provider_fields = {
+        LLMProvider.GEMINI: "gemini_model",
+        LLMProvider.OPENAI: "openai_model",
+        LLMProvider.ANTHROPIC: "anthropic_model",
+        LLMProvider.OLLAMA: "ollama_model",
+        LLMProvider.LLAMACPP: "llamacpp_model",
+    }
+    if primary:
+        kwargs["primary_model"] = primary
+        if field := provider_fields.get(provider):
+            kwargs[field] = primary
+    if assistant:
+        kwargs["assistant_model"] = assistant
+        if field := provider_fields.get(assistant_provider):
+            kwargs[field] = assistant
+    kwargs["lite_model"] = lite or assistant or primary
 
 
 def _web_search_settings_from_env():
@@ -216,7 +218,7 @@ def _web_search_settings_from_env():
     Returns None when no --web-search-* flags were supplied, which means
     requires_web_search tests should be skipped.
     """
-    from app.models.settings import SearchSettings
+    search_settings = import_module("app.models.settings").SearchSettings
 
     project_id = os.environ.get("G8E_TEST_WEB_SEARCH_PROJECT_ID", "").strip()
     engine_id = os.environ.get("G8E_TEST_WEB_SEARCH_ENGINE_ID", "").strip()
@@ -226,12 +228,12 @@ def _web_search_settings_from_env():
     if not project_id or not engine_id or not api_key:
         return None
 
-    return SearchSettings(
+    return search_settings(
         enabled=True, project_id=project_id, engine_id=engine_id, api_key=api_key, location=location
     )
 
 
-async def _load_settings_from_operator(timeout: float = 5.0):
+async def _load_settings_from_operator(probe_timeout: float = 5.0):
     """Probe the operator for platform settings.
 
     Returns ``(settings, status)`` where ``status`` is ``"ok"`` when the
@@ -241,18 +243,6 @@ async def _load_settings_from_operator(timeout: float = 5.0):
     during the probe so the caller can emit a single concise status line
     instead of three stacked error traces.
     """
-    from app.clients.db_client import DBClient
-    from app.clients.kv_cache_client import KVCacheClient
-
-    from app.db.db_service import DBService
-    from app.db.kv_service import KVService
-    from app.models.settings import TLSConfig
-    from app.services.cache.cache_aside import CacheAsideService
-    from app.services.infra.settings_service import SettingsService
-
-    import asyncio
-    import logging as _logging
-
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
@@ -267,12 +257,12 @@ async def _load_settings_from_operator(timeout: float = 5.0):
     )
     saved_levels = {}
     for name in noisy_loggers:
-        noisy_logger = _logging.getLogger(name)
+        noisy_logger = logging.getLogger(name)
         saved_levels[name] = noisy_logger.level
-        noisy_logger.setLevel(_logging.CRITICAL)
+        noisy_logger.setLevel(logging.CRITICAL)
 
     try:
-        async with asyncio.timeout(timeout):
+        async with asyncio.timeout(probe_timeout):
             tls_config = TLSConfig(
                 ca_cert_path=bootstrap_settings.ca_cert_path,
                 client_cert_path=bootstrap_settings.client_cert_path,
@@ -304,30 +294,25 @@ async def _load_settings_from_operator(timeout: float = 5.0):
         return bootstrap_settings, "down"
     finally:
         for name, level in saved_levels.items():
-            _logging.getLogger(name).setLevel(level)
+            logging.getLogger(name).setLevel(level)
 
 
 def pytest_configure(config):
-    from app.llm.factory import set_llm_settings, set_search_settings, set_settings
-
-    import asyncio
-
     # Probe the operator for platform settings. Prints a single concise
     # status line (operator: ok | down) so the test runner output starts
     # with a readable signal instead of three stacked connection errors.
     try:
-        settings, status = asyncio.run(_load_settings_from_operator())
+        settings, _status = asyncio.run(_load_settings_from_operator())
     except Exception:
-        from app.services.infra.settings_service import SettingsService
+        settings_service = import_module("app.services.infra.settings_service").SettingsService
 
-        settings = SettingsService().get_local_settings()
-
+        settings = settings_service().get_local_settings()
 
     set_settings(settings)
 
     env_llm = _llm_settings_from_env()
     if env_llm is not None:
-        logger.info(f"Overriding LLM settings from env: provider={env_llm.primary_provider}")
+        logger.info("Overriding LLM settings from env: provider=%s", env_llm.primary_provider)
         set_llm_settings(env_llm)
 
     env_search = _web_search_settings_from_env()
@@ -348,9 +333,6 @@ def _ollama_has_model(endpoint: str, model: str) -> bool:
 
 
 def pytest_collection_modifyitems(config, items):
-    from app.constants.env_vars import EnvVar
-    from app.llm.factory import get_llm_settings, get_search_settings, get_settings
-
     get_settings()
     llm = get_llm_settings()
     search_settings = get_search_settings()
@@ -387,7 +369,9 @@ def pytest_collection_modifyitems(config, items):
         else False
     )
     has_system_one = any(item.get_closest_marker("requires_system_one") for item in items) and (
-        _ollama_has_model(os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT, "nimble")
+        _ollama_has_model(
+            os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT, "nimble"
+        )
     )
 
     for item in items:
@@ -436,8 +420,6 @@ class TaskTracker:
     """
 
     def __init__(self):
-        import asyncio
-
         self._captured_coros = []
         self._captured_tasks = []
         # Store original create_task so we can still use it even if patched globally
@@ -445,8 +427,6 @@ class TaskTracker:
 
     def track(self, coro_or_task):
         """Track a coroutine or task for automatic cleanup."""
-        import asyncio
-
         if asyncio.iscoroutine(coro_or_task):
             self._captured_coros.append(coro_or_task)
         elif isinstance(coro_or_task, asyncio.Task):
@@ -454,13 +434,9 @@ class TaskTracker:
         return coro_or_task
 
     def _fake_create_task(self, coro):
-        import asyncio
-
         if not asyncio.iscoroutine(coro):
             # If it's not a real coroutine (e.g. it's a mock),
             # we just return a new mock to represent the task.
-            from unittest.mock import MagicMock
-
             return MagicMock()
 
         task = self._original_create_task(coro)
@@ -473,7 +449,6 @@ class TaskTracker:
         The patch will create REAL tasks (so they actually run) but they will be
         automatically cancelled and awaited during cleanup.
         """
-        from unittest.mock import patch
 
         class _TaskPatchContext:
             def __init__(self, tracker):
@@ -489,14 +464,14 @@ class TaskTracker:
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
-                self._patch.__exit__(exc_type, exc_val, exc_tb)
+                patcher = self._patch
+                if patcher is not None:
+                    patcher.__exit__(exc_type, exc_val, exc_tb)
 
         return _TaskPatchContext(self)
 
     async def cleanup(self):
         """Close coroutines and cancel tasks."""
-        import asyncio
-
         # 1. Close plain coroutines
         for coro in self._captured_coros:
             with contextlib.suppress(Exception):
@@ -521,59 +496,46 @@ async def task_tracker():
     yield tracker
     await tracker.cleanup()
 
+
 @pytest.fixture
 def unique_investigation_id():
     """Generate unique investigation ID for test isolation."""
-    import uuid
-
     return f"test-inv-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_user_id():
     """Generate unique user ID for test isolation."""
-    import uuid
-
     return f"test-user-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_case_id():
     """Generate unique case ID for test isolation."""
-    import uuid
-
     return f"test-case-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_operator_id():
     """Generate unique operator ID for test isolation."""
-    import uuid
-
     return f"test-op-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_session_id():
     """Generate unique session ID for test isolation."""
-    import uuid
-
     return f"test-sess-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def unique_web_session_id():
     """Generate unique web session ID for test isolation."""
-    import uuid
-
     return f"test-ws-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
 def mock_governance_client():
     """Mock GovernanceClient for service tests."""
-    from unittest.mock import AsyncMock, MagicMock
-
     mock = MagicMock()
     mock.submit_envelope = AsyncMock(return_value={"status": "accepted"})
     mock.update_governed_doc = AsyncMock(return_value={"status": "accepted"})
@@ -588,7 +550,9 @@ def mock_operator_document():
     Returns a properly configured OperatorDocument with system info
     for agent accuracy testing scenarios.
     """
-    from tests.fakes.factories import build_production_operator_document
+    build_production_operator_document = import_module(
+        "tests.fakes.factories"
+    ).build_production_operator_document
 
     return build_production_operator_document()
 
@@ -600,19 +564,31 @@ def test_settings():
     In a real test run, this is loaded from operator by pytest_sessionstart.
     If settings are not properly configured, returns a default G8eeAppSettings.
     """
-    from app.llm.factory import get_settings
-    from app.models.settings import AuthSettings, G8eeAppSettings, GatewaySettings
+    get_settings = import_module("app.llm.factory").get_settings
+    auth_settings = import_module("app.models.settings").AuthSettings
+    g8ee_app_settings = import_module("app.models.settings").G8eeAppSettings
 
     settings = get_settings()
     if settings is None or not hasattr(settings, "auth"):
-        return G8eeAppSettings(auth=AuthSettings(), listen=GatewaySettings())
+        return g8ee_app_settings(
+            port=8443,
+            host="0.0.0.0",
+            log_level=LogLevel.INFO,
+            enable_logging=True,
+            auth=auth_settings(
+                operator_session_id=None, operator_api_key=None, internal_api_key=None
+            ),
+            session_ttl=28800,
+            absolute_session_timeout=86400,
+            docs_dir="docs",
+        )
     return settings
 
 
 @pytest.fixture
 def mock_cache_aside_service():
     """Pure MagicMock spec'd to CacheAsideService for unit tests."""
-    from tests.fakes.builder import create_pure_mock_cache_aside
+    create_pure_mock_cache_aside = import_module("tests.fakes.builder").create_pure_mock_cache_aside
 
     return create_pure_mock_cache_aside()
 
@@ -620,7 +596,9 @@ def mock_cache_aside_service():
 @pytest.fixture
 def fake_cache_aside_service():
     """Real CacheAsideService backed by MagicMock clients for unit tests."""
-    from tests.fakes.builder import create_mock_cache_aside_service
+    create_mock_cache_aside_service = import_module(
+        "tests.fakes.builder"
+    ).create_mock_cache_aside_service
 
     return create_mock_cache_aside_service()
 
@@ -628,46 +606,56 @@ def fake_cache_aside_service():
 @pytest.fixture
 def mock_blob_service():
     """Pure MagicMock spec'd to BlobService for unit tests."""
-    from unittest.mock import MagicMock
+    blob_service = import_module("app.db.blob_service").BlobService
 
-    from app.db.blob_service import BlobService
-
-    return MagicMock(spec=BlobService)
+    return MagicMock(spec=blob_service)
 
 
 @pytest.fixture
 def mock_event_service():
-    from tests.fakes.fake_event_service import FakeEventService
+    fake_event_service = import_module("tests.fakes.fake_event_service").FakeEventService
 
-    return FakeEventService()
+    return fake_event_service()
 
 
 @pytest.fixture
 def mock_settings():
-    from app.models.settings import AuthSettings, G8eeAppSettings, GatewaySettings
+    auth_settings = import_module("app.models.settings").AuthSettings
+    g8ee_app_settings = import_module("app.models.settings").G8eeAppSettings
 
-    return G8eeAppSettings(auth=AuthSettings(), listen=GatewaySettings())
+    return g8ee_app_settings(
+        port=8443,
+        host="0.0.0.0",
+        log_level=LogLevel.INFO,
+        enable_logging=True,
+        auth=auth_settings(operator_session_id=None, operator_api_key=None, internal_api_key=None),
+        session_ttl=28800,
+        absolute_session_timeout=86400,
+        docs_dir="docs",
+    )
 
 
 @pytest.fixture
 def mock_client_http_client():
-    from tests.fakes.fake_operator_clients import FakeG8eClient
+    fake_g8e_client = import_module("tests.fakes.fake_operator_clients").FakeG8eClient
 
-    return FakeG8eClient()
+    return fake_g8e_client()
 
 
 @pytest.fixture
 def mock_investigation_service():
-    from tests.fakes.fake_investigation_service import FakeInvestigationService
+    fake_investigation_service = import_module(
+        "tests.fakes.fake_investigation_service"
+    ).FakeInvestigationService
 
-    return FakeInvestigationService()
+    return fake_investigation_service()
 
 
 @pytest.fixture
 def mock_db_service():
-    from tests.fakes.fake_db_service import FakeDBService
+    fake_db_service = import_module("tests.fakes.fake_db_service").FakeDBService
 
-    return FakeDBService()
+    return fake_db_service()
 
 
 # ---------------------------------------------------------------------------
@@ -677,96 +665,91 @@ def mock_db_service():
 
 @pytest.fixture
 def enriched_investigation():
-    from tests.fakes.factories import build_enriched_context
+    build_enriched_context = import_module("tests.fakes.factories").build_enriched_context
 
     return build_enriched_context()
 
 
 @pytest.fixture
 def remote_operator_doc():
-    from app.constants import OperatorType
-    from app.models.operators import (
-        HeartbeatDiskDetails,
-        HeartbeatEnvironment,
-        HeartbeatMemoryDetails,
-        HeartbeatNetworkInfo,
-        HeartbeatOSDetails,
-        HeartbeatSnapshot,
-        HeartbeatSystemIdentity,
-        HeartbeatUserDetails,
-        OperatorDocument,
-    )
+    heartbeat_disk_details = import_module("app.models.operators").HeartbeatDiskDetails
+    heartbeat_environment = import_module("app.models.operators").HeartbeatEnvironment
+    heartbeat_memory_details = import_module("app.models.operators").HeartbeatMemoryDetails
+    heartbeat_network_info = import_module("app.models.operators").HeartbeatNetworkInfo
+    heartbeat_os_details = import_module("app.models.operators").HeartbeatOSDetails
+    heartbeat_snapshot = import_module("app.models.operators").HeartbeatSnapshot
+    heartbeat_system_identity = import_module("app.models.operators").HeartbeatSystemIdentity
+    heartbeat_user_details = import_module("app.models.operators").HeartbeatUserDetails
+    operator_document = import_module("app.models.operators").OperatorDocument
 
-    return OperatorDocument(
+    return operator_document(
         id="remote-op-1",
         user_id="test-user",
         operator_session_id="session-remote-op-1",
         operator_type=OperatorType.REMOTE,
         granted_intents=["ec2_discovery", "s3_read"],
-        latest_heartbeat_snapshot=HeartbeatSnapshot(
-            system_identity=HeartbeatSystemIdentity(
+        latest_heartbeat_snapshot=heartbeat_snapshot(
+            system_identity=heartbeat_system_identity(
                 hostname="ip-10-0-1-100.ec2.internal",
                 os="Amazon Linux 2023",
                 architecture="x86_64",
                 cpu_count=4,
                 memory_mb=8192,
             ),
-            network=HeartbeatNetworkInfo(
+            network_info=heartbeat_network_info(
                 public_ip="54.123.45.67",
             ),
-            os_details=HeartbeatOSDetails(distro="Amazon Linux", kernel="6.1.0", version="2023"),
-            user_details=HeartbeatUserDetails(
+            os_details=heartbeat_os_details(distro="Amazon Linux", kernel="6.1.0", version="2023"),
+            user_details=heartbeat_user_details(
                 username="ec2-user", home="/home/ec2-user", shell="/bin/bash"
             ),
-            disk_details=HeartbeatDiskDetails(percent=45.2, total_gb=100, free_gb=54.8),
-            memory_details=HeartbeatMemoryDetails(percent=62.1, total_mb=8192, available_mb=3105),
-            environment=HeartbeatEnvironment(pwd="/home/ec2-user", timezone="UTC"),
+            disk_details=heartbeat_disk_details(percent=45.2, total_gb=100, free_gb=54.8),
+            memory_details=heartbeat_memory_details(percent=62.1, total_mb=8192, available_mb=3105),
+            environment=heartbeat_environment(pwd="/home/ec2-user", timezone="UTC"),
         ),
     )
 
 
 @pytest.fixture
 def binary_operator_doc():
-    from app.constants import OperatorType
-    from app.models.operators import (
-        HeartbeatDiskDetails,
-        HeartbeatEnvironment,
-        HeartbeatMemoryDetails,
-        HeartbeatNetworkInfo,
-        HeartbeatOSDetails,
-        HeartbeatSnapshot,
-        HeartbeatSystemIdentity,
-        HeartbeatUserDetails,
-        OperatorDocument,
-    )
+    heartbeat_disk_details = import_module("app.models.operators").HeartbeatDiskDetails
+    heartbeat_environment = import_module("app.models.operators").HeartbeatEnvironment
+    heartbeat_memory_details = import_module("app.models.operators").HeartbeatMemoryDetails
+    heartbeat_network_info = import_module("app.models.operators").HeartbeatNetworkInfo
+    heartbeat_os_details = import_module("app.models.operators").HeartbeatOSDetails
+    heartbeat_snapshot = import_module("app.models.operators").HeartbeatSnapshot
+    heartbeat_system_identity = import_module("app.models.operators").HeartbeatSystemIdentity
+    heartbeat_user_details = import_module("app.models.operators").HeartbeatUserDetails
+    operator_document = import_module("app.models.operators").OperatorDocument
 
-    return OperatorDocument(
+    return operator_document(
         id="binary-op-1",
         user_id="test-user",
         operator_session_id="session-binary-op-1",
         operator_type=OperatorType.REMOTE,
-        latest_heartbeat_snapshot=HeartbeatSnapshot(
-            system_identity=HeartbeatSystemIdentity(
+        latest_heartbeat_snapshot=heartbeat_snapshot(
+            system_identity=heartbeat_system_identity(
                 hostname="web-server-1",
                 os="Ubuntu 22.04",
                 architecture="x86_64",
                 cpu_count=8,
                 memory_mb=16384,
             ),
-            network=HeartbeatNetworkInfo(),
-            os_details=HeartbeatOSDetails(distro="Ubuntu", kernel="5.15.0", version="22.04"),
-            user_details=HeartbeatUserDetails(username="root", home="/root", shell="/bin/bash"),
-            disk_details=HeartbeatDiskDetails(percent=10.0, total_gb=500, free_gb=450),
-            memory_details=HeartbeatMemoryDetails(percent=20.0, total_mb=16384, available_mb=13107),
-            environment=HeartbeatEnvironment(pwd="/root", timezone="UTC"),
+            network_info=heartbeat_network_info(),
+            os_details=heartbeat_os_details(distro="Ubuntu", kernel="5.15.0", version="22.04"),
+            user_details=heartbeat_user_details(username="root", home="/root", shell="/bin/bash"),
+            disk_details=heartbeat_disk_details(percent=10.0, total_gb=500, free_gb=450),
+            memory_details=heartbeat_memory_details(
+                percent=20.0, total_mb=16384, available_mb=13107
+            ),
+            environment=heartbeat_environment(pwd="/root", timezone="UTC"),
         ),
     )
 
 
 @pytest.fixture
 def multi_operator_investigation(remote_operator_doc, binary_operator_doc):
-    from app.constants import InvestigationStatus
-    from tests.fakes.factories import build_enriched_context
+    build_enriched_context = import_module("tests.fakes.factories").build_enriched_context
 
     return build_enriched_context(
         investigation_id="inv-test-123",
@@ -784,9 +767,9 @@ def provider_config():
     This follows the documented pattern in testing.md and provides
     a default configuration for isolated unit tests.
     """
-    from app.llm.llm_types import GenerateContentConfig
+    generate_content_config = import_module("app.llm.llm_types").GenerateContentConfig
 
-    return GenerateContentConfig(max_output_tokens=None)
+    return generate_content_config(max_output_tokens=None)
 
 
 # ---------------------------------------------------------------------------
@@ -796,35 +779,34 @@ def provider_config():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def cache_aside_service(test_settings):
-    from app.clients.db_client import DBClient
-    from app.clients.kv_cache_client import KVCacheClient
-
-    from app.db.db_service import DBService
-    from app.db.kv_service import KVService
-    from app.models.settings import TLSConfig
-    from app.services.cache.cache_aside import CacheAsideService
+    db_client = import_module("app.clients.db_client").DBClient
+    kv_cache_client = import_module("app.clients.kv_cache_client").KVCacheClient
+    db_service = import_module("app.db.db_service").DBService
+    kv_service = import_module("app.db.kv_service").KVService
+    tls_config = import_module("app.models.settings").TLSConfig
+    cache_aside_service = import_module("app.services.cache.cache_aside").CacheAsideService
 
     settings = test_settings
 
-    tls_config = TLSConfig(
+    tls_config = tls_config(
         ca_cert_path=settings.ca_cert_path,
         client_cert_path=settings.client_cert_path,
         client_key_path=settings.client_key_path,
     )
 
-    raw_kv = KVCacheClient(
+    raw_kv = kv_cache_client(
         tls_config=tls_config,
         component_name=G8EE_COMPONENT,
     )
     await raw_kv.connect()
 
-    raw_db = DBClient(tls_config=tls_config)
+    raw_db = db_client(tls_config=tls_config)
     await raw_db.connect()
 
-    kv = KVService(raw_kv)
-    db = DBService(raw_db)
+    kv = kv_service(raw_kv)
+    db = db_service(raw_db)
 
-    service = CacheAsideService(
+    service = cache_aside_service(
         kv=kv,
         db=db,
         component_name=G8EE_COMPONENT,
@@ -849,9 +831,11 @@ async def db_client(cache_aside_service):
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def db_service(test_settings, cache_aside_service, mock_governance_client):
-    from app.services.investigation.investigation_data_service import InvestigationDataService
+    investigation_data_service = import_module(
+        "app.services.investigation.investigation_data_service"
+    ).InvestigationDataService
 
-    yield InvestigationDataService(
+    yield investigation_data_service(
         cache=cache_aside_service, governance_client=mock_governance_client
     )
 
@@ -859,7 +843,9 @@ async def db_service(test_settings, cache_aside_service, mock_governance_client)
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def llm_provider():
     """Returns a configured LLMProvider instance for the session."""
-    from app.llm.factory import clear_provider_cache, get_llm_provider, get_llm_settings
+    clear_provider_cache = import_module("app.llm.factory").clear_provider_cache
+    get_llm_provider = import_module("app.llm.factory").get_llm_provider
+    get_llm_settings = import_module("app.llm.factory").get_llm_settings
 
     llm = get_llm_settings()
     if llm is None:
@@ -870,17 +856,21 @@ async def llm_provider():
 
 
 @pytest.fixture(scope="session")
-def memory_crud(cache_aside_service):
-    from app.services.data.memory_service import MemoryCRUDService
+def memory_crud():
+    fake_memory_data_service = import_module(
+        "tests.fakes.fake_memory_data_service"
+    ).FakeMemoryDataService
 
-    return MemoryCRUDService(cache_aside_service=cache_aside_service)
+    return fake_memory_data_service()
 
 
 @pytest.fixture(scope="session")
 def memory_service(memory_crud):
-    from app.services.ai.memory_generation_service import MemoryGenerationService
+    memory_generation_service = import_module(
+        "app.services.ai.memory_generation_service"
+    ).MemoryGenerationService
 
-    return MemoryGenerationService(memory_crud=memory_crud)
+    return memory_generation_service(memory_crud=memory_crud)
 
 
 # ---------------------------------------------------------------------------
@@ -901,9 +891,9 @@ async def mock_gateway():
       - mock_gateway.tls_config: TLSConfig with the self-signed CA cert
       - mock_gateway.kv / .db / .blob: direct access to in-memory stores
     """
-    from tests.fakes.mock_gateway import MockGateway
+    mock_gateway = import_module("tests.fakes.mock_gateway").MockGateway
 
-    gw = MockGateway()
+    gw = mock_gateway()
     await gw.start()
     yield gw
     await gw.stop()

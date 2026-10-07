@@ -11,8 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,7 +29,7 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func writeTestFrozenInventory(t *testing.T, root, relPath string, variants ...*evalv1.ModelVariant) {
+func writeTestFrozenInventory(t *testing.T, root string, variants ...*evalv1.ModelVariant) {
 	t.Helper()
 	bodies := make([]json.RawMessage, 0, len(variants))
 	for _, variant := range variants {
@@ -43,16 +41,10 @@ func writeTestFrozenInventory(t *testing.T, root, relPath string, variants ...*e
 		Variants []json.RawMessage `json:"variants"`
 	}{Variants: bodies})
 	require.NoError(t, err)
-	if relPath == evaluation.DefaultModelInventoryRelPath {
-		fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
-		require.NoError(t, err)
-		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, payload, constants.PermFileReadOnly))
-		return
-	}
-	path := filepath.Join(root, relPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), constants.PermDirPrivate))
-	require.NoError(t, os.WriteFile(path, payload, constants.PermFileReadOnly))
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), evaluation.DefaultModelInventoryRelPath, payload, constants.PermFileReadOnly))
 }
 
 func writeTestRuntimeQueue(t *testing.T, root string, queue *evaluation.CampaignQueue) fs.RuntimeFileService {
@@ -96,25 +88,6 @@ func TestWriteModelInventoryFreezeFile_WritesJSON(t *testing.T) {
 	payload, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(payload), "eval-init-qwen3-4b")
-}
-
-func TestCheckHTTPReachable_AcceptsHealthyEndpoint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(server.Close)
-
-	require.NoError(t, checkHTTPReachable(context.Background(), server.URL))
-}
-
-func TestCheckHTTPReachable_RejectsMissingURLAndNon2xx(t *testing.T) {
-	require.Error(t, checkHTTPReachable(context.Background(), ""))
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(server.Close)
-	require.Error(t, checkHTTPReachable(context.Background(), server.URL))
 }
 
 func assertTestRuntimeFileExists(t *testing.T, root string, relPath string) {

@@ -11,7 +11,6 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -1090,7 +1089,7 @@ func TestDeriveSeedPublicKey_MatchesKnownSeed(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBootstrapConsensusPolicy_NilStoresReturnsError(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
@@ -1109,7 +1108,7 @@ func TestBootstrapConsensusPolicy_NilStoresReturnsError(t *testing.T) {
 }
 
 func TestBootstrapConsensusPolicy_MissingFile(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	err := consensusPolicyBootstrap(nil, nil, constants.TestPathNonexistentConsensus, nil, logger)
 	require.Error(t, err)
@@ -1117,7 +1116,7 @@ func TestBootstrapConsensusPolicy_MissingFile(t *testing.T) {
 }
 
 func TestBootstrapConsensusPolicy_MalformedJSON(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
@@ -1130,7 +1129,7 @@ func TestBootstrapConsensusPolicy_MalformedJSON(t *testing.T) {
 }
 
 func TestBootstrapConsensusPolicy_InvalidConfig(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.DiscardHandler)
 
 	tests := []struct {
 		name   string

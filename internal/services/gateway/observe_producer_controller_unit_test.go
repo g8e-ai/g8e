@@ -74,8 +74,8 @@ func newProducerControllerTestEnv(t *testing.T) *ObserveProducerController {
 // identity into the request context, mirroring handleAppAuth. The request
 // contract contains no user_id field; the controller derives user_id from
 // the peer certificate, never from the body.
-func withAppAuthCtx(r *http.Request, appID, userID string) *http.Request {
-	ctx := context.WithValue(r.Context(), constants.ContextKeyAppID, appID)
+func withAppAuthCtx(r *http.Request, _ string, userID string) *http.Request {
+	ctx := context.WithValue(r.Context(), constants.ContextKeyAppID, "app-workload")
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
 	return r.WithContext(ctx)
 }

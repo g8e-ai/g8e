@@ -7,25 +7,26 @@
 
 import logging
 from typing import Any
+
 from app.constants import EventType, RiskLevel
 from app.models.agent import OperatorContext
-from app.models.settings import G8eeUserSettings
 from app.models.agents.tribunal import (
     TribunalMarshalBlockedError,
     TribunalMarshalBlockedPayload,
 )
+from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
     ErrorAnalysisContext,
 )
-from app.services.protocols import AIResponseAnalyzerProtocol
 from app.services.ai.tribunal.emitter import TribunalEmitter
+from app.services.protocols import AIResponseAnalyzerProtocol
 
 logger = logging.getLogger(__name__)
 
 
-async def _run_marshal_stage(
+async def run_marshal_stage(
     request: str,
     guidelines: str,
     vote_winner: str,

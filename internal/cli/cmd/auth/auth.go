@@ -37,7 +37,7 @@ type Enroller interface {
 // and config. It is injected through *WithConfig constructors (mirroring
 // fileSvcFactory) so production wires newDefaultEnrollmentCoordinator and
 // tests wire a stub — no package-level mutable state.
-type EnrollerFactory func(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) Enroller
+type EnrollerFactory func(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) (Enroller, error)
 
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -63,7 +63,7 @@ func Cmd() *cobra.Command {
 // real system-trust installer, real browser opener, hardened passkey
 // registrar, stdin-reading confirm and continue functions) and an OutputFunc
 // that writes to the provided output sink.
-func NewDefaultEnrollmentCoordinator(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) Enroller {
+func NewDefaultEnrollmentCoordinator(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) (Enroller, error) {
 	return auth.NewEnrollmentCoordinator(auth.EnrollmentCoordinatorDeps{
 		FileSvc:  fileSvc,
 		Cfg:      cfg,
@@ -197,9 +197,12 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			coordinator := EnrollerFactory(func(format string, args ...any) {
+			coordinator, err := EnrollerFactory(func(format string, args ...any) {
 				cmd.Printf(format+"\n", args...)
 			}, fileSvc, cfg)
+			if err != nil {
+				return err
+			}
 			result, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
 				NoSystemTrust: noSystemTrust || headless,
 				RotateCLI:     rotateCLI,

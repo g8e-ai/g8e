@@ -1,0 +1,197 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+//go:build integration
+
+package lattice
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// newTestOAuthServer returns an httptest.Server that simulates the Lattice
+// OAuth2 token endpoint. The handler records the number of token requests
+// and inspects the sandbox header.
+func newTestOAuthServer(t *testing.T, token string, expiresIn int) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		t.Logf("OAuth request body: %s", string(body))
+
+		resp := map[string]interface{}{
+			"access_token": token,
+			"expires_in":   expiresIn,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	return httptest.NewServer(mux)
+}
+
+func newInspectOAuthServer(t *testing.T, token string) (*httptest.Server, *oauthRequestInspector) {
+	t.Helper()
+	insp := &oauthRequestInspector{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		insp.requestCount.Add(1)
+		insp.sandboxHeader = r.Header.Get("Anduril-Sandbox-Authorization")
+		insp.contentType = r.Header.Get("Content-Type")
+		body, _ := io.ReadAll(r.Body)
+		insp.body = string(body)
+
+		resp := map[string]interface{}{
+			"access_token": token,
+			"expires_in":   3600,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	return httptest.NewServer(mux), insp
+}
+
+func TestGetRequestMetadata_ReturnsAuthorizationBearerToken(t *testing.T) {
+
+	srv := newTestOAuthServer(t, "test-token-123", 3600)
+	defer srv.Close()
+
+	auth := NewClientCredentialsAuth("client-id", "client-secret", "", srv.URL+"/oauth/token")
+	md, err := auth.GetRequestMetadata(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, "Bearer test-token-123", md["authorization"])
+}
+
+func TestGetRequestMetadata_IncludesSandboxHeaderWhenSandboxesTokenSet(t *testing.T) {
+
+	srv, insp := newInspectOAuthServer(t, "test-token-456")
+	defer srv.Close()
+
+	auth := NewClientCredentialsAuth("client-id", "client-secret", "sandbox-token-value", srv.URL+"/oauth/token")
+	md, err := auth.GetRequestMetadata(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, "Bearer test-token-456", md["authorization"])
+	assert.Equal(t, "Bearer sandbox-token-value", md["anduril-sandbox-authorization"])
+
+	assert.Equal(t, "Bearer sandbox-token-value", insp.sandboxHeader)
+}
+
+func TestGetRequestMetadata_OmitsSandboxHeaderWhenSandboxesTokenEmpty(t *testing.T) {
+
+	srv, insp := newInspectOAuthServer(t, "test-token-789")
+	defer srv.Close()
+
+	auth := NewClientCredentialsAuth("client-id", "client-secret", "", srv.URL+"/oauth/token")
+	md, err := auth.GetRequestMetadata(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, "Bearer test-token-789", md["authorization"])
+	_, hasSandbox := md["anduril-sandbox-authorization"]
+	assert.False(t, hasSandbox)
+
+	assert.Empty(t, insp.sandboxHeader)
+}
+
+func TestGetRequestMetadata_TokenIsReusedAcrossCallsWithinValidityWindow(t *testing.T) {
+
+	srv, insp := newInspectOAuthServer(t, "shared-token")
+	defer srv.Close()
+
+	auth := NewClientCredentialsAuth("client-id", "client-secret", "", srv.URL+"/oauth/token")
+
+	for i := 0; i < 3; i++ {
+		md, err := auth.GetRequestMetadata(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, "Bearer shared-token", md["authorization"])
+	}
+
+	assert.Equal(t, int32(1), insp.requestCount.Load())
+}
+
+func TestForceRefresh_ClearsCachedTokenForcingReacquisition(t *testing.T) {
+
+	srv, insp := newInspectOAuthServer(t, "refreshed-token")
+	defer srv.Close()
+
+	auth := NewClientCredentialsAuth("client-id", "client-secret", "", srv.URL+"/oauth/token")
+
+	md, err := auth.GetRequestMetadata(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer refreshed-token", md["authorization"])
+	assert.Equal(t, int32(1), insp.requestCount.Load())
+
+	auth.ForceRefresh()
+
+	md2, err := auth.GetRequestMetadata(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer refreshed-token", md2["authorization"])
+	assert.Equal(t, int32(2), insp.requestCount.Load())
+}
+
+func TestAcquireToken_ReturnsErrLatticeTokenAcquireFailedOnNon200(t *testing.T) {
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"invalid_client"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	auth := NewClientCredentialsAuth("bad-id", "bad-secret", "", srv.URL+"/oauth/token")
+	_, err := auth.GetRequestMetadata(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrLatticeTokenAcquireFailed)
+}
+
+func TestAcquireToken_SendsFormEncodedClientCredentials(t *testing.T) {
+
+	srv, insp := newInspectOAuthServer(t, "form-token")
+	defer srv.Close()
+
+	auth := NewClientCredentialsAuth("form-client-id", "form-client-secret", "", srv.URL+"/oauth/token")
+	_, err := auth.GetRequestMetadata(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, "application/x-www-form-urlencoded", insp.contentType)
+	assert.Contains(t, insp.body, "grant_type=client_credentials")
+	assert.Contains(t, insp.body, "client_id=form-client-id")
+	assert.Contains(t, insp.body, "client_secret=form-client-secret")
+}
+
+func TestAcquireToken_ReturnsErrLatticeTokenAcquireFailedOnEmptyAccessToken(t *testing.T) {
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "",
+			"expires_in":   3600,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	auth := NewClientCredentialsAuth("id", "secret", "", srv.URL+"/oauth/token")
+	_, err := auth.GetRequestMetadata(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrLatticeTokenAcquireFailed)
+}

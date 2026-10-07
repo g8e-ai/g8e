@@ -140,10 +140,10 @@ func (r *Runner) Run(ctx context.Context, request RunRequest) (*evalv1.Evaluatio
 	allowedObservations := []*evalv1.EvaluationObservation{
 		integerObservation(r.newID("observation"), "target-marker-count-before-allowed", request.RunID, AllowedExecutionScenarioID, allowedAttemptID, initialCount, initialRef, initialErr, initialObservedAt),
 		integerObservation(r.newID("observation"), "target-marker-count-after-allowed", request.RunID, AllowedExecutionScenarioID, allowedAttemptID, allowedCount, allowedObservationRef, allowedObservationErr, allowedObservedAt),
-		booleanOutcomeObservation(r.newID("observation"), "target-identity-matches", request.RunID, AllowedExecutionScenarioID, allowedAttemptID, allowedOutcome, func(outcome *LaneOutcome) bool { return outcome.TargetIdentityMatches }, r.now()),
-		booleanOutcomeObservation(r.newID("observation"), "terminal-receipt-completed", request.RunID, AllowedExecutionScenarioID, allowedAttemptID, allowedOutcome, func(outcome *LaneOutcome) bool { return outcome.ReceiptCompleted }, r.now()),
-		booleanOutcomeObservation(r.newID("observation"), "receipt-durable", request.RunID, AllowedExecutionScenarioID, allowedAttemptID, allowedOutcome, func(outcome *LaneOutcome) bool { return outcome.ReceiptDurable }, r.now()),
-		booleanOutcomeObservation(r.newID("observation"), "protocol-chain-valid", request.RunID, AllowedExecutionScenarioID, allowedAttemptID, allowedOutcome, func(outcome *LaneOutcome) bool { return outcome.ProtocolChainValid }, r.now()),
+		booleanOutcomeObservation(r.newID("observation"), "target-identity-matches", request.RunID, allowedAttemptID, allowedOutcome, func(outcome *LaneOutcome) bool { return outcome.TargetIdentityMatches }, r.now()),
+		booleanOutcomeObservation(r.newID("observation"), "terminal-receipt-completed", request.RunID, allowedAttemptID, allowedOutcome, func(outcome *LaneOutcome) bool { return outcome.ReceiptCompleted }, r.now()),
+		booleanOutcomeObservation(r.newID("observation"), "receipt-durable", request.RunID, allowedAttemptID, allowedOutcome, func(outcome *LaneOutcome) bool { return outcome.ReceiptDurable }, r.now()),
+		booleanOutcomeObservation(r.newID("observation"), "protocol-chain-valid", request.RunID, allowedAttemptID, allowedOutcome, func(outcome *LaneOutcome) bool { return outcome.ProtocolChainValid }, r.now()),
 	}
 	r.appendAttempt(report, allowedAttempt, suite.Scenarios[0], allowedObservations)
 
@@ -260,8 +260,8 @@ func integerObservation(id, observationType, runID, scenarioID, attemptID string
 	return observation
 }
 
-func booleanOutcomeObservation(id, observationType, runID, scenarioID, attemptID string, outcome *LaneOutcome, value func(*LaneOutcome) bool, observedAt time.Time) *evalv1.EvaluationObservation {
-	observation := observation(id, observationType, runID, scenarioID, attemptID, evalv1.EvaluationObservationSource_EVALUATION_OBSERVATION_SOURCE_OPERATOR_RECEIPT, evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE, observedAt)
+func booleanOutcomeObservation(id, observationType, runID, attemptID string, outcome *LaneOutcome, value func(*LaneOutcome) bool, observedAt time.Time) *evalv1.EvaluationObservation {
+	observation := observation(id, observationType, runID, AllowedExecutionScenarioID, attemptID, evalv1.EvaluationObservationSource_EVALUATION_OBSERVATION_SOURCE_OPERATOR_RECEIPT, evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE, observedAt)
 	if outcome != nil {
 		observation.Value = &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: value(outcome)}}
 		observation.EvidenceRefs = cloneReferences(outcome.EvidenceRefs)

@@ -8,24 +8,25 @@
 import codecs
 import logging
 from collections.abc import AsyncIterator
+from typing import cast
 
+from g8e.operator.v1.operator_pb2 import InferenceDispatchStreamFrame
 from google.protobuf import json_format
 
 from app.clients.http_client import (
-    CircuitBreakerConfig,
     GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
-    RetryConfig,
+    CircuitBreakerConfig,
     HTTPClient,
+    RetryConfig,
 )
-from app.models.settings import G8eeAppSettings, TLSConfig
 from app.constants import (
     DEFAULT_HTTP_CLIENT_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     G8EE_COMPONENT,
-    GatewayAPIPaths,
     INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
-    InternalAPIPaths,
     UNKNOWN_ERROR_MESSAGE,
+    GatewayAPIPaths,
+    InternalAPIPaths,
 )
 from app.errors import NetworkError
 from app.models.auth import (
@@ -34,22 +35,22 @@ from app.models.auth import (
     ProxySigningKeyResponse,
 )
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import (
     GrantIntentResponse,
-    IntentOperationResult,
-    IntentRequestPayload,
-    RevokeIntentResponse,
-    SSEPushResponse,
-    OperatorLinkResponse,
-    OperatorLinkRequestPayload,
-    ObserveProducerAgentStateRequest,
-    ObserveProducerRunStateRequest,
-    ObserveProducerResponse,
     InferenceDispatchRequest,
     InferenceDispatchResponse,
+    IntentOperationResult,
+    IntentRequestPayload,
+    ObserveProducerAgentStateRequest,
+    ObserveProducerResponse,
+    ObserveProducerRunStateRequest,
+    OperatorLinkRequestPayload,
+    OperatorLinkResponse,
+    RevokeIntentResponse,
+    SSEPushResponse,
 )
-from g8e.operator.v1.operator_pb2 import InferenceDispatchStreamFrame
+from app.models.settings import G8eeAppSettings, TLSConfig
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,10 @@ class InternalHttpClient:
 
     async def close(self) -> None:
         await self._http.close()
+
+    def ensure_mtls(self) -> None:
+        """Public entry point for collaborators that issue requests via ``client``."""
+        self._ensure_mtls()
 
     def _ensure_mtls(self) -> None:
         """Ensure mTLS credentials are up to date from settings.
@@ -176,9 +181,9 @@ class InternalHttpClient:
         into the empty-fan-out success shape.
         """
         wire_model = (
-            SessionEventWire.from_session_event(event)
+            SessionEventWire.from_routed_session_event(event)
             if isinstance(event, SessionEvent)
-            else BackgroundEventWire.from_background_event(event)
+            else BackgroundEventWire.from_routed_background_event(event)
         )
         wire = wire_model.model_dump(mode="json")
         web_session_id: str | None = wire.get("web_session_id")
@@ -251,7 +256,6 @@ class InternalHttpClient:
             )
 
             self._ensure_mtls()
-            from app.models.http_context import RequestContext
 
             request_payload = IntentRequestPayload(
                 context=RequestContext.from_app_context(context),
@@ -271,13 +275,9 @@ class InternalHttpClient:
                     extra={
                         "operator_id": operator_id,
                         "intent": intent,
-                        "granted_intents": result.granted_intents,
                     },
                 )
-                return IntentOperationResult(
-                    success=True,
-                    granted_intents=result.granted_intents,
-                )
+                return IntentOperationResult(success=True)
             logger.warning(
                 "[HTTP-CLIENT] Failed to grant intent",
                 extra={
@@ -307,7 +307,6 @@ class InternalHttpClient:
     ) -> IntentOperationResult:
         try:
             self._ensure_mtls()
-            from app.models.http_context import RequestContext
 
             request_payload = IntentRequestPayload(
                 context=RequestContext.from_app_context(context),
@@ -322,10 +321,7 @@ class InternalHttpClient:
             )
             result = RevokeIntentResponse.model_validate(response.json())
             if response.is_success and result.success:
-                return IntentOperationResult(
-                    success=True,
-                    granted_intents=result.granted_intents,
-                )
+                return IntentOperationResult(success=True)
             return IntentOperationResult(
                 success=False,
                 error=result.error or UNKNOWN_ERROR_MESSAGE,
@@ -357,7 +353,6 @@ class InternalHttpClient:
             )
 
             self._ensure_mtls()
-            from app.models.http_context import RequestContext
 
             if context:
                 request_context = RequestContext.from_app_context(context)
@@ -509,7 +504,7 @@ class InternalHttpClient:
 
         The gateway resolves the Inference Node's operator session from the
         requestor's mTLS identity, constructs a governed envelope, dispatches
-        it through the full L1–L5 gauntlet on the Inference Node, and returns
+        it through the full L1-L5 gauntlet on the Inference Node, and returns
         the signed receipt and InferenceResult. This is the transport layer
         underneath the ensemble chat pipeline's ``G8E`` LLM provider.
         """
@@ -521,7 +516,7 @@ class InternalHttpClient:
                     request,
                     preserving_proto_field_name=True,
                 ),
-                timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
+                request_timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
             )
         except NetworkError:
             raise
@@ -551,8 +546,15 @@ class InternalHttpClient:
                 },
             )
 
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise NetworkError(
+                "[HTTP-CLIENT] Inference dispatch returned a non-object JSON body",
+                component=G8EE_COMPONENT,
+                details={"status_code": response.status_code, "role": request.role},
+            )
         dispatch_response = InferenceDispatchResponse()
-        json_format.ParseDict(response.json(), dispatch_response)
+        json_format.ParseDict(cast(dict[str, object], payload), dispatch_response)
         return dispatch_response
 
     async def dispatch_inference_stream(
@@ -573,7 +575,7 @@ class InternalHttpClient:
                     request,
                     preserving_proto_field_name=True,
                 ),
-                timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
+                request_timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
             ):
                 buffer += decoder.decode(chunk)
                 while "\n" in buffer:

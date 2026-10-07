@@ -30,13 +30,7 @@ type ProvenanceOperatorStatus struct {
 func ActiveProvenanceOperators(operators []models.OperatorDocumentGo) []ProvenanceOperatorStatus {
 	matches := make([]ProvenanceOperatorStatus, 0)
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
-			continue
-		}
-		if op.RuntimeConfig == nil || !op.RuntimeConfig.ProvenanceOperatorEnabled {
-			continue
-		}
-		if op.OperatorSessionID == "" {
+		if op.RuntimeConfig == nil || !HasActiveRole(op, constants.OperatorRoleProvenance) {
 			continue
 		}
 		matches = append(matches, ProvenanceOperatorStatus{

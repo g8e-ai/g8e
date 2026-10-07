@@ -47,4 +47,4 @@ def test_operator_authenticate_request_succeeds_with_auth():
 def test_operator_authenticate_request_requires_context():
     # Without a context, the typed body-based identity contract is violated
     with pytest.raises(ValidationError):
-        InternalOperatorAuthCall(authorization="Bearer some_key")
+        InternalOperatorAuthCall.model_validate({"authorization": "Bearer some_key"})

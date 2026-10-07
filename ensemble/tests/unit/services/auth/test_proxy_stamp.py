@@ -12,6 +12,22 @@ import hashlib
 
 import pytest
 from nacl.signing import SigningKey
+from proxy_stamp_support import (
+    KEY_ID,
+    NOW,
+    VECTORS,
+    Clock,
+    KeySource,
+    make_request,
+    stamped_headers,
+    verifier,
+)
+from proxy_stamp_support import (
+    key_response as _response,
+)
+from proxy_stamp_support import (
+    make_key as _key,
+)
 
 from app.constants import (
     X_PROXY_ISSUED_AT,
@@ -22,18 +38,6 @@ from app.constants import (
 from app.errors import AuthenticationError
 from app.models.auth import ProxySigningKeyResponse
 from app.services.auth.proxy_stamp import BrowserProxyStamp
-from proxy_stamp_support import (
-    NOW,
-    VECTORS,
-    Clock,
-    KEY_ID,
-    KeySource,
-    key_response as _response,
-    make_key as _key,
-    make_request,
-    stamped_headers,
-    verifier,
-)
 
 
 class TestSharedConformanceVector:
@@ -44,10 +48,16 @@ class TestSharedConformanceVector:
     def test_gateway_signature_verifies_against_the_gateway_public_key(self):
         key = SigningKey(bytes.fromhex(VECTORS["private_seed_hex"]))
         assert bytes(key.verify_key).hex() == VECTORS["public_key_hex"]
-        assert key.sign(bytes.fromhex(VECTORS["canonical_bytes_hex"])).signature.hex() == VECTORS["signature_hex"]
+        assert (
+            key.sign(bytes.fromhex(VECTORS["canonical_bytes_hex"])).signature.hex()
+            == VECTORS["signature_hex"]
+        )
 
     def test_vector_body_hash_is_the_hash_of_the_vector_body(self):
-        assert hashlib.sha256(VECTORS["body_utf8"].encode()).hexdigest() == VECTORS["stamp"]["body_sha256"]
+        assert (
+            hashlib.sha256(VECTORS["body_utf8"].encode()).hexdigest()
+            == VECTORS["stamp"]["body_sha256"]
+        )
 
     def test_fields_with_line_breaks_are_refused(self):
         stamp = BrowserProxyStamp(**{**VECTORS["stamp"], "user_id": "user-1\nweb-2"})
@@ -80,7 +90,9 @@ class TestProxyStampVerifier:
     @pytest.mark.asyncio
     async def test_signature_from_another_key_is_rejected(self):
         with pytest.raises(AuthenticationError):
-            await verifier(KeySource(_response(_key(1)))).verify(make_request(stamped_headers(_key(2))))
+            await verifier(KeySource(_response(_key(1)))).verify(
+                make_request(stamped_headers(_key(2)))
+            )
 
     @pytest.mark.asyncio
     async def test_tampered_body_is_rejected(self):
@@ -137,7 +149,9 @@ class TestProxyStampVerifier:
     @pytest.mark.asyncio
     async def test_timestamp_at_the_edge_of_the_window_is_accepted(self):
         key = _key()
-        await verifier(KeySource(_response(key))).verify(make_request(stamped_headers(key, issued_at=int(NOW) - 30)))
+        await verifier(KeySource(_response(key))).verify(
+            make_request(stamped_headers(key, issued_at=int(NOW) - 30))
+        )
 
     @pytest.mark.asyncio
     async def test_non_numeric_timestamp_is_rejected(self):
@@ -166,7 +180,9 @@ class TestProxyStampVerifier:
         await v.verify(make_request(stamped_headers(key, issued_at=int(clock.now))))
         clock.now = NOW + 62
         with pytest.raises(AuthenticationError):
-            await v.verify(make_request(stamped_headers(key, issued_at=int(clock.now), nonce="n" * 32)))
+            await v.verify(
+                make_request(stamped_headers(key, issued_at=int(clock.now), nonce="n" * 32))
+            )
 
     @pytest.mark.asyncio
     async def test_failed_signature_does_not_burn_the_nonce(self):
@@ -190,12 +206,16 @@ class TestProxyStampVerifier:
     async def test_unreachable_gateway_key_endpoint_fails_closed(self):
         key = _key()
         with pytest.raises(AuthenticationError):
-            await verifier(KeySource(RuntimeError("gateway down"))).verify(make_request(stamped_headers(key)))
+            await verifier(KeySource(RuntimeError("gateway down"))).verify(
+                make_request(stamped_headers(key))
+            )
 
     @pytest.mark.asyncio
     async def test_non_ed25519_key_from_gateway_fails_closed(self):
         key = _key()
-        bad = ProxySigningKeyResponse(key_id=KEY_ID, public_key=bytes(key.verify_key).hex(), algorithm="rsa")
+        bad = ProxySigningKeyResponse(
+            key_id=KEY_ID, public_key=bytes(key.verify_key).hex(), algorithm="rsa"
+        )
         with pytest.raises(AuthenticationError):
             await verifier(KeySource(bad)).verify(make_request(stamped_headers(key)))
 
@@ -216,7 +236,11 @@ class TestProxyStampVerifier:
         v = verifier(source, clock)
         await v.verify(make_request(stamped_headers(old, key_id="k1", nonce="a" * 32)))
         clock.now = NOW + 11
-        await v.verify(make_request(stamped_headers(new, key_id="k2", nonce="b" * 32, issued_at=int(clock.now))))
+        await v.verify(
+            make_request(
+                stamped_headers(new, key_id="k2", nonce="b" * 32, issued_at=int(clock.now))
+            )
+        )
         assert source.calls == 2
 
     @pytest.mark.asyncio
@@ -227,7 +251,9 @@ class TestProxyStampVerifier:
         await v.verify(make_request(stamped_headers(key, nonce="a" * 32)))
         for i in range(5):
             with pytest.raises(AuthenticationError):
-                await v.verify(make_request(stamped_headers(key, key_id=f"bogus-{i}", nonce=f"{i}" * 32)))
+                await v.verify(
+                    make_request(stamped_headers(key, key_id=f"bogus-{i}", nonce=f"{i}" * 32))
+                )
         assert source.calls == 1
 
     @pytest.mark.asyncio
@@ -237,7 +263,9 @@ class TestProxyStampVerifier:
         key = _key()
         source = KeySource(_response(key), delay=0.01)
         v = verifier(source)
-        await asyncio.gather(*(v.verify(make_request(stamped_headers(key, nonce=c * 32))) for c in "abc"))
+        await asyncio.gather(
+            *(v.verify(make_request(stamped_headers(key, nonce=c * 32))) for c in "abc")
+        )
         assert source.calls == 1
 
     @pytest.mark.asyncio
@@ -250,7 +278,11 @@ class TestProxyStampVerifier:
         clock.now = NOW + 11
         await asyncio.gather(
             *(
-                v.verify(make_request(stamped_headers(new, key_id="k2", nonce=c * 32, issued_at=int(clock.now))))
+                v.verify(
+                    make_request(
+                        stamped_headers(new, key_id="k2", nonce=c * 32, issued_at=int(clock.now))
+                    )
+                )
                 for c in "bcd"
             )
         )

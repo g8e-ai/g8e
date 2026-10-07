@@ -12,69 +12,77 @@ Enums and constants are re-exported from the g8e protocol package
 duplicates that drift from the protocol.
 """
 
-from enum import StrEnum
+from enum import IntEnum
 
-from g8e.enums import OperatorToolName as _ProtocolOperatorToolName
-
-# OperatorToolName: re-export the protocol enum, extended with ensemble-specific
-# tools that are not yet in the Go protocol SSOT. The 19 protocol members are
-# sourced from g8e.enums.OperatorToolName; the 2 ensemble-specific members
-# (GRANT_INTENT, REVOKE_INTENT) are for the in-progress AWS cloud operator
-# feature and will move to the protocol when that feature is fleshed out.
-_ensemble_tool_members: dict[str, str] = {
-    "GRANT_INTENT": "grant_intent_permission",
-    "REVOKE_INTENT": "revoke_intent_permission",
-}
-
-OperatorToolName = StrEnum(  # type: ignore[misc]
-    "OperatorToolName",
-    {
-        **{m.name: m.value for m in _ProtocolOperatorToolName},
-        **_ensemble_tool_members,
-    },
-)
-
-
-# ComponentName is now imported from g8e.constants
 from g8e.constants import ComponentName
-
-# Enums sourced from g8e protocol STATUS constants via g8e.enums
 from g8e.enums import (
-    SessionEndReason,
-    SessionEventType,
-    SessionKeyPrefix,
-    SessionSuspiciousReason,
-    SentinelStatus,
-    VaultMode,
-    CommandStatus,
-    ConnectionState,
-    StreamStatus,
-    SystemHealth,
-    Environment,
-    HistoryActor,
     ActionType,
     AISource,
+    AITaskId,
     AuditEventSource,
     AuditEventType,
+    AuditorReason,
     AuditSseEventType,
     AuthAuditEventType,
     AuthAuditResult,
     AuthProvider,
+    CaseStatus,
     CitationLayout,
+    CommandCategory,
+    CommandErrorType,
+    CommandStatus,
+    ComponentStatus,
+    ConnectionState,
+    ConsensusAuditMode,
+    ConsensusAuditStatus,
+    ConsensusMember,
     DownloadAuditEventType,
+    Environment,
+    EventType,
     G8eAvailability,
     GatewayMode,
+    HeartbeatType,
+    HistoryActor,
+    InvestigationStatus,
     LoginAuditEventType,
+    OperatorHistoryEventType,
+    OperatorRole,
+    OperatorStatus,
+    OperatorToolName,
+    OperatorType,
+    Platform,
+    Priority,
+    ReasoningAgent,
+    RiskLevel,
+    RiskThreshold,
+    SentinelStatus,
+    SessionEndReason,
+    SessionEventType,
+    SessionKeyPrefix,
+    SessionSuspiciousReason,
+    SessionType,
+    Severity,
+    SlashTier,
+    StreamStatus,
+    SystemHealth,
+    TaskStatus,
+    ThinkingPhase,
+    TieBreakReason,
     ToolCallDefaults,
+    ToolScope,
+    TriageComplexityClassification,
+    TriageConfidence,
+    TriageIntentClassification,
+    TriageRequestPosture,
     UserRole,
     UserStatus,
-    HeartbeatType,
-    LlmModels as LLMs,
-    ThinkingPhase,
+    VaultMode,
+    VersionStability,
+    WorkflowType,
 )
-
-
-from enum import IntEnum
+from g8e.enums import (
+    LlmModels as LLMs,
+)
 
 
 class ScrubberPriority(IntEnum):
@@ -86,94 +94,71 @@ class ScrubberPriority(IntEnum):
     GENERIC_PII = 4
 
 
-from g8e.enums import CommandErrorType
-
-
-from g8e.enums import ToolScope
-
-
-from g8e.enums import AITaskId
-
-
-from g8e.enums import OperatorStatus
-
-
-from g8e.enums import OperatorType
-
-
-from g8e.enums import Platform
-
-
-from g8e.enums import Priority
-
-
-from g8e.enums import RiskLevel
-
-
-from g8e.enums import RiskThreshold
-
-
-from g8e.enums import TaskStatus
-
-
-from g8e.enums import VersionStability
-
-
-from g8e.enums import ReasoningAgent
-
-
-from g8e.enums import WorkflowType
-
-
-from g8e.enums import ComponentStatus
-
-
-from g8e.enums import EventType
-
-
-from g8e.enums import InvestigationStatus
-
-
-from g8e.enums import Severity
-
-
-from g8e.enums import OperatorHistoryEventType
-
-
-from g8e.enums import CommandCategory
-
-
-from g8e.enums import TriageComplexityClassification
-
-
-from g8e.enums import TriageConfidence
-
-
-from g8e.enums import TriageIntentClassification
-
-
-from g8e.enums import TriageRequestPosture
-
-
-from g8e.enums import TieBreakReason
-
-
-from g8e.enums import ConsensusMember
-
-
-from g8e.enums import ConsensusAuditMode
-
-
-from g8e.enums import ConsensusAuditStatus
-
-
-from g8e.enums import AuditorReason
-
-
-from g8e.enums import CaseStatus
-
-
-from g8e.enums import SessionType
-
-
-from g8e.enums import SlashTier
+__all__ = [
+    "AISource",
+    "AITaskId",
+    "ActionType",
+    "AuditEventSource",
+    "AuditEventType",
+    "AuditSseEventType",
+    "AuditorReason",
+    "AuthAuditEventType",
+    "AuthAuditResult",
+    "AuthProvider",
+    "CaseStatus",
+    "CitationLayout",
+    "CommandCategory",
+    "CommandErrorType",
+    "CommandStatus",
+    "ComponentName",
+    "ComponentStatus",
+    "ConnectionState",
+    "ConsensusAuditMode",
+    "ConsensusAuditStatus",
+    "ConsensusMember",
+    "DownloadAuditEventType",
+    "Environment",
+    "EventType",
+    "G8eAvailability",
+    "GatewayMode",
+    "HeartbeatType",
+    "HistoryActor",
+    "InvestigationStatus",
+    "LLMs",
+    "LoginAuditEventType",
+    "OperatorHistoryEventType",
+    "OperatorRole",
+    "OperatorStatus",
+    "OperatorToolName",
+    "OperatorType",
+    "Platform",
+    "Priority",
+    "ReasoningAgent",
+    "RiskLevel",
+    "RiskThreshold",
+    "ScrubberPriority",
+    "SentinelStatus",
+    "SessionEndReason",
+    "SessionEventType",
+    "SessionKeyPrefix",
+    "SessionSuspiciousReason",
+    "SessionType",
+    "Severity",
+    "SlashTier",
+    "StreamStatus",
+    "SystemHealth",
+    "TaskStatus",
+    "ThinkingPhase",
+    "TieBreakReason",
+    "ToolCallDefaults",
+    "ToolScope",
+    "TriageComplexityClassification",
+    "TriageConfidence",
+    "TriageIntentClassification",
+    "TriageRequestPosture",
+    "UserRole",
+    "UserStatus",
+    "VaultMode",
+    "VersionStability",
+    "WorkflowType",
+]

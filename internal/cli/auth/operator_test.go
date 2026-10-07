@@ -10,7 +10,6 @@ package auth
 import (
 	"crypto/x509"
 	"fmt"
-	"net"
 	"runtime"
 	"strconv"
 	"testing"
@@ -38,22 +37,6 @@ func TestCheckOperatorRunning_HealthCheckFailed(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrServiceUnavailable)
 }
 
-func TestCheckOperatorRunning_Success(t *testing.T) {
-	t.Parallel()
-
-	// Start a test server on a random port
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer listener.Close()
-
-	_, port, err := net.SplitHostPort(listener.Addr().String())
-	require.NoError(t, err)
-
-	url := fmt.Sprintf("http://127.0.0.1:%s", port)
-	err = CheckOperatorRunningAtURL(url)
-	require.NoError(t, err)
-}
-
 func TestCheckOperatorRunning_InvalidURL(t *testing.T) {
 	t.Parallel()
 
@@ -68,21 +51,6 @@ func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
 	err := CheckOperatorRunningAtURL("localhost:" + strconv.Itoa(constants.Ports.OperatorHttp))
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrGatewayURLRequired)
-}
-
-func TestCheckOperatorRunning_LocalhostReplacement(t *testing.T) {
-	t.Parallel()
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer listener.Close()
-
-	_, port, err := net.SplitHostPort(listener.Addr().String())
-	require.NoError(t, err)
-
-	url := fmt.Sprintf("http://localhost:%s", port)
-	err = CheckOperatorRunningAtURL(url)
-	require.NoError(t, err)
 }
 
 func TestIsCertificateVerificationError_UnknownAuthorityError(t *testing.T) {

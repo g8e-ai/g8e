@@ -30,14 +30,18 @@ import asyncio
 import base64
 import datetime as _dt
 import json
-import os
 import stat
+import sys
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
 import httpx
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, utils
+from cryptography.x509.oid import NameOID
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap, get_bootstrap
 from app.constants.generated_paths import PortConstants
@@ -46,10 +50,6 @@ from app.services.infra.app_enrollment_service import (
     AppEnrollmentService,
     AppIdentity,
 )
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509.oid import NameOID
 
 pytestmark = pytest.mark.unit
 
@@ -151,7 +151,7 @@ def _patch_httpx_with_mock_transport(
     mock_transport = httpx.MockTransport(handler)
     real_async_client = httpx.AsyncClient
 
-    class _MockAsyncClient(real_async_client):  # type: ignore[misc]
+    class _MockAsyncClient(real_async_client):
         def __init__(self, *args, **kwargs):
             kwargs["transport"] = mock_transport
             super().__init__(*args, **kwargs)
@@ -182,6 +182,16 @@ def _mock_platform_enrollment_handler(
     captured: dict = {"requests": [], "poll_count": 0, "request_submitted": False}
     expires_at = (_dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)).isoformat()
 
+    def _status_state() -> str:
+        if deny:
+            return "denied"
+        if expire:
+            return "expired"
+        # First poll: pending; subsequent: approved (or the specified state).
+        if captured["poll_count"] < 2:
+            return "pending"
+        return state
+
     def handler(request: httpx.Request) -> httpx.Response:
         captured["requests"].append(request)
         path = request.url.path
@@ -206,43 +216,12 @@ def _mock_platform_enrollment_handler(
 
         if path == "/api/v1/auth/platform-enrollments/status":
             captured["poll_count"] += 1
-            if deny:
-                return httpx.Response(
-                    200,
-                    json={
-                        "request_id": request_id,
-                        "component_kind": "ensemble",
-                        "state": "denied",
-                        "expires_at": expires_at,
-                    },
-                )
-            if expire:
-                return httpx.Response(
-                    200,
-                    json={
-                        "request_id": request_id,
-                        "component_kind": "ensemble",
-                        "state": "expired",
-                        "expires_at": expires_at,
-                    },
-                )
-            # First poll: pending; subsequent: approved (or the specified state).
-            if captured["poll_count"] < 2:
-                return httpx.Response(
-                    200,
-                    json={
-                        "request_id": request_id,
-                        "component_kind": "ensemble",
-                        "state": "pending",
-                        "expires_at": expires_at,
-                    },
-                )
             return httpx.Response(
                 200,
                 json={
                     "request_id": request_id,
                     "component_kind": "ensemble",
-                    "state": state,
+                    "state": _status_state(),
                     "expires_at": expires_at,
                 },
             )
@@ -273,7 +252,7 @@ def _mock_platform_enrollment_handler(
 
 def _file_mode(path: str) -> int:
     """Return the permission bits (0o777 mask) of a file."""
-    return stat.S_IMODE(os.stat(path).st_mode)
+    return stat.S_IMODE(Path(path).stat().st_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +360,7 @@ class TestLoadIdentityMalformedCert:
         _write_existing_identity(pki_dir, "not a cert", "not a key")
 
         service = AppEnrollmentService()
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="Unable to load PEM"):
             service.load_identity()
 
 
@@ -450,16 +429,18 @@ class TestEnrollPlatformEnrollment:
         assert "/api/v1/auth/platform-enrollments/complete" in paths_hit
 
         # Credentials were written to disk.
-        cert_on_disk = Path(identity.cert_path).read_text(encoding="utf-8")
+        cert_on_disk = await asyncio.to_thread(Path(identity.cert_path).read_text, encoding="utf-8")
         assert "BEGIN CERTIFICATE" in cert_on_disk
-        key_on_disk = Path(identity.key_path).read_text(encoding="utf-8")
+        key_on_disk = await asyncio.to_thread(Path(identity.key_path).read_text, encoding="utf-8")
         assert "BEGIN PRIVATE KEY" in key_on_disk
-        ca_on_disk = Path(identity.ca_cert_path).read_text(encoding="utf-8")
+        ca_on_disk = await asyncio.to_thread(
+            Path(identity.ca_cert_path).read_text, encoding="utf-8"
+        )
         assert ca_on_disk == "CA-BUNDLE-PEM"
 
         # Pending state was removed after successful enrollment.
         pending_path = str(pki_dir / "pending-enrollment" / "g8ee.json")
-        assert not Path(pending_path).exists()
+        assert not await asyncio.to_thread(Path(pending_path).exists)
 
     async def test_fetch_ca_bundle_pulls_via_http_and_writes_to_disk(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -495,10 +476,14 @@ class TestEnrollPlatformEnrollment:
 
         cert_path = str(pki_dir / "issued" / "apps" / "g8ee.crt")
         key_path = str(pki_dir / "issued" / "apps" / "g8ee.key")
-        assert _file_mode(cert_path) == 0o600
-        assert _file_mode(key_path) == 0o644 or _file_mode(key_path) == 0o600
-        # The key must be 0600 (private).
-        assert _file_mode(key_path) == 0o600
+        if sys.platform != "win32":
+            assert _file_mode(cert_path) == 0o600
+            assert _file_mode(key_path) == 0o644 or _file_mode(key_path) == 0o600
+            # The key must be 0600 (private).
+            assert _file_mode(key_path) == 0o600
+        else:
+            assert await asyncio.to_thread(Path(cert_path).is_file)
+            assert await asyncio.to_thread(Path(key_path).is_file)
 
     async def test_persists_pending_state_with_0600_during_enrollment(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -594,14 +579,17 @@ class TestEnrollPlatformEnrollment:
         # Give the filesystem a moment to settle.
         await asyncio.sleep(0.05)
 
-        assert Path(pending_path_str).exists(), "pending state file should exist during enrollment"
-        assert _file_mode(pending_path_str) == 0o600
+        assert await asyncio.to_thread(Path(pending_path_str).exists), (
+            "pending state file should exist during enrollment"
+        )
+        if sys.platform != "win32":
+            assert _file_mode(pending_path_str) == 0o600
 
         # Let enrollment complete.
         identity = await asyncio.wait_for(enroll_task, timeout=10.0)
         assert isinstance(identity, AppIdentity)
         # Pending state removed after completion.
-        assert not Path(pending_path_str).exists()
+        assert not await asyncio.to_thread(Path(pending_path_str).exists)
 
     async def test_resumes_from_persisted_pending_state_without_generating_new_keys(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -631,7 +619,7 @@ class TestEnrollPlatformEnrollment:
             "instance_id": "ensemble-resume-1",
         }
         pending_path.write_text(json.dumps(pending_state), encoding="utf-8")
-        os.chmod(pending_path, 0o600)
+        pending_path.chmod(0o600)
 
         request_submitted = False
 
@@ -815,8 +803,6 @@ class TestEnrollPlatformEnrollment:
     ) -> None:
         """Verify the proof signature is valid ASN.1 DER ECDSA and verifies
         against the transcript digest."""
-        from cryptography.hazmat.primitives.asymmetric import utils
-
         service = AppEnrollmentService()
         private_key = ec.generate_private_key(ec.SECP256R1())
 

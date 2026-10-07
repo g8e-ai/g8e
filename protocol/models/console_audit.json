@@ -21,15 +21,20 @@
     },
 
     "operator_context": {
+      "acting_app_id": {
+        "type": "string",
+        "required": false,
+        "description": "Authenticated acting app identity from the GovernanceEnvelope. Exact identity selector for app audit queries, independent of an Operator binding."
+      },
       "operator_id": {
         "type": "string",
-        "required": true,
-        "description": "Operator ID from the GovernanceEnvelope that submitted the action."
+        "required": false,
+        "description": "Operator ID from the GovernanceEnvelope. Empty for app-authenticated Gateway-local document writes; use acting_app_id for those records."
       },
       "operator_session_id": {
         "type": "string",
-        "required": true,
-        "description": "Operator session ID from the GovernanceEnvelope. Binds the action to a specific authenticated session."
+        "required": false,
+        "description": "Operator session ID from the GovernanceEnvelope when bound to an Operator. App-authenticated Gateway-local document writes have no Operator session and are queried by acting_app_id."
       }
     },
 

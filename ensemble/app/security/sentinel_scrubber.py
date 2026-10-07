@@ -32,6 +32,7 @@ sensitive data from reaching the cloud AI.
 
 import logging
 import re
+from typing import ClassVar
 
 from app.constants.generated_status import ScrubberPriority
 from app.models.base import G8eBaseModel
@@ -86,7 +87,14 @@ class SentinelScrubber:
     messages are sent to the cloud AI.
     """
 
-    _scrubbers: list[RegexScrubber] = []
+    _scrubbers: ClassVar[list[RegexScrubber]] = []
+
+    @classmethod
+    def scrubbers(cls) -> list[RegexScrubber]:
+        """Return the shared patterns used to inspect and scrub text."""
+        if not cls._scrubbers:
+            cls._scrubbers = cls._initialize_scrubbers()
+        return cls._scrubbers
 
     def __init__(self, config: SentinelConfig):
         self.config = config or SentinelConfig()
@@ -202,7 +210,7 @@ class SentinelScrubber:
             )
         )
 
-        # URL or Connections (URL_OR_CONNECTION)
+        # URLs and connection strings
         scrubbers.append(
             RegexScrubber(
                 "url_with_creds",
@@ -358,7 +366,7 @@ class SentinelScrubber:
         total_count = 0
         scrub_types = []
 
-        for scrubber in self._scrubbers:
+        for scrubber in self.scrubbers():
             new_result, count = scrubber.scrub(result)
             if count > 0:
                 result = new_result
@@ -386,17 +394,18 @@ class SentinelScrubber:
         )
 
 
-SentinelScrubber._scrubbers = SentinelScrubber._initialize_scrubbers()
+class _DefaultScrubberState:
+    instance: SentinelScrubber | None = None
 
 
-_default_scrubber: SentinelScrubber | None = None
+_default_scrubber_state = _DefaultScrubberState()
 
 
 def inspect_sensitive_text(text: str) -> tuple[int, list[str]]:
     result = text
     total_count = 0
     scrub_types: list[str] = []
-    for scrubber in SentinelScrubber._scrubbers:
+    for scrubber in SentinelScrubber.scrubbers():
         result, count = scrubber.scrub(result)
         if count > 0:
             total_count += count
@@ -405,12 +414,11 @@ def inspect_sensitive_text(text: str) -> tuple[int, list[str]]:
 
 
 def get_sentinel_scrubber(config: SentinelConfig | None = None) -> SentinelScrubber:
-    global _default_scrubber
-    if _default_scrubber is None:
+    if _default_scrubber_state.instance is None:
         if config is None:
             config = SentinelConfig()
-        _default_scrubber = SentinelScrubber(config)
-    return _default_scrubber
+        _default_scrubber_state.instance = SentinelScrubber(config)
+    return _default_scrubber_state.instance
 
 
 def scrub_user_message(message: str) -> str:

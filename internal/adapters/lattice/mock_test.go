@@ -18,7 +18,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -115,31 +114,6 @@ func (m *mockTaskManagerAPIClient) StreamTasks(ctx context.Context, in *taskmana
 }
 
 // mockStream is a stub ServerStreamingClient for testing stream behavior.
-type mockStream struct {
-	msgs []*taskmanagerv1.ListenAsAgentResponse
-	errs []error
-	idx  int
-}
-
-func (s *mockStream) Recv() (*taskmanagerv1.ListenAsAgentResponse, error) {
-	if s.idx < len(s.msgs) {
-		msg := s.msgs[s.idx]
-		var err error
-		if s.idx < len(s.errs) {
-			err = s.errs[s.idx]
-		}
-		s.idx++
-		return msg, err
-	}
-	return nil, context.Canceled
-}
-
-func (s *mockStream) Header() (metadata.MD, error) { return nil, nil }
-func (s *mockStream) Trailer() metadata.MD         { return nil }
-func (s *mockStream) CloseSend() error             { return nil }
-func (s *mockStream) Context() context.Context     { return context.Background() }
-func (s *mockStream) SendMsg(any) error            { return nil }
-func (s *mockStream) RecvMsg(any) error            { return nil }
 
 // mockHeartbeatRegistrar is a stub HeartbeatRegistrar for unit tests.
 type mockHeartbeatRegistrar struct {

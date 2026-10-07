@@ -7,9 +7,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import os
-from typing import Any, TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
     from app.services.auth.certificate_data_service import CertificateDataService
@@ -18,10 +19,20 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app.constants.paths import PATHS
 from app.constants.config import CLIENT_CERT_VALIDITY_DAYS, CRL_ISSUER
+from app.constants.paths import PATHS
 
 logger = logging.getLogger(__name__)
+
+
+class _OperatorJsonClient(Protocol):
+    async def request_json(
+        self, method: str, path: str, **kwargs: Any
+    ) -> dict[str, object] | None: ...
+
+
+class _ClientBackedDocumentService(Protocol):
+    client: _OperatorJsonClient
 
 
 class CertificateService:
@@ -42,10 +53,10 @@ class CertificateService:
         data_service: CertificateDataService | None = None,
     ):
         if pki_dir is None:
-            pki_dir = PATHS["infra"]["pki_dir"]
-            ca_cert_path = ca_cert_path or PATHS["infra"]["ca_cert_path"]
+            pki_dir = str(PATHS["infra"]["pki_dir"])
+            ca_cert_path = ca_cert_path or str(PATHS["infra"]["ca_cert_path"])
         self.pki_dir = pki_dir
-        self.ca_cert_path = ca_cert_path or os.path.join(pki_dir, "trust", "g8eg-ca-bundle.pem")
+        self.ca_cert_path = ca_cert_path or str(Path(pki_dir) / "trust" / "g8eg-ca-bundle.pem")
         self.data_service = data_service
         self.ca_cert: x509.Certificate | None = None
         self.ca_key: ec.EllipticCurvePrivateKey | None = None
@@ -76,22 +87,22 @@ class CertificateService:
         # Authority: operator (Operator Gateway mode)
         # We no longer read ca.key directly. Key operations are behind the /.well-known/g8e/pki/sign-csr API.
         paths = [
-            self.ca_cert_path,
-            os.path.join(self.pki_dir, "trust", "g8eg-ca-bundle.pem"),
-            os.path.join(self.pki_dir, "authorities", "hub_ca.crt"),
-            os.path.join(self.pki_dir, "root", "root_ca.crt"),
+            Path(self.ca_cert_path),
+            Path(self.pki_dir) / "trust" / "g8eg-ca-bundle.pem",
+            Path(self.pki_dir) / "authorities" / "hub_ca.crt",
+            Path(self.pki_dir) / "root" / "root_ca.crt",
         ]
 
-        found_cert_path = None
+        found_cert_path: Path | None = None
         for cert_path in paths:
-            if os.path.exists(cert_path):
+            if await asyncio.to_thread(cert_path.exists):
                 found_cert_path = cert_path
                 break
 
         if found_cert_path:
             try:
-                with open(found_cert_path, "rb") as f:
-                    self.ca_cert = x509.load_pem_x509_certificate(f.read())
+                cert_bytes = await asyncio.to_thread(found_cert_path.read_bytes)
+                self.ca_cert = x509.load_pem_x509_certificate(cert_bytes)
                 # CodeQL: Avoid logging absolute paths as they can reveal system information
                 logger.info("[CERT-SERVICE] CA certificate loaded")
                 self.initialized = True
@@ -102,9 +113,7 @@ class CertificateService:
             logger.error("[CERT-SERVICE] CA certificate not found in the configured PKI directory")
             # We let it proceed but some operations might fail if they expect a CA cert local copy
 
-    async def generate_operator_certificate(
-        self, operator_id: str, user_id: str, organization_id: str
-    ) -> dict[str, str]:
+    async def generate_operator_certificate(self, operator_id: str, user_id: str) -> dict[str, str]:
         """Request a new per-operator client certificate from operator signing API."""
         if not self.initialized:
             await self.initialize()
@@ -128,7 +137,10 @@ class CertificateService:
         # In a cleaner world we'd inject a OperatorClient, but DBClient already has the connection info.
         # We'll use the _request_json internal of db_client for this transition phase.
 
-        db_client = self.data_service.cache.db.client  # type: ignore
+        if self.data_service is None:
+            raise RuntimeError("CertificateDataService is required to sign certificates")
+        db_service = cast(_ClientBackedDocumentService, self.data_service.cache.db)
+        db_client = db_service.client
 
         payload = {
             "public_key_pem": public_key_pem,
@@ -138,7 +150,7 @@ class CertificateService:
         }
 
         try:
-            response = await db_client._request_json(
+            response = await db_client.request_json(
                 "POST", "/.well-known/g8e/pki/sign-csr", json=payload
             )
             if not response or not response.get("success"):

@@ -24,8 +24,14 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 import app.llm.llm_types as types
+from app.constants import AgentMode, InvestigationStatus
 from app.models.agent import AgentInputs, AgentStreamState
+from app.models.investigations import ConversationHistoryMessage
+from app.models.memory import InvestigationMemory
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.utils.hashing.ledger_hash import genesis_hash
 from tests.fakes.agent_helpers import make_agent_inputs
+from tests.fakes.factories import build_enriched_context, build_g8e_http_context
 
 pytestmark = [pytest.mark.unit]
 
@@ -68,13 +74,13 @@ class TestAgentStreamStateExtraForbid:
 
     def test_unknown_sink_field_raises_validation_error(self):
         with pytest.raises(PydanticValidationError):
-            AgentStreamState(response_text="", unknown_sink="value")
+            AgentStreamState.model_validate({"response_text": "", "unknown_sink": "value"})
 
     def test_attempt_to_add_request_field_is_rejected(self):
         # Someone copying an AgentInputs field onto AgentStreamState (e.g.
         # trying to store ``investigation_id`` on the state sink) must fail.
         with pytest.raises(PydanticValidationError):
-            AgentStreamState(investigation_id="inv-1")
+            AgentStreamState.model_validate({"investigation_id": "inv-1"})
 
 
 class TestAgentInputsContentsShallowCopyInvariant:
@@ -135,16 +141,10 @@ class TestAgentInputsImmutability:
         must be preserved when dumping to dict and reconstructing, ensuring
         no silent data loss occurs during persistence or transmission.
         """
-        from app.constants import AgentMode
-        from app.models.settings import G8eeUserSettings, LLMSettings
-        from tests.fakes.factories import build_enriched_context, build_g8e_http_context
 
         inv = build_enriched_context(investigation_id="inv-immutable-test")
         g8e_ctx = build_g8e_http_context(user_id="user-immutable-test")
         request_settings = G8eeUserSettings(llm=LLMSettings())
-
-        from app.models.investigations import ConversationHistoryMessage
-        from app.utils.hashing.ledger_hash import genesis_hash
 
         genesis = genesis_hash("inv-immutable-test", inv.created_at.isoformat())
         test_hash = "0" * 64
@@ -173,28 +173,26 @@ class TestAgentInputsImmutability:
             model_to_use="test-model",
             conversation_history=conversation_history,
             system_instructions="You are a helpful assistant",
-            contents=[{"role": "user", "parts": [{"text": "hello"}]}],
+            contents=[types.Content(role=types.Role.USER, parts=[types.Part(text="hello")])],
             user_memories=[
-                {
-                    "id": "mem-1",
-                    "content": "test memory",
-                    "case_id": "case-immutable",
-                    "investigation_id": "inv-immutable-test",
-                    "user_id": "user-immutable-test",
-                    "status": "Open",
-                    "case_title": "test case",
-                }
+                InvestigationMemory(
+                    id="mem-1",
+                    case_id="case-immutable",
+                    investigation_id="inv-immutable-test",
+                    user_id="user-immutable-test",
+                    status=InvestigationStatus.OPEN,
+                    case_title="test case",
+                )
             ],
             case_memories=[
-                {
-                    "id": "case-mem-1",
-                    "content": "case memory",
-                    "case_title": "test case",
-                    "case_id": "case-immutable",
-                    "investigation_id": "inv-immutable-test",
-                    "user_id": "user-immutable-test",
-                    "status": "Open",
-                }
+                InvestigationMemory(
+                    id="case-mem-1",
+                    case_title="test case",
+                    case_id="case-immutable",
+                    investigation_id="inv-immutable-test",
+                    user_id="user-immutable-test",
+                    status=InvestigationStatus.OPEN,
+                )
             ],
         )
 

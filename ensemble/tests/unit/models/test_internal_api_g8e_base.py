@@ -20,22 +20,25 @@ Verifies:
 """
 
 import pytest
-
 from g8e.models.internal_api import (
-    ResourceCreationRequest as G8eResourceCreationRequest,
-    ChatStartedResponse as G8eChatStartedResponse,
     ChatMessageRequest as G8eChatMessageRequest,
 )
-
-from app.models.internal_api import (
-    ResourceCreationRequest,
-    ChatStartedResponse,
-    ChatMessageRequest,
-    RequestOverrides,
+from g8e.models.internal_api import (
+    ChatStartedResponse as G8eChatStartedResponse,
 )
-from app.models.http_context import RequestContext
-from app.models.attachments import AttachmentMetadata
+from g8e.models.internal_api import (
+    ResourceCreationRequest as G8eResourceCreationRequest,
+)
+
 from app.constants import G8EE_COMPONENT
+from app.models.attachments import AttachmentMetadata
+from app.models.http_context import RequestContext
+from app.models.internal_api import (
+    ChatMessageRequest,
+    ChatStartedResponse,
+    RequestOverrides,
+    ResourceCreationRequest,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -77,10 +80,10 @@ class TestChatStartedResponseReExport:
 
 
 class TestChatMessageRequestInheritance:
-    """Verify ChatMessageRequest subclasses g8e base and RequestOverrides."""
+    """Verify ChatMessageRequest carries every protocol field and RequestOverrides."""
 
-    def test_chat_message_request_subclasses_g8e(self):
-        assert issubclass(ChatMessageRequest, G8eChatMessageRequest)
+    def test_chat_message_request_declares_every_g8e_field(self):
+        assert set(G8eChatMessageRequest.model_fields) <= set(ChatMessageRequest.model_fields)
 
     def test_chat_message_request_inherits_request_overrides(self):
         assert issubclass(ChatMessageRequest, RequestOverrides)

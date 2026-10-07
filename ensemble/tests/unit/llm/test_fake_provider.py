@@ -9,11 +9,23 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from app.llm.llm_dataclasses import Content, Part
+from app.constants import LLMProvider
+from app.llm.factory import get_llm_provider
+from app.llm.llm_dataclasses import Content, Part, ResponseFormat
 from app.llm.llm_types import LiteLLMSettings, PrimaryLLMSettings
 from app.llm.providers.fake import FakeProvider
+from app.models.agents.triage import TriageResult
+from app.models.settings import LLMSettings
+from app.models.tool_results import (
+    CommandRiskAnalysis,
+    ErrorAnalysisResult,
+    FileOperationRiskAnalysis,
+)
+from app.services.ai.auditor_service import TribunalAuditorResponse
 
 
 @pytest.fixture
@@ -36,9 +48,12 @@ class TestFakeProviderFileCreate:
     @pytest.mark.asyncio
     async def test_stream_primary_yields_file_create_tool_call(self, provider, settings):
         message = "Create a new file at /tmp/g8e-smoke-test.txt with the content: hello world"
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", _user_content(message), settings
+            )
+        ]
 
         assert len(chunks) == 1
         chunk = chunks[0]
@@ -54,7 +69,9 @@ class TestFakeProviderFileCreate:
     @pytest.mark.asyncio
     async def test_generate_primary_returns_file_create_tool_call(self, provider, settings):
         message = "Create a new file at /tmp/test.txt with the content: test content"
-        response = await provider.generate_content_primary("fake-model", _user_content(message), settings)
+        response = await provider.generate_content_primary(
+            "fake-model", _user_content(message), settings
+        )
 
         assert len(response.candidates) == 1
         tool_calls = response.tool_calls
@@ -75,11 +92,12 @@ class TestFakeProviderFileCreate:
             )
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary(
-            "fake-model", contents, settings
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", contents, settings
+            )
+        ]
 
         assert len(chunks) == 1
         assert chunks[0].text == "Tool execution completed successfully."
@@ -113,9 +131,12 @@ class TestFakeProviderFileWrite:
     @pytest.mark.asyncio
     async def test_stream_primary_yields_file_write_tool_call(self, provider, settings):
         message = "Write the following content to the file at /tmp/output.txt: new data"
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", _user_content(message), settings
+            )
+        ]
 
         assert len(chunks) == 1
         chunk = chunks[0]
@@ -131,9 +152,12 @@ class TestFakeProviderNonToolCallResponses:
     @pytest.mark.asyncio
     async def test_delete_instruction_returns_text(self, provider, settings):
         message = "Delete the investigation note created in the previous run."
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", _user_content(message), settings
+            )
+        ]
 
         assert len(chunks) == 1
         assert len(chunks[0].tool_calls) == 0
@@ -143,9 +167,12 @@ class TestFakeProviderNonToolCallResponses:
     @pytest.mark.asyncio
     async def test_investigation_note_returns_text(self, provider, settings):
         message = "Create a new investigation note documenting this smoke test run."
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", _user_content(message), settings
+            )
+        ]
 
         assert len(chunks) == 1
         assert len(chunks[0].tool_calls) == 0
@@ -158,9 +185,12 @@ class TestFakeProviderDefaults:
     @pytest.mark.asyncio
     async def test_create_without_explicit_path_uses_default(self, provider, settings):
         message = "Create a file for the smoke test"
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", _user_content(message), settings
+            )
+        ]
 
         assert len(chunks[0].tool_calls) == 1
         assert chunks[0].tool_calls[0].name == "file_create_on_operator"
@@ -174,7 +204,9 @@ class TestFakeProviderCallLog:
     @pytest.mark.asyncio
     async def test_call_log_records_stream_primary(self, provider, settings):
         message = "Create a new file at /tmp/test.txt with the content: data"
-        async for _ in provider.generate_content_stream_primary("fake-model", _user_content(message), settings):
+        async for _ in provider.generate_content_stream_primary(
+            "fake-model", _user_content(message), settings
+        ):
             pass
 
         assert len(provider.call_log) == 1
@@ -199,19 +231,15 @@ class TestFakeProviderFactoryWiring:
     """Verify the LLM provider factory returns a FakeProvider for LLMProvider.FAKE."""
 
     def test_factory_returns_fake_provider(self):
-        from app.constants import LLMProvider
-        from app.llm.factory import get_llm_provider
-        from app.models.settings import LLMSettings
 
         settings = LLMSettings(
-            primary_provider=LLMProvider.FAKE,
-            primary_model="fake-model",
+            llm_primary_provider=LLMProvider.FAKE,
+            llm_model="fake-model",
         )
         provider = get_llm_provider(settings)
         assert isinstance(provider, FakeProvider)
 
     def test_llm_provider_enum_has_fake_value(self):
-        from app.constants import LLMProvider
 
         assert LLMProvider.FAKE.value == "fake"
         assert LLMProvider("fake") == LLMProvider.FAKE
@@ -231,8 +259,6 @@ class TestFakeProviderLiteStructuredResponse:
 
     @pytest.mark.asyncio
     async def test_lite_returns_command_risk_analysis_json(self, provider):
-        from app.llm.llm_dataclasses import ResponseFormat
-        from app.models.tool_results import CommandRiskAnalysis
 
         settings = LiteLLMSettings(
             response_format=ResponseFormat.from_pydantic_schema(
@@ -255,18 +281,13 @@ class TestFakeProviderLiteStructuredResponse:
 
     @pytest.mark.asyncio
     async def test_lite_returns_file_risk_analysis_json(self, provider):
-        from app.llm.llm_dataclasses import ResponseFormat
-        from app.models.tool_results import FileOperationRiskAnalysis
 
         schema = FileOperationRiskAnalysis.model_json_schema()
-        settings = LiteLLMSettings(
-            response_format=ResponseFormat.from_pydantic_schema(schema)
-        )
+        settings = LiteLLMSettings(response_format=ResponseFormat.from_pydantic_schema(schema))
         response = await provider.generate_content_lite(
             "fake-model", _user_content("analyze risk"), settings
         )
         text = response.candidates[0].content.parts[0].text
-        import json
 
         parsed = json.loads(text)
         assert parsed["risk_level"] == "LOW"
@@ -277,18 +298,13 @@ class TestFakeProviderLiteStructuredResponse:
 
     @pytest.mark.asyncio
     async def test_lite_returns_error_analysis_json(self, provider):
-        from app.llm.llm_dataclasses import ResponseFormat
-        from app.models.tool_results import ErrorAnalysisResult
 
         schema = ErrorAnalysisResult.model_json_schema()
-        settings = LiteLLMSettings(
-            response_format=ResponseFormat.from_pydantic_schema(schema)
-        )
+        settings = LiteLLMSettings(response_format=ResponseFormat.from_pydantic_schema(schema))
         response = await provider.generate_content_lite(
             "fake-model", _user_content("analyze error"), settings
         )
         text = response.candidates[0].content.parts[0].text
-        import json
 
         parsed = json.loads(text)
         assert parsed["error_category"] == "system"
@@ -297,7 +313,6 @@ class TestFakeProviderLiteStructuredResponse:
 
     @pytest.mark.asyncio
     async def test_lite_fallback_for_unknown_schema(self, provider):
-        from app.llm.llm_dataclasses import ResponseFormat
 
         unknown_schema = {
             "type": "object",
@@ -316,7 +331,6 @@ class TestFakeProviderLiteStructuredResponse:
             "fake-model", _user_content("analyze"), settings
         )
         text = response.candidates[0].content.parts[0].text
-        import json
 
         parsed = json.loads(text)
         assert parsed["category"] == "a"
@@ -325,8 +339,6 @@ class TestFakeProviderLiteStructuredResponse:
 
     @pytest.mark.asyncio
     async def test_lite_returns_schema_valid_triage_with_reported_usage(self, provider):
-        from app.llm.llm_dataclasses import ResponseFormat
-        from app.models.agents.triage import TriageResult
 
         settings = LiteLLMSettings(
             response_format=ResponseFormat.from_pydantic_schema(TriageResult.model_json_schema())
@@ -355,7 +367,6 @@ class TestFakeProviderLiteStructuredResponse:
 
     @pytest.mark.asyncio
     async def test_lite_returns_approval_for_tribunal_auditor_prompt(self, provider):
-        from app.services.ai.auditor_service import TribunalAuditorResponse
 
         response = await provider.generate_content_lite(
             "fake-model",
@@ -373,7 +384,6 @@ class TestFakeProviderLiteStructuredResponse:
 
     @pytest.mark.asyncio
     async def test_lite_returns_passing_eval_judge_grade(self, provider):
-        from app.llm.llm_dataclasses import ResponseFormat
 
         settings = LiteLLMSettings(
             response_format=ResponseFormat.from_pydantic_schema(
@@ -390,8 +400,6 @@ class TestFakeProviderLiteStructuredResponse:
         response = await provider.generate_content_lite(
             "fake-model", _user_content("grade this attempt"), settings
         )
-
-        import json
 
         result = json.loads(response.text)
         assert result == {
@@ -411,11 +419,12 @@ class TestFakeProviderTribunalToolCall:
             "and answer without commas."
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary(
-            "fake-model", _user_content(message), settings
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", _user_content(message), settings
+            )
+        ]
 
         assert len(chunks) == 1
         assert len(chunks[0].tool_calls) == 1
@@ -431,9 +440,7 @@ class TestFakeProviderTribunalToolCall:
         assert chunks[0].usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
-    async def test_stream_primary_creates_marker_after_tribunal_response(
-        self, provider, settings
-    ):
+    async def test_stream_primary_creates_marker_after_tribunal_response(self, provider, settings):
         message = (
             "Run a diagnostic through the Tribunal then create the marker file at "
             "/tmp/g8e-role-complete.txt."
@@ -446,11 +453,12 @@ class TestFakeProviderTribunalToolCall:
             )
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary(
-            "fake-model", contents, settings
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", contents, settings
+            )
+        ]
 
         assert len(chunks) == 1
         assert len(chunks[0].tool_calls) == 1
@@ -461,9 +469,7 @@ class TestFakeProviderTribunalToolCall:
         assert chunks[0].usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
-    async def test_stream_primary_terminates_after_marker_response(
-        self, provider, settings
-    ):
+    async def test_stream_primary_terminates_after_marker_response(self, provider, settings):
         contents = _user_content(
             "Run a diagnostic through the Tribunal then create the marker file at "
             "/tmp/g8e-role-complete.txt."
@@ -475,11 +481,12 @@ class TestFakeProviderTribunalToolCall:
             )
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary(
-            "fake-model", contents, settings
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", contents, settings
+            )
+        ]
 
         assert len(chunks) == 1
         assert chunks[0].text == "Tool execution completed successfully."
@@ -501,11 +508,12 @@ class TestFakeProviderTribunalToolCall:
             )
         )
 
-        chunks = []
-        async for chunk in provider.generate_content_stream_primary(
-            "fake-model", contents, settings
-        ):
-            chunks.append(chunk)
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "fake-model", contents, settings
+            )
+        ]
 
         assert len(chunks) == 1
         assert chunks[0].text == "Tool execution failed."

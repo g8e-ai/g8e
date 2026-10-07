@@ -40,9 +40,9 @@ func putOperator(t *testing.T, svc *DocumentStoreService, id string, op models.O
 }
 
 // persistedOperatorStatus reads the stored status without reconciliation.
-func persistedOperatorStatus(t *testing.T, svc *DocumentStoreService, id string) constants.OperatorStatus {
+func persistedOperatorStatus(t *testing.T, svc *DocumentStoreService, _ string) constants.OperatorStatus {
 	t.Helper()
-	doc, err := svc.docGet(operatorsCollection, id)
+	doc, err := svc.docGet(operatorsCollection, "op-1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	var status constants.OperatorStatus

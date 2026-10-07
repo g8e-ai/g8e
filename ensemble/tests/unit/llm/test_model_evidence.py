@@ -73,11 +73,27 @@ def test_model_boundary_hash_canonicalizes_tool_schemas():
     )
     first = PrimaryLLMSettings(
         system_instructions="Inspect the target",
-        tools=[ToolGroup(tools=[ToolDeclaration(name="inspect_path", description="Inspect a path", parameters=first_schema)])],
+        tools=[
+            ToolGroup(
+                tools=[
+                    ToolDeclaration(
+                        name="inspect_path", description="Inspect a path", parameters=first_schema
+                    )
+                ]
+            )
+        ],
     )
     second = PrimaryLLMSettings(
         system_instructions="Inspect the target",
-        tools=[ToolGroup(tools=[ToolDeclaration(name="inspect_path", description="Inspect a path", parameters=second_schema)])],
+        tools=[
+            ToolGroup(
+                tools=[
+                    ToolDeclaration(
+                        name="inspect_path", description="Inspect a path", parameters=second_schema
+                    )
+                ]
+            )
+        ],
     )
 
     assert model_boundary_hash(first) == model_boundary_hash(second)

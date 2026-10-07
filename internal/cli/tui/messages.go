@@ -10,7 +10,8 @@ package tui
 import (
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // PipelineStage identifies a layer in the 5-layer verification gauntlet.
@@ -91,28 +92,6 @@ func (l LedgerLevel) Tag() string {
 	}
 }
 
-// ConsensusResult represents the outcome of a consensus deliberation.
-type ConsensusResult int
-
-const (
-	ConsensusPending ConsensusResult = iota
-	ConsensusReached
-	ConsensusRejected
-)
-
-func (c ConsensusResult) String() string {
-	switch c {
-	case ConsensusPending:
-		return "PENDING"
-	case ConsensusReached:
-		return "CONSENSUS REACHED"
-	case ConsensusRejected:
-		return "CONSENSUS REJECTED"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 // PipelineMsg advances or updates a pipeline stage in the TUI.
 type PipelineMsg struct {
 	Stage  PipelineStage
@@ -126,17 +105,6 @@ type LedgerMsg struct {
 	Level   LedgerLevel
 	Message string
 	Time    time.Time
-}
-
-// ConsensusMsg updates the consensus voting status.
-type ConsensusMsg struct {
-	Member   constants.ConsensusMember
-	Decision bool
-	Signed   bool
-	Quorum   int
-	Total    int
-	Result   ConsensusResult
-	Hash     string
 }
 
 // ConnStatus represents the SSE adapter connection state.
@@ -173,6 +141,138 @@ type ConnStatusMsg struct {
 	Detail string
 }
 
+// ApprovalCompletedMsg reports an approval.completed event for a suspended
+// L3 transaction. The event alone is not proof: the model verifies the
+// transaction's status over mTLS before reporting it approved.
+type ApprovalCompletedMsg struct {
+	TxHash string
+}
+
+// ApprovalOpenedMsg reports that the browser WebAuthn approval page for a
+// pending transaction was opened (or could not be, in which case the user is
+// pointed at URL).
+type ApprovalOpenedMsg struct {
+	TxHash string
+	URL    string
+	Err    error
+}
+
+// ApprovalVerifiedMsg carries the mTLS-verified status of a transaction after
+// approval.completed, or the error that prevented or failed verification.
+type ApprovalVerifiedMsg struct {
+	TxHash string
+	Status models.ApprovalStatusResponse
+	Err    error
+}
+
+// OperatorsMsg carries the session user's Operators as listed by the Gateway,
+// or the error that prevented listing them.
+type OperatorsMsg struct {
+	Operators []models.OperatorDocumentGo
+	Err       error
+}
+
+// HealthMsg carries the Gateway's health report, including its immutable
+// governance posture, or the error that prevented fetching it.
+type HealthMsg struct {
+	Health models.HealthResponse
+	Err    error
+}
+
+// PendingApprovalsMsg carries the session user's pending L3 transactions as
+// listed by the Gateway, or the error that prevented listing them.
+type PendingApprovalsMsg struct {
+	Transactions []models.SuspendedTxResponse
+	Err          error
+}
+
+// EnrollmentsMsg carries the pending platform enrollment requests and the
+// completed enrollments as listed by the Gateway, or the error that prevented
+// listing them. Only the platform owner may list them.
+type EnrollmentsMsg struct {
+	Pending  []models.PlatformEnrollmentPendingRequest
+	Enrolled []models.PlatformEnrollmentEnrolledRequest
+	Err      error
+}
+
+// EnrollmentDecidedMsg carries the Gateway's response to an owner decision on
+// a pending platform enrollment request, or the error that failed it.
+type EnrollmentDecidedMsg struct {
+	RequestID string
+	Decision  models.PlatformEnrollmentDecision
+	Response  *models.PlatformEnrollmentDecisionResponse
+	Err       error
+}
+
+// EnrollmentRevokedMsg carries the Gateway's response to revoking a completed
+// platform enrollment, or the error that failed it.
+type EnrollmentRevokedMsg struct {
+	RequestID string
+	Response  *models.PlatformEnrollmentRevokeResponse
+	Err       error
+}
+
+// OperatorStopMsg carries the Gateway's response to a governed shutdown
+// request for a remote Operator, or the error that failed it.
+type OperatorStopMsg struct {
+	OperatorSessionID string
+	Response          models.StopOperatorResponse
+	Err               error
+}
+
+// OperatorBindMsg carries a replacement CLI session after binding to an
+// Operator, or the error that prevented binding.
+type OperatorBindMsg struct {
+	Response auth.CLISessionBind
+	Err      error
+}
+
+// OperatorUnbindMsg carries a replacement CLI session after clearing the
+// Operator binding, or the error that prevented unbinding.
+type OperatorUnbindMsg struct {
+	Response auth.CLISessionUnbind
+	Err      error
+}
+
+// RecoveryApprovedMsg carries the Gateway response to an approve-recovery
+// action, or the error that prevented it.
+type RecoveryApprovedMsg struct {
+	Approve  bool
+	Response models.CLIRecoveryApproveResponse
+	Err      error
+}
+
+// SessionRotatedMsg carries a freshly rebuilt CLI session and authoritative
+// identity after a Gateway action replaces the session credentials.
+type SessionRotatedMsg struct {
+	Session  Session
+	Identity Identity
+	Err      error
+}
+
+// AuditEventsMsg carries one page of Gateway audit events, or the error that
+// prevented listing them.
+type AuditEventsMsg struct {
+	Events []models.AuditEventRow
+	Count  int
+	Offset int
+	Err    error
+}
+
+// AuditSummaryMsg carries the aggregate Gateway audit summary, or the error
+// that prevented fetching it.
+type AuditSummaryMsg struct {
+	Summary models.AuditSummaryResponse
+	Err     error
+}
+
+// AuditVerifyMsg carries the result of verifying the Gateway audit chain, or
+// the error that prevented the verification request.
+type AuditVerifyMsg struct {
+	Verify models.AuditVerifyResponse
+	Err    error
+}
+
 // ScenarioStatus represents the terminal state of a demo scenario run.
 type ScenarioStatus int
 
@@ -206,11 +306,4 @@ type ledgerEntry struct {
 	level   LedgerLevel
 	message string
 	time    time.Time
-}
-
-// consensusMemberState is the per-member state in the consensus pane.
-type consensusMemberState struct {
-	name     constants.ConsensusMember
-	decision bool
-	signed   bool
 }

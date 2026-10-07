@@ -6,16 +6,19 @@
 # released under the Apache License, Version 2.0.
 
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
+
 from app.constants import G8EE_COMPONENT
 from app.models.agent import OperatorContext
 from app.models.http_context import G8eHttpContext
+from app.models.investigations import InvestigationCurrentState
 from app.models.reputation import ReputationCommitment
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.whitelist import WhitelistedCommand
-from app.services.protocols import EventServiceProtocol, AIResponseAnalyzerProtocol
 from app.services.data.reputation_data_service import ReputationDataService
+from app.services.protocols import AIResponseAnalyzerProtocol, EventServiceProtocol
 
 
 def _make_mock_reputation_service() -> MagicMock:
@@ -83,7 +86,7 @@ def make_mock_provider():
 
 _MOCK_USER_SETTINGS = G8eeUserSettings(
     llm=LLMSettings(
-        assistant_model="test-assistant", primary_model="test-primary", lite_model="test-lite"
+        llm_assistant_model="test-assistant", llm_model="test-primary", llm_lite_model="test-lite"
     )
 )
 
@@ -97,7 +100,7 @@ def make_tribunal_generation_request(
     settings: G8eeUserSettings | None = None,
     reputation_data_service: ReputationDataService | None = None,
     ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
-    investigation_state: str = "",
+    investigation_state: InvestigationCurrentState | None = None,
     investigation_context: str = "",
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,

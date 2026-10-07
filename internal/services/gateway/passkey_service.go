@@ -134,8 +134,14 @@ func (s *dbUserStore) UpdateUser(userID string, user *models.User) error {
 }
 
 func (s *dbUserStore) CreateUser() (*models.User, error) {
-	userID := uuid.NewString()
-	webAuthnUserID := uuid.NewString()
+	userID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
+	webAuthnUserID, err := uuid.NewString()
+	if err != nil {
+		return nil, err
+	}
 
 	u := &models.User{
 		ID:                 userID,

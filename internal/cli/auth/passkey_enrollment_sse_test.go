@@ -96,7 +96,7 @@ func TestMonitorPasskeyRegistration_SSEEventTriggersRegisteredMsg(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -137,7 +137,7 @@ func TestMonitorPasskeyRegistration_NoEventHeaderExtractsTypeFromPayload(t *test
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -167,7 +167,7 @@ func TestMonitorPasskeyRegistration_TimeoutSendsEnrollErrMsg(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -204,7 +204,7 @@ func TestMonitorPasskeyRegistration_SSEStreamClosedSendsEnrollErrMsg(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	sender := newMockProgramSender()
 	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
@@ -227,7 +227,7 @@ func TestGenerateEnrollmentToken_NetworkErrorReturnsErrHTTPRequestExecuteFailed(
 	})
 	cfg.Paths.Host = "https://127.0.0.1:1"
 
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{Browser: func(string) error { return nil }})
 	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 
