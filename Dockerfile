@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 # =============================================================================
-# Multi-stage Dockerfile for g8e Gateway
+# Multi-stage Dockerfile for g8e Gateway and Operator
 # Modern, minimal, and secure container image.
 #
 # This Dockerfile runs `make build-target` to produce only the binary for the
@@ -148,7 +148,8 @@ COPY --from=builder /build/bin/g8e-${TARGETOS}-${TARGETARCH} /g8e
 # 3. Host-mounted arch binary from /opt/g8e/bin/g8e-linux-${ARCH}
 # 4. Image baked-in binary (/g8e)
 COPY scripts/docker-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY scripts/gateway-preflight.sh /gateway-preflight.sh
+RUN chmod +x /entrypoint.sh /gateway-preflight.sh
 
 # Copy protocol constants (required for doctrine mode)
 COPY --from=builder /build/protocol/constants /protocol/constants

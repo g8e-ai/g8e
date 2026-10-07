@@ -6,7 +6,7 @@ Runnable examples, client configuration templates, and reference shapes for inte
 
 | Directory | Kind | Description | Run |
 | --- | --- | --- | --- |
-| [`external-console/`](external-console/README.md) | Browser app | Static SPA that talks directly to a local Gateway (WebAuthn, SSE, approvals) | `examples/external-console/serve.sh` |
+| [`external-console/`](external-console/README.md) | Browser app | Static SPA that talks directly to a local Gateway (WebAuthn, SSE, approvals) | `python3 -m http.server 3003 --bind 127.0.0.1 --directory examples/external-console` |
 | [`governance-envelope/`](governance-envelope/main.go) | Go program | Builds, signs, serializes, and parses a `GovernanceEnvelope` | `go run ./examples/governance-envelope/` |
 | [`workload-identity/`](workload-identity/main.go) | Go program | Generates, matches, extracts, and parses g8e SPIFFE workload identities | `go run ./examples/workload-identity/` |
 | [`mcp-client-configs/`](mcp-client-configs/) | JSON templates | MCP client configurations for direct Gateway, governed stdio, and agent launch | Copy and edit |

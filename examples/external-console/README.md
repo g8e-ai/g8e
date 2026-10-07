@@ -15,7 +15,6 @@ Same contracts as the embedded console / dashboard auth layer: WebAuthn passkeys
 | `index.html` | Shell UI |
 | `styles.css` | Dark console theme |
 | `app.js` | Gateway client + WebAuthn + SSE + dashboard |
-| `serve.sh` | Local static server on port 3003 |
 | `README.md` | This file |
 
 ## Prerequisites
@@ -31,9 +30,7 @@ Same contracts as the embedded console / dashboard auth layer: WebAuthn passkeys
 From this directory:
 
 ```bash
-./serve.sh
-# or: python3 -m http.server 3003
-# or: npx --yes serve -l 3003
+python3 -m http.server 3003 --bind 127.0.0.1
 ```
 
 Open **http://localhost:3003** in a **top-level** browser tab (not an iframe).

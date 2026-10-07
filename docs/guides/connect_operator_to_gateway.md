@@ -234,11 +234,11 @@ ssh user@192.0.2.10 /opt/g8e operator start --endpoint <gateway-host>
 
 `operator deploy` can create one isolated container and one persistent named volume per Operator on an explicit Docker context. Prepare an image first; deployment never guesses a registry, builds source, changes the current Docker context, publishes ports, or removes an Operator volume.
 
-Build a runtime-only image from an existing Linux amd64 binary. The helper sends an allowlisted temporary context containing only the binary, entrypoint, protocol constants, reference data, and Dockerfile:
+Build the shared Gateway/Operator image from the repository root using the root Dockerfile. It compiles the unified binary from source and includes the Gateway connectivity preflight used by Docker deployment. The root `.dockerignore` excludes local runtime state and credentials:
 
 ```bash
-make build-all
-./scripts/build-operator-image.sh livingroom-node g8e-operator:local bin/g8e-linux-amd64
+docker --context livingroom-node build --platform linux/amd64 --pull=false \
+  --file Dockerfile --tag g8e:local .
 ```
 
 Then deploy a small batch. Here the owner CLI talks to its local Gateway while containers dial the Gateway through the machine's LAN address:
@@ -246,7 +246,7 @@ Then deploy a small batch. Here the owner CLI talks to its local Gateway while c
 ```bash
 ./g8e operator deploy \
   --docker-context livingroom-node \
-  --docker-image g8e-operator:local \
+  --docker-image g8e:local \
   --dest-dir /operators/livingroom-data \
   --count 10 --roles data \
   --endpoint localhost --operator-endpoint 192.168.1.2 \
