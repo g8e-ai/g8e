@@ -20,7 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
-func stackDataOperator(id, sessionID string) operatorv1.OperatorDocument {
+func stackDataOperator(id, sessionID string) *operatorv1.OperatorDocument {
 	return operatorv1.OperatorDocument{
 		ID: id, OperatorSessionID: sessionID, CurrentHostname: constants.DataOperatorHostname,
 		Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,

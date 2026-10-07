@@ -296,8 +296,8 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		return nil, fmt.Errorf("dispatch: validate operator session: %w", err)
 	}
 
-	operatorID := op.ID
-	operatorSessionID := op.OperatorSessionID
+	operatorID := op.Id
+	operatorSessionID := op.OperatorSessionId
 
 	actionType, err := constants.ValidateGovernedRequest(constants.EventType(req.EventType))
 	if err != nil {
@@ -418,7 +418,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	//    so no result can ever arrive.
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
 	var delivered int
-	if op.OperatorType == constants.OperatorTypeEmbedded {
+	if constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
 		if d.embeddedProcessor == nil {
 			return nil, fmt.Errorf("dispatch embedded operator: %w", constants.ErrDispatchNoDelivery)
 		}

@@ -98,7 +98,7 @@ func findOperatorByIDOrSession(operators []*operatorv1.OperatorDocument, idOrSes
 	return nil
 }
 
-func operatorHostnameValue(op operatorv1.OperatorDocument) string {
+func operatorHostnameValue(op *operatorv1.OperatorDocument) string {
 	view := clioperator.ParseHeartbeatView(op.LatestHeartbeat)
 	if view != nil && view.SystemIdentity.Hostname != "" {
 		return view.SystemIdentity.Hostname
@@ -106,7 +106,7 @@ func operatorHostnameValue(op operatorv1.OperatorDocument) string {
 	return op.CurrentHostname
 }
 
-func operatorHostnameDisplay(op operatorv1.OperatorDocument) string {
+func operatorHostnameDisplay(op *operatorv1.OperatorDocument) string {
 	if hostname := operatorHostnameValue(op); hostname != "" {
 		return hostname
 	}
@@ -146,7 +146,7 @@ type operatorHeartbeatOutput struct {
 	SystemFingerprint  string                              `json:"system_fingerprint,omitempty"`
 }
 
-func operatorShowPayload(op operatorv1.OperatorDocument) operatorShowOutput {
+func operatorShowPayload(op *operatorv1.OperatorDocument) operatorShowOutput {
 	payload := operatorShowOutput{
 		OperatorID:        op.ID,
 		OperatorSessionID: op.OperatorSessionID,
@@ -205,7 +205,7 @@ func heartbeatViewOutput(view *clioperator.HeartbeatView) *operatorHeartbeatOutp
 	return result
 }
 
-func printOperatorShow(cmd *cobra.Command, op operatorv1.OperatorDocument) {
+func printOperatorShow(cmd *cobra.Command, op *operatorv1.OperatorDocument) {
 	view := clioperator.ParseHeartbeatView(op.LatestHeartbeat)
 
 	cmd.Printf("Operator:  %s\n", op.ID)

@@ -77,7 +77,7 @@ func TestIsDataOperator_ExcludesOtherRoles(t *testing.T) {
 	}
 }
 
-func stackDataOperatorDoc(id, sessionID, hostname string) operatorv1.OperatorDocument {
+func stackDataOperatorDoc(id, sessionID, hostname string) *operatorv1.OperatorDocument {
 	return operatorv1.OperatorDocument{
 		ID:                id,
 		OperatorSessionID: sessionID,
@@ -270,7 +270,7 @@ func TestActiveDataOperators_EmptyHeartbeatLeavesWorkingDirectoryEmpty(t *testin
 	assert.Empty(t, statuses[0].WorkingDirectory)
 }
 
-func tierOp(id string, kind constants.OperatorType, hostname string, roles ...constants.OperatorRole) operatorv1.OperatorDocument {
+func tierOp(id string, kind constants.OperatorType, hostname string, roles ...constants.OperatorRole) *operatorv1.OperatorDocument {
 	return operatorv1.OperatorDocument{
 		ID:                id,
 		OperatorSessionID: "sess-" + id,

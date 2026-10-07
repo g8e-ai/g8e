@@ -199,7 +199,7 @@ func TestIsActiveOperatorSession(t *testing.T) {
 
 	tests := []struct {
 		name string
-		op   operatorv1.OperatorDocument
+		op   *operatorv1.OperatorDocument
 		want bool
 	}{
 		{"active remote", operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "s"}, true},

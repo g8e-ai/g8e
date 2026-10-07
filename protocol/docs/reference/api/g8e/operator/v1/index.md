@@ -2110,7 +2110,7 @@ persists it; every other component reads it through this contract.
 | account | [string](#string) |  |  |
 | port | [int32](#int32) |  |  |
 | stop_reason | [string](#string) |  |  |
-| latest_heartbeat_snapshot | [google.protobuf.Struct](#google-protobuf-Struct) |  |  |
+| latest_heartbeat_snapshot | [HeartbeatResult](#g8e-operator-v1-HeartbeatResult) |  |  |
 | current_hostname | [string](#string) |  |  |
 | runtime_config | [OperatorRuntimeConfig](#g8e-operator-v1-OperatorRuntimeConfig) |  |  |
 | consumed_by_operator_id | [string](#string) |  |  |

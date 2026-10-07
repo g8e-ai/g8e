@@ -359,7 +359,7 @@ func listWindow(n, selected int) (int, int) {
 }
 
 // operatorHostname names an Operator for display, as 'g8e gw status' does.
-func operatorHostname(op operatorv1.OperatorDocument) string {
+func operatorHostname(op *operatorv1.OperatorDocument) string {
 	if view := clioperator.ParseHeartbeatView(op.LatestHeartbeat); view != nil && view.SystemIdentity.Hostname != "" {
 		return view.SystemIdentity.Hostname
 	}

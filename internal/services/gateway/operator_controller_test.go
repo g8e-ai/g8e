@@ -162,7 +162,7 @@ func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testin
 		require.NotNil(t, doc)
 		body, err := json.Marshal(doc.Data)
 		require.NoError(t, err)
-		var operator operatorv1.OperatorDocument
+		var operator *operatorv1.OperatorDocument
 		require.NoError(t, json.Unmarshal(body, &operator))
 		assert.Equal(t, constants.OperatorStatusStopped, operator.Status)
 		assert.Equal(t, "planned maintenance", operator.StopReason)

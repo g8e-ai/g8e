@@ -15,11 +15,11 @@ import (
 // IsConnected reports whether an Operator document from GET
 // APIPaths.Operators represents a live connection: an unclaimed slot never
 // does, and a claimed Operator does while it is active, bound, or stale.
-func IsConnected(op operatorv1.OperatorDocument) bool {
+func IsConnected(op *operatorv1.OperatorDocument) bool {
 	if op.IsSlot && !op.Claimed {
 		return false
 	}
-	switch op.Status {
+	switch constants.OperatorStatus(op.Status) {
 	case constants.OperatorStatusActive, constants.OperatorStatusBound, constants.OperatorStatusStale:
 		return true
 	default:

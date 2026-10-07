@@ -541,7 +541,7 @@ func chatEvalBindDataOperator(
 	}
 	targets := make([]string, 0, len(bound)+1)
 	for _, sessionID := range bound {
-		if slices.ContainsFunc(operators, func(op operatorv1.OperatorDocument) bool {
+		if slices.ContainsFunc(operators, func(op *operatorv1.OperatorDocument) bool {
 			return op.OperatorSessionID == sessionID && op.Status == constants.OperatorStatusActive
 		}) {
 			targets = append(targets, sessionID)

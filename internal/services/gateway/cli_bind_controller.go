@@ -95,16 +95,16 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 			c.responder.Error(w, http.StatusInternalServerError, "failed to verify operator session")
 			return
 		}
-		if op.UserID != userID {
+		if op.UserId != userID {
 			c.logger.Warn("CLI bind: operator session does not belong to authenticated user",
 				"user_id", userID,
-				"operator_user_id", op.UserID,
+				"operator_user_id", op.UserId,
 				"operator_session_id_prefix", safeTruncateID(sessionID),
 			)
 			c.responder.Error(w, http.StatusForbidden, "operator session does not belong to the authenticated user")
 			return
 		}
-		bound = append(bound, models.CLIBoundOperator{OperatorSessionID: sessionID, OperatorID: op.ID})
+		bound = append(bound, models.CLIBoundOperator{OperatorSessionID: sessionID, OperatorID: op.Id})
 	}
 	primary := bound[0]
 

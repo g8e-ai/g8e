@@ -358,7 +358,7 @@ func TestHandleCLIRefreshAuth_StaleOperatorBinding_Admitted(t *testing.T) {
 	operatorDoc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator")
 	require.NoError(t, err)
 	require.NotNil(t, operatorDoc)
-	var operator operatorv1.OperatorDocument
+	var operator *operatorv1.OperatorDocument
 	data, err := json.Marshal(operatorDoc.Data)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &operator))

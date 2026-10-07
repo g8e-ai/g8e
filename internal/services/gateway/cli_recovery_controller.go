@@ -17,6 +17,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -505,19 +506,19 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 		// No active operator session exists: mint a fresh remote recovery
 		// operator so the recovered CLI session still has a binding.
 		operator := &operatorv1.OperatorDocument{
-			ID:                operatorID,
-			UserID:            user.ID,
-			OrganizationID:    orgID,
-			Component:         constants.ComponentNameG8EO,
+			Id:                operatorID,
+			UserId:            user.ID,
+			OrganizationId:    orgID,
+			Component:         string(constants.ComponentNameG8EO),
 			Name:              "cli-recovery-" + safePrefix(user.ID),
-			Status:            constants.OperatorStatusActive,
-			OperatorSessionID: operatorSessionID,
-			OperatorType:      constants.OperatorTypeRemote,
+			Status:            string(constants.OperatorStatusActive),
+			OperatorSessionId: operatorSessionID,
+			OperatorType:      string(constants.OperatorTypeRemote),
 			SystemFingerprint: req.SystemFingerprint,
 			Claimed:           true,
 			ClaimedAt:         &now,
-			CreatedAt:         now,
-			UpdatedAt:         now,
+			CreatedAt:         timestamppb.New(now),
+			UpdatedAt:         timestamppb.New(now),
 		}
 		opBytes, err := json.Marshal(operator)
 		if err != nil {

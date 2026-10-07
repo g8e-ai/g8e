@@ -20,8 +20,8 @@ import (
 
 // CheckStoppable reports why an Operator cannot receive a governed shutdown:
 // only a remote Operator can, which the Gateway enforces again on the request.
-func CheckStoppable(op operatorv1.OperatorDocument) error {
-	switch op.OperatorType {
+func CheckStoppable(op *operatorv1.OperatorDocument) error {
+	switch constants.OperatorType(op.OperatorType) {
 	case constants.OperatorTypeRemote:
 		return nil
 	case constants.OperatorTypeEmbedded:

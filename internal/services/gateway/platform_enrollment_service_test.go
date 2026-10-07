@@ -469,7 +469,7 @@ func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSess
 	require.NotNil(t, opDoc)
 	opBytes, err := json.Marshal(opDoc.Data)
 	require.NoError(t, err)
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(opBytes, &op))
 	assert.Equal(t, constants.OperatorStatusTerminated, op.Status)
 
@@ -561,7 +561,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	require.NotNil(t, opDoc)
 	dataBytes, err := json.Marshal(opDoc.Data)
 	require.NoError(t, err)
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(dataBytes, &op))
 	// DocSet strips the "id" field from the data JSON (the ID is stored
 	// separately in the documents table), so op.ID is empty. The operator
@@ -704,7 +704,7 @@ func TestPlatformEnrollmentService_ReEnrollmentSupersedesPriorOperatorLease(t *t
 
 	operators, err := env.svc.GetRegistrationService().ListUserOperators(env.ownerID)
 	require.NoError(t, err)
-	byID := make(map[string]operatorv1.OperatorDocument, len(operators))
+	byID := make(map[string]*operatorv1.OperatorDocument, len(operators))
 	for _, op := range operators {
 		byID[op.ID] = op
 	}

@@ -76,7 +76,7 @@ func (c *OperatorController) handleBrowserGetOperator(w http.ResponseWriter, r *
 		c.responder.Error(w, http.StatusNotFound, "operator not found")
 		return
 	}
-	if op.UserID != userID {
+	if op.UserId != userID {
 		c.responder.Error(w, http.StatusForbidden, constants.ErrRegistrationOperatorNotBelongToUser.Error())
 		return
 	}
@@ -95,23 +95,23 @@ func (c *OperatorController) handleBrowserStopOperator(w http.ResponseWriter, r 
 		c.responder.Error(w, http.StatusNotFound, "operator not found")
 		return
 	}
-	if op.UserID != userID {
+	if op.UserId != userID {
 		c.responder.Error(w, http.StatusForbidden, constants.ErrRegistrationOperatorNotBelongToUser.Error())
 		return
 	}
-	if strings.TrimSpace(op.OperatorSessionID) == "" {
+	if strings.TrimSpace(op.OperatorSessionId) == "" {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrRegistrationOperatorNoActiveSession.Error())
 		return
 	}
-	if op.Status != constants.OperatorStatusActive {
+	if constants.OperatorStatus(op.Status) != constants.OperatorStatusActive {
 		c.responder.Error(w, http.StatusConflict, constants.ErrRegistrationOperatorNoActiveSession.Error())
 		return
 	}
-	if op.OperatorType == constants.OperatorTypeEmbedded {
+	if constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopEmbedded.Error())
 		return
 	}
-	if op.OperatorType != constants.OperatorTypeRemote {
+	if constants.OperatorType(op.OperatorType) != constants.OperatorTypeRemote {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopNotRemote.Error())
 		return
 	}
@@ -121,25 +121,25 @@ func (c *OperatorController) handleBrowserStopOperator(w http.ResponseWriter, r 
 		return
 	}
 	result, err := c.dispatch.Dispatch(r.Context(), DispatchRequest{
-		TargetOperatorSessionID: op.OperatorSessionID,
+		TargetOperatorSessionID: op.OperatorSessionId,
 		EventType:               string(constants.Event.Operator.ShutdownRequested),
 		Payload:                 payload,
-		TargetResource:          op.ID,
+		TargetResource:          op.Id,
 		RequestorUserID:         userID,
 	})
 	if err != nil {
-		c.logger.Warn("gateway: browser stop operator dispatch failed", "operator_id", op.ID, "error", err)
+		c.logger.Warn("gateway: browser stop operator dispatch failed", "operator_id", op.Id, "error", err)
 		c.responder.Error(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := c.reg.MarkOperatorStopped(op.ID, userID, ""); err != nil {
+	if err := c.reg.MarkOperatorStopped(op.Id, userID, ""); err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, browserOperatorStopResponse{
 		Message:           "Stop command relayed to orchestrator",
-		OperatorID:        op.ID,
-		OperatorSessionID: op.OperatorSessionID,
+		OperatorID:        op.Id,
+		OperatorSessionID: op.OperatorSessionId,
 		Success:           true,
 		TransactionID:     result.TransactionID,
 	})

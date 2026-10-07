@@ -149,7 +149,7 @@ func loadOperator(t *testing.T, store *memStore) *operatorv1.OperatorDocument {
 	require.NotNil(t, doc)
 	b, err := json.Marshal(doc.Data)
 	require.NoError(t, err)
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(b, &op))
 	op.ID = doc.ID
 	return &op

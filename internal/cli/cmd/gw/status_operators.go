@@ -84,7 +84,7 @@ type operatorInventory struct {
 	Unavailable string
 }
 
-func operatorStatusFromDocument(op operatorv1.OperatorDocument) operatorStatus {
+func operatorStatusFromDocument(op *operatorv1.OperatorDocument) operatorStatus {
 	row := operatorStatus{
 		ID:       op.ID,
 		Type:     operatorTypeDisplay(op.OperatorType),

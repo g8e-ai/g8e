@@ -1042,7 +1042,7 @@ func TestCLIRecoveryController_IssueCLIIdentity_MintsRemoteRecoveryOperator(t *t
 	doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, doc)
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	b, err := json.Marshal(doc.Data)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(b, &op))

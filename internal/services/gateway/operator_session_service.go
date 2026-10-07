@@ -190,7 +190,7 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 		if err != nil {
 			return nil, fmt.Errorf("marshal operator document: %w", err)
 		}
-		var operator operatorv1.OperatorDocument
+		var operator *operatorv1.OperatorDocument
 		if err := json.Unmarshal(dataBytes, &operator); err != nil {
 			return nil, fmt.Errorf("unmarshal operator document: %w", err)
 		}
@@ -213,11 +213,11 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 	return nil, nil
 }
 
-func dataOperatorSession(operator operatorv1.OperatorDocument) *models.OperatorSession {
+func dataOperatorSession(operator *operatorv1.OperatorDocument) *models.OperatorSession {
 	return &models.OperatorSession{
-		ID:         operator.OperatorSessionID,
-		UserID:     operator.UserID,
-		OperatorID: operator.ID,
+		ID:         operator.OperatorSessionId,
+		UserID:     operator.UserId,
+		OperatorID: operator.Id,
 		IsActive:   true,
 	}
 }

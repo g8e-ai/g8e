@@ -20,13 +20,13 @@ import (
 func TestIsConnected(t *testing.T) {
 	tests := []struct {
 		name string
-		op   operatorv1.OperatorDocument
+		op   *operatorv1.OperatorDocument
 		want bool
 	}{
-		{"active", operatorv1.OperatorDocument{Status: constants.OperatorStatusActive}, true},
-		{"bound", operatorv1.OperatorDocument{Status: constants.OperatorStatusBound}, true},
-		{"stale", operatorv1.OperatorDocument{Status: constants.OperatorStatusStale}, true},
-		{"offline", operatorv1.OperatorDocument{Status: constants.OperatorStatusOffline}, false},
+		{"active", operatorv1.OperatorDocument{Status: string(constants.OperatorStatusActive)}, true},
+		{"bound", operatorv1.OperatorDocument{Status: string(constants.OperatorStatusBound)}, true},
+		{"stale", operatorv1.OperatorDocument{Status: string(constants.OperatorStatusStale)}, true},
+		{"offline", operatorv1.OperatorDocument{Status: string(constants.OperatorStatusOffline)}, false},
 		{"unclaimed slot", operatorv1.OperatorDocument{IsSlot: true, Status: constants.OperatorStatusActive}, false},
 		{"claimed slot", operatorv1.OperatorDocument{IsSlot: true, Claimed: true, Status: constants.OperatorStatusActive}, true},
 	}

@@ -254,7 +254,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	reg := NewRegistrationService(docStore, kvStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	if err := reg.UpdateOperatorRuntimeConfig(string(constants.DocIDEmbeddedOperator), &operatorv1.OperatorRuntimeConfig{Roles: cfg.EffectiveOperatorRoles(), HTTPPort: cfg.HTTPPort, LocalDir: cfg.WorkDir, InferenceEnabled: cfg.Inference.Enabled, InferenceOllamaEndpoint: cfg.Inference.OllamaEndpoint, ProvenanceOperatorEnabled: cfg.ProvenanceOperator.Enabled, ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperator.ModelStorageRoot, ProviderBoundaryObserverEnabled: cfg.ProviderBoundaryObserver.Enabled}); err != nil {
+	if err := reg.UpdateOperatorRuntimeConfig(string(constants.DocIDEmbeddedOperator), &operatorv1.OperatorRuntimeConfig{Roles: cfg.EffectiveOperatorRoles(), HttpPort: cfg.HttpPort, LocalDir: cfg.WorkDir, InferenceEnabled: cfg.Inference.Enabled, InferenceOllamaEndpoint: cfg.Inference.OllamaEndpoint, ProvenanceOperatorEnabled: cfg.ProvenanceOperator.Enabled, ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperator.ModelStorageRoot, ProviderBoundaryObserverEnabled: cfg.ProviderBoundaryObserver.Enabled}); err != nil {
 		return nil, fmt.Errorf("gateway: embedded runtime config: %w", err)
 	}
 

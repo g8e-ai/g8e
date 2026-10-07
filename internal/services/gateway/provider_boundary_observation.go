@@ -193,8 +193,8 @@ func selectProviderBoundaryObserverForGateway(operators []*operatorv1.OperatorDo
 	// choose by list order or recency.
 	inference := make([]*operatorv1.OperatorDocument, 0, len(operators))
 	for _, op := range operators {
-		if op.Status == constants.OperatorStatusActive &&
-			(op.OperatorType == constants.OperatorTypeRemote || op.OperatorType == constants.OperatorTypeEmbedded) &&
+		if constants.OperatorStatus(op.Status) == constants.OperatorStatusActive &&
+			(constants.OperatorType(op.OperatorType) == constants.OperatorTypeRemote || constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded) &&
 			op.RuntimeConfig != nil &&
 			op.RuntimeConfig.InferenceEnabled &&
 			op.SystemFingerprint != "" {
@@ -403,8 +403,8 @@ func (d *DispatchService) PublishCommand(ctx context.Context, req PublishCommand
 		return "", fmt.Errorf("dispatch: publish command: get state root: %w", err)
 	}
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
-		OperatorID:        op.ID,
-		OperatorSessionID: op.OperatorSessionID,
+		OperatorID:        op.Id,
+		OperatorSessionID: op.OperatorSessionId,
 		EventType:         req.EventType,
 		Payload:           req.Payload,
 		RequestorUserID:   req.RequestorUserID,
@@ -431,7 +431,7 @@ func (d *DispatchService) PublishCommand(ctx context.Context, req PublishCommand
 		}
 		wire = deliberated
 	}
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
+	cmdChannel := pubsub.CmdChannel(op.Id, op.OperatorSessionId)
 	delivered := d.pubsub.Publish(cmdChannel, wire)
 	if delivered == 0 {
 		return "", fmt.Errorf("dispatch: publish command: %w", constants.ErrDispatchNoDelivery)

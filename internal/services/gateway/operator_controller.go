@@ -116,7 +116,7 @@ func (c *OperatorController) handleValidateOperatorSession(w http.ResponseWriter
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 		return
 	}
-	c.responder.JSON(w, http.StatusOK, models.OperatorSessionValidationResponse{Valid: true, OperatorID: op.ID, UserID: op.UserID})
+	c.responder.JSON(w, http.StatusOK, models.OperatorSessionValidationResponse{Valid: true, OperatorID: op.Id, UserID: op.UserId})
 }
 
 // GET /api/v1/operators
@@ -179,19 +179,19 @@ func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	if op.UserID != userID {
+	if op.UserId != userID {
 		c.responder.Error(w, http.StatusForbidden, constants.ErrRegistrationOperatorNotBelongToUser.Error())
 		return
 	}
-	if op.Status != constants.OperatorStatusActive {
+	if constants.OperatorStatus(op.Status) != constants.OperatorStatusActive {
 		c.responder.Error(w, http.StatusConflict, constants.ErrRegistrationOperatorNoActiveSession.Error())
 		return
 	}
-	if op.OperatorType == constants.OperatorTypeEmbedded {
+	if constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopEmbedded.Error())
 		return
 	}
-	if op.OperatorType != constants.OperatorTypeRemote {
+	if constants.OperatorType(op.OperatorType) != constants.OperatorTypeRemote {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopNotRemote.Error())
 		return
 	}
@@ -204,20 +204,20 @@ func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.R
 		TargetOperatorSessionID: req.OperatorSessionID,
 		EventType:               string(constants.Event.Operator.ShutdownRequested),
 		Payload:                 payload,
-		TargetResource:          op.ID,
+		TargetResource:          op.Id,
 		RequestorUserID:         userID,
 	})
 	if err != nil {
-		c.logger.Warn("gateway: stop operator dispatch failed", "operator_id", op.ID, "operator_session_id", op.OperatorSessionID, "error", err)
+		c.logger.Warn("gateway: stop operator dispatch failed", "operator_id", op.Id, "operator_session_id", op.OperatorSessionId, "error", err)
 		c.responder.Error(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := c.reg.MarkOperatorStopped(op.ID, userID, req.Reason); err != nil {
+	if err := c.reg.MarkOperatorStopped(op.Id, userID, req.Reason); err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, models.StopOperatorResponse{
-		Success: true, OperatorID: op.ID, OperatorSessionID: op.OperatorSessionID, TransactionID: result.TransactionID,
+		Success: true, OperatorID: op.Id, OperatorSessionID: op.OperatorSessionId, TransactionID: result.TransactionID,
 	})
 }
 
@@ -408,8 +408,8 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if req.RuntimeConfig != nil {
-		if err := c.reg.UpdateOperatorRuntimeConfig(op.ID, req.RuntimeConfig); err != nil {
-			c.logger.Error("gateway: persist operator runtime config", "operator_id", op.ID, "error", err)
+		if err := c.reg.UpdateOperatorRuntimeConfig(op.Id, req.RuntimeConfig); err != nil {
+			c.logger.Error("gateway: persist operator runtime config", "operator_id", op.Id, "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 			return
 		}
@@ -419,17 +419,17 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		MaxConcurrentTasks:       25,
 		MaxMemoryMB:              2048,
 		HeartbeatIntervalSeconds: 30,
-		OperatorSessionID:        op.OperatorSessionID,
-		OperatorID:               op.ID,
-		UserID:                   op.UserID,
+		OperatorSessionID:        op.OperatorSessionId,
+		OperatorID:               op.Id,
+		UserID:                   op.UserId,
 		Posture:                  string(c.cfg.Gateway.Posture),
 	}
 
 	c.responder.JSON(w, http.StatusOK, operatorBootstrapResponse{
 		Success:           true,
-		OperatorSessionID: op.OperatorSessionID,
-		OperatorID:        op.ID,
-		UserID:            op.UserID,
+		OperatorSessionID: op.OperatorSessionId,
+		OperatorID:        op.Id,
+		UserID:            op.UserId,
 		Config:            bootstrapConfig,
 	})
 }

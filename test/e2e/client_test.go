@@ -523,9 +523,9 @@ func (c *E2EClient) DiscoverPendingOperatorByHostname(t *testing.T, ctx context.
 // cross-enrollment tests to find the secondary gateway's operator after
 // approval. The caller owns the context; this helper uses require.Eventually
 // for polling so it must be called from a test goroutine.
-func (c *E2EClient) DiscoverActiveOperatorByName(t *testing.T, ctx context.Context, nameSubstring string) operatorv1.OperatorDocument {
+func (c *E2EClient) DiscoverActiveOperatorByName(t *testing.T, ctx context.Context, nameSubstring string) *operatorv1.OperatorDocument {
 	t.Helper()
-	var found operatorv1.OperatorDocument
+	var found *operatorv1.OperatorDocument
 	require.Eventually(t, func() bool {
 		operators, err := c.ListOperators(ctx)
 		if err != nil {

@@ -96,7 +96,7 @@ func SelectInferenceOperatorForHardware(
 	}
 }
 
-func inferenceOperatorOllamaEndpoint(op operatorv1.OperatorDocument) string {
+func inferenceOperatorOllamaEndpoint(op *operatorv1.OperatorDocument) string {
 	if op.RuntimeConfig == nil {
 		return ""
 	}

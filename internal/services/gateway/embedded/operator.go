@@ -24,6 +24,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
@@ -83,14 +84,14 @@ func (s *Service) ExecutesFor(operatorID string) bool {
 func pendingDocument(now time.Time) *operatorv1.OperatorDocument {
 	return &operatorv1.OperatorDocument{
 		Id:           string(constants.DocIDEmbeddedOperator),
-		Component:    constants.ComponentNameG8EO,
+		Component:    string(constants.ComponentNameG8EO),
 		Name:         string(constants.DocIDEmbeddedOperator),
-		Status:       constants.OperatorStatusAvailable,
+		Status:       string(constants.OperatorStatusAvailable),
 		IsSlot:       false,
 		Claimed:      false,
-		OperatorType: constants.OperatorTypeEmbedded,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		OperatorType: string(constants.OperatorTypeEmbedded),
+		CreatedAt:    timestamppb.New(now),
+		UpdatedAt:    timestamppb.New(now),
 	}
 }
 
@@ -171,7 +172,7 @@ func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operat
 		}
 	}
 
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	b, err := json.Marshal(doc.Data)
 	if err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: marshal document data: %w", err)

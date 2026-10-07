@@ -41,7 +41,7 @@ func loadEmbeddedOperatorDoc(t *testing.T, docStore *DocumentStoreService) *oper
 	require.NotNil(t, doc, "embedded operator document must exist")
 	b, err := json.Marshal(doc.Data)
 	require.NoError(t, err)
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(b, &op))
 	op.ID = doc.ID
 	return &op

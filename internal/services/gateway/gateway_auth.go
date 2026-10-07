@@ -512,7 +512,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operat
 		return nil, fmt.Errorf("gateway: auth: marshal operator document: %w: %w", err, constants.ErrRequestMarshalFailed)
 	}
 
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, fmt.Errorf("gateway: auth: unmarshal operator document: %w: %w", err, constants.ErrResponseParseFailed)
 	}
@@ -520,7 +520,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operat
 	// [PIVOT] Reject terminated identities (Plan §4.6)
 	// We allow OFFLINE and STALE statuses to authenticate (to support bootstrap
 	// and recovery), but TERMINATED is a hard-gate rejection.
-	if op.Status == constants.OperatorStatusTerminated {
+	if constants.OperatorStatus(op.Status) == constants.OperatorStatusTerminated {
 		return nil, &AuthError{Message: constants.ErrOperatorIdentityDisabled.Error(), Status: http.StatusUnauthorized}
 	}
 
@@ -530,7 +530,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operat
 	// Check if the linked user is active (plan §4.6)
 	// This is the single chokepoint that makes retirement real - without it,
 	// a stale CLI cert can still talk to the Gateway.
-	if err := s.getAndValidateUser(op.UserID); err != nil {
+	if err := s.getAndValidateUser(op.UserId); err != nil {
 		return nil, err
 	}
 
@@ -542,7 +542,7 @@ func (s *AuthService) ValidateOperatorCLISessionBinding(operatorSessionID, cliSe
 	if err != nil {
 		return nil, err
 	}
-	if op.UserID != userID {
+	if op.UserId != userID {
 		return nil, &AuthError{Message: constants.ErrGatewayOperatorSessionUserMismatch.Error(), Status: http.StatusUnauthorized}
 	}
 	if cliSessionID == "" {
@@ -701,14 +701,14 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 			cert := r.TLS.PeerCertificates[0]
 			match := false
 			for _, uri := range cert.URIs {
-				if wid.MatchesOperator(uri.String(), op.OrganizationID, op.ID, operatorSessionID) {
+				if wid.MatchesOperator(uri.String(), op.OrganizationId, op.Id, operatorSessionID) {
 					match = true
 					break
 				}
 			}
 			if !match && cliSessionID != "" {
 				var err error
-				match, err = s.cliCertBoundToOperator(cert.URIs, cliSessionID, op.UserID, operatorSessionID)
+				match, err = s.cliCertBoundToOperator(cert.URIs, cliSessionID, op.UserId, operatorSessionID)
 				if err != nil {
 					s.logger.Error("gateway: auth: CLI cert binding check failed", "operator_session_id", operatorSessionID, "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
 					s.responder.Error(w, http.StatusInternalServerError, constants.ErrCLICertBindingCheckFailed.Error())
@@ -716,16 +716,16 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 				}
 			}
 			if !match {
-				s.logger.Warn("gateway: auth: mTLS URI SAN mismatch for Operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
+				s.logger.Warn("gateway: auth: mTLS URI SAN mismatch for Operator session", "path", r.URL.Path, "operator_id", op.Id, "operator_session_id", operatorSessionID)
 				s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 				return
 			}
 		}
 
 		// Stamp context with user_id and operator session info
-		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, op.UserID)
-		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, op.OrganizationID)
-		ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, op.UserId)
+		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, op.OrganizationId)
+		ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.Id)
 		ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, operatorSessionID)
 		if cliSessionID != "" {
 			ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
@@ -879,7 +879,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				}
 				return true
 			}
-			if (headerOpID != "" && headerOpID != op.ID) || (targetSessionID != cliSession.OperatorSessionID && op.UserID != cliSession.UserID) {
+			if (headerOpID != "" && headerOpID != op.Id) || (targetSessionID != cliSession.OperatorSessionID && op.UserId != cliSession.UserId) {
 				s.logger.Warn("gateway: auth: operator headers mismatch persisted CLI session binding",
 					"path", r.URL.Path,
 					"cli_session_id", cliSessionID,
@@ -887,7 +887,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				s.responder.Error(w, http.StatusForbidden, constants.ErrOperatorBindingMismatch.Error())
 				return true
 			}
-			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.Id)
 			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, targetSessionID)
 			ctx = context.WithValue(ctx, constants.ContextKeyBoundOperatorSessionIDs, cliSession.BoundOperatorSessionIDs)
 		} else if headerOpID != "" || headerOpSessionID != "" {

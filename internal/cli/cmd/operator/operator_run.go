@@ -341,7 +341,7 @@ type operatorRunTarget struct {
 }
 
 func resolveOperatorRunTargets(operators []*operatorv1.OperatorDocument, sessionIDs []string) ([]operatorRunTarget, error) {
-	bySession := make(map[string]operatorv1.OperatorDocument, len(operators))
+	bySession := make(map[string]*operatorv1.OperatorDocument, len(operators))
 	for _, op := range operators {
 		if op.OperatorSessionID != "" {
 			bySession[op.OperatorSessionID] = op

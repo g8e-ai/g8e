@@ -511,7 +511,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 		if err != nil || op == nil {
 			return false
 		}
-		var opDoc operatorv1.OperatorDocument
+		var opDoc *operatorv1.OperatorDocument
 		opBytes, err := json.Marshal(op.ForWire())
 		if err != nil {
 			return false

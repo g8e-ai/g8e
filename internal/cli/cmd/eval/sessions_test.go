@@ -18,7 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-func remoteOperator(id, session string, cfg *operatorv1.OperatorRuntimeConfig) operatorv1.OperatorDocument {
+func remoteOperator(id, session string, cfg *operatorv1.OperatorRuntimeConfig) *operatorv1.OperatorDocument {
 	return operatorv1.OperatorDocument{
 		ID:                id,
 		OperatorSessionID: session,
@@ -28,20 +28,20 @@ func remoteOperator(id, session string, cfg *operatorv1.OperatorRuntimeConfig) o
 	}
 }
 
-func inferenceOperatorFixture(id, session string) operatorv1.OperatorDocument {
+func inferenceOperatorFixture(id, session string) *operatorv1.OperatorDocument {
 	return remoteOperator(id, session, &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true, InferenceOllamaEndpoint: "http://provider.example:11434"})
 }
 
 // dataOperatorFixture is the stack's data-operator: a data Operator whose
 // heartbeat hostname is constants.DataOperatorHostname.
-func dataOperatorFixture(id, session string) operatorv1.OperatorDocument {
+func dataOperatorFixture(id, session string) *operatorv1.OperatorDocument {
 	op := remoteOperator(id, session, &operatorv1.OperatorRuntimeConfig{})
 	op.CurrentHostname = constants.DataOperatorHostname
 	return op
 }
 
 // otherDataOperatorFixture is a data Operator enrolled from elsewhere.
-func otherDataOperatorFixture(id, session string) operatorv1.OperatorDocument {
+func otherDataOperatorFixture(id, session string) *operatorv1.OperatorDocument {
 	op := remoteOperator(id, session, &operatorv1.OperatorRuntimeConfig{})
 	op.CurrentHostname = "other-host"
 	return op

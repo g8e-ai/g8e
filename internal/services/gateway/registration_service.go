@@ -155,7 +155,7 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 		OperatorRoles: operatorcapability.ResolveOperatorRoles(runtimeConfig),
 		LocalDir:      runtimeConfig.LocalDir,
 		Account:       runtimeConfig.Account,
-		Port:          runtimeConfig.HTTPPort,
+		Port:          runtimeConfig.HttpPort,
 		UpdatedAt:     time.Now().UTC(),
 	}
 	updateBytes, err := json.Marshal(payload)
@@ -180,7 +180,7 @@ func (s *RegistrationService) MarkOperatorStopped(operatorID, userID, reason str
 	if err != nil {
 		return err
 	}
-	if op.UserID != userID {
+	if op.UserId != userID {
 		return constants.ErrRegistrationOperatorNotBelongToUser
 	}
 	update, err := json.Marshal(struct {
@@ -196,7 +196,7 @@ func (s *RegistrationService) MarkOperatorStopped(operatorID, userID, reason str
 	}
 	s.docStore.NotifyOperatorStatusChanged(OperatorStatusTransition{
 		OperatorID: operatorID,
-		UserID:     op.UserID,
+		UserID:     op.UserId,
 		Name:       op.Name,
 		Status:     constants.OperatorStatusStopped,
 	})
@@ -224,11 +224,11 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return err
 	}
 
-	if op.UserID != userID {
+	if op.UserId != userID {
 		return constants.ErrRegistrationOperatorNotBelongToUser
 	}
 
-	if op.Status == constants.OperatorStatusTerminated {
+	if constants.OperatorStatus(op.Status) == constants.OperatorStatusTerminated {
 		return nil // Already terminated
 	}
 
@@ -341,7 +341,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	}
 
 	s.logger.Info("[REGISTRATION] CSR-based enrollment complete",
-		"operator_id", operator.ID, "user_id", userID)
+		"operator_id", operator.Id, "user_id", userID)
 
 	return resp, nil
 }
@@ -411,11 +411,11 @@ func (s *RegistrationService) completeRegistration(operator *operatorv1.Operator
 		}
 
 		// Use operator.OrganizationID, fallback to provided organizationID
-		orgID := operator.OrganizationID
+		orgID := operator.OrganizationId
 		if orgID == "" {
 			orgID = organizationID
 		}
-		certPEM, chainPEM, signErr := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID, "")
+		certPEM, chainPEM, signErr := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.Id, "", operatorSessionID, "")
 		if signErr != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrRegistrationCSRSignFailed, signErr)
 		}
@@ -451,7 +451,7 @@ func (s *RegistrationService) completeRegistration(operator *operatorv1.Operator
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
-	_, updateErr := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
+	_, updateErr := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.Id, updateBytes)
 	if updateErr != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, updateErr)
 	}
@@ -459,7 +459,7 @@ func (s *RegistrationService) completeRegistration(operator *operatorv1.Operator
 	// already-connected browser session sees the Operator without waiting for
 	// a later transition or a manual reload.
 	s.docStore.NotifyOperatorStatusChanged(OperatorStatusTransition{
-		OperatorID: operator.ID,
+		OperatorID: operator.Id,
 		UserID:     userID,
 		Name:       operator.Name,
 		Status:     constants.OperatorStatusActive,
@@ -496,7 +496,7 @@ func (s *RegistrationService) completeRegistration(operator *operatorv1.Operator
 		operatorSessionID,
 		userID,
 		organizationID,
-		operator.ID,
+		operator.Id,
 		"csr",
 	); persistErr != nil {
 		return nil, persistErr
@@ -504,7 +504,7 @@ func (s *RegistrationService) completeRegistration(operator *operatorv1.Operator
 	return &models.OperatorRegistrationResponse{
 		Success:                true,
 		UserID:                 userID,
-		OperatorID:             operator.ID,
+		OperatorID:             operator.Id,
 		OperatorSessionID:      operatorSessionID,
 		CLISessionID:           cliSessionID,
 		OperatorCert:           finalCertPEM,
@@ -521,7 +521,7 @@ func (s *RegistrationService) toOperatorDoc(doc *models.Document) (*operatorv1.O
 	if err != nil {
 		return nil, err
 	}
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, err
 	}
@@ -548,15 +548,15 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*operatorv1.Oper
 	}
 
 	op := &operatorv1.OperatorDocument{
-		ID:             id,
-		UserID:         userID,
-		OrganizationID: orgID,
+		Id:             id,
+		UserId:         userID,
+		OrganizationId: orgID,
 		Component:      constants.ComponentName(marshaler.Status(constants.ComponentNameG8EO)),
 		Name:           fmt.Sprintf("operator-%d", slotNumber),
-		Status:         constants.OperatorStatusOffline,
+		Status:         string(constants.OperatorStatusOffline),
 		SlotNumber:     slotNumber,
 		IsSlot:         true,
-		OperatorType:   constants.OperatorTypeRemote,
+		OperatorType:   string(constants.OperatorTypeRemote),
 		CreatedAt:      time.Now().UTC(),
 		UpdatedAt:      time.Now().UTC(),
 	}
@@ -606,12 +606,12 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 			lastErr = err
 			continue
 		}
-		if op.UserID != req.UserID {
+		if op.UserId != req.UserId {
 			failed = append(failed, opID)
 			lastErr = constants.ErrRegistrationOperatorNotBelongToUser
 			continue
 		}
-		if op.OperatorSessionID == "" {
+		if op.OperatorSessionId == "" {
 			failed = append(failed, opID)
 			lastErr = constants.ErrRegistrationOperatorNoActiveSession
 			continue
@@ -619,7 +619,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// 1. Update KV binding
 		// sessionBindOperators(operatorSessionId) -> webSessionId
-		if err := s.kvStore.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.WebSessionID, 0); err != nil {
+		if err := s.kvStore.KVSet(sessionOperatorBindKey(op.OperatorSessionId), req.WebSessionID, 0); err != nil {
 			failed = append(failed, opID)
 			lastErr = err
 			continue
@@ -637,13 +637,13 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		}
 		exists := false
 		for _, sid := range sessionIDs {
-			if sid == op.OperatorSessionID {
+			if sid == op.OperatorSessionId {
 				exists = true
 				break
 			}
 		}
 		if !exists {
-			sessionIDs = append(sessionIDs, op.OperatorSessionID)
+			sessionIDs = append(sessionIDs, op.OperatorSessionId)
 			body, err := json.Marshal(sessionIDs)
 			if err != nil {
 				failed = append(failed, opID)
@@ -670,7 +670,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				ID:                 docID,
 				WebSessionID:       req.WebSessionID,
 				UserID:             req.UserID,
-				OperatorSessionIDs: []string{op.OperatorSessionID},
+				OperatorSessionIDs: []string{op.OperatorSessionId},
 				OperatorIDs:        []string{opID},
 				BoundAt:            time.Now().UTC(),
 				LastUpdatedAt:      time.Now().UTC(),
@@ -710,7 +710,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 			}
 			if !opExists {
 				bDoc.OperatorIDs = append(bDoc.OperatorIDs, opID)
-				bDoc.OperatorSessionIDs = append(bDoc.OperatorSessionIDs, op.OperatorSessionID)
+				bDoc.OperatorSessionIDs = append(bDoc.OperatorSessionIDs, op.OperatorSessionId)
 				bDoc.LastUpdatedAt = time.Now().UTC()
 				bDoc.Status = constants.OperatorStatusActive
 				body, err := json.Marshal(bDoc)
@@ -766,12 +766,12 @@ func (s *RegistrationService) BindEmbeddedOperatorToWebSession(userID, webSessio
 	if err != nil {
 		return false, fmt.Errorf("decode embedded operator: %w", err)
 	}
-	if !op.Claimed || op.UserID != userID {
+	if !op.Claimed || op.UserId != userID {
 		return false, nil
 	}
 
 	resp, err := s.BindOperators(models.BindOperatorsRequest{
-		OperatorIDs:  []string{op.ID},
+		OperatorIDs:  []string{op.Id},
 		UserID:       userID,
 		WebSessionID: webSessionID,
 	})
@@ -815,16 +815,16 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			lastErr = err
 			continue
 		}
-		if op.UserID != req.UserID {
+		if op.UserId != req.UserId {
 			failed = append(failed, opID)
 			lastErr = constants.ErrRegistrationOperatorNotBelongToUser
 			continue
 		}
 
 		// 1. Update KV binding
-		if op.OperatorSessionID != "" {
-			if err := s.kvStore.KVDelete(sessionOperatorBindKey(op.OperatorSessionID)); err != nil {
-				s.logger.Warn("[REGISTRATION] Failed to delete operator session binding", "error", err, "operator_session_id", op.OperatorSessionID)
+		if op.OperatorSessionId != "" {
+			if err := s.kvStore.KVDelete(sessionOperatorBindKey(op.OperatorSessionId)); err != nil {
+				s.logger.Warn("[REGISTRATION] Failed to delete operator session binding", "error", err, "operator_session_id", op.OperatorSessionId)
 			}
 
 			webBindKey := sessionWebBindKey(req.WebSessionID)
@@ -837,7 +837,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 				}
 				newSessionIDs := []string{}
 				for _, sid := range sessionIDs {
-					if sid != op.OperatorSessionID {
+					if sid != op.OperatorSessionId {
 						newSessionIDs = append(newSessionIDs, sid)
 					}
 				}
@@ -937,8 +937,8 @@ func (s *RegistrationService) UnbindUserWebOperators(userID string) ([]string, e
 
 	byWebSession := map[string][]*operatorv1.OperatorDocument{}
 	for _, op := range operators {
-		if op.BoundWebSessionID != "" {
-			byWebSession[op.BoundWebSessionID] = append(byWebSession[op.BoundWebSessionID], op)
+		if op.BoundWebSessionId != "" {
+			byWebSession[op.BoundWebSessionId] = append(byWebSession[op.BoundWebSessionId], op)
 		}
 	}
 
@@ -948,8 +948,8 @@ func (s *RegistrationService) UnbindUserWebOperators(userID string) ([]string, e
 		operatorIDs := make([]string, 0, len(group))
 		sessionIDByOperator := make(map[string]string, len(group))
 		for _, op := range group {
-			operatorIDs = append(operatorIDs, op.ID)
-			sessionIDByOperator[op.ID] = op.OperatorSessionID
+			operatorIDs = append(operatorIDs, op.Id)
+			sessionIDByOperator[op.Id] = op.OperatorSessionId
 		}
 		res, err := s.UnbindOperators(models.UnbindOperatorsRequest{
 			OperatorIDs:  operatorIDs,
@@ -1004,11 +1004,11 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 	if err != nil {
 		return nil, err
 	}
-	if op.UserID != req.UserID {
+	if op.UserId != req.UserId {
 		return nil, constants.ErrRegistrationOperatorNotBelongToUser
 	}
 
-	if op.BoundWebSessionID != req.WebSessionID {
+	if op.BoundWebSessionId != req.WebSessionID {
 		// Not bound, so bind it first
 		bindRes, err := s.BindOperators(models.BindOperatorsRequest{
 			OperatorIDs:  []string{req.OperatorID},

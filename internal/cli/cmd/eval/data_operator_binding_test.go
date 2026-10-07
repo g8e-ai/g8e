@@ -25,7 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func activeOperatorSessionDoc(id, sessionID string) operatorv1.OperatorDocument {
+func activeOperatorSessionDoc(id, sessionID string) *operatorv1.OperatorDocument {
 	return operatorv1.OperatorDocument{
 		ID:                id,
 		OperatorSessionID: sessionID,

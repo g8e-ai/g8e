@@ -171,7 +171,7 @@ func TestPlatformEnrollment_ApproveAndIssue_GatewayOriginBecomesActiveOperator(t
 	require.NotNil(t, opDoc)
 	dataBytes, err := json.Marshal(opDoc.Data)
 	require.NoError(t, err)
-	var op operatorv1.OperatorDocument
+	var op *operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(dataBytes, &op))
 	assert.Equal(t, env.ownerID, op.UserID,
 		"gateway-as-operator doc must carry the approving owner's user_id")

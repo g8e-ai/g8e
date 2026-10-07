@@ -56,7 +56,7 @@ type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
 
-func capableOp(sessionID string) operatorv1.OperatorDocument {
+func capableOp(sessionID string) *operatorv1.OperatorDocument {
 	return operatorv1.OperatorDocument{
 		ID:                "op-" + sessionID,
 		OperatorSessionID: sessionID,

@@ -284,27 +284,27 @@ func (c *CLIRefreshController) registryOperatorBinding(userID string) (sessionID
 	}
 	// The stack's data-operator is the preferred primary binding; any other
 	// dedicated data Operator is the fallback, then the Gateway's embedded one.
-	for _, isCandidate := range []func(operatorv1.OperatorDocument) bool{operatorcapability.IsStackDataOperator, operatorcapability.IsDedicatedDataOperator} {
+	for _, isCandidate := range []func(*operatorv1.OperatorDocument) bool{operatorcapability.IsStackDataOperator, operatorcapability.IsDedicatedDataOperator} {
 		for _, op := range operators {
 			if !isCandidate(op) {
 				continue
 			}
-			validated, validateErr := c.auth.ValidateOperatorSession(op.OperatorSessionID)
-			if validateErr == nil && validated.UserID == userID {
-				return validated.OperatorSessionID, validated.ID, true, nil
+			validated, validateErr := c.auth.ValidateOperatorSession(op.OperatorSessionId)
+			if validateErr == nil && validated.UserId == userID {
+				return validated.OperatorSessionId, validated.Id, true, nil
 			}
 		}
 	}
 	var embeddedSessionID string
 	for _, op := range operators {
-		if op.ID == string(constants.DocIDEmbeddedOperator) && op.Status == constants.OperatorStatusActive && op.OperatorSessionID != "" {
-			embeddedSessionID = op.OperatorSessionID
+		if op.Id == string(constants.DocIDEmbeddedOperator) && constants.OperatorStatus(op.Status) == constants.OperatorStatusActive && op.OperatorSessionId != "" {
+			embeddedSessionID = op.OperatorSessionId
 		}
 	}
 	if embeddedSessionID != "" {
 		validated, validateErr := c.auth.ValidateOperatorSession(embeddedSessionID)
-		if validateErr == nil && validated.UserID == userID {
-			return validated.OperatorSessionID, validated.ID, true, nil
+		if validateErr == nil && validated.UserId == userID {
+			return validated.OperatorSessionId, validated.Id, true, nil
 		}
 	}
 	return "", "", false, nil

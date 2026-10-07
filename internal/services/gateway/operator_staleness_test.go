@@ -33,7 +33,7 @@ func timeAgo(d time.Duration) *time.Time {
 
 // putOperator persists an operator document whose created_at is createdAgo in
 // the past, bypassing the reconciler so the test controls the starting state.
-func putOperator(t *testing.T, svc *DocumentStoreService, id string, op operatorv1.OperatorDocument, createdAgo time.Duration) {
+func putOperator(t *testing.T, svc *DocumentStoreService, id string, op *operatorv1.OperatorDocument, createdAgo time.Duration) {
 	t.Helper()
 	body, err := json.Marshal(op)
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func persistedOperatorStatus(t *testing.T, svc *DocumentStoreService, _ string) 
 	return status
 }
 
-func remoteOperator(status constants.OperatorStatus) operatorv1.OperatorDocument {
+func remoteOperator(status constants.OperatorStatus) *operatorv1.OperatorDocument {
 	return operatorv1.OperatorDocument{
 		Status:       status,
 		OperatorType: constants.OperatorTypeRemote,
@@ -140,7 +140,7 @@ func TestOperatorStaleness_OnlyActiveRemoteOperatorsGoStale(t *testing.T) {
 	embedded := operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}
 	tests := []struct {
 		name string
-		op   operatorv1.OperatorDocument
+		op   *operatorv1.OperatorDocument
 		want constants.OperatorStatus
 	}{
 		{"embedded active", embedded, constants.OperatorStatusActive},

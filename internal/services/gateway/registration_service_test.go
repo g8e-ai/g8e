@@ -345,7 +345,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
-		var op operatorv1.OperatorDocument
+		var op *operatorv1.OperatorDocument
 		b, _ := json.Marshal(doc.ForWire())
 		_ = json.Unmarshal(b, &op)
 		assert.Equal(t, constants.OperatorStatusTerminated, op.Status)

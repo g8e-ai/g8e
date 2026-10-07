@@ -354,8 +354,8 @@ func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID str
 		cliSet[id] = true
 	}
 	for _, op := range ops {
-		isBoundWeb := webSessionID != "" && op.BoundWebSessionID == webSessionID
-		isBoundCLI := cliSet[op.OperatorSessionID] || cliSet[op.ID]
+		isBoundWeb := webSessionID != "" && op.BoundWebSessionId == webSessionID
+		isBoundCLI := cliSet[op.OperatorSessionId] || cliSet[op.Id]
 		if !isBoundWeb && !isBoundCLI {
 			continue
 		}
@@ -363,13 +363,13 @@ func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID str
 		// binding. Binding an active Operator leaves its document status
 		// active; g8ee's BoundOperator status describes the binding instead.
 		status := op.Status
-		if status == constants.OperatorStatusActive {
-			status = constants.OperatorStatusBound
+		if constants.OperatorStatus(status) == constants.OperatorStatusActive {
+			status = string(constants.OperatorStatusBound)
 		}
 		bound = append(bound, browserBoundOperator{
-			BoundWebSessionID: op.BoundWebSessionID,
-			OperatorID:        op.ID,
-			OperatorSessionID: op.OperatorSessionID,
+			BoundWebSessionID: op.BoundWebSessionId,
+			OperatorID:        op.Id,
+			OperatorSessionID: op.OperatorSessionId,
 			Status:            string(status),
 		})
 	}

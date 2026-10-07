@@ -427,7 +427,7 @@ message OperatorDocument {
   string account = 26;
   int32 port = 27;
   string stop_reason = 28;
-  google.protobuf.Struct latest_heartbeat_snapshot = 29;
+  HeartbeatResult latest_heartbeat_snapshot = 29;
   string current_hostname = 30;
   OperatorRuntimeConfig runtime_config = 31;
   string consumed_by_operator_id = 32;

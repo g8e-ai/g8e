@@ -244,7 +244,7 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_LogsNotFound(t *t
 // with the observer flag and the same hardware fingerprint, plus an inference
 // node on a different host whose fingerprint matches neither.
 func duplicateObserverOperators() []*operatorv1.OperatorDocument {
-	observer := func(id, session string) operatorv1.OperatorDocument {
+	observer := func(id, session string) *operatorv1.OperatorDocument {
 		return operatorv1.OperatorDocument{
 			ID:                id,
 			OperatorSessionID: session,

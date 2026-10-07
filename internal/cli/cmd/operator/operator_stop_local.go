@@ -29,7 +29,7 @@ type localOperatorProcess struct {
 	close     func()
 }
 
-func (p localOperatorProcess) matches(op operatorv1.OperatorDocument) bool {
+func (p localOperatorProcess) matches(op *operatorv1.OperatorDocument) bool {
 	if p.sessionID != "" {
 		return p.sessionID == op.OperatorSessionID
 	}

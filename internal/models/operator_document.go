@@ -18,7 +18,7 @@ import (
 )
 
 // The canonical OperatorDocument is the protobuf message
-// operatorv1.OperatorDocument. These helpers are its only JSON codec: the
+// *operatorv1.OperatorDocument. These helpers are its only JSON codec: the
 // document store, HTTP responses and clients all use the protojson form with
 // proto field names, never encoding/json over the generated struct.
 

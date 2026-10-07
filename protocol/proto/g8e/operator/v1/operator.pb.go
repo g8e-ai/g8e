@@ -3777,7 +3777,7 @@ type OperatorDocument struct {
 	Account                 string                 `protobuf:"bytes,26,opt,name=account,proto3" json:"account,omitempty"`
 	Port                    int32                  `protobuf:"varint,27,opt,name=port,proto3" json:"port,omitempty"`
 	StopReason              string                 `protobuf:"bytes,28,opt,name=stop_reason,json=stopReason,proto3" json:"stop_reason,omitempty"`
-	LatestHeartbeatSnapshot *structpb.Struct       `protobuf:"bytes,29,opt,name=latest_heartbeat_snapshot,json=latestHeartbeatSnapshot,proto3" json:"latest_heartbeat_snapshot,omitempty"`
+	LatestHeartbeatSnapshot *HeartbeatResult       `protobuf:"bytes,29,opt,name=latest_heartbeat_snapshot,json=latestHeartbeatSnapshot,proto3" json:"latest_heartbeat_snapshot,omitempty"`
 	CurrentHostname         string                 `protobuf:"bytes,30,opt,name=current_hostname,json=currentHostname,proto3" json:"current_hostname,omitempty"`
 	RuntimeConfig           *OperatorRuntimeConfig `protobuf:"bytes,31,opt,name=runtime_config,json=runtimeConfig,proto3" json:"runtime_config,omitempty"`
 	ConsumedByOperatorId    string                 `protobuf:"bytes,32,opt,name=consumed_by_operator_id,json=consumedByOperatorId,proto3" json:"consumed_by_operator_id,omitempty"`
@@ -3990,7 +3990,7 @@ func (x *OperatorDocument) GetStopReason() string {
 	return ""
 }
 
-func (x *OperatorDocument) GetLatestHeartbeatSnapshot() *structpb.Struct {
+func (x *OperatorDocument) GetLatestHeartbeatSnapshot() *HeartbeatResult {
 	if x != nil {
 		return x.LatestHeartbeatSnapshot
 	}
@@ -12209,7 +12209,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\"provider_boundary_observer_enabled\x18\f \x01(\bR\x1fproviderBoundaryObserverEnabled\x12>\n" +
 	"\x1bprovenance_operator_enabled\x18\r \x01(\bR\x19provenanceOperatorEnabled\x12R\n" +
 	"&provenance_operator_model_storage_root\x18\x0e \x01(\tR\"provenanceOperatorModelStorageRoot\x12\x1a\n" +
-	"\bplatform\x18\x0f \x01(\tR\bplatform\"\xa4\n" +
+	"\bplatform\x18\x0f \x01(\tR\bplatform\"\xad\n" +
 	"\n" +
 	"\x10OperatorDocument\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
@@ -12243,8 +12243,8 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\aaccount\x18\x1a \x01(\tR\aaccount\x12\x12\n" +
 	"\x04port\x18\x1b \x01(\x05R\x04port\x12\x1f\n" +
 	"\vstop_reason\x18\x1c \x01(\tR\n" +
-	"stopReason\x12S\n" +
-	"\x19latest_heartbeat_snapshot\x18\x1d \x01(\v2\x17.google.protobuf.StructR\x17latestHeartbeatSnapshot\x12)\n" +
+	"stopReason\x12\\\n" +
+	"\x19latest_heartbeat_snapshot\x18\x1d \x01(\v2 .g8e.operator.v1.HeartbeatResultR\x17latestHeartbeatSnapshot\x12)\n" +
 	"\x10current_hostname\x18\x1e \x01(\tR\x0fcurrentHostname\x12M\n" +
 	"\x0eruntime_config\x18\x1f \x01(\v2&.g8e.operator.v1.OperatorRuntimeConfigR\rruntimeConfig\x125\n" +
 	"\x17consumed_by_operator_id\x18  \x01(\tR\x14consumedByOperatorIdJ\x04\b\x0f\x10\x10J\x04\b\x11\x10\x12J\x04\b\x12\x10\x13R\rcloud_subtypeR\x12created_at_unix_msR\x12updated_at_unix_ms\"+\n" +
@@ -13275,7 +13275,7 @@ var file_g8e_operator_v1_operator_proto_depIdxs = []int32{
 	148, // 7: g8e.operator.v1.OperatorDocument.started_at:type_name -> google.protobuf.Timestamp
 	148, // 8: g8e.operator.v1.OperatorDocument.claimed_at:type_name -> google.protobuf.Timestamp
 	148, // 9: g8e.operator.v1.OperatorDocument.last_heartbeat_at:type_name -> google.protobuf.Timestamp
-	147, // 10: g8e.operator.v1.OperatorDocument.latest_heartbeat_snapshot:type_name -> google.protobuf.Struct
+	94,  // 10: g8e.operator.v1.OperatorDocument.latest_heartbeat_snapshot:type_name -> g8e.operator.v1.HeartbeatResult
 	54,  // 11: g8e.operator.v1.OperatorDocument.runtime_config:type_name -> g8e.operator.v1.OperatorRuntimeConfig
 	4,   // 12: g8e.operator.v1.DeterministicStageEvidence.kind:type_name -> g8e.operator.v1.DeterministicStageKind
 	5,   // 13: g8e.operator.v1.DeterministicStageEvidence.outcome:type_name -> g8e.operator.v1.DeterministicStageOutcome

@@ -1195,7 +1195,7 @@ func TestHandleIssue_OperatorSignsBothCSRsAndPersistsOwnedOperator(t *testing.T)
 	require.NotNil(t, doc)
 	raw, err := json.Marshal(doc.Data)
 	require.NoError(t, err)
-	var opDoc operatorv1.OperatorDocument
+	var opDoc *operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(raw, &opDoc))
 	assert.Equal(t, enrollTestOwnerID, opDoc.UserID)
 	assert.Equal(t, enrollTestOrgID, opDoc.OrganizationID)

@@ -57,10 +57,10 @@ func (s *AuditIngestService) Ingest(ctx context.Context, req models.AuditRecordI
 	if err != nil {
 		return nil, err
 	}
-	if op.ID != req.OperatorID {
+	if op.Id != req.OperatorID {
 		return nil, fmt.Errorf("%w: operator_id does not match session", constants.ErrAuditIngestInvalidRequest)
 	}
-	if requestorUserID != "" && op.UserID != requestorUserID {
+	if requestorUserID != "" && op.UserId != requestorUserID {
 		return nil, constants.ErrRegistrationOperatorNotBelongToUser
 	}
 

@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/httpclient"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
@@ -162,14 +163,14 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 	account := ResolveCurrentAccount()
 
 	runtimeConfig := &operatorv1.OperatorRuntimeConfig{
-		CloudMode:             bs.config.CloudMode,
-		CloudProvider:         bs.config.CloudProvider,
-		ExecutionVaultEnabled: bs.config.ExecutionVaultEnabled,
-		NoGit:                 bs.config.NoGit,
-		LogLevel:              bs.config.LogLevel,
+		CloudMode:           bs.config.CloudMode,
+		CloudProvider:       bs.config.CloudProvider,
+		LocalStorageEnabled: bs.config.ExecutionVaultEnabled,
+		NoGit:               bs.config.NoGit,
+		LogLevel:            bs.config.LogLevel,
 
-		HttpPort: bs.config.HTTPPort,
-		Roles:    roles,
+		HttpPort: int32(bs.config.HTTPPort),
+		Roles:    models.OperatorRolesToProto(roles),
 		LocalDir: bs.config.WorkDir,
 		Account:  account,
 

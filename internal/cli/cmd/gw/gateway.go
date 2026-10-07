@@ -714,7 +714,7 @@ func printEnrollmentSummary(w io.Writer, client authcmd.APIClient) {
 	fmt.Fprintf(w, "Enrollments  users %s · pending %s · apps %s · dashboards %s\n", userCount, pendingCount, appCount, dashboardCount)
 }
 
-func operatorHostnameDisplay(op operatorv1.OperatorDocument) string {
+func operatorHostnameDisplay(op *operatorv1.OperatorDocument) string {
 	if op.CurrentHostname != "" {
 		return op.CurrentHostname
 	}

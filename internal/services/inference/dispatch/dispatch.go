@@ -616,18 +616,18 @@ func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest)
 
 	capable := func(op *operatorv1.OperatorDocument) bool {
 		return op.RuntimeConfig != nil &&
-			operatorcapability.GetOperatorRoles(*op).Has(constants.OperatorRoleInference) &&
-			op.OperatorSessionID != "" &&
-			op.Status == constants.OperatorStatusActive
+			operatorcapability.GetOperatorRoles(op).Has(constants.OperatorRoleInference) &&
+			op.OperatorSessionId != "" &&
+			constants.OperatorStatus(op.Status) == constants.OperatorStatusActive
 	}
 
 	if req.TargetOperatorSessionID != "" {
 		for i := range operators {
-			if operators[i].OperatorSessionID == req.TargetOperatorSessionID {
-				if !capable(&operators[i]) {
+			if operators[i].OperatorSessionId == req.TargetOperatorSessionID {
+				if !capable(operators[i]) {
 					return "", constants.ErrInferenceOperatorNotCapable
 				}
-				return operators[i].OperatorSessionID, nil
+				return operators[i].OperatorSessionId, nil
 			}
 		}
 		// The target is not in the requestor's operator list. Report
@@ -638,8 +638,8 @@ func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest)
 
 	var matches []string
 	for i := range operators {
-		if capable(&operators[i]) {
-			matches = append(matches, operators[i].OperatorSessionID)
+		if capable(operators[i]) {
+			matches = append(matches, operators[i].OperatorSessionId)
 		}
 	}
 	switch len(matches) {

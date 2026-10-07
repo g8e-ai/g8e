@@ -71,7 +71,7 @@ func (s *stubInferenceOperatorLister) ListUserOperators(_ string) ([]*operatorv1
 	return s.ops, s.err
 }
 
-func inferenceCapableOperator(_ string) operatorv1.OperatorDocument {
+func inferenceCapableOperator(_ string) *operatorv1.OperatorDocument {
 	return operatorv1.OperatorDocument{
 		ID:                "op-inf-001",
 		OperatorSessionID: "sess-inf-1",

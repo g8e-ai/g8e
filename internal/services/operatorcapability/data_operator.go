@@ -10,8 +10,6 @@ package operatorcapability
 import (
 	"fmt"
 
-	"google.golang.org/protobuf/encoding/protojson"
-
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -27,15 +25,15 @@ type DataOperatorStatus struct {
 
 // IsDataOperator reports whether an active remote or configured embedded
 // session includes Data, even when other roles are enabled.
-func IsDataOperator(op operatorv1.OperatorDocument) bool {
+func IsDataOperator(op *operatorv1.OperatorDocument) bool {
 	return HasActiveRole(op, constants.OperatorRoleData)
 }
 
 // IsDedicatedDataOperator reports whether op is an active Data session other
 // than the Gateway's embedded Operator. Selection prefers dedicated Data
 // Operators and falls back to the embedded one only when none is active.
-func IsDedicatedDataOperator(op operatorv1.OperatorDocument) bool {
-	return IsDataOperator(op) && op.OperatorType != constants.OperatorTypeEmbedded
+func IsDedicatedDataOperator(op *operatorv1.OperatorDocument) bool {
+	return IsDataOperator(op) && constants.OperatorType(op.OperatorType) != constants.OperatorTypeEmbedded
 }
 
 // PreferDedicatedDataOperators drops the Gateway's embedded Operator when a
@@ -56,7 +54,7 @@ func PreferDedicatedDataOperators(operators []*operatorv1.OperatorDocument) []*o
 // IsStackDataOperator reports whether op is the data-operator the unified
 // Docker stack launches: an active data Operator whose heartbeat hostname is
 // constants.DataOperatorHostname.
-func IsStackDataOperator(op operatorv1.OperatorDocument) bool {
+func IsStackDataOperator(op *operatorv1.OperatorDocument) bool {
 	return IsDataOperator(op) && op.CurrentHostname == constants.DataOperatorHostname
 }
 
@@ -72,7 +70,7 @@ func ActiveDataOperators(operators []*operatorv1.OperatorDocument) []DataOperato
 		if !IsDataOperator(op) {
 			continue
 		}
-		wd := extractWorkingDirectory(op.LatestHeartbeat)
+		wd := extractWorkingDirectory(op.GetLatestHeartbeatSnapshot())
 		status := DataOperatorStatus{
 			OperatorID:        op.Id,
 			OperatorSessionID: op.OperatorSessionId,
@@ -82,7 +80,7 @@ func ActiveDataOperators(operators []*operatorv1.OperatorDocument) []DataOperato
 		switch {
 		case op.CurrentHostname == constants.DataOperatorHostname:
 			stackMatches = append(stackMatches, status)
-		case op.OperatorType == constants.OperatorTypeEmbedded:
+		case constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded:
 			embeddedMatches = append(embeddedMatches, status)
 		default:
 			dedicatedMatches = append(dedicatedMatches, status)
@@ -101,14 +99,7 @@ func ActiveDataOperators(operators []*operatorv1.OperatorDocument) []DataOperato
 // extractWorkingDirectory reads the pwd from the operator's heartbeat.
 // It tries EnvironmentDetails.pwd first, then falls back to SystemIdentity.pwd.
 // Returns empty string if the heartbeat cannot be unmarshalled or pwd is absent.
-func extractWorkingDirectory(hb []byte) string {
-	if len(hb) == 0 {
-		return ""
-	}
-	hr := &operatorv1.HeartbeatResult{}
-	if err := protojson.Unmarshal(hb, hr); err != nil {
-		return ""
-	}
+func extractWorkingDirectory(hr *operatorv1.HeartbeatResult) string {
 	// Try EnvironmentDetails first
 	if env := hr.GetEnvironment(); env != nil && env.GetPwd() != "" {
 		return env.GetPwd()
