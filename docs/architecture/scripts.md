@@ -65,7 +65,7 @@ Entry points: [Development bootstrap](#development-bootstrap) (`linux-setup.sh`,
 | Fresh onboarding smoke test | `scripts/ci/onboarding-smoke.sh` | Disposable Linux checkout only: installs build prerequisites, builds and starts Gateway, enrolls owner, installs Ensemble runtime, then starts and approves four Operators and Ensemble |
 | Host stack launcher | `scripts/full.py` | Behind `make full`, `full-setup`, `full-reset`, `status`, `down`, `ensemble-*`, and `operators-*`; see [Host lifecycle launcher](../guides/unified_stack.md#host-lifecycle-launcher-make-full) |
 | Windows-to-WSL Gateway LAN helper | `scripts/configure-gateway-lan.ps1` | `-Action Inspect\|Apply\|Remove` for ports 8080 and 8443 portproxy and firewall rules; see [Network Architecture](network.md) |
-| Operator image build | `scripts/build-operator-image.sh` | Builds a runtime-only Operator image from an allowlisted temporary Docker context |
+| Operator image build | `scripts/build-operator-image.sh`, `scripts/operator-runtime/` | Builds a runtime-only Operator image from an allowlisted temporary Docker context |
 | Container entrypoint | `scripts/docker-entrypoint.sh` | Copied into the image as `/entrypoint.sh` by the `Dockerfile` |
 | License header check | `scripts/check-bsl-headers.py` | Run by `make bsl-headers-check` |
 | Script unit tests | `scripts/tests/` | `test_audit_dev_guidelines.py`, `test_bootstrap_uv.py`, `test_full.py`, `test_make_clean.py` |
