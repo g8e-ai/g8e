@@ -144,7 +144,7 @@ func (s *laneTestArtifactSink) reference(scope EvidenceScope, artifactType compl
 }
 
 func TestCommandLane_ResolveTargetAndPostureFailClosed(t *testing.T) {
-	activeRemote := &operatorv1.OperatorDocument{Id: "operator-1", OperatorSessionId: "session-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)}
+	activeRemote := &operatorv1.OperatorDocument{Id: "operator-1", OperatorSessionId: "session-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), CurrentHostname: constants.DataOperatorHostname}
 	tests := []struct {
 		name       string
 		client     *laneTestClient
@@ -152,7 +152,7 @@ func TestCommandLane_ResolveTargetAndPostureFailClosed(t *testing.T) {
 		wantErr    error
 	}{
 		{name: "discovered active remote operator", client: &laneTestClient{discovered: activeRemote}, wantTarget: Target{OperatorID: "operator-1", SessionID: "session-1"}},
-		{name: "configured blended embedded Data operator", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{Id: "blend", OperatorSessionId: "blend-session", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference})}}}, wantTarget: Target{OperatorID: "blend", SessionID: "blend-session"}},
+		{name: "configured blended embedded Data operator is not the stack target", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{Id: "blend", OperatorSessionId: "blend-session", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference})}}}, wantErr: constants.ErrEvaluationTargetUnavailable},
 		{name: "remote witness without Data rejected", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{Id: "witness", OperatorSessionId: "witness-session", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleObserver})}}}, wantErr: constants.ErrEvaluationTargetUnavailable},
 		{name: "discovered embedded operator rejected", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{Id: "operator-1", OperatorSessionId: "session-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded)}}, wantErr: constants.ErrEvaluationTargetUnavailable},
 		{name: "discovered inactive operator rejected", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{Id: "operator-1", OperatorSessionId: "session-1", Status: string(constants.OperatorStatusOffline), OperatorType: string(constants.OperatorTypeRemote)}}, wantErr: constants.ErrEvaluationTargetUnavailable},

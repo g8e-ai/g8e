@@ -20,7 +20,7 @@ from app.models.evaluation_trace import EvaluationToolCallRecord
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import EvalJudgeSettings, G8eeUserSettings, LLMSettings
-from app.services.ai.eval_judge import EvalGrade
+from app.services.ai.eval_judge import EvalGrade, EvalJudgeError
 from app.services.evaluation.semantic_grader import (
     _resolve_eval_judge_model,
     grade_campaign_assignment_semantically,
@@ -219,7 +219,8 @@ async def test_empty_judge_response_is_unavailable_and_sends_no_output_cap():
     assert semantic_grades[0].status == "unavailable"
     assert semantic_grades[0].score is None
     assert "empty response" in semantic_grades[0].detail
-    assert grader_calls == []
+    assert len(grader_calls) == 1
+    assert grader_calls[0].judge_variant_id == "qwen3:0.6b"
     assert provider.generate_content_lite.await_count == 1
 
 
@@ -241,6 +242,41 @@ async def test_grade_campaign_assignment_semantically_returns_unavailable_when_j
     assert len(semantic_grades) == 1
     assert semantic_grades[0].status == "unavailable"
     assert semantic_grades[0].detail
+
+
+@pytest.mark.asyncio
+async def test_unavailable_grade_preserves_failed_judge_attempt_telemetry():
+    evaluation_context = _evaluation_context()
+    context = G8eHttpContext(user_id="user-1", evaluation_context=evaluation_context)
+    settings = G8eeUserSettings(eval_judge=EvalJudgeSettings(eval_judge_model="judge-model"))
+    failed_call = ModelCallTelemetry(
+        agent_role="judge",
+        classification="grader",
+        provider="GeminiProvider",
+        model="judge-model",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+        provider_attempt_id="failed-judge-attempt",
+    )
+    with (
+        patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()),
+        patch("app.services.evaluation.semantic_grader.EvalJudge") as judge_cls,
+    ):
+        judge_cls.return_value.grade_turn = AsyncMock(
+            side_effect=EvalJudgeError("judge provider failed", model_calls=[failed_call])
+        )
+        semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
+            evaluation_context=evaluation_context,
+            g8e_context=context,
+            judge_settings=settings,
+            gold_summary=_gold_summary(),
+            designated_role_output="checkout-api failed",
+            tool_calls=[],
+        )
+
+    assert semantic_grades[0].status == "unavailable"
+    assert len(grader_calls) == 1
+    assert grader_calls[0].provider_attempt_id == "failed-judge-attempt"
 
 
 @pytest.mark.asyncio

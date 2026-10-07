@@ -230,12 +230,14 @@ func TestRunsRepair_RequiresExactlyOneMode(t *testing.T) {
 func TestRunsStart_DryRunPrintsPlanWithoutWriting(t *testing.T) {
 	env := setupRunEnv(t)
 	env.createCampaign(t, "eval-a")
+	env.deps.authLoader = func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
+		return nil, errors.New("CLI auth should not be loaded for a dry run")
+	}
 
 	out := env.mustRun(t, "runs", "start", "eval-a", "--dry-run")
 	assert.Contains(t, out, "Run start plan")
 	assert.Contains(t, out, "eval-a")
-	assert.Contains(t, out, testInferenceSession)
-	assert.Contains(t, out, testDataSession)
+	assert.Contains(t, out, "Sessions resolved: false")
 
 	runIDs, err := env.store(t).ListRunIDs(context.Background())
 	require.NoError(t, err)
@@ -250,8 +252,9 @@ func TestRunsStart_DryRunJSON(t *testing.T) {
 	require.NoError(t, env.runJSON(t, &payload, "runs", "start", "eval-a", "--dry-run"))
 	assert.Equal(t, "eval-a", payload.CampaignID)
 	assert.Equal(t, uint64(41), payload.CellCount)
-	assert.Equal(t, testInferenceSession, payload.InferenceSession)
-	assert.Equal(t, testDataSession, payload.DataSession)
+	assert.False(t, payload.SessionsResolved)
+	assert.Empty(t, payload.InferenceSession)
+	assert.Empty(t, payload.DataSession)
 	assert.Equal(t, []string{"qwen3:4b"}, payload.ModelTags)
 }
 

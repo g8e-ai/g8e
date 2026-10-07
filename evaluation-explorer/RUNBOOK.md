@@ -47,13 +47,17 @@ Run a campaign evaluation with live publication to the public mirror:
 
 ```bash
 cd /home/bob/g8e
-G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval campaign execute --run-id <run-id> --publish --daemon
+./g8e eval campaigns create <campaign-id> <frozen-model-tag> --suite smoke-suite
+./g8e eval runs start <campaign-id> --require-witness
 ```
 
-Or catch up publication for an existing run:
+This requires g8ee and enabled Data, Inference, Observer, and Provenance roles. The Gateway embedded Operator can supply all of them (`make gw`); separate outbound Operators are optional. Freeze the provider inventory and pass the chat acceptance gate first; see [First model campaign](../docs/architecture/evals.md#first-model-campaign). Provider access comes from the Inference Operator's enrolled configuration.
+
+Resume a prepared or interrupted run, or catch up publication for an existing run:
 
 ```bash
-./g8e eval campaign publish --run-id <run-id>
+./g8e eval runs resume <run-id> --publish --daemon
+./g8e eval runs publish <run-id>
 ```
 
 The Go `CampaignPublicationCoordinator` in the evaluation service projects canonical campaign state into public-safe explorer records and publishes them through the real `g8e public` publisher. The explorer's TypeScript `campaign-adapter` decodes those envelopes from the mirror. No separate projector script is involved.
@@ -71,11 +75,13 @@ Do not use a full Docker or gateway cleanup for a public-feed problem.
 
 ## Publish evaluation reports
 
-Publication is owned by the Go evaluation service. Campaign runs project lifecycle events, assignment results, and aggregate records into the public feed as they execute (`--publish`) or on demand (`g8e eval campaign publish`). The publisher signs batches, writes the durable outbox, and advances the high-water sequence; the mirror ingests signed batches and serves anonymous reads and SSE.
+Publication is owned by the Go evaluation service. Campaign runs project lifecycle events, assignment results, and aggregate records into the public feed as they execute (`runs start` publishes by default; `runs resume` uses `--publish`) or on demand (`g8e eval runs publish <run-id>`). The publisher signs batches, writes the durable outbox, and advances the high-water sequence; the mirror ingests signed batches and serves anonymous reads and SSE.
 
 ## Expected browser states
 
 The overview first reconstructs bootstrap, complete paginated history, and the sealed snapshot, then connects SSE. A live run appears as queued, running, provisional assignment and metric updates, and finally completed, failed, or stopped without a refresh. Reload reconstructs the same state before SSE resumes. Current-standard verified, run-scoped verified, not fully verified, legacy unverified, in-progress, failed, unavailable, and not-evaluated states remain distinct; the site never averages datasets.
+
+The Evaluation runs table defaults to all quality states for the selected release, keeping active runs and failures visible beside verified history. Use its quality filter to inspect verified runs only.
 
 The Evals leaderboard admits only scored models with exactly 100% evaluation coverage and current-standard or run-scoped verification. Each role leader ranks by pass rate descending, advertised parameter count ascending, then completed evaluation elapsed time ascending. Size comes from the model tag or name (billions or millions of parameters); elapsed time comes from a dataset containing one homogeneous model run. Unknown sizes and durations follow known values, with model name and variant ID providing a stable final order. Size and evaluation time appear beside each leader.
 

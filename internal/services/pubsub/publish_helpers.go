@@ -87,19 +87,24 @@ func publishLFAATypedResponseTo(
 		logger.Error("Failed to resolve originating action for LFAA response", string(constants.ConnectionStateError), err)
 		return
 	}
-	env, err := BuildUniversalResultEnvelope(cfg, msg.EventType, eventType, originatingAction, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
+	operatorID := cfg.OperatorID
+	if msg.OperatorID != nil && *msg.OperatorID != "" {
+		operatorID = *msg.OperatorID
+	}
+	env, err := BuildUniversalResultEnvelope(cfg, msg.EventType, eventType, originatingAction, payload, msg.ID, operatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
 		logger.Error("Failed to build LFAA typed response Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
+	env.OperatorSessionId = msg.OperatorSessionID
 	data, err := protojson.Marshal(env)
 	if err != nil {
 		logger.Error("Failed to marshal LFAA typed response Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
-	channelName := ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
+	channelName := ResultsChannel(operatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
 		logger.Error("Failed to publish LFAA typed response Universal", string(constants.ConnectionStateError), err)
 		return
@@ -137,19 +142,24 @@ func publishLFAAErrorTo(
 		logger.Error("Failed to resolve originating action for LFAA response", string(constants.ConnectionStateError), err)
 		return
 	}
-	env, err := BuildUniversalResultEnvelope(cfg, msg.EventType, eventType, originatingAction, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
+	operatorID := cfg.OperatorID
+	if msg.OperatorID != nil && *msg.OperatorID != "" {
+		operatorID = *msg.OperatorID
+	}
+	env, err := BuildUniversalResultEnvelope(cfg, msg.EventType, eventType, originatingAction, payload, msg.ID, operatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
 		logger.Error("Failed to build LFAA error Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
+	env.OperatorSessionId = msg.OperatorSessionID
 	data, err := protojson.Marshal(env)
 	if err != nil {
 		logger.Error("Failed to marshal LFAA error Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
-	channelName := ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
+	channelName := ResultsChannel(operatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
 		logger.Error("Failed to publish LFAA error Universal", string(constants.ConnectionStateError), err)
 	}

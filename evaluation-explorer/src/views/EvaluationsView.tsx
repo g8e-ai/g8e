@@ -35,7 +35,7 @@ export function EvaluationsView() {
 
   const suiteFilter = params.get('suite') ?? 'all';
   const statusFilter = params.get('status') ?? 'all';
-  const qualityFilter = params.get('quality') ?? 'exploratory_verified';
+  const qualityFilter = params.get('quality') ?? 'all';
   const releaseFilter = params.get('release') ?? CURRENT_PLATFORM_RELEASE;
 
   const evaluations = useStoreState((state) =>
@@ -74,14 +74,6 @@ export function EvaluationsView() {
     const next = new URLSearchParams(params);
     if (value === 'all') next.delete(key);
     else next.set(key, value);
-    setParams(next);
-  };
-
-  // Unlike suite/status, "all" is not the quality filter's implicit default, so it must be
-  // written explicitly — otherwise clearing it would snap back to the exploratory_verified default.
-  const setQualityFilter = (value: string) => {
-    const next = new URLSearchParams(params);
-    next.set('quality', value);
     setParams(next);
   };
 
@@ -192,7 +184,7 @@ export function EvaluationsView() {
           <option value="failed">Failed</option>
           <option value="stopped">Stopped</option>
         </select>
-        <select aria-label="Filter by quality" value={effectiveQualityFilter} onChange={(e) => setQualityFilter(e.target.value)}>
+        <select aria-label="Filter by quality" value={effectiveQualityFilter} onChange={(e) => setFilter('quality', e.target.value)}>
           <option value="all">All quality states</option>
           {qualityOptions.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>

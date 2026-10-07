@@ -11,6 +11,7 @@ package eval
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,6 +36,7 @@ func TestCampaignsList_AfterCreate(t *testing.T) {
 	out := env.mustRun(t, "campaigns", "list")
 	assert.Contains(t, out, "eval-a")
 	assert.Contains(t, out, "model-role")
+	assert.Equal(t, []string{"CAMPAIGN", "RELEASE", "LANE", "MODELS", "SCENARIOS", "REPS", "RUNS", "STATUS", "ARCHIVED"}, strings.Fields(strings.Split(out, "\n")[0]))
 
 	var payload campaignListJSON
 	require.NoError(t, env.runJSON(t, &payload, "campaigns", "list"))

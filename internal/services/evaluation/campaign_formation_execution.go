@@ -287,7 +287,23 @@ func ImportAssignmentResultFromFormationRun(req AssignmentExecutionRequest, form
 	}
 	lifecycle, grades := classifyFormationAssignmentOutcome(req, formationResult)
 	var decomposedScores []*evalv1.DecomposedScoreRecord
-	if roleTraces, ok := roleTracesFromFormationResult(formationResult); ok {
+	roleTraces, hasRoleTraces := roleTracesFromFormationResult(formationResult)
+	if lifecycle == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED &&
+		req.GradingMethod == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE &&
+		(!hasRoleTraces || slices.ContainsFunc(roleTraces, func(roleTrace RoleTrace) bool {
+			return semanticJudgeEvidenceUnavailable(roleTrace.Trace)
+		})) {
+		lifecycle = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED
+		grades = append(grades, newDeterministicGrade(
+			req.Assignment.GetAssignmentId(),
+			"semantic-judge-available",
+			basisStructural,
+			evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
+			"semantic judge evidence is missing or unavailable for a formation role",
+			0,
+		))
+	}
+	if hasRoleTraces {
 		grading, err := GradeHeterogeneousScenario(HeterogeneousScenarioGradingRequest{
 			AssignmentID:  req.Assignment.GetAssignmentId(),
 			ScenarioID:    req.Assignment.GetScenarioId(),

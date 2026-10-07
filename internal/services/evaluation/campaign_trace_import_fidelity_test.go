@@ -125,6 +125,51 @@ func TestImportAssignmentResultFromTrace_SeededScenarioWithAnHonestEchoCompletes
 	require.NoError(t, ValidateAssignmentResultDigest(result))
 }
 
+func TestImportAssignmentResultFromTrace_UnavailableSemanticJudgeIsGraderFailure(t *testing.T) {
+	t.Parallel()
+	f := newSeededImportFixture(t, "final-response-diagnosis", func(f *seededImportFixture) {
+		f.trace["semantic_grades"] = []any{EvaluationTrace{
+			"grade_id":         "assignment-1:semantic-judge",
+			"status":           "unavailable",
+			"judge_variant_id": "judge-model",
+			"detail":           "judge provider unavailable",
+		}}
+	})
+
+	result := f.importResult(t)
+
+	assert.Equal(t,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED,
+		result.GetLifecycleStatus(),
+	)
+	require.Len(t, result.GetSemanticGrades(), 1)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, result.GetSemanticGrades()[0].GetStatus())
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE, DerivePublicSummaryStatus(result))
+	outcome, err := AssignmentTerminalOutcome(result.GetLifecycleStatus(), result)
+	require.NoError(t, err)
+	assert.Equal(t, TerminalOutcomeGraderFailed, outcome)
+}
+
+func TestImportAssignmentResultFromTrace_MissingSemanticJudgeIsGraderFailure(t *testing.T) {
+	t.Parallel()
+	f := newSeededImportFixture(t, "final-response-diagnosis", func(f *seededImportFixture) {
+		delete(f.trace, "semantic_grades")
+	})
+
+	result := f.importResult(t)
+
+	assert.Equal(t,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED,
+		result.GetLifecycleStatus(),
+	)
+	require.Len(t, result.GetSemanticGrades(), 1)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, result.GetSemanticGrades()[0].GetStatus())
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE, DerivePublicSummaryStatus(result))
+	outcome, err := AssignmentTerminalOutcome(result.GetLifecycleStatus(), result)
+	require.NoError(t, err)
+	assert.Equal(t, TerminalOutcomeGraderFailed, outcome)
+}
+
 func failedGradeDetails(result *evalv1.EvaluationAssignmentResult) []string {
 	var failed []string
 	for _, grade := range result.GetDeterministicGrades() {

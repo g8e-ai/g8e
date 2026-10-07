@@ -63,9 +63,10 @@ async def grade_campaign_assignment_semantically(
     """Grade one assignment with the platform's semantic judge.
 
     judge_settings are the caller's settings before request overrides: the
-    configured judge model, else the Lite model, on the Lite provider. A
-    campaign's overrides bind the scored model, which is never its own judge,
-    and the grader dispatches without campaign authority (it is not a scored
+    configured judge model, else the Lite model, on the Lite provider. The
+    campaign's model overrides do not select the judge; caller settings select
+    it independently, so the judge may use the same model tag as the scored
+    model. The grader dispatches without campaign authority (it is not a scored
     call), so under governed inference only the Inference Operator's Lite
     binding is accepted for it.
     """
@@ -112,6 +113,7 @@ async def grade_campaign_assignment_semantically(
             evaluation_context.assignment_id,
             exc,
         )
+        failed_calls = exc.model_calls if isinstance(exc, EvalJudgeError) else []
         return (
             [
                 EvaluationSemanticGradeRecord(
@@ -121,7 +123,14 @@ async def grade_campaign_assignment_semantically(
                     detail=str(exc),
                 )
             ],
-            [],
+            [
+                EvaluationGraderCallRecord(
+                    grader_call_id=f"{grade_id}:call-{index + 1}",
+                    judge_variant_id=call.model or judge_model or "",
+                    provider_attempt_id=call.provider_attempt_id or "",
+                )
+                for index, call in enumerate(failed_calls)
+            ],
         )
 
     semantic_grade = EvaluationSemanticGradeRecord(

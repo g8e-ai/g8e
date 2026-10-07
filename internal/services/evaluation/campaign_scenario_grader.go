@@ -767,7 +767,7 @@ func semanticGradesForRequest(req ScenarioGradingRequest) []*evalv1.SemanticGrad
 		return []*evalv1.SemanticGrade{{
 			GradeId:     req.AssignmentID + ":semantic-judge",
 			CriterionId: "semantic-judge",
-			Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
+			Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
 			Detail:      "semantic judge evidence is missing from campaign trace",
 		}}
 	}
@@ -785,6 +785,8 @@ func requiredSemanticGradeEvidence(req ScenarioGradingRequest) (evalv1.Evaluatio
 			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "semantic judge grading executed", 1
 		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL:
 			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, grade.GetDetail(), 0
+		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE:
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, grade.GetDetail(), 0
 		}
 	}
 	return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "semantic judge grading is unavailable", 0
@@ -823,8 +825,10 @@ func semanticOutcomeStatus(outcome string) evalv1.EvaluationVerdictStatus {
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
 	case "fail":
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
+	case "unavailable":
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE
 	default:
-		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE
 	}
 }
 

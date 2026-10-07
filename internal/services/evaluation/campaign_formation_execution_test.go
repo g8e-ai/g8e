@@ -259,6 +259,32 @@ func TestImportAssignmentResultFromFormationRun_GradesFromRoleTraces(t *testing.
 	}
 }
 
+func TestImportAssignmentResultFromFormationRun_MissingSemanticJudgeInRoleTracesIsGraderFailure(t *testing.T) {
+	variants := testHeterogeneousVariants()
+	stack := mustHeterogeneousStack(t)
+	formation, err := BindHeterogeneousStack(FormationBindingRequest{Stack: stack, Variants: variants})
+	require.NoError(t, err)
+	req := heterogeneousAssignmentExecutionRequest(t, stack, variants)
+	req.GradingMethod = evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE
+	formationResult := &FormationRunResult{
+		FormationID: formation.ID,
+		Passed:      true,
+		Roles: []FormationRoleTelemetry{
+			{Role: FormationRoleLite, Model: formation.Lite, ProviderAttemptID: "lite-attempt", Trace: completedHomogeneousTrace(t, "lite")},
+			{Role: FormationRoleAssistant, Model: formation.Assistant, ProviderAttemptID: "assistant-attempt", Trace: completedHomogeneousTrace(t, "assistant")},
+			{Role: FormationRolePrimary, Model: formation.Primary, ProviderAttemptID: "primary-attempt", Trace: completedHomogeneousTrace(t, "primary")},
+		},
+	}
+
+	result, err := ImportAssignmentResultFromFormationRun(req, formationResult, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED, result.GetLifecycleStatus())
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE, DerivePublicSummaryStatus(result))
+	outcome, err := AssignmentTerminalOutcome(result.GetLifecycleStatus(), result)
+	require.NoError(t, err)
+	assert.Equal(t, TerminalOutcomeGraderFailed, outcome)
+}
+
 func TestImportAssignmentResultFromFormationRun_DoesNotPublishUnavailablePromptUsageAsZero(t *testing.T) {
 	variants := testHeterogeneousVariants()
 	stack := mustHeterogeneousStack(t)

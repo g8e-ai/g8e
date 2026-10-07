@@ -17,9 +17,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -205,6 +207,36 @@ func TestPublishLFAATypedResponseTo(t *testing.T) {
 		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload, nil, nil)
 		// Should log error and not panic
 	})
+}
+
+func TestLFAAResponsesUseExecutingOperatorIdentity(t *testing.T) {
+	for _, failure := range []bool{false, true} {
+		t.Run(map[bool]string{false: "completion", true: "failure"}[failure], func(t *testing.T) {
+			cfg := testutil.NewTestConfig(t)
+			cfg.OperatorID = "gateway-config-identity"
+			cfg.OperatorSessionId = "gateway-config-session"
+			operatorID := string(constants.DocIDEmbeddedOperator)
+			msg := &PubSubCommandMessage{
+				ID: "inventory-command", EventType: constants.Event.Operator.OllamaModelInventory.Requested,
+				OperatorID: &operatorID, OperatorSessionID: "embedded-session",
+				Payload: mustMarshalProto(t, &operatorv1.OllamaModelInventoryRequested{ExecutionId: "inventory-execution"}),
+			}
+			client := pubsubtest.NewMockOperatorPubSubClient()
+			if failure {
+				publishLFAAErrorTo(t.Context(), client, cfg, testutil.NewTestLogger(), msg, constants.Event.Operator.OllamaModelInventory.Failed, "inventory failed", nil, nil)
+			} else {
+				publishLFAATypedResponseTo(t.Context(), client, cfg, testutil.NewTestLogger(), msg, constants.Event.Operator.OllamaModelInventory.Completed, &operatorv1.OllamaModelInventoryResult{}, nil, nil)
+			}
+			published := client.LastPublished()
+			require.NotNil(t, published)
+			assert.Equal(t, ResultsChannel(operatorID, msg.OperatorSessionID), published.Channel)
+			envelope := &commonv1.GovernanceEnvelope{}
+			require.NoError(t, protojson.Unmarshal(published.Data, envelope))
+			assert.Equal(t, operatorID, envelope.GetOperatorId())
+			assert.Equal(t, msg.OperatorSessionID, envelope.GetOperatorSessionId())
+			assert.Equal(t, msg.ID, envelope.GetId())
+		})
+	}
 }
 
 func TestPublishLFAAErrorTo(t *testing.T) {

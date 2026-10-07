@@ -250,6 +250,13 @@ func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (
 			grade.Detail = err.Error()
 			return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, grade
 		}
+		if req.GradingMethod == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE &&
+			semanticJudgeEvidenceUnavailable(trace) {
+			grade.Status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
+			grade.Score = 1
+			grade.Detail = "designated model role invoked; semantic judge unavailable"
+			return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED, grade
+		}
 		grade.Status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
 		grade.Score = 1
 		grade.Detail = "designated model role invoked with governed inference evidence"
@@ -258,6 +265,19 @@ func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (
 		grade.Detail = fmt.Sprintf("trace status %q is not terminal", status)
 		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, grade
 	}
+}
+
+func semanticJudgeEvidenceUnavailable(trace EvaluationTrace) bool {
+	grades := traceToolRecords(trace, "semantic_grades")
+	if len(grades) != 1 {
+		return true
+	}
+	grade, ok := evaluationTrace(grades[0])
+	if !ok {
+		return true
+	}
+	status := stringValue(grade["status"])
+	return status != "pass" && status != "fail"
 }
 
 func homogeneousCandidateVariant(assignment *evalv1.EvaluationAssignment) *evalv1.ModelVariant {

@@ -88,6 +88,34 @@ describe('EvaluationsView', () => {
     expect(labels).not.toContain('Run-scoped verification passed');
   });
 
+  it('shows running and failed runs alongside verified history by default', () => {
+    evalStore.loadFixtures([
+      evaluation('ds-running', 'run-running', '2026-10-06T12:00:00Z'),
+      { ...evaluation('ds-verified', 'run-verified', '2026-10-06T10:00:00Z'),
+        quality_state: 'exploratory_verified', lifecycle_state: 'completed', verifier_state: 'passed' },
+      { ...evaluation('ds-failed', 'run-failed', '2026-10-06T11:00:00Z'),
+        quality_state: 'terminal_failed', lifecycle_state: 'failed' },
+    ] as SnapshotRecord[], []);
+    render(<MemoryRouter initialEntries={['/?release=all']}><EvaluationsView /></MemoryRouter>);
+
+    expect(screen.getByRole('combobox', { name: 'Filter by quality' })).toHaveValue('all');
+    for (const run of ['run-running', 'run-verified', 'run-failed']) {
+      expect(screen.getByRole('link', { name: run })).toBeInTheDocument();
+    }
+  });
+
+  it('honors an explicit verified-only history filter', () => {
+    evalStore.loadFixtures([
+      evaluation('ds-running', 'run-running', '2026-10-06T12:00:00Z'),
+      { ...evaluation('ds-verified', 'run-verified', '2026-10-06T10:00:00Z'),
+        quality_state: 'exploratory_verified', lifecycle_state: 'completed', verifier_state: 'passed' },
+    ] as SnapshotRecord[], []);
+    render(<MemoryRouter initialEntries={['/?release=all&quality=exploratory_verified']}><EvaluationsView /></MemoryRouter>);
+
+    expect(screen.getByRole('link', { name: 'run-verified' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'run-running' })).not.toBeInTheDocument();
+  });
+
   it('lists runs from every dataset without a dataset selector', () => {
     render(
       <MemoryRouter initialEntries={['/?release=all']}>
