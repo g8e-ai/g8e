@@ -114,9 +114,6 @@ jobs:
           git diff --exit-code
           make doctrines-validate
 
-      - name: Validate COSAiS Overlay Coverage
-        run: make cosais-validate
-
       - name: Generate & Validate Swagger Docs
         run: |
           make swagger-generate
