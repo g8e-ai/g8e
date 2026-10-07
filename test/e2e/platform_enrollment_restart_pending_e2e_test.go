@@ -96,8 +96,8 @@ func TestPlatformEnrollment_RestartDuringPending(t *testing.T) {
 			return false
 		}
 		for i := range operators.Operators {
-			if operators.Operators[i].Status == constants.OperatorStatusActive {
-				active = &operators.Operators[i]
+			if operators.Operators[i].Status == string(constants.OperatorStatusActive) {
+				active = operators.Operators[i]
 				return true
 			}
 		}
@@ -105,8 +105,8 @@ func TestPlatformEnrollment_RestartDuringPending(t *testing.T) {
 	}, 180*time.Second, 3*time.Second,
 		"an active operator must appear in the registry after approving the resumed request")
 	require.NotNil(t, active, "active operator must be discovered after approval")
-	require.NotEmpty(t, active.OperatorSessionID, "active operator must have a session ID")
-	t.Logf("operator became active after restart-during-pending approval: session=%s", active.OperatorSessionID)
+	require.NotEmpty(t, active.OperatorSessionId, "active operator must have a session ID")
+	t.Logf("operator became active after restart-during-pending approval: session=%s", active.OperatorSessionId)
 
 	// A command roundtrip must succeed against the now-active operator.
 	// This proves the full L4/L5 verification and execution chain works

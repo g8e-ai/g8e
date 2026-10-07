@@ -29,11 +29,11 @@ import (
 
 func TestDiscoverRemoteOperator_SelectsTheStackDataOperator(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "op-embedded", OperatorSessionID: "sess-embedded", CurrentHostname: constants.DataOperatorHostname, Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded},
-		{ID: "op-offline", OperatorSessionID: "sess-offline", CurrentHostname: constants.DataOperatorHostname, Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote},
-		{ID: "op-nosession", CurrentHostname: constants.DataOperatorHostname, Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
-		{ID: "op-elsewhere-1", OperatorSessionID: "sess-elsewhere-1", CurrentHostname: "elsewhere-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
-		{ID: "op-elsewhere-2", OperatorSessionID: "sess-elsewhere-2", CurrentHostname: "elsewhere-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
+		{Id: "op-embedded", OperatorSessionId: "sess-embedded", CurrentHostname: constants.DataOperatorHostname, Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded)},
+		{Id: "op-offline", OperatorSessionId: "sess-offline", CurrentHostname: constants.DataOperatorHostname, Status: string(constants.OperatorStatusOffline), OperatorType: string(constants.OperatorTypeRemote)},
+		{Id: "op-nosession", CurrentHostname: constants.DataOperatorHostname, Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
+		{Id: "op-elsewhere-1", OperatorSessionId: "sess-elsewhere-1", CurrentHostname: "elsewhere-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
+		{Id: "op-elsewhere-2", OperatorSessionId: "sess-elsewhere-2", CurrentHostname: "elsewhere-2", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
 		stackDataOperator("op-remote", "sess-remote"),
 	}
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: operators})
@@ -56,15 +56,15 @@ func TestDiscoverRemoteOperator_SelectsTheStackDataOperator(t *testing.T) {
 	doc, raw, err := client.DiscoverRemoteOperator(context.Background())
 
 	require.NoError(t, err)
-	assert.Equal(t, "op-remote", doc.ID)
-	assert.Equal(t, "sess-remote", doc.OperatorSessionID)
+	assert.Equal(t, "op-remote", doc.Id)
+	assert.Equal(t, "sess-remote", doc.OperatorSessionId)
 	assert.Equal(t, body, raw)
 	require.Len(t, exchanges, 1)
 }
 
 func TestDiscoverRemoteOperator_SelectsHostNativeDataOperator(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "op-local", OperatorSessionID: "sess-local", CurrentHostname: "beepboop", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
+		{Id: "op-local", OperatorSessionId: "sess-local", CurrentHostname: "beepboop", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
 	}
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: operators})
 	require.NoError(t, err)
@@ -79,8 +79,8 @@ func TestDiscoverRemoteOperator_SelectsHostNativeDataOperator(t *testing.T) {
 
 	doc, raw, err := client.DiscoverRemoteOperator(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "op-local", doc.ID)
-	assert.Equal(t, "sess-local", doc.OperatorSessionID)
+	assert.Equal(t, "op-local", doc.Id)
+	assert.Equal(t, "sess-local", doc.OperatorSessionId)
 	assert.Equal(t, body, raw)
 }
 
@@ -98,14 +98,14 @@ func TestDiscoverRemoteOperator_RejectsZeroOrAmbiguousMatches(t *testing.T) {
 		{
 			name: "no active data-operator session",
 			operators: []*operatorv1.OperatorDocument{
-				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: constants.DataOperatorHostname, Status: constants.OperatorStatusStale, OperatorType: constants.OperatorTypeRemote},
+				{Id: "op-1", OperatorSessionId: "sess-1", CurrentHostname: constants.DataOperatorHostname, Status: string(constants.OperatorStatusStale), OperatorType: string(constants.OperatorTypeRemote)},
 			},
 			wantErr: constants.ErrEvaluationTargetUnavailable,
 		},
 		{
 			name: "inference operators are not data operators",
 			operators: []*operatorv1.OperatorDocument{
-				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: "elsewhere", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
+				{Id: "op-1", OperatorSessionId: "sess-1", CurrentHostname: "elsewhere", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
 			},
 			wantErr: constants.ErrEvaluationTargetUnavailable,
 		},
@@ -120,8 +120,8 @@ func TestDiscoverRemoteOperator_RejectsZeroOrAmbiguousMatches(t *testing.T) {
 		{
 			name: "ambiguous host-native data-operator sessions without stack",
 			operators: []*operatorv1.OperatorDocument{
-				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: "elsewhere-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
-				{ID: "op-2", OperatorSessionID: "sess-2", CurrentHostname: "elsewhere-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
+				{Id: "op-1", OperatorSessionId: "sess-1", CurrentHostname: "elsewhere-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
+				{Id: "op-2", OperatorSessionId: "sess-2", CurrentHostname: "elsewhere-2", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
 			},
 			wantErr: constants.ErrEvaluationTargetAmbiguous,
 		},

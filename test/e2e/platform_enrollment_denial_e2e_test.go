@@ -108,7 +108,7 @@ func TestPlatformEnrollment_Denial(t *testing.T) {
 	for _, op := range operators.Operators {
 		assert.NotEqual(t, constants.OperatorStatusActive, op.Status,
 			"no operator must be active after its enrollment was denied (session=%s)",
-			op.OperatorSessionID)
+			op.OperatorSessionId)
 	}
 	t.Logf("no active operator registered after denial (%d total operators)",
 		len(operators.Operators))

@@ -69,14 +69,14 @@ func TestRegisterPendingEmbeddedOperator_Idempotent(t *testing.T) {
 	require.NoError(t, infra.Embedded.RegisterPending())
 
 	op := loadEmbeddedOperatorDoc(t, infra.DocStore)
-	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.ID)
+	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.Id)
 	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
 	assert.Equal(t, constants.ComponentNameG8EO, op.Component)
 	assert.Equal(t, constants.OperatorStatusAvailable, op.Status)
 	assert.False(t, op.Claimed)
 	assert.False(t, op.IsSlot)
-	assert.Empty(t, op.UserID)
-	assert.Empty(t, op.OperatorSessionID)
+	assert.Empty(t, op.UserId)
+	assert.Empty(t, op.OperatorSessionId)
 
 	// A second registration is a no-op — exactly one operators document.
 	require.NoError(t, infra.Embedded.RegisterPending())
@@ -90,8 +90,8 @@ func TestRegisterPendingEmbeddedOperator_Idempotent(t *testing.T) {
 	require.NoError(t, infra.Embedded.RegisterPending())
 	claimed := loadEmbeddedOperatorDoc(t, infra.DocStore)
 	assert.True(t, claimed.Claimed)
-	assert.Equal(t, "user-claim", claimed.UserID)
-	assert.Equal(t, sessionID, claimed.OperatorSessionID)
+	assert.Equal(t, "user-claim", claimed.UserId)
+	assert.Equal(t, sessionID, claimed.OperatorSessionId)
 }
 
 // TestBootstrap_ClaimsEmbeddedOperatorAndBindsCLISession verifies the
@@ -118,8 +118,8 @@ func TestBootstrap_ClaimsEmbeddedOperatorAndBindsCLISession(t *testing.T) {
 	// The claim persisted the pending document into the claimed state.
 	op := loadEmbeddedOperatorDoc(t, infra.DocStore)
 	assert.True(t, op.Claimed)
-	assert.Equal(t, resp.User.ID, op.UserID)
-	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionID)
+	assert.Equal(t, resp.User.ID, op.UserId)
+	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionId)
 	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
 
 	// The operator session document exists for the minted session.
@@ -157,8 +157,8 @@ func TestBootstrap_MissingPendingDoc_ClaimsAnyway(t *testing.T) {
 
 	op := loadEmbeddedOperatorDoc(t, infra.DocStore)
 	assert.True(t, op.Claimed)
-	assert.Equal(t, resp.User.ID, op.UserID)
-	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionID)
+	assert.Equal(t, resp.User.ID, op.UserId)
+	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionId)
 }
 
 // TestClaimEmbeddedOperator_SameUserReclaimIsIdempotent verifies that a

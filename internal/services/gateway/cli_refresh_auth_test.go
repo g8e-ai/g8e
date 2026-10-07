@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
@@ -49,19 +50,19 @@ func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool, cer
 	if sessionID != "" {
 		cliSessionID = sessionID
 		now := time.Now().UTC()
-		operatorDoc := operatorv1.OperatorDocument{
-			ID:                "refresh-auth-operator",
-			UserID:            userID,
-			Status:            constants.OperatorStatusActive,
-			OperatorSessionID: "op-refresh-auth",
-			OperatorType:      constants.OperatorTypeRemote,
-			CreatedAt:         now,
-			UpdatedAt:         now,
+		operatorDoc := &operatorv1.OperatorDocument{
+			Id:                "refresh-auth-operator",
+			UserId:            userID,
+			Status:            string(constants.OperatorStatusActive),
+			OperatorSessionId: "op-refresh-auth",
+			OperatorType:      string(constants.OperatorTypeRemote),
+			CreatedAt:         timestamppb.New(now),
+			UpdatedAt:         timestamppb.New(now),
 		}
-		operatorBytes, err := json.Marshal(operatorDoc)
+		operatorBytes, err := models.MarshalOperatorDocument(operatorDoc)
 		require.NoError(t, err)
 		require.NoError(t, infra.DocStore.DocSet(
-			marshaler.CollectionName(constants.CollectionOperators), operatorDoc.ID, operatorBytes,
+			marshaler.CollectionName(constants.CollectionOperators), operatorDoc.Id, operatorBytes,
 		))
 
 		expiresAt := now.Add(1 * time.Hour)
@@ -358,12 +359,10 @@ func TestHandleCLIRefreshAuth_StaleOperatorBinding_Admitted(t *testing.T) {
 	operatorDoc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator")
 	require.NoError(t, err)
 	require.NotNil(t, operatorDoc)
-	var operator *operatorv1.OperatorDocument
-	data, err := json.Marshal(operatorDoc.Data)
+	operator, err := models.OperatorDocumentFromStore(operatorDoc)
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal(data, &operator))
-	operator.Status = constants.OperatorStatusTerminated
-	data, err = json.Marshal(operator)
+	operator.Status = string(constants.OperatorStatusTerminated)
+	data, err := models.MarshalOperatorDocument(operator)
 	require.NoError(t, err)
 	require.NoError(t, auth.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator", data))
 

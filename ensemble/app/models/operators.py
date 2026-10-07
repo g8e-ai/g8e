@@ -130,9 +130,6 @@ class OperatorDocument(G8eIdentifiableModel):
     latest_heartbeat_snapshot: HeartbeatSnapshot | None = Field(
         default=None, description="Latest heartbeat metrics"
     )
-    investigation_id: str | None = Field(default=None, description="Current investigation ID")
-    case_id: str | None = Field(default=None, description="Current case ID")
-    is_active: bool = Field(default=False, description="Whether Operator is in active status")
     operator_type: OperatorType = Field(description="Operator deployment type")
 
     granted_intents: list[str] = Field(
@@ -156,6 +153,22 @@ class OperatorDocument(G8eIdentifiableModel):
     runtime_config: OperatorRuntimeConfig | None = Field(
         default=None, description="Active runtime configuration"
     )
+
+    @field_validator("operator_type", mode="before")
+    @classmethod
+    def coerce_empty_operator_type_to_default(cls, v: object) -> object:
+        """Map empty string operator_type to the default enum value."""
+        if v == "":
+            return OperatorType.REMOTE
+        return v
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def coerce_empty_status_to_default(cls, v: object) -> object:
+        """Map empty string status to the default enum value."""
+        if v == "":
+            return OperatorStatus.OFFLINE
+        return v
 
     @model_validator(mode="after")
     def populate_current_hostname_from_snapshot(self) -> OperatorDocument:

@@ -173,11 +173,11 @@ func (c *E2EClient) ListOperators(ctx context.Context) (models.OperatorSlotRespo
 func findLiveActiveRemoteOperator(operators []*operatorv1.OperatorDocument) *operatorv1.OperatorDocument {
 	var candidates []*operatorv1.OperatorDocument
 	for i := range operators {
-		op := &operators[i]
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+		op := operators[i]
+		if op.Status != string(constants.OperatorStatusActive) || op.OperatorType != string(constants.OperatorTypeRemote) {
 			continue
 		}
-		if op.CurrentHostname == "" && len(op.LatestHeartbeat) == 0 {
+		if op.CurrentHostname == "" && op.LatestHeartbeatSnapshot == nil {
 			continue
 		}
 		candidates = append(candidates, op)
@@ -185,11 +185,11 @@ func findLiveActiveRemoteOperator(operators []*operatorv1.OperatorDocument) *ope
 	if len(candidates) == 0 {
 		var fallback *operatorv1.OperatorDocument
 		for i := range operators {
-			op := &operators[i]
-			if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+			op := operators[i]
+			if op.Status != string(constants.OperatorStatusActive) || op.OperatorType != string(constants.OperatorTypeRemote) {
 				continue
 			}
-			if fallback == nil || op.UpdatedAt.After(fallback.UpdatedAt) {
+			if fallback == nil || op.UpdatedAt.AsTime().After(fallback.UpdatedAt.AsTime()) {
 				fallback = op
 			}
 		}
@@ -198,14 +198,14 @@ func findLiveActiveRemoteOperator(operators []*operatorv1.OperatorDocument) *ope
 
 	best := candidates[0]
 	for _, op := range candidates[1:] {
-		if op.UpdatedAt.After(best.UpdatedAt) {
+		if op.UpdatedAt.AsTime().After(best.UpdatedAt.AsTime()) {
 			best = op
 		}
 	}
 
 	const freshWindow = 90 * time.Second
 	for _, op := range candidates {
-		if best.UpdatedAt.Sub(op.UpdatedAt) > freshWindow {
+		if best.UpdatedAt.AsTime().Sub(op.UpdatedAt.AsTime()) > freshWindow {
 			continue
 		}
 		if op.CurrentHostname != "" && op.Name != "" && op.CurrentHostname != op.Name {
@@ -217,8 +217,8 @@ func findLiveActiveRemoteOperator(operators []*operatorv1.OperatorDocument) *ope
 
 func findOperatorByID(operators []*operatorv1.OperatorDocument, id string) *operatorv1.OperatorDocument {
 	for i := range operators {
-		if operators[i].ID == id {
-			return &operators[i]
+		if operators[i].Id == id {
+			return operators[i]
 		}
 	}
 	return nil
@@ -456,15 +456,15 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 	var target *operatorv1.OperatorDocument
 	target = findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, target, "a live active remote operator must exist as the dispatch target")
-	require.NotEmpty(t, target.OperatorSessionID, "target operator must have a session ID")
-	t.Logf("dispatch target: id=%s session=%s hostname=%s", target.ID, target.OperatorSessionID, target.CurrentHostname)
+	require.NotEmpty(t, target.OperatorSessionId, "target operator must have a session ID")
+	t.Logf("dispatch target: id=%s session=%s hostname=%s", target.Id, target.OperatorSessionId, target.CurrentHostname)
 
 	fsReadReq := &operatorv1.FsReadRequested{Path: constants.PathEtcHostname}
 	payload, err := proto.Marshal(fsReadReq)
 	require.NoError(t, err, "marshal FsReadRequested payload")
 
 	reqBody := dispatchRequestJSON{
-		TargetOperatorSessionID: target.OperatorSessionID,
+		TargetOperatorSessionID: target.OperatorSessionId,
 		EventType:               string(constants.EventOperatorFilesystemReadRequested),
 		Payload:                 payload,
 		TargetResource:          constants.PathEtcHostname,
@@ -533,7 +533,7 @@ func (c *E2EClient) DiscoverActiveOperatorByName(t *testing.T, ctx context.Conte
 			return false
 		}
 		for i := range operators.Operators {
-			if operators.Operators[i].Status != constants.OperatorStatusActive {
+			if operators.Operators[i].Status != string(constants.OperatorStatusActive) {
 				continue
 			}
 			if strings.Contains(operators.Operators[i].Name, nameSubstring) {

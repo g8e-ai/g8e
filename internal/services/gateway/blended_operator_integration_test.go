@@ -41,7 +41,7 @@ func TestGatewayConstructsAndRegistersAllEmbeddedOperatorRoles(t *testing.T) {
 	ops, err := svc.reg.ListUserOperators("owner")
 	require.NoError(t, err)
 	require.Len(t, ops, 1)
-	require.Equal(t, sessionID, ops[0].OperatorSessionID)
+	require.Equal(t, sessionID, ops[0].OperatorSessionId)
 	require.Equal(t, cfg.OperatorRoles, operatorcapability.GetOperatorRoles(ops[0]))
 	require.True(t, operatorcapability.IsDataOperator(ops[0]))
 	require.Len(t, operatorcapability.ActiveProvenanceOperators(ops), 1)

@@ -20,8 +20,8 @@ import (
 
 func TestSelectProviderBoundaryObserver(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "data-1", OperatorSessionID: "sess-data-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
+		{Id: "obs-1", OperatorSessionId: "sess-obs-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "data-1", OperatorSessionId: "sess-data-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
 	}
 	selected, err := SelectProviderBoundaryObserver(operators, "")
 	require.NoError(t, err)
@@ -32,12 +32,12 @@ func TestActiveProviderBoundaryObserversFiltersAndProjectsOperators(t *testing.T
 	t.Parallel()
 
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "inactive", OperatorSessionID: "sess-inactive", Status: constants.OperatorStatusAvailable, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "local", OperatorSessionID: "sess-local", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "disabled", OperatorSessionID: "sess-disabled", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: false}},
-		{ID: "missing-config", OperatorSessionID: "sess-missing-config", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
-		{ID: "missing-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "observer-1", OperatorSessionID: "sess-observer-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true, Platform: "linux"}},
+		{Id: "inactive", OperatorSessionId: "sess-inactive", Status: string(constants.OperatorStatusAvailable), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "local", OperatorSessionId: "sess-local", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "disabled", OperatorSessionId: "sess-disabled", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: false}},
+		{Id: "missing-config", OperatorSessionId: "sess-missing-config", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
+		{Id: "missing-session", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "observer-1", OperatorSessionId: "sess-observer-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true, Platform: "linux"}},
 	}
 
 	matches := ActiveProviderBoundaryObservers(operators)
@@ -49,7 +49,7 @@ func TestSelectProviderBoundaryObserverBySessionRejectsUnknownSession(t *testing
 	t.Parallel()
 
 	operators := []*operatorv1.OperatorDocument{{
-		ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
+		Id: "obs-1", OperatorSessionId: "sess-obs-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote),
 		RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 	}}
 	selected, err := SelectProviderBoundaryObserver(operators, "sess-obs-1")
@@ -67,8 +67,8 @@ func TestSelectProviderBoundaryObserver_NotFound(t *testing.T) {
 
 func TestSelectProviderBoundaryObserver_Ambiguous(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "obs-2", OperatorSessionID: "sess-obs-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "obs-1", OperatorSessionId: "sess-obs-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "obs-2", OperatorSessionId: "sess-obs-2", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
 	}
 	_, err := SelectProviderBoundaryObserver(operators, "")
 	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverAmbiguous)
@@ -78,15 +78,15 @@ func TestSelectProviderBoundaryObserverForHardware(t *testing.T) {
 	t.Parallel()
 	operators := []*operatorv1.OperatorDocument{
 		{
-			ID: "observer-other", OperatorSessionID: "sess-other",
+			Id: "observer-other", OperatorSessionId: "sess-other",
 			SystemFingerprint: "hardware-other",
-			Status:            constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
+			Status:            string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote),
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		},
 		{
-			ID: "observer-target", OperatorSessionID: "sess-target",
+			Id: "observer-target", OperatorSessionId: "sess-target",
 			SystemFingerprint: "hardware-target",
-			Status:            constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
+			Status:            string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote),
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		},
 	}

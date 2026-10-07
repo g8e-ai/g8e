@@ -49,7 +49,7 @@ func TestCompliance_AuditReceiptsRecorded(t *testing.T) {
 	assert.NotEmpty(t, r.SignerKeyID, "audit receipt must carry the signer key ID")
 	assert.NotEmpty(t, r.StateRootBefore,
 		"audit receipt must record the pre-execution state root")
-	assert.False(t, r.ExecutedAt.IsZero(),
+	assert.False(t, r.ExecutedAt == nil,
 		"audit receipt must have a non-zero execution timestamp")
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, r.Status,
 		"audit receipt must have completed execution status")

@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
@@ -258,14 +259,14 @@ func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.
 	now := time.Now().UTC()
 
 	provenanceBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-		ID:                "op-id-provenance",
-		UserID:            user.ID,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
-		OperatorSessionID: provenanceSessionID,
+		Id:                "op-id-provenance",
+		UserId:            user.ID,
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
+		OperatorSessionId: provenanceSessionID,
 		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		CreatedAt:         timestamppb.New(now),
+		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(
@@ -273,13 +274,13 @@ func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.
 	))
 
 	dataBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-		ID:                "op-id-data",
-		UserID:            user.ID,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
-		OperatorSessionID: dataSessionID,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		Id:                "op-id-data",
+		UserId:            user.ID,
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
+		OperatorSessionId: dataSessionID,
+		CreatedAt:         timestamppb.New(now),
+		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(
@@ -309,13 +310,13 @@ func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testi
 
 	now := time.Now().UTC()
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-		ID:                "op-id-registry-active",
-		UserID:            user.ID,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
-		OperatorSessionID: activeSessionID,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		Id:                "op-id-registry-active",
+		UserId:            user.ID,
+		Status: string(constants.OperatorStatusActive),
+		OperatorType: string(constants.OperatorTypeRemote),
+		OperatorSessionId: activeSessionID,
+		CreatedAt: timestamppb.New(now),
+		UpdatedAt: timestamppb.New(now),
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(
@@ -407,24 +408,24 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 	// and carries no operator_session_id.
 	now := time.Now().UTC()
 	embeddedBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-		ID:                string(constants.DocIDEmbeddedOperator),
-		UserID:            user.ID,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeEmbedded,
-		OperatorSessionID: "embedded-sess-refresh",
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		Id:                string(constants.DocIDEmbeddedOperator),
+		UserId:            user.ID,
+		Status: string(constants.OperatorStatusActive),
+		OperatorType: string(constants.OperatorTypeEmbedded),
+		OperatorSessionId: "embedded-sess-refresh",
+		CreatedAt: timestamppb.New(now),
+		UpdatedAt: timestamppb.New(now),
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator), embeddedBytes))
 	staleRemoteBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-		ID:                "stale-remote-operator",
-		UserID:            user.ID,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
-		OperatorSessionID: "stale-remote-session",
-		CreatedAt:         now.Add(-48 * time.Hour),
-		UpdatedAt:         now.Add(-48 * time.Hour),
+		Id:                "stale-remote-operator",
+		UserId:            user.ID,
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
+		OperatorSessionId: "stale-remote-session",
+		CreatedAt:         timestamppb.New(now.Add(-48 * time.Hour)),
+		UpdatedAt:         timestamppb.New(now.Add(-48 * time.Hour)),
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSetWithTimestamps(marshaler.CollectionName(constants.CollectionOperators), "stale-remote-operator", staleRemoteBytes, now.Add(-48*time.Hour), now.Add(-48*time.Hour)))

@@ -45,26 +45,26 @@ func TestOperatorRegistry_ActiveOperator(t *testing.T) {
 
 	var active *operatorv1.OperatorDocument
 	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
-			active = &operators.Operators[i]
+		if operators.Operators[i].Status == string(constants.OperatorStatusActive) && operators.Operators[i].OperatorType == string(constants.OperatorTypeRemote) {
+			active = operators.Operators[i]
 			break
 		}
 	}
 	require.NotNil(t, active, "at least one operator must have active status")
-	assert.NotEmpty(t, active.ID, "active operator must have a non-empty ID")
-	assert.NotEmpty(t, active.OperatorSessionID, "active operator must have a session ID")
-	assert.False(t, active.CreatedAt.IsZero(), "active operator must have a creation timestamp")
+	assert.NotEmpty(t, active.Id, "active operator must have a non-empty ID")
+	assert.NotEmpty(t, active.OperatorSessionId, "active operator must have a session ID")
+	assert.False(t, active.CreatedAt == nil, "active operator must have a creation timestamp")
 	t.Logf("active operator discovered: id=%s session=%s slot=%d",
-		active.ID, active.OperatorSessionID, active.SlotNumber)
+		active.Id, active.OperatorSessionId, active.SlotNumber)
 
 	// Cross-check: the session lookup endpoint must return the same operator
 	// document with active status. This proves the registry is consistent
 	// across the list and session-scoped query paths.
-	single, err := e2eClient.GetOperatorBySession(ctx, active.OperatorSessionID)
+	single, err := e2eClient.GetOperatorBySession(ctx, active.OperatorSessionId)
 	require.NoError(t, err, "session lookup for the active operator must succeed")
 	require.True(t, single.Success, "session lookup response must report success")
 	require.NotNil(t, single.Operator, "session lookup must return an operator document")
-	assert.Equal(t, active.ID, single.Operator.ID,
+	assert.Equal(t, active.Id, single.Operator.Id,
 		"session lookup must return the same operator ID as the list")
 	assert.Equal(t, constants.OperatorStatusActive, single.Operator.Status,
 		"session lookup must report active status")
@@ -86,10 +86,10 @@ func TestOperatorRegistry_HeartbeatTimestampSet(t *testing.T) {
 	var active *operatorv1.OperatorDocument
 	active = findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, active, "an active operator must exist")
-	assert.False(t, active.UpdatedAt.IsZero(),
+	assert.False(t, active.UpdatedAt == nil,
 		"active operator UpdatedAt must be set by at least one heartbeat delivery")
 	// UpdatedAt should be recent relative to suite start, proving the
 	// heartbeat path is live, not a stale bootstrap timestamp.
-	assert.WithinDuration(t, time.Now(), active.UpdatedAt, 5*time.Minute,
+	assert.WithinDuration(t, time.Now(), active.UpdatedAt.AsTime(), 5*time.Minute,
 		"active operator UpdatedAt must be within 5 minutes of now — heartbeat path may be stale")
 }

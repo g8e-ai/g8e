@@ -42,13 +42,13 @@ func TestPlatform_FullBootstrap(t *testing.T) {
 		require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
 		var remoteOperator *operatorv1.OperatorDocument
 		for i := range operators.Operators {
-			if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
-				remoteOperator = &operators.Operators[i]
+			if operators.Operators[i].Status == string(constants.OperatorStatusActive) && operators.Operators[i].OperatorType == string(constants.OperatorTypeRemote) {
+				remoteOperator = operators.Operators[i]
 				break
 			}
 		}
 		require.NotNil(t, remoteOperator, "an active remote operator must be registered")
-		assert.NotEmpty(t, remoteOperator.OperatorSessionID, "remote operator must have an active session ID")
+		assert.NotEmpty(t, remoteOperator.OperatorSessionId, "remote operator must have an active session ID")
 	})
 
 	t.Run("EnsembleHealth", func(t *testing.T) {

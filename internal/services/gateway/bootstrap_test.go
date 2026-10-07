@@ -39,12 +39,9 @@ func loadEmbeddedOperatorDoc(t *testing.T, docStore *DocumentStoreService) *oper
 	doc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	require.NoError(t, err)
 	require.NotNil(t, doc, "embedded operator document must exist")
-	b, err := json.Marshal(doc.Data)
+	op, err := models.OperatorDocumentFromStore(doc)
 	require.NoError(t, err)
-	var op *operatorv1.OperatorDocument
-	require.NoError(t, json.Unmarshal(b, &op))
-	op.ID = doc.ID
-	return &op
+	return op
 }
 
 func TestBootstrapFlow(t *testing.T) {
@@ -105,8 +102,8 @@ func TestBootstrapFlow(t *testing.T) {
 	// minted the operator session the CLI session is bound to.
 	op := loadEmbeddedOperatorDoc(t, infra.DocStore)
 	assert.True(t, op.Claimed, "embedded operator is claimed by bootstrap")
-	assert.Equal(t, bootstrapUserID, op.UserID)
-	assert.Equal(t, bootstrapSessionID, op.OperatorSessionID)
+	assert.Equal(t, bootstrapUserID, op.UserId)
+	assert.Equal(t, bootstrapSessionID, op.OperatorSessionId)
 	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
 	assert.Equal(t, "test-fingerprint", op.SystemFingerprint)
 
@@ -142,7 +139,7 @@ func TestBootstrapFlow(t *testing.T) {
 	// 5. Verify the user can authenticate via the operator session
 	validatedOp, err := h.authMiddleware.ValidateOperatorSession(bootstrapSessionID)
 	require.NoError(t, err)
-	assert.Equal(t, bootstrapUserID, validatedOp.UserID)
+	assert.Equal(t, bootstrapUserID, validatedOp.UserId)
 
 	// 6. Verify the user remains active (no retirement). The old
 	// create-then-retire dance is gone; the first user is a real user that

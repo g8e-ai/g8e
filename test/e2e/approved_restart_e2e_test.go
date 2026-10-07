@@ -60,31 +60,31 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 	}, 180*time.Second, 3*time.Second,
 		"a live active remote operator must appear in the registry on an approved stack")
 	require.NotNil(t, active, "active operator must be discovered")
-	require.NotEmpty(t, active.OperatorSessionID,
+	require.NotEmpty(t, active.OperatorSessionId,
 		"active operator must have a non-empty session ID — persisted identity must survive")
-	require.NotEmpty(t, active.ID, "active operator must have a non-empty ID")
-	t.Logf("operator active: id=%s session=%s", active.ID, active.OperatorSessionID)
+	require.NotEmpty(t, active.Id, "active operator must have a non-empty ID")
+	t.Logf("operator active: id=%s session=%s", active.Id, active.OperatorSessionId)
 
 	// Cross-check: the session lookup must return the same operator with
 	// active status. This proves the registry is consistent across the
 	// list and session-scoped query paths.
-	single, err := e2eClient.GetOperatorBySession(ctx, active.OperatorSessionID)
+	single, err := e2eClient.GetOperatorBySession(ctx, active.OperatorSessionId)
 	require.NoError(t, err, "session lookup must succeed for the active operator")
 	require.True(t, single.Success, "session lookup response must report success")
 	require.NotNil(t, single.Operator, "session lookup must return an operator document")
-	assert.Equal(t, active.ID, single.Operator.ID,
+	assert.Equal(t, active.Id, single.Operator.Id,
 		"session lookup must return the same operator ID")
-	assert.Equal(t, constants.OperatorStatusActive, single.Operator.Status,
+	assert.Equal(t, string(constants.OperatorStatusActive), single.Operator.Status,
 		"session lookup must report active status")
 	t.Logf("session lookup consistent: id=%s status=%s",
-		single.Operator.ID, single.Operator.Status)
+		single.Operator.Id, single.Operator.Status)
 
 	// Heartbeat must advance. The first observation captures the current
 	// UpdatedAt; the second must be strictly later, proving the pub/sub
 	// heartbeat path is live. The E2E stack uses a short configurable
 	// heartbeat interval so this assertion remains fast and bounded.
-	firstUpdatedAt := active.UpdatedAt
-	require.False(t, firstUpdatedAt.IsZero(),
+	firstUpdatedAt := active.UpdatedAt.AsTime()
+	require.False(t, firstUpdatedAt == nil,
 		"first observation: operator UpdatedAt must be set")
 	t.Logf("first heartbeat observation: updated_at=%s",
 		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
@@ -95,18 +95,18 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		second = findOperatorByID(operators.Operators, active.ID)
-		return second != nil && second.UpdatedAt.After(firstUpdatedAt)
+		second = findOperatorByID(operators.Operators, active.Id)
+		return second != nil && second.UpdatedAt.AsTime().After(firstUpdatedAt)
 	}, 45*time.Second, 500*time.Millisecond,
 		"heartbeat UpdatedAt for operator %s did not advance past %s within 45s — pub/sub heartbeat path may have failed",
-		active.ID, firstUpdatedAt.UTC().Format(time.RFC3339Nano))
-	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),
+		active.Id, firstUpdatedAt.UTC().Format(time.RFC3339Nano))
+	assert.True(t, second.UpdatedAt.AsTime().After(firstUpdatedAt),
 		"second heartbeat observation must be strictly later than the first")
-	assert.Equal(t, constants.OperatorStatusActive, second.Status,
+	assert.Equal(t, string(constants.OperatorStatusActive), second.Status,
 		"operator must remain active across heartbeat observations")
 	t.Logf("heartbeat advanced: updated_at=%s (advanced by %s)",
-		second.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		second.UpdatedAt.Sub(firstUpdatedAt).Round(time.Second))
+		second.UpdatedAt.AsTime().UTC().Format(time.RFC3339Nano),
+		second.UpdatedAt.AsTime().Sub(firstUpdatedAt).Round(time.Second))
 
 	// Command roundtrip must succeed. This proves the full command delivery
 	// chain (gateway pub/sub, operator WS subscription, L4/L5 verification,

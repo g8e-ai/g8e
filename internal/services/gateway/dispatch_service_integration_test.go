@@ -36,6 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -63,23 +64,24 @@ func seedOperatorForDispatch(t *testing.T, infra *TestInfrastructure) (operatorI
 	userID = "user-dispatch-int"
 
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
+	now := time.Now().UTC()
 	opDoc := &operatorv1.OperatorDocument{
 		Id:                operatorID,
 		UserId:            userID,
-		OrganizationID:    "org-dispatch-int",
-		Status:            constants.OperatorStatusActive,
+		OrganizationId:    "org-dispatch-int",
+		Status:            string(constants.OperatorStatusActive),
 		OperatorSessionId: operatorSessionID,
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.New(now),
+		UpdatedAt:         timestamppb.New(now),
 	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 
@@ -94,8 +96,8 @@ func seedCLISessionForDispatch(t *testing.T, infra *TestInfrastructure, userID s
 	cliSessionID = "cli-dispatch-int"
 
 	cliDoc := &models.CLISession{
-		Id:        cliSessionID,
-		UserId:    userID,
+		ID:        cliSessionID,
+		UserID:    userID,
 		ExpiresAt: time.Now().Add(1 * time.Hour),
 		IsActive:  true,
 	}
@@ -236,7 +238,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(publicKey)
-	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{Id: keyID, PublicKey: keyID, AddedAt: time.Now().UTC(), Enabled: true}))
+	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{ID: keyID, PublicKey: keyID, AddedAt: time.Now().UTC(), Enabled: true}))
 	client := pubsub.NewInProcessPubSubClient(infra.Pubsub, infra.Logger)
 	results, err := pubsub.NewPubSubResultsService(&remoteCfg, infra.Logger, client)
 	require.NoError(t, err)
@@ -444,21 +446,22 @@ func boundaryInferenceResultText(t *testing.T, result *operatorv1.InferenceResul
 
 func seedInferenceOperator(t *testing.T, infra *TestInfrastructure, userID, operatorID, sessionID string, capable bool) {
 	t.Helper()
+	now := time.Now().UTC()
 	op := &operatorv1.OperatorDocument{
 		Id:                operatorID,
 		UserId:            userID,
-		OrganizationID:    "org-inference-boundary",
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
+		OrganizationId:    "org-inference-boundary",
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
 		OperatorSessionId: sessionID,
 		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: capable},
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.New(now),
+		UpdatedAt:         timestamppb.New(now),
 	}
 	body, err := json.Marshal(op)
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, body))
-	require.NoError(t, infra.OperatorSessionSvc.PersistOperatorSession(sessionID, userID, op.OrganizationID, operatorID, "mTLS"))
+	require.NoError(t, infra.OperatorSessionSvc.PersistOperatorSession(sessionID, userID, op.OrganizationId, operatorID, "mTLS"))
 }
 
 type boundaryTamperingResultsService struct {
@@ -497,7 +500,7 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(pubKey)
 	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{
-		Id:        keyID,
+		ID:        keyID,
 		PublicKey: keyID,
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
@@ -557,7 +560,7 @@ func startFileEditOperator(t *testing.T, infra *TestInfrastructure, operatorID, 
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(pubKey)
 	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{
-		Id:        keyID,
+		ID:        keyID,
 		PublicKey: keyID,
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
@@ -730,7 +733,7 @@ func TestDispatch_FileMutationExecutesOnceAndReplayProducesSignedRejection(t *te
 	require.NotNil(t, persisted)
 	require.NotNil(t, persisted.ActionReceipt)
 	assert.Equal(t, operatorID, persisted.OperatorID)
-	assert.Equal(t, sessionID, persisted.OperatorSessionId)
+	assert.Equal(t, sessionID, persisted.OperatorSessionID)
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persisted.ActionReceipt.Status)
 	commitments, err := infra.AuditStore.CommitmentLedger().ListCommitments()
 	require.NoError(t, err)

@@ -89,9 +89,9 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 	var targetOperatorID string
 	var targetSessionID string
 	for _, op := range operators.Operators {
-		if op.Status == constants.OperatorStatusActive && op.OperatorType == constants.OperatorTypeRemote {
-			targetOperatorID = op.ID
-			targetSessionID = op.OperatorSessionID
+		if op.Status == string(constants.OperatorStatusActive) && op.OperatorType == string(constants.OperatorTypeRemote) {
+			targetOperatorID = op.Id
+			targetSessionID = op.OperatorSessionId
 			break
 		}
 	}
@@ -167,7 +167,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 			if r.TargetResource != targetResource {
 				continue
 			}
-			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBeforeCreate) {
+			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBeforeCreate) {
 				continue
 			}
 			if r.Signature == "" {
@@ -267,7 +267,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 			if r.TargetResource != targetResource {
 				continue
 			}
-			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBeforeMerge) {
+			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBeforeMerge) {
 				continue
 			}
 			if r.Signature == "" {
@@ -358,7 +358,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 			if r.TargetResource != targetResource {
 				continue
 			}
-			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBeforeDelete) {
+			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBeforeDelete) {
 				continue
 			}
 			if r.Signature == "" {

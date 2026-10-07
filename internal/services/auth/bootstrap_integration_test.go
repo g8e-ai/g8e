@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -195,11 +196,13 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, capturedBody.RuntimeConfig)
-	assert.True(t, capturedBody.RuntimeConfig.CloudMode)
-	assert.Equal(t, "aws", capturedBody.RuntimeConfig.CloudProvider)
-	assert.True(t, capturedBody.RuntimeConfig.ExecutionVaultEnabled)
-	assert.False(t, capturedBody.RuntimeConfig.NoGit)
-	assert.Equal(t, "debug", capturedBody.RuntimeConfig.LogLevel)
+	runtimeCfg, err := models.UnmarshalOperatorRuntimeConfig(capturedBody.RuntimeConfig)
+	require.NoError(t, err)
+	assert.True(t, runtimeCfg.CloudMode)
+	assert.Equal(t, "aws", runtimeCfg.CloudProvider)
+	assert.True(t, runtimeCfg.LocalStorageEnabled)
+	assert.False(t, runtimeCfg.NoGit)
+	assert.Equal(t, "debug", runtimeCfg.LogLevel)
 
 }
 

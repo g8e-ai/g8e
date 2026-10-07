@@ -160,9 +160,9 @@ func TestRegisterPending_Idempotent(t *testing.T) {
 
 	op := loadOperator(t, store)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.Id)
-	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
-	assert.Equal(t, constants.ComponentNameG8EO, op.Component)
-	assert.Equal(t, constants.OperatorStatusAvailable, op.Status)
+	assert.Equal(t, string(constants.OperatorTypeEmbedded), op.OperatorType)
+	assert.Equal(t, string(constants.ComponentNameG8EO), op.Component)
+	assert.Equal(t, string(constants.OperatorStatusAvailable), op.Status)
 	assert.False(t, op.Claimed)
 	assert.False(t, op.IsSlot)
 	assert.Empty(t, op.UserId)
@@ -226,8 +226,8 @@ func TestClaim_MissingPendingDoc_ClaimsAnyway(t *testing.T) {
 	assert.Equal(t, "user-heal", op.UserId)
 	assert.Equal(t, sessionID, op.OperatorSessionId)
 	assert.Equal(t, "fp-heal", op.SystemFingerprint)
-	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
-	assert.Equal(t, constants.OperatorStatusActive, op.Status)
+	assert.Equal(t, string(constants.OperatorTypeEmbedded), op.OperatorType)
+	assert.Equal(t, string(constants.OperatorStatusActive), op.Status)
 }
 
 func TestClaimEmbeddedOperator_PersistsBootstrapSession(t *testing.T) {

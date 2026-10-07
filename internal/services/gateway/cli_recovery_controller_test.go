@@ -1048,8 +1048,8 @@ func TestCLIRecoveryController_IssueCLIIdentity_MintsRemoteRecoveryOperator(t *t
 	require.NoError(t, json.Unmarshal(b, &op))
 	assert.Equal(t, constants.OperatorTypeRemote, op.OperatorType)
 	assert.Equal(t, "cli-recovery-"+safePrefix(user.ID), op.Name)
-	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionID)
-	assert.Equal(t, user.ID, op.UserID)
+	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionId)
+	assert.Equal(t, user.ID, op.UserId)
 
 	// The new CLI session is bound to the minted session.
 	cliSession, err := c.cliSessionSvc.loadCLISession(resp.CLISessionID)

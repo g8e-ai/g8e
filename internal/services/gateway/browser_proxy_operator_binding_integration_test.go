@@ -58,8 +58,8 @@ func TestBrowserProxyRouter_ActiveEmbeddedOperatorIsBoundInChatContext(t *testin
 	require.True(t, bound)
 
 	op := loadEmbeddedOperatorDoc(t, infra.DocStore)
-	require.Equal(t, constants.OperatorStatusActive, op.Status, "binding must preserve lifecycle status")
-	require.Equal(t, webSessionID, op.BoundWebSessionID)
+	require.Equal(t, string(constants.OperatorStatusActive), op.Status, "binding must preserve lifecycle status")
+	require.Equal(t, webSessionID, op.BoundWebSessionId)
 
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.EnsembleChatPrefix+"/send", bytes.NewBufferString(
 		`{"message":"what is taking up RAM on the embedded operator?","context":{"bound_operators":[]}}`,

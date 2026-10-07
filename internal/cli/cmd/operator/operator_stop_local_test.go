@@ -80,7 +80,7 @@ func TestStopLocalOperatorSignalFailure(t *testing.T) {
 func TestTargetedStopFallsBackAfterShutdownFailure(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
-	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{{ID: "op-a", OperatorSessionID: "session-a", OperatorType: constants.OperatorTypeRemote}}})
+	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{{Id: "op-a", OperatorSessionId: "session-a", OperatorType: string(constants.OperatorTypeRemote)}}})
 	require.NoError(t, err)
 	client := &cmdtest.MockAPIClient{GetResp: body, PostErr: errors.New("shutdown channel disconnected")}
 	checks := 0

@@ -282,7 +282,7 @@ func TestDispatchInference_NonActiveOperatorNotSelectable(t *testing.T) {
 func TestDispatchInference_StaleOperatorDoesNotContestSelection(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
 	stale := capableOp("sess-stale")
-	stale.Status = constants.OperatorStatusStale
+	stale.Status = string(constants.OperatorStatusStale)
 	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		stale,
 		capableOp("sess-live"),

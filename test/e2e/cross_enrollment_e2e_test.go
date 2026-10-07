@@ -140,18 +140,18 @@ func TestCrossEnrollment_GatewayAsOperator_ApproveAndActivate(t *testing.T) {
 	// the first active operator whose Name contains the secondary gateway
 	// hostname substring.
 	active := e2eClient.DiscoverActiveOperatorByName(t, ctx, crossEnrollmentHostname)
-	require.NotEmpty(t, active.OperatorSessionID,
+	require.NotEmpty(t, active.OperatorSessionId,
 		"active secondary gateway operator must have a session ID")
 	assert.Equal(t, constants.OperatorStatusActive, active.Status,
 		"secondary gateway operator must be in the active state")
 	t.Logf("secondary gateway became active operator: id=%s session=%s name=%s",
-		active.ID, active.OperatorSessionID, active.Name)
+		active.Id, active.OperatorSessionId, active.Name)
 
 	// Dispatch an FS_READ command to the secondary gateway's operator
 	// specifically (by session ID), not to whichever operator happens to
 	// be first in the list. This proves the gateway-as-operator executes
 	// governed commands through the full L4/L5 chain.
-	resp := dispatchFsReadToOperator(t, ctx, active.OperatorSessionID)
+	resp := dispatchFsReadToOperator(t, ctx, active.OperatorSessionId)
 	assert.NotEmpty(t, resp.TransactionID, "dispatch response must carry a transaction ID")
 	assert.Equal(t, string(constants.Event.Operator.FsRead.Completed), resp.EventType,
 		"dispatch response event type must be the fs.read completed event")
@@ -235,12 +235,12 @@ func TestCrossEnrollment_GatewayAsOperator_Denial(t *testing.T) {
 	operators, err := e2eClient.ListOperators(ctx)
 	require.NoError(t, err, "operator list must succeed after denial")
 	for _, op := range operators.Operators {
-		if op.Status != constants.OperatorStatusActive {
+		if op.Status != string(constants.OperatorStatusActive) {
 			continue
 		}
 		assert.NotContains(t, op.Name, crossEnrollmentHostname,
 			"no active operator matching the secondary gateway must exist after denial (name=%s, session=%s)",
-			op.Name, op.OperatorSessionID)
+			op.Name, op.OperatorSessionId)
 	}
 	t.Logf("no active operator from the secondary gateway after denial (%d total operators)",
 		len(operators.Operators))
@@ -300,17 +300,17 @@ func TestCrossEnrollment_GatewayAsOperator_RestartDuringPending(t *testing.T) {
 	t.Logf("approved resumed secondary gateway enrollment request %s", req.RequestID)
 
 	active := e2eClient.DiscoverActiveOperatorByName(t, ctx, crossEnrollmentHostname)
-	require.NotEmpty(t, active.OperatorSessionID,
+	require.NotEmpty(t, active.OperatorSessionId,
 		"active secondary gateway operator must have a session ID after restart-during-pending approval")
 	assert.Equal(t, constants.OperatorStatusActive, active.Status,
 		"secondary gateway operator must be active after restart-during-pending approval")
 	t.Logf("secondary gateway became active after restart-during-pending approval: session=%s",
-		active.OperatorSessionID)
+		active.OperatorSessionId)
 
 	// A command roundtrip must succeed against the now-active
 	// gateway-as-operator. This proves the full L4/L5 verification and
 	// execution chain works after restart-during-pending enrollment.
-	resp := dispatchFsReadToOperator(t, ctx, active.OperatorSessionID)
+	resp := dispatchFsReadToOperator(t, ctx, active.OperatorSessionId)
 	assert.NotEmpty(t, resp.TransactionID, "dispatch response must carry a transaction ID")
 	assert.Equal(t, string(constants.Event.Operator.FsRead.Completed), resp.EventType,
 		"dispatch response event type must be the fs.read completed event")

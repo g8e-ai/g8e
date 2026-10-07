@@ -38,10 +38,10 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 
 	first := activeOperator(t, ctx)
 	firstUpdatedAt := first.UpdatedAt
-	require.False(t, firstUpdatedAt.IsZero(),
+	require.False(t, firstUpdatedAt == nil,
 		"first observation: active operator UpdatedAt must be set by at least one heartbeat")
 	t.Logf("first heartbeat observation: operator_id=%s updated_at=%s hostname=%s",
-		first.ID, firstUpdatedAt.UTC().Format(time.RFC3339Nano), first.CurrentHostname)
+		first.Id, firstUpdatedAt.UTC().Format(time.RFC3339Nano), first.CurrentHostname)
 
 	// Poll until UpdatedAt advances past the first observation. The E2E
 	// stack uses a short configurable heartbeat interval so a dead path
@@ -52,11 +52,11 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		second = findOperatorByID(operators.Operators, first.ID)
+		second = findOperatorByID(operators.Operators, first.Id)
 		return second != nil && second.UpdatedAt.After(firstUpdatedAt)
 	}, 45*time.Second, 500*time.Millisecond,
 		"heartbeat UpdatedAt for operator %s did not advance past %s within 45s — pub/sub heartbeat path may be dead",
-		first.ID, firstUpdatedAt.UTC().Format(time.RFC3339Nano))
+		first.Id, firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 
 	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),
 		"second heartbeat observation must be strictly later than the first")

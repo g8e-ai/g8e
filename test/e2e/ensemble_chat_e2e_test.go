@@ -46,8 +46,8 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 
 	target := findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, target, "a live active remote operator must exist")
-	targetOperatorID := target.ID
-	targetSessionID := target.OperatorSessionID
+	targetOperatorID := target.Id
+	targetSessionID := target.OperatorSessionId
 	require.NotEmpty(t, targetSessionID, "live active operator session must exist")
 
 	runID := fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
@@ -114,7 +114,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 			if r.TargetResource != filePath {
 				continue
 			}
-			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBefore) {
+			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBefore) {
 				continue
 			}
 			if r.Signature == "" {
@@ -166,7 +166,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 			if r.EventType != constants.EventAppCaseCreateRequested {
 				continue
 			}
-			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBefore) {
+			if !r.ExecutedAt == nil && r.ExecutedAt.Before(notBefore) {
 				continue
 			}
 			if r.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {

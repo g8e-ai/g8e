@@ -119,7 +119,22 @@ func TestOperatorDetailsView(t *testing.T) {
 			OperatorType:      string(constants.OperatorTypeRemote),
 			Status:            string(constants.OperatorStatusActive),
 			CurrentHostname:   "cached-host",
-			LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{},
+			LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{
+				Timestamp: "2026-09-18T12:00:00Z",
+				Status:    "automatic",
+				SystemIdentity: &operatorv1.SystemIdentity{
+					Hostname:     "heartbeat-host",
+					Os:           "linux",
+					Architecture: "amd64",
+					CpuCount:     8,
+				},
+				PerformanceMetrics: &operatorv1.PerformanceMetrics{
+					CpuPercent: 12.5,
+				},
+				VersionInfo: &operatorv1.VersionInfo{
+					OperatorVersion: "v2.3.2",
+				},
+			},
 		},
 	}})
 	m, _ = press(t, m, runeKey('3'))

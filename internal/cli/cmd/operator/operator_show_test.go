@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
@@ -129,35 +131,33 @@ func TestOperatorShowCmdWithConfig_PrintsHeartbeatDetails(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
 
-	heartbeat := json.RawMessage(`{
-		"timestamp": "2026-09-18T12:00:00Z",
-		"status": "automatic",
-		"system_identity": {
-			"hostname": "dev-host",
-			"os": "linux",
-			"architecture": "amd64",
-			"current_user": "bob",
-			"pwd": "/home/bob"
-		},
-		"performance_metrics": {
-			"cpu_percent": 10.0,
-			"memory_percent": 50.0
-		},
-		"version_info": {
-			"operator_version": "v2.1.8"
-		}
-	}`)
-
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                "286d7a56-b961-4cff-9c69-063a84b69afd",
-				OperatorSessionID: "74a859f4-2443-4a4b-ae9c-35da879c1ad3",
-				OperatorType:      constants.OperatorTypeRemote,
-				Status:            constants.OperatorStatusActive,
-				LatestHeartbeat:   heartbeat,
-				UpdatedAt:         time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC),
+				Id:                "286d7a56-b961-4cff-9c69-063a84b69afd",
+				OperatorSessionId: "74a859f4-2443-4a4b-ae9c-35da879c1ad3",
+				OperatorType:      string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{
+					Timestamp: "2026-09-18T12:00:00Z",
+					Status:    "automatic",
+					SystemIdentity: &operatorv1.SystemIdentity{
+						Hostname:    "dev-host",
+						Os:          "linux",
+						Architecture: "amd64",
+						CurrentUser: "bob",
+						Pwd:         "/home/bob",
+					},
+					PerformanceMetrics: &operatorv1.PerformanceMetrics{
+						CpuPercent:    10.0,
+						MemoryPercent: 50.0,
+					},
+					VersionInfo: &operatorv1.VersionInfo{
+						OperatorVersion: "v2.1.8",
+					},
+				},
+				UpdatedAt: timestamppb.New(time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)),
 			},
 		},
 	}
@@ -185,15 +185,18 @@ func TestOperatorShowCmdWithConfig_JSONOutput(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
 
-	heartbeat := json.RawMessage(`{"system_identity":{"hostname":"json-host"}}`)
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                "op-json",
-				OperatorSessionID: "session-json",
-				Status:            constants.OperatorStatusActive,
-				LatestHeartbeat:   heartbeat,
+				Id:                "op-json",
+				OperatorSessionId: "session-json",
+				Status:            string(constants.OperatorStatusActive),
+				LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{
+					SystemIdentity: &operatorv1.SystemIdentity{
+						Hostname: "json-host",
+					},
+				},
 			},
 		},
 	}
@@ -227,10 +230,10 @@ func TestOperatorShowCmdWithConfig_ReportsLastHeartbeatAndStaleStatus(t *testing
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                "op-stale",
-				OperatorSessionID: "session-stale",
-				Status:            constants.OperatorStatusStale,
-				LastHeartbeatAt:   &lastHeartbeat,
+				Id:                "op-stale",
+				OperatorSessionId: "session-stale",
+				Status:            string(constants.OperatorStatusStale),
+				LastHeartbeatAt:   timestamppb.New(lastHeartbeat),
 			},
 		},
 	}
@@ -279,16 +282,19 @@ func TestOperatorListCmdWithConfig_IncludesHostname(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
 
-	heartbeat := json.RawMessage(`{"system_identity":{"hostname":"list-host"}}`)
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                "op-host",
-				OperatorSessionID: "session-host",
-				OperatorType:      constants.OperatorTypeRemote,
-				Status:            constants.OperatorStatusActive,
-				LatestHeartbeat:   heartbeat,
+				Id:                "op-host",
+				OperatorSessionId: "session-host",
+				OperatorType:      string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{
+					SystemIdentity: &operatorv1.SystemIdentity{
+						Hostname: "list-host",
+					},
+				},
 			},
 		},
 	}
@@ -308,14 +314,14 @@ func TestOperatorListCmdWithConfig_IncludesHostname(t *testing.T) {
 }
 
 func TestOperatorHostnameValue_FallbackToCurrentHostname(t *testing.T) {
-	op := operatorv1.OperatorDocument{
-		ID:              "op-1",
+	op := &operatorv1.OperatorDocument{
+		Id:              "op-1",
 		CurrentHostname: "cached-worker",
 	}
 	assert.Equal(t, "cached-worker", operatorHostnameValue(op))
 	assert.Equal(t, "cached-worker", operatorHostnameDisplay(op))
 
-	emptyOp := operatorv1.OperatorDocument{ID: "op-2"}
+	emptyOp := &operatorv1.OperatorDocument{Id: "op-2"}
 	assert.Equal(t, "", operatorHostnameValue(emptyOp))
 	assert.Equal(t, "-", operatorHostnameDisplay(emptyOp))
 }

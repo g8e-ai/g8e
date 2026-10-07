@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 
 	"github.com/stretchr/testify/assert"
@@ -69,12 +71,12 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	opDoc := &operatorv1.OperatorDocument{
 		Id:                "op-123",
 		OperatorSessionId: operatorSessionID,
-		Status:            constants.OperatorStatusTerminated,
+		Status:            string(constants.OperatorStatusTerminated),
 		UserId:            "user-123",
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.Now(),
+		UpdatedAt:         timestamppb.Now(),
 	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-123", opBytes))
 
@@ -93,7 +95,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	// Create an inactive user
 	userID := "inactive-user"
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusDisabled,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -105,12 +107,12 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	opDoc := &operatorv1.OperatorDocument{
 		Id:                "op-789",
 		OperatorSessionId: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
+		Status:            string(constants.OperatorStatusActive),
 		UserId:            userID,
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.Now(),
+		UpdatedAt:         timestamppb.Now(),
 	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-789", opBytes))
 
@@ -129,12 +131,12 @@ func TestAuthService_ValidateOperatorCLISessionBinding(t *testing.T) {
 	userID := "authoritative-user"
 	operatorSessionID := "authoritative-operator-session"
 	cliSessionID := "authoritative-cli-session"
-	userBytes, err := json.Marshal(&models.User{Id: userID, Status: constants.UserStatusActive})
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		Id: "authoritative-operator", UserId: userID, OperatorSessionId: operatorSessionID,
-		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		Status: string(constants.OperatorStatusActive), CreatedAt: timestamppb.Now(), UpdatedAt: timestamppb.Now(),
 	})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "authoritative-operator", opBytes))
@@ -145,10 +147,10 @@ func TestAuthService_ValidateOperatorCLISessionBinding(t *testing.T) {
 		claimedUser string
 		wantError   bool
 	}{
-		{name: "active exact binding is accepted", session: models.CLISession{Id: cliSessionID, UserId: userID, OperatorSessionId: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: userID},
-		{name: "expired CLI session is rejected", session: models.CLISession{Id: cliSessionID, UserId: userID, OperatorSessionId: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(-time.Hour)}, claimedUser: userID, wantError: true},
-		{name: "mismatched Operator binding is rejected", session: models.CLISession{Id: cliSessionID, UserId: userID, OperatorSessionId: "different-session", IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: userID, wantError: true},
-		{name: "mismatched user is rejected", session: models.CLISession{Id: cliSessionID, UserId: userID, OperatorSessionId: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: "different-user", wantError: true},
+		{name: "active exact binding is accepted", session: models.CLISession{ID: cliSessionID, UserID: userID, OperatorSessionID: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: userID},
+		{name: "expired CLI session is rejected", session: models.CLISession{ID: cliSessionID, UserID: userID, OperatorSessionID: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(-time.Hour)}, claimedUser: userID, wantError: true},
+		{name: "mismatched Operator binding is rejected", session: models.CLISession{ID: cliSessionID, UserID: userID, OperatorSessionID: "different-session", IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: userID, wantError: true},
+		{name: "mismatched user is rejected", session: models.CLISession{ID: cliSessionID, UserID: userID, OperatorSessionID: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: "different-user", wantError: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -174,11 +176,11 @@ func TestAuthService_ValidateOperatorSession_RejectsDuplicateRecords(t *testing.
 	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	userID := "duplicate-user"
-	userBytes, err := json.Marshal(&models.User{Id: userID, Status: constants.UserStatusActive})
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	for _, operatorID := range []string{"duplicate-operator-one", "duplicate-operator-two"} {
-		opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{Id: operatorID, UserId: userID, OperatorSessionId: "duplicate-session", Status: constants.OperatorStatusActive})
+		opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{Id: operatorID, UserId: userID, OperatorSessionId: "duplicate-session", Status: string(constants.OperatorStatusActive)})
 		require.NoError(t, err)
 		require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 	}
@@ -692,8 +694,8 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 	// Create an expired web session
 	webSessionID := "expired-web-session"
 	webSession := &models.WebSession{
-		Id:              webSessionID,
-		UserId:          "user-123",
+		ID:              webSessionID,
+		UserID:          "user-123",
 		ExpiresAtUnixMs: time.Now().Add(-1 * time.Hour).UnixMilli(),
 		CreatedAtUnixMs: time.Now().Add(-2 * time.Hour).UnixMilli(),
 	}
@@ -728,7 +730,7 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	// Create an inactive user
 	userID := "inactive-web-user"
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusDisabled,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -738,8 +740,8 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	// Create a valid web session for the inactive user
 	webSessionID := "web-session-inactive-user"
 	webSession := &models.WebSession{
-		Id:              webSessionID,
-		UserId:          userID,
+		ID:              webSessionID,
+		UserID:          userID,
 		ExpiresAtUnixMs: time.Now().Add(1 * time.Hour).UnixMilli(),
 		CreatedAtUnixMs: time.Now().UnixMilli(),
 	}
@@ -774,7 +776,7 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	// Create an active user
 	userID := "active-web-user"
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -784,8 +786,8 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	// Create a valid web session
 	webSessionID := "valid-web-session"
 	webSession := &models.WebSession{
-		Id:              webSessionID,
-		UserId:          userID,
+		ID:              webSessionID,
+		UserID:          userID,
 		ExpiresAtUnixMs: time.Now().Add(1 * time.Hour).UnixMilli(),
 		CreatedAtUnixMs: time.Now().UnixMilli(),
 	}
@@ -825,13 +827,13 @@ func TestAuthService_ValidateWebSessionCookie_ReturnsCookieSessionID(t *testing.
 	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	userID := "web-session-id-user"
-	userBytes, err := json.Marshal(&models.User{Id: userID, Status: constants.UserStatusActive})
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	webSessionID := "web-session-id-cookie"
 	sessionBytes, err := json.Marshal(&models.WebSession{
-		UserId:          userID,
+		UserID:          userID,
 		CreatedAtUnixMs: time.Now().UnixMilli(),
 		ExpiresAtUnixMs: time.Now().Add(time.Hour).UnixMilli(),
 	})
@@ -985,7 +987,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	// Create an active user
 	userID := "user-123"
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -997,13 +999,13 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	opDoc := &operatorv1.OperatorDocument{
 		Id:                "op-123",
 		OperatorSessionId: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
+		Status:            string(constants.OperatorStatusActive),
 		UserId:            userID,
-		OrganizationID:    "org-123",
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		OrganizationId:    "org-123",
+		CreatedAt:         timestamppb.Now(),
+		UpdatedAt:         timestamppb.Now(),
 	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-123", opBytes))
 
@@ -1041,12 +1043,12 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	opDoc := &operatorv1.OperatorDocument{
 		Id:                "op-terminated",
 		OperatorSessionId: operatorSessionID,
-		Status:            constants.OperatorStatusTerminated,
+		Status:            string(constants.OperatorStatusTerminated),
 		UserId:            "user-123",
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.Now(),
+		UpdatedAt:         timestamppb.Now(),
 	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-terminated", opBytes))
 
@@ -1060,7 +1062,7 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 	// Create an active user
 	userID := "user-456"
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -1070,8 +1072,8 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 	// Create a CLI session
 	cliSessionID := "cli-session-123"
 	cliDoc := &models.CLISession{
-		Id:                cliSessionID,
-		UserId:            userID,
+		ID:                cliSessionID,
+		UserID:            userID,
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
 		CreatedAt:         time.Now().UTC(),
 		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
@@ -1089,7 +1091,7 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 	b, _ := json.Marshal(cliDocResult.Data)
 	err = json.Unmarshal(b, &cliSession)
 	require.NoError(t, err)
-	assert.Equal(t, userID, cliSession.UserId)
+	assert.Equal(t, userID, cliSession.UserID)
 	assert.False(t, cliSession.ExpiresAt.IsZero())
 }
 
@@ -1108,8 +1110,8 @@ func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
 	// Create an expired CLI session
 	cliSessionID := "expired-cli-session"
 	cliDoc := &models.CLISession{
-		Id:                cliSessionID,
-		UserId:            "user-123",
+		ID:                cliSessionID,
+		UserID:            "user-123",
 		ExpiresAt:         time.Now().Add(-1 * time.Hour),
 		CreatedAt:         time.Now().Add(-2 * time.Hour),
 		AbsoluteExpiresAt: time.Now().Add(-1 * time.Hour),
@@ -1138,7 +1140,7 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 	// Create an inactive user
 	userID := "inactive-user"
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusDisabled,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -1244,9 +1246,9 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 	userID := "user-bound"
 
 	cliDoc := &models.CLISession{
-		Id:                cliSessionID,
-		UserId:            userID,
-		OperatorSessionId: operatorSessionID,
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
 		CreatedAt:         time.Now().UTC(),
 		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
@@ -1265,8 +1267,8 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 	b, _ := json.Marshal(cliDocResult.Data)
 	err = json.Unmarshal(b, &cliSession)
 	require.NoError(t, err)
-	assert.Equal(t, operatorSessionID, cliSession.OperatorSessionId)
-	assert.Equal(t, userID, cliSession.UserId)
+	assert.Equal(t, operatorSessionID, cliSession.OperatorSessionID)
+	assert.Equal(t, userID, cliSession.UserID)
 }
 
 func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
@@ -1283,9 +1285,9 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	userID := "user-mismatch"
 
 	cliDoc := &models.CLISession{
-		Id:                cliSessionID,
-		UserId:            userID,
-		OperatorSessionId: "op-session-2", // Different Operator session
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: "op-session-2", // Different Operator session
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
 		CreatedAt:         time.Now().UTC(),
 		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
@@ -1313,9 +1315,9 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 	userID := "user-expired"
 
 	cliDoc := &models.CLISession{
-		Id:                cliSessionID,
-		UserId:            userID,
-		OperatorSessionId: operatorSessionID,
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
 		ExpiresAt:         time.Now().Add(-1 * time.Hour),
 		CreatedAt:         time.Now().Add(-2 * time.Hour),
 		AbsoluteExpiresAt: time.Now().Add(-1 * time.Hour),
@@ -1342,7 +1344,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	// Create an active user
 	userID := "user-op-auth"
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -1355,13 +1357,13 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	opDoc := &operatorv1.OperatorDocument{
 		Id:                "op-auth-test",
 		OperatorSessionId: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
+		Status:            string(constants.OperatorStatusActive),
 		UserId:            userID,
-		OrganizationID:    organizationID,
+		OrganizationId:    organizationID,
 		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		UpdatedAt:         timestamppb.Now(),
 	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-auth-test", opBytes))
 
@@ -1424,7 +1426,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	// Create an active user
 	userID := "user-cli-auth"
 	userDoc := &models.User{
-		Id:     userID,
+		ID:     userID,
 		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -1435,11 +1437,11 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	cliSessionID := "cli-session-auth-test"
 	operatorSessionID := "op-session-cli-auth"
 	cliDoc := &models.CLISession{
-		Id:                cliSessionID,
-		UserId:            userID,
-		OperatorSessionId: operatorSessionID,
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
-		CreatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.Now(),
 		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 		IsActive:          true,
 	}
@@ -1452,12 +1454,12 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	opDoc := &operatorv1.OperatorDocument{
 		Id:                "op-cli-auth",
 		OperatorSessionId: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
+		Status:            string(constants.OperatorStatusActive),
 		UserId:            userID,
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.Now(),
+		UpdatedAt:         timestamppb.Now(),
 	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-cli-auth", opBytes))
 
@@ -1603,9 +1605,9 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 
 		// Mock CLI session in DB
 		cliDoc := &models.CLISession{
-			Id:                cliSessionID,
-			UserId:            userID,
-			OperatorSessionId: opSessionID,
+			ID:                cliSessionID,
+			UserID:            userID,
+			OperatorSessionID: opSessionID,
 			ExpiresAt:         time.Now().Add(1 * time.Hour),
 			IsActive:          true,
 		}
@@ -1614,7 +1616,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 
 		// Mock user in DB
 		userDoc := &models.User{
-			Id:     userID,
+			ID:     userID,
 			Status: constants.UserStatusActive,
 		}
 		userBytes, _ := json.Marshal(userDoc)
@@ -1627,12 +1629,12 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 		opDoc := &operatorv1.OperatorDocument{
 			Id:                opID,
 			OperatorSessionId: opSessionID,
-			Status:            constants.OperatorStatusActive,
+			Status:            string(constants.OperatorStatusActive),
 			UserId:            userID,
-			CreatedAt:         time.Now().UTC(),
-			UpdatedAt:         time.Now().UTC(),
+			CreatedAt:         timestamppb.Now(),
+			UpdatedAt:         timestamppb.Now(),
 		}
-		opBytes, _ := json.Marshal(opDoc)
+		opBytes, _ := models.MarshalOperatorDocument(opDoc)
 		require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), opID, opBytes))
 
 		wid := protocol.NewWorkloadIdentity()
@@ -1687,23 +1689,23 @@ func TestRouteAuthRegistry_CLISessionEndpoint(t *testing.T) {
 // persisted state handleCLIAuth validates before stamping context.
 func seedBoundCLIAuthFixture(t *testing.T, db *CanonicalDBService, userID, operatorID, operatorSessionID, cliSessionID string) {
 	t.Helper()
-	userBytes, err := json.Marshal(&models.User{Id: userID, Status: constants.UserStatusActive})
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		Id:                operatorID,
 		OperatorSessionId: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
+		Status:            string(constants.OperatorStatusActive),
 		UserId:            userID,
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.Now(),
+		UpdatedAt:         timestamppb.Now(),
 	})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 	cliBytes, err := json.Marshal(&models.CLISession{
-		Id:                cliSessionID,
-		UserId:            userID,
-		OperatorSessionId: operatorSessionID,
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
 		IsActive:          true,
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
 	})
@@ -1813,17 +1815,17 @@ func seedSecondBoundOperator(t *testing.T, db *CanonicalDBService, operatorUserI
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		Id:                operatorID,
 		OperatorSessionId: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
+		Status:            string(constants.OperatorStatusActive),
 		UserId:            operatorUserID,
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		CreatedAt:         timestamppb.Now(),
+		UpdatedAt:         timestamppb.Now(),
 	})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 	cliBytes, err := json.Marshal(&models.CLISession{
-		Id:                      cliSessionID,
-		UserId:                  userID,
-		OperatorSessionId:       primarySessionID,
+		ID:                      cliSessionID,
+		UserID:                  userID,
+		OperatorSessionID:       primarySessionID,
 		BoundOperatorSessionIDs: []string{primarySessionID, operatorSessionID},
 		IsActive:                true,
 		ExpiresAt:               time.Now().Add(1 * time.Hour),
@@ -1876,8 +1878,8 @@ func TestHandleCLIAuth_AdmitsEveryBoundOperatorSession(t *testing.T) {
 			seedBoundCLIAuthFixture(t, db, userID, primaryID, primarySessionID, cliSessionID)
 			seedSecondBoundOperator(t, db, tt.operatorUserID, userID, cliSessionID, primarySessionID, secondID, secondSessionID)
 			strayBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-				Id: strayID, OperatorSessionId: straySessionID, Status: constants.OperatorStatusActive, UserId: userID,
-				CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+				Id: strayID, OperatorSessionId: straySessionID, Status: string(constants.OperatorStatusActive), UserId: userID,
+				CreatedAt: timestamppb.Now(), UpdatedAt: timestamppb.Now(),
 			})
 			require.NoError(t, err)
 			require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), strayID, strayBytes))
@@ -1923,12 +1925,12 @@ func TestCLISessionBindsOperator(t *testing.T) {
 		target  string
 		want    bool
 	}{
-		{name: "primary of a multi-bind session", session: models.CLISession{OperatorSessionId: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "a", want: true},
-		{name: "non-primary of a multi-bind session", session: models.CLISession{OperatorSessionId: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "b", want: true},
-		{name: "session outside the bound list", session: models.CLISession{OperatorSessionId: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "c"},
-		{name: "primary-only session persisted before multi-bind", session: models.CLISession{OperatorSessionId: "a"}, target: "a", want: true},
+		{name: "primary of a multi-bind session", session: models.CLISession{OperatorSessionID: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "a", want: true},
+		{name: "non-primary of a multi-bind session", session: models.CLISession{OperatorSessionID: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "b", want: true},
+		{name: "session outside the bound list", session: models.CLISession{OperatorSessionID: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "c"},
+		{name: "primary-only session persisted before multi-bind", session: models.CLISession{OperatorSessionID: "a"}, target: "a", want: true},
 		{name: "unbound session", session: models.CLISession{}, target: "a"},
-		{name: "empty target never matches", session: models.CLISession{OperatorSessionId: "a"}, target: ""},
+		{name: "empty target never matches", session: models.CLISession{OperatorSessionID: "a"}, target: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1952,12 +1954,12 @@ func TestHandleCLIAuth_RejectsOperatorHeadersOnUnboundSession(t *testing.T) {
 	userID := "user-cli-unbound-hdr"
 	cliSessionID := "cli-sess-unbound-hdr"
 
-	userBytes, err := json.Marshal(&models.User{Id: userID, Status: constants.UserStatusActive})
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	cliBytes, err := json.Marshal(&models.CLISession{
-		Id:        cliSessionID,
-		UserId:    userID,
+		ID:        cliSessionID,
+		UserID:    userID,
 		IsActive:  true,
 		ExpiresAt: time.Now().Add(1 * time.Hour),
 	})
@@ -1990,7 +1992,7 @@ func TestAuthService_ValidateOperatorSession_PersistentIdentity(t *testing.T) {
 	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	userID := "user-ttl-exempt"
-	userBytes, err := json.Marshal(&models.User{Id: userID, Status: constants.UserStatusActive})
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
@@ -1999,11 +2001,11 @@ func TestAuthService_ValidateOperatorSession_PersistentIdentity(t *testing.T) {
 		opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 			Id:                operatorID,
 			OperatorSessionId: sessionID,
-			Status:            constants.OperatorStatusActive,
+			Status:            string(constants.OperatorStatusActive),
 			UserId:            userID,
-			OperatorType:      opType,
-			CreatedAt:         oldTime,
-			UpdatedAt:         oldTime,
+			OperatorType:      string(opType),
+			CreatedAt:         timestamppb.New(oldTime),
+			UpdatedAt:         timestamppb.New(oldTime),
 		})
 		require.NoError(t, err)
 		require.NoError(t, db.GetDocStore().DocSetWithTimestamps(
@@ -2019,8 +2021,8 @@ func TestAuthService_ValidateOperatorSession_PersistentIdentity(t *testing.T) {
 	for _, status := range []constants.OperatorStatus{constants.OperatorStatusActive, constants.OperatorStatusStale, constants.OperatorStatusOffline} {
 		t.Run(string(status), func(t *testing.T) {
 			opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
-				Id: "op-remote-old", OperatorSessionId: "sess-remote-old", Status: status,
-				UserId: userID, OperatorType: constants.OperatorTypeRemote, CreatedAt: oldTime, UpdatedAt: oldTime,
+				Id: "op-remote-old", OperatorSessionId: "sess-remote-old", Status: string(status),
+				UserId: userID, OperatorType: string(constants.OperatorTypeRemote), CreatedAt: timestamppb.New(oldTime), UpdatedAt: timestamppb.New(oldTime),
 			})
 			require.NoError(t, err)
 			require.NoError(t, db.GetDocStore().DocSetWithTimestamps(

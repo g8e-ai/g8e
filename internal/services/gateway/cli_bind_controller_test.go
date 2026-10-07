@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
@@ -43,15 +44,15 @@ func persistOperatorForBindController(t *testing.T, c *CLIRefreshController, use
 	t.Helper()
 	now := time.Now().UTC()
 	opDoc := &operatorv1.OperatorDocument{
-		ID:                operatorID,
-		OperatorSessionID: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
-		UserID:            userID,
-		OperatorType:      constants.OperatorTypeRemote,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		Id:                operatorID,
+		OperatorSessionId: operatorSessionID,
+		Status:            string(constants.OperatorStatusActive),
+		UserId:            userID,
+		OperatorType:      string(constants.OperatorTypeRemote),
+		CreatedAt:         timestamppb.New(now),
+		UpdatedAt:         timestamppb.New(now),
 	}
-	opBytes, err := json.Marshal(opDoc)
+	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 }

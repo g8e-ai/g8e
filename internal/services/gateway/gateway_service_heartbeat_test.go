@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -29,11 +30,11 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	ls := newTestGatewayService(t, testGatewayOpts{})
 
 	t.Run("Valid heartbeat updates operator document", func(t *testing.T) {
-		opDoc := operatorv1.OperatorDocument{
-			ID:     "op-123",
-			Status: constants.OperatorStatusActive,
+		opDoc := &operatorv1.OperatorDocument{
+			Id:     "op-123",
+			Status: string(constants.OperatorStatusActive),
 		}
-		opBytes, err := json.Marshal(opDoc)
+		opBytes, err := models.MarshalOperatorDocument(opDoc)
 		require.NoError(t, err)
 		err = ls.GetDocStore().DocSet("operators", "op-123", opBytes)
 		require.NoError(t, err)

@@ -48,14 +48,14 @@ func TestDispatch_UnknownEventRejected(t *testing.T) {
 	require.True(t, operators.Success)
 	target := findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, target, "a live active remote operator must exist")
-	require.NotEmpty(t, target.OperatorSessionID)
+	require.NotEmpty(t, target.OperatorSessionId)
 
 	fsReadReq := &operatorv1.FsReadRequested{Path: constants.PathEtcHostname}
 	payload, err := proto.Marshal(fsReadReq)
 	require.NoError(t, err)
 
 	reqBody := dispatchRequestJSON{
-		TargetOperatorSessionID: target.OperatorSessionID,
+		TargetOperatorSessionID: target.OperatorSessionId,
 		EventType:               "g8e.v1.not.registered.event",
 		Payload:                 payload,
 		TargetResource:          constants.PathEtcHostname,
@@ -77,12 +77,12 @@ func TestLFAA_AuditIngestAckAndVerify(t *testing.T) {
 	require.True(t, operators.Success)
 	target := findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, target, "a live active remote operator must exist")
-	require.NotEmpty(t, target.OperatorSessionID)
+	require.NotEmpty(t, target.OperatorSessionId)
 
 	ack, err := e2eClient.IngestAuditRecord(ctx, models.AuditRecordIngestRequest{
 		EventType:         string(constants.EventOperatorAuditDirectCommandRecordRequested),
-		OperatorID:        target.ID,
-		OperatorSessionID: target.OperatorSessionID,
+		OperatorID:        target.Id,
+		OperatorSessionID: target.OperatorSessionId,
 		IdempotencyKey:    fmt.Sprintf("e2e-lfaa-%d", time.Now().UnixNano()),
 		Payload:           []byte(`{"command":"e2e-lfaa-proof"}`),
 	})
