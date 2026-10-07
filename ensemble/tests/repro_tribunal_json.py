@@ -13,11 +13,13 @@ import pytest
 
 from app.constants import (
     G8EE_COMPONENT,
+    ConsensusAuditMode,
 )
 from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown
 from app.models.http_context import G8eHttpContext
 from app.services.ai.auditor_service import run_auditor
 from app.services.ai.generator import TribunalEmitter
+from app.utils.agent_persona_loader import get_agent_persona
 
 
 def _make_mock_g8e_context() -> G8eHttpContext:
@@ -59,10 +61,9 @@ async def test_auditor_repro_json_failure():
             model="test-model",
             request="list files",
             guidelines="",
-            mode="unanimous",
+            mode=ConsensusAuditMode.UNANIMOUS,
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
-            tied_candidates=None,
             operator_context=MagicMock(),
             emitter=emitter,
             command_constraints_message="No constraints",

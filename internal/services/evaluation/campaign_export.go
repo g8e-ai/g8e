@@ -649,7 +649,7 @@ func normalizeRuntimeExportDir(runID, outputDir string) (string, error) {
 		outputDir = filepath.Join(evaluationRunDir(runID), "export")
 	}
 	outputDir = filepath.ToSlash(outputDir)
-	if filepath.IsAbs(outputDir) || outputDir == ".." || strings.HasPrefix(outputDir, "../") {
+	if filepath.IsAbs(outputDir) || strings.HasPrefix(outputDir, "/") || strings.ContainsAny(outputDir, "\\:") || outputDir == ".." || strings.HasPrefix(outputDir, "../") {
 		return "", fmt.Errorf("evaluation: export campaign run: %w", constants.ErrEvaluationExportDirNotRelative)
 	}
 	return outputDir, nil

@@ -234,7 +234,7 @@ func TestRunReleasePrepare_DerivesInputsThenGeneratesVerifiesAndProjectsInOrder(
 	assert.Contains(t, stderr.String(), "uncommitted release changes are not part of the recorded revision")
 	keyBody, err := os.Stat(fixture.privateKey)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), keyBody.Mode().Perm(), "the generated private key is owner-only")
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, keyBody.IsDir()), keyBody.Mode().Perm(), "the generated private key is owner-only")
 }
 
 func TestRunReleasePrepare_StopsBeforeProjectionWhenVerificationFails(t *testing.T) {

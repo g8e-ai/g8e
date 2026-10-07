@@ -5,14 +5,16 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from unittest.mock import AsyncMock, MagicMock, ANY
+from unittest.mock import ANY, AsyncMock, MagicMock
+
 import pytest
+
 from app.constants import ErrorAnalysisCategory, EventType, RiskLevel
+from app.models.agents.tribunal import TribunalMarshalBlockedError
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import CommandRiskAnalysis, ErrorAnalysisResult
-from app.models.agents.tribunal import TribunalMarshalBlockedError
 from app.services.ai.tribunal.emitter import TribunalEmitter
-from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
+from app.services.ai.tribunal.stages.marshal import run_marshal_stage
 
 
 @pytest.mark.asyncio
@@ -25,7 +27,7 @@ class TestRunMarshalStage:
         emitter = TribunalEmitter(None, mock_g8e_context)
         settings = G8eeUserSettings(llm=LLMSettings())
 
-        result = await _run_marshal_stage(
+        result = await run_marshal_stage(
             request="list files",
             guidelines="",
             vote_winner="ls -la",
@@ -37,6 +39,7 @@ class TestRunMarshalStage:
             investigation_state=MagicMock(),
         )
 
+        assert result is not None
         assert result.risk_level == RiskLevel.LOW
 
     async def test_raises_blocked_error_on_high_risk(self, mock_g8e_context, mock_operator_context):
@@ -63,7 +66,7 @@ class TestRunMarshalStage:
         investigation_state.marshal_block_count = 0
 
         with pytest.raises(TribunalMarshalBlockedError):
-            await _run_marshal_stage(
+            await run_marshal_stage(
                 request="danger",
                 guidelines="",
                 vote_winner="rm -rf /",

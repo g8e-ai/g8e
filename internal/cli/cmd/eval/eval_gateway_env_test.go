@@ -5,6 +5,8 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
+//go:build integration
+
 package eval
 
 import (
@@ -59,6 +61,6 @@ func newGatewayTestDeps(t *testing.T, root string, operators []models.OperatorDo
 			return &auth.ClientAuthContext{UserID: "user-1", CLISessionID: "cli-1"}, nil
 		},
 		now:   func() time.Time { return fixedNow },
-		newID: func() string { return "test-id" },
+		newID: func() (string, error) { return "test-id", nil },
 	}
 }

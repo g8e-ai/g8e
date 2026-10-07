@@ -14,7 +14,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -181,42 +180,51 @@ func TestModelProvenanceControllerHandleModelProvenanceAttestPreflight_ReturnsRe
 	assert.NotEmpty(t, resp.Window)
 }
 
-// slowModelProvenancePreflight attests only after delay, like a Provenance
-// Operator hashing a multi-gigabyte model.
-type slowModelProvenancePreflight struct {
-	stubModelProvenancePreflight
-	delay time.Duration
+type progressingModelProvenancePreflight struct{ stubModelProvenancePreflight }
+
+func (s progressingModelProvenancePreflight) PreflightStorageAttestationWithProgress(ctx context.Context, tag, digest string, progress func(string)) (*evalv1.ModelProvenanceAttestationWindow, error) {
+	progress("awaiting_operator")
+	progress("attesting_storage")
+	return s.PreflightStorageAttestation(ctx, tag, digest)
 }
 
-func (s slowModelProvenancePreflight) PreflightStorageAttestation(ctx context.Context, tag, digest string) (*evalv1.ModelProvenanceAttestationWindow, error) {
-	time.Sleep(s.delay)
-	return s.stubModelProvenancePreflight.PreflightStorageAttestation(ctx, tag, digest)
-}
-
-// TestModelProvenanceControllerAttestPreflight_OutlivesServerWriteTimeout
-// reproduces the campaign preflight failure: an attestation that finishes
-// after the server WriteTimeout was cut mid-response and the TLS client saw
-// "tls: bad record MAC". The handler clears the write deadline because the
-// probe bounds its own wait.
-func TestModelProvenanceControllerAttestPreflight_OutlivesServerWriteTimeout(t *testing.T) {
-	t.Parallel()
+func TestModelProvenanceController_ProgressUsesAuthenticatedSession(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	controller := newModelProvenanceController(ModelProvenanceControllerDeps{
-		Logger:                logger,
-		Responder:             response.NewWriter(logger),
-		ProvenanceCoordinator: slowModelProvenancePreflight{delay: 300 * time.Millisecond},
+	broker := NewGatewayWebSocketHandler(logger)
+	var delivered []models.ModelProvenancePreflightProgress
+	unsubscribe := broker.RegisterHandler("sse:cli:requesting-cli", func(_ string, data []byte) {
+		var publication models.SSEPublishedEvent
+		require.NoError(t, json.Unmarshal(data, &publication))
+		require.Zero(t, publication.ID, "progress must be ephemeral")
+		var push models.SSEPushPayload
+		require.NoError(t, json.Unmarshal(publication.Payload, &push))
+		require.Equal(t, "owner", push.UserID)
+		require.Equal(t, "requesting-cli", push.CliSessionID)
+		var event struct {
+			Type string                                  `json:"type"`
+			Data models.ModelProvenancePreflightProgress `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(push.Event, &event))
+		require.Equal(t, string(constants.EventModelProvenancePreflightProgress), event.Type)
+		delivered = append(delivered, event.Data)
 	})
-	srv := httptest.NewUnstartedServer(http.HandlerFunc(controller.handleModelProvenance))
-	srv.Config.WriteTimeout = 100 * time.Millisecond
-	srv.StartTLS()
-	t.Cleanup(srv.Close)
-
-	url := srv.URL + constants.APIPaths.InferenceModelProvenanceAttestations + "_attest?served_model_tag=probe-model%3A7b&expected_model_digest=" + strings.Repeat("a", 64)
-	resp, err := srv.Client().Get(url)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	var body models.ModelProvenanceAttestResponse
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
-	assert.Equal(t, "ready", body.Status)
+	defer unsubscribe()
+	other := broker.RegisterHandler("sse:cli:other-cli", func(_ string, _ []byte) { t.Error("progress leaked to another session") })
+	defer other()
+	controller := newModelProvenanceController(ModelProvenanceControllerDeps{
+		Logger: logger, Responder: response.NewWriter(logger), ProgressPublisher: NewSSEEventPublisher(nil, broker),
+		ProvenanceCoordinator: progressingModelProvenancePreflight{stubModelProvenancePreflight{attestErr: constants.ErrEvaluationObservationUnavailable}},
+	})
+	ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, "owner")
+	ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, "requesting-cli")
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.InferenceModelProvenanceAttestations+"_attest?served_model_tag=probe-model%3A7b&expected_model_digest="+strings.Repeat("a", 64)+"&request_id=request-1&cli_session_id=other-cli&user_id=other-user", nil).WithContext(ctx)
+	rr := httptest.NewRecorder()
+	controller.handleModelProvenance(rr, req)
+	require.Equal(t, http.StatusServiceUnavailable, rr.Code)
+	require.Len(t, delivered, 3)
+	require.Equal(t, "request-1", delivered[0].RequestID)
+	require.Equal(t, "awaiting_operator", delivered[0].Phase)
+	require.Equal(t, "attesting_storage", delivered[1].Phase)
+	require.Equal(t, "failed", delivered[2].Phase)
+	require.NotEmpty(t, delivered[2].Error)
 }

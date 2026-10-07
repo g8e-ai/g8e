@@ -13,8 +13,9 @@ import logging
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
-from app.constants.prompts import PromptFile
 from app.constants.generated_status import OperatorToolName
+from app.constants.prompts import PromptFile
+from app.errors import ServiceUnavailableError
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
 from app.models.http_context import G8eHttpContext
@@ -45,8 +46,11 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del investigation, g8e_context, request_settings, execution_id
     args = SearchWebArgs.model_validate(tool_args)
     logger.info("[G8E_WEB_SEARCH] Query: %s", args.query)
+    if svc.web_search_provider is None:
+        raise ServiceUnavailableError("Web search provider is not configured")
     result: ToolResult = await svc.web_search_provider.search(query=args.query, num=args.num)
     logger.info("[G8E_WEB_SEARCH] Result: %s", result)
     return result

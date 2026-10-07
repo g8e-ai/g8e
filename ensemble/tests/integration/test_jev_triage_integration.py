@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from app.constants import OLLAMA_DEFAULT_ENDPOINT, AgentMode, JEV_DEFAULT_MODEL, LLMProvider
+from app.constants import JEV_DEFAULT_MODEL, OLLAMA_DEFAULT_ENDPOINT, AgentMode, LLMProvider
 from app.constants.env_vars import EnvVar
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.settings import G8eeUserSettings, LLMSettings
@@ -26,10 +26,10 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires_system_one, pytest.m
 def jev_settings() -> G8eeUserSettings:
     return G8eeUserSettings(
         llm=LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="main-model",
-            lite_provider=LLMProvider.JEV,
-            lite_model=JEV_DEFAULT_MODEL,
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="main-model",
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model=JEV_DEFAULT_MODEL,
             ollama_endpoint=os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT,
         )
     )

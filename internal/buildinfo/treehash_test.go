@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -89,7 +91,7 @@ func TestComputeSourceTreeHash_RenamedFileChangesDigest(t *testing.T) {
 func TestComputeSourceTreeHash_RejectsSymlink(t *testing.T) {
 	root := t.TempDir()
 	writeParityFixture(t, root)
-	require.NoError(t, os.Symlink("a.txt", filepath.Join(root, "link.txt")))
+	testutil.Symlink(t, "a.txt", filepath.Join(root, "link.txt"))
 
 	_, err := ComputeSourceTreeHash(root)
 	require.Error(t, err)
@@ -99,7 +101,7 @@ func TestComputeSourceTreeHash_RejectsSymlink(t *testing.T) {
 func TestComputeSourceTreeHash_RejectsSymlinkedDirectory(t *testing.T) {
 	root := t.TempDir()
 	writeParityFixture(t, root)
-	require.NoError(t, os.Symlink("a", filepath.Join(root, "linkdir")))
+	testutil.Symlink(t, "a", filepath.Join(root, "linkdir"))
 
 	_, err := ComputeSourceTreeHash(root)
 	require.Error(t, err)
@@ -172,7 +174,7 @@ func TestComputeSourceManifestHash_RejectsSymlinkEntry(t *testing.T) {
 	base := t.TempDir()
 	writeParityFixture(t, base)
 	outside := t.TempDir()
-	require.NoError(t, os.Symlink(outside, filepath.Join(base, "ext")))
+	testutil.Symlink(t, outside, filepath.Join(base, "ext"))
 
 	_, err := ComputeSourceManifestHash(base, []string{"ext"}, nil)
 	require.Error(t, err)

@@ -566,7 +566,7 @@ func TestValidateVerificationReportEnforcesTypedCheckConsistency(t *testing.T) {
 			report.Checks = append(report.Checks, report.Checks[0])
 		}},
 		{name: "check verifier mismatch", mutate: func(report *compliancev1.ComplianceVerificationReport) {
-			report.Checks[0].VerifierId = constants.DemoRunVerifierID
+			report.Checks[0].VerifierId = constants.EvalRunVerifierID
 		}},
 		{name: "missing check evidence", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.Checks[0].EvidenceRefs = nil }},
 		{name: "unspecified check status", mutate: func(report *compliancev1.ComplianceVerificationReport) {

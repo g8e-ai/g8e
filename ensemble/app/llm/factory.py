@@ -31,60 +31,98 @@ One entry point:
 All Gemini-specific logic lives in app.llm.providers.gemini.
 """
 
+from __future__ import annotations
+
+import importlib
 import logging
+from dataclasses import dataclass
+from typing import Protocol, cast
 
-from app.models.settings import LLMSettings, G8eeAppSettings, SearchSettings
 from app.constants import LLMProvider
+from app.models.settings import G8eeAppSettings, LLMSettings, SearchSettings
 
+from .endpoints import normalize_ollama_host
 from .provider import LLMProvider as LLMProviderBase
-from .providers.open_ai import OpenAIProvider
-from .providers.gemini import GeminiProvider
-from .providers.anthropic import AnthropicProvider
-from .providers.llama_cpp import LlamaCppProvider
-from .providers.ollama import OllamaProvider, _normalize_ollama_host
-from .providers.g8e import G8EProvider
-from .providers.fake import FakeProvider
 
 logger = logging.getLogger(__name__)
 
-_settings: G8eeAppSettings | None = None
-_llm_settings: LLMSettings | None = None
-_search_settings: SearchSettings | None = None
+
+@dataclass
+class _FactoryState:
+    """Process-wide settings and clients injected at startup (or by tests)."""
+
+    settings: G8eeAppSettings | None = None
+    llm_settings: LLMSettings | None = None
+    search_settings: SearchSettings | None = None
+    internal_http_client: object | None = None
+
+
+_state = _FactoryState()
 _provider_cache: dict[str, LLMProviderBase] = {}
-_internal_http_client: object | None = None
+
+# Provider modules are resolved by name only when selected, so an unused
+# provider SDK is never imported (and a broken one cannot break startup).
+_PROVIDER_MODULES: dict[LLMProvider, tuple[str, str]] = {
+    LLMProvider.OLLAMA: ("app.llm.providers.ollama", "OllamaProvider"),
+    LLMProvider.OPENAI: ("app.llm.providers.open_ai", "OpenAIProvider"),
+    LLMProvider.GEMINI: ("app.llm.providers.gemini", "GeminiProvider"),
+    LLMProvider.ANTHROPIC: ("app.llm.providers.anthropic", "AnthropicProvider"),
+    LLMProvider.LLAMACPP: ("app.llm.providers.llama_cpp", "LlamaCppProvider"),
+    LLMProvider.FAKE: ("app.llm.providers.fake", "FakeProvider"),
+    LLMProvider.G8E: ("app.llm.providers.g8e", "G8EProvider"),
+}
+
+# app.errors and app.decision.factory sit on the app.errors -> app.models ->
+# app.llm import cycle, so they are resolved at call time rather than module load.
+_ERRORS_MODULE = "app.errors"
+_DECISION_FACTORY_MODULE = "app.decision.factory"
+
+
+class _EndpointProviderClass(Protocol):
+    def __call__(self, *, endpoint: str | None, api_key: str | None) -> LLMProviderBase: ...
+
+
+class _ApiKeyProviderClass(Protocol):
+    def __call__(self, *, api_key: str | None) -> LLMProviderBase: ...
+
+
+class _GovernedProviderClass(Protocol):
+    def __call__(self, *, internal_http_client: object) -> LLMProviderBase: ...
+
+
+def _configuration_error(message: str) -> Exception:
+    error_class = importlib.import_module(_ERRORS_MODULE).ConfigurationError
+    return error_class(message)
 
 
 def set_settings(settings: G8eeAppSettings) -> None:
     """Inject the platform G8eeAppSettings at startup."""
-    global _settings
-    _settings = settings
+    _state.settings = settings
 
 
 def get_settings() -> G8eeAppSettings | None:
     """Return the platform settings singleton."""
-    return _settings
+    return _state.settings
 
 
 def set_llm_settings(settings: LLMSettings) -> None:
     """Inject LLM settings for testing. Production code uses G8eeUserSettings.llm."""
-    global _llm_settings
-    _llm_settings = settings
+    _state.llm_settings = settings
 
 
 def get_llm_settings() -> LLMSettings | None:
     """Return the LLM settings singleton (used in tests)."""
-    return _llm_settings
+    return _state.llm_settings
 
 
 def set_search_settings(settings: SearchSettings) -> None:
     """Inject search settings for testing. Production code uses G8eeUserSettings.search."""
-    global _search_settings
-    _search_settings = settings
+    _state.search_settings = settings
 
 
 def get_search_settings() -> SearchSettings | None:
     """Return the search settings singleton (used in tests)."""
-    return _search_settings
+    return _state.search_settings
 
 
 def set_internal_http_client(client: object) -> None:
@@ -95,13 +133,12 @@ def set_internal_http_client(client: object) -> None:
     is a singleton shared with the rest of the application; the factory
     does not own its lifecycle.
     """
-    global _internal_http_client
-    _internal_http_client = client
+    _state.internal_http_client = client
 
 
 def get_internal_http_client() -> object | None:
     """Return the internal HTTP client singleton (used by the G8E provider)."""
-    return _internal_http_client
+    return _state.internal_http_client
 
 
 def _get_provider_cache_key(
@@ -120,7 +157,7 @@ def _get_provider_cache_key(
         key_parts.append(endpoint or "")
         key_parts.append(api_key or "")
     elif provider_value in (LLMProvider.OLLAMA.value, LLMProvider.LLAMACPP.value):
-        key_parts.append(_normalize_ollama_host(endpoint or ""))
+        key_parts.append(normalize_ollama_host(endpoint or ""))
         key_parts.append(api_key or "")
 
     return "|".join(key_parts)
@@ -128,24 +165,22 @@ def _get_provider_cache_key(
 
 async def clear_provider_cache() -> None:
     """Close and clear all cached provider instances. Intended for shutdown/testing."""
-    from app.decision.factory import clear_decision_provider_cache
-
     for provider in _provider_cache.values():
         try:
             await provider.force_close()
         except Exception as exc:
             logger.info("Error closing provider during cache clear: %s", exc)
     _provider_cache.clear()
-    await clear_decision_provider_cache()
+    decision_factory = importlib.import_module(_DECISION_FACTORY_MODULE)
+    await decision_factory.clear_decision_provider_cache()
 
 
 def reset_settings() -> None:
     """Reset all settings singletons. Intended for use in tests only."""
-    global _settings, _llm_settings, _search_settings, _internal_http_client
-    _settings = None
-    _llm_settings = None
-    _search_settings = None
-    _internal_http_client = None
+    _state.settings = None
+    _state.llm_settings = None
+    _state.search_settings = None
+    _state.internal_http_client = None
 
 
 def get_generative_lite_provider(settings: LLMSettings) -> LLMProviderBase:
@@ -156,9 +191,7 @@ def get_generative_lite_provider(settings: LLMSettings) -> LLMProviderBase:
     get_decision_provider() when lite_provider is jev.
     """
     if settings.lite_provider is LLMProvider.JEV:
-        logger.debug(
-            "Lite provider is jev; using assistant provider for generative lite call"
-        )
+        logger.debug("Lite provider is jev; using assistant provider for generative lite call")
         return get_llm_provider(settings, is_assistant=True)
     return get_llm_provider(settings, is_lite=True)
 
@@ -186,60 +219,50 @@ def get_llm_provider(
     provider_str, api_key, endpoint, _ = settings.resolve(role)
 
     if not provider_str:
-        from app.errors import ConfigurationError
+        raise _configuration_error(f"No provider configured for role: {role}")
 
-        raise ConfigurationError(f"No provider configured for role: {role}")
+    provider = _construct_provider(LLMProvider(provider_str), api_key=api_key, endpoint=endpoint)
+    provider.mark_cached_singleton()
+    _provider_cache[cache_key] = provider
+    return provider
 
-    provider_type = LLMProvider(provider_str)
 
-    if provider_type == LLMProvider.OLLAMA:
-        provider = OllamaProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.OPENAI:
-        provider = OpenAIProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.GEMINI:
-        provider = GeminiProvider(api_key=api_key)
-    elif provider_type == LLMProvider.ANTHROPIC:
-        provider = AnthropicProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.LLAMACPP:
-        provider = LlamaCppProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.FAKE:
-        provider = FakeProvider(
-            endpoint=endpoint,
-            api_key=api_key,
-        )
-    elif provider_type == LLMProvider.G8E:
-        if _internal_http_client is None:
-            from app.errors import ConfigurationError
-
-            raise ConfigurationError(
+def _construct_provider(
+    provider_type: LLMProvider, *, api_key: str | None, endpoint: str | None
+) -> LLMProviderBase:
+    provider_class = get_llm_provider_class(provider_type)
+    if provider_type == LLMProvider.G8E:
+        if _state.internal_http_client is None:
+            raise _configuration_error(
                 "G8E provider requires the InternalHttpClient to be injected "
                 "at startup via set_internal_http_client()"
             )
-        provider = G8EProvider(internal_http_client=_internal_http_client)
-    elif provider_type == LLMProvider.JEV:
-        from app.errors import ConfigurationError
+        governed_class = cast(_GovernedProviderClass, provider_class)
+        return governed_class(internal_http_client=_state.internal_http_client)
+    if provider_type == LLMProvider.GEMINI:
+        api_key_class = cast(_ApiKeyProviderClass, provider_class)
+        return api_key_class(api_key=api_key)
+    endpoint_class = cast(_EndpointProviderClass, provider_class)
+    return endpoint_class(endpoint=endpoint, api_key=api_key)
 
-        raise ConfigurationError(
+
+def get_llm_provider_class(provider_type: LLMProvider) -> type[LLMProviderBase]:
+    """Load only the selected provider, including during config validation.
+
+    Import failures propagate for the selected provider. We never silently
+    switch providers or weaken validation when its SDK cannot load.
+    """
+    location = _PROVIDER_MODULES.get(provider_type)
+    if location is not None:
+        module_name, class_name = location
+        provider_class = getattr(importlib.import_module(module_name), class_name)
+        if not (isinstance(provider_class, type) and issubclass(provider_class, LLMProviderBase)):
+            raise TypeError(f"{module_name}.{class_name} is not an LLMProvider subclass")
+        return provider_class
+
+    if provider_type == LLMProvider.JEV:
+        raise _configuration_error(
             "Provider 'jev' does not support lite text generation; use jev only "
             "for triage/eval_judge or select a generative lite provider."
         )
-    else:
-        from app.errors import ConfigurationError
-
-        raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")
-
-    provider._is_cached_singleton = True
-    _provider_cache[cache_key] = provider
-    return provider
+    raise _configuration_error(f"Unsupported LLM provider: {provider_type}")

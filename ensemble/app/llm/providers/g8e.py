@@ -10,7 +10,7 @@
 This provider routes inference through the gateway's platform-internal
 ``/api/v1/inference/dispatch`` endpoint instead of calling an LLM backend
 directly. The gateway constructs a governed envelope, resolves the Inference
-Node's operator session, dispatches the request through the full L1–L5
+Node's operator session, dispatches the request through the full L1-L5
 gauntlet on the Inference Node, and returns the signed receipt and
 ``InferenceResult``. This is the transport layer underneath the ensemble
 chat pipeline's tiered routing logic; the governed dispatch wraps the
@@ -27,41 +27,14 @@ The dispatch endpoint returns the complete ``InferenceResult`` after the Inferen
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
 from contextvars import ContextVar
 from uuid import uuid4
 
-from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
-from app.llm.llm_dataclasses import (
-    Candidate,
-    Content,
-    GenerateContentResponse,
-    Part,
-    ResponseFormat,
-    StreamChunkFromModel,
-    ToolCall,
-    ToolConfig,
-    ToolGroup,
-    UsageMetadata,
-)
-from app.llm.llm_types import (
-    AssistantLLMSettings,
-    LiteLLMSettings,
-    PrimaryLLMSettings,
-    ThinkingConfig,
-)
-from app.llm.provider import LLMProvider
-from app.llm.providers._capability import translate_governed_tool_rejection
-from app.llm.thinking import translate_for_ollama
-from app.models.model_configs import get_model_config
-from app.models.http_context import G8eHttpContext
-from app.models.internal_api import (
-    InferenceDispatchRequest,
-    InferenceDispatchResponse,
-)
-from app.models.model_telemetry import GovernedDispatchEvidence
 from g8e.constants import PLATFORM
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
@@ -76,6 +49,7 @@ from g8e.operator.v1.operator_pb2 import (
     MODEL_ROLE_LITE,
     MODEL_ROLE_PRIMARY,
     ExecutionStatus,
+    InferenceDispatchStreamFrame,
     InferenceMessage,
     InferenceMessagePart,
     InferenceModelVariant,
@@ -85,7 +59,43 @@ from g8e.operator.v1.operator_pb2 import (
     InferenceToolChoice,
     InferenceToolDeclaration,
     InferenceToolResult,
+    ModelRole,
 )
+
+from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
+from app.errors import ModelCapabilityError, NetworkError, ValidationError
+from app.llm.llm_dataclasses import (
+    Candidate,
+    Content,
+    GenerateContentResponse,
+    Part,
+    ResponseFormat,
+    StreamChunkFromModel,
+    ToolCall,
+    ToolConfig,
+    ToolGroup,
+    UsageMetadata,
+)
+from app.llm.llm_schema import inline_json_schema_refs
+from app.llm.llm_types import (
+    AssistantLLMSettings,
+    LiteLLMSettings,
+    PrimaryLLMSettings,
+    ThinkingConfig,
+)
+from app.llm.provider import LLMProvider
+from app.llm.providers._capability import (
+    translate_governed_context_overflow,
+    translate_governed_tool_rejection,
+)
+from app.llm.thinking import translate_for_ollama
+from app.models.http_context import G8eHttpContext
+from app.models.internal_api import (
+    InferenceDispatchRequest,
+    InferenceDispatchResponse,
+)
+from app.models.model_configs import get_model_config
+from app.models.model_telemetry import GovernedDispatchEvidence, ModelResponseArtifact
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +103,8 @@ _ROLE_PRIMARY = MODEL_ROLE_PRIMARY
 _ROLE_ASSISTANT = MODEL_ROLE_ASSISTANT
 _ROLE_LITE = MODEL_ROLE_LITE
 _REQUEST_SCHEMA_VERSION = PLATFORM["platform"]["InferenceRequestSchemaVersion"]["value"]
+_MAX_STREAM_CAPTURE_BYTES = 32 << 20
+_MAX_STREAM_CAPTURE_FRAMES = 65536
 
 
 # The inference operator verifies canonical form by round-tripping through Go's
@@ -111,8 +123,6 @@ _GO_JSON_STRING_ESCAPES = str.maketrans(
 
 
 def _canonical_json(value: object) -> str:
-    from app.errors import ValidationError
-
     try:
         return json.dumps(
             value,
@@ -130,8 +140,6 @@ def _contents_to_messages(
     system_instructions: str | None,
     model: str = "",
 ) -> list[InferenceMessage]:
-    from app.errors import ModelCapabilityError, ValidationError
-
     messages: list[InferenceMessage] = []
     if system_instructions is not None:
         messages.append(
@@ -150,79 +158,74 @@ def _contents_to_messages(
     for content in contents:
         if content.role not in roles:
             raise ValidationError(f"Unsupported governed inference message role: {content.role}")
-        parts: list[InferenceMessagePart] = []
-        for part in content.parts:
-            kinds = sum(
-                value is not None
-                for value in (part.text, part.tool_call, part.tool_response, part.inline_data)
-            )
-            if kinds != 1:
-                raise ValidationError(
-                    "Governed inference message parts must contain exactly one value"
-                )
-            if part.inline_data is not None:
-                raise ModelCapabilityError(
-                    "G8E governed dispatch does not support inline data content parts",
-                    model=model,
-                    capability="multimodal",
-                    service_name="g8e",
-                )
-            if part.tool_call is not None:
-                if content.role not in ("model", "assistant") or not part.tool_call.name:
-                    raise ValidationError(
-                        "Governed inference tool calls require an assistant role and name"
-                    )
-                parts.append(
-                    InferenceMessagePart(
-                        tool_call=InferenceToolCall(
-                            call_id=part.tool_call.id or "",
-                            name=part.tool_call.name,
-                            arguments_json=_canonical_json(part.tool_call.args),
-                        )
-                    )
-                )
-            elif part.tool_response is not None:
-                if content.role != "tool" or not part.tool_response.name:
-                    raise ValidationError(
-                        "Governed inference tool results require a tool role and name"
-                    )
-                parts.append(
-                    InferenceMessagePart(
-                        tool_result=InferenceToolResult(
-                            call_id=part.tool_response.id or "",
-                            name=part.tool_response.name,
-                            result_json=_canonical_json(part.tool_response.response),
-                        )
-                    )
-                )
-            elif part.text is not None:
-                if content.role == "tool":
-                    raise ValidationError("Governed inference tool messages require a tool result")
-                parts.append(InferenceMessagePart(text=part.text))
+        parts = [
+            _content_part_to_message_part(part, content.role, model)
+            for part in content.parts
+        ]
         if not parts:
             raise ValidationError("Governed inference messages require at least one part")
         messages.append(InferenceMessage(role=roles[content.role], parts=parts))
     return messages
 
 
+def _content_part_to_message_part(part, role: str, model: str) -> InferenceMessagePart:
+    kinds = sum(
+        value is not None
+        for value in (part.text, part.tool_call, part.tool_response, part.inline_data)
+    )
+    if kinds != 1:
+        raise ValidationError("Governed inference message parts must contain exactly one value")
+    if part.inline_data is not None:
+        raise ModelCapabilityError(
+            "G8E governed dispatch does not support inline data content parts",
+            model=model,
+            capability="multimodal",
+            service_name="g8e",
+        )
+    if part.tool_call is not None:
+        if role not in ("model", "assistant") or not part.tool_call.name:
+            raise ValidationError("Governed inference tool calls require an assistant role and name")
+        return InferenceMessagePart(
+            tool_call=InferenceToolCall(
+                call_id=part.tool_call.id or "",
+                name=part.tool_call.name,
+                arguments_json=_canonical_json(part.tool_call.args),
+            )
+        )
+    if part.tool_response is not None:
+        if role != "tool" or not part.tool_response.name:
+            raise ValidationError("Governed inference tool results require a tool role and name")
+        return InferenceMessagePart(
+            tool_result=InferenceToolResult(
+                call_id=part.tool_response.id or "",
+                name=part.tool_response.name,
+                result_json=_canonical_json(part.tool_response.response),
+            )
+        )
+    if part.text is not None:
+        if role == "tool":
+            raise ValidationError("Governed inference tool messages require a tool result")
+        return InferenceMessagePart(text=part.text)
+    raise ValidationError("Governed inference message part is empty")
+
+
 def _tools_to_declarations(tools: list[ToolGroup] | None) -> list[InferenceToolDeclaration]:
     declarations: list[InferenceToolDeclaration] = []
-    for group in tools or []:
-        for tool in group.tools:
-            declarations.append(
-                InferenceToolDeclaration(
-                    name=tool.name,
-                    description=tool.description,
-                    json_schema=_canonical_json(tool.parameters.to_json_schema()),
-                )
-            )
+    declarations.extend(
+        InferenceToolDeclaration(
+            name=tool.name,
+            description=tool.description,
+            json_schema=_canonical_json(tool.parameters.to_json_schema()),
+        )
+        for group in tools or []
+        for tool in group.tools
+    )
     return declarations
 
 
 def _response_format(format_value: ResponseFormat | None) -> InferenceResponseFormat | None:
     if format_value is None:
         return None
-    from app.llm.llm_schema import inline_json_schema_refs
 
     return InferenceResponseFormat(
         media_type="application/json",
@@ -235,7 +238,6 @@ def _response_format(format_value: ResponseFormat | None) -> InferenceResponseFo
 def _tool_choice(config: ToolConfig | None) -> InferenceToolChoice | None:
     if config is None:
         return None
-    from app.errors import ValidationError
 
     mode_name = config.tool_calling_config.mode.upper()
     modes = {
@@ -263,12 +265,42 @@ def _thinking_control(model: str, config: ThinkingConfig | None) -> InferenceThi
     )
 
 
+def _apply_optional_request_options(
+    request: InferenceDispatchRequest,
+    model: str,
+    top_p: float | None,
+    top_k: int | None,
+    random_seed: int | None,
+    parallel_tool_calls: bool | None,
+    tool_config: ToolConfig | None,
+    thinking_config: ThinkingConfig | None,
+    response_format: ResponseFormat | None,
+) -> None:
+    """Copy optional generation settings into a dispatch request."""
+    if top_p is not None:
+        request.top_p = top_p
+    if top_k is not None:
+        request.top_k = top_k
+    if random_seed is not None:
+        request.seed = random_seed
+    if parallel_tool_calls is not None:
+        request.parallel_tool_calls = parallel_tool_calls
+    normalized_tool_choice = _tool_choice(tool_config)
+    if normalized_tool_choice is not None:
+        request.tool_choice.CopyFrom(normalized_tool_choice)
+    normalized_thinking = _thinking_control(model, thinking_config)
+    if normalized_thinking is not None:
+        request.thinking.CopyFrom(normalized_thinking)
+    normalized_response_format = _response_format(response_format)
+    if normalized_response_format is not None:
+        request.response_format.CopyFrom(normalized_response_format)
+
+
 def _apply_evaluation_context(
     request: InferenceDispatchRequest, context: G8eHttpContext | None, model: str
 ) -> None:
     if context is None or context.evaluation_context is None:
         return
-    from app.errors import ValidationError
 
     evaluation = context.evaluation_context
     matches = [variant for variant in evaluation.model_registry if variant.model == model]
@@ -305,9 +337,7 @@ def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetad
             else None
         ),
         cache_token_count=(
-            inference_result.cache_tokens
-            if inference_result.HasField("cache_tokens")
-            else None
+            inference_result.cache_tokens if inference_result.HasField("cache_tokens") else None
         ),
         usage_reported=inference_result.usage_reported,
         time_to_first_token_seconds=(
@@ -339,8 +369,6 @@ def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetad
 
 
 def _response_parts(result: InferenceDispatchResponse) -> list[Part]:
-    from app.errors import ValidationError
-
     if not result.HasField("result"):
         raise ValidationError("Governed inference response is missing its result")
     parts: list[Part] = []
@@ -382,8 +410,6 @@ def _response_parts(result: InferenceDispatchResponse) -> list[Part]:
 def _validate_response_identity(
     request: InferenceDispatchRequest, response: InferenceDispatchResponse
 ) -> None:
-    from app.errors import ValidationError
-
     if not response.HasField("result"):
         raise ValidationError("Governed inference response is missing its result")
     result = response.result
@@ -437,8 +463,6 @@ def _part_to_stream_chunk(part: Part) -> StreamChunkFromModel:
 
 
 def _progress_parts_to_stream_chunks(progress) -> list[StreamChunkFromModel]:
-    from app.errors import ValidationError
-
     chunks: list[StreamChunkFromModel] = []
     for response_part in progress.parts:
         kind = response_part.WhichOneof("part")
@@ -479,8 +503,7 @@ def _response_to_stream_chunks(
     result: InferenceDispatchResponse,
 ) -> list[StreamChunkFromModel]:
     chunks: list[StreamChunkFromModel] = []
-    for part in _response_parts(result):
-        chunks.append(_part_to_stream_chunk(part))
+    chunks.extend(_part_to_stream_chunk(part) for part in _response_parts(result))
     chunks.append(
         StreamChunkFromModel(
             finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
@@ -496,7 +519,7 @@ class G8EProvider(LLMProvider):
     Uses the ``InternalHttpClient`` to call the gateway's
     ``/api/v1/inference/dispatch`` endpoint. The gateway resolves the
     Inference Node, constructs the governed envelope, dispatches through
-    the L1–L5 gauntlet, and returns the signed receipt and InferenceResult.
+    the L1-L5 gauntlet, and returns the signed receipt and InferenceResult.
     """
 
     def __init__(self, internal_http_client):
@@ -543,6 +566,98 @@ class G8EProvider(LLMProvider):
             tools_declared=len(request.tools) > 0,
         )
 
+    @staticmethod
+    def _raise_if_context_overflow(
+        exc: BaseException, *, model: str, request: InferenceDispatchRequest
+    ) -> None:
+        """Re-raise the Gateway's typed context-overflow rejection as
+        ``ContextWindowExceededError``. Any other failure returns so the caller
+        re-raises the original exception.
+        """
+        translate_governed_context_overflow(
+            exc,
+            service_name="g8e",
+            model=model,
+            num_ctx=request.context_limit if request.HasField("context_limit") else None,
+        )
+
+    def _process_stream_frame(
+        self,
+        frame: InferenceDispatchStreamFrame,
+        request: InferenceDispatchRequest,
+        model: str,
+        completion: InferenceDispatchResponse | None,
+        progress_parts: list,
+    ) -> tuple[InferenceDispatchResponse | None, list[StreamChunkFromModel]]:
+        """Validate one stream frame and return any provisional text chunks."""
+        if completion is not None:
+            raise ValidationError("Governed inference stream continues after completion")
+        if frame.HasField("failure"):
+            failure = ValidationError(frame.failure.reason)
+            self._raise_if_tool_declaration_rejected(failure, model=model, request=request)
+            self._raise_if_context_overflow(failure, model=model, request=request)
+            raise failure
+
+        chunks: list[StreamChunkFromModel] = []
+        if frame.HasField("progress"):
+            progress = frame.progress
+            if (
+                progress.provider_attempt_id != request.provider_attempt_id
+                or progress.sequence != len(progress_parts) + 1
+            ):
+                raise ValidationError(
+                    "Governed inference progress identity or sequence mismatch"
+                )
+            progress_parts.append(list(progress.parts))
+            chunks.extend(
+                chunk
+                for chunk in _progress_parts_to_stream_chunks(progress)
+                if not chunk.tool_calls
+            )
+        if frame.HasField("completion"):
+            completion = frame.completion
+        return completion, chunks
+
+    def _verify_stream_completion(
+        self,
+        request: InferenceDispatchRequest,
+        completion: InferenceDispatchResponse,
+        progress_parts: list,
+    ) -> None:
+        """Verify terminal stream data and record its governed evidence."""
+        _validate_response_identity(request, completion)
+        _response_parts(completion)
+        if [part for event_parts in progress_parts for part in event_parts] != list(
+            completion.result.parts
+        ):
+            raise ValidationError("Governed inference progress differs from the terminal result")
+        self._record_response_evidence(completion)
+
+    def _record_response_evidence(self, response: InferenceDispatchResponse) -> None:
+        self._governed_dispatch_evidence.set(
+            GovernedDispatchEvidence(
+                transaction_id=response.transaction_id,
+                result_digest=response.result.result_digest if response.HasField("result") else "",
+                receipt_status=(
+                    ExecutionStatus.Name(response.receipt.status)
+                    if response.HasField("receipt")
+                    else ""
+                ),
+                provider_attempt_id=response.result.provider_attempt_id,
+                requested_model=response.result.requested_model,
+                served_model=response.result.model,
+                model_digest=response.result.served_model_digest,
+                normalized_request_hash=response.result.normalized_request_hash,
+                output_hash=response.result.output_hash,
+                campaign_id=response.result.campaign_id,
+                run_id=response.result.run_id,
+                assignment_id=response.result.assignment_id,
+                evaluation_attempt_id=response.result.evaluation_attempt_id,
+                scenario_id=response.result.scenario_id,
+                model_registry_digest=response.result.model_registry_digest,
+            )
+        )
+
     async def _close_resources(self):
         """Clean up provider resources. The HTTP client is owned by the
         application lifecycle, not by this provider, so close is a no-op."""
@@ -554,11 +669,12 @@ class G8EProvider(LLMProvider):
         The G8E provider uses the InternalHttpClient for transport (mTLS
         to the gateway), so no endpoint or API key is configured directly.
         """
+        _ = api_key, endpoint
         return []
 
     async def _dispatch(
         self,
-        role: int,
+        role: ModelRole,
         model: str,
         contents: list[Content],
         system_instructions: str | None,
@@ -574,7 +690,6 @@ class G8EProvider(LLMProvider):
         tools: list[ToolGroup] | None = None,
     ) -> InferenceDispatchResponse:
         """Dispatch a governed inference request and return the response."""
-        from app.errors import NetworkError
 
         self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
@@ -597,63 +712,34 @@ class G8EProvider(LLMProvider):
             cli_session_id=(context.cli_session_id or "") if context else "",
         )
         _apply_evaluation_context(request, context, model)
-        if top_p is not None:
-            request.top_p = top_p
-        if top_k is not None:
-            request.top_k = top_k
-        if random_seed is not None:
-            request.seed = random_seed
-        if parallel_tool_calls is not None:
-            request.parallel_tool_calls = parallel_tool_calls
-        normalized_tool_choice = _tool_choice(tool_config)
-        if normalized_tool_choice is not None:
-            request.tool_choice.CopyFrom(normalized_tool_choice)
-        normalized_thinking = _thinking_control(model, thinking_config)
-        if normalized_thinking is not None:
-            request.thinking.CopyFrom(normalized_thinking)
-        normalized_response_format = _response_format(response_format)
-        if normalized_response_format is not None:
-            request.response_format.CopyFrom(normalized_response_format)
+        _apply_optional_request_options(
+            request,
+            model,
+            top_p,
+            top_k,
+            random_seed,
+            parallel_tool_calls,
+            tool_config,
+            thinking_config,
+            response_format,
+        )
         self._record_model_boundary(request)
         self._record_declared_tools(tool.name for tool in request.tools)
         try:
             response = await self._client.dispatch_inference(request)
         except NetworkError as exc:
             self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
+            self._raise_if_context_overflow(exc, model=model, request=request)
             raise
         self._record_response(response, complete=True)
         _validate_response_identity(request, response)
         _response_parts(response)
-        self._governed_dispatch_evidence.set(
-            GovernedDispatchEvidence(
-                transaction_id=response.transaction_id,
-                result_digest=(
-                    response.result.result_digest if response.HasField("result") else ""
-                ),
-                receipt_status=(
-                    ExecutionStatus.Name(response.receipt.status)
-                    if response.HasField("receipt")
-                    else ""
-                ),
-                provider_attempt_id=response.result.provider_attempt_id,
-                requested_model=response.result.requested_model,
-                served_model=response.result.model,
-                model_digest=response.result.served_model_digest,
-                normalized_request_hash=response.result.normalized_request_hash,
-                output_hash=response.result.output_hash,
-                campaign_id=response.result.campaign_id,
-                run_id=response.result.run_id,
-                assignment_id=response.result.assignment_id,
-                evaluation_attempt_id=response.result.evaluation_attempt_id,
-                scenario_id=response.result.scenario_id,
-                model_registry_digest=response.result.model_registry_digest,
-            )
-        )
+        self._record_response_evidence(response)
         return response
 
     async def _dispatch_stream(
         self,
-        role: int,
+        role: ModelRole,
         model: str,
         contents: list[Content],
         system_instructions: str | None,
@@ -668,8 +754,6 @@ class G8EProvider(LLMProvider):
         thinking_config: ThinkingConfig | None,
         tools: list[ToolGroup] | None = None,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        from app.errors import NetworkError, ValidationError
-
         self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
         retry_count = self._provider_retry_count.get()
@@ -692,72 +776,108 @@ class G8EProvider(LLMProvider):
             cli_session_id=(context.cli_session_id or "") if context else "",
         )
         _apply_evaluation_context(request, context, model)
-        if top_p is not None:
-            request.top_p = top_p
-        if top_k is not None:
-            request.top_k = top_k
-        if random_seed is not None:
-            request.seed = random_seed
-        if parallel_tool_calls is not None:
-            request.parallel_tool_calls = parallel_tool_calls
-        normalized_tool_choice = _tool_choice(tool_config)
-        if normalized_tool_choice is not None:
-            request.tool_choice.CopyFrom(normalized_tool_choice)
-        normalized_thinking = _thinking_control(model, thinking_config)
-        if normalized_thinking is not None:
-            request.thinking.CopyFrom(normalized_thinking)
-        normalized_response_format = _response_format(response_format)
-        if normalized_response_format is not None:
-            request.response_format.CopyFrom(normalized_response_format)
+        _apply_optional_request_options(
+            request,
+            model,
+            top_p,
+            top_k,
+            random_seed,
+            parallel_tool_calls,
+            tool_config,
+            thinking_config,
+            response_format,
+        )
         self._record_model_boundary(request)
         self._record_declared_tools(tool.name for tool in request.tools)
 
         completion: InferenceDispatchResponse | None = None
+        progress_parts = []
+        processing_error: Exception | None = None
         try:
-            for frame in await self._receive_stream(self._client.dispatch_inference_stream(request)):
-                if frame.HasField("failure"):
-                    failure = ValidationError(frame.failure.reason)
-                    self._raise_if_tool_declaration_rejected(
-                        failure, model=model, request=request
-                    )
-                    raise failure
-                if frame.HasField("completion"):
-                    completion = frame.completion
+            async with contextlib.aclosing(self._receive_dispatch_stream(request)) as stream:
+                async for frame in stream:
+                    if processing_error is not None:
+                        continue
+                    try:
+                        completion, chunks = self._process_stream_frame(
+                            frame, request, model, completion, progress_parts
+                        )
+                        # Text is provisional; tools wait for the verified receipt.
+                        for chunk in chunks:
+                            yield chunk
+                    except Exception as exc:
+                        # Drain the stream after parsing fails to retain its raw tail.
+                        processing_error = exc
         except NetworkError as exc:
             self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
+            self._raise_if_context_overflow(exc, model=model, request=request)
             raise
 
+        if processing_error is not None:
+            raise processing_error
         if completion is None:
             raise ValidationError("Governed inference stream ended without a completion frame")
-        _validate_response_identity(request, completion)
-        _response_parts(completion)
-        self._governed_dispatch_evidence.set(
-            GovernedDispatchEvidence(
-                transaction_id=completion.transaction_id,
-                result_digest=(
-                    completion.result.result_digest if completion.HasField("result") else ""
-                ),
-                receipt_status=(
-                    ExecutionStatus.Name(completion.receipt.status)
-                    if completion.HasField("receipt")
-                    else ""
-                ),
-                provider_attempt_id=completion.result.provider_attempt_id,
-                requested_model=completion.result.requested_model,
-                served_model=completion.result.model,
-                model_digest=completion.result.served_model_digest,
-                normalized_request_hash=completion.result.normalized_request_hash,
-                output_hash=completion.result.output_hash,
-                campaign_id=completion.result.campaign_id,
-                run_id=completion.result.run_id,
-                assignment_id=completion.result.assignment_id,
-                evaluation_attempt_id=completion.result.evaluation_attempt_id,
-                scenario_id=completion.result.scenario_id,
-                model_registry_digest=completion.result.model_registry_digest,
-            )
-        )
+        self._verify_stream_completion(request, completion, progress_parts)
         for chunk in _response_to_stream_chunks(completion):
-            yield chunk
+            # Text/thinking already crossed the stream; do not replay it.
+            if chunk.tool_calls or chunk.finish_reason is not None:
+                yield chunk
+
+    async def _receive_dispatch_stream(
+        self,
+        request: InferenceDispatchRequest,
+    ) -> AsyncGenerator[InferenceDispatchStreamFrame]:
+        """Capture bounded Gateway frames independently of their interpretation."""
+
+        artifact = ModelResponseArtifact()
+        self._response_artifact.set(artifact)
+        frames: list[InferenceDispatchStreamFrame] = []
+        available = asyncio.Event()
+        finished = False
+        receive_error: Exception | None = None
+
+        async def receive() -> None:
+            nonlocal finished, receive_error
+            captured_bytes = 0
+            try:
+                async for frame in self._client.dispatch_inference_stream(request):
+                    if len(frames) >= _MAX_STREAM_CAPTURE_FRAMES:
+                        raise ValidationError("Governed inference stream exceeds the frame limit")
+                    self._record_response(frame)
+                    captured_bytes += len(artifact.raw_frames[-1].encode("utf-8"))
+                    if captured_bytes > _MAX_STREAM_CAPTURE_BYTES:
+                        artifact.raw_frames.pop()
+                        raise ValidationError("Governed inference stream exceeds the capture limit")
+                    frames.append(frame)
+                    available.set()
+                artifact.received_complete = True
+            except Exception as exc:
+                receive_error = exc
+            finally:
+                finished = True
+                available.set()
+
+        receiver = asyncio.create_task(receive())
+        cursor = 0
+        try:
+            while True:
+                if cursor < len(frames):
+                    frame = frames[cursor]
+                    cursor += 1
+                    yield frame
+                elif finished:
+                    if receive_error is not None:
+                        raise receive_error
+                    break
+                else:
+                    available.clear()
+                    await available.wait()
+        except (asyncio.CancelledError, GeneratorExit):
+            receiver.cancel()
+            raise
+        finally:
+            with contextlib.suppress(asyncio.CancelledError):
+                await receiver
 
     async def generate_content_stream_primary(
         self,
@@ -765,13 +885,15 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        async for chunk in self.generate_content_stream_scored_role(
+        stream = self.generate_content_stream_scored_role(
             "primary",
             model,
             contents,
             primary_llm_settings,
-        ):
-            yield chunk
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
+                yield chunk
 
     async def generate_content_stream_scored_role(
         self,
@@ -786,10 +908,8 @@ class G8EProvider(LLMProvider):
             "lite": _ROLE_LITE,
         }
         if model_role not in role_map:
-            from app.errors import ValidationError
-
             raise ValidationError(f"Unsupported scored model role: {model_role}")
-        async for chunk in self._dispatch_stream(
+        stream = self._dispatch_stream(
             role_map[model_role],
             model,
             contents,
@@ -804,8 +924,10 @@ class G8EProvider(LLMProvider):
             primary_llm_settings.parallel_tool_calls,
             primary_llm_settings.thinking_config,
             primary_llm_settings.tools,
-        ):
-            yield chunk
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
+                yield chunk
 
     async def generate_content_primary(
         self,
@@ -837,7 +959,7 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        async for chunk in self._dispatch_stream(
+        stream = self._dispatch_stream(
             _ROLE_ASSISTANT,
             model,
             contents,
@@ -851,8 +973,10 @@ class G8EProvider(LLMProvider):
             None,
             None,
             None,
-        ):
-            yield chunk
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
+                yield chunk
 
     async def generate_content_assistant(
         self,
@@ -883,7 +1007,7 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        async for chunk in self._dispatch_stream(
+        stream = self._dispatch_stream(
             _ROLE_LITE,
             model,
             contents,
@@ -897,8 +1021,10 @@ class G8EProvider(LLMProvider):
             None,
             None,
             None,
-        ):
-            yield chunk
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
+                yield chunk
 
     async def generate_content_lite(
         self,

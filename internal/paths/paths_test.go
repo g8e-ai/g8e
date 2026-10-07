@@ -124,14 +124,6 @@ func TestInitWithBase(t *testing.T) {
 		{"ExecutionVaultDBPath", Infra.ExecutionVaultDBPath, pathutil.SafeJoin(Infra.DataDir, constants.ExecutionVaultDBFilename)},
 		{"ReplayStoreDBPath", Infra.ReplayStoreDBPath, pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)},
 		{"LedgerDir", Infra.LedgerDir, pathutil.SafeJoin(Infra.DataDir, constants.LedgerDirname)},
-		{"DemosDir", Infra.DemosDir, pathutil.SafeJoin(base, constants.DemosDirname)},
-		{"DemosHealthcareDir", Infra.DemosHealthcareDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgHealthcare)},
-		{"DemosFinanceDir", Infra.DemosFinanceDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgFinance)},
-		{"DemosHealthcareTargetDataDir", Infra.DemosHealthcareTargetDataDir, pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosTargetDataDir)},
-		{"DemosHealthcareDoctrineDir", Infra.DemosHealthcareDoctrineDir, pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosDoctrineDir)},
-		{"DemosHealthcarePARequestsPath", Infra.DemosHealthcarePARequestsPath, pathutil.SafeJoin(Infra.DemosHealthcareTargetDataDir, constants.DemosPARequestsFile)},
-		{"DemosHealthcareComposePath", Infra.DemosHealthcareComposePath, pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosComposeFile)},
-		{"DemosHealthcareDoctrineHIPAAPath", Infra.DemosHealthcareDoctrineHIPAAPath, pathutil.SafeJoin(Infra.DemosHealthcareDoctrineDir, constants.DemosHIPAADoctrineFile)},
 	}
 
 	for _, tc := range tests {
@@ -213,7 +205,6 @@ func TestInitWithBase_RuntimePathsPrefixedWithBase(t *testing.T) {
 	}
 
 	// All runtime paths should start with the base directory.
-	// Demos paths are relative to baseDir directly (not under runtime dir).
 	runtimePaths := []struct {
 		name string
 		val  string
@@ -228,7 +219,6 @@ func TestInitWithBase_RuntimePathsPrefixedWithBase(t *testing.T) {
 		{"SshConfigPath", Infra.SshConfigPath},
 		{"TestVaultDir", Infra.TestVaultDir},
 		{"LogDir", Infra.LogDir},
-		{"DemosDir", Infra.DemosDir},
 	}
 
 	for _, tc := range runtimePaths {
@@ -568,70 +558,62 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 
 	// Reset Infra to zero values to test defaults.
 	Infra = struct {
-		DbPath                           string
-		PkiDir                           string
-		SecretsDir                       string
-		CaCertPath                       string
-		AppCertDir                       string
-		DocsDir                          string
-		ProtocolDir                      string
-		ProtocolConstantsDir             string
-		ProtocolModelsDir                string
-		SshConfigPath                    string
-		RuntimeDir                       string
-		DataDir                          string
-		VaultDir                         string
-		VaultKeyPath                     string
-		TestVaultDir                     string
-		LocalStateDBPath                 string
-		SuspendedTransactionsDBPath      string
-		AuditVaultDBPath                 string
-		RootCAPath                       string
-		HubCAPath                        string
-		OperatorCAPath                   string
-		GatewayPeerCAPath                string
-		GatewayChainPath                 string
-		TrustDomainJSONPath              string
-		ServiceCertPath                  string
-		PkiRootDir                       string
-		PkiAuthoritiesDir                string
-		PkiIssuedDir                     string
-		PkiIssuedHubDir                  string
-		PkiIssuedGatewayPeerDir          string
-		PkiTrustDir                      string
-		PkiRevocationDir                 string
-		PkiBinariesDir                   string
-		ActuatorPubJSONPath              string
-		ActuatorPubPEMPath               string
-		OperatorKeyPath                  string
-		OperatorCertPath                 string
-		OperatorChainPath                string
-		WardenPubPath                    string
-		RootCAKeyPath                    string
-		TrustedSignersDir                string
-		ClientPkiDir                     string
-		ClientOperatorKeyPath            string
-		ClientOperatorCertPath           string
-		SessionEncKeyPath                string
-		BootstrapDigestPath              string
-		LogDir                           string
-		G8eLogFile                       string
-		PidDir                           string
-		OperatorPostureFile              string
-		OperatorPIDFile                  string
-		BinDir                           string
-		ExecutionVaultDBPath             string
-		ReplayStoreDBPath                string
-		LedgerDir                        string
-		LedgerFilesDir                   string
-		DemosDir                         string
-		DemosHealthcareDir               string
-		DemosFinanceDir                  string
-		DemosHealthcareTargetDataDir     string
-		DemosHealthcareDoctrineDir       string
-		DemosHealthcarePARequestsPath    string
-		DemosHealthcareComposePath       string
-		DemosHealthcareDoctrineHIPAAPath string
+		DbPath                      string
+		PkiDir                      string
+		SecretsDir                  string
+		CaCertPath                  string
+		AppCertDir                  string
+		DocsDir                     string
+		ProtocolDir                 string
+		ProtocolConstantsDir        string
+		ProtocolModelsDir           string
+		SshConfigPath               string
+		RuntimeDir                  string
+		DataDir                     string
+		VaultDir                    string
+		VaultKeyPath                string
+		TestVaultDir                string
+		LocalStateDBPath            string
+		SuspendedTransactionsDBPath string
+		AuditVaultDBPath            string
+		RootCAPath                  string
+		HubCAPath                   string
+		OperatorCAPath              string
+		GatewayPeerCAPath           string
+		GatewayChainPath            string
+		TrustDomainJSONPath         string
+		ServiceCertPath             string
+		PkiRootDir                  string
+		PkiAuthoritiesDir           string
+		PkiIssuedDir                string
+		PkiIssuedHubDir             string
+		PkiIssuedGatewayPeerDir     string
+		PkiTrustDir                 string
+		PkiRevocationDir            string
+		PkiBinariesDir              string
+		ActuatorPubJSONPath         string
+		ActuatorPubPEMPath          string
+		OperatorKeyPath             string
+		OperatorCertPath            string
+		OperatorChainPath           string
+		WardenPubPath               string
+		RootCAKeyPath               string
+		TrustedSignersDir           string
+		ClientPkiDir                string
+		ClientOperatorKeyPath       string
+		ClientOperatorCertPath      string
+		SessionEncKeyPath           string
+		BootstrapDigestPath         string
+		LogDir                      string
+		G8eLogFile                  string
+		PidDir                      string
+		OperatorPostureFile         string
+		OperatorPIDFile             string
+		BinDir                      string
+		ExecutionVaultDBPath        string
+		ReplayStoreDBPath           string
+		LedgerDir                   string
+		LedgerFilesDir              string
 	}{}
 
 	// After resetting, all fields should be empty.

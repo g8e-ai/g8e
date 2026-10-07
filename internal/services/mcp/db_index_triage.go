@@ -108,6 +108,9 @@ func (t *DBIndexTriageTool) Execute(ctx context.Context, args json.RawMessage) (
 			Used:   true,
 		})
 	}
+	if err := indexList.Err(); err != nil {
+		return CallToolResult{}, fmt.Errorf("failed during index iteration: %w", err)
+	}
 
 	result := DBIndexTriageResult{
 		Indexes:       indexes,

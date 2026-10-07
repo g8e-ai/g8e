@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -213,12 +214,16 @@ while IFS= read -r line; do
 done
 `
 	require.NoError(t, os.WriteFile(scriptPath, []byte(scriptContent), 0o755))
+	downstreamCmd := "/bin/sh"
+	if runtime.GOOS == "windows" {
+		downstreamCmd = "sh"
+	}
 
 	// Create gateway fixture with subprocess downstream configuration
 	fixture := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
 		TestName:          t.Name(),
 		AllowTestPortZero: true,
-		DownstreamCmd:     "/bin/sh",
+		DownstreamCmd:     downstreamCmd,
 		DownstreamArgs:    []string{scriptPath},
 	})
 

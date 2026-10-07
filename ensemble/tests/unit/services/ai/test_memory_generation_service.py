@@ -8,12 +8,15 @@
 """Unit tests for MemoryGenerationService."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
-from app.constants import InvestigationStatus
+from app.constants import InvestigationStatus, LLMProvider
 from app.constants.message_sender import MessageSender
+from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Content, Role
+from app.models.http_context import RequestContext
 from app.models.investigations import (
     AIResponseMetadata,
     ConversationHistoryMessage,
@@ -21,14 +24,81 @@ from app.models.investigations import (
     InvestigationModel,
 )
 from app.models.memory import InvestigationMemory, MemoryAnalysis
-from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.memory_generation_service import (
     CONVERSATION_HISTORY_LIMIT,
     FALLBACK_TEXT_LIMIT,
+    MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS,
     MemoryGenerationService,
 )
+from tests.fakes.fake_llm_provider import FakeLLMProvider
 from tests.fakes.fake_memory_data_service import FakeMemoryDataService
+
+
+@pytest.mark.asyncio
+async def test_memory_generation_bounds_models_without_documented_output_limit(monkeypatch):
+    provider = FakeLLMProvider()
+    provider.add_response('{"investigation_summary":"Synthetic test summary"}')
+    monkeypatch.setattr(
+        "app.services.ai.memory_generation_service.get_generative_lite_provider",
+        lambda _settings: provider,
+    )
+    service = MemoryGenerationService(FakeMemoryDataService())
+    memory = InvestigationMemory(
+        investigation_id="inv-1",
+        case_id="case-1",
+        user_id="user-1",
+        status=InvestigationStatus.OPEN,
+        case_title="Test Case",
+    )
+    settings = G8eeUserSettings(
+        llm=LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="smollm2:135m")
+    )
+    await service._ai_update_memory(memory, [], settings)
+    assert (
+        provider.call_log[0]["lite_llm_settings"].max_output_tokens
+        == MEMORY_ANALYSIS_MAX_OUTPUT_TOKENS
+    )
+    assert memory.investigation_summary == "Synthetic test summary"
+
+
+@pytest.mark.asyncio
+async def test_memory_generation_skips_update_on_context_overflow_without_retry(monkeypatch):
+    provider = FakeLLMProvider()
+    provider.generate_content_lite = AsyncMock(
+        side_effect=ContextWindowExceededError(
+            "prompt filled the context window",
+            model="smollm2:135m",
+            service_name="ollama",
+            num_ctx=65536,
+            prompt_tokens=65536,
+            channel="lite",
+        )
+    )
+    monkeypatch.setattr(
+        "app.services.ai.memory_generation_service.get_generative_lite_provider",
+        lambda _settings: provider,
+    )
+    service = MemoryGenerationService(FakeMemoryDataService())
+    memory = InvestigationMemory(
+        investigation_id="inv-1",
+        case_id="case-1",
+        user_id="user-1",
+        status=InvestigationStatus.OPEN,
+        case_title="Test Case",
+        investigation_summary="Existing summary",
+    )
+    settings = G8eeUserSettings(
+        llm=LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="smollm2:135m")
+    )
+
+    model_call = await service._ai_update_memory(memory, [], settings)
+
+    assert memory.investigation_summary == "Existing summary"
+    assert model_call is not None
+    assert model_call.succeeded is False
+    assert model_call.error_type == "ContextWindowExceededError"
+    assert provider.generate_content_lite.await_count == 1
 
 
 class TestMemoryGenerationServiceInit:
@@ -56,9 +126,7 @@ class TestUpdateMemoryFromConversation:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(
-                provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash"
-            )
+            llm=LLMSettings(llm_lite_provider=LLMProvider.GEMINI, llm_lite_model="gemini-3.1-flash")
         )
 
         memory, model_call = await service.update_memory_from_conversation(
@@ -103,9 +171,7 @@ class TestUpdateMemoryFromConversation:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(
-                provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash"
-            )
+            llm=LLMSettings(llm_lite_provider=LLMProvider.GEMINI, llm_lite_model="gemini-3.1-flash")
         )
 
         memory, model_call = await service.update_memory_from_conversation(
@@ -125,7 +191,7 @@ class TestUpdateMemoryFromConversation:
         assert len(fake_memory_crud.save_calls) == 0
 
     @pytest.mark.asyncio
-    async def test_conversation_truncates_to_limit(self):
+    async def test_conversation_truncates_to_limit(self, monkeypatch):
         fake_memory_crud = FakeMemoryDataService()
         service = MemoryGenerationService(fake_memory_crud)
 
@@ -152,16 +218,14 @@ class TestUpdateMemoryFromConversation:
         ]
 
         settings = G8eeUserSettings(
-            llm=LLMSettings(
-                provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash"
-            )
+            llm=LLMSettings(llm_lite_provider=LLMProvider.GEMINI, llm_lite_model="gemini-3.1-flash")
         )
 
         # Mock _ai_update_memory to prevent actual LLM call
         async def mock_ai_update(memory, history, settings, **kwargs):
             return None
 
-        service._ai_update_memory = mock_ai_update
+        monkeypatch.setattr(service, "_ai_update_memory", mock_ai_update)
 
         await service.update_memory_from_conversation(
             conversation_history=conversation_history,
@@ -182,7 +246,6 @@ class TestUpdateMemoryFromConversation:
             user_id="user-1",
             status=InvestigationStatus.OPEN,
             case_title="Test Case",
-            sentinel_mode=False,
         )
         contents = MemoryGenerationService._conversation_to_contents(conversation_history, memory)
         # Total contents = memory context (1) + messages (20) + analysis request (1) = 22
@@ -199,7 +262,6 @@ class TestConversationToContents:
             user_id="user-1",
             status=InvestigationStatus.OPEN,
             case_title="Test Case",
-            sentinel_mode=False,
             investigation_summary="Test summary",
             technical_background="Test background",
         )
@@ -208,9 +270,11 @@ class TestConversationToContents:
 
         assert len(contents) == 2
         assert contents[0].role == Role.USER
-        assert "CURRENT MEMORY STATE" in contents[0].parts[0].text
-        assert "Test summary" in contents[0].parts[0].text
-        assert "Test background" in contents[0].parts[0].text
+        first_text = contents[0].parts[0].text
+        assert first_text is not None
+        assert "CURRENT MEMORY STATE" in first_text
+        assert "Test summary" in first_text
+        assert "Test background" in first_text
 
     def test_filters_thinking_messages(self):
         memory = InvestigationMemory(
@@ -219,7 +283,6 @@ class TestConversationToContents:
             user_id="user-1",
             status=InvestigationStatus.OPEN,
             case_title="Test Case",
-            sentinel_mode=False,
         )
 
         conversation_history = [
@@ -249,7 +312,7 @@ class TestConversationToContents:
             len(contents) == 3
         )  # Memory context + normal message + analysis request (thinking filtered)
         # Extract all text from content parts
-        all_text = " ".join([part.text for content in contents for part in content.parts])
+        all_text = " ".join([part.text or "" for content in contents for part in content.parts])
         assert "Normal message" in all_text
         assert "Thinking message" not in all_text
 
@@ -260,7 +323,6 @@ class TestConversationToContents:
             user_id="user-1",
             status=InvestigationStatus.OPEN,
             case_title="Test Case",
-            sentinel_mode=False,
         )
 
         conversation_history = [
@@ -287,7 +349,6 @@ class TestConversationToContents:
             user_id="user-1",
             status=InvestigationStatus.OPEN,
             case_title="Test Case",
-            sentinel_mode=False,
         )
 
         conversation_history = [
@@ -314,7 +375,6 @@ class TestConversationToContents:
             user_id="user-1",
             status=InvestigationStatus.OPEN,
             case_title="Test Case",
-            sentinel_mode=False,
         )
 
         conversation_history = [
@@ -341,7 +401,6 @@ class TestConversationToContents:
             user_id="user-1",
             status=InvestigationStatus.OPEN,
             case_title="Test Case",
-            sentinel_mode=False,
         )
 
         conversation_history = [
@@ -368,7 +427,6 @@ class TestConversationToContents:
             user_id="user-1",
             status=InvestigationStatus.OPEN,
             case_title="Test Case",
-            sentinel_mode=False,
         )
 
         contents = MemoryGenerationService._conversation_to_contents([], memory)
@@ -674,18 +732,6 @@ class TestConversationToContentsPayload:
             sentinel_mode=False,
         )
 
-        (
-            [
-                ConversationHistoryMessage(
-                    id="msg-1",
-                    sender=MessageSender.USER_CHAT,
-                    content="User question",
-                    timestamp=datetime.now(UTC),
-                    prev_hash="0" * 64,
-                    entry_hash="0" * 64,
-                )
-            ],
-        )
         memory = InvestigationMemory(
             investigation_id="inv-1",
             case_id="case-1",
@@ -724,7 +770,7 @@ class TestMemoryMergeLogic:
     """
 
     @pytest.mark.asyncio
-    async def test_full_replacement_when_llm_returns_all_fields(self):
+    async def test_full_replacement_when_llm_returns_all_fields(self, monkeypatch):
         fake_crud = FakeMemoryDataService()
         existing = InvestigationMemory(
             investigation_id="inv-1",
@@ -767,7 +813,7 @@ class TestMemoryMergeLogic:
             )
             memory.interaction_style = ai_response.interaction_style or memory.interaction_style
 
-        service._ai_update_memory = mock_ai_update
+        monkeypatch.setattr(service, "_ai_update_memory", mock_ai_update)
 
         investigation = InvestigationModel(
             id="inv-1",
@@ -778,7 +824,7 @@ class TestMemoryMergeLogic:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test")
+            llm=LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="test")
         )
 
         memory, model_call = await service.update_memory_from_conversation(
@@ -807,7 +853,7 @@ class TestMemoryMergeLogic:
         assert memory.communication_preferences == "New prefs"
 
     @pytest.mark.asyncio
-    async def test_partial_response_preserves_unmentioned_fields(self):
+    async def test_partial_response_preserves_unmentioned_fields(self, monkeypatch):
         fake_crud = FakeMemoryDataService()
         existing = InvestigationMemory(
             investigation_id="inv-1",
@@ -844,7 +890,7 @@ class TestMemoryMergeLogic:
             )
             memory.interaction_style = ai_response.interaction_style or memory.interaction_style
 
-        service._ai_update_memory = mock_ai_update
+        monkeypatch.setattr(service, "_ai_update_memory", mock_ai_update)
 
         investigation = InvestigationModel(
             id="inv-1",
@@ -855,7 +901,7 @@ class TestMemoryMergeLogic:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test")
+            llm=LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="test")
         )
 
         memory, model_call = await service.update_memory_from_conversation(
@@ -887,7 +933,7 @@ class TestMemoryMergeLogic:
         assert memory.response_style == "Old style"
 
     @pytest.mark.asyncio
-    async def test_empty_llm_response_preserves_all_existing_fields(self):
+    async def test_empty_llm_response_preserves_all_existing_fields(self, monkeypatch):
         fake_crud = FakeMemoryDataService()
         existing = InvestigationMemory(
             investigation_id="inv-1",
@@ -904,7 +950,7 @@ class TestMemoryMergeLogic:
         async def mock_ai_update(memory, history, settings, **kwargs):
             return None  # Simulate empty/unparseable LLM response (no fields updated)
 
-        service._ai_update_memory = mock_ai_update
+        monkeypatch.setattr(service, "_ai_update_memory", mock_ai_update)
 
         investigation = InvestigationModel(
             id="inv-1",
@@ -915,7 +961,7 @@ class TestMemoryMergeLogic:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test")
+            llm=LLMSettings(llm_lite_provider=LLMProvider.OLLAMA, llm_lite_model="test")
         )
 
         memory, model_call = await service.update_memory_from_conversation(

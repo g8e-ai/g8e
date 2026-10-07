@@ -55,7 +55,7 @@ def load_prompt(prompt_file: PromptFile) -> str:
         )
 
     try:
-        with open(file_path, encoding="utf-8") as f:
+        with Path(file_path).open(encoding="utf-8") as f:
             content = f.read()
 
         logger.info("Loaded prompt from %s (%d chars)", prompt_file.name, len(content))
@@ -86,7 +86,7 @@ def list_prompts(subdirectory: str = "") -> dict[str, Path]:
         if any(part.startswith(".") for part in file_path.parts) or "venv" in file_path.parts:
             continue
         relative_path = file_path.relative_to(PROMPTS_DIR)
-        prompt_name = str(relative_path).replace(".txt", "").replace("/", "_")
+        prompt_name = relative_path.as_posix().replace(".txt", "").replace("/", "_")
         prompts[prompt_name] = file_path
 
     return prompts
@@ -114,10 +114,7 @@ def load_mode_prompts(
     Returns:
         Dict keyed by PromptSection string with loaded prompt content.
     """
-    if operator_bound:
-        mode = AgentMode.G8E_BOUND
-    else:
-        mode = AgentMode.G8E_NOT_BOUND
+    mode = AgentMode.G8E_BOUND if operator_bound else AgentMode.G8E_NOT_BOUND
 
     section_files = dict(AGENT_MODE_PROMPT_FILES[mode])
 

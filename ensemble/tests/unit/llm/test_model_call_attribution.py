@@ -6,26 +6,30 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 from pydantic import ValidationError as PydanticValidationError
 
 from app.errors import ValidationError
 from app.llm.model_call_attribution import (
+    ProviderForTelemetry,
     build_model_call_telemetry,
     governed_telemetry_fields,
     prepare_provider_call,
 )
+from app.llm.providers.fake import FakeProvider
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import GovernedDispatchEvidence, ModelCallTelemetry
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+from tests.fakes.fake_decision_provider import FakeDecisionProvider
 
 
-class _RecordingProvider:
+class _RecordingProvider(FakeProvider):
+    """Real LLMProvider that records the per-call hooks prepare_provider_call drives."""
+
     def __init__(self):
+        super().__init__()
         self.last_context: G8eHttpContext | None = None
         self.last_retry_count = -1
-        self.input_artifact_hash = ""
-        self.model_boundary_privacy = None
-        self.declared_tool_names: list[str] | None = ["stale_tool_from_prior_call"]
+        self._record_declared_tools(["stale_tool_from_prior_call"])
         self._governed_dispatch_evidence = GovernedDispatchEvidence(
             transaction_id="tx-1",
             result_digest="digest-1",
@@ -48,11 +52,8 @@ class _RecordingProvider:
     def governed_dispatch_evidence(self) -> GovernedDispatchEvidence:
         return self._governed_dispatch_evidence
 
-    def clear_input_artifact_hash(self) -> None:
-        self.input_artifact_hash = ""
-
-    def clear_declared_tools(self) -> None:
-        self.declared_tool_names = None
+    def declare_tools(self, names: list[str]) -> None:
+        self._record_declared_tools(names)
 
     def set_g8e_context(self, context: G8eHttpContext | None) -> None:
         self.last_context = context
@@ -97,7 +98,7 @@ def test_prepare_provider_call_discards_tool_declarations_from_the_prior_call():
     assert provider.declared_tool_names is None
 
 
-def _telemetry(provider):
+def _telemetry(provider: ProviderForTelemetry):
     return build_model_call_telemetry(
         provider=provider,
         agent_role="sage",
@@ -111,7 +112,7 @@ def _telemetry(provider):
 
 def test_build_model_call_telemetry_records_the_tools_sent_on_that_call():
     provider = _RecordingProvider()
-    provider.declared_tool_names = ["recursive_grep_search", "file_read_on_operator"]
+    provider.declare_tools(["recursive_grep_search", "file_read_on_operator"])
 
     assert _telemetry(provider).tools_declared == ["recursive_grep_search", "file_read_on_operator"]
 
@@ -119,20 +120,16 @@ def test_build_model_call_telemetry_records_the_tools_sent_on_that_call():
 def test_build_model_call_telemetry_distinguishes_no_tools_from_not_reported():
     provider = _RecordingProvider()
 
-    provider.declared_tool_names = []
+    provider.declare_tools([])
     assert _telemetry(provider).tools_declared == []
 
-    provider.declared_tool_names = None
+    provider.clear_declared_tools()
     assert _telemetry(provider).tools_declared is None
 
 
 def test_build_model_call_telemetry_ignores_a_provider_without_the_capture():
-    class _NoCapture:
-        input_artifact_hash = ""
-        model_boundary_privacy = None
-        governed_dispatch_evidence = None
-
-    assert _telemetry(_NoCapture()).tools_declared is None
+    # Decision providers never cross a tool-declaring boundary.
+    assert _telemetry(FakeDecisionProvider()).tools_declared is None
 
 
 @pytest.mark.parametrize(
@@ -186,10 +183,12 @@ def test_build_model_call_telemetry_includes_governed_fields():
 
 def test_model_call_telemetry_requires_classification():
     with pytest.raises(PydanticValidationError, match="classification"):
-        ModelCallTelemetry(
-            agent_role="sage",
-            provider="fake",
-            model="model-a",
-            monotonic_start=1.0,
-            monotonic_end=2.0,
+        ModelCallTelemetry.model_validate(
+            {
+                "agent_role": "sage",
+                "provider": "fake",
+                "model": "model-a",
+                "monotonic_start": 1.0,
+                "monotonic_end": 2.0,
+            }
         )

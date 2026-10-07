@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -164,7 +165,7 @@ func TestG8eoService_Start_FailsClosedWithoutExecutionVault(t *testing.T) {
 	assert.Nil(t, service.pubSubCommands, "no command service may be built without replay protection storage")
 }
 
-func TestG8eoService_Start_InferenceReadinessGate(t *testing.T) {
+func TestG8eoService_Start_InferenceProviderAvailabilityDoesNotGateStartup(t *testing.T) {
 	tests := []struct {
 		name      string
 		endpoint  func(t *testing.T) string
@@ -186,9 +187,19 @@ func TestG8eoService_Start_InferenceReadinessGate(t *testing.T) {
 			wantReady: true,
 		},
 		{
-			name:     "provider unavailable",
-			endpoint: func(t *testing.T) string { return fakeOllamaWithModels(t, "", http.StatusServiceUnavailable) },
-			wantErr:  constants.ErrInferenceBackendUnavailable,
+			name:      "provider unavailable",
+			endpoint:  func(t *testing.T) string { return fakeOllamaWithModels(t, "", http.StatusServiceUnavailable) },
+			wantReady: true,
+		},
+		{
+			name:      "provider connection refused",
+			endpoint:  func(*testing.T) string { return "http://127.0.0.1:1" },
+			wantReady: true,
+		},
+		{
+			name:      "provider returns malformed status",
+			endpoint:  func(t *testing.T) string { return fakeOllamaWithModels(t, "not JSON", http.StatusOK) },
+			wantReady: true,
 		},
 		{
 			name:     "provider endpoint is invalid",
@@ -213,30 +224,26 @@ func TestG8eoService_Start_InferenceReadinessGate(t *testing.T) {
 			require.ErrorIs(t, err, tt.wantErr)
 			assert.Contains(t, err.Error(), "g8eo:", "startup must fail closed with a g8eo-attributed error")
 			assert.False(t, service.running)
-			assert.Nil(t, service.pubSubCommands, "no command service may start behind an unready inference provider")
+			assert.Nil(t, service.pubSubCommands, "invalid local configuration must not start a command service")
 		})
 	}
 }
 
-// An Inference Operator whose provider is not ready must fail before bootstrap
-// claims a session. The bootstrap port is closed here, so a claim attempt would
-// surface ErrNotAuthenticated (after its retry backoff outlasts the start
-// timeout) instead of the provider error.
-func TestG8eoService_Start_InferenceProviderFailureDoesNotClaimSession(t *testing.T) {
-	endpoint := fakeOllamaWithModels(t, "", http.StatusServiceUnavailable)
+// Startup must not spend a provider request timeout probing a slow/offline daemon.
+func TestG8eoService_Start_InferenceDoesNotProbeProvider(t *testing.T) {
+	var requests atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		<-r.Context().Done()
+	}))
+	defer provider.Close()
 	service := newStartableG8eoService(t, func(cfg *config.Config) {
-		cfg.HTTPSPort = 1
-		cfg.Inference = config.InferenceConfig{Enabled: true, OllamaEndpoint: endpoint}
+		cfg.Inference = config.InferenceConfig{Enabled: true, OllamaEndpoint: provider.URL}
 	})
-
-	sessionBefore := service.config.OperatorSessionId
-
-	err := startWithTimeout(t, service)
-
-	require.ErrorIs(t, err, constants.ErrInferenceBackendUnavailable)
-	assert.NotErrorIs(t, err, constants.ErrNotAuthenticated)
-	assert.Equal(t, sessionBefore, service.config.OperatorSessionId, "no Operator session may be claimed behind an unready inference provider")
-	assert.False(t, service.running)
+	require.NoError(t, startWithTimeout(t, service))
+	assert.True(t, service.running)
+	assert.NotNil(t, service.pubSubCommands)
+	assert.Zero(t, requests.Load(), "provider traffic starts only when requested")
 }
 
 func TestG8eoService_Start_EnablesProviderBoundaryObserverAndProvenanceOperator(t *testing.T) {

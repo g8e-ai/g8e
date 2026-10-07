@@ -6,26 +6,24 @@
 # released under the Apache License, Version 2.0.
 
 from __future__ import annotations
-from app.constants.message_sender import MessageSender
-
-
-from app.models.base import ConfigDict, Field, field_validator, model_validator
 
 from app.constants import (
+    G8EE_COMPONENT,
     ComponentStatus,
     EscalationRisk,
     EventType,
     ExecutionStatus,
     FileOperation,
-    G8EE_COMPONENT,
     HistoryActor,
     InvestigationStatus,
     Priority,
     RiskThreshold,
     Severity,
 )
-from app.utils.time_ids.timestamp import now
+from app.constants.message_sender import MessageSender
+from app.models.base import ConfigDict, Field, field_validator, model_validator
 from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
+from app.utils.time_ids.timestamp import now
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 from .grounding import GroundingMetadata
@@ -74,7 +72,11 @@ class ConversationMessageMetadata(G8eBaseModel):
         default=None, description="Whether this message has embedded thinking content"
     )
     thinking_content: str | None = Field(default=None, description="Embedded AI thinking content")
-    response_source: MessageSender | None = Field(default=None, description="Source of the AI response")
+    response_source: MessageSender | None = Field(
+        default=None, description="Source of the AI response"
+    )
+    old_status: InvestigationStatus | None = Field(default=None, description="Prior investigation status")
+    new_status: InvestigationStatus | None = Field(default=None, description="Updated investigation status")
     approved: bool | None = Field(default=None, description="Whether the approval was granted")
     reason: str | None = Field(default=None, description="Approval decision reason or feedback")
     feedback_reason: str | None = Field(
@@ -172,7 +174,9 @@ class AIResponseMetadata(ConversationMessageMetadata):
     source: MessageSender | None = Field(
         default=None, description="AI response attribution (source_ai, source_tool_call)"
     )
-    response_source: MessageSender | None = Field(default=None, description="Source of the AI response")
+    response_source: MessageSender | None = Field(
+        default=None, description="Source of the AI response"
+    )
     model: str | None = Field(default=None, description="AI model that produced this response")
     tokens: int | None = Field(default=None, description="Token count for this response")
     has_thinking: bool | None = Field(
@@ -530,6 +534,20 @@ class InvestigationModel(G8eIdentifiableModel):
             return v.strip()
         return v
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return InvestigationStatus.OPEN
+        if isinstance(v, InvestigationStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return InvestigationStatus(v)
+            except ValueError as err:
+                raise ValueError(f"Invalid investigation status: {v}") from err
+        return v
+
     @field_validator("priority", mode="before")
     @classmethod
     def validate_priority(cls, v):
@@ -620,7 +638,7 @@ class InvestigationModel(G8eIdentifiableModel):
             event_type=_status_event[new_status],
             actor=actor,
             summary=summary,
-            details={"old_status": old_status, "new_status": new_status},
+            details=ConversationMessageMetadata(old_status=old_status, new_status=new_status),
         )
 
 
@@ -687,9 +705,23 @@ class InvestigationUpdateRequest(G8eBaseModel):
         default=None, description="Updated technical context"
     )
     sentinel_mode: bool | None = Field(
-        None,
+        default=None,
         description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data.",
     )
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, InvestigationStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return InvestigationStatus(v)
+            except ValueError as err:
+                raise ValueError(f"Invalid investigation status: {v}") from err
+        return v
 
 
 class InvestigationQueryRequest(G8eBaseModel):
@@ -710,6 +742,20 @@ class InvestigationQueryRequest(G8eBaseModel):
     order_direction: str = Field(
         default="desc", pattern="^(asc|desc)$", description="Order direction"
     )
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, InvestigationStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return InvestigationStatus(v)
+            except ValueError as err:
+                raise ValueError(f"Invalid investigation status: {v}") from err
+        return v
 
 
 class InvestigationGetRequest(G8eBaseModel):
@@ -737,7 +783,7 @@ class EnrichedInvestigationContext(InvestigationModel):
         default=None, description="Attached InvestigationMemory for AI context"
     )
     bound_operators: list[BoundOperator] = Field(
-        default_factory=list, description="BoundOperator instances from G8eHttpContext"
+        default_factory=list, description="BOUND BoundOperator instances from G8eHttpContext"
     )
     operator_session_token: str | None = Field(
         default=None, description="Transient operator session token for authorization validation"

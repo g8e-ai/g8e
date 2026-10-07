@@ -11,7 +11,6 @@ package execution
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -28,7 +27,7 @@ import (
 
 func TestFsListService_ExecuteFsList(t *testing.T) {
 	t.Parallel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger := slog.New(slog.DiscardHandler)
 	workDir := testutil.TempDir(t)
 	require.NoError(t, os.WriteFile(filepath.Join(workDir, "sentinel.txt"), []byte("x"), 0644))
 	service := NewFsListService(workDir, logger)

@@ -438,12 +438,12 @@ func TestRemoteGatewayCampaignFeedExporter_HighWaterSequence(t *testing.T) {
 		client := &scriptedFeedClient{snapshot: mustMarshalJSON(t, models.PublicFeedSnapshot{HighWaterSequence: 3})}
 		exporter := &remoteGatewayCampaignFeedExporter{client: client}
 
-		got, err := exporter.fetchGatewayHighWater(context.Background())
+		got, err := exporter.fetchGatewayHighWater()
 		require.NoError(t, err)
 		assert.Equal(t, int64(3), got)
 
 		client.snapshot = mustMarshalJSON(t, models.PublicFeedSnapshot{HighWaterSequence: 1})
-		got, err = exporter.fetchGatewayHighWater(context.Background())
+		got, err = exporter.fetchGatewayHighWater()
 		require.NoError(t, err)
 		assert.Equal(t, int64(3), got)
 	})

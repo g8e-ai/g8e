@@ -329,15 +329,14 @@ func TestFSFileChecksumTool_Execute_RelativePath(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := testutil.TempDir(t)
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
+	// Relative-path resolution discovers CWD; this is the behavior under test.
+	t.Chdir(tmpDir)
 
 	absFile := filepath.Join(tmpDir, "relative.txt")
-	err = os.WriteFile(absFile, []byte("test"), 0644)
+	err := os.WriteFile(absFile, []byte("test"), 0644)
 	require.NoError(t, err)
 
-	relPath, err := filepath.Rel(cwd, absFile)
-	require.NoError(t, err)
+	relPath := "relative.txt"
 
 	req := FSFileChecksumRequest{FilePath: relPath}
 	args, err := json.Marshal(req)

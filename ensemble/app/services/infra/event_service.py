@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from app.constants import EventType, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, EventType
 from app.models.base import G8eBaseModel
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.http_context import G8eHttpContext, RequestContext
@@ -42,7 +42,9 @@ class EventService(EventServiceProtocol):
         approval requests for file edits). There is no connected client to
         deliver to when there is no routing target, so skipping is correct.
         """
-        if not getattr(event, "web_session_id", None) and not getattr(event, "cli_session_id", None):
+        if not getattr(event, "web_session_id", None) and not getattr(
+            event, "cli_session_id", None
+        ):
             logger.debug(
                 "Skipping SSE push for targetless %s (event_type=%s)",
                 type(event).__name__,
@@ -69,7 +71,7 @@ class EventService(EventServiceProtocol):
         self,
         investigation_id: str,
         event_type: EventType,
-        payload: object,
+        payload: G8eBaseModel,
         web_session_id: str | None,
         case_id: str,
         user_id: str,
@@ -77,10 +79,6 @@ class EventService(EventServiceProtocol):
         cli_session_id: str | None = None,
     ) -> None:
         """Publish an investigation-related event."""
-        from app.models.events import SessionEvent
-        from app.models.http_context import RequestContext
-
-
         ctx = RequestContext(
             web_session_id=web_session_id,
             cli_session_id=cli_session_id,
@@ -96,9 +94,7 @@ class EventService(EventServiceProtocol):
         )
         await self.publish(event)
 
-    async def publish_agent_state(
-        self, request: ObserveProducerAgentStateRequest
-    ) -> None:
+    async def publish_agent_state(self, request: ObserveProducerAgentStateRequest) -> None:
         """Best-effort agent-state projection push to the gateway observe producer.
 
         Catches transport/network failures from the low-level client, logs one
@@ -109,8 +105,7 @@ class EventService(EventServiceProtocol):
         """
         if not request.web_session_id and not request.cli_session_id:
             logger.debug(
-                "Skipping observe agent-state push for targetless request "
-                "(agent_id=%s, status=%s)",
+                "Skipping observe agent-state push for targetless request (agent_id=%s, status=%s)",
                 request.agent_id,
                 request.status,
             )
@@ -129,17 +124,14 @@ class EventService(EventServiceProtocol):
                 },
             )
 
-    async def publish_run_state(
-        self, request: ObserveProducerRunStateRequest
-    ) -> None:
+    async def publish_run_state(self, request: ObserveProducerRunStateRequest) -> None:
         """Best-effort run-state projection push to the gateway observe producer.
 
         Same best-effort and targetless-skip semantics as publish_agent_state.
         """
         if not request.web_session_id and not request.cli_session_id:
             logger.debug(
-                "Skipping observe run-state push for targetless request "
-                "(run_id=%s, status=%s)",
+                "Skipping observe run-state push for targetless request (run_id=%s, status=%s)",
                 request.run_id,
                 request.status,
             )

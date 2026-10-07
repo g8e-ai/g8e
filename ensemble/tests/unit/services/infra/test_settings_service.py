@@ -17,10 +17,10 @@ from app.constants.collections import (
 from app.constants.config import LLMProvider
 from app.constants.env_vars import EnvVar
 from app.models.settings import (
+    AppSettingsDocument,
     G8eeAppSettings,
     G8eeUserSettings,
     LLMSettings,
-    AppSettingsDocument,
     UserSettingsDocument,
 )
 from app.services.infra.settings_service import SettingsService
@@ -48,13 +48,13 @@ class TestSettingsService:
         # Mock user document
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OPENAI,
-                primary_model="gpt-4",
+                llm_primary_provider=LLMProvider.OPENAI,
+                llm_model="gpt-4",
                 openai_api_key="sk-user-key",
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -70,8 +70,8 @@ class TestSettingsService:
             collection=DB_COLLECTION_SETTINGS, document_id=user_doc_id
         )
 
-    async def test_get_user_settings_missing_returns_empty_defaults(self):
-        """Missing user settings document yields empty defaults so request-scoped
+    async def test_get_user_settings_missing_defaults_to_governed_inference(self):
+        """Missing user settings document selects governed inference; request-scoped
         LLM overrides (CLI/BYO) can populate validate_llm_config. Hard failure on
         absent credentials is the responsibility of validate_llm_config, not this
         dependency-injected loader."""
@@ -81,9 +81,9 @@ class TestSettingsService:
         user_id = "user_456"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        platform_doc = AppSettingsDocument(settings=G8eeAppSettings()).model_dump()
+        platform_doc = AppSettingsDocument(settings=G8eeAppSettings.model_validate({})).model_dump()
 
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             None if document_id == user_doc_id else platform_doc
         )
 
@@ -91,7 +91,7 @@ class TestSettingsService:
         settings = await service.get_user_settings(user_id)
 
         assert isinstance(settings, G8eeUserSettings)
-        assert settings.llm.primary_provider is None
+        assert settings.llm.primary_provider is LLMProvider.G8E
         assert settings.llm.primary_model is None
         assert settings.llm.openai_api_key is None
 
@@ -116,13 +116,13 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA,
-                primary_model="gemma3:12b",
+                llm_primary_provider=LLMProvider.OLLAMA,
+                llm_model="gemma3:12b",
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
 
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -143,8 +143,8 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA,
-                primary_model="gemma3:12b",
+                llm_primary_provider=LLMProvider.OLLAMA,
+                llm_model="gemma3:12b",
                 llm_command_gen_passes=5,
                 llm_command_gen_enabled=False,
                 llm_command_gen_auditor=False,
@@ -152,7 +152,7 @@ class TestSettingsService:
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
 
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -173,13 +173,13 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.GEMINI,
-                primary_model="gemini-2.5-pro",
+                llm_primary_provider=LLMProvider.GEMINI,
+                llm_model="gemini-2.5-pro",
                 gemini_api_key="test-key",
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -199,11 +199,11 @@ class TestSettingsService:
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
         user_settings = G8eeUserSettings(
-            llm=LLMSettings(primary_provider=LLMProvider.OLLAMA, primary_model="gemma3:12b")
+            llm=LLMSettings(llm_primary_provider=LLMProvider.OLLAMA, llm_model="gemma3:12b")
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
 
-        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda *_args, document_id, **_kwargs: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -252,7 +252,7 @@ class TestLLMEnvVarBootstrapDefaults:
         service = self._make_service()
         settings = service.get_local_settings()
 
-        assert settings.llm.primary_provider is None
+        assert settings.llm.primary_provider is LLMProvider.G8E
         assert settings.llm.primary_model is None
         assert settings.llm.assistant_provider is None
         assert settings.llm.assistant_model is None
@@ -264,7 +264,7 @@ class TestLLMEnvVarBootstrapDefaults:
         service = self._make_service()
         settings = service.get_local_settings()
 
-        assert settings.llm.primary_provider is None
+        assert settings.llm.primary_provider is LLMProvider.G8E
         assert settings.llm.primary_model is None
         assert settings.llm.openai_api_key is None
         assert settings.llm.ollama_api_key is None
@@ -290,14 +290,14 @@ class TestLLMEnvVarBootstrapDefaults:
         assert local.llm.openai_api_key == "env-openai-key"
 
         # Platform DB carries a different provider, model, key, and endpoint.
-        platform = G8eeAppSettings(
-            llm=LLMSettings(
-                primary_provider=LLMProvider.OPENAI,
-                primary_model="gpt-4o",
-                openai_api_key="platform-key",
-                ollama_endpoint="http://10.0.0.9:11434",
-            )
-        )
+        platform = G8eeAppSettings.model_validate({
+            "llm": {
+                "llm_primary_provider": LLMProvider.OPENAI,
+                "llm_model": "gpt-4o",
+                "openai_api_key": "platform-key",
+                "ollama_endpoint": "http://10.0.0.9:11434",
+            }
+        })
 
         merged = service.overlay_platform_data(local, platform)
 
@@ -316,7 +316,7 @@ class TestLLMEnvVarBootstrapDefaults:
         assert local.llm.openai_api_key == "env-openai-key"
 
         # Platform DB has no LLM values (all None).
-        platform = G8eeAppSettings()
+        platform = G8eeAppSettings.model_validate({})
 
         merged = service.overlay_platform_data(local, platform)
 
@@ -333,12 +333,12 @@ class TestLLMEnvVarBootstrapDefaults:
         assert local.llm.openai_api_key == "env-openai-key"
         assert local.llm.primary_model is None
 
-        platform = G8eeAppSettings(
-            llm=LLMSettings(
-                primary_model="gemma4:12b",
-                ollama_api_key="platform-ollama-key",
-            )
-        )
+        platform = G8eeAppSettings.model_validate({
+            "llm": {
+                "llm_model": "gemma4:12b",
+                "ollama_api_key": "platform-ollama-key",
+            }
+        })
 
         merged = service.overlay_platform_data(local, platform)
 

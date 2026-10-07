@@ -96,6 +96,7 @@ func (c *AuditController) handleAuditRecords(w http.ResponseWriter, r *http.Requ
 // @Param			tx_id			query		string	false	"Transaction ID for a single canonical ActionReceipt"
 // @Param			investigation_id	query		string	false	"Investigation ID for a unique correlation lookup"
 // @Param			action_type		query		string	false	"Action type required with investigation_id"
+// @Param acting_app_id query string false "Acting app identity filter"
 // @Param			operator_session_id	query	string	false	"Operator session filter for list results"
 // @Param			limit			query		int		false	"Maximum list results"
 // @Param			offset			query		int		false	"List offset"
@@ -183,7 +184,7 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	receipts, err := c.auditStore.ListActionReceipts(operatorSessionID, limit, offset)
+	receipts, err := c.auditStore.ListActionReceipts(models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: r.URL.Query().Get("acting_app_id")}, limit, offset)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditReceipts: %w", err).Error())
 		return
@@ -200,6 +201,7 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 // @Tags			audit
 // @Produce		json
 // @Param			since			query		string	false	"Inclusive receipt timestamp in RFC3339 format"
+// @Param acting_app_id query string false "Acting app identity filter"
 // @Param			operator_session_id	query	string	false	"Operator session filter"
 // @Param			limit			query		int		false	"Maximum results"
 // @Success		200				{object}	models.AuditReceiptsResponse
@@ -234,8 +236,8 @@ func (c *AuditController) handleAuditReceiptsExport(w http.ResponseWriter, r *ht
 	operatorSessionID := r.URL.Query().Get("operator_session_id")
 	var receipts []*models.ActionReceiptRecord
 	var err error
-	if operatorSessionID != "" {
-		receipts, err = c.auditStore.ListActionReceipts(operatorSessionID, limit, 0)
+	if operatorSessionID != "" || r.URL.Query().Get("acting_app_id") != "" {
+		receipts, err = c.auditStore.ListActionReceipts(models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: r.URL.Query().Get("acting_app_id")}, limit, 0)
 	} else {
 		receipts, err = c.auditStore.ListActionReceiptsSince(since, limit)
 	}
@@ -273,7 +275,7 @@ func (c *AuditController) handleAuditEvents(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	events, err := c.auditStore.GetEvents(operatorSessionID, limit, offset)
+	events, err := c.auditStore.GetEvents(models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: r.URL.Query().Get("acting_app_id")}, limit, offset)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditEvents: %w", err).Error())
 		return
@@ -298,6 +300,7 @@ func toAuditEventRow(e *storage.Event) models.AuditEventRow {
 	}
 	return models.AuditEventRow{
 		ID:                e.ID,
+		TransactionID:     e.TransactionID,
 		OperatorSessionID: e.OperatorSessionID,
 		Timestamp:         e.Timestamp.Format(time.RFC3339),
 		Type:              string(e.Type),
@@ -317,7 +320,7 @@ func (c *AuditController) handleAuditSummary(w http.ResponseWriter, r *http.Requ
 	operatorSessionID := r.URL.Query().Get("operator_session_id")
 
 	// Query events summary
-	events, err := c.auditStore.GetEvents(operatorSessionID, maxAuditQueryLimit, 0)
+	events, err := c.auditStore.GetEvents(models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: r.URL.Query().Get("acting_app_id")}, maxAuditQueryLimit, 0)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditSummary: %w", err).Error())
 		return
@@ -329,7 +332,7 @@ func (c *AuditController) handleAuditSummary(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Query receipts summary
-	receipts, err := c.auditStore.ListActionReceipts(operatorSessionID, maxAuditQueryLimit, 0)
+	receipts, err := c.auditStore.ListActionReceipts(models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: r.URL.Query().Get("acting_app_id")}, maxAuditQueryLimit, 0)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditSummary: %w", err).Error())
 		return
@@ -360,14 +363,14 @@ func (c *AuditController) handleAuditReport(w http.ResponseWriter, r *http.Reque
 	operatorSessionID := r.URL.Query().Get("operator_session_id")
 
 	// Fetch events
-	events, err := c.auditStore.GetEvents(operatorSessionID, maxAuditQueryLimit, 0)
+	events, err := c.auditStore.GetEvents(models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: r.URL.Query().Get("acting_app_id")}, maxAuditQueryLimit, 0)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditReport: %w", err).Error())
 		return
 	}
 
 	// Fetch receipts
-	receipts, err := c.auditStore.ListActionReceipts(operatorSessionID, maxAuditQueryLimit, 0)
+	receipts, err := c.auditStore.ListActionReceipts(models.AuditScope{OperatorSessionID: operatorSessionID, ActingAppID: r.URL.Query().Get("acting_app_id")}, maxAuditQueryLimit, 0)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditReport: %w", err).Error())
 		return
@@ -399,6 +402,7 @@ func (c *AuditController) handleAuditReport(w http.ResponseWriter, r *http.Reque
 	report := models.AuditReportData{
 		GeneratedAt:       time.Now().Format(time.RFC3339),
 		OperatorSessionID: operatorSessionID,
+		ActingAppID:       r.URL.Query().Get("acting_app_id"),
 		Events:            eventRows,
 		EventsCount:       len(events),
 		Receipts:          receiptRows,

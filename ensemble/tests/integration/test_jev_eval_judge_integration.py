@@ -13,19 +13,18 @@ import os
 
 import pytest
 
-from app.constants import OLLAMA_DEFAULT_ENDPOINT, JEV_DEFAULT_MODEL, LLMProvider
+from app.constants import JEV_DEFAULT_MODEL, OLLAMA_DEFAULT_ENDPOINT, LLMProvider
 from app.constants.env_vars import EnvVar
-from app.models.settings import EvalJudgeSettings, G8eeUserSettings, LLMSettings
-from app.services.ai.eval_judge import EvalJudge, PASSING_THRESHOLD
 from app.decision import get_decision_provider
+from app.models.settings import EvalJudgeSettings, G8eeUserSettings, LLMSettings
+from app.services.ai.eval_judge import PASSING_THRESHOLD, EvalJudge
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_system_one, pytest.mark.slow]
 
 FROZEN_ASSIGNMENT = {
     "user_query": "Which service failed in these logs?",
     "interaction_trace": (
-        "Designated role output:\n"
-        "The checkout-api service is failing with HTTP 503 errors."
+        "Designated role output:\nThe checkout-api service is failing with HTTP 503 errors."
     ),
     "expected_behavior": "Identify checkout-api as the failing service",
     "required_concepts": ["log-analysis", "checkout-api"],
@@ -38,10 +37,10 @@ FROZEN_ASSIGNMENT = {
 def jev_settings() -> G8eeUserSettings:
     return G8eeUserSettings(
         llm=LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="main-model",
-            lite_provider=LLMProvider.JEV,
-            lite_model=JEV_DEFAULT_MODEL,
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="main-model",
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model=JEV_DEFAULT_MODEL,
             ollama_endpoint=os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT,
         ),
         eval_judge=EvalJudgeSettings(eval_judge_model=JEV_DEFAULT_MODEL),

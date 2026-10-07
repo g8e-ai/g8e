@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -54,6 +55,9 @@ type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, env map[string]string, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if runtime.GOOS == "windows" {
+		setProcessGroup(cmd)
+	}
 	if len(env) > 0 {
 		base := os.Environ()
 		merged := make([]string, 0, len(base)+len(env))
@@ -254,6 +258,7 @@ func certFingerprint(cert *x509.Certificate) string {
 func bundleContainsFingerprint(data []byte, fingerprint string) (bool, error) {
 	certs, err := parseBundleCerts(data)
 	if err != nil {
+		//nolint:nilerr // intentional fallback: unparseable cert bundle treated as not containing fingerprint
 		return false, nil
 	}
 	for _, c := range certs {
@@ -263,6 +268,8 @@ func bundleContainsFingerprint(data []byte, fingerprint string) (bool, error) {
 	}
 	return false, nil
 }
+
+var _ = bundleContainsFingerprint
 
 // writeTempCert writes certPEM to a restrictive temporary directory and returns
 // the file path. The caller must clean up the returned directory via

@@ -22,6 +22,7 @@ import (
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
@@ -49,7 +50,7 @@ func TestParseOperatorHeartbeatView_HeartbeatResultSnapshot(t *testing.T) {
 		}
 	}`)
 
-	view := parseOperatorHeartbeatView(raw)
+	view := clioperator.ParseHeartbeatView(raw)
 	require.NotNil(t, view)
 	assert.Equal(t, "worker-1", view.SystemIdentity.Hostname)
 	assert.Equal(t, constants.Platform("linux"), view.SystemIdentity.OS)
@@ -70,7 +71,7 @@ func TestParseOperatorHeartbeatView_AcceptsProtojsonCamelCase(t *testing.T) {
 		}
 	}`)
 
-	view := parseOperatorHeartbeatView(raw)
+	view := clioperator.ParseHeartbeatView(raw)
 	require.NotNil(t, view)
 	assert.Equal(t, "legacy-host", view.SystemIdentity.Hostname)
 	assert.Equal(t, 5.0, view.PerformanceMetrics.CPUPercent)
@@ -84,7 +85,7 @@ func TestParseOperatorHeartbeatView_RejectsLegacyPythonShape(t *testing.T) {
 		"performance": {"cpu_percent": 5.0}
 	}`)
 
-	assert.Nil(t, parseOperatorHeartbeatView(raw))
+	assert.Nil(t, clioperator.ParseHeartbeatView(raw))
 }
 
 func TestFindOperatorByIDOrSession(t *testing.T) {

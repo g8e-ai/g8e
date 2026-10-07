@@ -5,23 +5,21 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from __future__ import annotations
-
-"""
-Internal API Router for g8ee
+"""Internal API Router for g8ee.
 
 Cluster-internal HTTP endpoints for direct communication from other g8e components.
 NOT exposed via Ingress - only accessible from pods within the Kubernetes cluster.
-
 Note: g8eo Operator commands still use PubSub (external agent communication).
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from fastapi import APIRouter, Depends, status
-from app.models.http_context import G8eHttpContext, RequestContext
 
-from app.models.settings import G8eeAppSettings, G8eeUserSettings
+from fastapi import APIRouter, Depends, status
+
+from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants import (
     DB_COLLECTION_MEMORIES,
     EventType,
@@ -30,16 +28,47 @@ from app.constants import (
     OperatorStatus,
     Priority,
 )
-from app.errors import ResourceNotFoundError, ServiceUnavailableError, ValidationError
+from app.constants.message_sender import MessageSender
+from app.dependencies import (
+    get_g8ee_api_key_service,
+    get_g8ee_app_settings,
+    get_g8ee_approval_service,
+    get_g8ee_attachment_service,
+    get_g8ee_cache_aside_service,
+    get_g8ee_case_data_service,
+    get_g8ee_certificate_service,
+    get_g8ee_chat_pipeline,
+    get_g8ee_chat_task_manager,
+    get_g8ee_chat_user_settings,
+    get_g8ee_event_service,
+    get_g8ee_gateway_operator_client,
+    get_g8ee_investigation_seed_service,
+    get_g8ee_investigation_service,
+    get_g8ee_operator_command_service,
+    get_g8ee_settings_service_write,
+    get_request_context,
+    require_authenticated_context,
+)
+from app.errors import (
+    AuthenticationError,
+    NetworkError,
+    ResourceNotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
+from app.llm.model_catalog import list_governed_models, list_models
 from app.models import CaseCreateRequest
+from app.models.cache import FieldFilter
 from app.models.cases import (
     CaseCreatedPayload,
+    CaseDeleteRequest,
     CaseEventPayload,
     CaseGetRequest,
     CaseUpdateRequest,
-    CaseDeleteRequest,
 )
-from app.models.cache import FieldFilter
+from app.models.evaluation_trace import EvaluationSeedApplication
+from app.models.events import SessionEvent
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import (
     APIKeyGenerationRequest,
     APIKeyGenerationResponse,
@@ -47,22 +76,22 @@ from app.models.internal_api import (
     CaseResponse,
     ChatMessageRequest,
     ChatStartedResponse,
-    EvaluationTraceResponse,
     DirectCommandRequest,
     DirectCommandSentResponse,
-    OperatorApprovalResponse,
+    EvaluationTraceResponse,
     InternalOperatorAuthCall,
     LLMModelListRequest,
     LLMModelListResponse,
     LLMRoleSettingsResponse,
     LLMRoleSettingsUpdateRequest,
+    OperatorApprovalResponse,
     OperatorAuthenticateResponse,
-    OperatorDeviceLinkRegisterRequest,
-    OperatorDeviceLinkRegisterResponse,
     OperatorBindRequest,
     OperatorBindResponse,
     OperatorCertificateRevokeRequest,
     OperatorCertificateRevokeResponse,
+    OperatorDeviceLinkRegisterRequest,
+    OperatorDeviceLinkRegisterResponse,
     OperatorListenSessionAuthRequest,
     OperatorSessionRefreshRequest,
     OperatorSessionRefreshResponse,
@@ -80,83 +109,68 @@ from app.models.internal_api import (
     OperatorUpdateAPIKeyRequest,
     OperatorUpdateAPIKeyResponse,
     PendingApprovalsResponse,
+    SettingsGetRequest,
     StopAIRequest,
     StopAIResponse,
     StopOperatorRequest,
-    SettingsGetRequest,
 )
+from app.models.investigations import (
+    ConversationMessageMetadata,
+    InvestigationCreateRequest,
+    InvestigationGetRequest,
+    InvestigationModel,
+    InvestigationQueryRequest,
+    InvestigationUpdateRequest,
+)
+from app.models.operators import (
+    HeartbeatSnapshot,
+    OperatorStatusUpdatedPayload,
+)
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.models.triage_api import (
     TriageAnswerRequest,
     TriageSkipRequest,
     TriageTimeoutRequest,
 )
-from app.models.investigations import (
-    ConversationMessageMetadata,
-    InvestigationModel,
-    InvestigationQueryRequest,
-    InvestigationUpdateRequest,
-    InvestigationGetRequest,
-)
+from app.services.ai.chat_pipeline import ChatPipelineService
+from app.services.ai.chat_task_manager import BackgroundTaskManager
+from app.services.ai.title_generator import generate_case_title
+from app.services.auth.api_key_service import APIKeyService
+from app.services.auth.certificate_service import CertificateService
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.data.attachment_store_service import AttachmentService
+from app.services.data.case_data_service import CaseDataService
+from app.services.evaluation.investigation_seed import InvestigationSeedService
+from app.services.evaluation.tool_gate import resolve_tool_gate
+from app.services.evaluation.trace_service import EvaluationTraceService, validated_trace_ids
+from app.services.infra.event_service import EventService
+from app.services.infra.llm_role_settings import provider_connection
+from app.services.infra.settings_service import SettingsService
+from app.services.investigation.investigation_service import InvestigationService
+from app.services.operator.approval_service import OperatorApprovalService
+from app.services.operator.command_service import OperatorCommandService
+from app.utils.time_ids.timestamp import now
 
 InvestigationUpdateRequest.model_rebuild()
 InvestigationQueryRequest.model_rebuild()
 InvestigationGetRequest.model_rebuild()
-from app.models.events import SessionEvent
-from app.models.operators import (
-    HeartbeatSnapshot,
-    OperatorStatusUpdatedPayload,
-)
-from app.clients.gateway_operator_client import GatewayOperatorClient
-from app.errors import NetworkError
-from app.llm.model_catalog import list_governed_models, list_models
-from app.services.data.case_data_service import CaseDataService
-from app.services.data.attachment_store_service import AttachmentService
-from app.services.investigation.investigation_service import InvestigationService
-from app.services.ai.chat_pipeline import ChatPipelineService
-from app.services.ai.chat_task_manager import BackgroundTaskManager
-from app.services.ai.title_generator import generate_case_title
-from app.services.infra.event_service import EventService
-from app.services.cache.cache_aside import CacheAsideService
-from app.services.auth.api_key_service import APIKeyService
-from app.services.auth.certificate_service import CertificateService
-from app.services.infra.llm_role_settings import provider_connection
-from app.services.infra.settings_service import SettingsService
-from app.constants.message_sender import MessageSender
 
 _GATEWAY_OPERATOR_AUTHORITY_ERROR = (
     "Operator auth and session authority are Gateway-owned; use gateway enrollment "
     "and POST /api/v1/operators/reauth instead of g8ee local services."
 )
 
-from app.models.evaluation_trace import EvaluationSeedApplication
-from app.services.evaluation.investigation_seed import InvestigationSeedService
-from app.services.evaluation.tool_gate import resolve_tool_gate
-from app.services.evaluation.trace_service import EvaluationTraceService, validated_trace_ids
-from app.dependencies import (
-    get_g8ee_app_settings,
-    get_g8ee_approval_service,
-    get_g8ee_attachment_service,
-    get_g8ee_cache_aside_service,
-    get_g8ee_case_data_service,
-    get_g8ee_chat_pipeline,
-    get_g8ee_chat_task_manager,
-    get_g8ee_event_service,
-    get_g8ee_investigation_seed_service,
-    get_g8ee_investigation_service,
-    get_g8ee_operator_command_service,
-    get_g8ee_gateway_operator_client,
-    get_g8ee_api_key_service,
-    get_g8ee_certificate_service,
-    get_g8ee_settings_service_write,
-    get_g8ee_chat_user_settings,
-    get_request_context,
-    require_authenticated_context,
-)
-
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["internal"])
 _background_tasks: set[asyncio.Task] = set()
+
+
+def _require_context_value(value: str | None, field: str) -> str:
+    if not value:
+        raise ValidationError(
+            f"Request context requires {field}", field=field, constraint="required"
+        )
+    return value
 
 
 def _status_payload_from_gateway_doc(
@@ -164,7 +178,8 @@ def _status_payload_from_gateway_doc(
 ) -> OperatorStatusUpdatedPayload:
     snapshot_raw = operator_doc.get("latest_heartbeat_snapshot")
     snapshot: HeartbeatSnapshot | None = None
-    hostname = operator_doc.get("current_hostname")
+    hostname_raw = operator_doc.get("current_hostname")
+    hostname = hostname_raw if isinstance(hostname_raw, str) else None
     if isinstance(snapshot_raw, dict):
         try:
             snapshot = HeartbeatSnapshot.model_validate(snapshot_raw)
@@ -172,10 +187,11 @@ def _status_payload_from_gateway_doc(
                 hostname = snapshot.system_identity.hostname
         except Exception:
             snapshot = None
+    operator_name = operator_doc.get("name")
     return OperatorStatusUpdatedPayload(
         operator_id=str(operator_doc.get("id", "")),
         status=status,
-        name=operator_doc.get("name") if isinstance(operator_doc.get("name"), str) else None,
+        name=operator_name if isinstance(operator_name, str) else None,
         hostname=hostname if isinstance(hostname, str) else None,
         system_fingerprint=snapshot.system_fingerprint if snapshot else None,
         metrics=snapshot,
@@ -193,10 +209,10 @@ async def _publish_gateway_operator_status_events(
     if not operator_ids:
         return
     try:
-        operators = await gateway_operator_client.list(user_id=g8e_context.user_id)
-        by_id = {
-            str(op.get("id")): op for op in operators if isinstance(op, dict) and op.get("id")
-        }
+        operators = await gateway_operator_client.list(
+            user_id=_require_context_value(g8e_context.user_id, "user_id")
+        )
+        by_id = {str(op.get("id")): op for op in operators if isinstance(op, dict) and op.get("id")}
         for operator_id in operator_ids:
             operator_doc = by_id.get(operator_id)
             if not operator_doc:
@@ -219,7 +235,9 @@ def _per_operator_errors(
     failed_operator_ids: list[str], message: str | None
 ) -> list[dict[str, str]]:
     error_message = message or "Gateway operator request failed"
-    return [{"operator_id": operator_id, "error": error_message} for operator_id in failed_operator_ids]
+    return [
+        {"operator_id": operator_id, "error": error_message} for operator_id in failed_operator_ids
+    ]
 
 
 async def _generate_and_update_title(
@@ -250,16 +268,15 @@ async def _generate_and_update_title(
                 case_id=case_id,
                 web_session_id=context.web_session_id,
                 payload=CaseEventPayload(
-                    updated_at=updated_case.updated_at,
+                    updated_at=updated_case.updated_at or now(),
                     title=ai_title,
                 ),
-                user_id=context.user_id,
+                user_id=_require_context_value(context.user_id, "user_id"),
             )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "[INTERNAL-HTTP] Failed to generate case title in background task",
             extra={"case_id": case_id, "error": str(e)},
-            exc_info=True,
         )
 
 
@@ -289,8 +306,6 @@ async def _create_investigation_for_case(
             component="g8ee",
         )
 
-    from app.models.investigations import InvestigationCreateRequest
-
     investigation = await investigation_service.create_investigation(
         InvestigationCreateRequest(
             case_id=case.id,
@@ -299,7 +314,7 @@ async def _create_investigation_for_case(
             web_session_id=g8e_context.web_session_id,
             priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
             user_email=case.user_email,
-            user_id=case.user_id,
+            user_id=_require_context_value(case.user_id, "user_id"),
             operator_id=g8e_context.operator_id,
             operator_session_id=g8e_context.operator_session_id,
             sentinel_mode=sentinel_mode,
@@ -312,6 +327,36 @@ async def _create_investigation_for_case(
         extra={"case_id": case.id, "investigation_id": investigation.id},
     )
     return g8e_context.model_copy(update={"investigation_id": investigation.id})
+
+
+def _log_internal_chat_request(
+    request: ChatMessageRequest,
+    context: G8eHttpContext,
+    create_new_case: bool,
+) -> None:
+    logger.info(
+        "[INTERNAL-HTTP] Non-streaming chat request received",
+        extra={
+            "case_id": context.case_id,
+            "investigation_id": context.investigation_id,
+            "create_new_case": create_new_case,
+            "web_session_id": (context.web_session_id[:8] + "...")
+            if context.web_session_id
+            else None,
+            "message_length": len(request.message),
+        },
+    )
+
+
+def _validate_chat_seed(request: ChatMessageRequest, create_new_case: bool):
+    seed = request.evaluation_context.seed if request.evaluation_context is not None else None
+    if seed is not None and not create_new_case:
+        raise ValidationError(
+            "an investigation seed is only accepted when the request creates the case",
+            field="evaluation_context.seed",
+            constraint="requires_create_case",
+        )
+    return seed
 
 
 @router.post(InternalAPIPaths.G8EE_CHAT, response_model=ChatStartedResponse)
@@ -349,18 +394,13 @@ async def internal_chat(
     unless the request creates the case) and a seed failure is an HTTP error,
     not a model failure.
     """
+    del app_settings, settings_service
     resource_creation = request.resource_creation
     create_new_case = resource_creation.create_case if resource_creation else False
     create_new_investigation = bool(
         resource_creation and resource_creation.create_investigation and not create_new_case
     )
-    seed = request.evaluation_context.seed if request.evaluation_context is not None else None
-    if seed is not None and not create_new_case:
-        raise ValidationError(
-            "an investigation seed is only accepted when the request creates the case",
-            field="evaluation_context.seed",
-            constraint="requires_create_case",
-        )
+    seed = _validate_chat_seed(request, create_new_case)
 
     if request.evaluation_context is not None:
         g8e_context = g8e_context.model_copy(
@@ -381,35 +421,23 @@ async def internal_chat(
 
     # Validate investigation_id exists before proceeding, UNLESS we are creating
     # a new case or a new investigation under an existing case
-    if not create_new_case and not create_new_investigation:
-        if not g8e_context.investigation_id:
-            logger.error(
-                "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing",
-                extra={
-                    "case_id": g8e_context.case_id,
-                    "web_session_id": (g8e_context.web_session_id[:8] + "...")
-                    if g8e_context.web_session_id
-                    else None,
-                },
-            )
-            return ChatStartedResponse(
-                success=False,
-                case_id=g8e_context.case_id or "",
-                investigation_id=g8e_context.investigation_id or "",
-            )
+    if not create_new_case and not create_new_investigation and not g8e_context.investigation_id:
+        logger.error(
+            "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing",
+            extra={
+                "case_id": g8e_context.case_id,
+                "web_session_id": (g8e_context.web_session_id[:8] + "...")
+                if g8e_context.web_session_id
+                else None,
+            },
+        )
+        return ChatStartedResponse(
+            success=False,
+            case_id=g8e_context.case_id or "",
+            investigation_id=g8e_context.investigation_id or "",
+        )
 
-    logger.info(
-        "[INTERNAL-HTTP] Non-streaming chat request received",
-        extra={
-            "case_id": g8e_context.case_id,
-            "investigation_id": g8e_context.investigation_id,
-            "create_new_case": create_new_case,
-            "web_session_id": (g8e_context.web_session_id[:8] + "...")
-            if g8e_context.web_session_id
-            else None,
-            "message_length": len(request.message),
-        },
-    )
+    _log_internal_chat_request(request, g8e_context, create_new_case)
 
     seed_application: EvaluationSeedApplication | None = None
     if create_new_case:
@@ -417,15 +445,13 @@ async def internal_chat(
             initial_message=request.message,
             attachments=request.attachments or [],
             sentinel_mode=request.sentinel_mode,
-            user_id=g8e_context.user_id,
+            user_id=_require_context_value(g8e_context.user_id, "user_id"),
             web_session_id=g8e_context.web_session_id,
             organization_id=g8e_context.organization_id,
             operator_id=g8e_context.operator_id,
             operator_session_id=g8e_context.operator_session_id,
         )
         case = await case_service.create_case(case_create_data, generated_title=None)
-
-        from app.models.investigations import InvestigationCreateRequest
 
         investigation_request = InvestigationCreateRequest(
             case_id=case.id,
@@ -434,7 +460,7 @@ async def internal_chat(
             web_session_id=g8e_context.web_session_id,
             priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
             user_email=case.user_email,
-            user_id=case.user_id,
+            user_id=_require_context_value(case.user_id, "user_id"),
             operator_id=g8e_context.operator_id,
             operator_session_id=g8e_context.operator_session_id,
             sentinel_mode=request.sentinel_mode,
@@ -463,8 +489,6 @@ async def internal_chat(
                 )
                 raise
 
-        from app.models.events import SessionEvent
-
         # Publish CASE_CREATED event immediately after inline creation.
         try:
             await event_service.publish(
@@ -486,8 +510,10 @@ async def internal_chat(
             task = asyncio.create_task(
                 _generate_and_update_title(
                     message=request.message,
-                    case_id=g8e_context.case_id,
-                    investigation_id=g8e_context.investigation_id,
+                    case_id=_require_context_value(g8e_context.case_id, "case_id"),
+                    investigation_id=_require_context_value(
+                        g8e_context.investigation_id, "investigation_id"
+                    ),
                     context=RequestContext.from_app_context(g8e_context),
                     user_settings=user_settings,
                     case_service=case_service,
@@ -547,15 +573,19 @@ async def internal_chat(
     # Track the task - run_chat will also track it internally, but we track it here
     # to ensure it's in the registry before we return
     _t = asyncio.create_task(
-        chat_task_manager.track(g8e_context.investigation_id, chat_task, auto_cancel_previous=False)
+        chat_task_manager.track(
+            _require_context_value(g8e_context.investigation_id, "investigation_id"),
+            chat_task,
+            auto_cancel_previous=False,
+        )
     )
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
 
     return ChatStartedResponse(
         success=True,
-        case_id=g8e_context.case_id,
-        investigation_id=g8e_context.investigation_id,
+        case_id=_require_context_value(g8e_context.case_id, "case_id"),
+        investigation_id=_require_context_value(g8e_context.investigation_id, "investigation_id"),
     )
 
 
@@ -592,11 +622,12 @@ async def internal_triage_answer(
         },
     )
 
-    investigation = await investigation_service.get_investigation(g8e_context.investigation_id)
+    investigation_id = _require_context_value(g8e_context.investigation_id, "investigation_id")
+    investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation:
         raise ResourceNotFoundError(
             "Investigation not found",
-            resource_id=g8e_context.investigation_id,
+            resource_id=investigation_id,
             resource_type="investigation",
             component="g8ee",
         )
@@ -604,7 +635,7 @@ async def internal_triage_answer(
     # Store answer as user.chat message with structured metadata
     answer_text = f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}"
     await investigation_service.investigation_data_service.add_chat_message(
-        investigation_id=g8e_context.investigation_id,
+        investigation_id=investigation_id,
         sender=MessageSender.USER_CHAT,
         content=answer_text,
         metadata=ConversationMessageMetadata(
@@ -650,6 +681,7 @@ async def internal_triage_skip(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
+    del request
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -666,18 +698,19 @@ async def internal_triage_skip(
         },
     )
 
-    investigation = await investigation_service.get_investigation(g8e_context.investigation_id)
+    investigation_id = _require_context_value(g8e_context.investigation_id, "investigation_id")
+    investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation:
         raise ResourceNotFoundError(
             "Investigation not found",
-            resource_id=g8e_context.investigation_id,
+            resource_id=investigation_id,
             resource_type="investigation",
             component="g8ee",
         )
 
     skip_text = "Skipped clarifying questions"
     await investigation_service.investigation_data_service.add_chat_message(
-        investigation_id=g8e_context.investigation_id,
+        investigation_id=investigation_id,
         sender=MessageSender.USER_CHAT,
         content=skip_text,
         metadata=ConversationMessageMetadata(event_type=EventType.AI_TRIAGE_CLARIFICATION_SKIPPED),
@@ -716,6 +749,7 @@ async def internal_triage_timeout(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
+    del request
     logger.info(
         "[INTERNAL-HTTP] Triage timeout received",
         extra={
@@ -749,7 +783,7 @@ async def stop_ai_processing(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    investigation_id = g8e_context.investigation_id
+    investigation_id = _require_context_value(g8e_context.investigation_id, "investigation_id")
     reason = request.reason
     web_session_id = g8e_context.web_session_id
 
@@ -921,6 +955,7 @@ async def get_case(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Get a case by ID - internal cluster use only."""
+    del request, g8e_context
     case = await case_service.get_case(case_id)
     return CaseResponse(success=True, case=case)
 
@@ -939,13 +974,13 @@ async def update_case(
             case_id=case_id,
             web_session_id=g8e_context.web_session_id,
             payload=CaseEventPayload(
-                updated_at=case.updated_at,
+                updated_at=case.updated_at or now(),
                 title=case.title,
                 status=case.status,
                 priority=case.priority,
                 severity=case.severity,
             ),
-            user_id=g8e_context.user_id,
+            user_id=_require_context_value(g8e_context.user_id, "user_id"),
         )
     return CaseResponse(success=True, case=case)
 
@@ -968,6 +1003,7 @@ async def delete_case(
     - All investigations with this case_id
     - All memories with this case_id
     """
+    del request, g8e_context
     try:
         case = await case_service.get_case(case_id)
         case_user_id = case.user_id
@@ -1071,7 +1107,7 @@ async def listen_session_auth(
     """Removed: operators bootstrap via Gateway POST /api/v1/operators/reauth."""
     logger.warning(
         "[INTERNAL-HTTP] Rejected legacy session auth gateway request",
-        extra={"operator_id": request.operator_id, "user_id": request.user_id},
+        extra={"operator_id": request.operator_id, "user_id": g8e_context.user_id},
     )
     return {"success": False, "error": _GATEWAY_OPERATOR_AUTHORITY_ERROR}
 
@@ -1121,6 +1157,7 @@ async def generate_api_key(
     Authority: g8ee.
     SECURITY: Internal only - client component.
     """
+    del g8e_context
     try:
         api_key = api_key_service.generate_raw_key(prefix=request.prefix)
         return APIKeyGenerationResponse(success=True, api_key=api_key)
@@ -1142,6 +1179,7 @@ async def revoke_operator_certificate(
     Authority: g8ee.
     SECURITY: Internal only - client component.
     """
+    del g8e_context
     try:
         success = await certificate_service.revoke_certificate(
             serial=request.serial, reason=request.reason, operator_id=request.operator_id
@@ -1158,6 +1196,7 @@ async def claim_operator_slot(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Removed: slot claims are Gateway-owned during enrollment/reauth."""
+    del g8e_context
     logger.warning(
         "[INTERNAL-HTTP] Rejected legacy operator slot claim",
         extra={"operator_id": request.operator_id},
@@ -1297,6 +1336,7 @@ async def authenticate_operator(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Removed: operator authentication is Gateway-owned via enrollment/reauth."""
+    del request, g8e_context
     logger.warning("[INTERNAL-HTTP] Rejected legacy operator authenticate request")
     return OperatorAuthenticateResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
 
@@ -1310,11 +1350,14 @@ async def register_device_link_operator(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ) -> OperatorDeviceLinkRegisterResponse:
     """Removed: device-link operator bootstrap is Gateway-owned."""
+    del g8e_context
     logger.warning(
         "[INTERNAL-HTTP] Rejected legacy device-link operator registration",
         extra={"operator_id": request.operator_id},
     )
-    return OperatorDeviceLinkRegisterResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
+    return OperatorDeviceLinkRegisterResponse(
+        success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR
+    )
 
 
 @router.post(
@@ -1352,6 +1395,7 @@ async def refresh_operator_session(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Removed: operator session refresh is Gateway-owned."""
+    del g8e_context
     logger.warning(
         "[INTERNAL-HTTP] Rejected legacy operator session refresh",
         extra={"operator_session_id": request.operator_session_id[:12] + "..."},
@@ -1385,7 +1429,6 @@ async def stop_operator(
 
     try:
         result = await gateway_operator_client.stop(
-            context=g8e_context,
             operator_session_id=request.operator_session_id,
         )
     except NetworkError as exc:
@@ -1435,6 +1478,7 @@ async def get_investigation(
 
     SECURITY: Validates that the authenticated user owns the investigation.
     """
+    del request
     logger.info(
         "[INTERNAL-HTTP] Get investigation via RequestContext",
         extra={"user_id": g8e_context.user_id, "investigation_id": investigation_id},
@@ -1483,13 +1527,13 @@ async def get_evaluation_trace(
     trace_service = EvaluationTraceService()
     try:
         trace = trace_service.load(assignment_id, evaluation_attempt_id)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         raise ResourceNotFoundError(
             f"Evaluation trace not found for assignment {assignment_id}",
             resource_type="evaluation_trace",
             resource_id=f"{assignment_id}/{evaluation_attempt_id}",
             component="g8ee",
-        )
+        ) from exc
     return EvaluationTraceResponse(trace=trace.model_dump(mode="json"))
 
 
@@ -1525,7 +1569,11 @@ async def get_llm_role_settings(
 
     API keys are reported only as set or unset.
     """
-    return await settings_service.get_llm_role_settings(g8e_context.user_id)
+    del request
+    user_id = g8e_context.user_id
+    if user_id is None:
+        raise AuthenticationError("Authenticated user identity is required for model settings")
+    return await settings_service.get_llm_role_settings(user_id)
 
 
 @router.post(InternalAPIPaths.G8EE_SETTINGS_LLM, response_model=LLMRoleSettingsResponse)
@@ -1535,7 +1583,10 @@ async def update_llm_role_settings(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Save caller-owned provider connections or role selections to user settings."""
-    return await settings_service.update_llm_role_settings(g8e_context.user_id, request)
+    user_id = g8e_context.user_id
+    if user_id is None:
+        raise AuthenticationError("Authenticated user identity is required for model settings")
+    return await settings_service.update_llm_role_settings(user_id, request)
 
 
 @router.post(InternalAPIPaths.G8EE_SETTINGS_LLM_MODELS, response_model=LLMModelListResponse)
@@ -1555,7 +1606,10 @@ async def list_llm_models(
         return LLMModelListResponse(
             models=await list_governed_models(gateway_operator_client, g8e_context)
         )
-    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
+    user_id = g8e_context.user_id
+    if user_id is None:
+        raise AuthenticationError("Authenticated user identity is required to list saved models")
+    user_settings = await settings_service.get_user_settings(user_id)
     endpoint, api_key = provider_connection(user_settings.llm, request.provider)
     models = await list_models(request.provider, endpoint, api_key)
     return LLMModelListResponse(models=models)

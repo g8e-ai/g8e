@@ -35,7 +35,7 @@ func TestPublisherPublish_ValidatesAndReplacesCompleteMirror(t *testing.T) {
 	require.NoError(t, os.MkdirAll(old, constants.PermDirPrivate))
 	require.NoError(t, os.WriteFile(filepath.Join(old, "old.txt"), []byte("old"), constants.PermFilePublic))
 
-	archive := validArchive(t, "build-1", false)
+	archive := validArchive(t, false)
 	manifest, err := NewPublisher(old).Publish(bytes.NewReader(archive))
 
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestPublisherPublish_ValidatesAndReplacesCompleteMirror(t *testing.T) {
 func TestPublisherPublish_AcceptsDockerCopyRootDirectory(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "mirror")
 
-	manifest, err := NewPublisher(output).Publish(bytes.NewReader(validArchive(t, "build-1", true)))
+	manifest, err := NewPublisher(output).Publish(bytes.NewReader(validArchive(t, true)))
 
 	require.NoError(t, err)
 	assert.Equal(t, "build-1", manifest.BuildID)
@@ -109,9 +109,10 @@ func TestCatalogAndManifestValidationRejectsUnsupportedInputs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "g8e-linux-amd64", target.Filename)
 	hostTarget, err := HostTarget()
-	if runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" || runtime.GOARCH == "386") {
+	if _, targetErr := PlatformTarget(runtime.GOOS, runtime.GOARCH); targetErr == nil {
 		require.NoError(t, err)
 		assert.Equal(t, runtime.GOOS, hostTarget.OS)
+		assert.Equal(t, runtime.GOARCH, hostTarget.Arch)
 	} else {
 		assert.ErrorIs(t, err, constants.ErrG8eBinaryArtifact)
 	}
@@ -156,7 +157,7 @@ func TestReaderAndManifestFiles_ValidateCataloguedArtifacts(t *testing.T) {
 	_, corruptErr := OpenReader(corruptDir)
 	assert.ErrorIs(t, corruptErr, constants.ErrG8eBinaryManifest)
 
-	manifest, err := NewPublisher(root).Publish(bytes.NewReader(validArchive(t, "build-1", false)))
+	manifest, err := NewPublisher(root).Publish(bytes.NewReader(validArchive(t, false)))
 	require.NoError(t, err)
 	reader, err = OpenReader(root)
 	require.NoError(t, err)
@@ -183,7 +184,7 @@ func TestReaderAndManifestFiles_ValidateCataloguedArtifacts(t *testing.T) {
 
 func TestPublisherPublishMatching_EnforcesImageProvenance(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "mirror")
-	archive := validArchive(t, "build-1", false)
+	archive := validArchive(t, false)
 	_, err := NewPublisher(root).PublishMatching(bytes.NewReader(archive), Provenance{
 		Version:        "test",
 		BuildID:        "build-1",
@@ -207,7 +208,7 @@ func TestPublisherRejectsInvalidOutputAndMatchesProvenance(t *testing.T) {
 	_, err := NewPublisher("").Publish(bytes.NewReader(nil))
 	assert.ErrorIs(t, err, constants.ErrG8eBinaryExport)
 
-	archive := validArchive(t, "build-1", false)
+	archive := validArchive(t, false)
 	_, err = NewPublisher(filepath.Join(t.TempDir(), "mirror")).PublishMatching(bytes.NewReader(archive), Provenance{
 		Version:        "test",
 		BuildID:        "build-1",
@@ -237,7 +238,7 @@ func extractBuildTime(t *testing.T, archive []byte) string {
 	}
 }
 
-func validArchive(t *testing.T, buildID string, includeRoot bool) []byte {
+func validArchive(t *testing.T, includeRoot bool) []byte {
 	t.Helper()
 	var archive bytes.Buffer
 	writer := tar.NewWriter(&archive)
@@ -253,7 +254,7 @@ func validArchive(t *testing.T, buildID string, includeRoot bool) []byte {
 		writeTarFile(t, writer, target.Filename, data, constants.PermFileExecutable)
 		writeTarFile(t, writer, target.Checksum, []byte(hexDigest+"  "+target.Filename+"\n"), constants.PermFilePublic)
 	}
-	manifest := Manifest{SchemaVersion: 1, Version: "test", BuildID: buildID, BuildTime: time.Now().UTC().Format(time.RFC3339), SourceRevision: "test", SourceTreeHash: strings.Repeat("a", 64), Targets: artifacts}
+	manifest := Manifest{SchemaVersion: 1, Version: "test", BuildID: "build-1", BuildTime: time.Now().UTC().Format(time.RFC3339), SourceRevision: "test", SourceTreeHash: strings.Repeat("a", 64), Targets: artifacts}
 	data, err := json.Marshal(manifest)
 	require.NoError(t, err)
 	writeTarFile(t, writer, constants.G8eBinariesManifestFilename, data, constants.PermFilePublic)

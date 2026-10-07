@@ -20,9 +20,26 @@ in production code, and bypassed the gateway's governance pipeline. The
 ensemble routes governed operator dispatch through Gateway HTTP only.
 """
 
-import pytest
+import importlib
+import inspect
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+from g8e.models.governance import CommandIntent
+
+import app.clients as clients_pkg
+from app.clients.governance_client import GovernanceClient
+from app.constants import InvestigationStatus
 from app.constants.api_paths import GatewayAPIPaths
+from app.models.http_context import RequestContext
+from app.models.investigations import InvestigationModel
+from app.models.memory import InvestigationMemory
+from app.services.data.case_data_service import CaseDataService
+from app.services.data.reputation_data_service import ReputationDataService
+from app.services.investigation.investigation_data_service import (
+    InvestigationDataService,
+)
+from app.services.investigation.memory_data_service import MemoryDataService
 from app.utils.hashing.ledger_hash import canonical_json
 
 pytestmark = pytest.mark.unit
@@ -35,9 +52,6 @@ class TestGovernanceClientUsesGatewayAPIPaths:
         assert GatewayAPIPaths.GOVERNANCE_ENVELOPES == "/api/v1/governance/envelopes"
 
     def test_governance_client_source_uses_gateway_api_paths(self):
-        import inspect
-
-        from app.clients.governance_client import GovernanceClient
 
         source = inspect.getsource(GovernanceClient.submit_envelope)
         assert "GatewayAPIPaths.GOVERNANCE_ENVELOPES" in source
@@ -48,9 +62,6 @@ class TestGovernanceClientMTLS:
     """Verify GovernanceClient passes mTLS cert paths to session."""
 
     def test_governance_client_accepts_tls_config(self):
-        import inspect
-
-        from app.clients.governance_client import GovernanceClient
 
         sig = inspect.signature(GovernanceClient.__init__)
         assert "tls_config" in sig.parameters
@@ -58,9 +69,6 @@ class TestGovernanceClientMTLS:
         assert "TLSConfig" in annotation
 
     def test_governance_client_passes_certs_to_session(self):
-        import inspect
-
-        from app.clients.governance_client import GovernanceClient
 
         source = inspect.getsource(GovernanceClient._get_http_session)
         assert "ca_cert_path" in source
@@ -108,13 +116,11 @@ class TestDeadPubSubClientsRemoved:
         ],
     )
     def test_dead_pubsub_client_module_is_not_importable(self, module_name):
-        import importlib
 
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(module_name)
 
     def test_clients_init_does_not_export_dead_pubsub_clients(self):
-        import app.clients as clients_pkg
 
         exports = set(clients_pkg.__all__)
         assert "PubSubGovernanceClient" not in exports
@@ -131,13 +137,11 @@ class TestPubSubClientRemovedFromG8ee:
     """Regression: g8ee must not ship a PubSubClient for operator dispatch."""
 
     def test_pubsub_client_module_is_not_importable(self):
-        import importlib
 
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module("app.clients.pubsub_client")
 
     def test_clients_init_does_not_export_pubsub_client(self):
-        import app.clients as clients_pkg
 
         assert "PubSubClient" not in clients_pkg.__all__
         assert not hasattr(clients_pkg, "PubSubClient")
@@ -154,20 +158,17 @@ class TestDeadAbstractionsRemoved:
     """
 
     def test_uap_module_is_not_importable(self):
-        import importlib
 
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module("app.models.uap")
 
     def test_envelope_builder_module_is_not_importable(self):
-        import importlib
 
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module("app.utils.envelope_builder")
 
     def test_command_intent_sourced_from_g8e_models_governance(self):
         """CommandIntent must be sourced from g8e.models.governance, not redefined locally."""
-        from g8e.models.governance import CommandIntent
 
         assert CommandIntent is not None
         assert hasattr(CommandIntent, "from_payload_bytes")
@@ -178,9 +179,6 @@ class TestDataServicesUseGovernanceEnvelopes:
     """Verify business-critical data services route writes through governance."""
 
     def test_case_data_service_uses_governance(self):
-        import inspect
-
-        from app.services.data.case_data_service import CaseDataService
 
         source = inspect.getsource(CaseDataService)
         assert "governance_client" in source
@@ -189,11 +187,6 @@ class TestDataServicesUseGovernanceEnvelopes:
         assert "delete_governed_doc" in source
 
     def test_investigation_data_service_uses_governance(self):
-        import inspect
-
-        from app.services.investigation.investigation_data_service import (
-            InvestigationDataService,
-        )
 
         source = inspect.getsource(InvestigationDataService)
         assert "governance_client" in source
@@ -202,9 +195,6 @@ class TestDataServicesUseGovernanceEnvelopes:
         assert "delete_governed_doc" in source
 
     def test_memory_data_service_uses_governance(self):
-        import inspect
-
-        from app.services.investigation.memory_data_service import MemoryDataService
 
         source = inspect.getsource(MemoryDataService)
         assert "governance_client" in source
@@ -213,11 +203,6 @@ class TestDataServicesUseGovernanceEnvelopes:
 
     @pytest.mark.asyncio
     async def test_new_memory_write_preserves_delegated_operator_authority(self):
-        from unittest.mock import AsyncMock, MagicMock
-
-        from app.models.http_context import RequestContext
-        from app.models.investigations import InvestigationModel
-        from app.services.investigation.memory_data_service import MemoryDataService
 
         governance_client = MagicMock()
         governance_client.submit_envelope = AsyncMock()
@@ -243,11 +228,6 @@ class TestDataServicesUseGovernanceEnvelopes:
 
     @pytest.mark.asyncio
     async def test_new_generated_memory_save_preserves_delegated_operator_authority(self):
-        from unittest.mock import AsyncMock, MagicMock
-
-        from app.models.http_context import RequestContext
-        from app.models.memory import InvestigationMemory
-        from app.services.investigation.memory_data_service import MemoryDataService
 
         governance_client = MagicMock()
         governance_client.submit_envelope = AsyncMock()
@@ -262,7 +242,7 @@ class TestDataServicesUseGovernanceEnvelopes:
             case_id="case-1",
             investigation_id="investigation-1",
             user_id="user-1",
-            status="Open",
+            status=InvestigationStatus.OPEN,
             case_title="Case 1",
         )
 
@@ -273,9 +253,6 @@ class TestDataServicesUseGovernanceEnvelopes:
         assert message.operator_session_id == "operator-session-1"
 
     def test_reputation_data_service_uses_governance(self):
-        import inspect
-
-        from app.services.data.reputation_data_service import ReputationDataService
 
         source = inspect.getsource(ReputationDataService)
         assert "governance_client" in source

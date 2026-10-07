@@ -10,10 +10,11 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from app.constants import EventType, G8EE_COMPONENT
-from app.utils.time_ids.timestamp import now
+from app.constants import G8EE_COMPONENT, EventType
 from app.models.events import AiProcessingStoppedPayload, SessionEvent
-from app.services.infra.event_service import EventService
+from app.models.http_context import RequestContext
+from app.services.protocols import EventServiceProtocol
+from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class BackgroundTaskManager:
         cli_session_id: str | None = None,
         user_id: str | None = None,
         case_id: str | None = None,
-        event_service: EventService | None = None,
+        event_service: EventServiceProtocol | None = None,
     ) -> bool:
         """Cancel active task for the given ID.
 
@@ -111,9 +112,6 @@ class BackgroundTaskManager:
 
         if (web_session_id or cli_session_id) and case_id and event_service:
             try:
-                from app.models.http_context import RequestContext
-
-
                 ctx = RequestContext(
                     web_session_id=web_session_id,
                     cli_session_id=cli_session_id,
@@ -147,7 +145,7 @@ class BackgroundTaskManager:
 
         return True
 
-    async def wait_all(self, timeout: float | None = None) -> None:
+    async def wait_all(self, wait_timeout: float | None = None) -> None:
         """Await completion of all tracked tasks.
 
         This is used during cleanup to ensure all background operations
@@ -155,8 +153,8 @@ class BackgroundTaskManager:
         skipped. Cancelled tasks are awaited to ensure proper cleanup.
 
         Args:
-            timeout: Optional timeout in seconds. If provided, raises TimeoutError
-                    if not all tasks complete within the timeout.
+            wait_timeout: Optional timeout in seconds. If provided, raises TimeoutError
+                          if not all tasks complete within the timeout.
         """
         async with self._task_lock:
             tasks = list(self._active_tasks.values())
@@ -168,8 +166,8 @@ class BackgroundTaskManager:
         logger.info("Awaiting completion of %d tracked tasks", len(tasks))
 
         try:
-            if timeout is not None:
-                async with asyncio.timeout(timeout):
+            if wait_timeout is not None:
+                async with asyncio.timeout(wait_timeout):
                     await asyncio.gather(*tasks, return_exceptions=True)
             else:
                 await asyncio.gather(*tasks, return_exceptions=True)
@@ -178,11 +176,11 @@ class BackgroundTaskManager:
             logger.warning(
                 "Timeout waiting for %d tasks to complete after %s seconds",
                 len(tasks),
-                timeout,
+                wait_timeout,
             )
             raise
         except Exception as e:
-            logger.error("Error awaiting tracked tasks: %s", e, exc_info=True)
+            logger.exception("Error awaiting tracked tasks: %s", e)
             raise
 
 

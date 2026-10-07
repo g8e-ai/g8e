@@ -141,6 +141,36 @@ func CaptureCampaignRunModelProvenanceEvidence(ctx context.Context, store *Store
 	return nil
 }
 
+// WaitForCampaignRunModelProvenanceEvidence waits for completed scored attempts
+// only. It neither reruns inference nor manufactures missing witness evidence.
+func WaitForCampaignRunModelProvenanceEvidence(ctx context.Context, store *Store, runID string, reader *CampaignModelProvenanceReader) error {
+	if store == nil || reader == nil || runID == "" {
+		return fmt.Errorf("evaluation: wait for run model provenance: %w", constants.ErrMissingRequiredField)
+	}
+	assignments, err := store.ListAssignments(ctx, runID)
+	if err != nil {
+		return fmt.Errorf("evaluation: wait for run model provenance: %w", err)
+	}
+	var attemptIDs []string
+	for _, assignment := range assignments {
+		exists, err := store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		result, err := store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return err
+		}
+		for _, record := range scoredModelInferences(result) {
+			attemptIDs = append(attemptIDs, record.GetProviderAttemptId())
+		}
+	}
+	return reader.WaitForEvidence(ctx, attemptIDs, constants.ModelProvenanceCompletionPollInterval)
+}
+
 // CaptureCampaignRunWitnessEvidence captures both provider observation and model provenance
 // evidence for all completed assignments in a run.
 func CaptureCampaignRunWitnessEvidence(ctx context.Context, store *Store, runID string, providerReader *CampaignProviderObservationReader, provenanceReader *CampaignModelProvenanceReader) error {

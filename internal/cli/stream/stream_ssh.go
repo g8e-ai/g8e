@@ -45,6 +45,13 @@ func isTransientError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if isTransientSocketError(err) {
+		return true
+	}
+	var networkError net.Error
+	if errors.As(err, &networkError) && networkError.Timeout() {
+		return true
+	}
 	errStr := strings.ToLower(err.Error())
 	for _, pattern := range constants.TransientNetworkErrorPatterns {
 		if strings.Contains(errStr, pattern) {
@@ -70,7 +77,7 @@ func dialSSH(ctx context.Context, r ssh.HostConfig, clientConfig *sshlib.ClientC
 			proxyCmd := strings.ReplaceAll(r.ProxyCommand, "%h", r.Hostname)
 			proxyCmd = strings.ReplaceAll(proxyCmd, "%p", r.Port)
 
-			cmd := exec.CommandContext(ctx, constants.PathBinSh, "-c", proxyCmd)
+			cmd := proxyCommand(ctx, proxyCmd)
 			stdin, err := cmd.StdinPipe()
 			if err != nil {
 				ch <- dialResult{nil, fmt.Errorf("ssh: proxy stdin pipe: %w", err)}

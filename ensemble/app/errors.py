@@ -51,7 +51,7 @@ class G8eError(Exception):
             trace_id=trace_id,
             execution_id=execution_id,
             retry_suggested=retry_suggested,
-            remediation_steps=remediation_steps,
+            remediation_steps=remediation_steps or [],
             cause=cause_detail,
         )
         self.cause = cause
@@ -488,6 +488,45 @@ class ToolsNotSupportedError(ModelCapabilityError):
             capability=self.CAPABILITY,
             service_name=service_name,
             cause=cause,
+        )
+
+
+class ContextWindowExceededError(ExternalServiceError):
+    """The prompt filled the provider's context window.
+
+    The provider truncated the prompt (dropping the oldest tokens) or left no
+    room to generate, so any output is degraded or absent. Retrying the same
+    request cannot succeed; callers must shrink the prompt or raise the window.
+    Both the direct Ollama provider and the governed ``g8e`` provider raise this
+    so callers branch on the type instead of an empty-response heuristic.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        model: str,
+        service_name: str,
+        num_ctx: int | None = None,
+        prompt_tokens: int | None = None,
+        channel: str | None = None,
+        cause: Exception | None = None,
+    ):
+        self.model = model
+        self.num_ctx = num_ctx
+        self.prompt_tokens = prompt_tokens
+        self.channel = channel
+        super().__init__(
+            message,
+            service_name=service_name,
+            code=ErrorCode.EXTERNAL_SERVICE_ERROR,
+            cause=cause,
+            details={
+                "model": model,
+                "num_ctx": num_ctx,
+                "prompt_tokens": prompt_tokens,
+                "channel": channel,
+            },
         )
 
 

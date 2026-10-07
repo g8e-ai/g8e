@@ -12,39 +12,47 @@ wired with typed fakes. Use the individual fake constructors directly when
 testing a sub-service in isolation.
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
+from app.clients.gateway_operator_client import GatewayOperatorClient
+from app.constants import G8EE_COMPONENT, LogLevel
 from app.constants.generated_paths import PortConstants
-from app.constants import G8EE_COMPONENT
+from app.db.db_service import DBService
+from app.db.kv_service import KVService
 from app.models.cache import CacheOperationResult
 from app.models.settings import G8eeAppSettings
+from app.services.cache.cache_aside import CacheAsideService
 from app.services.operator.command_service import OperatorCommandService
+from app.services.operator.execution_service import OperatorExecutionService
+from app.services.operator.file_service import OperatorFileService
+from app.services.operator.filesystem_service import OperatorFilesystemService
 from app.services.operator.intent_service import OperatorIntentService
+from app.services.operator.lfaa_service import OperatorLFAAService
+from app.services.operator.port_service import OperatorPortService
 from app.services.protocols import ExecutionServiceProtocol
 from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.validation.blacklist_validator import CommandBlacklistValidator
 from app.utils.validation.whitelist_validator import CommandWhitelistValidator
-from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient
+from tests.fakes.fake_operator_clients import (
+    FakeDBClient,
+    FakeG8eClient,
+    FakeKVClient,
+)
 
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService
 from .fake_db_service import FakeDBService
 from .fake_event_service import FakeEventService
 from .fake_execution_service import FakeExecutionService
-from tests.fakes.fake_operator_clients import (
-    FakeG8eClient,
-)
 from .fake_investigation_service import FakeInvestigationService
 
 
-def create_pure_mock_cache_aside():
+def create_pure_mock_cache_aside() -> MagicMock:
     """Returns a MagicMock spec'd to CacheAsideService with AsyncMock methods.
 
     Use this for pure unit tests of services that depend on CacheAsideService
     where you only want to assert on the service-level interface calls.
     """
-    from unittest.mock import AsyncMock, MagicMock
-
-    from app.services.cache.cache_aside import CacheAsideService
-
     mock = MagicMock(spec=CacheAsideService)
     # CRUD operations
     mock.create_document = AsyncMock(return_value=CacheOperationResult(success=True))
@@ -78,35 +86,36 @@ def create_pure_mock_cache_aside():
     return mock
 
 
-def create_mock_cache_aside_service(kv_cache_client=None, db_client=None):
+class FakeWiredCacheAsideService(CacheAsideService):
+    """Real CacheAsideService wired to in-memory fake clients.
+
+    Exposes the raw fake clients as ``kv_cache_client`` / ``db_client`` so
+    tests can seed or inspect the underlying stores directly.
+    """
+
+    def __init__(self, kv_cache_client: FakeKVClient, db_client: FakeDBClient) -> None:
+        super().__init__(
+            kv=KVService(kv_cache_client),
+            db=DBService(db_client),
+            component_name=G8EE_COMPONENT,
+        )
+        self.kv_cache_client = kv_cache_client
+        self.db_client = db_client
+
+
+def create_mock_cache_aside_service(
+    kv_cache_client: FakeKVClient | None = None,
+    db_client: FakeDBClient | None = None,
+) -> FakeWiredCacheAsideService:
     """Wired CacheAsideService with fake KV/DB for tests."""
-
-    from app.db.db_service import DBService
-    from app.db.kv_service import KVService
-    from app.services.cache.cache_aside import CacheAsideService
-
-    # Use provided clients or create new fakes
-    kv_raw = kv_cache_client or FakeKVClient()
-    db_raw = db_client or FakeDBClient()
-
-    kv_svc = KVService(kv_raw)
-    db_svc = DBService(db_raw)
-
-    svc = CacheAsideService(
-        kv=kv_svc,
-        db=db_svc,
-        component_name=G8EE_COMPONENT,
+    return FakeWiredCacheAsideService(
+        kv_cache_client=kv_cache_client or FakeKVClient(),
+        db_client=db_client or FakeDBClient(),
     )
-    # Attach raw clients for convenience in tests
-    svc.kv_cache_client = kv_raw
-    svc.db_client = db_raw
-    return svc
 
 
-def create_mock_tool_executor():
+def create_mock_tool_executor() -> MagicMock:
     """Build a mock ToolExecutor for tests."""
-    from unittest.mock import MagicMock
-
     executor = MagicMock()
     executor.get_tools = MagicMock(return_value=[])
     executor.g8e_web_search_available = False
@@ -138,22 +147,21 @@ def build_command_service(
     event_service = event_service or FakeEventService()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
-    settings = settings or G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
-
-    from app.clients.gateway_operator_client import GatewayOperatorClient
+    settings = settings or G8eeAppSettings(
+        port=PortConstants.G8E_PORT_G8EE_HTTPS,
+        host="0.0.0.0",
+        log_level=LogLevel.INFO,
+        enable_logging=True,
+        session_ttl=28800,
+        absolute_session_timeout=86400,
+        docs_dir="docs",
+    )
 
     gateway_operator_client = GatewayOperatorClient(internal_http_client)
 
     approval_service = approval_service or FakeApprovalService()
 
     # Build sub-services manually (mirroring OperatorCommandService.build)
-    from app.services.operator.execution_service import OperatorExecutionService
-    from app.services.operator.file_service import OperatorFileService
-    from app.services.operator.filesystem_service import OperatorFilesystemService
-    from app.services.operator.intent_service import OperatorIntentService
-    from app.services.operator.lfaa_service import OperatorLFAAService
-    from app.services.operator.port_service import OperatorPortService
-
     lfaa_service = OperatorLFAAService(
         gateway_operator_client=gateway_operator_client,
     )
@@ -190,7 +198,7 @@ def build_command_service(
         internal_http_client=internal_http_client,
     )
 
-    svc = OperatorCommandService(
+    return OperatorCommandService(
         approval_service=approval_service,
         execution_service=execution_service,
         filesystem_service=filesystem_service,
@@ -204,8 +212,6 @@ def build_command_service(
         blacklist_validator=blacklist_validator,
         auto_approved_validator=auto_approved_validator,
     )
-    svc._store = {}
-    return svc
 
 
 def build_intent_service(

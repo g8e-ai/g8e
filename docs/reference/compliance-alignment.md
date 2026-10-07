@@ -1,8 +1,8 @@
 # Compliance Alignment
 
-**Document Version:** 2.2.3
-**Last Updated:** 2026-09-28
-**Platform:** g8e v2.2.3
+**Document Version:** 2.3.2
+**Last Updated:** 2026-10-06
+**Platform:** g8e v2.3.2
 **Maintained by:** Security and Compliance Team
 
 ## Purpose and claim boundary
@@ -18,7 +18,7 @@ g8e does not claim certification, accreditation, authorization, legal compliance
 | Atomic assertions | [`protocol/constants/compliance/assertion-catalog.json`](../../protocol/constants/compliance/assertion-catalog.json) | Versioned framework-neutral technical assertions, responsibility, evidence requirements, grader and verifier references, evidence level, validation cycle, missing-evidence policy, and passing rule |
 | Framework catalog | [`protocol/constants/compliance/framework-catalog.json`](../../protocol/constants/compliance/framework-catalog.json) | Versioned framework controls, responsibility, source references, support status, and support rationale |
 | Reviewed crosswalk | [`protocol/constants/compliance/fedramp-nist-crosswalk.json`](../../protocol/constants/compliance/fedramp-nist-crosswalk.json) | Versioned mappings from framework controls to atomic assertions, including mapping type, evidence level, responsibility, reviewer, and review time |
-| Demo scenario catalog | [`protocol/constants/compliance/demo-scenario-catalog.json`](../../protocol/constants/compliance/demo-scenario-catalog.json) | Versioned evidence-producing scenarios with assertion and framework-control references |
+| Historical demo scenario catalog | [`protocol/constants/compliance/demo-scenario-catalog.json`](../../protocol/constants/compliance/demo-scenario-catalog.json) | Retired pre-v2.3.2 scenario definitions; retained for historical interpretation, with no current runner or importer |
 | Protocol contract | [`protocol/proto/g8e/compliance/v1/compliance.proto`](../../protocol/proto/g8e/compliance/v1/compliance.proto) | Typed scope, evidence, assessment, analysis, profile, report-manifest, signature, and verification records |
 | Generated protocol reference | [`protocol/docs/reference/api/g8e/compliance/v1/index.md`](../../protocol/docs/reference/api/g8e/compliance/v1/index.md) | Generated field reference for the compliance protocol |
 | FedRAMP KSI catalog | [`docs/reference/ksi-catalog.json`](./ksi-catalog.json) | Typed FedRAMP KSI definitions and method requirements used by the KSI evaluator |
@@ -27,7 +27,7 @@ The JSON catalogs are canonical compact documents with embedded identities, vers
 
 ## Maintained framework scope
 
-The canonical framework catalog (version 1.0.0) and reviewed crosswalk (version 1.0.0) currently cover FedRAMP 20x CR26 and NIST SP 800-53 Rev. 5. Their exact framework versions, controls, support classifications, responsibilities, and mappings are defined in the framework catalog and crosswalk linked above. The assertion catalog (version 2.0.0) and demo scenario catalog (version 1.1.0) provide the technical evidence basis for compliance evaluations.
+The canonical framework catalog (version 1.0.0) and reviewed crosswalk (version 1.0.0) currently cover FedRAMP 20x CR26 and NIST SP 800-53 Rev. 5. Their exact framework versions, controls, support classifications, responsibilities, and mappings are defined in the framework catalog and crosswalk linked above. The assertion catalog (version 2.0.0) provides the technical evidence basis for current compliance evaluations; the demo scenario catalog (version 1.1.0) is historical after the v2.3.2 demo removal.
 
 SOC 2 Trust Services Criteria, ISO/IEC 27001, HIPAA Security Rule, PCI DSS, GDPR, NIST SP 800-63B, and NSA Zero Trust Implementation Guidelines do not yet have reviewed canonical catalogs and crosswalks in this repository. g8e therefore does not emit framework-control assessments or framework profiles for them. Architecture features may be relevant to those standards, but relevance is not a machine-evaluated control outcome and is not presented as one here.
 
@@ -35,7 +35,7 @@ SOC 2 Trust Services Criteria, ISO/IEC 27001, HIPAA Security Rule, PCI DSS, GDPR
 
 The proof-backed reporting path separates collection, verification, grading, analysis, profiling, and rendering:
 
-1. Read-only importers decode persisted demo, eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence through registered evidence importers.
+1. Read-only importers decode persisted eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence through registered evidence importers.
 2. The evidence graph validates canonical digests, content addresses, references, prohibited cycles, assessed trust, encryption metadata, freshness, and scope, run, attempt, scenario, transaction, and evidence-window binding.
 3. Assertion assessment evaluates each selected subject independently from verified, scope-bound evidence, enforces compatible run, attempt, scenario, and transaction bindings, derives achieved evidence strength from reproduced grader and verifier checks, and preserves known negative measurements when other selected subjects are unavailable.
 4. Framework assessment projects assertion assessments through the reviewed crosswalk without changing the underlying assertion outcomes, preserving partial, supporting, and full mapping distinctions.
@@ -61,15 +61,14 @@ Framework mappings retain `full`, `partial`, `supporting`, and `not_applicable` 
 
 ## Generate and verify evidence
 
-Validate persisted demo and eval evidence as one content-addressed graph:
+Validate persisted evaluation evidence as one content-addressed graph:
 
 ```bash
 g8e compliance evidence-graph verify \
-  --demo-run <demo-run-id> \
   --eval-run <eval-run-id>
 ```
 
-Generate and persist a signed report bundle from a protected scope. Repeat `--demo-run`, `--eval-run`, and `--source` as needed, and supply the dedicated compliance-report signing identity. Generation defaults to the owner-local `restricted` profile; select `--profile public` only when every admitted source is affirmatively public-safe:
+Generate and persist a signed report bundle from a protected scope. Repeat `--eval-run` and `--source` as needed, and supply the dedicated compliance-report signing identity. Generation defaults to the owner-local `restricted` profile; select `--profile public` only when every admitted source is affirmatively public-safe:
 
 ```bash
 g8e compliance report generate \
@@ -91,13 +90,7 @@ g8e compliance report verify <bundle-manifest.json> \
   --evidence-trust <assessed-evidence-trust.json>
 ```
 
-Verify one persisted demo run independently:
-
-```bash
-g8e compliance demo-run verify <run-id>
-```
-
-`compliance report generate` reads persisted demo and eval evidence plus explicit operational, KSI, commitment, customer or assessor attestation, audit, ledger, and build/configuration inputs without mutating assessed state. It copies exact source bytes into canonical protected paths, assembles canonical analysis, framework profiles, and rendered formats into an immutable signed bundle, persists protected bodies, and writes the canonical descriptor last. `compliance report verify` is read-only and offline: it requires report trust outside the bundle, independently requires evidence-signer trust for represented signed sources, verifies directory integrity, protected bodies, checksum roots, and both signatures, replays every represented source route through the registered verifier or importer, compares reproduced evidence with signed analysis, and reproduces every renderer according to the protected bundle profile. Public Markdown and CSV are allowlisted release projections rather than full source-context views. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the network-disabled environment, exact candidate and trust digests, successful verification report, and rejected source, renderer, and signature mutations.
+`compliance report generate` reads persisted evaluation evidence plus explicit operational, KSI, commitment, customer or assessor attestation, audit, ledger, and build/configuration inputs without mutating assessed state. It copies exact source bytes into canonical protected paths, assembles canonical analysis, framework profiles, and rendered formats into an immutable signed bundle, persists protected bodies, and writes the canonical descriptor last. `compliance report verify` is read-only and offline: it requires report trust outside the bundle, independently requires evidence-signer trust for represented signed sources, verifies directory integrity, protected bodies, checksum roots, and both signatures, replays every represented source route through the registered verifier or importer, compares reproduced evidence with signed analysis, and reproduces every renderer according to the protected bundle profile. Public Markdown and CSV are allowlisted release projections rather than full source-context views. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the network-disabled environment, exact candidate and trust digests, successful verification report, and rejected source, renderer, and signature mutations.
 
 ## Generated artifacts
 
@@ -134,7 +127,7 @@ Assessment results belong in generated artifacts, not this document. The reposit
 - [v2.1.4 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.md)
 - [v2.1.4 release evidence (CSV)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.csv)
 
-The retained historical release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs. They predate the current signed report-bundle projection path and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. New release projections are generated only from a verified public bundle and carry the protected assessment scope's release version, analysis identity, source limitations, and claim boundaries; later evidence does not rewrite an earlier result.
+The retained historical release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs (the demo system is removed in v2.3.2). They predate the current signed report-bundle projection path and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. New release projections are generated only from a verified public bundle and carry the protected assessment scope's release version, analysis identity, source limitations, and claim boundaries; later evidence does not rewrite an earlier result.
 
 ## Responsibility boundaries
 
@@ -168,10 +161,8 @@ Do not infer satisfaction from source-code presence, test names, demo terminal o
 - [Authentication Architecture](../architecture/auth.md)
 - [Storage Architecture](../architecture/storage.md)
 - [Protocol Specification](../../protocol/docs/spec.md)
-- [FedRAMP Demo](../../demos/fedramp/README.md)
-- [Healthcare Demo](../../demos/healthcare/README.md)
-- [Finance Demo](../../demos/finance/README.md)
-- [DHS Demo](../../demos/dhs/README.md)
+- [Evaluation Architecture](../architecture/evals.md)
+- [Release Process](../devs/release_process.md)
 
 ## Contact
 

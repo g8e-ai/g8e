@@ -417,7 +417,7 @@ func readTrajectory(req ScenarioGradingRequest, view traceGradingView) trajector
 			}
 		}
 
-		allCalls := buildGradingToolCalls(realCalls, policy, view.SeedEvents)
+		allCalls := buildGradingToolCalls(realCalls, view.SeedEvents)
 		seededCount := len(allCalls) - len(realCalls)
 
 		satisfyingIndex := -1
@@ -508,7 +508,7 @@ func readTrajectory(req ScenarioGradingRequest, view traceGradingView) trajector
 		}
 
 	case evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GOVERNED:
-		allCalls := buildGradingToolCalls(realCalls, policy, view.SeedEvents)
+		allCalls := buildGradingToolCalls(realCalls, view.SeedEvents)
 		var deniedForbiddenTool string
 		for _, call := range allCalls {
 			if isToolInList(call.ToolName, forbiddenTools) {
@@ -562,7 +562,7 @@ func readTrajectory(req ScenarioGradingRequest, view traceGradingView) trajector
 	}
 }
 
-func buildGradingToolCalls(calls []traceToolCall, policy evalv1.EvaluationTrajectoryPolicy, seedEvents []InvestigationSeedHistoryEvent) []traceToolCall {
+func buildGradingToolCalls(calls []traceToolCall, seedEvents []InvestigationSeedHistoryEvent) []traceToolCall {
 	var seeded []traceToolCall
 	for _, event := range seedEvents {
 		if event.ToolName != "" && (event.Error != "" || event.ErrorType != "") {

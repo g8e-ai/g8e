@@ -13,25 +13,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.models.base import ConfigDict, Field
-
-from app.llm.llm_types import Content, PrimaryLLMSettings, Part, ToolCall
-
 from app.constants import (
-    OperatorType,
     AgentMode,
+    OperatorType,
     ReasoningAgent,
+    StreamChunkFromModelType,
     WorkflowType,
 )
-from app.models.base import G8eBaseModel
-from app.models.grounding import GroundingMetadata
-from app.models.http_context import G8eHttpContext
-from app.models.investigations import EnrichedInvestigationContext, ConversationHistoryMessage
-from app.models.memory import InvestigationMemory
-from app.models.events import ScrubbingTelemetry
-from app.models.model_telemetry import ModelCallTelemetry
-from app.models.settings import G8eeUserSettings
+from app.constants.message_sender import MessageSender
+from app.llm.llm_types import Content, Part, PrimaryLLMSettings, ToolCall
 from app.models.agents import TriageResult
+from app.models.base import ConfigDict, Field, G8eBaseModel
+from app.models.command_request_payloads import TargetedOperatorBase
 from app.models.evaluation_trace import (
     EvaluationControlledRoleAssignment,
     EvaluationGovernedActionRecord,
@@ -41,18 +34,18 @@ from app.models.evaluation_trace import (
     EvaluationToolCallRecord,
     EvaluationToolDecisionRecord,
 )
-from app.models.command_request_payloads import TargetedOperatorBase
+from app.models.events import ScrubbingTelemetry
+from app.models.grounding import GroundingMetadata
+from app.models.http_context import G8eHttpContext
+from app.models.investigations import ConversationHistoryMessage, EnrichedInvestigationContext
+from app.models.memory import InvestigationMemory
+from app.models.model_telemetry import ModelCallTelemetry
+from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
+    CommandRiskAnalysis,
     TokenUsage,
     ToolResult,
-    CommandRiskAnalysis,
 )
-
-
-from app.constants import (
-    StreamChunkFromModelType,
-)
-from app.constants.message_sender import MessageSender
 
 _TARGET_OPERATORS_DESCRIPTION = (
     "Run on MULTIPLE operators simultaneously under a SINGLE approval. "

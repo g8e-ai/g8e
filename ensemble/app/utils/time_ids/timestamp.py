@@ -49,11 +49,9 @@ def parse_iso(iso_string: str) -> datetime:
         return dt
     except ValueError:
         try:
-            dt = datetime.strptime(iso_string, "%Y-%m-%dT%H:%M:%S")
-            return dt.replace(tzinfo=UTC)
+            return datetime.strptime(iso_string, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=UTC)
         except ValueError:
-            dt = datetime.strptime(iso_string, "%Y-%m-%d %H:%M:%S")
-            return dt.replace(tzinfo=UTC)
+            return datetime.strptime(iso_string, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
 
 
 def ensure_utc(dt: datetime) -> datetime:

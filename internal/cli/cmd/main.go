@@ -19,7 +19,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/audit"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	compliancecmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/compliance"
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
 	ensemblecmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/ensemble"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/eval"
@@ -57,7 +56,10 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 			if err != nil {
 				return fmt.Errorf("root: get endpoint flag: %w", err)
 			}
-			port, err := cmd.Flags().GetInt("port")
+			// Read the root persistent flag directly: subcommands such as
+			// operator deploy define their own --port for SSH, which shadows
+			// this Gateway HTTPS port in cmd.Flags().
+			port, err := cmd.Root().PersistentFlags().GetInt("port")
 			if err != nil {
 				return fmt.Errorf("root: get port flag: %w", err)
 			}
@@ -101,7 +103,6 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 		operatorcmd.Cmd(),
 		vaultcmd.Cmd(),
 		testcmd.Cmd(),
-		demos.Cmd(),
 		docker.Cmd(),
 		ensemblecmd.Cmd(),
 		audit.Cmd(),

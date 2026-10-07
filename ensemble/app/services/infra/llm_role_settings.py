@@ -22,10 +22,10 @@ from urllib.parse import urlsplit
 
 from app.constants import (
     ANTHROPIC_DEFAULT_ENDPOINT,
-    LLMProvider,
     LLAMACPP_DEFAULT_ENDPOINT,
     OLLAMA_DEFAULT_ENDPOINT,
     OPENAI_DEFAULT_ENDPOINT,
+    LLMProvider,
 )
 from app.errors import ValidationError
 from app.models.internal_api import (
@@ -35,6 +35,7 @@ from app.models.internal_api import (
     LLMRole,
     LLMRoleSettingsResponse,
     LLMRoleSettingsUpdateRequest,
+    LLMRoleUpdate,
     LLMRoleView,
 )
 from app.models.settings import LLMSettings
@@ -44,12 +45,12 @@ from app.models.settings import LLMSettings
 # provider that requires Tribunal to be disabled, and fake is test-only; both
 # stay configurable through platform settings, not here.
 _PROVIDER_FIELDS: dict[LLMProvider, tuple[str, FieldRequirement, FieldRequirement, bool]] = {
+    LLMProvider.G8E: ("g8e governed inference", "none", "none", True),
     LLMProvider.OLLAMA: ("Ollama", "optional", "optional", True),
     LLMProvider.OPENAI: ("OpenAI-compatible", "optional", "required", True),
     LLMProvider.ANTHROPIC: ("Anthropic", "optional", "required", True),
     LLMProvider.GEMINI: ("Google Gemini", "none", "required", True),
     LLMProvider.LLAMACPP: ("llama.cpp", "optional", "optional", True),
-    LLMProvider.G8E: ("g8e governed inference", "none", "none", True),
 }
 
 
@@ -72,7 +73,9 @@ def provider_options(llm: LLMSettings) -> list[LLMProviderOption]:
                 label=label,
                 endpoint=endpoint,
                 api_key=api_key,
-                default_endpoint=_provider_default_endpoint(provider) if endpoint != "none" else None,
+                default_endpoint=_provider_default_endpoint(provider)
+                if endpoint != "none"
+                else None,
                 configured_endpoint=endpoint_value,
                 api_key_set=bool(provider_key),
                 lists_models=lists_models,
@@ -91,9 +94,7 @@ _PROVIDER_CONNECTION_FIELDS: dict[LLMProvider, tuple[str | None, str | None]] = 
 }
 
 
-def provider_connection(
-    llm: LLMSettings, provider: LLMProvider
-) -> tuple[str | None, str | None]:
+def provider_connection(llm: LLMSettings, provider: LLMProvider) -> tuple[str | None, str | None]:
     fields = _PROVIDER_CONNECTION_FIELDS.get(provider)
     if fields is None:
         raise ValidationError(
@@ -159,21 +160,22 @@ def _check_provider(provider: LLMProvider, field: str) -> FieldRequirement:
 
 def apply_role_updates(llm: LLMSettings, request: LLMRoleSettingsUpdateRequest) -> None:
     """Validate role selections, then replace each selected provider/model pair."""
-    updates = {
-        role: update
-        for role, update in (
-            ("primary", request.primary),
-            ("assistant", request.assistant),
-            ("lite", request.lite),
-        )
-        if update is not None
+    requested_updates: tuple[tuple[LLMRole, LLMRoleUpdate | None], ...] = (
+        ("primary", request.primary),
+        ("assistant", request.assistant),
+        ("lite", request.lite),
+    )
+    updates: dict[LLMRole, LLMRoleUpdate] = {
+        role: update for role, update in requested_updates if update is not None
     }
     normalized: dict[LLMRole, tuple[LLMProvider | None, str | None]] = {}
     for role, update in updates.items():
         if update.provider is None:
             if role == "primary":
                 raise ValidationError(
-                    "The primary role needs a provider", field="primary.provider", constraint="required"
+                    "The primary role needs a provider",
+                    field="primary.provider",
+                    constraint="required",
                 )
             normalized[role] = (None, None)
             continue

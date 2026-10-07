@@ -6,45 +6,48 @@
 # released under the Apache License, Version 2.0.
 
 from __future__ import annotations
+
+import asyncio
 import logging
 
 from app.clients.gateway_operator_client import GatewayOperatorClient
-from app.models.settings import G8eeAppSettings, G8eeUserSettings
-from app.constants.generated_status import CommandErrorType, RiskLevel
+from app.constants import G8EE_COMPONENT, EventType
 from app.constants.config import ExecutionStatus
-from app.constants import EventType, G8EE_COMPONENT
-from app.constants.generated_status import AITaskId
+from app.constants.generated_status import AITaskId, CommandErrorType, RiskLevel
+from app.errors import BusinessLogicError, ValidationError
 from app.models.agent import ExecutorCommandArgs
-from app.models.tool_args import (
-    GrantIntentArgs,
-    RevokeIntentArgs,
-)
 from app.models.command_request_payloads import (
     CheckPortRequestPayload,
     CommandRequestPayload,
-    FetchFileHistoryRequestPayload,
     FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
     FileEditRequestPayload,
+    FsGrepRequestPayload,
     FsListRequestPayload,
     FsReadRequestPayload,
 )
 from app.models.http_context import G8eHttpContext
+from app.models.internal_api import DirectCommandRequest
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import (
     ApprovalResult,
     BatchOperatorExecutionResult,
     CommandApprovalRequest,
+    DirectCommandResult,
     OperatorDocument,
     TargetSystem,
-    DirectCommandResult,
 )
-from app.models.internal_api import DirectCommandRequest
 from app.models.pubsub_messages import G8eMessage
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
+from app.models.tool_args import (
+    GrantIntentArgs,
+    RevokeIntentArgs,
+)
 from app.models.tool_results import (
-    CommandInternalResult,
     CommandExecutionResult,
-    FetchFileHistoryToolResult,
+    CommandInternalResult,
     FetchFileDiffToolResult,
+    FetchFileHistoryToolResult,
     FileEditResult,
     FsGrepToolResult,
     FsListToolResult,
@@ -52,19 +55,30 @@ from app.models.tool_results import (
     IntentPermissionResult,
     PortCheckToolResult,
 )
+from app.services.investigation.investigation_service import extract_single_operator_context
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ApprovalServiceProtocol,
     ExecutionServiceProtocol,
     FileServiceProtocol,
     FilesystemServiceProtocol,
-    InvestigationServiceProtocol,
+    G8eClientProtocol,
     IntentServiceProtocol,
+    InvestigationServiceProtocol,
     LFAAServiceProtocol,
     PortServiceProtocol,
-    G8eClientProtocol,
 )
-from app.services.investigation.investigation_service import extract_single_operator_context
+from app.utils.csv_commands import parse_command_csv
+from app.utils.time_ids.ids import generate_batch_id, generate_command_execution_id
+from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.safety import validate_command_safety
+from app.utils.validation.validators import (
+    get_auto_approved_validator,
+    get_blacklist_validator,
+    get_whitelist_validator,
+)
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 from .execution_service import OperatorExecutionService
 from .file_service import OperatorFileService
@@ -72,19 +86,6 @@ from .filesystem_service import OperatorFilesystemService
 from .intent_service import OperatorIntentService
 from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
-from app.utils.validation.safety import validate_command_safety
-from app.utils.csv_commands import parse_command_csv
-from app.utils.validation.validators import (
-    get_auto_approved_validator,
-    get_blacklist_validator,
-    get_whitelist_validator,
-)
-from app.utils.time_ids.ids import generate_command_execution_id, generate_batch_id
-from app.utils.validation.whitelist_validator import CommandWhitelistValidator
-from app.utils.validation.blacklist_validator import CommandBlacklistValidator
-from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
-from app.errors import ValidationError, BusinessLogicError
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +135,10 @@ class OperatorCommandService:
     def investigation_service(self) -> InvestigationServiceProtocol:
         return self._investigation_service
 
+    @property
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        return self._execution_service.ai_response_analyzer
+
     def _init_logic(self, settings: G8eeAppSettings) -> None:
         self._cv = settings.command_validation
         self._be = settings.batch_execution
@@ -164,6 +169,8 @@ class OperatorCommandService:
         auto_approved_validator: CommandAutoApprovedValidator | None = None,
     ) -> OperatorCommandService:
         """Construct, wire, and return a fully-initialised OperatorCommandService."""
+        if gateway_operator_client is None:
+            raise ValueError("gateway_operator_client is required to build operator services")
         lfaa_service = OperatorLFAAService(
             gateway_operator_client=gateway_operator_client,
         )
@@ -220,7 +227,6 @@ class OperatorCommandService:
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None = None,
     ) -> CommandExecutionResult:
         """Orchestrate command execution: resolve -> validate -> approve -> fan-out dispatch.
 
@@ -245,7 +251,7 @@ class OperatorCommandService:
         try:
             target_operator_docs = self._resolve_targets(operator_documents, args)
         except (ValidationError, BusinessLogicError, ValueError) as e:
-            logger.error("[COMMAND] Operator resolution failed: %s", e, exc_info=True)
+            logger.exception("[COMMAND] Operator resolution failed: %s", e)
             return CommandExecutionResult(
                 success=False,
                 error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
@@ -360,99 +366,26 @@ class OperatorCommandService:
         semaphore = asyncio.Semaphore(max_concurrency)
         cancel_event = asyncio.Event()
 
-        async def _dispatch(op: OperatorDocument, exec_id: str) -> BatchOperatorExecutionResult:
-            op_id = op.id
-            op_session_id = op.operator_session_id or ""
-            hostname = (
-                op.current_hostname
-                or (
-                    op.latest_heartbeat_snapshot.system_identity.hostname
-                    if op.latest_heartbeat_snapshot
-                    else None
-                )
-                or op_id
-            )
-
-            if cancel_event.is_set():
-                return BatchOperatorExecutionResult(
-                    hostname=hostname,
-                    operator_id=op_id,
-                    execution_id=exec_id,
-                    success=False,
-                    error="Cancelled by fail-fast",
-                )
-
-            async with semaphore:
-                if cancel_event.is_set():
-                    return BatchOperatorExecutionResult(
-                        hostname=hostname,
-                        operator_id=op_id,
-                        execution_id=exec_id,
-                        success=False,
-                        error="Cancelled by fail-fast",
-                    )
-
-                g8e_message = G8eMessage(
-                    id=exec_id,
-                    source_component=G8EE_COMPONENT,
-                    event_type=EventType.OPERATOR_COMMAND_REQUESTED,
-                    case_id=g8e_context.case_id,
-                    task_id=AITaskId.COMMAND,
-                    investigation_id=g8e_context.investigation_id,
-                    web_session_id=g8e_context.web_session_id,
-                    user_id=g8e_context.user_id,
-                    cli_session_id=g8e_context.cli_session_id,
-                    operator_session_id=op_session_id,
-                    operator_id=op_id,
-                    payload=CommandRequestPayload(
-                        command=command,
-                        execution_id=exec_id,
-                        justification=justification,
-                        timeout_seconds=args.timeout_seconds,
-                    ),
-                )
-
-                try:
-                    internal_result, _ = await self._execution_service.execute(
-                        g8e_message=g8e_message,
-                        g8e_context=g8e_context,
-                        timeout_seconds=args.timeout_seconds,
-                    )
-                    if internal_result is None:
-                        raise BusinessLogicError(
-                            "Execution service returned None for internal_result", component="g8ee"
-                        )
-                except Exception as e:
-                    logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
-                    if fail_fast:
-                        cancel_event.set()
-                    return BatchOperatorExecutionResult(
-                        hostname=hostname,
-                        operator_id=op_id,
-                        execution_id=exec_id,
-                        success=False,
-                        error=f"Command execution failed: {e}. Check operator status and retry.",
-                    )
-
-                succeeded = internal_result.status == ExecutionStatus.COMPLETED
-                if not succeeded and fail_fast:
-                    cancel_event.set()
-                return BatchOperatorExecutionResult(
-                    hostname=hostname,
-                    operator_id=op_id,
-                    execution_id=exec_id,
-                    success=succeeded,
-                    result=internal_result,
-                    error=internal_result.error if not succeeded else None,
-                )
-
         logger.info(
             "[COMMAND] Dispatching to %d operator(s) (batch_id=%s)",
             len(target_operator_docs),
             batch_id,
         )
         per_operator_results: list[BatchOperatorExecutionResult] = await asyncio.gather(
-            *[_dispatch(op, per_operator_exec_ids[i]) for i, op in enumerate(target_operator_docs)]
+            *[
+                self._dispatch_operator_command(
+                    op=op,
+                    exec_id=per_operator_exec_ids[i],
+                    command=command,
+                    justification=justification,
+                    args=args,
+                    g8e_context=g8e_context,
+                    semaphore=semaphore,
+                    cancel_event=cancel_event,
+                    fail_fast=fail_fast,
+                )
+                for i, op in enumerate(target_operator_docs)
+            ]
         )
 
         return self._assemble_result(
@@ -464,6 +397,93 @@ class OperatorCommandService:
             batch_id=batch_id,
             marshal_risk=args.risk_analysis.risk_level if args.risk_analysis else None,
         )
+
+    async def _dispatch_operator_command(
+        self,
+        *,
+        op: OperatorDocument,
+        exec_id: str,
+        command: str,
+        justification: str,
+        args: ExecutorCommandArgs,
+        g8e_context: G8eHttpContext,
+        semaphore: asyncio.Semaphore,
+        cancel_event: asyncio.Event,
+        fail_fast: bool,
+    ) -> BatchOperatorExecutionResult:
+        op_id = op.id
+        op_session_id = op.operator_session_id or ""
+        hostname = (
+            op.current_hostname
+            or (
+                op.latest_heartbeat_snapshot.system_identity.hostname
+                if op.latest_heartbeat_snapshot
+                else None
+            )
+            or op_id
+        )
+
+        def cancelled_result() -> BatchOperatorExecutionResult:
+            return BatchOperatorExecutionResult(
+                hostname=hostname,
+                operator_id=op_id,
+                execution_id=exec_id,
+                success=False,
+                error="Cancelled by fail-fast",
+            )
+
+        if cancel_event.is_set():
+            return cancelled_result()
+        async with semaphore:
+            if cancel_event.is_set():
+                return cancelled_result()
+            message = G8eMessage(
+                id=exec_id,
+                source_component=G8EE_COMPONENT,
+                event_type=EventType.OPERATOR_COMMAND_REQUESTED,
+                case_id=g8e_context.case_id,
+                task_id=AITaskId.COMMAND,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
+                user_id=g8e_context.user_id,
+                cli_session_id=g8e_context.cli_session_id,
+                operator_session_id=op_session_id,
+                operator_id=op_id,
+                payload=CommandRequestPayload(
+                    command=command,
+                    execution_id=exec_id,
+                    justification=justification,
+                    timeout_seconds=args.timeout_seconds,
+                ),
+            )
+            try:
+                internal_result, _ = await self._execution_service.execute(
+                    g8e_message=message,
+                    g8e_context=g8e_context,
+                    timeout_seconds=args.timeout_seconds,
+                )
+            except Exception as exc:
+                logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, exc)
+                if fail_fast:
+                    cancel_event.set()
+                return BatchOperatorExecutionResult(
+                    hostname=hostname,
+                    operator_id=op_id,
+                    execution_id=exec_id,
+                    success=False,
+                    error=f"Command execution failed: {exc}. Check operator status and retry.",
+                )
+            succeeded = internal_result.status == ExecutionStatus.COMPLETED
+            if not succeeded and fail_fast:
+                cancel_event.set()
+            return BatchOperatorExecutionResult(
+                hostname=hostname,
+                operator_id=op_id,
+                execution_id=exec_id,
+                success=succeeded,
+                result=internal_result,
+                error=internal_result.error if not succeeded else None,
+            )
 
     # ------------------------------------------------------------------
     # Helpers

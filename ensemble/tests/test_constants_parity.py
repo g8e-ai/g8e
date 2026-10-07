@@ -19,7 +19,6 @@ import json
 import os
 from pathlib import Path
 
-
 from app.constants.collections import (
     DB_COLLECTION_AGENT_ACTIVITY_METADATA,
     DB_COLLECTION_CASES,

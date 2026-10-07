@@ -9,6 +9,8 @@ package model_provenance
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,4 +135,62 @@ func TestTracker_Finalize_DigestMismatchFails(t *testing.T) {
 	_, err = tracker.Finalize(ctx, finalize)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrModelProvenanceDigestMismatch)
+}
+
+type blockingStorageAttestor struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (a *blockingStorageAttestor) Attest(ctx context.Context, _, _ string, _ time.Time) (*evalv1.ModelProvenanceAttestationWindow, error) {
+	a.entered <- struct{}{}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-a.release:
+		return nil, constants.ErrServiceUnavailable
+	}
+}
+
+func TestTracker_FinalizeBoundsHashingAndCancelsQueuedWork(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	attestor := &blockingStorageAttestor{entered: make(chan struct{}, 3), release: make(chan struct{})}
+	tracker, err := NewTracker(TrackerConfig{Attestor: attestor})
+	require.NoError(t, err)
+	var wg sync.WaitGroup
+	defer func() { cancel(); wg.Wait() }()
+	command := func(id string) *evalv1.ModelProvenanceObservationCommand {
+		return &evalv1.ModelProvenanceObservationCommand{ProviderAttemptId: id, Phase: evalv1.ModelProvenanceObservationPhase_MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE, ServedModelTag: "test:latest", ExpectedModelDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+	}
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(id string) { defer wg.Done(); _, _ = tracker.Finalize(ctx, command(id)) }(fmt.Sprintf("attempt-%d", i))
+		select {
+		case <-attestor.entered:
+		case <-time.After(time.Second):
+			t.Fatal("hashing did not start")
+		}
+	}
+	queuedCtx, queuedCancel := context.WithCancel(ctx)
+	defer queuedCancel()
+	done := make(chan error, 1)
+	wg.Add(1)
+	go func() { defer wg.Done(); _, err := tracker.Finalize(queuedCtx, command("attempt-queued")); done <- err }()
+	select {
+	case <-attestor.entered:
+		t.Fatal("third attestation started while two hashes were active")
+	case <-time.After(30 * time.Millisecond):
+	}
+	queuedCancel()
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("queued hash ignored cancellation")
+	}
+	// A storage error releases its slot for subsequent work.
+	close(attestor.release)
+	wg.Wait()
+	_, err = tracker.Finalize(ctx, command("attempt-after-release"))
+	require.ErrorIs(t, err, constants.ErrServiceUnavailable)
 }

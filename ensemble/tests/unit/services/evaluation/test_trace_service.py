@@ -8,6 +8,13 @@
 import json
 
 import pytest
+from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest
+from g8e.models.internal_api import (
+    EvaluationInferenceContext,
+    EvaluationInvestigationSeed,
+    EvaluationSeedTurn,
+    InferenceModelVariant,
+)
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
 from app.constants.chat_model_call_sites import classification_for_agent_role
@@ -29,13 +36,6 @@ from app.services.evaluation.trace_service import (
     EvaluationTraceService,
     compute_trace_digest,
     validated_trace_ids,
-)
-from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest
-from g8e.models.internal_api import (
-    EvaluationInferenceContext,
-    EvaluationInvestigationSeed,
-    EvaluationSeedTurn,
-    InferenceModelVariant,
 )
 
 
@@ -109,9 +109,9 @@ def test_trace_persist_finalize_and_load(trace_service):
     assert len(loaded.model_calls) == 1
     assert loaded.designated_role_output is None
     assert loaded.trace_digest == finalized.trace_digest
-    assert compute_trace_digest(
-        loaded.model_copy(update={"trace_digest": ""})
-    ) == loaded.trace_digest
+    assert (
+        compute_trace_digest(loaded.model_copy(update={"trace_digest": ""})) == loaded.trace_digest
+    )
 
 
 def test_trace_finalize_persists_the_chain_and_binds_it_into_the_digest(trace_service):
@@ -159,9 +159,14 @@ def test_trace_finalize_persists_the_chain_and_binds_it_into_the_digest(trace_se
     assert loaded.trace_digest == finalized.trace_digest
 
     tampered = loaded.model_copy(
-        update={"player_steps": [loaded.player_steps[0], loaded.player_steps[1].model_copy(
-            update={"text": EvaluationTextOutput(text="Red")}
-        )]}
+        update={
+            "player_steps": [
+                loaded.player_steps[0],
+                loaded.player_steps[1].model_copy(
+                    update={"text": EvaluationTextOutput(text="Red")}
+                ),
+            ]
+        }
     )
     assert compute_trace_digest(tampered) != loaded.trace_digest
 
@@ -235,7 +240,10 @@ def test_trace_finalize_records_the_proof_that_the_opportunity_was_real(trace_se
 
     loaded = trace_service.load("assignment-1", "attempt-1")
     assert loaded.trace_digest == finalized.trace_digest
-    assert loaded.model_calls[0].tools_declared == ["recursive_grep_search", "file_read_on_operator"]
+    assert loaded.model_calls[0].tools_declared == [
+        "recursive_grep_search",
+        "file_read_on_operator",
+    ]
     assert loaded.tool_gate is ToolGate.BYPASSED_FOR_EVAL
     assert loaded.provider_tool_rejection is None
 

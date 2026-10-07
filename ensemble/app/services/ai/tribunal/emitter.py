@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import logging
+
 from app.constants import EventType
 from app.models.agents.tribunal import TribunalObserver
 from app.models.base import G8eBaseModel
@@ -43,9 +44,7 @@ class TribunalEmitter:
         self.correlation_id = correlation_id
         self.observer = observer
 
-    def observe_marshal_risk(
-        self, command: str, analysis: CommandRiskAnalysis | None
-    ) -> None:
+    def observe_marshal_risk(self, command: str, analysis: CommandRiskAnalysis | None) -> None:
         """Tell the observer what Marshal classified. Marshal publishes no event unless it blocks."""
         if self.observer is None:
             return
@@ -72,8 +71,8 @@ class TribunalEmitter:
             # Inject correlation_id if provided and supported by the payload
             # If not provided to emit, try to use the one stored on the emitter
             corr_id = correlation_id or getattr(self, "correlation_id", None)
-            if corr_id and hasattr(payload, "correlation_id"):
-                payload.correlation_id = corr_id
+            if corr_id and "correlation_id" in type(payload).model_fields:
+                payload = payload.model_copy(update={"correlation_id": corr_id})
 
             event = SessionEvent.from_context(
                 context=self.g8e_context,

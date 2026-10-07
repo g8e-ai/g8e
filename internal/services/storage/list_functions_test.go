@@ -99,7 +99,7 @@ func TestListExecutions_NilDB(t *testing.T) {
 
 func TestListExecutions_Empty(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 	records, err := ev.ListExecutions(context.Background(), 10, 0)
 	require.NoError(t, err)
 	assert.Empty(t, records)
@@ -107,7 +107,7 @@ func TestListExecutions_Empty(t *testing.T) {
 
 func TestListExecutions_WithData(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	for i := 0; i < 3; i++ {
 		record := &models.ExecutionRecord{
@@ -130,7 +130,7 @@ func TestListExecutions_WithData(t *testing.T) {
 
 func TestListExecutions_DefaultLimit(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	for i := 0; i < 3; i++ {
 		record := &models.ExecutionRecord{
@@ -151,7 +151,7 @@ func TestListExecutions_DefaultLimit(t *testing.T) {
 
 func TestListExecutions_Pagination(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	for i := 0; i < 5; i++ {
 		record := &models.ExecutionRecord{
@@ -194,7 +194,7 @@ func TestListFileDiffs_NilDB(t *testing.T) {
 
 func TestListFileDiffs_Empty(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 	records, err := ev.ListFileDiffs(context.Background(), 10, 0)
 	require.NoError(t, err)
 	assert.Empty(t, records)
@@ -202,7 +202,7 @@ func TestListFileDiffs_Empty(t *testing.T) {
 
 func TestListFileDiffs_WithData(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	for i := 0; i < 3; i++ {
 		record := &models.FileDiffRecord{
@@ -225,7 +225,7 @@ func TestListFileDiffs_WithData(t *testing.T) {
 
 func TestListFileDiffs_DefaultLimit(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	for i := 0; i < 3; i++ {
 		record := &models.FileDiffRecord{
@@ -247,7 +247,7 @@ func TestListFileDiffs_DefaultLimit(t *testing.T) {
 
 func TestListFileDiffs_Pagination(t *testing.T) {
 	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
+	ev := setupTestExecutionVault(t)
 
 	for i := 0; i < 5; i++ {
 		record := &models.FileDiffRecord{

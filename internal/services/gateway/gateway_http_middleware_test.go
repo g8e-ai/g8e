@@ -489,7 +489,7 @@ func TestRateLimitMiddleware_ConcurrentRequestsSafe(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
-		go func(idx int) {
+		go func() {
 			defer wg.Done()
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			req.RemoteAddr = "10.0.0.60:1234"
@@ -497,7 +497,7 @@ func TestRateLimitMiddleware_ConcurrentRequestsSafe(t *testing.T) {
 			mw.ServeHTTP(rr, req)
 			// Status should be either 200 (within burst) or 429 (rate limited)
 			assert.LessOrEqual(t, rr.Code, 429)
-		}(i)
+		}()
 	}
 	wg.Wait()
 

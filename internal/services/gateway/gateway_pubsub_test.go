@@ -14,6 +14,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"sync"
@@ -165,7 +166,7 @@ func TestPubSubSessionHandler_handleAction(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			tt.preSetup()
 			handler.handleAction(tt.msg)
@@ -337,7 +338,7 @@ func TestIsDone(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			sub := tt.setup()
 			assert.Equal(t, tt.expected, sub.isDone())
@@ -346,7 +347,7 @@ func TestIsDone(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_NoTLS(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 
 	spiffeID, operatorID := extractMTLSIdentity(req)
 
@@ -355,7 +356,7 @@ func TestExtractMTLSIdentity_NoTLS(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_NoPeerCertificates(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.TLS = &tls.ConnectionState{}
 
 	spiffeID, operatorID := extractMTLSIdentity(req)
@@ -365,7 +366,7 @@ func TestExtractMTLSIdentity_NoPeerCertificates(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_NoURISANs(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{}},
 	}
@@ -380,7 +381,7 @@ func TestExtractMTLSIdentity_OperatorSPIFFEID(t *testing.T) {
 	spiffeURL, err := url.Parse("spiffe://g8e.local/operator/org-123/op-456/session-789")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},
@@ -397,7 +398,7 @@ func TestExtractMTLSIdentity_AppSPIFFEID(t *testing.T) {
 	spiffeURL, err := url.Parse("spiffe://g8e.local/app/op-123")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},
@@ -414,7 +415,7 @@ func TestExtractMTLSIdentity_UnknownSPIFFEID(t *testing.T) {
 	spiffeURL, err := url.Parse("spiffe://g8e.local/unknown/type")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},
@@ -431,7 +432,7 @@ func TestExtractMTLSIdentity_MalformedOperatorSPIFFEID(t *testing.T) {
 	spiffeURL, err := url.Parse("spiffe://g8e.local/operator/too-short")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},
@@ -701,7 +702,7 @@ func TestVerifyPatternACL(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			err := verifyPatternACL(tt.pattern, tt.operator, tt.spiffeID)
 			if tt.wantErr {

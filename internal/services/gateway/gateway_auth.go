@@ -449,25 +449,25 @@ func (s *AuthService) invalidateUserCache(userID string) {
 // getAndValidateUser fetches a user by ID (cache-first), caches the result,
 // and verifies the user is active. Returns the user if active, nil if not found,
 // or an error if the lookup fails or the user is disabled.
-func (s *AuthService) getAndValidateUser(userID string) (*models.User, error) {
+func (s *AuthService) getAndValidateUser(userID string) error {
 	if s.userSvc == nil || userID == "" {
-		return nil, nil
+		return nil
 	}
 	user := s.getCachedUser(userID)
 	if user == nil {
 		var err error
 		user, err = s.userSvc.GetByID(userID)
 		if err != nil {
-			return nil, fmt.Errorf("gateway: auth: load user %s: %w: %w", userID, err, constants.ErrUserNotFound)
+			return fmt.Errorf("gateway: auth: load user %s: %w: %w", userID, err, constants.ErrUserNotFound)
 		}
 		if user != nil {
 			s.cacheUser(userID, user)
 		}
 	}
 	if user != nil && !user.IsActive() {
-		return nil, &AuthError{Message: constants.ErrIdentityDisabled.Error(), Reason: constants.AuthErrorReasonIdentityDisabled, Status: http.StatusForbidden}
+		return &AuthError{Message: constants.ErrIdentityDisabled.Error(), Reason: constants.AuthErrorReasonIdentityDisabled, Status: http.StatusForbidden}
 	}
-	return user, nil
+	return nil
 }
 
 // InvalidateUserCache is a public method for explicit cache invalidation.
@@ -534,7 +534,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	// Check if the linked user is active (plan §4.6)
 	// This is the single chokepoint that makes retirement real - without it,
 	// a stale CLI cert can still talk to the Gateway.
-	if _, err := s.getAndValidateUser(op.UserID); err != nil {
+	if err := s.getAndValidateUser(op.UserID); err != nil {
 		return nil, err
 	}
 
@@ -661,9 +661,8 @@ func (s *AuthService) handleMTLSAuth(w http.ResponseWriter, r *http.Request, nex
 
 	switch {
 	case operatorSessionID != "":
-		if s.handleOperatorAuth(w, r, operatorSessionID, cliSessionID, next) {
-			return
-		}
+		s.handleOperatorAuth(w, r, operatorSessionID, cliSessionID, next)
+		return
 	case cliSessionID != "":
 		if s.handleCLIAuth(w, r, cliSessionID, next) {
 			return
@@ -697,8 +696,8 @@ func (s *AuthService) handleWebSessionAuth(w http.ResponseWriter, r *http.Reques
 }
 
 // handleOperatorAuth handles authentication for Operator sessions.
-// Returns true if the request was handled (either succeeded or failed with error).
-func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request, operatorSessionID, cliSessionID string, next http.Handler) bool {
+// Always handles the request (succeeds or writes an error response).
+func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request, operatorSessionID, cliSessionID string, next http.Handler) {
 	op, err := s.ValidateOperatorSession(operatorSessionID)
 	if err == nil {
 		if len(r.TLS.PeerCertificates) > 0 {
@@ -717,13 +716,13 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 				if err != nil {
 					s.logger.Error("gateway: auth: CLI cert binding check failed", "operator_session_id", operatorSessionID, "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
 					s.responder.Error(w, http.StatusInternalServerError, constants.ErrCLICertBindingCheckFailed.Error())
-					return true
+					return
 				}
 			}
 			if !match {
 				s.logger.Warn("gateway: auth: mTLS URI SAN mismatch for Operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
 				s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
-				return true
+				return
 			}
 		}
 
@@ -739,18 +738,17 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 			ctx = context.WithValue(ctx, constants.ContextKeyWebSessionID, webSessionID)
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
-		return true
+		return
 	}
 
-	s.logger.Warn("gateway: auth: Invalid Operator session attempt", "operator_session_id", safeTruncateID(operatorSessionID, 8), string(constants.ConnectionStateError), err)
+	s.logger.Warn("gateway: auth: Invalid Operator session attempt", "operator_session_id", safeTruncateID(operatorSessionID), string(constants.ConnectionStateError), err)
 
 	if ae, ok := err.(*AuthError); ok {
 		s.responder.Error(w, ae.Status, ae.Message)
-		return true
+		return
 	}
-	s.logger.Error("gateway: auth: operator session validation failed", "operator_session_id", safeTruncateID(operatorSessionID, 8), string(constants.ConnectionStateError), err)
+	s.logger.Error("gateway: auth: operator session validation failed", "operator_session_id", safeTruncateID(operatorSessionID), string(constants.ConnectionStateError), err)
 	s.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
-	return true
 }
 
 // handleCLIAuth handles authentication for CLI sessions.
@@ -817,7 +815,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			return true
 		}
 
-		if _, err := s.getAndValidateUser(cliSession.UserID); err != nil {
+		if err := s.getAndValidateUser(cliSession.UserID); err != nil {
 			if ae, ok := err.(*AuthError); ok {
 				s.logger.Warn("gateway: auth: CLI session identity disabled", "user_id", cliSession.UserID)
 				s.responder.Error(w, ae.Status, ae.Message)
@@ -867,7 +865,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 					s.logger.Warn("gateway: auth: operator headers mismatch persisted CLI session binding",
 						"path", r.URL.Path,
 						"cli_session_id", cliSessionID,
-						"persisted_operator_session_id", safeTruncateID(cliSession.OperatorSessionID, 8))
+						"persisted_operator_session_id", safeTruncateID(cliSession.OperatorSessionID))
 					s.responder.Error(w, http.StatusForbidden, constants.ErrOperatorBindingMismatch.Error())
 					return true
 				}
@@ -888,7 +886,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				s.logger.Warn("gateway: auth: operator headers mismatch persisted CLI session binding",
 					"path", r.URL.Path,
 					"cli_session_id", cliSessionID,
-					"persisted_operator_session_id", safeTruncateID(cliSession.OperatorSessionID, 8))
+					"persisted_operator_session_id", safeTruncateID(cliSession.OperatorSessionID))
 				s.responder.Error(w, http.StatusForbidden, constants.ErrOperatorBindingMismatch.Error())
 				return true
 			}
@@ -973,7 +971,7 @@ func (s *AuthService) handleCLIRefreshAuth(w http.ResponseWriter, r *http.Reques
 			return true
 		}
 		if !matches {
-			s.logger.Warn("gateway: auth: CLI refresh: cert does not match rotated session", "path", r.URL.Path, "cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8))
+			s.logger.Warn("gateway: auth: CLI refresh: cert does not match rotated session", "path", r.URL.Path, "cli_session_id_prefix", safeTruncateID(oldCLISessionID))
 			s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 			return true
 		}
@@ -981,7 +979,7 @@ func (s *AuthService) handleCLIRefreshAuth(w http.ResponseWriter, r *http.Reques
 
 	// Validate the user is still active. An expired session does not
 	// bypass user-disabled checks.
-	if _, err := s.getAndValidateUser(userID); err != nil {
+	if err := s.getAndValidateUser(userID); err != nil {
 		if ae, ok := err.(*AuthError); ok {
 			s.logger.Warn("gateway: auth: CLI refresh: identity disabled", "user_id", userID)
 			s.responder.Error(w, ae.Status, ae.Message)
@@ -994,7 +992,7 @@ func (s *AuthService) handleCLIRefreshAuth(w http.ResponseWriter, r *http.Reques
 
 	s.logger.Info("gateway: auth: CLI refresh: admitting expired/missing session for refresh",
 		"user_id", userID,
-		"cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+		"cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 	)
 
 	ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, userID)
@@ -1057,14 +1055,18 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 				// Extract it so processGatewayTransaction can bind both identities to
 				// the signed governance envelope (RequestorUserId + ActingAppId).
 				wid2 := protocol.NewWorkloadIdentity()
+				var delegateUserID string
 				for _, u2 := range cert.URIs {
 					u2Str := u2.String()
 					if wid2.IsUserSAN(u2Str) {
 						if userID, ok := wid2.ExtractUserIDFromUserSAN(u2Str); ok {
-							ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
+							delegateUserID = userID
 						}
 						break
 					}
+				}
+				if delegateUserID != "" {
+					ctx = context.WithValue(ctx, constants.ContextKeyUserID, delegateUserID)
 				}
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return true
@@ -1211,7 +1213,7 @@ func (s *AuthService) ValidateWebSessionCookie(r *http.Request) (webSessionID, u
 		return "", "", constants.ErrWebSessionExpired
 	}
 
-	if _, err := s.getAndValidateUser(webSession.UserID); err != nil {
+	if err := s.getAndValidateUser(webSession.UserID); err != nil {
 		if ae, ok := err.(*AuthError); ok {
 			return "", "", ae
 		}
@@ -1318,9 +1320,10 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// safeTruncateID returns the first n characters of id followed by "...", or the
-// full id if it is shorter than n. This prevents panics on short or empty IDs.
-func safeTruncateID(id string, n int) string {
+// safeTruncateID returns the first 8 characters of id followed by "...", or the
+// full id if it is 8 characters or shorter. This prevents panics on short or empty IDs.
+func safeTruncateID(id string) string {
+	const n = 8
 	if len(id) <= n {
 		return id
 	}

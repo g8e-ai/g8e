@@ -15,16 +15,20 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -37,6 +41,9 @@ import (
 )
 
 const capacityTrustedProxyCIDR = "127.0.0.0/8"
+
+const capacityDialMaxAttempts = 16
+const capacityDialConcurrency = 64
 
 type capacityMirrorEnv struct {
 	helper   *mirrorTestEnv
@@ -83,14 +90,68 @@ func newCapacityMirrorEnv(t *testing.T, recordCount int) *capacityMirrorEnv {
 	server := httptest.NewServer(mirror.Handler())
 	t.Cleanup(server.Close)
 	helper.server = server
-	helper.client = server.Client()
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 2000
+	transport.MaxIdleConnsPerHost = 2000
+	dialSlots := make(chan struct{}, capacityDialConcurrency)
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		select {
+		case dialSlots <- struct{}{}:
+			defer func() { <-dialSlots }()
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		return capacityDialWithRetry(ctx, network, address)
+	}
+	client := &http.Client{Transport: transport}
+	t.Cleanup(func() { transport.CloseIdleConnections() })
+	helper.client = client
 
 	return &capacityMirrorEnv{
 		helper:   helper,
 		baseURL:  server.URL,
 		sourceID: sourceID,
-		client:   server.Client(),
+		client:   client,
 	}
+}
+
+func capacityDialWithRetry(ctx context.Context, network, address string) (net.Conn, error) {
+	dialer := net.Dialer{}
+	var err error
+	for attempt := 0; attempt < capacityDialMaxAttempts; attempt++ {
+		var conn net.Conn
+		conn, err = dialer.DialContext(ctx, network, address)
+		if err == nil || !isCapacityConnectionRefusal(err) || attempt+1 == capacityDialMaxAttempts {
+			return conn, err
+		}
+
+		// Spread retries across a short window so a refused SYN burst does not
+		// immediately refill the listener backlog with another synchronized wave.
+		delay := 5*time.Millisecond + time.Duration(rand.Intn(11))*time.Millisecond
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, err
+}
+
+func isCapacityConnectionRefusal(err error) bool {
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return true
+	}
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	// Windows returns the Winsock error value directly. syscall.ECONNREFUSED
+	// is a separate, synthesized POSIX-compatible value on Windows.
+	var errno syscall.Errno
+	return errors.As(err, &errno) && errno == syscall.Errno(10061) // WSAECONNREFUSED
 }
 
 func sendIngestToHandler(t *testing.T, handler http.Handler, batch models.PublicFeedBatch) (int, models.PublicIngestResponse) {
@@ -115,7 +176,7 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 
 	bootstrap, status, err := capacityGetJSON[bootstrapCapacityResponse](ctx, env.client, origin+"/bootstrap", clientIP)
 	if err != nil || status != http.StatusOK {
-		return "bootstrap", status == http.StatusTooManyRequests
+		return fmt.Sprintf("bootstrap (status=%d, error=%v)", status, err), status == http.StatusTooManyRequests
 	}
 	source := bootstrap.Snapshot.SourceID
 	if source == "" {
@@ -135,7 +196,7 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 				"limit":  {"500"},
 			}), clientIP)
 			if err != nil || status != http.StatusOK {
-				return "history", status == http.StatusTooManyRequests
+				return fmt.Sprintf("history (status=%d, error=%v)", status, err), status == http.StatusTooManyRequests
 			}
 			if len(history.Items) > 0 {
 				cursor = history.Items[len(history.Items)-1].Sequence
@@ -149,7 +210,7 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 		}
 		snapshot, status, err := capacityGetJSON[snapshotCapacityResponse](ctx, env.client, capacityEndpoint(origin, "/snapshot", url.Values{"source": {source}}), clientIP)
 		if err != nil || status != http.StatusOK {
-			return "snapshot", status == http.StatusTooManyRequests
+			return fmt.Sprintf("snapshot (status=%d, error=%v)", status, err), status == http.StatusTooManyRequests
 		}
 		if snapshot.HighWaterSequence == cursor {
 			survived, status, outcome := env.openStream(ctx, source, cursor, clientIP, 200*time.Millisecond)
@@ -179,23 +240,31 @@ func (env *capacityMirrorEnv) openStream(ctx context.Context, source string, cur
 	}
 	response, err := env.client.Do(request)
 	if err != nil {
-		return false, 0, "stream"
+		return false, 0, fmt.Sprintf("stream (error=%v)", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
 		return false, response.StatusCode, "stream"
 	}
-	deadline := time.Now().Add(hold)
+	// Scanner.Scan blocks until the next SSE line. The mirror only emits a
+	// keepalive every 15 seconds, so checking a deadline after Scan returns
+	// makes short hold tests wait for that keepalive. Cancel the request at the
+	// end of the hold to wake the blocked read immediately.
+	held := make(chan struct{}, 1)
+	holdTimer := time.AfterFunc(hold, func() {
+		held <- struct{}{}
+		cancel()
+	})
+	defer holdTimer.Stop()
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
-		if !time.Now().Before(deadline) {
-			return true, response.StatusCode, "complete"
-		}
 	}
-	if !time.Now().Before(deadline) {
+	select {
+	case <-held:
 		return true, response.StatusCode, "complete"
+	default:
 	}
 	return false, response.StatusCode, "stream_disconnected"
 }
@@ -353,17 +422,22 @@ func TestPublicSpectatorStreamHold_ThousandDistinctClientsSurvive(t *testing.T) 
 	const clients = constants.PublicFeedSSEMaxSubscribers
 	hold := 300 * time.Millisecond
 	results := make(chan bool, clients)
+	errors := make(chan string, clients)
 	var wg sync.WaitGroup
 	wg.Add(clients)
 	for index := range clients {
 		go func(clientIndex int) {
 			defer wg.Done()
-			survived, status, _ := env.openStream(ctx, env.sourceID, 0, capacitySyntheticClientAddress(clientIndex), hold)
+			survived, status, outcome := env.openStream(ctx, env.sourceID, 0, capacitySyntheticClientAddress(clientIndex), hold)
 			results <- survived && status == http.StatusOK
+			if !survived || status != http.StatusOK {
+				errors <- fmt.Sprintf("status=%d, %s", status, outcome)
+			}
 		}(index)
 	}
 	wg.Wait()
 	close(results)
+	close(errors)
 
 	survived := 0
 	for ok := range results {
@@ -371,5 +445,9 @@ func TestPublicSpectatorStreamHold_ThousandDistinctClientsSurvive(t *testing.T) 
 			survived++
 		}
 	}
-	assert.Equal(t, clients, survived)
+	outcomes := make(map[string]int)
+	for outcome := range errors {
+		outcomes[outcome]++
+	}
+	assert.Equal(t, clients, survived, "outcomes: %v", outcomes)
 }

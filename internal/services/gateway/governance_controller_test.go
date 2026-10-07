@@ -167,13 +167,13 @@ func identityBindingRequest(t *testing.T, spiffeIDs ...string) *http.Request {
 // mutationEnvelopeBytes builds a wire GovernanceEnvelope with the given action
 // type and identity claims, encoded in canonical protojson (the wire form
 // verifyEnvelopeIdentityBinding decodes).
-func mutationEnvelopeBytes(t *testing.T, actionType constants.ActionType, operatorID, operatorSessionID string, source commonv1.Component) []byte {
+func mutationEnvelopeBytes(t *testing.T, actionType constants.ActionType, operatorID, operatorSessionID string, _ commonv1.Component) []byte {
 	t.Helper()
 	b, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
 		ActionType:        string(actionType),
 		OperatorId:        operatorID,
 		OperatorSessionId: operatorSessionID,
-		SourceComponent:   source,
+		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 	})
 	require.NoError(t, err)
 	return b

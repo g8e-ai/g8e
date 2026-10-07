@@ -91,7 +91,9 @@ def test_violation_set_only_shrinks():
         "use a typed default or an explicit launch argument (INV-ENV-04)"
     )
     stale = _ALLOWED_VIOLATIONS - actual
-    assert not stale, f"{sorted(stale)} are no longer violations: remove them from _ALLOWED_VIOLATIONS"
+    assert not stale, (
+        f"{sorted(stale)} are no longer violations: remove them from _ALLOWED_VIOLATIONS"
+    )
 
 
 def test_retired_platform_config_is_not_registered():
@@ -130,15 +132,18 @@ def _env_read_arguments(tree: ast.AST) -> list[ast.expr]:
 def test_production_env_reads_use_registry_keys():
     offenders: list[str] = []
     py_files = [
-        p for p in _APP_DIR.rglob("*.py")
+        p
+        for p in _APP_DIR.rglob("*.py")
         if not any(part.startswith(".") for part in p.parts)
         and "venv" not in p.parts
         and "__pycache__" not in p.parts
     ]
     for path in sorted(py_files):
         tree = ast.parse(path.read_text(), filename=str(path))
-        for arg in _env_read_arguments(tree):
-            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                offenders.append(f"{path.relative_to(_APP_DIR.parent)}:{arg.lineno} {arg.value!r}")
+        offenders.extend(
+            f"{path.relative_to(_APP_DIR.parent)}:{arg.lineno} {arg.value!r}"
+            for arg in _env_read_arguments(tree)
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+        )
 
     assert not offenders, f"env reads must use EnvVar keys, not string literals: {offenders}"

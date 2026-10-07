@@ -19,7 +19,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 )
 
@@ -47,30 +46,11 @@ func TestComplianceOverlayCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-func TestComplianceDemoRunVerifyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	cmd := complianceDemoRunVerifyCmdWithConfig(
-		cmdtest.FailingFileSvcFactory(errFactory),
-		func(string) evidence.ProvenanceSource {
-			panic("provenance source should not be created when fileSvcFactory fails")
-		},
-	)
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-	err := cmd.RunE(cmd, []string{"any-run"})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
-}
-
 func TestComplianceEvidenceGraphVerifyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd := complianceEvidenceGraphVerifyCmdWithConfig(
 		cmdtest.FailingFileSvcFactory(errFactory),
-		func(string) evidence.ProvenanceSource {
-			panic("provenance source should not be created when fileSvcFactory fails")
-		},
 	)
-	require.NoError(t, cmd.Flags().Set("demo-run", "any-run"))
+	require.NoError(t, cmd.Flags().Set("eval-run", "any-run"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -83,16 +63,13 @@ func TestComplianceEvidenceGraphVerifyCmdWithConfig_FileSvcFactoryError(t *testi
 func TestComplianceReportGenerateCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd := complianceReportGenerateCmdWithConfig(
 		cmdtest.FailingFileSvcFactory(errFactory),
-		func(string) evidence.ProvenanceSource {
-			panic("provenance source should not be created when fileSvcFactory fails")
-		},
 		func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 			panic("signing identity should not be loaded when fileSvcFactory fails")
 		},
 		time.Now,
 	)
 	require.NoError(t, cmd.Flags().Set("scope", constants.ComplianceBundleScopeFilename))
-	require.NoError(t, cmd.Flags().Set("demo-run", "any-run"))
+	require.NoError(t, cmd.Flags().Set("eval-run", "any-run"))
 	require.NoError(t, cmd.Flags().Set("report-id", "report-1"))
 	require.NoError(t, cmd.Flags().Set("signing-metadata", constants.ComplianceReportSigningMetadataTestFilename))
 	require.NoError(t, cmd.Flags().Set("signing-private-key", constants.ComplianceReportSigningPrivateKeyTestFilename))

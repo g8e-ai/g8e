@@ -47,7 +47,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 def get_all_python_files(root: Path):
     app_root = root / "app" if (root / "app").exists() else root
     for path in app_root.rglob("*.py"):
-        if "tests" in path.parts or ".ruff_cache" in path.parts or ".venv" in path.parts or "venv" in path.parts:
+        if (
+            "tests" in path.parts
+            or ".ruff_cache" in path.parts
+            or ".venv" in path.parts
+            or "venv" in path.parts
+        ):
             continue
         if any(part.startswith(".") for part in path.parts):
             continue
@@ -56,7 +61,7 @@ def get_all_python_files(root: Path):
 
 def check_file_for_violations(file_path: Path) -> list[str]:
     """Returns a list of violation descriptions found in the file."""
-    with open(file_path, encoding="utf-8", errors="ignore") as f:
+    with file_path.open(encoding="utf-8", errors="ignore") as f:
         try:
             tree = ast.parse(f.read())
         except SyntaxError:
@@ -67,9 +72,11 @@ def check_file_for_violations(file_path: Path) -> list[str]:
     for node in ast.walk(tree):
         # 1. Check for imports of the data service
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                if "reputation_data_service" in alias.name:
-                    violations.append(f"Import of reputation_data_service: {alias.name}")
+            violations.extend(
+                f"Import of reputation_data_service: {alias.name}"
+                for alias in node.names
+                if "reputation_data_service" in alias.name
+            )
         elif isinstance(node, ast.ImportFrom):
             if node.module and "reputation_data_service" in node.module:
                 violations.append(f"Import from reputation_data_service: {node.module}")
@@ -96,7 +103,7 @@ def test_reputation_information_isolation_invariant():
     all_violations = {}
 
     for py_file in get_all_python_files(PROJECT_ROOT):
-        relative_path = str(py_file.relative_to(PROJECT_ROOT))
+        relative_path = py_file.relative_to(PROJECT_ROOT).as_posix()
 
         if relative_path in ALLOW_LIST:
             continue

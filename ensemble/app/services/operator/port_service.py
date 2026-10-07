@@ -14,20 +14,19 @@ Dispatches through Gateway via ``OperatorExecutionService.execute()``.
 import logging
 from typing import cast
 
-from app.services.protocols import ExecutionServiceProtocol
-
-from app.constants import EventType, G8EE_COMPONENT, NetworkProtocol
+from app.constants import G8EE_COMPONENT, EventType, NetworkProtocol
+from app.constants.config import OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
 from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
 )
-from app.constants.config import OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.pubsub_messages import PortCheckResultPayload, G8eMessage
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, PortCheckResultPayload
 from app.models.tool_results import PortCheckToolResult
+from app.services.protocols import ExecutionServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +64,7 @@ class OperatorPortService:
             protocol = NetworkProtocol(args.protocol.strip().lower())
         except ValueError:
             error_msg = f"Invalid network protocol: {args.protocol}"
-            logger.error("[PORT_CHECK] %s", error_msg)
+            logger.exception("[PORT_CHECK] %s", error_msg)
             return PortCheckToolResult(
                 success=False, error=error_msg, error_type=CommandErrorType.EXECUTION_ERROR
             )
@@ -87,7 +86,7 @@ class OperatorPortService:
             )
             resolved_operator = resolved_operators[0]
         except (ValidationError, BusinessLogicError, ValueError) as e:
-            logger.error("[PORT_CHECK] Operator resolution failed: %s", e, exc_info=True)
+            logger.error("[PORT_CHECK] Operator resolution failed: %s", e)
             return PortCheckToolResult(
                 success=False,
                 error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
@@ -144,57 +143,60 @@ class OperatorPortService:
                 timeout_seconds=OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,
             )
 
-            if not envelope:
-                timeout_error = (
-                    f"Port check timed out after {OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS} seconds"
-                )
-                logger.warning("[PORT_CHECK] %s", timeout_error)
-
-                return PortCheckToolResult(
-                    success=False,
-                    error=timeout_error,
-                    error_type=CommandErrorType.OPERATION_TIMEOUT,
-                )
-
-            if not hasattr(envelope, "payload"):
-                logger.error("[PORT_CHECK] Unexpected envelope type: %s", type(envelope))
-                return PortCheckToolResult(
-                    success=False,
-                    error="Unexpected result format from operator",
-                    error_type=CommandErrorType.EXECUTION_ERROR,
-                )
-
-            if isinstance(envelope.payload, PortCheckResultPayload):
-                payload = envelope.payload
-                failed = envelope.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
-
-                if failed:
-                    return PortCheckToolResult(
-                        success=False,
-                        error=payload.error or "Port check failed",
-                        error_type=CommandErrorType.PORT_CHECK_FAILED,
-                    )
-                return PortCheckToolResult(
-                    success=True,
-                    host=payload.host or host,
-                    port=payload.port or port,
-                    protocol=cast(NetworkProtocol, payload.protocol or protocol),
-                    is_open=payload.is_open,
-                    latency_ms=payload.latency_ms,
-                    error=payload.error,
-                )
-
-            return PortCheckToolResult(
-                success=False,
-                error="Unexpected result payload from operator",
-                error_type=CommandErrorType.EXECUTION_ERROR,
-            )
+            return self._parse_port_result(envelope, host, port, protocol)
         except (ValidationError, BusinessLogicError):
             raise
         except Exception as e:
-            logger.error("[PORT_CHECK] Unexpected error: %s", e, exc_info=True)
+            logger.error("[PORT_CHECK] Unexpected error: %s", e)
             return PortCheckToolResult(
                 success=False,
                 error=f"Port check execution failed: {e}. Check operator status and retry.",
                 error_type=CommandErrorType.EXECUTION_ERROR,
             )
+
+    @staticmethod
+    def _parse_port_result(
+        envelope: G8eoResultEnvelope | None,
+        host: str,
+        port: int,
+        protocol: NetworkProtocol,
+    ) -> PortCheckToolResult:
+        if not envelope:
+            timeout_error = (
+                f"Port check timed out after {OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS} seconds"
+            )
+            logger.warning("[PORT_CHECK] %s", timeout_error)
+            return PortCheckToolResult(
+                success=False,
+                error=timeout_error,
+                error_type=CommandErrorType.OPERATION_TIMEOUT,
+            )
+        if not hasattr(envelope, "payload"):
+            logger.exception("[PORT_CHECK] Unexpected envelope type: %s", type(envelope))
+            return PortCheckToolResult(
+                success=False,
+                error="Unexpected result format from operator",
+                error_type=CommandErrorType.EXECUTION_ERROR,
+            )
+        if isinstance(envelope.payload, PortCheckResultPayload):
+            payload = envelope.payload
+            if envelope.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED:
+                return PortCheckToolResult(
+                    success=False,
+                    error=payload.error or "Port check failed",
+                    error_type=CommandErrorType.PORT_CHECK_FAILED,
+                )
+            return PortCheckToolResult(
+                success=True,
+                host=payload.host or host,
+                port=payload.port or port,
+                protocol=cast(NetworkProtocol, payload.protocol or protocol),
+                is_open=payload.is_open,
+                latency_ms=payload.latency_ms,
+                error=payload.error,
+            )
+        return PortCheckToolResult(
+            success=False,
+            error="Unexpected result payload from operator",
+            error_type=CommandErrorType.EXECUTION_ERROR,
+        )

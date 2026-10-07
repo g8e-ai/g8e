@@ -103,7 +103,7 @@ func campaignRunRows(ctx context.Context, fileSvc fs.RuntimeFileService, runIDs 
 		if err != nil {
 			return nil, err
 		}
-		row, _, err := summarizeRun(ctx, store, archived, runID, live, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+		row, _, err := summarizeRun(ctx, store, archived, runID, live, deps.now, adaptNewID(deps.newID))
 		if err != nil {
 			return nil, err
 		}
@@ -408,7 +408,7 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 	if stackSet == nil && len(freeze.Variants) != 1 {
 		return nil, fmt.Errorf("evaluation: campaigns create: %d models selected: %w", len(freeze.Variants), constants.ErrEvaluationCampaignSubjectInvalid)
 	}
-	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+	controller := evaluation.NewCampaignController(store, nil, deps.now, adaptNewID(deps.newID))
 	campaignSpec, err := controller.CreateCampaign(ctx, evaluation.CampaignCreateRequest{
 		CampaignID:        spec.CampaignID,
 		Catalog:           catalog,
@@ -488,7 +488,7 @@ Examples:
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			campaignID := args[0]
-			selector = selector.withArgs(args[1:])
+			selector = *selector.withArgs(args[1:])
 			formationCampaign := allFormations || len(formations) > 0
 			if allFormations && len(formations) > 0 {
 				return fmt.Errorf("evaluation: campaigns create: --formations and --all-formations are mutually exclusive: %w", constants.ErrEvaluationFlagsInvalid)

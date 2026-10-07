@@ -22,11 +22,11 @@ and are kept aligned via the contract test in
 
 from __future__ import annotations
 
-
 from typing import Self
 
-from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime, Field, model_validator
 from app.constants.generated_status import SlashTier
+
+from .base import Field, G8eBaseModel, G8eIdentifiableModel, UTCDatetime, model_validator
 
 __all__ = [
     "GENESIS_PREV_ROOT",

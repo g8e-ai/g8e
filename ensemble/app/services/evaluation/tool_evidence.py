@@ -18,6 +18,7 @@ from app.models.evaluation_trace import (
     EvaluationErrorAnalysisSummary,
     EvaluationGovernedActionRecord,
     EvaluationPolicyDecisionRecord,
+    EvaluationPolicyOutcome,
     EvaluationToolCallRecord,
     EvaluationToolDecisionRecord,
 )
@@ -72,7 +73,7 @@ POLICY_DENY_ERROR_TYPES: frozenset[CommandErrorType] = frozenset(
 )
 
 
-def _policy_outcome_from_result(result: CommandExecutionResult) -> str:
+def _policy_outcome_from_result(result: CommandExecutionResult) -> EvaluationPolicyOutcome:
     if result.success:
         return "allow"
     if result.error_type in POLICY_DENY_ERROR_TYPES:
@@ -124,7 +125,9 @@ def record_tool_call_completed(
             arguments_json=arguments_json,
             arguments_hash=hashlib.sha256(arguments_json.encode()).hexdigest(),
             command=chunk.command or "",
-            result_json=_canonical_json(chunk.result.model_dump(mode="json")) if chunk.result is not None else "",
+            result_json=_canonical_json(chunk.result.model_dump(mode="json"))
+            if chunk.result is not None
+            else "",
             success=success,
             is_operator_tool=bool(chunk.is_operator_tool),
             execution_id=execution_id,

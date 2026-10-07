@@ -59,7 +59,8 @@ FORBIDDEN_PUBSUB_PATTERNS = (
 
 def _python_files_under(path: Path) -> list[Path]:
     return sorted(
-        p for p in path.rglob("*.py")
+        p
+        for p in path.rglob("*.py")
         if not any(part.startswith(".") for part in p.parts)
         and "venv" not in p.parts
         and "__pycache__" not in p.parts
@@ -75,9 +76,12 @@ class TestOperatorGatewayBoundary:
         offenders: list[str] = []
         for path in _python_files_under(ENSEMBLE_APP):
             text = _read(path)
-            if "heartbeat:" in text and "OperatorChannel.heartbeat" not in text:
-                if "subscribe(" in text or "on_channel_message" in text:
-                    offenders.append(str(path.relative_to(REPO_ROOT)))
+            if (
+                "heartbeat:" in text
+                and "OperatorChannel.heartbeat" not in text
+                and ("subscribe(" in text or "on_channel_message" in text)
+            ):
+                offenders.append(str(path.relative_to(REPO_ROOT)))
         assert offenders == [], f"g8ee must not subscribe to heartbeat:* channels: {offenders}"
 
     def test_deleted_operator_authority_modules_stay_absent(self):
@@ -142,9 +146,11 @@ class TestOperatorGatewayBoundary:
         offenders: list[str] = []
         for path in _python_files_under(ENSEMBLE_APP):
             text = _read(path)
-            for prefix in DELETED_OPERATOR_IMPORT_PREFIXES:
-                if prefix in text:
-                    offenders.append(f"{path.relative_to(REPO_ROOT)} imports {prefix}")
+            offenders.extend(
+                f"{path.relative_to(REPO_ROOT)} imports {prefix}"
+                for prefix in DELETED_OPERATOR_IMPORT_PREFIXES
+                if prefix in text
+            )
         assert offenders == [], f"Deleted operator authority modules still imported: {offenders}"
 
     def test_operator_data_service_does_not_write_operator_documents(self):
@@ -162,6 +168,5 @@ class TestOperatorGatewayBoundary:
         )
         offenders = [marker for marker in write_markers if marker in text]
         assert offenders == [], (
-            "OperatorDataService must not write operator documents locally: "
-            f"found {offenders}"
+            f"OperatorDataService must not write operator documents locally: found {offenders}"
         )

@@ -17,6 +17,7 @@ Covers the service's own responsibilities:
 
 """
 
+import inspect
 from typing import ClassVar
 
 import pytest
@@ -49,6 +50,11 @@ def _make_service() -> OperatorCommandService:
     return build_command_service()
 
 
+def _command_validation_settings(**overrides: object) -> CommandValidationSettings:
+    """Build a command policy using the settings model's normal field defaults."""
+    return CommandValidationSettings.model_validate(overrides)
+
+
 # ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
@@ -59,16 +65,10 @@ class TestOperatorCommandServiceInit:
 
     pytestmark = pytest.mark.unit
 
-    def test_raises_type_error_when_required_arg_missing(self):
-        """Missing required arg must raise TypeError at construction time."""
-        with pytest.raises(TypeError):
-            OperatorCommandService.build(
-                # investigation_service is missing
-                settings=None,
-                ai_response_analyzer=None,
-                internal_http_client=None,
-                approval_service=None,
-            )
+    def test_investigation_service_is_a_required_build_arg(self):
+        """investigation_service has no default, so omitting it fails at construction time."""
+        params = inspect.signature(OperatorCommandService.build).parameters
+        assert params["investigation_service"].default is inspect.Parameter.empty
 
     def test_succeeds_with_all_required_args(self):
         """Service constructs without error when all required deps are provided."""
@@ -191,9 +191,7 @@ class TestExecuteCommandTargetSystems:
         """With a single operator, target_systems must contain that operator."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -205,7 +203,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(enable_auto_approve=False),
+            command_validation=_command_validation_settings(enable_auto_approve=False),
         )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 
@@ -219,9 +217,7 @@ class TestExecuteCommandTargetSystems:
         """When target_operators is set, target_systems must reflect all resolved operators."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -238,7 +234,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(enable_auto_approve=False),
+            command_validation=_command_validation_settings(enable_auto_approve=False),
         )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 
@@ -252,9 +248,7 @@ class TestExecuteCommandTargetSystems:
         """Batch execution dispatches one message per operator and aggregates per-host results."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -272,7 +266,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(enable_auto_approve=False),
+            command_validation=_command_validation_settings(enable_auto_approve=False),
         )
         result = await service.execute_command(args, g8e_context, investigation, request_settings)
 
@@ -297,9 +291,7 @@ class TestExecuteCommandTargetSystems:
         """Providing only target_operators (no singular target_operator) must resolve cleanly."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -331,9 +323,7 @@ class TestExecuteCommandTargetSystems:
         """
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -347,7 +337,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_auto_approve=False,
                 enable_whitelisting=True,
                 whitelisted_commands="uptime,df,free",
@@ -363,9 +353,7 @@ class TestExecuteCommandTargetSystems:
         """enable_auto_approve + auto_approved_commands list bypasses human approval."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -379,7 +367,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_auto_approve=True,
                 auto_approved_commands="uptime,df,free",
             ),
@@ -393,9 +381,7 @@ class TestExecuteCommandTargetSystems:
         """A command whose base verb is NOT in auto_approved_commands still requires human approval."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -409,7 +395,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_auto_approve=True,
                 auto_approved_commands="uptime,df,free",
             ),
@@ -423,9 +409,7 @@ class TestExecuteCommandTargetSystems:
         """auto_approved_commands without enable_auto_approve is inert."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -439,7 +423,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_auto_approve=False,
                 auto_approved_commands="uptime,df,free",
             ),
@@ -454,9 +438,7 @@ class TestExecuteCommandTargetSystems:
         for commands that have already passed every hard safety gate."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -471,7 +453,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_whitelisting=True,
                 whitelisted_commands="uptime,df,free",
                 enable_auto_approve=True,
@@ -489,9 +471,7 @@ class TestExecuteCommandTargetSystems:
         """A command not present in the user CSV must be blocked by L1Doctrine safety."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -505,7 +485,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(
+            command_validation=_command_validation_settings(
                 enable_whitelisting=True,
                 whitelisted_commands="uptime,df,free",
             ),
@@ -521,9 +501,7 @@ class TestExecuteCommandTargetSystems:
         """target_systems must never be empty when a valid operator is resolved."""
         approval_service = FakeApprovalService()
         ai_analyzer = FakeAIResponseAnalyzer()
-        execution_service = FakeExecutionService(
-            ai_response_analyzer=ai_analyzer
-        )
+        execution_service = FakeExecutionService(ai_response_analyzer=ai_analyzer)
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
         )
@@ -535,7 +513,7 @@ class TestExecuteCommandTargetSystems:
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
-            command_validation=CommandValidationSettings(enable_auto_approve=False),
+            command_validation=_command_validation_settings(enable_auto_approve=False),
         )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 

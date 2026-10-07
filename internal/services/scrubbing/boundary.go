@@ -953,6 +953,7 @@ func (s *ScrubbingService) RehydratePayload(ctx context.Context, payload []byte)
 
 	var data json.RawMessage
 	if err := json.Unmarshal(payload, &data); err != nil {
+		//nolint:nilerr // intentional fallback: non-JSON payload rehydrated as plain text
 		return []byte(s.RehydrateText(ctx, string(payload))), nil
 	}
 

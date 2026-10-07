@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.constants import LLMProvider
 from app.constants.collections import (
     DB_COLLECTION_SETTINGS,
     PLATFORM_SETTINGS_DOC,
@@ -16,7 +17,7 @@ from app.constants.collections import (
 )
 from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PortConstants
-from app.models.settings import G8eeAppSettings
+from app.models.settings import AuthSettings, G8eeAppSettings
 from app.services.infra.settings_service import SettingsService
 
 
@@ -216,7 +217,6 @@ class TestG8eeSettingsOverlayIntegration:
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
 
-
     async def test_get_user_settings_falls_back_to_empty_llm_when_missing(
         self, settings_service, cache_service
     ):
@@ -294,7 +294,7 @@ class TestG8eeSettingsOverlayIntegration:
         user_settings = await settings_service.get_user_settings(user_id)
 
         # LLM settings are user-specific only; missing user doc returns empty LLMSettings with None provider
-        assert user_settings.llm.primary_provider is None
+        assert user_settings.llm.primary_provider is LLMProvider.G8E
         assert user_settings.llm.primary_model is None
         assert user_settings.llm.gemini_api_key is None
 
@@ -308,7 +308,6 @@ class TestG8eeSettingsOverlayIntegration:
         enumerated fields by hand. The test iterates ``AuthSettings.model_fields``
         directly so any newly added auth field is automatically covered.
         """
-        from app.models.settings import AuthSettings
 
         auth_field_names = list(AuthSettings.model_fields.keys())
         # Synthesise a unique non-empty value per field so we can assert each
@@ -345,7 +344,6 @@ class TestG8eeSettingsOverlayIntegration:
                 f"overlay_platform_data; the auth merge has likely regressed "
                 f"to hand-listed fields."
             )
-
 
     async def test_overlay_propagates_auto_approve_from_platform(self, cache_service):
         """Platform-level auto_approve settings must flow through overlay_platform_data.

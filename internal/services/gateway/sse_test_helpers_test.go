@@ -67,12 +67,12 @@ func makeTestAppCert(t *testing.T, spiffeURIs []string) *x509.Certificate {
 }
 
 // makeTLSRequest creates an http.Request with r.TLS set to simulate mTLS auth.
-func makeTLSRequest(method, path string, body string, cert *x509.Certificate) *http.Request {
+func makeTLSRequest(method, _ string, body string, cert *x509.Certificate) *http.Request {
 	var bodyReader strings.Reader
 	if body != "" {
 		bodyReader = *strings.NewReader(body)
 	}
-	req := httptest.NewRequest(method, path, &bodyReader)
+	req := httptest.NewRequest(method, "/api/v1/sse/push", &bodyReader)
 	if cert != nil {
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{cert},
@@ -141,16 +141,16 @@ func bindOperatorToWebSession(t *testing.T, h *HTTPHandler, operatorSessionID, w
 // plus the generated IDs. This reduces the repeated seedCLISessionDoc + context
 // stamping boilerplate (opSessID + userID + cliSessionID) in stream/authorize tests.
 // The suffix is used to generate unique IDs per test to avoid cross-test collisions.
-func seedCLISessionCtx(t *testing.T, h *HTTPHandler, suffix string) (ctx context.Context, userID, cliSessionID, opSessID string) {
+func seedCLISessionCtx(t *testing.T, h *HTTPHandler, suffix string) (ctx context.Context, userID, cliSessionID string) {
 	t.Helper()
-	opSessID = "opsess-" + suffix
+	opSessID := "opsess-" + suffix
 	userID = "user-" + suffix
 	cliSessionID = "cli-" + suffix
 	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
 	ctx = context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
 	ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
-	return ctx, userID, cliSessionID, opSessID
+	return ctx, userID, cliSessionID
 }
 
 // runStreamWithCancel runs handleInternalSSEStream in a goroutine with a cancellable

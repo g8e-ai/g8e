@@ -13,8 +13,8 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import app.llm.llm_types as types
-from app.constants.prompts import PromptFile
 from app.constants.generated_status import CommandErrorType, OperatorToolName
+from app.constants.prompts import PromptFile
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
 from app.models.http_context import G8eHttpContext
@@ -63,6 +63,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del g8e_context, request_settings, execution_id
     args = QueryInvestigationContextArgs.model_validate(tool_args)
     logger.info(
         "[QUERY_INVESTIGATION_CONTEXT] data_type=%s limit=%s",
@@ -71,7 +72,7 @@ async def handle(
     )
 
     if not investigation or not investigation.id:
-        logger.error("[QUERY_INVESTIGATION_CONTEXT] No investigation ID available")
+        logger.exception("[QUERY_INVESTIGATION_CONTEXT] No investigation ID available")
         return InvestigationContextResult(
             success=False,
             error="No investigation ID available",
@@ -127,7 +128,7 @@ async def handle(
         )
 
     except Exception as e:
-        logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e, exc_info=True)
+        logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e)
         return InvestigationContextResult(
             success=False,
             error=f"Investigation context query failed: {e}. Retry or check investigation ID.",

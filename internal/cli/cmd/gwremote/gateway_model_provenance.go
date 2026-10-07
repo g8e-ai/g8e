@@ -11,9 +11,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
@@ -147,6 +151,10 @@ func LoadModelProvenanceAttestation(fileSvc fs.RuntimeFileService, cfg *config.C
 }
 
 func PreflightModelProvenanceAttestation(fileSvc fs.RuntimeFileService, cfg *config.Config, servedModelTag, expectedModelDigest string) error {
+	return preflightModelProvenanceAttestationContext(context.Background(), fileSvc, cfg, servedModelTag, expectedModelDigest, nil)
+}
+
+func preflightModelProvenanceAttestationContext(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config, servedModelTag, expectedModelDigest string, progress func(models.ModelProvenancePreflightProgress)) error {
 	if !IsGatewayHealthy() {
 		return constants.ErrEvaluationObservationUnavailable
 	}
@@ -157,8 +165,50 @@ func PreflightModelProvenanceAttestation(fileSvc fs.RuntimeFileService, cfg *con
 	query := url.Values{}
 	query.Set("served_model_tag", servedModelTag)
 	query.Set("expected_model_digest", expectedModelDigest)
+	if progress != nil {
+		requestID := uuid.NewString()
+		query.Set("request_id", requestID)
+		streamCtx, stop := context.WithCancel(ctx)
+		stream := client.NewSSEClient()
+		ready := make(chan struct{})
+		stream.SetOnConnect(func() { close(ready) })
+		done := make(chan error, 1)
+		go func() {
+			done <- stream.ConnectOnce(streamCtx, func(_ string, data string) {
+				var push models.SSEPushPayload
+				if json.Unmarshal([]byte(data), &push) != nil {
+					return
+				}
+				var event struct {
+					Type string                                  `json:"type"`
+					Data models.ModelProvenancePreflightProgress `json:"data"`
+				}
+				if json.Unmarshal(push.Event, &event) != nil || event.Type != string(constants.EventModelProvenancePreflightProgress) || event.Data.RequestID != requestID {
+					return
+				}
+				progress(event.Data)
+			})
+		}()
+		timer := time.NewTimer(constants.ModelProvenanceCommandAcknowledgementTimeout)
+		defer timer.Stop()
+		select {
+		case <-ready:
+			defer func() { stop(); <-done }()
+		case err := <-done:
+			stop()
+			return fmt.Errorf("model provenance preflight: connect progress SSE: %v", err)
+		case <-ctx.Done():
+			stop()
+			<-done
+			return ctx.Err()
+		case <-timer.C:
+			stop()
+			<-done
+			return fmt.Errorf("model provenance preflight: progress SSE did not connect within %s", constants.ModelProvenanceCommandAcknowledgementTimeout)
+		}
+	}
 	path := constants.APIPaths.InferenceModelProvenanceAttestations + "_attest?" + query.Encode()
-	body, err := client.Get(path)
+	body, err := client.DoRequestContext(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return fmt.Errorf("model provenance attestation preflight for %q: %w", servedModelTag, err)
 	}
@@ -175,6 +225,12 @@ func PreflightModelProvenanceAttestation(fileSvc fs.RuntimeFileService, cfg *con
 }
 
 func PreflightCampaignModelProvenance(fileSvc fs.RuntimeFileService, cfg *config.Config, bindings []evaluation.CampaignModelBinding) error {
+	return PreflightCampaignModelProvenanceContext(context.Background(), fileSvc, cfg, bindings, nil)
+}
+
+// PreflightCampaignModelProvenanceContext streams session-scoped progress before
+// dispatch and propagates cancellation to the authoritative attestation request.
+func PreflightCampaignModelProvenanceContext(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config, bindings []evaluation.CampaignModelBinding, progress func(models.ModelProvenancePreflightProgress)) error {
 	if err := preflightModelProvenanceDelivery(fileSvc, cfg); err != nil {
 		return err
 	}
@@ -185,7 +241,7 @@ func PreflightCampaignModelProvenance(fileSvc fs.RuntimeFileService, cfg *config
 		if binding.ModelDigest == evaluation.FormationDelegatedRegistryDigestPlaceholder {
 			continue
 		}
-		if err := PreflightModelProvenanceAttestation(fileSvc, cfg, binding.ServedModelTag, binding.ModelDigest); err != nil {
+		if err := preflightModelProvenanceAttestationContext(ctx, fileSvc, cfg, binding.ServedModelTag, binding.ModelDigest, progress); err != nil {
 			return err
 		}
 	}

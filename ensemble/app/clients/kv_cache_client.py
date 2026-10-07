@@ -14,17 +14,17 @@ from urllib.parse import quote
 
 import aiohttp
 
-from app.models.settings import GatewaySettings, TLSConfig
-from app.services.infra.settings_service import SettingsService
-from app.utils.aiohttp_session import create_kv_http_session
 from app.constants import (
     AUTHORIZATION,
     CONTENT_TYPE,
-    ErrorCode,
     G8EE_COMPONENT,
+    ErrorCode,
     GatewayAPIPaths,
 )
 from app.errors import NetworkError
+from app.models.settings import GatewaySettings, TLSConfig
+from app.services.infra.settings_service import SettingsService
+from app.utils.aiohttp_session import create_kv_http_session
 
 logger = logging.getLogger(__name__)
 

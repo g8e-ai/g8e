@@ -3,8 +3,8 @@ doc_id: ensemble_sse
 title: Server-Sent Events (SSE) Architecture
 audience: developers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - docs/ensemble/sse.md
   - ensemble/app/services/infra/event_service.py
@@ -105,7 +105,7 @@ The g8ee Agentic Ensemble publishes real-time event streams over mTLS to the Gov
 ```mermaid
 flowchart TD
     subgraph Ensemble ["g8e Agentic Ensemble (g8ee)"]
-        Chat["Chat Pipeline / Agent Turn (g8eEnsemble)"]
+        Chat["Chat Pipeline / Agent Turn (G8eEnsemble)"]
         Tribunal["Tribunal Consensus (TribunalEmitter)"]
         Approval["Approval Service (OperatorApprovalService)"]
         EventSvc["EventService"]
@@ -222,7 +222,7 @@ The streaming delivery pipeline in `deliver_via_sse()` bridges the core agent Re
 
 ```mermaid
 sequenceDiagram
-    participant Agent as g8eEnsemble (ReAct Loop)
+    participant Agent as G8eEnsemble (ReAct Loop)
     participant SSE as deliver_via_sse
     participant EventSvc as EventService
     participant Gateway as Governance Gateway (g8eg)
@@ -254,7 +254,7 @@ sequenceDiagram
 
 ### Stream Chunk Translation
 
-Before consuming chunks, `deliver_via_sse()` emits an initial iteration start event (`EventType.AI_LLM_CHAT_ITERATION_STARTED`). As `g8eEnsemble` yields `StreamChunkFromModel` objects, the function translates each chunk type into its corresponding protocol event and typed payload. The COMPLETE chunk is special: it saves token usage and finish reason to state but does not emit an event itself. The completion event is emitted after the loop exits, capturing all accumulated state.
+Before consuming chunks, `deliver_via_sse()` emits an initial iteration start event (`EventType.AI_LLM_CHAT_ITERATION_STARTED`). As `G8eEnsemble` yields `StreamChunkFromModel` objects, the function translates each chunk type into its corresponding protocol event and typed payload. The COMPLETE chunk is special: it saves token usage and finish reason to state but does not emit an event itself. The completion event is emitted after the loop exits, capturing all accumulated state.
 
 | Model Chunk Type / Phase | Emitted SSE Event Type | Payload Class | Description |
 | --- | --- | --- | --- |
@@ -382,7 +382,6 @@ To eliminate race conditions in fast or automated test environments (where an au
 | --- | --- | --- | --- |
 | Command Execution | `g8e.v1.operator.command.approval.requested` | `...approval.granted`, `...approval.rejected` | High-risk shell command or destructive operation proposed. Emits `...approval.preparing` during synthesis. |
 | File Mutation | `g8e.v1.operator.file.edit.approval.requested` | `...approval.granted`, `...approval.rejected` | Target host file edit or patch application proposed. Emits `...approval.feedback` if new context arrives. |
-| Operator Streaming | `g8e.v1.operator.stream.approval.requested` | `...approval.granted`, `...approval.rejected` | Request to open a direct operator live streaming channel. |
 | Intent Authorization | `g8e.v1.operator.intent.approval.requested` | `...approval.granted`, `...approval.rejected` | Operator capability intent grant or privilege expansion. |
 | Agent Continuation | `g8e.v1.ai.agent.continue.approval.requested` | `...approval.granted`, `...approval.rejected` | Tool loop exceeds maximum turn limit (`AGENT_MAX_TOOL_TURNS`). |
 
@@ -403,7 +402,7 @@ g8ee publishes operator-related SSE events when the request context includes a w
 The SSE architecture in `g8ee` incorporates several defensive concurrency patterns:
 
 - **Non-Blocking UI Side-Channel** — SSE streaming is treated as an informative telemetry side-channel. Network failures during streaming event publication log warnings but do not abort core execution pipelines or database transactions. The database remains the primary durable record of truth.
-- **Coroutine Context Isolation** — In `g8eEnsemble.run_with_sse()`, context token lifecycles are owned by a standard coroutine rather than an async generator. This avoids Python `ContextVar.reset()` exceptions caused by Python dispatching async-generator cleanup across distinct asyncio execution contexts.
+- **Coroutine Context Isolation** — In `G8eEnsemble.run_with_sse()`, context token lifecycles are owned by a standard coroutine rather than an async generator. This avoids Python `ContextVar.reset()` exceptions caused by Python dispatching async-generator cleanup across distinct asyncio execution contexts.
 - **Task Lifecycle and Stop Interlocks** — `BackgroundTaskManager` tracks active background chat tasks by investigation ID. When a user requests a stop, the manager cancels the active asyncio task and publishes `AI_LLM_CHAT_ITERATION_STOPPED` to notify the UI immediately.
 
 ## Contract Testing and Verification

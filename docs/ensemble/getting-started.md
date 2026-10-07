@@ -3,8 +3,8 @@ doc_id: getting_started_ensemble
 title: Getting Started with g8ee
 audience: developers implementing or deploying the ensemble
 status: current
-last_updated: 2026-09-29
-version: v2.2.4
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - docs/ensemble/
   - ensemble/
@@ -58,7 +58,7 @@ None specific to this guide. Refer to [PKI and Trust](pki.md) for workload enrol
 | Ensemble startup | `ensemble/app/main.py` lifespan context manager | Bootstrap phases, service initialization order |
 | Health endpoints | `ensemble/app/routers/health_router.py` | GET `/health`, `/health/live`, `/health/details` response schemas |
 | Docker build | `ensemble/Dockerfile` | Multi-stage build, Python 3.12, runtime command |
-| Make commands | `Makefile` targets and `ensemble/Makefile` | ensemble-test, ensemble-lint, ensemble-test-external |
+| Make commands | `Makefile` targets and `ensemble/Makefile` | dev-python, ensemble-test, ensemble-lint, ensemble-test-external |
 
 ## Procedures
 
@@ -144,7 +144,7 @@ A fresh enrollment requires the Gateway to be healthy and the owner CLI to have 
 
 #### Bootstrap
 
-The ensemble depends on the in-tree Python protocol package. From the repository root:
+The ensemble depends on the in-tree Python protocol package. From the repository root, `make dev-python` is the shortest path: it provisions the repository-root `.venv` with uv (which installs Python 3.12 when the system has none) and installs the editable `protocol/python` package and `ensemble[test]`. Both Makefiles prefer that `.venv`. To manage the environment by hand instead:
 
 ```bash
 cd ensemble
@@ -195,7 +195,7 @@ make ensemble-test
 make ensemble-lint
 ```
 
-`make ensemble-test` runs unit and in-process integration suites without live LLM or external API calls. `make ensemble-lint` runs Ruff and Pyright against `ensemble/app`. Tests requiring live providers or external APIs are separate and may require credentials:
+`make ensemble-test` runs unit and in-process integration suites without live LLM or external API calls. `make ensemble-lint` runs Ruff and Pyright against `ensemble/app` and `ensemble/tests` (see [Python Linting](../devs/python-linting.md)). Tests requiring live providers or external APIs are separate and may require credentials:
 
 ```bash
 make ensemble-test-external

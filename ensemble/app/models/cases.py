@@ -10,7 +10,14 @@ from typing import Any
 from app.constants import CaseStatus, EventType, Priority, Severity
 
 from .attachments import AttachmentMetadata
-from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime, computed_field, Field
+from .base import (
+    Field,
+    G8eBaseModel,
+    G8eIdentifiableModel,
+    UTCDatetime,
+    computed_field,
+    field_validator,
+)
 from .http_context import RequestContext
 
 
@@ -56,6 +63,20 @@ class CaseModel(G8eIdentifiableModel):
     attachments: list[str] = Field(
         default_factory=list, description="List of Google Cloud Storage URLs for attached files"
     )
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return CaseStatus.NEW
+        if isinstance(v, CaseStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return CaseStatus(v)
+            except ValueError as err:
+                raise ValueError(f"Invalid case status: {v}") from err
+        return v
 
 
 class CaseCreateRequest(G8eBaseModel):

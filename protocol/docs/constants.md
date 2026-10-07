@@ -1,7 +1,7 @@
 # Constants System
 
 Last Updated: 2026-10-04
-Version: v2.3.1
+Version: v2.3.2
 
 ## Overview
 

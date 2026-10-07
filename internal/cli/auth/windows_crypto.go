@@ -11,10 +11,13 @@
 package auth
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
@@ -34,6 +37,14 @@ const envCertPath = "G8E_CERT_PATH"
 // separate from this Personal client certificate store and is never
 // touched here.
 func ImportCertificateToWindowsStore(certPEM string) error {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil || block.Type != "CERTIFICATE" {
+		return fmt.Errorf("%w: invalid PEM certificate", constants.ErrWindowsCertStoreImport)
+	}
+	if _, err := x509.ParseCertificate(block.Bytes); err != nil {
+		return fmt.Errorf("%w: parse PEM certificate: %w", constants.ErrWindowsCertStoreImport, err)
+	}
+
 	tmpDir, err := os.MkdirTemp("", constants.WindowsTempCertImportPrefix)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrWindowsTempDirCreate, err)
@@ -56,7 +67,8 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 		$store.Close()
 	`
 
-	psCmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
+	psCmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", psScript)
+	psCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	psCmd.Env = append(os.Environ(), envCertPath+"="+certFile)
 	output, err := psCmd.CombinedOutput()
 	if err != nil {

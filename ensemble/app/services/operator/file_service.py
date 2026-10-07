@@ -12,42 +12,44 @@ Handles file-related operations (edit, read, write, update) on Operators.
 
 import logging
 
-from app.services.protocols import (
-    ApprovalServiceProtocol,
-    ExecutionServiceProtocol,
-    AIResponseAnalyzerProtocol,
-    InvestigationServiceProtocol,
-)
-from app.constants import EventType, FileOperation, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, EventType, FileOperation
+from app.constants.config import ApprovalErrorType, ExecutionStatus
 from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
 )
-from app.constants.config import ExecutionStatus, ApprovalErrorType
 from app.models.command_request_payloads import (
-    FileEditRequestPayload,
-    FetchFileHistoryRequestPayload,
     FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FileEditRequestPayload,
 )
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.tool_results import (
-    FileEditResult,
-    FileOperationRiskAnalysis,
-    FileOperationRiskContext,
-    FetchFileHistoryToolResult,
-    FetchFileDiffToolResult,
-)
-from app.models.operators import FileEditApprovalRequest
-from app.models.settings import G8eeUserSettings, LLMSettings
+from app.models.operators import FileEditApprovalRequest, OperatorDocument
 from app.models.pubsub_messages import (
     FetchFileDiffByIdSuccessPayload,
     FetchFileDiffBySessionSuccessPayload,
     FetchFileDiffErrorPayload,
-    FetchFileHistorySuccessPayload,
     FetchFileHistoryErrorPayload,
+    FetchFileHistorySuccessPayload,
     FileEditResultPayload,
     G8eMessage,
+    G8eoResultEnvelope,
+)
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.models.tool_results import (
+    CommandInternalResult,
+    FetchFileDiffToolResult,
+    FetchFileHistoryToolResult,
+    FileEditResult,
+    FileOperationRiskAnalysis,
+    FileOperationRiskContext,
+)
+from app.services.protocols import (
+    AIResponseAnalyzerProtocol,
+    ApprovalServiceProtocol,
+    ExecutionServiceProtocol,
+    InvestigationServiceProtocol,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,6 +94,7 @@ class OperatorFileService:
         request_settings: G8eeUserSettings | None = None,
     ) -> FileEditResult:
         """Orchestrate file operation: resolution -> risk -> approval -> execution."""
+        result: FileEditResult
         try:
             file_path = args.file_path
             operation = args.operation
@@ -101,88 +104,30 @@ class OperatorFileService:
             op_name = getattr(operation, "value", operation)
             logger.info("[FILE] Starting %s on %s", op_name, file_path)
 
-            # 1. Validation
-            if not file_path or not file_path.strip():
-                return FileEditResult(
-                    success=False,
-                    error="File path parameter is required",
-                    error_type=CommandErrorType.VALIDATION_ERROR,
-                )
-
-            if not justification:
-                return FileEditResult(
-                    success=False,
-                    error="Justification parameter is required",
-                    error_type=CommandErrorType.VALIDATION_ERROR,
-                )
-
-            if operation == FileOperation.REPLACE:
-                if not args.old_content:
-                    return FileEditResult(
-                        success=False,
-                        error="old_content is required for replace operation",
-                        error_type=CommandErrorType.VALIDATION_ERROR,
-                    )
-                if not args.new_content:
-                    return FileEditResult(
-                        success=False,
-                        error="new_content is required for replace operation",
-                        error_type=CommandErrorType.VALIDATION_ERROR,
-                    )
-            elif operation == FileOperation.WRITE:
-                if not args.content:
-                    return FileEditResult(
-                        success=False,
-                        error="content is required for write operation",
-                        error_type=CommandErrorType.VALIDATION_ERROR,
-                    )
-            elif operation == FileOperation.INSERT:
-                if not args.insert_content:
-                    return FileEditResult(
-                        success=False,
-                        error="insert_content is required for insert operation",
-                        error_type=CommandErrorType.VALIDATION_ERROR,
-                    )
-                if args.insert_position is None:
-                    return FileEditResult(
-                        success=False,
-                        error="insert_position is required for insert operation",
-                        error_type=CommandErrorType.VALIDATION_ERROR,
-                    )
-            elif operation == FileOperation.DELETE:
-                if args.start_line is None and args.end_line is None:
-                    return FileEditResult(
-                        success=False,
-                        error="At least one of start_line or end_line must be provided for delete operation",
-                        error_type=CommandErrorType.VALIDATION_ERROR,
-                    )
+            validation_error = self._validate_file_edit(args, file_path, justification)
+            if validation_error:
+                return validation_error
 
             # 2. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
-            try:
-                resolved_operators = self.execution_service.resolve_operators(
-                    operator_documents=operator_documents,
-                    target_operators=args.target_operators,
-                )
-                resolved_operator = resolved_operators[0]
-            except Exception as e:
-                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
+            resolved_operator, resolution_error = self._resolve_file_operator(
+                operator_documents, args
+            )
+            if resolution_error:
+                return resolution_error
+            if resolved_operator is None or not resolved_operator.operator_session_id:
                 return FileEditResult(
                     success=False,
-                    error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
-                    error_type=CommandErrorType.G8E_RESOLUTION_ERROR
-                    if operator_documents
-                    else CommandErrorType.NO_OPERATORS_AVAILABLE,
+                    error=(
+                        "No eligible operator is available for this file operation."
+                        if resolved_operator is None
+                        else "Operator offline"
+                    ),
+                    error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
             operator_id = resolved_operator.id
             operator_session_id = resolved_operator.operator_session_id
-            if not operator_session_id:
-                return FileEditResult(
-                    success=False,
-                    error="Operator offline",
-                    error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
-                )
 
             # 3. Risk analysis (only for write/update)
             risk_analysis: FileOperationRiskAnalysis | None = None
@@ -203,7 +148,7 @@ class OperatorFileService:
                             blocking_issues=risk_analysis.blocking_issues,
                         )
                 except Exception as e:
-                    logger.error("[FILE-RISK] Failed to analyze risk: %s", e)
+                    logger.exception("[FILE-RISK] Failed to analyze risk: %s", e)
 
             # 4. Approval gate (only for write/update)
             approval_result = None
@@ -256,11 +201,14 @@ class OperatorFileService:
 
             # Extract content for READ operations from envelope payload
             content = None
-            if operation == FileOperation.READ and envelope:
-                if isinstance(envelope.payload, FileEditResultPayload):
-                    content = envelope.payload.content
+            if (
+                operation == FileOperation.READ
+                and envelope
+                and isinstance(envelope.payload, FileEditResultPayload)
+            ):
+                content = envelope.payload.content
 
-            return FileEditResult(
+            result = FileEditResult(
                 success=internal_result.status == ExecutionStatus.COMPLETED
                 if internal_result
                 else False,
@@ -270,11 +218,63 @@ class OperatorFileService:
                 error=internal_result.error if internal_result else "Execution result is None",
             )
         except Exception as e:
-            logger.error("[FILE-ERROR] Unexpected error in execute_file_edit: %s", e, exc_info=True)
-            return FileEditResult(
+            logger.error("[FILE-ERROR] Unexpected error in execute_file_edit: %s", e)
+            result = FileEditResult(
                 success=False,
                 error=f"File edit execution failed: {e}. Check operator status and retry.",
                 error_type=CommandErrorType.EXECUTION_ERROR,
+            )
+        return result
+
+    @staticmethod
+    def _validate_file_edit(
+        args: FileEditRequestPayload, file_path: str, justification: str
+    ) -> FileEditResult | None:
+        """Return the existing validation result for an invalid edit request."""
+        error = None
+        if not file_path or not file_path.strip():
+            error = "File path parameter is required"
+        elif not justification:
+            error = "Justification parameter is required"
+        elif args.operation == FileOperation.REPLACE and not args.old_content:
+            error = "old_content is required for replace operation"
+        elif args.operation == FileOperation.REPLACE and not args.new_content:
+            error = "new_content is required for replace operation"
+        elif args.operation == FileOperation.WRITE and not args.content:
+            error = "content is required for write operation"
+        elif args.operation == FileOperation.INSERT and not args.insert_content:
+            error = "insert_content is required for insert operation"
+        elif args.operation == FileOperation.INSERT and args.insert_position is None:
+            error = "insert_position is required for insert operation"
+        elif (
+            args.operation == FileOperation.DELETE
+            and args.start_line is None
+            and args.end_line is None
+        ):
+            error = "At least one of start_line or end_line must be provided for delete operation"
+        if error:
+            return FileEditResult(
+                success=False, error=error, error_type=CommandErrorType.VALIDATION_ERROR
+            )
+        return None
+
+    def _resolve_file_operator(
+        self, operator_documents: list[OperatorDocument], args: FileEditRequestPayload
+    ) -> tuple[OperatorDocument, None] | tuple[None, FileEditResult]:
+        try:
+            resolved = self.execution_service.resolve_operators(
+                operator_documents=operator_documents,
+                target_operators=args.target_operators,
+            )[0]
+            return resolved, None
+        except Exception as exc:
+            logger.exception("[FILE-ERROR] Operator resolution failed: %s", exc)
+            return None, FileEditResult(
+                success=False,
+                error=f"Operator resolution failed: {exc}. Ensure at least one operator is online and has a valid session, then retry.",
+                error_type=CommandErrorType.G8E_RESOLUTION_ERROR
+                if operator_documents
+                else CommandErrorType.NO_OPERATORS_AVAILABLE,
             )
 
     async def execute_fetch_file_history(
@@ -298,7 +298,7 @@ class OperatorFileService:
                 )
                 resolved_operator = resolved_operators[0]
             except Exception as e:
-                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
+                logger.exception("[FILE-ERROR] Operator resolution failed: %s", e)
                 return FetchFileHistoryToolResult(
                     success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
@@ -360,9 +360,7 @@ class OperatorFileService:
                 error=internal_result.error if internal_result else "Execution result is None",
             )
         except Exception as e:
-            logger.error(
-                "[FILE-ERROR] Unexpected error in execute_fetch_file_history: %s", e, exc_info=True
-            )
+            logger.exception("[FILE-ERROR] Unexpected error in execute_fetch_file_history: %s", e)
             return FetchFileHistoryToolResult(
                 success=False,
                 error=f"File history fetch failed: {e}. Check operator status and retry.",
@@ -390,7 +388,7 @@ class OperatorFileService:
                 )
                 resolved_operator = resolved_operators[0]
             except Exception as e:
-                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
+                logger.error("[FILE-ERROR] Operator resolution failed: %s", e)
                 return FetchFileDiffToolResult(
                     success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
@@ -429,44 +427,50 @@ class OperatorFileService:
                 timeout_seconds=60,
             )
 
-            if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
-                return FetchFileDiffToolResult(
-                    success=True,
-                    diff=envelope.payload.diff,
-                    total=1,
-                    error=None,
-                    operator_session_id=operator_session_id,
-                )
-            if envelope and isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
-                return FetchFileDiffToolResult(
-                    success=True,
-                    diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
-                    total=envelope.payload.total,
-                    error=None,
-                    operator_session_id=operator_session_id,
-                )
-            if envelope and isinstance(envelope.payload, FetchFileDiffErrorPayload):
-                return FetchFileDiffToolResult(
-                    success=False,
-                    diff=None,
-                    total=0,
-                    error=envelope.payload.error,
-                    operator_session_id=operator_session_id,
-                )
-
-            return FetchFileDiffToolResult(
-                success=internal_result.status == ExecutionStatus.COMPLETED
-                if internal_result
-                else False,
-                error=internal_result.error if internal_result else "Execution result is None",
-                operator_session_id=operator_session_id,
-            )
+            return self._file_diff_result(envelope, internal_result, operator_session_id)
         except Exception as e:
-            logger.error(
-                "[FILE-ERROR] Unexpected error in execute_fetch_file_diff: %s", e, exc_info=True
-            )
+            logger.exception("[FILE-ERROR] Unexpected error in execute_fetch_file_diff: %s", e)
             return FetchFileDiffToolResult(
                 success=False,
                 error=f"File diff fetch failed: {e}. Check operator status and retry.",
                 error_type=CommandErrorType.EXECUTION_ERROR,
             )
+
+    @staticmethod
+    def _file_diff_result(
+        envelope: G8eoResultEnvelope | None,
+        internal_result: CommandInternalResult | None,
+        operator_session_id: str,
+    ) -> FetchFileDiffToolResult:
+        if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
+            return FetchFileDiffToolResult(
+                success=True,
+                diff=envelope.payload.diff,
+                total=1,
+                error=None,
+                operator_session_id=operator_session_id,
+            )
+        if envelope and isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
+            return FetchFileDiffToolResult(
+                success=True,
+                diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
+                total=envelope.payload.total,
+                error=None,
+                operator_session_id=operator_session_id,
+            )
+        if envelope and isinstance(envelope.payload, FetchFileDiffErrorPayload):
+            return FetchFileDiffToolResult(
+                success=False,
+                diff=None,
+                total=0,
+                error=envelope.payload.error,
+                operator_session_id=operator_session_id,
+            )
+
+        return FetchFileDiffToolResult(
+            success=internal_result.status == ExecutionStatus.COMPLETED
+            if internal_result
+            else False,
+            error=internal_result.error if internal_result else "Execution result is None",
+            operator_session_id=operator_session_id,
+        )

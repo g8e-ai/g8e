@@ -138,7 +138,7 @@ func TestCredentialStore_CommittedFilePermissions(t *testing.T) {
 		require.NoError(t, err)
 		info, err := fileSvc.Stat(context.Background(), rel)
 		require.NoError(t, err)
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(),
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(),
 			"file must have private permissions (0600): %s", abs)
 	}
 }

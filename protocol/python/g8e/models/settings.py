@@ -40,7 +40,7 @@ class LLMSettings(G8eBaseModel):
         populate_by_name=True,
         extra="ignore",
     )
-    primary_provider: str | None = Field(default=None, alias="llm_primary_provider")
+    primary_provider: str | None = Field(default="g8e", alias="llm_primary_provider")
     assistant_provider: str | None = Field(default=None, alias="llm_assistant_provider")
     lite_provider: str | None = Field(default=None, alias="llm_lite_provider")
     primary_model: str | None = Field(default=None, alias="llm_model")

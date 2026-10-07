@@ -22,7 +22,7 @@ from app.utils.security import (
 from app.utils.time_ids.timestamp import now
 
 if TYPE_CHECKING:
-    from app.services.infra.settings_service import SettingsServiceProtocol
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,6 @@ class APIKeyService:
         user_id: str,
         organization_id: str | None,
         operator_id: str,
-        settings_service: SettingsServiceProtocol,
         client_name: str = "operator",
         permissions: list[str] | None = None,
     ) -> bool:
@@ -200,7 +199,6 @@ class APIKeyService:
         user_id: str,
         organization_id: str | None,
         operator_id: str,
-        settings_service: SettingsServiceProtocol,
         client_name: str = "operator",
         permissions: list[str] | None = None,
     ) -> bool:
@@ -214,7 +212,6 @@ class APIKeyService:
             user_id=user_id,
             organization_id=organization_id,
             operator_id=operator_id,
-            settings_service=settings_service,
             client_name=client_name,
             permissions=permissions,
         )
@@ -235,7 +232,6 @@ class APIKeyService:
     async def revoke_operator_key(
         self,
         raw_key: str,
-        settings_service: SettingsServiceProtocol,
     ) -> bool:
         """Revoke an operator API key in the canonical store."""
         return await self.revoke_key(raw_key)

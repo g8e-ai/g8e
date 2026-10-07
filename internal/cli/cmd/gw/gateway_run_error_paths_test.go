@@ -143,7 +143,7 @@ func TestGatewayCleanCmd_AbortsOnNoResponse(t *testing.T) {
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("n\n"))
+	w.WriteString("n\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 
@@ -163,7 +163,7 @@ func TestGatewayResetCmd_AbortsOnNoResponse(t *testing.T) {
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("n\n"))
+	w.WriteString("n\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 
@@ -287,7 +287,7 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 		Operators: []models.OperatorDocumentGo{
 			{
 				ID:                "g8e-model-provenance-operator",
-				OperatorRole:      constants.OperatorRoleProvenance,
+				OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleProvenance},
 				OperatorType:      constants.OperatorTypeRemote,
 				CurrentHostname:   "beepboop",
 				OperatorSessionID: "sess-prov-1",
@@ -295,7 +295,7 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 			},
 			{
 				ID:                "g8e-provider-boundary-observer",
-				OperatorRole:      constants.OperatorRoleObserver,
+				OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleObserver},
 				OperatorType:      constants.OperatorTypeRemote,
 				CurrentHostname:   "beepboop",
 				OperatorSessionID: "sess-obs-1",
@@ -303,17 +303,17 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 			},
 			{
 				ID:                "g8e-inference-operator",
-				OperatorRole:      constants.OperatorRoleInference,
+				OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleInference},
 				OperatorType:      constants.OperatorTypeRemote,
 				CurrentHostname:   "beepboop",
 				OperatorSessionID: "sess-inf-1",
 				Status:            constants.OperatorStatusActive,
 			},
 			{
-				ID:           "old-stopped-op",
-				OperatorRole: constants.OperatorRoleData,
-				OperatorType: constants.OperatorTypeRemote,
-				Status:       constants.OperatorStatusStopped,
+				ID:            "old-stopped-op",
+				OperatorRoles: constants.OperatorRoles{constants.OperatorRoleData},
+				OperatorType:  constants.OperatorTypeRemote,
+				Status:        constants.OperatorStatusStopped,
 			},
 		},
 	})
@@ -340,7 +340,8 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "Localhost Gateway")
 	assert.Contains(t, out, "State: RUNNING (PID: 9999)")
-	assert.Contains(t, out, "Connected Operators")
+	assert.Contains(t, out, "Enrollments")
+	assert.Contains(t, out, "Operators")
 	assert.Contains(t, out, "g8e-model-provenance-operator")
 	assert.Contains(t, out, "provenance")
 	assert.Contains(t, out, "g8e-provider-boundary-observer")
@@ -384,9 +385,138 @@ func TestGatewayStatusCmd_ReportsNoConnectedOperatorsWhenEmpty(t *testing.T) {
 
 	out := buf.String()
 	assert.Contains(t, out, "Localhost Gateway")
-	assert.Contains(t, out, "Connected Operators")
+	assert.Contains(t, out, "Enrollments")
+	assert.Contains(t, out, "Operators")
 	assert.Contains(t, out, "No connected operators")
 	assert.NotContains(t, out, "Docker Compose Stack")
+}
+
+func TestGatewayStatusCmd_ReportsEnrollmentSections(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+
+	healthResp, _ := json.Marshal(models.HealthResponse{Status: constants.GatewayModeStatusOK, PID: 9999})
+	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}})
+	pendingResp, _ := json.Marshal(models.PlatformEnrollmentPendingResponse{
+		Requests: []models.PlatformEnrollmentPendingRequest{
+			{RequestID: "req-pending", ComponentKind: models.PlatformComponentApplication, ComponentName: "pending-app", InstanceID: "app-pending-host", Hostname: "host", State: models.PlatformEnrollmentStatePending},
+		},
+	})
+	enrolledResp, _ := json.Marshal(models.PlatformEnrollmentEnrolledResponse{
+		Enrollments: []models.PlatformEnrollmentEnrolledRequest{
+			{RequestID: "req-app", ComponentKind: models.PlatformComponentApplication, ComponentName: "my-app", InstanceID: "app-my-app-host", Hostname: "host", State: models.PlatformEnrollmentStateCompleted},
+			{RequestID: "req-ens", ComponentKind: models.PlatformComponentEnsemble, ComponentName: "g8ee", InstanceID: "g8ee-1", Hostname: "host", State: models.PlatformEnrollmentStateCompleted},
+			{RequestID: "req-dash", ComponentKind: models.PlatformComponentDashboard, ComponentName: "g8ed", InstanceID: "dash-inst", Hostname: "host", State: models.PlatformEnrollmentStateCompleted},
+			{RequestID: "req-revoked", ComponentKind: models.PlatformComponentApplication, ComponentName: "revoked-app", InstanceID: "app-revoked", Hostname: "host", State: models.PlatformEnrollmentStateRevoked},
+			{RequestID: "req-op", ComponentKind: models.PlatformComponentOperator, ComponentName: "g8eo", InstanceID: "op-inst", Hostname: "host", State: models.PlatformEnrollmentStateCompleted},
+		},
+	})
+
+	usersResp, _ := json.Marshal([]models.User{
+		{ID: "user-1", Status: constants.UserStatusActive, Roles: []string{"admin"}, PasskeyCredentials: []models.PasskeyCredential{{}}},
+	})
+
+	mockClient := &statusMockClient{
+		responses: map[string][]byte{
+			"/api/v1/health":                                  healthResp,
+			constants.APIPaths.Operators:                      operatorsResp,
+			constants.APIPaths.AuthPlatformEnrollmentPending:  pendingResp,
+			constants.APIPaths.AuthPlatformEnrollmentEnrolled: enrolledResp,
+			constants.APIPaths.Users:                          usersResp,
+		},
+	}
+	clientFactory := func(fs.RuntimeFileService, *config.Config) (authcmd.APIClient, error) {
+		return mockClient, nil
+	}
+
+	cmd := gatewayStatusCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), clientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	out := buf.String()
+	pending := strings.Index(out, "\nPending\n")
+	operators := strings.Index(out, "\nOperators\n")
+	apps := strings.Index(out, "\nApplications\n")
+	dashboard := strings.Index(out, "\nDashboard\n")
+	users := strings.Index(out, "\nUsers\n")
+	require.True(t, pending > 0 && pending < operators && operators < apps && apps < dashboard && dashboard < users, "sections out of order:\n%s", out)
+
+	assert.Contains(t, out, "Enrollments")
+	assert.Contains(t, out[pending:operators], "req-pending")
+	assert.Contains(t, out[apps:dashboard], "my-app")
+	assert.Contains(t, out[apps:dashboard], "g8ee")
+	assert.Contains(t, out[dashboard:users], "g8ed")
+	assert.Contains(t, out[users:], "user-1")
+	assert.Contains(t, out[users:], "admin")
+	assert.NotContains(t, out, "revoked-app")
+	assert.NotContains(t, out, "op-inst")
+}
+
+func TestGatewayStatusCmd_ReportsEmptyEnrollmentSections(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+
+	healthResp, _ := json.Marshal(models.HealthResponse{Status: constants.GatewayModeStatusOK, PID: 9999})
+	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}})
+	pendingResp, _ := json.Marshal(models.PlatformEnrollmentPendingResponse{})
+	enrolledResp, _ := json.Marshal(models.PlatformEnrollmentEnrolledResponse{})
+	usersResp, _ := json.Marshal([]models.User{})
+
+	mockClient := &statusMockClient{
+		responses: map[string][]byte{
+			"/api/v1/health":                                  healthResp,
+			constants.APIPaths.Operators:                      operatorsResp,
+			constants.APIPaths.AuthPlatformEnrollmentPending:  pendingResp,
+			constants.APIPaths.AuthPlatformEnrollmentEnrolled: enrolledResp,
+			constants.APIPaths.Users:                          usersResp,
+		},
+	}
+	clientFactory := func(fs.RuntimeFileService, *config.Config) (authcmd.APIClient, error) {
+		return mockClient, nil
+	}
+
+	cmd := gatewayStatusCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), clientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+	out := buf.String()
+	assert.Contains(t, out, "No pending enrollments")
+	assert.Contains(t, out, "No connected operators")
+	assert.Contains(t, out, "No enrolled applications")
+	assert.Contains(t, out, "No enrolled dashboard")
+	assert.Contains(t, out, "No users")
+}
+
+func TestGatewayStatusCmd_EnrollmentListUnavailable(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+
+	healthResp, _ := json.Marshal(models.HealthResponse{Status: constants.GatewayModeStatusOK, PID: 9999})
+	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}})
+
+	mockClient := &statusMockClient{
+		responses: map[string][]byte{
+			"/api/v1/health":             healthResp,
+			constants.APIPaths.Operators: operatorsResp,
+		},
+	}
+	clientFactory := func(fs.RuntimeFileService, *config.Config) (authcmd.APIClient, error) {
+		return mockClient, nil
+	}
+
+	cmd := gatewayStatusCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), clientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+	out := buf.String()
+	assert.Contains(t, out, "Pending enrollments unavailable")
+	assert.Contains(t, out, "Applications unavailable")
+	assert.Contains(t, out, "Dashboard unavailable")
+	assert.Contains(t, out, "Users unavailable")
 }
 
 func TestGatewayLogsCmd_NoLogFileReturnsMessage(t *testing.T) {
@@ -427,7 +557,7 @@ func TestGatewayCleanCmd_AbortedOutputContainsNoDestructiveAction(t *testing.T) 
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("\n"))
+	w.WriteString("\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 
@@ -448,7 +578,7 @@ func TestGatewayResetCmd_WarningMessagesPrintedBeforePrompt(t *testing.T) {
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("n\n"))
+	w.WriteString("n\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 
@@ -472,7 +602,7 @@ func TestGatewayCleanCmd_WarningMessagesPrintedBeforePrompt(t *testing.T) {
 	originalStdin := os.Stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Write([]byte("n\n"))
+	w.WriteString("n\n")
 	w.Close()
 	t.Cleanup(func() { os.Stdin = originalStdin })
 

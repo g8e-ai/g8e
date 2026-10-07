@@ -21,19 +21,28 @@ linters:
     - gocyclo
     - misspell
     - unconvert
-    # - unparam  # Disabled for gradual compliance (27 issues)
-    # - whitespace  # Disabled for gradual compliance (1 issue)
+    - whitespace
+    - unparam
     
     # Bug Prevention
     - bodyclose
+    - nilnesserr
+    - durationcheck
+    - reassign
+    - makezero
+    - sqlclosecheck
+    - rowserrcheck
+    - wastedassign
+    - fatcontext
+    - recvcheck
+    - mirror
+    - musttag
     # - contextcheck  # Disabled for gradual compliance (9 issues)
-    # - copyloopvar  # Disabled for gradual compliance (14 issues)
-    # - errorlint  # Disabled for gradual compliance (43 issues)
-    # - nilerr  # Disabled for gradual compliance (16 issues)
-    # - rowserrcheck  # Disabled for gradual compliance (9 issues)
-    # - sqlclosecheck  # Disabled for gradual compliance (2 issues)
-    
-    # Security
+    - copyloopvar
+    - usestdlibvars
+    - nilerr
+    - nolintlint
+    - sloglint
     - gosec
     
     # Test Helpers (relaxed for gradual compliance)
@@ -71,25 +80,25 @@ linters:
         - opinionated
     gosec:
       excludes:
-        - G104
-        - G101
-        - G204
-        - G306
-        - G402
-        - G703
-        - G107
-        - G115
-        - G102
-        - G123
-        - G702
-        - G706
+        - G104 # Unchecked errors (handled by errcheck)
+        - G101 # False positives on constant names containing "key" / "token"
+        - G204 # Subprocess exec with variable (common across CLI tools)
+        - G306 # File permissions (covered by project Perm* constants)
+        - G703 # Path traversal taint false positives
+        - G107 # HTTP request URL taint false positives
+        - G115 # Integer overflow conversion
     govet:
       disable:
         - fieldalignment
         - shadow
+        - unusedwrite
       enable-all: true
     gocyclo:
       min-complexity: 60
+    nolintlint:
+      allow-unused: true
+      require-explanation: false
+      require-specific: true
     goconst:
       min-len: 5
       min-occurrences: 5
@@ -105,9 +114,15 @@ linters:
           - errcheck
           - gocritic
           - gosec
-          - govet
           - unused
         path: _test\.go
+      - linters:
+          - gosec
+        path: internal/cli/stream/proxy_command_unix\.go
+        text: G702
+      - linters:
+          - recvcheck
+        path: internal/constants/operator_roles\.go
       - linters:
           - bodyclose
         path: internal/testutil/pubsub\.go
@@ -120,9 +135,6 @@ linters:
           - gosec
         path: internal/cli/cmd/auth/auth_context\.go
         text: G117
-      - linters:
-          - unparam
-        path: _test\.go
       - linters:
           - whitespace
         path: _test\.go

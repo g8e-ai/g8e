@@ -80,6 +80,12 @@ g8e_setup_confirm() {
     if [[ "$AUTO_YES" == true ]]; then
         return 0
     fi
+    if [[ ! -t 0 ]]; then
+        echo "ERROR: cannot prompt for confirmation: stdin is not a terminal." >&2
+        echo "Re-run with -y/--yes (or G8E_SETUP_YES=1) to accept all installs non-interactively," >&2
+        echo "or run in an interactive terminal to answer each prompt." >&2
+        exit 2
+    fi
     read -r -p "$prompt" response
     [[ "$response" =~ ^[Yy]$ ]]
 }
@@ -250,6 +256,12 @@ g8e_check_bc() {
         echo "  bc: detected"
         return 0
     fi
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            echo "  bc: not required on Windows (awk fallback used)"
+            return 0
+            ;;
+    esac
     echo "  bc: missing (used by the make ci coverage threshold)"
     return 1
 }
@@ -263,6 +275,12 @@ g8e_check_cc() {
             return 0
         fi
     done
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            echo "  C compiler: not required on Windows (the Go race detector is disabled on Windows)"
+            return 0
+            ;;
+    esac
     echo "  C compiler: missing (required by 'go test -race')"
     return 1
 }
@@ -323,10 +341,18 @@ g8e_check_go_tools() {
 }
 
 g8e_check_python_env() {
-    local py=".venv/bin/python" ver
+    local py=".venv/bin/python" bindir=".venv/bin" ver
     if [[ ! -x "$py" ]]; then
-        echo "  .venv: missing (run: make dev-python)"
-        return 1
+        if [[ -f ".venv/Scripts/python.exe" ]]; then
+            py=".venv/Scripts/python.exe"
+            bindir=".venv/Scripts"
+        elif [[ -f ".venv/Scripts/python" ]]; then
+            py=".venv/Scripts/python"
+            bindir=".venv/Scripts"
+        else
+            echo "  .venv: missing (run: make dev-python)"
+            return 1
+        fi
     fi
     ver="$(g8e_extract_version "$("$py" --version 2>&1)")"
     if [[ "$ver" != "$G8E_PYTHON_VERSION".* ]]; then
@@ -339,7 +365,7 @@ g8e_check_python_env() {
     fi
     local tool
     for tool in ruff pyright pytest; do
-        if [[ ! -x ".venv/bin/$tool" ]]; then
+        if [[ ! -x "$bindir/$tool" && ! -f "$bindir/$tool.exe" && ! -x "$bindir/$tool.exe" ]]; then
             echo "  .venv: $tool missing (run: make dev-python)"
             return 1
         fi
@@ -350,7 +376,7 @@ g8e_check_python_env() {
 
 g8e_check_node_deps() {
     local failed=0 dir
-    for dir in console protocol/node g8e-adapter; do
+    for dir in console protocol/node g8e-adapter website; do
         if [[ -d "$dir/node_modules" ]]; then
             echo "  $dir/node_modules: present"
         else
@@ -526,7 +552,7 @@ EOF
   make dev-check        # confirms every tool 'make ci' needs is installed
 
 Contributor workflow:
-  make ci               # full local CI (platform, ensemble, console)
+  make ci               # full local CI (platform, protocol, ensemble, console, website, scripts)
   make help             # all targets
 EOF
     fi

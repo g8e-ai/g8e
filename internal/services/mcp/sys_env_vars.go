@@ -68,8 +68,7 @@ func (t *SysEnvVarsTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 		value := parts[1]
 
 		if req.Pattern != "" {
-			matched, err := matchPattern(key, req.Pattern)
-			if err != nil || !matched {
+			if !matchPattern(key, req.Pattern) {
 				continue
 			}
 		}
@@ -100,9 +99,9 @@ func (t *SysEnvVarsTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 	}, nil
 }
 
-func matchPattern(key, pattern string) (bool, error) {
+func matchPattern(key, pattern string) bool {
 	if pattern == "" {
-		return true, nil
+		return true
 	}
 
 	lowerKey := strings.ToLower(key)
@@ -117,10 +116,10 @@ func matchPattern(key, pattern string) (bool, error) {
 				suffix = parts[len(parts)-1]
 			}
 		}
-		return strings.HasPrefix(lowerKey, prefix) && strings.HasSuffix(lowerKey, suffix), nil
+		return strings.HasPrefix(lowerKey, prefix) && strings.HasSuffix(lowerKey, suffix)
 	}
 
-	return strings.EqualFold(key, pattern), nil
+	return strings.EqualFold(key, pattern)
 }
 
 func redactEnvValue(key, value string) string {

@@ -284,7 +284,7 @@ func TestToolRegistry_ConcurrentAccess(t *testing.T) {
 	// Register tools concurrently
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
-		go func(idx int) {
+		go func() {
 			tool := &mockTool{
 				name:        "concurrent_tool",
 				description: "Concurrent test",
@@ -292,7 +292,7 @@ func TestToolRegistry_ConcurrentAccess(t *testing.T) {
 			}
 			registry.Register(tool)
 			done <- true
-		}(i)
+		}()
 	}
 
 	// Wait for all goroutines

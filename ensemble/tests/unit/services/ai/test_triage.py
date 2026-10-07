@@ -22,14 +22,17 @@ import pytest
 
 from app.constants import (
     AgentMode,
+    LLMProvider,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
     TriageRequestPosture,
 )
-from app.models.agents.triage import TriageRequest
+from app.errors import ContextWindowExceededError
 from app.llm.providers.fake import FakeProvider
+from app.models.agents.triage import TriageRequest
 from app.models.attachments import AttachmentMetadata
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.triage import TriageAgent
 from tests.fakes.fake_llm_provider import FakeLLMProvider
 
@@ -43,15 +46,13 @@ def fake_provider():
 
 @pytest.fixture
 def mock_settings():
-    from app.constants import LLMProvider
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     return G8eeUserSettings(
         llm=LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="main-model",
-            lite_provider=LLMProvider.OLLAMA,
-            lite_model="lite-model",
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="main-model",
+            llm_lite_provider=LLMProvider.OLLAMA,
+            llm_lite_model="lite-model",
         )
     )
 
@@ -278,6 +279,43 @@ async def test_triage_defaults_to_complex_on_provider_exception(fake_provider, m
     assert result.model_call.input_artifact_hash
 
 
+async def test_triage_defaults_to_complex_on_context_overflow_without_retry(
+    fake_provider, mock_settings
+):
+    fake_provider.generate_content_lite = AsyncMock(
+        side_effect=ContextWindowExceededError(
+            "prompt filled the context window",
+            model="lite-model",
+            service_name="ollama",
+            num_ctx=65536,
+            prompt_tokens=65536,
+            channel="lite",
+        )
+    )
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="hello",
+        agent_mode=AgentMode.G8E_NOT_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
+        result = await agent.triage(request)
+
+    assert result.complexity == TriageComplexityClassification.COMPLEX
+    assert result.complexity_confidence == TriageConfidence.LOW
+    assert result.error_code == "MODEL_CONTEXT_OVERFLOW"
+    assert result.error_class == "ContextWindowExceededError"
+    assert "context window" in result.intent_summary
+    assert "empty" not in result.intent_summary.lower()
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type == "ContextWindowExceededError"
+    assert fake_provider.generate_content_lite.await_count == 1
+
+
 async def test_triage_defaults_to_complex_on_llm_exception(fake_provider, mock_settings):
     agent = TriageAgent()
     request = TriageRequest(
@@ -447,13 +485,15 @@ async def test_triage_uses_provided_model_override(fake_provider, mock_settings)
         model_override="custom-model",
     )
 
-    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
-        with patch(
+    with (
+        patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider),
+        patch(
             "app.services.ai.triage.AIGenerationConfigBuilder.build_lite_settings"
-        ) as mock_config:
-            mock_config.return_value = MagicMock()
-            await agent.triage(request)
+        ) as mock_config,
+    ):
+        mock_config.return_value = MagicMock()
+        await agent.triage(request)
 
-            # Verify custom model was used in config builder
-            _args, kwargs = mock_config.call_args
-            assert kwargs["model"] == "custom-model"
+        # Verify custom model was used in config builder
+        _args, kwargs = mock_config.call_args
+        assert kwargs["model"] == "custom-model"

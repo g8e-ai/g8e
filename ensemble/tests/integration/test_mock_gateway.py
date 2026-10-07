@@ -16,6 +16,7 @@ import pytest
 from app.clients.blob_client import BlobClient
 from app.clients.db_client import DBClient
 from app.clients.kv_cache_client import KVCacheClient
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 
@@ -53,6 +54,7 @@ class TestMockGatewayHealth:
             assert ok
         finally:
             await blob.close()
+
 
 class TestMockGatewayKV:
     async def test_set_and_get(self, mock_gateway):
@@ -123,6 +125,7 @@ class TestMockGatewayDB:
             await db.create_document("test_col", "doc1", {"name": "test", "value": 123})
             result = await db.get_document("test_col", "doc1")
             assert result.success
+            assert result.data is not None
             assert result.data["name"] == "test"
             assert result.data["value"] == 123
         finally:
@@ -138,6 +141,7 @@ class TestMockGatewayDB:
             await db.create_document("test_col", "doc2", {"a": 1, "b": 2})
             await db.update_document("test_col", "doc2", {"b": 3, "c": 4})
             result = await db.get_document("test_col", "doc2")
+            assert result.data is not None
             assert result.data["a"] == 1
             assert result.data["b"] == 3
             assert result.data["c"] == 4
@@ -222,4 +226,3 @@ class TestMockGatewayBlob:
             assert count == 2
         finally:
             await blob.close()
-

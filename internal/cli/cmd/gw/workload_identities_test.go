@@ -22,6 +22,7 @@ func TestCleanupReportsRecordedIdentitiesWithoutScanningHome(t *testing.T) {
 	t.Chdir(t.TempDir())
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	known := filepath.Join(home, "custom-operator")
 	unlisted := filepath.Join(home, "unlisted-operator")
 	for _, dir := range []string{known, unlisted} {
@@ -40,6 +41,26 @@ func TestCleanupReportsRecordedIdentitiesWithoutScanningHome(t *testing.T) {
 	require.Contains(t, out.String(), known)
 	require.NotContains(t, out.String(), unlisted)
 	retained, err := os.ReadFile(filepath.Join(known, ".g8e/pki/trust/g8eg-ca-bundle.pem"))
+	require.NoError(t, err)
+	require.Equal(t, "old-ca", string(retained))
+}
+
+func TestCleanupReportsDefaultDataIdentityWithoutRegistry(t *testing.T) {
+	t.Chdir(t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	dir := filepath.Join(home, ".ollama/g8e/data")
+	path := filepath.Join(dir, ".g8e/pki/trust/g8eg-ca-bundle.pem")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
+	require.NoError(t, os.WriteFile(path, []byte("old-ca"), 0600))
+	cmd := &cobra.Command{}
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	reportWorkloadIdentities(cmd)
+	require.Contains(t, out.String(), "data: "+dir)
+	require.Contains(t, out.String(), "make full RESET_IDENTITIES=1")
+	retained, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Equal(t, "old-ca", string(retained))
 }

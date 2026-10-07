@@ -17,9 +17,9 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.enums import HistoryActor
 
 from app.constants import EventType, ExecutionStatus
-from g8e.enums import HistoryActor
 from app.models.investigations import (
     ConversationMessageMetadata,
     InvestigationHistoryEntry,
@@ -31,8 +31,6 @@ from app.services.investigation.investigation_service import InvestigationServic
 
 def _make_investigation_data_service(mock_cache):
     """Helper to create InvestigationDataService with required governance_client."""
-    from unittest.mock import MagicMock
-
     mock_governance_client = MagicMock()
     return InvestigationDataService(cache=mock_cache, governance_client=mock_governance_client)
 

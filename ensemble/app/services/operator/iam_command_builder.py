@@ -131,7 +131,7 @@ class IamCommandBuilder:
             f"set -e && "
             f"ROLE_ARN=$(aws sts get-caller-identity --query 'Arn' --output text | "
             f"  sed 's/:sts:/:iam:/' | sed 's/assumed-role/role/' | sed 's/\\/[^\\/]*$//' ) && "
-            f'echo "Verifying permission propagation for role: $ROLE_ARN" && '
+            f'echo "Verifying permission propagation for intent {intent} on role: $ROLE_ARN" && '
             f"MAX_ATTEMPTS=10 && "
             f"ATTEMPT=0 && "
             f"while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do "

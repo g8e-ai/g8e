@@ -99,7 +99,7 @@ func openTestDB(t *testing.T, fileSvc fs.RuntimeFileService, logger *slog.Logger
 
 // setupTestInfrastructure creates common test infrastructure for gateway tests.
 // It initializes DB, PKI, auth services, and other shared components.
-func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfrastructure {
+func setupTestInfrastructure(t *testing.T, _ bool) *TestInfrastructure {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()

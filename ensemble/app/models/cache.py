@@ -8,7 +8,7 @@
 from typing import Literal
 
 from app.constants import BatchWriteOpType
-from app.models.base import G8eBaseModel, Field
+from app.models.base import Field, G8eBaseModel
 
 
 class DocumentResult(G8eBaseModel):

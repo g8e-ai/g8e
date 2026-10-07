@@ -103,13 +103,15 @@ class TestFsListRequestPayload:
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
-        p = FsListRequestPayload(
-            path="/tmp",
-            execution_id="exec-test",
-            user_id="u-1",
-            source="tool_call",
-            requested_at="2026-01-01T00:00:00Z",
-            target_operators=["op-1"],
+        p = FsListRequestPayload.model_validate(
+            {
+                "path": "/tmp",
+                "execution_id": "exec-test",
+                "user_id": "u-1",
+                "source": "tool_call",
+                "requested_at": "2026-01-01T00:00:00Z",
+                "target_operators": ["op-1"],
+            }
         )
         wire = p.model_dump(mode="json")
         assert "user_id" not in wire
@@ -127,7 +129,9 @@ class TestFsReadRequestPayload:
 
     def test_missing_path_raises(self):
         with pytest.raises(ValidationError):
-            FsReadRequestPayload(execution_id="exec-test", target_operators=["op-1"])
+            FsReadRequestPayload.model_validate(
+                {"execution_id": "exec-test", "target_operators": ["op-1"]}
+            )
 
     def test_all_fields_set(self):
         p = FsReadRequestPayload(
@@ -193,12 +197,14 @@ class TestFsReadRequestPayload:
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
-        p = FsReadRequestPayload(
-            path="/tmp/test.txt",
-            execution_id="exec-test",
-            user_id="u-1",
-            source="tool_call",
-            target_operators=["op-1"],
+        p = FsReadRequestPayload.model_validate(
+            {
+                "path": "/tmp/test.txt",
+                "execution_id": "exec-test",
+                "user_id": "u-1",
+                "source": "tool_call",
+                "target_operators": ["op-1"],
+            }
         )
         wire = p.model_dump(mode="json")
         assert "user_id" not in wire
@@ -212,7 +218,7 @@ class TestFetchLogsRequestPayload:
 
     def test_missingexecution_id_raises(self):
         with pytest.raises(ValidationError):
-            FetchLogsRequestPayload()
+            FetchLogsRequestPayload.model_validate({})
 
     def test_all_fields_set(self):
         p = FetchLogsRequestPayload(execution_id="exec-abc", sentinel_mode="scrubbed")
@@ -251,8 +257,12 @@ class TestFetchLogsRequestPayload:
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
-        p = FetchLogsRequestPayload(
-            execution_id="exec-xyz", source="tool_call", requested_at="2026-01-01T00:00:00Z"
+        p = FetchLogsRequestPayload.model_validate(
+            {
+                "execution_id": "exec-xyz",
+                "source": "tool_call",
+                "requested_at": "2026-01-01T00:00:00Z",
+            }
         )
         wire = p.model_dump(mode="json")
         assert "source" not in wire

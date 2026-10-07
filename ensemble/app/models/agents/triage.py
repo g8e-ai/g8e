@@ -5,7 +5,6 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from app.models.base import G8eBaseModel, Field
 from app.constants import (
     TriageComplexityClassification,
     TriageConfidence,
@@ -13,10 +12,11 @@ from app.constants import (
     TriageRequestPosture,
 )
 from app.constants.prompts import AgentMode
-from app.models.attachments import AttachmentMetadata
+from app.models.attachments import ChatAttachment
+from app.models.base import Field, G8eBaseModel
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import ConversationHistoryMessage
 from app.models.model_telemetry import ModelCallTelemetry
-from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeUserSettings
 
 
@@ -28,8 +28,8 @@ class TriageRequest(G8eBaseModel):
     conversation_history: list[ConversationHistoryMessage] = Field(
         default_factory=list, description="The recent conversation history."
     )
-    attachments: list[AttachmentMetadata] = Field(
-        default_factory=list, description="Metadata for any attached files."
+    attachments: list[ChatAttachment] = Field(
+        default_factory=list, description="Metadata or processed data for attached files."
     )
     settings: G8eeUserSettings = Field(description="The user's LLM and platform settings.")
     model_override: str | None = Field(

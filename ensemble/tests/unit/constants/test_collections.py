@@ -8,7 +8,6 @@
 """Regression tests for Phase 7 — DB collection names sourced from g8e.constants."""
 
 import pytest
-
 from g8e.constants import collection as _g8e_collection
 
 from app.constants.collections import (
@@ -18,9 +17,9 @@ from app.constants.collections import (
     DB_COLLECTION_CLI_SESSIONS,
     DB_COLLECTION_INVESTIGATIONS,
     DB_COLLECTION_MEMORIES,
-    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_OPERATOR_SESSIONS,
     DB_COLLECTION_OPERATOR_USAGE,
+    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_ORGANIZATIONS,
     DB_COLLECTION_REPUTATION_COMMITMENTS,
     DB_COLLECTION_REPUTATION_STATE,

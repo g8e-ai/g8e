@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -568,7 +569,7 @@ func signerKeyFromExchanges(exchanges []client.Exchange, signerID string) ed2551
 
 func rejectionOutcome(exchanges []client.Exchange, attemptID string) (bool, bool) {
 	for _, exchange := range exchanges {
-		if exchange.Method != "POST" || !strings.Contains(exchange.URL, constants.APIPaths.OperatorsCommands) {
+		if exchange.Method != http.MethodPost || !strings.Contains(exchange.URL, constants.APIPaths.OperatorsCommands) {
 			continue
 		}
 		request := &client.DispatchCommandRequest{}

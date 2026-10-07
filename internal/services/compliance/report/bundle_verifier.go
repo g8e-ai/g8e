@@ -170,7 +170,7 @@ func (v *bundleVerifier) verifyBindings() {
 		if profile == nil {
 			continue
 		}
-		bundlePath := fmt.Sprintf("%s/%s.json", constants.ComplianceBundleProfilesDirname, profile.GetProfileId())
+		bundlePath := frameworkProfileBundlePath(profile.GetProfileId())
 		if profile.GetAnalysisRef() != bundle.GetAnalysis().GetAnalysisId() {
 			v.fail(constants.ErrUnresolvedReference, bundlePath, "framework profile does not reference the bundled analysis")
 		}
@@ -370,9 +370,6 @@ func (v *bundleVerifier) verifySourceAdmissionBindings(scope *compliancev1.Asses
 	}
 	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
 		if resource.GetSourceAdmissionId() == "" {
-			if evidence.ArtifactType(resource.GetArtifactType()) == evidence.ArtifactTypeDemoDefinition {
-				continue
-			}
 			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource does not bind a protected source admission")
 			continue
 		}
@@ -467,7 +464,7 @@ func (v *bundleVerifier) verifyTypedArtifacts() {
 		if profile == nil {
 			continue
 		}
-		bundlePath := fmt.Sprintf("%s/%s.json", constants.ComplianceBundleProfilesDirname, profile.GetProfileId())
+		bundlePath := frameworkProfileBundlePath(profile.GetProfileId())
 		body, ok := v.bodies[bundlePath]
 		if !ok {
 			v.fail(constants.ErrBundleArtifactMissing, bundlePath, "framework profile artifact is missing")
@@ -581,7 +578,7 @@ func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
 	}
 	for _, profile := range replayed.Profiles {
 		if !proto.Equal(expectedProfiles[profile.GetProfileId()], profile) {
-			v.fail(constants.ErrRendererMismatch, path.Join(constants.ComplianceBundleProfilesDirname, profile.GetProfileId()+constants.FileExtJSON), "framework profile does not reproduce from protected analysis")
+			v.fail(constants.ErrRendererMismatch, frameworkProfileBundlePath(profile.GetProfileId()), "framework profile does not reproduce from protected analysis")
 		}
 	}
 }
@@ -589,7 +586,7 @@ func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
 type evidenceVerificationRoute string
 
 const (
-	evidenceVerificationRouteDemo        evidenceVerificationRoute = "demo"
+	evidenceVerificationRouteShared      evidenceVerificationRoute = "shared"
 	evidenceVerificationRouteEval        evidenceVerificationRoute = "eval"
 	evidenceVerificationRouteKSI         evidenceVerificationRoute = "ksi"
 	evidenceVerificationRouteCommitment  evidenceVerificationRoute = "commitment"
@@ -600,15 +597,10 @@ const (
 )
 
 var evidenceVerificationRoutes = map[evidence.ArtifactType]evidenceVerificationRoute{
-	evidence.ArtifactTypeDemoManifest:        evidenceVerificationRouteDemo,
-	evidence.ArtifactTypeDemoResult:          evidenceVerificationRouteDemo,
-	evidence.ArtifactTypeDemoStepResult:      evidenceVerificationRouteDemo,
-	evidence.ArtifactTypeDemoDefinition:      evidenceVerificationRouteDemo,
-	evidence.ArtifactTypeActionReceipt:       evidenceVerificationRouteDemo,
-	evidence.ArtifactTypeReceiptPersistence:  evidenceVerificationRouteDemo,
-	evidence.ArtifactTypeStateObservation:    evidenceVerificationRouteDemo,
-	evidence.ArtifactTypeDemoMetric:          evidenceVerificationRouteDemo,
-	evidence.ArtifactTypeProtocolChain:       evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeActionReceipt:       evidenceVerificationRouteShared,
+	evidence.ArtifactTypeReceiptPersistence:  evidenceVerificationRouteShared,
+	evidence.ArtifactTypeStateObservation:    evidenceVerificationRouteShared,
+	evidence.ArtifactTypeProtocolChain:       evidenceVerificationRouteShared,
 	evidence.ArtifactTypeEvalManifest:        evidenceVerificationRouteEval,
 	evidence.ArtifactTypeEvalTask:            evidenceVerificationRouteEval,
 	evidence.ArtifactTypeEvalAttempt:         evidenceVerificationRouteEval,
@@ -629,18 +621,9 @@ var evidenceVerificationRoutes = map[evidence.ArtifactType]evidenceVerificationR
 	evidence.ArtifactTypeAssessorAttestation: evidenceVerificationRouteAttestation,
 }
 
-type demoSourceInventory struct {
-	verificationReport *compliancev1.ComplianceVerificationReport
-	runtimeManifest    bool
-	runtimeResults     bool
-	provenanceArtifact bool
-	definitions        bool
-}
-
 func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
 	v.verifyEvidenceArtifactRoutes()
 	v.verifyEvaluationSelectionDiagnostics()
-	v.verifyDemoSourceVerificationReports(ctx)
 	v.verifyEvalSourceVerificationReports(ctx)
 	v.verifyOperationalSources(ctx)
 	v.verifyKSIHistorySources(ctx)
@@ -659,81 +642,6 @@ func (v *bundleVerifier) verifyEvidenceArtifactRoutes() {
 		}
 		if _, exists := evidenceVerificationRoutes[evidence.ArtifactType(resource.GetArtifactType())]; !exists {
 			v.fail(constants.ErrInvalidEvidenceGraph, resource.GetArtifactId(), "evidence artifact type has no complete-bundle verification route")
-		}
-	}
-}
-
-func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context) {
-	expectedRuns := make(map[string]struct{})
-	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
-		if resource != nil && resource.GetArtifactType() == string(evidence.ArtifactTypeDemoManifest) && resource.GetRunId() != "" {
-			expectedRuns[resource.GetRunId()] = struct{}{}
-		}
-	}
-	inventories := make(map[string]*demoSourceInventory, len(expectedRuns))
-	for runID := range expectedRuns {
-		inventories[runID] = &demoSourceInventory{}
-	}
-	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname) + "/"
-	for bundlePath, body := range v.bodies {
-		if !strings.HasPrefix(bundlePath, prefix) {
-			continue
-		}
-		parts := strings.Split(bundlePath, "/")
-		if len(parts) < 4 || parts[0] != constants.ComplianceBundleSourcesDirname || parts[1] != constants.ComplianceBundleSourceDemosDirname || parts[2] == "" {
-			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "demo source path is unsupported")
-			continue
-		}
-		runID := parts[2]
-		inventory, expected := inventories[runID]
-		if !expected {
-			v.fail(constants.ErrUnresolvedReference, bundlePath, "demo source artifact does not bind an analysis evidence run")
-			continue
-		}
-		switch parts[3] {
-		case constants.ComplianceBundleSourceVerificationFilename:
-			if len(parts) != 4 {
-				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "demo source verification path is unsupported")
-				continue
-			}
-			inventory.verificationReport = v.verifySourceVerificationReport(bundlePath, body, runID, constants.DemoRunVerifierID, constants.DemoRunVerifierVersion, constants.ErrDemoRunVerificationFailed, "demo")
-		case constants.ComplianceBundleSourceRuntimeDirname:
-			if len(parts) < 5 {
-				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "demo runtime source path is incomplete")
-				continue
-			}
-			if len(parts) == 5 && parts[4] == constants.DemoRunManifestFilename {
-				inventory.runtimeManifest = true
-			}
-			if len(parts) == 5 && parts[4] == constants.DemoRunResultsFilename {
-				inventory.runtimeResults = true
-			}
-		case constants.ComplianceBundleSourceProvenanceDirname:
-			if len(parts) == 5 && parts[4] == constants.DemoRunDefinitionsFilename {
-				inventory.definitions = true
-				continue
-			}
-			if len(parts) >= 6 && parts[4] == constants.ComplianceBundleSourceArtifactsDirname {
-				inventory.provenanceArtifact = true
-				continue
-			}
-			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "demo provenance source path is unsupported")
-		default:
-			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "demo source path is unsupported")
-		}
-	}
-	for runID, inventory := range inventories {
-		if inventory.verificationReport == nil {
-			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
-			v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, "demo evidence run lacks a valid independent source verification report")
-		}
-		complete := inventory.runtimeManifest && inventory.runtimeResults && inventory.provenanceArtifact && inventory.definitions
-		if !complete {
-			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID)
-			v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, "demo evidence run lacks a complete protected runtime and provenance source inventory")
-		}
-		if complete && inventory.verificationReport != nil {
-			v.replayDemoSourceVerification(ctx, runID, inventory.verificationReport)
 		}
 	}
 }
@@ -832,7 +740,7 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 	}
 	evalAdmissions := make(map[string]struct{})
 	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
-		if resource.GetArtifactType() != string(evidence.ArtifactTypeEvalManifest) || resource.GetVerifierId() == constants.DemoRunVerifierID {
+		if resource.GetArtifactType() != string(evidence.ArtifactTypeEvalManifest) {
 			continue
 		}
 		if admissionsByID[resource.GetSourceAdmissionId()] == nil {
@@ -1862,35 +1770,6 @@ func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID
 	}
 }
 
-func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
-	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID)
-	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceDemosDirname, runtimeRoot: runtimeRoot}
-	assessmentAsOf, err := v.protectedAssessmentTime()
-	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
-	if err != nil {
-		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
-		return
-	}
-	replayed, err := evidence.VerifyDemoRun(ctx, reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, assessmentAsOf)
-	if err != nil {
-		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, err.Error())
-		return
-	}
-	matches, matchErr := evidence.CanonicalProtosEqual(expected, replayed)
-	if matchErr != nil || !replayed.GetValid() || !matches {
-		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, "replayed demo verification does not match the protected source verification report")
-		return
-	}
-	nodes, err := evidence.NewDemoRunImporterAt(reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, func() time.Time { return assessmentAsOf }).Import(ctx)
-	if err != nil {
-		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, fmt.Sprintf("replay demo evidence importer: %v", err))
-		return
-	}
-	if err := v.retainReplayedNodes(nodes); err != nil {
-		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
-	}
-}
-
 type bundledRuntimeArtifactReader struct {
 	bodies      map[string][]byte
 	runID       string
@@ -2030,51 +1909,6 @@ func (e bundledRuntimeDirEntry) Type() os.FileMode {
 }
 func (e bundledRuntimeDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
-type bundledDemoProvenanceSource struct {
-	bodies map[string][]byte
-	runID  string
-}
-
-func (s *bundledDemoProvenanceSource) Artifacts(ctx context.Context, _ string) ([]evidence.ProvenanceArtifact, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, s.runID, constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname) + "/"
-	artifacts := make([]evidence.ProvenanceArtifact, 0)
-	for bundlePath, body := range s.bodies {
-		if !strings.HasPrefix(bundlePath, prefix) {
-			continue
-		}
-		name := strings.TrimPrefix(bundlePath, prefix)
-		if name == "" {
-			return nil, constants.ErrUnexpectedEvidenceArtifact
-		}
-		artifacts = append(artifacts, evidence.ProvenanceArtifact{Name: filepath.FromSlash(name), Body: append([]byte(nil), body...)})
-	}
-	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Name < artifacts[j].Name })
-	return artifacts, nil
-}
-
-func (s *bundledDemoProvenanceSource) Definitions(ctx context.Context, _ string) ([]evidence.DemoDefinitionArtifact, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, s.runID, constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename)
-	body, exists := s.bodies[bundlePath]
-	if !exists {
-		return nil, constants.ErrNotFound
-	}
-	lines := bytes.Split(body, []byte{'\n'})
-	definitions := make([]evidence.DemoDefinitionArtifact, 0, len(lines))
-	for _, line := range lines {
-		if len(line) == 0 {
-			return nil, constants.ErrEvidenceArtifactMalformed
-		}
-		definitions = append(definitions, evidence.DemoDefinitionArtifact{Body: append([]byte(nil), line...)})
-	}
-	return definitions, nil
-}
-
 func (v *bundleVerifier) verifyRenderedFormats() {
 	profile, err := ParseBundleProfile(v.request.Bundle.GetManifest().GetBundleProfile())
 	if err != nil {
@@ -2127,7 +1961,6 @@ func stableVerificationFailureCode(err error) error {
 		constants.ErrUnexpectedEvidenceArtifact,
 		constants.ErrEvidenceArtifactTooLarge,
 		constants.ErrEvidenceDirectoryLimitExceeded,
-		constants.ErrDemoRunVerificationFailed,
 		constants.ErrEvalRunVerificationFailed,
 		constants.ErrEvidenceDuplicateID,
 		constants.ErrEvidenceDuplicateContent,

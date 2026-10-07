@@ -23,7 +23,6 @@ func TestCatalogJSONAccessorsReturnIndependentCopies(t *testing.T) {
 		{name: "assertion catalog", access: AssertionCatalogJSON, minimum: 1},
 		{name: "framework catalog", access: FrameworkCatalogJSON, minimum: 1},
 		{name: "FedRAMP NIST crosswalk", access: FedRAMPAndNISTCrosswalkJSON, minimum: 1},
-		{name: "demo scenario catalog", access: DemoScenarioCatalogJSON, minimum: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

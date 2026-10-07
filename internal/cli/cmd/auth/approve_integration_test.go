@@ -48,7 +48,7 @@ func TestApproveCmd(t *testing.T) {
 		// Use injectable config loader for hermetic test
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -84,7 +84,7 @@ func TestApproveCmd(t *testing.T) {
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -108,7 +108,7 @@ func TestApproveCmd(t *testing.T) {
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -144,7 +144,7 @@ func TestApproveCmd(t *testing.T) {
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -185,7 +185,7 @@ func TestApproveCmd(t *testing.T) {
 		// Use injectable config loader for hermetic test
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc))
+		}, DefaultAPIClientFactory, cmdtest.FileSvcFactoryFor(fileSvc), func(string) error { return nil })
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)

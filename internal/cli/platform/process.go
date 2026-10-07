@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -30,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/netutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 )
@@ -119,12 +119,9 @@ func (pm *ProcessManager) WriteNetworkIdentityFile(identityData []byte) (string,
 }
 
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
-	addr := fmt.Sprintf("%s:%d", constants.LocalhostIP, port)
-	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
-	if err != nil {
-		return fmt.Errorf("%w: port %d (%s): %v", constants.ErrPortUnavailable, port, name, err)
+	if err := netutil.CheckTCPPortAvailable(port); err != nil {
+		return fmt.Errorf("port %d (%s): %w", port, name, err)
 	}
-	listener.Close()
 	return nil
 }
 
@@ -142,10 +139,14 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 
 	for attempt := 0; attempt < MaxPortAttempts; attempt++ {
 		port := startPort + attempt
-		addr := fmt.Sprintf("%s:%d", constants.LocalhostIP, port)
-		listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
-		if err == nil {
-			listener.Close()
+		// The gateway child binds these itself after start; probing them now
+		// would succeed and then collide (e.g. 8080 busy -> 8081, which is the
+		// public spectator ingest listener) and the health check would hit
+		// the wrong listener.
+		if _, reserved := constants.GatewayReservedLoopbackPorts[port]; reserved {
+			continue
+		}
+		if err := netutil.CheckTCPPortAvailable(port); err == nil {
 			return port, nil
 		}
 
@@ -266,6 +267,25 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 		"--log", opts.LogLevel,
 	}
 
+	if len(opts.OperatorRoles) > 0 {
+		args = append(args, "--roles", opts.OperatorRoles.String())
+	}
+
+	if opts.InferenceOllamaEndpoint != "" {
+		args = append(args, "--inference-ollama-endpoint", opts.InferenceOllamaEndpoint)
+	}
+	if opts.InferenceKeepAlive != "" {
+		args = append(args, "--inference-keep-alive", opts.InferenceKeepAlive)
+	}
+	if opts.ProviderBoundaryObserverID != "" {
+		args = append(args, "--provider-boundary-observer-id", opts.ProviderBoundaryObserverID)
+	}
+	if opts.ProvenanceOperatorID != "" {
+		args = append(args, "--provenance-operator-id", opts.ProvenanceOperatorID)
+	}
+	if opts.ProvenanceOperatorModelStorageRoot != "" {
+		args = append(args, "--model-storage-root", opts.ProvenanceOperatorModelStorageRoot)
+	}
 	if opts.VaultDir != "" {
 		args = append(args, "--vault-dir", opts.VaultDir)
 	}
@@ -509,8 +529,21 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- cmd.Wait() }()
 
+	// The goroutine above owns cmd.Wait, so cleanup must not call Wait again
+	// (a second wait fails with ECHILD and masks the real start failure).
+	stopChild := func(exited bool) error {
+		if exited {
+			return nil
+		}
+		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return fmt.Errorf("kill process: %w", err)
+		}
+		<-waitCh
+		return nil
+	}
+
 	failStart := func() error {
-		cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+		cleanupErr := errors.Join(stopChild(true), pm.deletePID(constants.OperatorPIDFilename))
 		if cleanupErr != nil {
 			return fmt.Errorf("%w: check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
 		}
@@ -550,7 +583,7 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 		}
 	}
 
-	cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+	cleanupErr := errors.Join(stopChild(false), pm.deletePID(constants.OperatorPIDFilename))
 	if cleanupErr != nil {
 		return fmt.Errorf("%w: gateway did not become healthy, check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
 	}

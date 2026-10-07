@@ -19,20 +19,22 @@ and ``acting_app_id`` and include them in the canonical transaction hash so
 they are cryptographically tamper-evident and verified by the gateway.
 """
 
+import base64
 import json
 from pathlib import Path
 
 import pytest
+from g8e.models.governance import GOVERNANCE_PROTOCOL_VERSION_V1, compute_transaction_hash
 
-from app.constants import EventType, G8EE_COMPONENT
-from app.errors import ValidationError
-from app.models.command_request_payloads import CommandRequestPayload
-from app.models.pubsub_messages import G8eMessage
 from app.clients.governance_client import (
     _source_component_to_proto_enum,
     build_governance_envelope,
     build_governance_envelope_json,
 )
+from app.constants import G8EE_COMPONENT, EventType
+from app.errors import ValidationError
+from app.models.command_request_payloads import CommandRequestPayload
+from app.models.pubsub_messages import G8eMessage
 
 pytestmark = [pytest.mark.unit]
 
@@ -126,14 +128,13 @@ class TestEnvelopeIdentityBinding:
         We verify this by checking that the hash differs from a hash computed
         without acting_app_id (using the canonical function directly).
         """
-        from g8e.models.governance import compute_transaction_hash
 
         message = _make_message(user_id="user-1")
         envelope = build_governance_envelope(message, state_merkle_root="root")
 
         # Recompute without acting_app_id to prove it was included
-        import base64
 
+        assert message.payload is not None
         payload_bytes = message.payload.to_protobuf().SerializeToString()
         payload_b64 = base64.b64encode(payload_bytes).decode("ascii")
         hash_without_app = compute_transaction_hash(
@@ -177,7 +178,9 @@ class TestHashParityVectors:
     def _load_vectors() -> list[dict]:
         # Resolve from the ensemble directory to the repo-root protocol dir.
         # ensemble/tests/unit/utils/ -> ../../../../protocol/conformance/
-        path = Path(__file__).resolve().parents[4] / "protocol" / "conformance" / "hash_vectors.json"
+        path = (
+            Path(__file__).resolve().parents[4] / "protocol" / "conformance" / "hash_vectors.json"
+        )
         data = json.loads(path.read_text())
         assert data["vectors"], "hash_vectors.json contains no vectors"
         return data["vectors"]
@@ -187,10 +190,6 @@ class TestHashParityVectors:
         assert len(vectors) >= 6
 
     def test_all_vectors_match_go_expected_hashes(self):
-        from g8e.models.governance import (
-            GOVERNANCE_PROTOCOL_VERSION_V1,
-            compute_transaction_hash,
-        )
 
         vectors = self._load_vectors()
         for v in vectors:

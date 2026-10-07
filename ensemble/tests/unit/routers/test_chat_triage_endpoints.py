@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request
 
-from app.constants import MessageSender, ComponentName
+from app.constants import ComponentName, MessageSender
 from app.constants.generated_status import EventType
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.settings import G8eeUserSettings
-from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from app.routers.chat_router import (
     answer_triage_question,
@@ -55,7 +55,6 @@ class TestTriageEndpoints:
             source_component=ComponentName.CLIENT,
         )
         payload = TriageAnswerRequest(
-            investigation_id=investigation_id,
             question_index=1,
             answer=True,
             context=RequestContext(
@@ -112,7 +111,6 @@ class TestTriageEndpoints:
             source_component=ComponentName.CLIENT,
         )
         payload = TriageSkipRequest(
-            investigation_id=investigation_id,
             context=RequestContext(
                 investigation_id=investigation_id,
                 case_id="case-123",
@@ -160,7 +158,6 @@ class TestTriageEndpoints:
             investigation_id=investigation_id,
         )
         payload = TriageTimeoutRequest(
-            investigation_id=investigation_id,
             context=RequestContext(
                 investigation_id=investigation_id,
                 case_id="case-123",

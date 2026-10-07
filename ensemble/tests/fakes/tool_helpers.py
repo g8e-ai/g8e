@@ -7,10 +7,18 @@
 
 """Consolidated tool executor helpers for g8ee tests."""
 
+import asyncio
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
+from app.models.operators import PendingApproval
+from app.models.tool_results import SearchWebResult
 from app.services.ai.tool_service import AIToolService
+from app.services.investigation.investigation_service import InvestigationService
+from app.utils.time_ids.timestamp import now
 
+from .builder import build_command_service
+from .fake_approval_service import FakeApprovalService
 from .fake_web_search_provider import FakeWebSearchProvider
 
 
@@ -29,22 +37,18 @@ def create_tool_service_fake(
     Uses build_command_service to ensure we have a real OperatorCommandService
     with awaitable methods on its sub-services.
     """
-    from app.models.operators import PendingApproval
-    from app.services.investigation.investigation_service import InvestigationService
-    from app.utils.time_ids.timestamp import now
-
-    from .builder import build_command_service
+    approval_service = FakeApprovalService()
 
     # Build a real wired OperatorCommandService using our fakes
     operator_command_service = build_command_service(
-        investigation_service=investigation_service, event_service=event_service
+        investigation_service=investigation_service,
+        event_service=event_service,
+        approval_service=approval_service,
     )
 
     if auto_approve:
 
-        def _auto_approve_callback(approval_id: str, pending: PendingApproval):
-            import asyncio
-
+        def _auto_approve_callback(_approval_id: str, pending: PendingApproval) -> None:
             # Schedule the resolution to happen almost immediately but in the next loop tick
             # to simulate an external response while we are waiting.
             loop = asyncio.get_event_loop()
@@ -55,9 +59,7 @@ def create_tool_service_fake(
                 ),
             )
 
-        operator_command_service._approval_service.set_on_approval_requested(_auto_approve_callback)
-
-    from typing import cast
+        approval_service.set_on_approval_requested(_auto_approve_callback)
 
     if investigation_service is None:
         investigation_service = operator_command_service.investigation_service
@@ -78,8 +80,6 @@ def create_tool_service_fake(
 
 def create_tool_service_with_search_fake(investigation_service=None):
     """Return an AIToolService with a fake WebSearchProvider configured."""
-    from app.models.tool_results import SearchWebResult
-
     provider = FakeWebSearchProvider(
         search_result=SearchWebResult(success=True, query="test query", results=[])
     )

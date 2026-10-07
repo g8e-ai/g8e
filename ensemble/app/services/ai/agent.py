@@ -26,41 +26,42 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from dataclasses import dataclass
+from typing import Literal, Self
 
 import app.llm.llm_types as types
-from app.errors import ToolsNotSupportedError, ValidationError
 from app.constants import (
     AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
     AGENT_MAX_TOOL_TURNS,
     AGENT_RETRY_BACKOFF_MULTIPLIER,
     AGENT_RETRY_DELAY_SECONDS,
-    AITaskId,
     DEFAULT_FINISH_REASON,
+    AITaskId,
 )
-from app.llm.model_evidence import model_boundary_hash, model_boundary_json
+from app.errors import ToolsNotSupportedError, ValidationError
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash, model_boundary_json
 from app.llm.provider import LLMProvider
 from app.llm.providers.g8e import G8EProvider
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
-    ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
     StreamChunkFromModelType,
     TokenUsage,
+    ToolCallResponse,
+    TurnResult,
 )
-from app.models.model_telemetry import ModelCallTelemetry
 from app.models.grounding import GroundingMetadata
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.operators import AgentContinueApprovalRequest
+from app.services.ai.agent_sse import deliver_via_sse
 from app.services.ai.agent_tool_loop import (
     execute_turn_tool_calls,
     merge_grounding,
 )
-from app.services.ai.agent_sse import deliver_via_sse
-from app.services.evaluation.role_control import resolve_scored_model_role
-from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.ai.agent_turn import (
     GatedTurnResult,
     consolidate_model_parts,
@@ -69,11 +70,61 @@ from app.services.ai.agent_turn import (
 )
 from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
-from app.services.infra.event_service import EventService
-from app.services.protocols import ApprovalServiceProtocol
+from app.services.evaluation.role_control import resolve_scored_model_role
+from app.services.protocols import ApprovalServiceProtocol, EventServiceProtocol
 from app.utils.time_ids.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _ModelTurnContext:
+    inputs: AgentInputs
+    provider: LLMProvider
+    contents: list[types.Content]
+    model_calls: list[ModelCallTelemetry]
+    retry_count: int
+    model_name: str
+    generation_config: types.PrimaryLLMSettings
+
+
+@dataclass
+class _TokenTotals:
+    """Running token totals across every model call in one tool loop."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+    @classmethod
+    def from_calls(cls, calls: list[ModelCallTelemetry]) -> Self:
+        return cls(
+            input_tokens=sum(call.input_tokens for call in calls),
+            output_tokens=sum(call.output_tokens for call in calls),
+            total_tokens=sum(call.total_tokens for call in calls),
+        )
+
+    def add(self, turn_result: TurnResult) -> None:
+        self.input_tokens += turn_result.input_tokens
+        self.output_tokens += turn_result.output_tokens
+        self.total_tokens += turn_result.total_tokens
+
+
+@dataclass
+class _TurnResponseContext:
+    contents: list[types.Content]
+    turn_result: TurnResult
+    responses: list[ToolCallResponse]
+    grounding_metadata: GroundingMetadata | None
+    response_sizes: list[int]
+
+
+@dataclass
+class _ToolTurnContext:
+    turn_result: TurnResult
+    inputs: AgentInputs
+    event_service: EventServiceProtocol
+    loop_turn: int
 
 
 def _sum_optional_usage_counts(values: list[int | None]) -> int | None:
@@ -81,10 +132,10 @@ def _sum_optional_usage_counts(values: list[int | None]) -> int | None:
         return None
     if any(value is None for value in values):
         return None
-    return sum(values)
+    return sum(value for value in values if value is not None)
 
 
-def _resolve_agent_model_role(inputs: AgentInputs) -> str:
+def _resolve_agent_model_role(inputs: AgentInputs) -> Literal["primary", "assistant", "lite"]:
     return resolve_scored_model_role(
         designated_model_role=inputs.designated_model_role,
         active_agent=inputs.active_agent,
@@ -164,7 +215,7 @@ def _agent_generation_stream(
     )
 
 
-class g8eEnsemble:
+class G8eEnsemble:
     """
     Unified g8e AI Agent - orchestrates the ReAct streaming loop.
 
@@ -184,7 +235,7 @@ class g8eEnsemble:
         self._tool_executor = tool_executor
         self._grounding_service = grounding_service or GroundingService()
         self._approval_service = approval_service
-        logger.info("g8eEnsemble initialized")
+        logger.info("G8eEnsemble initialized")
 
     @property
     def tool_executor(self) -> AIToolService:
@@ -197,7 +248,7 @@ class g8eEnsemble:
     async def stream_response(
         self,
         inputs: AgentInputs,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         llm_provider: LLMProvider,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """
@@ -289,10 +340,9 @@ class g8eEnsemble:
         self,
         inputs: AgentInputs,
         state: AgentStreamState,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         llm_provider: LLMProvider,
         on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
-        evaluation_trace_service: EvaluationTraceService | None = None,
     ) -> None:
         """
         SSE chat path - runs stream_response and delivers events to the browser.
@@ -350,14 +400,13 @@ class g8eEnsemble:
             state=state,
             event_service=event_service,
             on_iteration_text=on_iteration_text,
-            evaluation_trace_service=evaluation_trace_service,
         )
 
     async def _stream_with_tool_loop(
         self,
         inputs: AgentInputs,
         llm_provider: LLMProvider,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         model_calls: list[ModelCallTelemetry] | None = None,
         retry_count: int = 0,
     ) -> AsyncGenerator[StreamChunkFromModel]:
@@ -383,15 +432,10 @@ class g8eEnsemble:
         assert generation_config is not None, "generation_config must not be None"
         assert model_name is not None, "model_name must not be None"
 
-        case_id = inputs.case_id
-        investigation_id = inputs.investigation_id
-
-        triage_call = inputs.triage_result.model_call if inputs.triage_result else None
         if model_calls is None:
+            triage_call = inputs.triage_result.model_call if inputs.triage_result else None
             model_calls = [triage_call] if triage_call else []
-        total_input_tokens = sum(call.input_tokens for call in model_calls)
-        total_output_tokens = sum(call.output_tokens for call in model_calls)
-        total_tokens = sum(call.total_tokens for call in model_calls)
+        totals = _TokenTotals.from_calls(model_calls)
         grounding_metadata: GroundingMetadata | None = None
         final_finish_reason: str = DEFAULT_FINISH_REASON
         tool_response_sizes: list[int] = []
@@ -404,180 +448,44 @@ class g8eEnsemble:
                 loop_turn += 1
                 if loop_turn > AGENT_MAX_TOOL_TURNS:
                     tool_turn_limit_reached = True
-                    if inputs.g8e_context.evaluation_context is not None:
-                        # A scored run has no human to answer the continue-approval,
-                        # so the request would stall until it times out. Deny it
-                        # immediately; the trace records tool_turn_limit_reached.
-                        logger.warning(
-                            "[AGENT] Scored run reached max tool turns (%d); stopping without approval",
-                            AGENT_MAX_TOOL_TURNS,
-                        )
-                        final_finish_reason = "tool_turn_limit"
-                        break
-                    if self._approval_service is None:
-                        logger.error(
-                            "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
-                            AGENT_MAX_TOOL_TURNS,
-                        )
-                        break
-
-                    logger.warning(
-                        "[AGENT] Tool loop reached max turns (%d); requesting operator approval to continue",
-                        AGENT_MAX_TOOL_TURNS,
+                    loop_turn, final_finish_reason, should_stop = await self._resolve_turn_limit(
+                        inputs, loop_turn, final_finish_reason
                     )
-                    justification = (
-                        f"The AI agent has executed {AGENT_MAX_TOOL_TURNS} tool-use turns "
-                        f"without completing its response. Approve to reset the turn counter "
-                        f"and allow the agent to continue; deny to stop the agent now."
-                    )
-                    approval_result = await self._approval_service.request_agent_continue_approval(
-                        AgentContinueApprovalRequest(
-                            g8e_context=inputs.g8e_context,
-                            timeout_seconds=AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
-                            justification=justification,
-                            execution_id=generate_command_execution_id(),
-                            turn_limit=AGENT_MAX_TOOL_TURNS,
-                            turns_completed=loop_turn - 1,
-                            task_id=AITaskId.AGENT_CONTINUE.value,
-                        )
-                    )
-                    if not approval_result.approved:
-                        logger.info(
-                            "[AGENT] Continuation denied (reason=%s); stopping tool loop",
-                            approval_result.reason,
-                        )
-                        final_finish_reason = "stopped_by_operator"
+                    if should_stop:
                         break
-                    logger.info("[AGENT] Continuation approved; resetting turn counter")
-                    loop_turn = 1
                 logger.info(
                     "[AGENT] Tool loop turn %d: contents=%d case_id=%s investigation_id=%s",
                     loop_turn,
                     len(contents),
-                    case_id,
-                    investigation_id,
+                    inputs.case_id,
+                    inputs.investigation_id,
                 )
 
-                prepare_provider_call(
-                    llm_provider,
-                    g8e_context=inputs.g8e_context,
+                gated_result_out: list[GatedTurnResult] = []
+                turn_context = _ModelTurnContext(
+                    inputs=inputs,
+                    provider=llm_provider,
+                    contents=contents,
+                    model_calls=model_calls,
                     retry_count=retry_count,
+                    model_name=model_name,
+                    generation_config=generation_config,
                 )
-                input_artifact_hash = model_boundary_hash(
-                    {
-                        "model": model_name,
-                        "contents": contents,
-                        "settings": generation_config,
-                    }
-                )
-                monotonic_start = time.monotonic()
-                model_role = _resolve_agent_model_role(inputs)
-                agent_role = _agent_role_for_telemetry(inputs)
-                try:
-                    stream_response = _agent_generation_stream(
-                        llm_provider,
-                        inputs=inputs,
-                        model_name=model_name,
-                        contents=contents,
-                        generation_config=generation_config,
-                    )
-
-                    gated_result_out: list[GatedTurnResult] = []
-                    async for chunk in process_turn_with_gate(
-                        stream_response, model_name, gated_result_out
-                    ):
-                        yield chunk
-
-                    gated = gated_result_out[0]
-                except Exception as exc:
-                    if hasattr(llm_provider, "record_processing_error"):
-                        llm_provider.record_processing_error(exc)
-                    model_calls.append(
-                        build_model_call_telemetry(
-                            provider=llm_provider,
-                            agent_role=agent_role,
-                            model_role=model_role,
-                            model=model_name,
-                            monotonic_start=monotonic_start,
-                            input_artifact_hash=input_artifact_hash,
-                            retry_count=retry_count,
-                            succeeded=False,
-                            error_type=type(exc).__name__,
-                        )
-                    )
-                    raise
+                async for chunk in self._process_model_turn(turn_context, gated_result_out):
+                    yield chunk
+                gated = gated_result_out[0]
                 turn_result = gated.turn_result
-                if hasattr(llm_provider, "record_processed_response"):
-                    llm_provider.record_processed_response(
-                        model_boundary_json(turn_result.model_response_parts)
-                    )
-                monotonic_end = time.monotonic()
-                model_calls.append(
-                    build_model_call_telemetry(
-                        provider=llm_provider,
-                        agent_role=agent_role,
-                        model_role=model_role,
-                        model=model_name,
-                        monotonic_start=monotonic_start,
-                        monotonic_end=monotonic_end,
-                        input_artifact_hash=input_artifact_hash,
-                        input_tokens=turn_result.input_tokens,
-                        output_tokens=turn_result.output_tokens,
-                        thinking_tokens=turn_result.thinking_tokens,
-                        cache_tokens=turn_result.cache_tokens,
-                        total_tokens=turn_result.total_tokens,
-                        usage_reported=turn_result.usage_reported,
-                        finish_reason=turn_result.finish_reason,
-                        time_to_first_token_seconds=turn_result.time_to_first_token_seconds,
-                        generation_duration_seconds=turn_result.eval_duration_seconds,
-                        prompt_eval_duration_seconds=turn_result.prompt_eval_duration_seconds,
-                        total_duration_seconds=turn_result.total_duration_seconds,
-                        load_duration_seconds=turn_result.load_duration_seconds,
-                        retry_count=retry_count,
-                        output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
-                        succeeded=turn_result.finish_reason != "MALFORMED_FUNCTION_CALL",
-                        error_type=(
-                            "MalformedFunctionCall"
-                            if turn_result.finish_reason == "MALFORMED_FUNCTION_CALL"
-                            else None
-                        ),
-                    )
+
+                totals.add(turn_result)
+                final_finish_reason = turn_result.finish_reason or final_finish_reason
+
+                malformed_call_retries = self._retry_malformed_call(
+                    turn_result.finish_reason,
+                    contents,
+                    loop_turn,
+                    malformed_call_retries,
                 )
-
-                total_input_tokens += turn_result.input_tokens
-                total_output_tokens += turn_result.output_tokens
-                total_tokens += turn_result.total_tokens
-                if turn_result.finish_reason:
-                    final_finish_reason = turn_result.finish_reason
-
-                if turn_result.finish_reason == "MALFORMED_FUNCTION_CALL":
-                    # A failed generation is not a completed answer. Retry only
-                    # this model turn, without executing its partial tool calls
-                    # or replaying any tools from earlier successful turns.
-                    if malformed_call_retries >= AGENT_MAX_RETRIES:
-                        raise RuntimeError(
-                            "The AI could not generate a valid operator tool call after retries. "
-                            "The requested check did not complete. Please retry the request."
-                        )
-                    malformed_call_retries += 1
-                    logger.warning(
-                        "[AGENT] Malformed function call at turn %d; retrying model turn (%d/%d)",
-                        loop_turn,
-                        malformed_call_retries,
-                        AGENT_MAX_RETRIES,
-                    )
-                    contents.append(
-                        types.Content(
-                            role=types.Role.USER,
-                            parts=[
-                                types.Part.from_text(
-                                    "Your previous tool call was malformed and was not executed. "
-                                    "Continue the request using the declared tools and arguments "
-                                    "that match their JSON schemas. Use {} for a tool with no arguments."
-                                )
-                            ],
-                        )
-                    )
+                if malformed_call_retries is not None:
                     continue
                 malformed_call_retries = 0
 
@@ -593,73 +501,322 @@ class g8eEnsemble:
                         "input_tokens=%d output_tokens=%d total_tokens=%d",
                         loop_turn,
                         turn_result.finish_reason,
-                        total_input_tokens,
-                        total_output_tokens,
-                        total_tokens,
+                        totals.input_tokens,
+                        totals.output_tokens,
+                        totals.total_tokens,
                     )
                     break
 
                 fc_responses_out: list[list[ToolCallResponse]] = []
-                async for chunk in execute_turn_tool_calls(
-                    pending_tool_calls=turn_result.pending_tool_calls,
-                    tool_executor=self._tool_executor,
-                    investigation=inputs.investigation,
-                    g8e_context=inputs.g8e_context,
-                    result_out=fc_responses_out,
-                    request_settings=inputs.request_settings,
-                    event_service=event_service,
+                async for chunk in self._execute_tool_turn(
+                    _ToolTurnContext(turn_result, inputs, event_service, loop_turn),
+                    fc_responses_out,
                 ):
-                    yield chunk.model_copy(
-                        update={"data": chunk.data.model_copy(update={"loop_turn": loop_turn})}
+                    yield chunk
+                fc_responses = fc_responses_out[0]
+
+                grounding_metadata = self._append_turn_responses(
+                    _TurnResponseContext(
+                        contents=contents,
+                        turn_result=turn_result,
+                        responses=fc_responses,
+                        grounding_metadata=grounding_metadata,
+                        response_sizes=tool_response_sizes,
                     )
-
-                fc_responses: list[ToolCallResponse] = fc_responses_out[0]
-
-                for resp in fc_responses:
-                    if resp.grounding is not None:
-                        grounding_metadata = merge_grounding(grounding_metadata, resp.grounding)
-
-                if turn_result.model_response_parts:
-                    consolidated = consolidate_model_parts(
-                        turn_result.model_response_parts, model_name=model_name
-                    )
-                    contents.append(types.Content(role=types.Role.MODEL, parts=consolidated))
-                    logger.info("[AGENT] Added model response: %d parts", len(consolidated))
-
-                tool_response_parts = [
-                    types.Part.from_tool_response(
-                        name=r.tool_name,
-                        response=r.flattened_response,
-                        call_id=r.tool_call_id,
-                    )
-                    for r in fc_responses
-                ]
-                for r in fc_responses:
-                    response_str = str(r.flattened_response)
-                    tool_response_sizes.append(len(response_str))
-                contents.append(types.Content(role=types.Role.TOOL, parts=tool_response_parts))
-                logger.info("[AGENT] Added %d tool responses, looping...", len(tool_response_parts))
+                )
         except asyncio.CancelledError:
             logger.info(
                 "[AGENT] Tool loop cancelled at turn %d for investigation %s",
                 loop_turn,
-                investigation_id,
+                inputs.investigation_id,
             )
             raise
 
-        if grounding_metadata and grounding_metadata.grounding_used:
-            yield StreamChunkFromModel(
-                type=StreamChunkFromModelType.CITATIONS,
-                data=StreamChunkData(grounding_metadata=grounding_metadata),
-            )
-        else:
-            logger.info("[AGENT] No grounding metadata to emit for this turn")
+        for chunk in self._closing_chunks(
+            grounding_metadata,
+            final_finish_reason,
+            totals,
+            model_calls,
+            tool_response_sizes,
+            tool_turn_limit_reached,
+        ):
+            yield chunk
 
-        token_usage = (
-            TokenUsage(
-                input_tokens=total_input_tokens,
-                output_tokens=total_output_tokens,
-                total_tokens=total_tokens,
+    async def _resolve_turn_limit(
+        self,
+        inputs: AgentInputs,
+        loop_turn: int,
+        final_finish_reason: str,
+    ) -> tuple[int, str, bool]:
+        """Decide whether the tool loop may continue after reaching the max turn count.
+
+        Returns ``(loop_turn, final_finish_reason, should_stop)``. A scored run or a
+        missing approval service stops immediately; otherwise the operator is asked to
+        approve another batch of turns, and approval resets the turn counter.
+        """
+        if inputs.g8e_context.evaluation_context is not None:
+            # A scored run has no human to answer the continue-approval,
+            # so the request would stall until it times out. Deny it
+            # immediately; the trace records tool_turn_limit_reached.
+            logger.warning(
+                "[AGENT] Scored run reached max tool turns (%d); stopping without approval",
+                AGENT_MAX_TOOL_TURNS,
+            )
+            return loop_turn, "tool_turn_limit", True
+        if self._approval_service is None:
+            logger.error(
+                "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
+                AGENT_MAX_TOOL_TURNS,
+            )
+            return loop_turn, final_finish_reason, True
+
+        logger.warning(
+            "[AGENT] Tool loop reached max turns (%d); requesting operator approval to continue",
+            AGENT_MAX_TOOL_TURNS,
+        )
+        justification = (
+            f"The AI agent has executed {AGENT_MAX_TOOL_TURNS} tool-use turns "
+            f"without completing its response. Approve to reset the turn counter "
+            f"and allow the agent to continue; deny to stop the agent now."
+        )
+        approval_result = await self._approval_service.request_agent_continue_approval(
+            AgentContinueApprovalRequest(
+                g8e_context=inputs.g8e_context,
+                timeout_seconds=AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
+                justification=justification,
+                execution_id=generate_command_execution_id(),
+                turn_limit=AGENT_MAX_TOOL_TURNS,
+                turns_completed=loop_turn - 1,
+                task_id=AITaskId.AGENT_CONTINUE.value,
+            )
+        )
+        if not approval_result.approved:
+            logger.info(
+                "[AGENT] Continuation denied (reason=%s); stopping tool loop",
+                approval_result.reason,
+            )
+            return loop_turn, "stopped_by_operator", True
+        logger.info("[AGENT] Continuation approved; resetting turn counter")
+        return 1, final_finish_reason, False
+
+    async def _process_model_turn(
+        self,
+        context: _ModelTurnContext,
+        result_out: list[GatedTurnResult],
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        """Stream one provider turn and attach its success or failure telemetry."""
+        inputs = context.inputs
+        provider = context.provider
+        model_role = _resolve_agent_model_role(inputs)
+        agent_role = _agent_role_for_telemetry(inputs)
+        prepare_provider_call(
+            provider,
+            g8e_context=inputs.g8e_context,
+            retry_count=context.retry_count,
+        )
+
+        input_artifact_hash = model_boundary_hash(
+            {
+                "model": context.model_name,
+                "contents": context.contents,
+                "settings": context.generation_config,
+            }
+        )
+        monotonic_start = time.monotonic()
+        try:
+            response = _agent_generation_stream(
+                provider,
+                inputs=inputs,
+                model_name=context.model_name,
+                contents=context.contents,
+                generation_config=context.generation_config,
+            )
+            async for chunk in process_turn_with_gate(response, result_out):
+                yield chunk
+        except Exception as exc:
+            if hasattr(provider, "record_processing_error"):
+                provider.record_processing_error(exc)
+            context.model_calls.append(
+                build_model_call_telemetry(
+                    provider=provider,
+                    agent_role=agent_role,
+                    model_role=model_role,
+                    model=context.model_name,
+                    monotonic_start=monotonic_start,
+                    input_artifact_hash=input_artifact_hash,
+                    retry_count=context.retry_count,
+                    succeeded=False,
+                    error_type=type(exc).__name__,
+                )
+            )
+            raise
+
+        turn_result = result_out[0].turn_result
+        if hasattr(provider, "record_processed_response"):
+            provider.record_processed_response(
+                model_boundary_json(turn_result.model_response_parts)
+            )
+        context.model_calls.append(
+            build_model_call_telemetry(
+                provider=provider,
+                agent_role=agent_role,
+                model_role=model_role,
+                model=context.model_name,
+                monotonic_start=monotonic_start,
+                monotonic_end=time.monotonic(),
+                input_artifact_hash=input_artifact_hash,
+                input_tokens=turn_result.input_tokens,
+                output_tokens=turn_result.output_tokens,
+                thinking_tokens=turn_result.thinking_tokens,
+                cache_tokens=turn_result.cache_tokens,
+                total_tokens=turn_result.total_tokens,
+                usage_reported=turn_result.usage_reported,
+                finish_reason=turn_result.finish_reason,
+                time_to_first_token_seconds=turn_result.time_to_first_token_seconds,
+                generation_duration_seconds=turn_result.eval_duration_seconds,
+                prompt_eval_duration_seconds=turn_result.prompt_eval_duration_seconds,
+                total_duration_seconds=turn_result.total_duration_seconds,
+                load_duration_seconds=turn_result.load_duration_seconds,
+                retry_count=context.retry_count,
+                output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
+                succeeded=turn_result.finish_reason != "MALFORMED_FUNCTION_CALL",
+                error_type=(
+                    "MalformedFunctionCall"
+                    if turn_result.finish_reason == "MALFORMED_FUNCTION_CALL"
+                    else None
+                ),
+            )
+        )
+
+    async def _execute_tool_turn(
+        self,
+        context: _ToolTurnContext,
+        result_out: list[list[ToolCallResponse]],
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        """Execute the pending calls and attach the current ReAct turn to each event."""
+        async for chunk in execute_turn_tool_calls(
+            pending_tool_calls=context.turn_result.pending_tool_calls,
+            tool_executor=self._tool_executor,
+            investigation=context.inputs.investigation,
+            g8e_context=context.inputs.g8e_context,
+            result_out=result_out,
+            request_settings=context.inputs.request_settings,
+            event_service=context.event_service,
+        ):
+            yield chunk.model_copy(
+                update={"data": chunk.data.model_copy(update={"loop_turn": context.loop_turn})}
+            )
+
+    @staticmethod
+    def _retry_malformed_call(
+        finish_reason: str | None,
+        contents: list[types.Content],
+        loop_turn: int,
+        retry_count: int,
+    ) -> int | None:
+        """Append the repair instruction when the provider returns a malformed tool call."""
+        if finish_reason != "MALFORMED_FUNCTION_CALL":
+            return None
+        if retry_count >= AGENT_MAX_RETRIES:
+            raise RuntimeError(
+                "The AI could not generate a valid operator tool call after retries. "
+                "The requested check did not complete. Please retry the request."
+            )
+        retry_count += 1
+        logger.warning(
+            "[AGENT] Malformed function call at turn %d; retrying model turn (%d/%d)",
+            loop_turn,
+            retry_count,
+            AGENT_MAX_RETRIES,
+        )
+        contents.append(
+            types.Content(
+                role=types.Role.USER,
+                parts=[
+                    types.Part.from_text(
+                        "Your previous tool call was malformed and was not executed. "
+                        "Continue the request using the declared tools and arguments "
+                        "that match their JSON schemas. Use {} for a tool with no arguments."
+                    )
+                ],
+            )
+        )
+        return retry_count
+
+    @staticmethod
+    def _append_turn_responses(context: _TurnResponseContext) -> GroundingMetadata | None:
+        for response in context.responses:
+            if response.grounding is not None:
+                context.grounding_metadata = merge_grounding(
+                    context.grounding_metadata, response.grounding
+                )
+        if context.turn_result.model_response_parts:
+            consolidated = consolidate_model_parts(context.turn_result.model_response_parts)
+            context.contents.append(types.Content(role=types.Role.MODEL, parts=consolidated))
+            logger.info("[AGENT] Added model response: %d parts", len(consolidated))
+        tool_parts = [
+            types.Part.from_tool_response(
+                name=response.tool_name,
+                response=response.flattened_response,
+                call_id=response.tool_call_id,
+            )
+            for response in context.responses
+        ]
+        context.response_sizes.extend(
+            len(str(response.flattened_response)) for response in context.responses
+        )
+        context.contents.append(types.Content(role=types.Role.TOOL, parts=tool_parts))
+        logger.info("[AGENT] Added %d tool responses, looping...", len(tool_parts))
+        return context.grounding_metadata
+
+    @staticmethod
+    def _citation_chunk(
+        grounding_metadata: GroundingMetadata | None,
+    ) -> StreamChunkFromModel | None:
+        if not (grounding_metadata and grounding_metadata.grounding_used):
+            logger.info("[AGENT] No grounding metadata to emit for this turn")
+            return None
+        return StreamChunkFromModel(
+            type=StreamChunkFromModelType.CITATIONS,
+            data=StreamChunkData(grounding_metadata=grounding_metadata),
+        )
+
+    @classmethod
+    def _closing_chunks(
+        cls,
+        grounding_metadata: GroundingMetadata | None,
+        finish_reason: str,
+        totals: _TokenTotals,
+        model_calls: list[ModelCallTelemetry],
+        tool_response_sizes: list[int],
+        turn_limit_reached: bool,
+    ) -> list[StreamChunkFromModel]:
+        """Build the optional CITATIONS chunk followed by the terminal COMPLETE chunk."""
+        chunks: list[StreamChunkFromModel] = []
+        citation_chunk = cls._citation_chunk(grounding_metadata)
+        if citation_chunk is not None:
+            chunks.append(citation_chunk)
+        chunks.append(
+            cls._completion_chunk(
+                finish_reason, totals, model_calls, tool_response_sizes, turn_limit_reached
+            )
+        )
+        return chunks
+
+    @staticmethod
+    def _completion_chunk(
+        finish_reason: str,
+        totals: _TokenTotals,
+        model_calls: list[ModelCallTelemetry],
+        tool_response_sizes: list[int],
+        turn_limit_reached: bool,
+    ) -> StreamChunkFromModel:
+        token_usage = None
+        if model_calls:
+            token_usage = TokenUsage(
+                input_tokens=totals.input_tokens,
+                output_tokens=totals.output_tokens,
+                total_tokens=totals.total_tokens,
                 thinking_tokens=_sum_optional_usage_counts(
                     [call.thinking_tokens for call in model_calls]
                 ),
@@ -668,24 +825,20 @@ class g8eEnsemble:
                 ),
                 usage_reported=all(call.usage_reported for call in model_calls),
             )
-            if model_calls
-            else None
-        )
-
         logger.info(
             "[AGENT] Yielding COMPLETE chunk: finish_reason=%s input_tokens=%d output_tokens=%d total_tokens=%d",
-            final_finish_reason or DEFAULT_FINISH_REASON,
-            total_input_tokens,
-            total_output_tokens,
-            total_tokens,
+            finish_reason or DEFAULT_FINISH_REASON,
+            totals.input_tokens,
+            totals.output_tokens,
+            totals.total_tokens,
         )
-        yield StreamChunkFromModel(
+        return StreamChunkFromModel(
             type=StreamChunkFromModelType.COMPLETE,
             data=StreamChunkData(
-                finish_reason=final_finish_reason or DEFAULT_FINISH_REASON,
+                finish_reason=finish_reason or DEFAULT_FINISH_REASON,
                 token_usage=token_usage,
                 model_calls=model_calls,
                 tool_response_sizes=tool_response_sizes if tool_response_sizes else None,
-                tool_turn_limit_reached=tool_turn_limit_reached or None,
+                tool_turn_limit_reached=turn_limit_reached or None,
             ),
         )

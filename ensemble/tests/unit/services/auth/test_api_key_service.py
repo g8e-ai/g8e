@@ -5,6 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,6 +15,7 @@ from app.models.api_keys import APIKeyDocument
 from app.services.auth.api_key_service import (
     APIKeyService,
 )
+from app.utils.time_ids.timestamp import now
 
 
 @pytest.fixture
@@ -101,14 +103,12 @@ class TestAPIKeyService:
     async def test_issue_operator_key_success(self, api_key_service, mock_cache_aside):
         """Test issuing an operator key."""
         mock_cache_aside.create_document.return_value = MagicMock(success=True)
-        mock_settings_service = AsyncMock()
 
         result = await api_key_service.issue_operator_key(
             raw_key="g8e_op_key_12345",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
-            settings_service=mock_settings_service,
         )
 
         assert result is True
@@ -118,14 +118,12 @@ class TestAPIKeyService:
         mock_cache_aside.create_document.return_value = MagicMock(
             success=False, error="Storage error"
         )
-        mock_settings_service = AsyncMock()
 
         result = await api_key_service.issue_operator_key(
             raw_key="g8e_op_key_12345",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
-            settings_service=mock_settings_service,
         )
 
         assert result is False
@@ -133,7 +131,6 @@ class TestAPIKeyService:
     async def test_rotate_operator_key_success(self, api_key_service, mock_cache_aside):
         """Test rotating an operator key."""
         mock_cache_aside.create_document.return_value = MagicMock(success=True)
-        mock_settings_service = AsyncMock()
 
         result = await api_key_service.rotate_operator_key(
             old_raw_key="g8e_old_key_12345",
@@ -141,7 +138,6 @@ class TestAPIKeyService:
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
-            settings_service=mock_settings_service,
         )
 
         assert result is True
@@ -151,7 +147,6 @@ class TestAPIKeyService:
     ):
         """Test rotate fails when new key issuance fails."""
         mock_cache_aside.create_document.return_value = MagicMock(success=False)
-        mock_settings_service = AsyncMock()
 
         result = await api_key_service.rotate_operator_key(
             old_raw_key="g8e_old_key_12345",
@@ -159,7 +154,6 @@ class TestAPIKeyService:
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
-            settings_service=mock_settings_service,
         )
 
         assert result is False
@@ -168,11 +162,9 @@ class TestAPIKeyService:
         """Test revoking an operator key."""
         mock_cache_aside.get_document_with_cache.return_value = {"status": APIKeyStatus.ACTIVE}
         mock_cache_aside.update_document.return_value = MagicMock(success=True)
-        mock_settings_service = AsyncMock()
 
         result = await api_key_service.revoke_operator_key(
             raw_key="g8e_op_key_12345",
-            settings_service=mock_settings_service,
         )
 
         assert result is True
@@ -181,11 +173,9 @@ class TestAPIKeyService:
         """Test revoking an operator key when storage fails."""
         mock_cache_aside.get_document_with_cache.return_value = {"status": APIKeyStatus.ACTIVE}
         mock_cache_aside.update_document.side_effect = Exception("Storage error")
-        mock_settings_service = AsyncMock()
 
         result = await api_key_service.revoke_operator_key(
             raw_key="g8e_op_key_12345",
-            settings_service=mock_settings_service,
         )
 
         assert result is False
@@ -237,9 +227,6 @@ class TestAPIKeyService:
 
     async def test_validate_key_expired(self, api_key_service, mock_cache_aside):
         """Test validating an expired API key."""
-        from datetime import timedelta
-        from app.utils.time_ids.timestamp import now
-
         expired_time = now() - timedelta(days=1)
         doc = APIKeyDocument(
             user_id="user-123",

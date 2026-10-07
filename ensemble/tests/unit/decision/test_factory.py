@@ -9,6 +9,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+import httpx
 import pytest
 
 from app.constants import JEV_DEFAULT_MODEL, LLMProvider
@@ -47,7 +50,7 @@ class TestDecisionProviderFactory:
         assert isinstance(provider, JevProvider)
 
     def test_get_decision_provider_rejects_non_jev_lite_provider(self):
-        settings = LLMSettings(lite_provider=LLMProvider.OLLAMA)
+        settings = LLMSettings(llm_lite_provider=LLMProvider.OLLAMA)
         with pytest.raises(ConfigurationError, match="lite_provider is not 'jev'"):
             get_decision_provider(settings)
 
@@ -56,13 +59,18 @@ class TestDecisionProviderFactory:
         second = get_decision_provider(_jev_settings())
         assert first is second
 
-        different_key = get_decision_provider(_jev_settings(ollama_endpoint="http://other-host:11434"))
+        different_key = get_decision_provider(
+            _jev_settings(ollama_endpoint="http://other-host:11434")
+        )
         assert different_key is not first
 
     @pytest.mark.asyncio
-    async def test_clear_decision_provider_cache_closes_cached_instances(self):
+    async def test_clear_decision_provider_cache_closes_cached_instances(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
         provider = get_decision_provider(_jev_settings())
-        provider._client = object()
+        assert isinstance(provider, JevProvider)
+        provider._client = MagicMock(spec=httpx.AsyncClient)
         provider._owns_client = False
 
         closed = False
@@ -71,7 +79,7 @@ class TestDecisionProviderFactory:
             nonlocal closed
             closed = True
 
-        provider.force_close = _force_close  # type: ignore[method-assign]
+        monkeypatch.setattr(provider, "force_close", _force_close)
 
         await clear_decision_provider_cache()
         assert closed is True

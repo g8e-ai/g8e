@@ -6,20 +6,20 @@
 # released under the Apache License, Version 2.0.
 
 import base64
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.operator.v1 import operator_pb2
 
-from app.constants.generated_status import EventType
-from app.constants.generated_status import AITaskId, CommandErrorType
-from app.constants import ExecutionStatus, G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, ExecutionStatus, OperatorType
+from app.constants.generated_status import AITaskId, CommandErrorType, EventType
 from app.errors import BusinessLogicError, NetworkError, ValidationError
-from app.models.http_context import RequestContext
 from app.models.command_request_payloads import CommandRequestPayload
-from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity
+from app.models.http_context import RequestContext
+from app.models.internal_api import DirectCommandRequest
+from app.models.operators import HeartbeatSnapshot, HeartbeatSystemIdentity, OperatorDocument
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
-from g8e.operator.v1 import operator_pb2
 from tests.fakes.factories import build_g8e_http_context
 
 pytestmark = [pytest.mark.unit]
@@ -82,53 +82,25 @@ class TestOperatorExecutionServiceProperties:
         assert execution_service.investigation_service == mock_investigation
 
 
-class TestOperatorExecutionServiceFailCommand:
-    @pytest.mark.asyncio
-    async def test_fail_command_returns_failure_result(self, execution_service):
-        g8e_context = build_g8e_http_context()
-        result = await execution_service._fail_command(
-            error_msg="some error",
-            error_type=CommandErrorType.EXECUTION_FAILED,
-            command="echo hi",
-            g8e_context=g8e_context,
-            execution_id="exec-1",
-            operator_session_id="sess-1",
-            status=ExecutionStatus.FAILED,
-            approval_id="app-1",
-            rule="rule-1",
-            violations=["v1"],
-            denial_reason="denied",
-            feedback_reason="feedback",
-        )
-
-        assert result.success is False
-        assert result.error == "some error"
-        assert result.error_type == CommandErrorType.EXECUTION_FAILED
-        assert result.execution_id == "exec-1"
-        assert result.rule == "rule-1"
-        assert result.denial_reason == "denied"
-        assert result.feedback_reason == "feedback"
-
-
 class TestOperatorExecutionServiceResolveOperators:
     def test_resolve_operators_empty_documents(self, execution_service):
         with pytest.raises(BusinessLogicError, match="No operators bound"):
             execution_service.resolve_operators([], ["op-1"])
 
     def test_resolve_operators_empty_targets(self, execution_service):
-        docs = [OperatorDocument(id="op-1", operator_type="remote", user_id="user-1")]
+        docs = [OperatorDocument(id="op-1", operator_type=OperatorType.REMOTE, user_id="user-1")]
         with pytest.raises(ValidationError, match="target_operators list is empty"):
             execution_service.resolve_operators(docs, [])
 
     def test_resolve_operators_single_doc(self, execution_service):
-        docs = [OperatorDocument(id="op-1", operator_type="remote", user_id="user-1")]
+        docs = [OperatorDocument(id="op-1", operator_type=OperatorType.REMOTE, user_id="user-1")]
         resolved = execution_service.resolve_operators(docs, ["something"])
         assert resolved == docs
 
     def test_resolve_operators_fleet_sentinels(self, execution_service):
         docs = [
-            OperatorDocument(id="op-1", operator_type="remote", user_id="user-1"),
-            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-1", operator_type=OperatorType.REMOTE, user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type=OperatorType.REMOTE, user_id="user-1"),
         ]
         for sentinel in ["all", "*", "fleet", "every", "everyone"]:
             resolved = execution_service.resolve_operators(docs, [sentinel])
@@ -136,8 +108,8 @@ class TestOperatorExecutionServiceResolveOperators:
 
     def test_resolve_operators_by_id(self, execution_service):
         docs = [
-            OperatorDocument(id="op-1", operator_type="remote", user_id="user-1"),
-            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-1", operator_type=OperatorType.REMOTE, user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type=OperatorType.REMOTE, user_id="user-1"),
         ]
         resolved = execution_service.resolve_operators(docs, ["op-2"])
         assert len(resolved) == 1
@@ -146,11 +118,14 @@ class TestOperatorExecutionServiceResolveOperators:
     def test_resolve_operators_by_hostname(self, execution_service):
         docs = [
             OperatorDocument(
-                id="op-1", current_hostname="host-1", operator_type="remote", user_id="user-1"
+                id="op-1",
+                current_hostname="host-1",
+                operator_type=OperatorType.REMOTE,
+                user_id="user-1",
             ),
             OperatorDocument(
                 id="op-2",
-                operator_type="remote",
+                operator_type=OperatorType.REMOTE,
                 user_id="user-1",
                 latest_heartbeat_snapshot=HeartbeatSnapshot(
                     system_identity=HeartbeatSystemIdentity(hostname="host-2")
@@ -163,8 +138,8 @@ class TestOperatorExecutionServiceResolveOperators:
 
     def test_resolve_operators_by_index(self, execution_service):
         docs = [
-            OperatorDocument(id="op-1", operator_type="remote", user_id="user-1"),
-            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-1", operator_type=OperatorType.REMOTE, user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type=OperatorType.REMOTE, user_id="user-1"),
         ]
         resolved = execution_service.resolve_operators(docs, ["1"])
         assert len(resolved) == 1
@@ -172,8 +147,8 @@ class TestOperatorExecutionServiceResolveOperators:
 
     def test_resolve_operators_not_found(self, execution_service):
         docs = [
-            OperatorDocument(id="op-1", operator_type="remote", user_id="user-1"),
-            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-1", operator_type=OperatorType.REMOTE, user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type=OperatorType.REMOTE, user_id="user-1"),
         ]
         with pytest.raises(ValidationError, match="Could not resolve any operators"):
             execution_service.resolve_operators(docs, ["non-existent"])
@@ -183,9 +158,12 @@ class TestOperatorExecutionServiceTargetSystems:
     def test_build_target_systems_list(self, execution_service):
         docs = [
             OperatorDocument(
-                id="op-1", current_hostname="host-1", operator_type="remote", user_id="user-1"
+                id="op-1",
+                current_hostname="host-1",
+                operator_type=OperatorType.REMOTE,
+                user_id="user-1",
             ),
-            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type=OperatorType.REMOTE, user_id="user-1"),
         ]
         systems = execution_service.build_target_systems_list(docs)
         assert len(systems) == 2
@@ -232,7 +210,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=None,
         )
         g8e_context = build_g8e_http_context()
-        with pytest.raises(ValidationError, match="g8e_message.payload is required"):
+        with pytest.raises(ValidationError, match=r"g8e_message\.payload is required"):
             await execution_service.dispatch_command(msg, g8e_context)
 
     @pytest.mark.asyncio
@@ -245,7 +223,7 @@ class TestOperatorExecutionServiceDispatch:
             task_id=AITaskId.COMMAND,
             investigation_id="inv-1",
             web_session_id="web-1",
-            operator_id=None,  # type: ignore
+            operator_id=None,
             operator_session_id="sess-1",
             payload=CommandRequestPayload(command="echo hi", execution_id="exec-1"),
         )
@@ -283,7 +261,9 @@ class TestOperatorExecutionServiceDispatch:
 
     @pytest.mark.asyncio
     async def test_dispatch_gateway_failure(self, execution_service, mock_gateway_client):
-        mock_gateway_client.dispatch = AsyncMock(side_effect=NetworkError("denied", component="g8ee"))
+        mock_gateway_client.dispatch = AsyncMock(
+            side_effect=NetworkError("denied", component="g8ee")
+        )
         msg = G8eMessage(
             id="exec-1",
             source_component=G8EE_COMPONENT,
@@ -314,7 +294,9 @@ class TestOperatorExecutionServiceDispatch:
                 "success": True,
                 "transaction_id": "tx-1",
                 "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
-                "result_payload": base64.b64encode(command_result.SerializeToString()).decode("ascii"),
+                "result_payload": base64.b64encode(command_result.SerializeToString()).decode(
+                    "ascii"
+                ),
             }
         )
         msg = G8eMessage(
@@ -385,8 +367,6 @@ class TestOperatorExecutionServiceDirectCommand:
         g8e_context = build_g8e_http_context()
         bound_op = MagicMock(operator_id="op-1", operator_session_id="sess-1")
         g8e_context.bound_operators = [bound_op]
-
-        from app.models.internal_api import DirectCommandRequest
 
         payload = DirectCommandRequest(
             execution_id="exec-1",

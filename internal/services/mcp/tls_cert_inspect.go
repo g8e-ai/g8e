@@ -100,7 +100,7 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 		if port <= 0 {
 			port = 443
 		}
-		cert, err = fetchCertFromHost(ctx, req.Host, port)
+		cert, err = fetchCertFromHost(req.Host, port)
 		if err != nil {
 			return CallToolResult{}, fmt.Errorf("tls_cert_inspect: failed to fetch certificate from host: %w", err)
 		}
@@ -143,7 +143,7 @@ func loadCertFromFile(path string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-func fetchCertFromHost(ctx context.Context, host string, port int) (*x509.Certificate, error) {
+func fetchCertFromHost(host string, port int) (*x509.Certificate, error) {
 	address := net.JoinHostPort(host, strconv.Itoa(port))
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 

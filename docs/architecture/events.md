@@ -3,8 +3,8 @@ doc_id: events
 title: Event and Action Protocol
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - protocol/constants/events.json
   - internal/services/gateway/
@@ -43,12 +43,12 @@ The event registry establishes a closed vocabulary for named, typed messages flo
 
 - **Event**: a named, typed message identified by `event_type`. It flows over SSE, pub/sub, or governed transport.
 - **Event kind**: one of request, outcome, fact, or stream. Defines the event's role and persistence.
-- **Request event**: an event whose `kind` is `request` and whose wire value ends in `.requested`. It initiates a governed transaction.
+- **Request event**: an event whose `kind` is `request` and whose wire value ends in `.requested`. It initiates a request, which may or may not be wrapped in a `GovernanceEnvelope` depending on the registry entry.
 - **Outcome event**: an event whose `kind` is `outcome`. It reports success, failure, or progress on a prior request.
 - **Fact event**: an event whose `kind` is `fact`. It records something that happened independently of a request; may be persisted in an audit log.
 - **Stream event**: an event whose `kind` is `stream`. It carries ephemeral UI fragments (deltas, chunks, thinking state) and is never persisted.
 - **Governance envelope**: a protobuf message carrying a request event, identity bindings, and authorization metadata. The Gateway validates the envelope, derives `action_type` from the registry, and enforces policy before forwarding to the operator.
-- **Action type**: the governance class of a request. The registry maps request events to `action_type` values; the Gateway uses this to select policy enforcement and audit logging.
+- **Action type**: the governance class of a governed request. The registry maps those request events to `action_type` values; the Gateway uses this to select policy enforcement and audit logging.
 - **Receipt**: cryptographic evidence of one stage of a governed transaction, signed by the operator and persisted in the audit chain.
 - **Audit record**: a fact event appended to an operator or Gateway audit log with a sequence number, content digest, and hash chain.
 
@@ -79,55 +79,73 @@ Metadata is validated against [protocol/models/event_registry.schema.json](proto
 
 ### Domains
 
-Wire values use `g8e.v1.<domain>.<entity>[.<qualifier>...].<terminal>`. The five domains are:
+Wire values use `g8e.v1.<domain>.<entity>[.<qualifier>...].<terminal>`. The live registry is the source of truth for which domains are in use today; it is not a closed enum hard-coded in the schema. In the current registry, the active domains are:
 
 | Domain | Purpose |
 | --- | --- |
 | `operator` | Operator lifecycle, commands, heartbeats, and status. |
-| `app` | Application lifecycle and actions. |
 | `ai` | AI model invocation, consensus, voting, and agent coordination. |
+| `app` | Application lifecycle and actions. |
 | `platform` | Platform infrastructure: auth, notifications, governance. |
-| `public` | Public-facing surface events (stable, versionable). |
+| `public` | Public-facing surface events that are stable and versioned. |
+| `inference` | Inference/session telemetry currently emitted by the ensemble stack. |
+
+The registry itself is maintained in [protocol/constants/events.json](../../protocol/constants/events.json); the schema only enforces the wire-value grammar and field structure, not a fixed domain list.
 
 ## Event kinds
 
 | Kind | Persistence | Transports | Purpose |
 | --- | --- | --- | --- |
-| `request` | ephemeral | governed | Initiates a governed transaction; terminal must end in `.requested`. |
-| `outcome` | gateway.sse_store, operator.audit_log, or ephemeral | sse, pubsub | Reports success, failure, or progress on a request. |
-| `fact` | operator.audit_log, gateway.audit_log, or ephemeral | sse, pubsub | Records something that happened independently; not tied to a request. |
+| `request` | ephemeral | governed, sse, or unset | Initiates a request; registry entries with `governance` metadata are processed through the `GovernanceEnvelope` path. |
+| `outcome` | gateway.sse_store, operator.audit_log, or ephemeral | sse, pubsub, or unset | Reports success, failure, or progress on a prior request. |
+| `fact` | operator.audit_log, gateway.audit_log, or ephemeral | sse, pubsub, or unset | Records something that happened independently; not tied to a request. |
 | `stream` | ephemeral | sse only | Ephemeral UI fragment (delta, chunk, thinking state). |
 
 ## Governance envelopes
 
-Request events that declare a `governance` block become governed transactions. The Gateway:
+Not every request event is a governed transaction. A request event becomes governed only when its registry entry carries a `governance` block. The current registry distinguishes between:
 
-1. Receives the protobuf GovernanceEnvelope over mTLS with identity bindings (operator_id, operator_session_id, cli_session_id, acting_app_id, source_component).
-2. Looks up the `event_type` in the registry and derives `action_type`.
-3. Verifies the envelope's identity bindings match the mTLS certificate's SPIFFE ID and rejects unbound mutations. The one exception is an application's own platform-record write (`DOCUMENT_UPDATE` or `DOCUMENT_DELETE` with an `acting_app_id` matching its app certificate); see INV-AUTH-ID-05 in [Authentication](auth.md). Any document action, bound or not, may target only a `_governed` collection (INV-GOV-WARD-06 in [Governance](governance.md)).
-4. Enforces policies (ACL, rate limit, quotas) derived from `action_type`.
-5. Forwards the envelope to the operator; the operator includes both `event_type` and `action_type` in signed receipts.
+- UI/session requests that are delivered over SSE or local request channels without a governance wrapper.
+- Mutating app and document requests that use the `governed` transport and carry a `GovernanceEnvelope`.
 
-The `governance` block specifies:
+The canonical envelope definition lives in [protocol/proto/g8e/common/v1/common.proto](../../protocol/proto/g8e/common/v1/common.proto). `GovernanceEnvelope` binds identity, intent, payload, timing, and optional L1/L2/L3 governance metadata into a single transaction container. The Gateway validates the envelope against the current event registry, derives the action classification from the registry entry, and enforces the posture-specific checks before forwarding the request to the selected operator session.
 
-- **action_type**: a governance class name; used to select policy enforcement and audit logging.
-- **payload**: the protobuf message type that carries the request body (e.g., `OperatorCommandPayload`).
+The `governance` block in the registry specifies:
 
-Version 2 canonicalization (hash, receipt signature) includes both `event_type` and `action_type` so signed evidence identifies the semantic request, not only its broad governance class. Verifiers retain version 1 only for historical records.
+- **action_type**: the policy/action classification for the request.
+- **payload**: the protobuf payload type that the envelope carries for that request.
+
+The canonical message shape is therefore registry-driven: the event registry identifies the semantic request, while the canonical protobuf message defines the envelope and proofs. The runtime derives action metadata from both sources rather than treating the event name as the only source of truth.
 
 ## Transport ownership
 
-- **SSE** (Server-Sent Events): Gateway-to-client delivery. The Gateway validates the registry entry, persists non-ephemeral events in its SSE store, and pushes them to subscribed clients.
-- **Governed**: mTLS HTTP POST to Gateway. Wraps a request event in a GovernanceEnvelope for identity binding, policy enforcement, and audit logging. Only used by request events with governance.
-- **Pub/sub**: Gateway-to-operator and operator-to-Gateway queues for commands, results, receipts, heartbeats, and audit channels. Ensemble does not publish or subscribe to operator pub/sub channels.
+The current registry defines three transport classes: `governed`, `pubsub`, and `sse`.
+
+- **SSE**: client-delivery channel for live UI and operator state updates. Many outcome and stream events are emitted here. This transport is not equivalent to a persisted audit log.
+- **Governed**: request path used by registry entries whose `governance` metadata is populated. The request is wrapped in a canonical `GovernanceEnvelope` and processed through the gateway policy path before dispatch.
+- **Pub/sub**: canonical routing/notification channel for runtime messaging where the registry marks it as such; it is not the same as a persisted storage layer.
+
+The registry is the source of truth for what a given event may traverse. In other words, a given event name is not assumed to be valid for all transports; the metadata in [protocol/constants/events.json](../../protocol/constants/events.json) declares the valid path.
 
 ## Storage ownership
 
-- **Gateway**: owns operator documents, heartbeat snapshots, operator audit chain, SSE event store, and docstore.
-- **Operator**: owns governed commitments (staged transaction state) and receipt stages, appended as it executes and signed as evidence.
-- **Audit flow**: application submits audit records to the Gateway, which verifies operator session binding, forwards to the operator, and receives operator acknowledgement containing sequence and hash.
-- **g8ee**: submits application requests and audit records to the Gateway but owns neither operator authority nor operator audit persistence.
-- **SSE**: is a client delivery projection, not an audit record; non-persistent copies may be pruned.
+The registry records persistence ownership in the `persistence` field. The current allowed values are:
+
+- `operator.audit_log`
+- `gateway.audit_log`
+- `gateway.sse_store`
+- `gateway.operator_docs`
+- `gateway.docstore`
+- `ephemeral`
+
+This is the authoritative storage contract enforced by the registry and generation tooling. In practical terms:
+
+- **Gateway**: owns the public-facing event projection and document surfaces that the registry marks as `gateway.*`.
+- **Operator**: owns the local, append-only evidence that the registry marks as `operator.audit_log`.
+- **SSE**: is a delivery projection for client updates, not the canonical evidence ledger.
+- **Ephemeral**: used for UI/request-scoped events that are not intended to become audit-state records.
+
+These ownership labels describe the current registry contract; they are not a second, out-of-band store model. Runtime code remains expected to follow the event registry and the runtime-specific storage services rather than invent a parallel naming scheme.
 
 ## Audit chain
 

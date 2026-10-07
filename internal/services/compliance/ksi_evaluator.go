@@ -29,7 +29,7 @@ import (
 // AuditEvidenceReader provides read-only access to audit store evidence
 // for KSI evaluation. SQLAuditStore satisfies this interface.
 type AuditEvidenceReader interface {
-	ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error)
+	ListActionReceipts(scope models.AuditScope, limit, offset int) ([]*models.ActionReceiptRecord, error)
 	ListEvents(sessionID string, limit, offset int) ([]*storage.Event, error)
 	ListFileMutations(limit, offset int) ([]*storage.FileMutationLog, error)
 }
@@ -415,7 +415,7 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
-		receipts, err := deps.Audit.ListActionReceipts("", 1, 0)
+		receipts, err := deps.Audit.ListActionReceipts(models.AuditScope{OperatorSessionID: ""}, 1, 0)
 		if err != nil {
 			return false, nil, err
 		}
@@ -429,7 +429,7 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
-		receipts, err := deps.Audit.ListActionReceipts("", 10, 0)
+		receipts, err := deps.Audit.ListActionReceipts(models.AuditScope{OperatorSessionID: ""}, 10, 0)
 		if err != nil {
 			return false, nil, err
 		}
@@ -452,9 +452,11 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 			}
 			publicKey, err := governance.SignerPublicKey(receipt.GetSignerKeyId())
 			if err != nil {
+				//nolint:nilerr // intentional fallback: unknown signer key marks compliance check unsatisfied
 				return false, evidence, nil
 			}
 			if governance.VerifyActionReceiptSignature(receipt, publicKey) != nil || governance.VerifyReceiptPersistenceAttestation(receipt, publicKey) != nil {
+				//nolint:nilerr // intentional fallback: signature verification failure marks check unsatisfied
 				return false, evidence, nil
 			}
 		}
@@ -586,10 +588,12 @@ func newCommitmentsCryptographicallyVerifiedMethod(reader CommitmentEvidenceRead
 			evidence = append(evidence, reference)
 			attestation := &operatorv1.CommitmentAttestation{}
 			if compliancev1.UnmarshalCanonical(row.AttestationJSON, attestation) != nil {
+				//nolint:nilerr // intentional fallback: unmarshal failure marks check unsatisfied
 				return false, evidence, nil
 			}
 			canonical, err := governance.CanonicalizeCommitmentAttestation(attestation)
 			if err != nil {
+				//nolint:nilerr // intentional fallback: canonicalization failure marks check unsatisfied
 				return false, evidence, nil
 			}
 			digest := sha256.Sum256(canonical)
@@ -598,10 +602,12 @@ func newCommitmentsCryptographicallyVerifiedMethod(reader CommitmentEvidenceRead
 			}
 			publicKey, err := governance.SignerPublicKey(row.AuditorKeyID)
 			if err != nil {
+				//nolint:nilerr // intentional fallback: unknown auditor key marks check unsatisfied
 				return false, evidence, nil
 			}
 			signature, err := hex.DecodeString(row.Signature)
 			if err != nil || !ed25519.Verify(publicKey, canonical, signature) {
+				//nolint:nilerr // intentional fallback: invalid signature marks check unsatisfied
 				return false, evidence, nil
 			}
 			reference.VerificationStatus = "verified"
@@ -646,7 +652,7 @@ func newIndependentStateObservedMethod(reader AuditEvidenceReader) KSIMethod {
 		if reader == nil {
 			return false, nil, nil
 		}
-		receipts, err := reader.ListActionReceipts("", 10, 0)
+		receipts, err := reader.ListActionReceipts(models.AuditScope{OperatorSessionID: ""}, 10, 0)
 		if err != nil {
 			return false, nil, err
 		}

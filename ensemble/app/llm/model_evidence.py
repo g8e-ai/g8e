@@ -22,7 +22,7 @@ from app.models.model_telemetry import (
     GovernedDispatchEvidence,
     ModelBoundaryPrivacyAttestation,
 )
-
+from app.security.sentinel_scrubber import inspect_sensitive_text
 
 _MODEL_BOUNDARY_SCANNER_VERSION = "sentinel-regex@1.0.0"
 
@@ -56,8 +56,6 @@ def model_boundary_hash(value: Any) -> str:
 
 
 def model_boundary_privacy_attestation(value: Any) -> ModelBoundaryPrivacyAttestation:
-    from app.security.sentinel_scrubber import inspect_sensitive_text
-
     canonical = model_boundary_json(value)
     raw_sensitive_occurrences, raw_sensitive_types = inspect_sensitive_text(canonical)
     return ModelBoundaryPrivacyAttestation(

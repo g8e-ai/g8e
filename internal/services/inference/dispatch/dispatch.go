@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -615,7 +616,7 @@ func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest)
 
 	capable := func(op *models.OperatorDocumentGo) bool {
 		return op.RuntimeConfig != nil &&
-			op.RuntimeConfig.InferenceEnabled &&
+			operatorcapability.GetOperatorRoles(*op).Has(constants.OperatorRoleInference) &&
 			op.OperatorSessionID != "" &&
 			op.Status == constants.OperatorStatusActive
 	}

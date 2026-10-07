@@ -1,22 +1,20 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
+"""
+Function call execution - tool display metadata, grounding merge, single
+tool call dispatch, and sequential turn-level execution loop.
+"""
+
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
 from __future__ import annotations
 
-"""
-Function call execution - tool display metadata, grounding merge, single
-tool call dispatch, and sequential turn-level execution loop.
-"""
-
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
-
-from app.models.base import BaseModel, ConfigDict, Field, ValidationError
 
 from app.constants import (
     CommandErrorType,
@@ -24,53 +22,52 @@ from app.constants import (
     OperatorToolName,
     ToolCallStatus,
 )
-from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.constants.config import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    ToolDisplayCategory,
     StreamChunkFromModelType,
+    ToolDisplayCategory,
 )
 from app.llm.llm_types import ToolCall
 from app.models.agent import (
     ExecutorCommandArgs,
     SageOperatorRequest,
-    ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
+    ToolCallResponse,
 )
-
-from app.services.ai.generator import generate_command
-from app.models.tribunal_commands import TribunalGenerationRequest
-from app.models.evaluation_trace import EvaluationPlayerStep
-from app.models.grounding import GroundingMetadata
-from app.models.http_context import G8eHttpContext, RequestContext
-from app.models.investigations import EnrichedInvestigationContext
-from app.models.reputation import StakeResolutionPayload
-from app.models.tool_results import (
-    CommandExecutionResult,
-    ToolResult,
-    SearchWebResult,
-)
-from app.models.settings import G8eeUserSettings
-
 from app.models.agents.tribunal import (
     CommandGenerationResult,
     TribunalError,
     TribunalObserver,
 )
+from app.models.base import BaseModel, ConfigDict, Field, ValidationError
+from app.models.evaluation_trace import EvaluationPlayerStep
+from app.models.grounding import GroundingMetadata
+from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.investigations import EnrichedInvestigationContext
+from app.models.reputation import StakeResolutionPayload
+from app.models.settings import G8eeUserSettings
+from app.models.tool_results import (
+    CommandExecutionResult,
+    SearchWebResult,
+    ToolResult,
+)
+from app.models.tribunal_commands import TribunalGenerationRequest
+from app.models.whitelist import WhitelistedCommand
+from app.services.ai.generator import generate_command
+from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
+from app.services.ai.tool_service import AIToolService
 from app.services.evaluation.player_steps import PlayerStepRecorder
 from app.services.investigation.investigation_service import (
     extract_operator_context_by_target,
     extract_single_operator_context,
 )
-from app.services.ai.tool_service import AIToolService
-from app.services.infra.event_service import EventService
+from app.services.protocols import EventServiceProtocol
+from app.utils.csv_commands import parse_command_csv
 from app.utils.time_ids.ids import generate_command_execution_id
 from app.utils.validation.safety import map_os_string_to_platform
-from app.utils.csv_commands import parse_command_csv
-from app.models.whitelist import WhitelistedCommand
 
 
 class TribunalInvoker:
@@ -140,7 +137,7 @@ class TribunalInvoker:
         sage_request: SageOperatorRequest,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         request_settings: G8eeUserSettings,
         tool_executor: AIToolService,
         step_observer: TribunalObserver | None = None,
@@ -203,7 +200,7 @@ class TribunalInvoker:
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             whitelisted_commands=whitelisted_commands,
-            blacklisted_commands=blacklisted_commands,
+            blacklisted_commands=[item["command"] for item in blacklisted_commands],
             step_observer=step_observer,
         )
         gen_result = await generate_command(tribunal_request)
@@ -214,8 +211,15 @@ class TribunalInvoker:
             gen_result.final_command[:80] if gen_result.final_command else None,
         )
 
+        final_command = gen_result.final_command
+        if final_command is None:
+            raise TribunalError(
+                request=request,
+                user_message="The Tribunal completed without producing a command.",
+            )
+
         executor_args = ExecutorCommandArgs(
-            command=gen_result.final_command,
+            command=final_command,
             request=request,
             guidelines=guidelines,
             target_operators=sage_request.target_operators,
@@ -238,7 +242,7 @@ class ToolCallResult(BaseModel):
     result: ToolResult
     grounding: GroundingMetadata | None = None
     tribunal_result: CommandGenerationResult | None = None
-    player_steps: list[EvaluationPlayerStep] = Field(default_factory=list)
+    player_steps: list[EvaluationPlayerStep] = Field(default_factory=list[EvaluationPlayerStep])
 
 
 logger = logging.getLogger(__name__)
@@ -273,6 +277,12 @@ def extract_tool_display_detail(tool_name: str, args: dict[str, object]) -> str:
     """Extract a concise display detail string from tool call arguments."""
     if not args:
         return ""
+    detail = _special_tool_display_detail(tool_name, args)
+    return detail if detail is not None else _fallback_tool_display_detail(args)
+
+
+def _special_tool_display_detail(tool_name: str, args: dict[str, object]) -> str | None:
+    """Build display details for tools with a specific argument format."""
     if tool_name == OperatorToolName.RUN_COMMANDS:
         req = args.get("request")
         if isinstance(req, str) and req.strip():
@@ -287,15 +297,16 @@ def extract_tool_display_detail(tool_name: str, args: dict[str, object]) -> str:
     if tool_name == OperatorToolName.CHECK_PORT:
         port = args.get("port")
         host = args.get("host")
-        if host and port:
-            return f"{host}:{port}"
-        if port:
-            return f"port {port}"
+        return f"{host}:{port}" if host and port else f"port {port}" if port else None
     if tool_name in (OperatorToolName.GRANT_INTENT, OperatorToolName.REVOKE_INTENT):
         intent = args.get("intent") or args.get("action")
         if intent:
             return str(intent)
+    return None
 
+
+def _fallback_tool_display_detail(args: dict[str, object]) -> str:
+    """Choose the first useful string argument for an otherwise generic tool."""
     for key in ("file_path", "path", "query", "command", "directory"):
         val = args.get(key)
         if isinstance(val, str) and val.strip():
@@ -428,7 +439,7 @@ async def orchestrate_tool_execution(
     tool_executor: AIToolService,
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
     request_settings: G8eeUserSettings,
     execution_id: str | None = None,
     call_info: StreamChunkData | None = None,
@@ -455,9 +466,7 @@ async def orchestrate_tool_execution(
     gen_result: CommandGenerationResult | None = None
     # A scored turn records what each Tribunal player produced; production
     # chat has no observer and the Tribunal runs exactly as before.
-    step_recorder = (
-        PlayerStepRecorder() if g8e_context.evaluation_context is not None else None
-    )
+    step_recorder = PlayerStepRecorder() if g8e_context.evaluation_context is not None else None
 
     if execution_id is None:
         execution_id = (
@@ -499,7 +508,7 @@ async def orchestrate_tool_execution(
                     )
                 except (TribunalError, ValidationError) as exc:
                     error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
-                    logger.error(
+                    logger.exception(
                         "[TRIBUNAL-ERROR] %s (%s): %s",
                         type(exc).__name__,
                         tool_name,
@@ -541,38 +550,13 @@ async def orchestrate_tool_execution(
                 investigation.id,
             )
 
-        # Schedule fire-and-forget reputation resolution
-        async def _resolve_and_emit():
-            try:
-                marshal_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
-                res = await tool_executor.reputation_service.resolve_stakes(
-                    tribunal_command_id=gen_result.correlation_id,
-                    investigation_id=investigation.id,
-                    gen_result=gen_result,
-                    execution_result=result,
-                    marshal_risk=result.marshal_risk,
-                    marshal_blocked=marshal_blocked,
-                    context=RequestContext.from_app_context(g8e_context),
-                )
-
-                for outcome in res.resolutions:
-                    payload = StakeResolutionPayload.model_validate(outcome.model_dump())
-                    await event_service.publish_reputation_event(
-                        EventType.OPERATOR_REPUTATION_STATE_UPDATED, payload, g8e_context
-                    )
-
-                    if outcome.slash_tier:
-                        slash_event = getattr(
-                            EventType, f"OPERATOR_REPUTATION_SLASH_TIER_{outcome.slash_tier.value}"
-                        )
-                        await event_service.publish_reputation_event(
-                            slash_event, payload, g8e_context
-                        )
-            except Exception as e:
-                logger.error("[REPUTATION] Failed to resolve stakes: %s", e, exc_info=True)
-
         task_id = f"reputation_resolution_{execution_id}"
-        task = asyncio.create_task(_resolve_and_emit(), name=task_id)
+        task = asyncio.create_task(
+            _resolve_and_emit(
+                gen_result, result, tool_executor, investigation, event_service, g8e_context
+            ),
+            name=task_id,
+        )
         tool_executor.chat_task_manager.track_detached(task_id, task)
 
     logger.info(
@@ -634,6 +618,45 @@ async def orchestrate_tool_execution(
     )
 
 
+async def _resolve_and_emit(
+    gen_result: CommandGenerationResult,
+    result: CommandExecutionResult,
+    tool_executor: AIToolService,
+    investigation: EnrichedInvestigationContext,
+    event_service: EventServiceProtocol,
+    g8e_context: G8eHttpContext,
+) -> None:
+    """Resolve command reputation stakes and publish the resulting events."""
+    try:
+        tribunal_command_id = gen_result.correlation_id
+        if tribunal_command_id is None:
+            logger.error("[REPUTATION] Cannot resolve stakes without a Tribunal command ID")
+            return
+        marshal_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
+        resolution = await tool_executor.reputation_service.resolve_stakes(
+            tribunal_command_id=tribunal_command_id,
+            investigation_id=investigation.id,
+            gen_result=gen_result,
+            execution_result=result,
+            marshal_risk=result.marshal_risk,
+            marshal_blocked=marshal_blocked,
+            context=RequestContext.from_app_context(g8e_context),
+        )
+
+        for outcome in resolution.resolutions:
+            payload = StakeResolutionPayload.model_validate(outcome.model_dump())
+            await event_service.publish_reputation_event(
+                EventType.OPERATOR_REPUTATION_STATE_UPDATED, payload, g8e_context
+            )
+            if outcome.slash_tier:
+                slash_event = getattr(
+                    EventType, f"OPERATOR_REPUTATION_SLASH_TIER_{outcome.slash_tier.value}"
+                )
+                await event_service.publish_reputation_event(slash_event, payload, g8e_context)
+    except Exception as exc:
+        logger.error("[REPUTATION] Failed to resolve stakes: %s", exc)
+
+
 async def execute_turn_tool_calls(
     pending_tool_calls: list[ToolCall],
     tool_executor: AIToolService,
@@ -641,7 +664,7 @@ async def execute_turn_tool_calls(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """
     Execute all tool calls from one turn.
@@ -689,7 +712,7 @@ async def _process_single_tool_call(
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,
     request_settings: G8eeUserSettings,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
     execution_id: str | None = None,
     call_info: StreamChunkData | None = None,
 ) -> ToolCallResult:
@@ -770,7 +793,7 @@ async def _execute_sequential(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Execute tool calls one by one."""
     responses: list[ToolCallResponse] = []
@@ -819,7 +842,7 @@ async def _execute_parallel(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    event_service: EventService,
+    event_service: EventServiceProtocol,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Execute tool calls concurrently using asyncio.gather."""
     prepared: list[tuple[str, StreamChunkData]] = [

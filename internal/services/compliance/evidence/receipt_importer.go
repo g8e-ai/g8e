@@ -145,7 +145,7 @@ func (i *PersistenceImporter) Import(ctx context.Context) ([]EvidenceNode, error
 
 func readCanonicalReceipt(ctx context.Context, reader ArtifactReader, binding ReceiptImportBinding) (*operatorv1.ActionReceipt, ReadResult, error) {
 	_, digest, _ := ParseExpectedContentReference(binding.Reference, constants.ActionReceiptReferencePrefix)
-	result, err := ReadAndDigest(reader, ctx, binding.Path, constants.DemoRunMaxArtifactBytes)
+	result, err := ReadAndDigest(reader, ctx, binding.Path, maxArtifactBytes)
 	if err != nil {
 		return nil, ReadResult{}, fmt.Errorf("%w: %s: %w", constants.ErrEvidenceImporterFailed, binding.Path, err)
 	}
@@ -164,7 +164,7 @@ func readCanonicalReceipt(ctx context.Context, reader ArtifactReader, binding Re
 
 func readCanonicalPersistence(ctx context.Context, reader ArtifactReader, binding PersistenceImportBinding) (*operatorv1.ReceiptPersistenceAttestation, ReadResult, error) {
 	_, digest, _ := ParseExpectedContentReference(binding.Reference, constants.ReceiptPersistenceReferencePrefix)
-	result, err := ReadAndDigest(reader, ctx, binding.Path, constants.DemoRunMaxArtifactBytes)
+	result, err := ReadAndDigest(reader, ctx, binding.Path, maxArtifactBytes)
 	if err != nil {
 		return nil, ReadResult{}, fmt.Errorf("%w: %s: %w", constants.ErrEvidenceImporterFailed, binding.Path, err)
 	}

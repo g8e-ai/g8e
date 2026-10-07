@@ -250,11 +250,10 @@ func (i admittedEvidenceImporter) Import(ctx context.Context) ([]evidence.Eviden
 	observedArtifacts := make(map[string]struct{}, len(nodes))
 	for index := range nodes {
 		node := &nodes[index]
-		sharedDefinition := node.ArtifactType == evidence.ArtifactTypeDemoDefinition
 		if node.SourceAdmissionID != "" && node.SourceAdmissionID != i.admission.GetAdmissionId() {
 			return nil, fmt.Errorf("%w: source admission %s imported artifact %s already bound to %s", constants.ErrEvidenceScopeMismatch, i.admission.GetAdmissionId(), node.ArtifactID, node.SourceAdmissionID)
 		}
-		if !sharedDefinition && i.admission.GetRunId() != "" && node.RunID != i.admission.GetRunId() {
+		if i.admission.GetRunId() != "" && node.RunID != i.admission.GetRunId() {
 			return nil, fmt.Errorf("%w: source admission %s selected run %s but imported %s", constants.ErrEvidenceScopeMismatch, i.admission.GetAdmissionId(), i.admission.GetRunId(), node.RunID)
 		}
 		if len(selectedArtifacts) > 0 {
@@ -262,9 +261,7 @@ func (i admittedEvidenceImporter) Import(ctx context.Context) ([]evidence.Eviden
 				return nil, fmt.Errorf("%w: source admission %s imported unselected artifact %s", constants.ErrEvidenceScopeMismatch, i.admission.GetAdmissionId(), node.ArtifactID)
 			}
 		}
-		if !sharedDefinition {
-			node.SourceAdmissionID = i.admission.GetAdmissionId()
-		}
+		node.SourceAdmissionID = i.admission.GetAdmissionId()
 		for _, diagnostic := range node.Diagnostics {
 			if diagnostic == nil {
 				continue

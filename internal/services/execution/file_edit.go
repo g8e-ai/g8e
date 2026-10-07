@@ -79,17 +79,17 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 	// Execute operation based on type
 	switch request.Operation {
 	case constants.FileOperationRead:
-		err = fes.executeRead(ctx, request, result)
+		err = fes.executeRead(request, result)
 	case constants.FileOperationWrite:
-		err = fes.executeWrite(ctx, request, result)
+		err = fes.executeWrite(request, result)
 	case constants.FileOperationReplace:
-		err = fes.executeReplace(ctx, request, result)
+		err = fes.executeReplace(request, result)
 	case constants.FileOperationInsert:
-		err = fes.executeInsert(ctx, request, result)
+		err = fes.executeInsert(request, result)
 	case constants.FileOperationDelete:
-		err = fes.executeDelete(ctx, request, result)
+		err = fes.executeDelete(request, result)
 	case constants.FileOperationPatch:
-		err = fes.executePatch(ctx, request, result)
+		err = fes.executePatch(request, result)
 	default:
 		err = constants.ErrFileEditUnsupportedOperation
 	}
@@ -128,7 +128,7 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 }
 
 // executeRead reads a file or file section
-func (fes *FileEditService) executeRead(ctx context.Context, request *models.FileEditRequest, result *models.FileEditResult) error {
+func (fes *FileEditService) executeRead(request *models.FileEditRequest, result *models.FileEditResult) error {
 	fes.logger.Info("Reading file", "file_path", request.FilePath)
 
 	// Check if file exists
@@ -233,7 +233,7 @@ func (fes *FileEditService) readFileLines(file *os.File, opts *models.FileReadOp
 }
 
 // executeWrite writes content to a file (overwrites existing content)
-func (fes *FileEditService) executeWrite(ctx context.Context, request *models.FileEditRequest, result *models.FileEditResult) error {
+func (fes *FileEditService) executeWrite(request *models.FileEditRequest, result *models.FileEditResult) error {
 	if request.Content == "" {
 		return constants.ErrFileEditContentRequired
 	}
@@ -288,7 +288,7 @@ func (fes *FileEditService) executeWrite(ctx context.Context, request *models.Fi
 }
 
 // executeReplace replaces old content with new content in a file
-func (fes *FileEditService) executeReplace(ctx context.Context, request *models.FileEditRequest, result *models.FileEditResult) error {
+func (fes *FileEditService) executeReplace(request *models.FileEditRequest, result *models.FileEditResult) error {
 	if request.OldContent == "" {
 		return constants.ErrFileEditOldContentRequired
 	}
@@ -360,7 +360,7 @@ func (fes *FileEditService) executeReplace(ctx context.Context, request *models.
 }
 
 // executeInsert inserts content at a specific line
-func (fes *FileEditService) executeInsert(ctx context.Context, request *models.FileEditRequest, result *models.FileEditResult) error {
+func (fes *FileEditService) executeInsert(request *models.FileEditRequest, result *models.FileEditResult) error {
 	if request.InsertContent == "" || request.InsertPosition == 0 {
 		return constants.ErrFileEditInsertContentRequired
 	}
@@ -429,7 +429,7 @@ func (fes *FileEditService) executeInsert(ctx context.Context, request *models.F
 }
 
 // executeDelete deletes lines from a file
-func (fes *FileEditService) executeDelete(ctx context.Context, request *models.FileEditRequest, result *models.FileEditResult) error {
+func (fes *FileEditService) executeDelete(request *models.FileEditRequest, result *models.FileEditResult) error {
 	if request.StartLine == 0 || request.EndLine == 0 {
 		return constants.ErrFileEditLineRangeRequired
 	}
@@ -496,7 +496,7 @@ func (fes *FileEditService) executeDelete(ctx context.Context, request *models.F
 }
 
 // executePatch applies a unified diff patch to a file
-func (fes *FileEditService) executePatch(ctx context.Context, request *models.FileEditRequest, result *models.FileEditResult) error {
+func (fes *FileEditService) executePatch(request *models.FileEditRequest, result *models.FileEditResult) error {
 	if request.PatchContent == "" {
 		return constants.ErrFileEditPatchContentRequired
 	}

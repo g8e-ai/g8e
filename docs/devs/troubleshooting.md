@@ -3,8 +3,8 @@ doc_id: troubleshooting
 title: Troubleshooting Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-26
-version: v2.2.0
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - internal/cli/cmd/
   - internal/services/gateway/
@@ -59,7 +59,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | --- | --- |
 | INV-TROUBLE-GW-01 | The Gateway requires an unlocked vault during startup. On first initialization, `.g8e/vault/` and `.g8e/vault/key` are generated. Lost vault keys make data unrecoverable; MUST NOT overwrite or delete vault keys without explicit data disposal intent. |
 | INV-TROUBLE-GW-02 | `gw restart` reads the launch profile at `.g8e/pids/operator-launch-profile.json`. If missing or invalid, restart fails closed; start with explicit flags to generate a new launch profile. |
-| INV-TROUBLE-GW-03 | `gw reset` and `gw clean` are destructive commands that move the local `.g8e/` runtime tree aside to `.g8e-<MMDDHHMM>`; the gateway starts over without it. MUST NOT use either command to repair retained state. |
+| INV-TROUBLE-GW-03 | `gw reset` and `gw clean` are destructive commands that move the local `.g8e/` runtime tree aside to `.g8e-<MMDDHHMM>`; the gateway starts over without it. MUST NOT use either command to repair retained state. `make clean` removes only build artifacts and Go caches; it does not reset Gateway runtime state. |
 
 ### Authentication and trust (`INV-TROUBLE-AUTH`)
 

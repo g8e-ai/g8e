@@ -21,19 +21,19 @@ handleDocumentUpdateSync/handleDocumentDeleteSync pubsub handlers:
    DOCUMENT_DELETE through the canonical event registry.
 """
 
-import pytest
+from typing import get_args
 
+import pytest
+from g8e.operator.v1 import operator_pb2
 from g8e.registry import action_for
+
+from app.clients.governance_client import PAYLOAD_TYPE_MAPPING
 from app.constants import EventType
 from app.models.command_request_payloads import (
     DocumentDeleteRequestPayload,
     DocumentUpdateRequestPayload,
     G8eCommandPayload,
 )
-from g8e.operator.v1 import operator_pb2
-from app.clients.governance_client import PAYLOAD_TYPE_MAPPING
-from typing import get_args
-
 
 pytestmark = [pytest.mark.unit]
 
@@ -125,10 +125,11 @@ class TestG8eCommandPayloadToProtobufContract:
     """
 
     def test_all_command_payloads_have_to_protobuf(self):
-        missing = []
-        for cls in get_args(G8eCommandPayload):
-            if not hasattr(cls, "to_protobuf") or not callable(cls.to_protobuf):
-                missing.append(cls.__name__)
+        missing = [
+            cls.__name__
+            for cls in get_args(G8eCommandPayload)
+            if not hasattr(cls, "to_protobuf") or not callable(cls.to_protobuf)
+        ]
         assert not missing, (
             f"Payloads missing to_protobuf(): {missing}. Every payload in "
             "G8eCommandPayload must implement to_protobuf() so the envelope "

@@ -16,13 +16,30 @@ stub the InternalHttpClient; no network or gateway is contacted.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+from g8e.operator.v1.operator_pb2 import (
+    EXECUTION_STATUS_COMPLETED,
+    INFERENCE_MESSAGE_ROLE_ASSISTANT,
+    INFERENCE_MESSAGE_ROLE_SYSTEM,
+    INFERENCE_MESSAGE_ROLE_TOOL,
+    INFERENCE_MESSAGE_ROLE_USER,
+    INFERENCE_TOOL_CHOICE_MODE_AUTO,
+    MODEL_ROLE_ASSISTANT,
+    MODEL_ROLE_LITE,
+    MODEL_ROLE_PRIMARY,
+    InferenceDispatchStreamFailure,
+    InferenceDispatchStreamFrame,
+    InferenceProgressEvent,
+)
 
-from app.constants import LLMProvider, ThinkingLevel
+from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, LLMProvider, ThinkingLevel
 from app.errors import (
     ConfigurationError,
+    ContextWindowExceededError,
     ModelCapabilityError,
     NetworkError,
     ToolsNotSupportedError,
@@ -57,22 +74,8 @@ from app.llm.llm_types import (
 from app.llm.providers.g8e import G8EProvider, _contents_to_messages, _validate_response_identity
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import InferenceDispatchRequest, InferenceDispatchResponse
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 from app.models.settings import G8eeUserSettings, LLMSettings
-from g8e.operator.v1.operator_pb2 import (
-    EXECUTION_STATUS_COMPLETED,
-    INFERENCE_MESSAGE_ROLE_ASSISTANT,
-    INFERENCE_MESSAGE_ROLE_SYSTEM,
-    INFERENCE_MESSAGE_ROLE_TOOL,
-    INFERENCE_MESSAGE_ROLE_USER,
-    INFERENCE_TOOL_CHOICE_MODE_AUTO,
-    MODEL_ROLE_ASSISTANT,
-    MODEL_ROLE_LITE,
-    MODEL_ROLE_PRIMARY,
-    InferenceDispatchStreamFailure,
-    InferenceDispatchStreamFrame,
-    InferenceProgressEvent,
-)
+from app.services.ai.chat_pipeline import ChatPipelineService
 
 pytestmark = pytest.mark.unit
 
@@ -172,9 +175,7 @@ def _dispatch_stream_response(response: InferenceDispatchResponse | None = None)
     async def dispatch_stream(request):
         result = response or _response()
         _bind_response_identity(request, result)
-        sequence = 0
-        for part in result.result.parts:
-            sequence += 1
+        for sequence, part in enumerate(result.result.parts, start=1):
             progress = InferenceProgressEvent(
                 provider_attempt_id=request.provider_attempt_id,
                 sequence=sequence,
@@ -230,15 +231,14 @@ class TestValidateLLMConfigAcceptsG8E:
     """ChatPipelineService.validate_llm_config must accept the g8e provider."""
 
     def _pipeline(self):
-        from app.services.ai.chat_pipeline import ChatPipelineService
 
         return ChatPipelineService.__new__(ChatPipelineService)
 
     def test_g8e_primary_provider_passes_validation(self):
         settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
             )
         )
         # G8E needs no endpoint or API key; validation must not reject the
@@ -248,12 +248,12 @@ class TestValidateLLMConfigAcceptsG8E:
     def test_g8e_provider_per_tier_passes_validation(self):
         settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
-                assistant_provider=LLMProvider.G8E,
-                assistant_model="gemma3:4b",
-                lite_provider=LLMProvider.G8E,
-                lite_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
+                llm_assistant_provider=LLMProvider.G8E,
+                llm_assistant_model="gemma3:4b",
+                llm_lite_provider=LLMProvider.G8E,
+                llm_lite_model="gemma3:4b",
             )
         )
         self._pipeline().validate_llm_config(settings)
@@ -275,8 +275,8 @@ class TestG8EProviderFactoryWiring:
         set_internal_http_client(_client())
         try:
             settings = LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
             )
             provider = get_llm_provider(settings)
             assert isinstance(provider, G8EProvider)
@@ -288,8 +288,8 @@ class TestG8EProviderFactoryWiring:
         await self._reset()
         try:
             settings = LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
             )
             with pytest.raises(ConfigurationError):
                 get_llm_provider(settings)
@@ -302,8 +302,8 @@ class TestG8EProviderFactoryWiring:
         set_internal_http_client(_client())
         try:
             settings = LLMSettings(
-                primary_provider=LLMProvider.G8E,
-                primary_model="gemma3:4b",
+                llm_primary_provider=LLMProvider.G8E,
+                llm_model="gemma3:4b",
             )
             first = get_llm_provider(settings)
             second = get_llm_provider(settings)
@@ -600,6 +600,142 @@ class TestG8EProviderDispatch:
         assert chunks[-1].usage_metadata.total_token_count == 18
 
     @pytest.mark.asyncio
+    async def test_stream_delivers_text_while_completion_is_pending(self):
+        release = asyncio.Event()
+        client = _client()
+
+        async def upstream(request):
+            async for frame in _dispatch_stream_response()(request):
+                if frame.HasField("completion"):
+                    await release.wait()
+                yield frame
+
+        client.dispatch_inference_stream = upstream
+        provider = G8EProvider(internal_http_client=client)
+        stream = provider.generate_content_stream_primary(
+            "gemma3:4b", _contents(), PrimaryLLMSettings()
+        )
+        try:
+            first = await asyncio.wait_for(anext(stream), timeout=1)
+            assert first.text == "generated output"
+            assert provider.governed_dispatch_evidence is None
+            release.set()
+            rest = [chunk async for chunk in stream]
+            assert len(rest) == 1
+            assert rest[0].finish_reason == "stop"
+            assert provider.response_artifact is not None
+            assert provider.response_artifact.received_complete is True
+        finally:
+            release.set()
+            await stream.aclose()
+
+    @pytest.mark.asyncio
+    async def test_stream_with_invalid_receipt_never_emits_tool_calls(self):
+        response = _tool_call_response()
+        response.receipt.result_summary = "invalid"
+        client = _client()
+        client.dispatch_inference_stream = _dispatch_stream_response(response)
+        provider = G8EProvider(internal_http_client=client)
+
+        async def consume_stream() -> list:
+            return [
+                chunk
+                async for chunk in provider.generate_content_stream_primary(
+                    "gemma3:4b", _contents(), PrimaryLLMSettings()
+                )
+            ]
+
+        with pytest.raises(ValidationError):
+            await consume_stream()
+        assert provider.response_artifact is not None
+        assert provider.response_artifact.received_complete is True
+
+    @pytest.mark.asyncio
+    async def test_stream_parser_failure_retains_later_frames(self):
+        client = _client()
+
+        async def upstream(request):
+            async for frame in _dispatch_stream_response()(request):
+                if frame.HasField("progress"):
+                    frame.progress.parts[0].ClearField("text")
+                yield frame
+                await asyncio.sleep(0)
+
+        client.dispatch_inference_stream = upstream
+        provider = G8EProvider(internal_http_client=client)
+        with pytest.raises(ValidationError, match="unspecified part"):
+            async for _ in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            ):
+                pass
+        artifact = provider.response_artifact
+        assert artifact is not None
+        assert artifact.received_complete is True
+        assert len(artifact.raw_frames) == 2
+        assert '"completion"' in artifact.raw_frames[-1]
+
+    @pytest.mark.asyncio
+    async def test_stream_rejects_progress_that_differs_from_verified_result(self):
+        client = _client()
+
+        async def upstream(request):
+            async for frame in _dispatch_stream_response()(request):
+                if frame.HasField("progress"):
+                    frame.progress.parts[0].text = "different"
+                yield frame
+
+        client.dispatch_inference_stream = upstream
+        provider = G8EProvider(internal_http_client=client)
+        with pytest.raises(ValidationError, match="differs from the terminal result"):
+            async for _ in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            ):
+                pass
+        assert provider.governed_dispatch_evidence is None
+
+    @pytest.mark.asyncio
+    async def test_closing_stream_cancels_and_joins_ingestion(self):
+        closed = asyncio.Event()
+        pending = asyncio.Event()
+        client = _client()
+
+        async def upstream(request):
+            try:
+                async for frame in _dispatch_stream_response()(request):
+                    if frame.HasField("completion"):
+                        await pending.wait()
+                    yield frame
+            finally:
+                closed.set()
+
+        client.dispatch_inference_stream = upstream
+        provider = G8EProvider(internal_http_client=client)
+        stream = provider.generate_content_stream_primary(
+            "gemma3:4b", _contents(), PrimaryLLMSettings()
+        )
+        first = await asyncio.wait_for(anext(stream), timeout=1)
+        assert first.text == "generated output"
+        await stream.aclose()
+        assert closed.is_set()
+        artifact = provider.response_artifact
+        assert artifact is not None
+        assert artifact.received_complete is False
+
+    @pytest.mark.asyncio
+    async def test_stream_capture_limit_fails_with_partial_evidence(self, monkeypatch):
+        monkeypatch.setattr("app.llm.providers.g8e._MAX_STREAM_CAPTURE_BYTES", 1)
+        provider = G8EProvider(internal_http_client=_client())
+        with pytest.raises(ValidationError, match="capture limit"):
+            async for _ in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            ):
+                pass
+        artifact = provider.response_artifact
+        assert artifact is not None
+        assert artifact.received_complete is False
+        assert artifact.raw_frames == []
+
+    @pytest.mark.asyncio
     async def test_stream_failure_frame_fails_closed(self):
         async def dispatch_stream(_request):
             yield InferenceDispatchStreamFrame(
@@ -801,7 +937,9 @@ class TestG8EProviderToolDeclarationEvidence:
         provider = G8EProvider(internal_http_client=client)
 
         await provider.generate_content_primary(
-            "gemma3:4b", _contents(), _tool_settings("recursive_grep_search", "file_read_on_operator")
+            "gemma3:4b",
+            _contents(),
+            _tool_settings("recursive_grep_search", "file_read_on_operator"),
         )
 
         request = client.dispatch_inference.await_args.args[0]
@@ -855,6 +993,69 @@ class TestG8EProviderToolDeclarationEvidence:
             )
 
         assert provider.declared_tool_names == ["recursive_grep_search"]
+
+
+class TestG8EProviderContextOverflow:
+    """The Gateway's typed context-overflow rejection is a distinct, typed outcome."""
+
+    _BODY = '{"error":"inference: context window exceeded"}'
+
+    @pytest.mark.asyncio
+    async def test_http_rejection_raises_context_window_exceeded(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(side_effect=_http_rejection(422, self._BODY))
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ContextWindowExceededError) as raised:
+            await provider.generate_content_primary("qwen3.5:4b", _contents(), _tool_settings())
+
+        assert raised.value.model == "qwen3.5:4b"
+        assert raised.value.num_ctx == LLM_OLLAMA_DEFAULT_NUM_CTX
+        assert not isinstance(raised.value, ToolsNotSupportedError)
+
+    @pytest.mark.asyncio
+    async def test_streaming_http_rejection_raises_context_window_exceeded(self):
+        async def dispatch_stream(_request):
+            raise _http_rejection(422, self._BODY)
+            yield  # pragma: no cover - makes this an async generator
+
+        client = _client()
+        client.dispatch_inference_stream = dispatch_stream
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ContextWindowExceededError):
+            async for _ in provider.generate_content_stream_primary(
+                "qwen3.5:4b", _contents(), _tool_settings()
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_failure_frame_raises_context_window_exceeded(self):
+        async def dispatch_stream(_request):
+            yield InferenceDispatchStreamFrame(
+                failure=InferenceDispatchStreamFailure(reason="inference: context window exceeded")
+            )
+
+        client = _client()
+        client.dispatch_inference_stream = dispatch_stream
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ContextWindowExceededError):
+            async for _ in provider.generate_content_stream_primary(
+                "qwen3.5:4b", _contents(), _tool_settings()
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_other_gateway_rejection_is_not_translated(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(
+            side_effect=_http_rejection(502, '{"error":"inference: backend unavailable"}')
+        )
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(NetworkError):
+            await provider.generate_content_primary("qwen3.5:4b", _contents(), _tool_settings())
 
 
 class TestG8EProviderToolDeclarationRejection:

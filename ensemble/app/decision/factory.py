@@ -54,7 +54,7 @@ def get_decision_provider(settings: LLMSettings) -> DecisionProvider:
         endpoint=endpoint,
         default_model=model,
     )
-    provider._is_cached_singleton = True
+    provider.mark_cached_singleton()
     _provider_cache[cache_key] = provider
     return provider
 

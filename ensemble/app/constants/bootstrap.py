@@ -30,28 +30,26 @@ class BootstrapSettings:
     ca_cert_path: str | None = None
 
 
-_current = BootstrapSettings()
+class _BootstrapState:
+    """Mutable holder for the process bootstrap settings."""
+
+    current: BootstrapSettings = BootstrapSettings()
 
 
 def get_bootstrap() -> BootstrapSettings:
     """Return the bootstrap settings for this process."""
-    return _current
+    return _BootstrapState.current
 
 
 def configure_bootstrap(settings: BootstrapSettings) -> None:
-    """Install the bootstrap settings and re-resolve the cached paths."""
-    global _current
-    _current = settings
-    _reload_paths()
+    """Install the bootstrap settings.
+
+    ``app.constants.paths`` caches resolved paths per bootstrap settings
+    instance, so installing new settings re-resolves paths on next access.
+    """
+    _BootstrapState.current = settings
 
 
 def reset_bootstrap() -> None:
     """Restore the in-code defaults. Used by tests for isolation."""
     configure_bootstrap(BootstrapSettings())
-
-
-def _reload_paths() -> None:
-    # Imported lazily: app.constants.paths reads these settings at resolution time.
-    from app.constants.paths import reload_paths
-
-    reload_paths()

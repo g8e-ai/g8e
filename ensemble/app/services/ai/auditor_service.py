@@ -12,54 +12,51 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NoReturn
 
-from app.errors import OllamaEmptyResponseError
-from app.models.base import G8eBaseModel
-from app.models.agent import OperatorContext
-from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment, ReputationSignRequest
-from app.models.http_context import RequestContext
-from app.services.data.reputation_data_service import ReputationDataService
-from app.utils.hashing.merkle import leaf_bytes, merkle_root
 from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    EventType,
     AuditorReason,
-    ConsensusAuditStatus,
     ConsensusAuditMode,
+    ConsensusAuditStatus,
+    EventType,
 )
 from app.constants.generated_status import CommandErrorType
-from app.llm.prompts import (
-    build_tribunal_auditor_prompt,
-    build_tribunal_auditor_context,
-    build_tribunal_prompt_fields,
-)
-from app.llm.llm_types import Content, Part, Role, ResponseFormat
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm.llm_types import Content, Part, ResponseFormat, Role
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
+from app.llm.prompts import (
+    build_tribunal_auditor_context,
+    build_tribunal_auditor_prompt,
+    build_tribunal_prompt_fields,
+)
 from app.llm.provider import LLMProvider
-from app.models.http_context import G8eHttpContext
+from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
-    CandidateCommand,
     AuditorClusterInfo,
-    TribunalAuditorFailedError,
-    TribunalAuditorStartedPayload,
     TribunalAuditorCompletedPayload,
+    TribunalAuditorFailedError,
     TribunalAuditorFailedPayload,
+    TribunalAuditorStartedPayload,
     VoteBreakdown,
 )
-from app.utils.agent_persona_loader import AgentPersona
+from app.models.base import G8eBaseModel
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.model_configs import get_model_config
 from app.models.model_telemetry import ModelCallTelemetry
+from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment, ReputationSignRequest
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+from app.services.data.reputation_data_service import ReputationDataService
+from app.utils.agent_persona_loader import AgentPersona
+from app.utils.hashing.merkle import leaf_bytes, merkle_root
 
 if TYPE_CHECKING:
     from app.services.ai.generator import TribunalEmitter
-from app.utils.json_utils import extract_json_from_text
-from app.utils.validation.safety import validate_command_safety
-
 # Internal import for normalisation
 from app.utils.command import normalise_command
+from app.utils.json_utils import extract_json_from_text
+from app.utils.validation.safety import validate_command_safety
 
 logger = logging.getLogger(__name__)
 
@@ -140,37 +137,43 @@ def parse_auditor_response(
         revised_cmd = str(revised_raw) if revised_raw is not None else None
         swap_id = str(swap_to_cluster) if swap_to_cluster is not None else None
 
-        # Mode-specific validation
-        if mode == ConsensusAuditMode.UNANIMOUS:
-            if status not in (ConsensusAuditStatus.OK, ConsensusAuditStatus.REVISED):
-                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
-            if swap_to_cluster:
-                raise ValueError(f"Auditor returned swap_to_cluster in {mode!r} mode")
-        elif mode == ConsensusAuditMode.TIED:
-            if status == ConsensusAuditStatus.OK:
-                raise ValueError(f"invalid status {status!r} for mode {mode!r} (must disambiguate)")
-            if status not in (ConsensusAuditStatus.SWAP, ConsensusAuditStatus.REVISED):
-                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
-        elif mode == ConsensusAuditMode.MAJORITY:
-            if status not in (
-                ConsensusAuditStatus.OK,
-                ConsensusAuditStatus.SWAP,
-                ConsensusAuditStatus.REVISED,
-            ):
-                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
-
-        if status == ConsensusAuditStatus.SWAP:
-            if not swap_to_cluster:
-                raise ValueError("Auditor returned status='swap' but no swap_to_cluster")
-            if swap_to_cluster not in cluster_ids:
-                raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
-
-        if status == ConsensusAuditStatus.REVISED and not revised_cmd:
-            raise ValueError("Auditor returned status='revised' but no revised_command")
+        _validate_auditor_status(mode, status, swap_to_cluster, revised_cmd, cluster_ids)
 
         return status, revised_cmd, swap_id
     except (AttributeError, TypeError) as exc:
         raise ValueError(f"Auditor returned malformed JSON structure: {exc!s}") from exc
+
+
+def _validate_auditor_status(
+    mode: ConsensusAuditMode,
+    status: ConsensusAuditStatus,
+    swap_to_cluster: str | None,
+    revised_command: str | None,
+    cluster_ids: list[str],
+) -> None:
+    """Validate parsed actions against the consensus mode and cluster set."""
+    allowed_statuses = {
+        ConsensusAuditMode.UNANIMOUS: (ConsensusAuditStatus.OK, ConsensusAuditStatus.REVISED),
+        ConsensusAuditMode.TIED: (ConsensusAuditStatus.SWAP, ConsensusAuditStatus.REVISED),
+        ConsensusAuditMode.MAJORITY: (
+            ConsensusAuditStatus.OK,
+            ConsensusAuditStatus.SWAP,
+            ConsensusAuditStatus.REVISED,
+        ),
+    }
+    if mode == ConsensusAuditMode.TIED and status == ConsensusAuditStatus.OK:
+        raise ValueError(f"invalid status {status!r} for mode {mode!r} (must disambiguate)")
+    if status not in allowed_statuses[mode]:
+        raise ValueError(f"invalid status {status!r} for mode {mode!r}")
+    if mode == ConsensusAuditMode.UNANIMOUS and swap_to_cluster:
+        raise ValueError(f"Auditor returned swap_to_cluster in {mode!r} mode")
+    if status == ConsensusAuditStatus.SWAP:
+        if not swap_to_cluster:
+            raise ValueError("Auditor returned status='swap' but no swap_to_cluster")
+        if swap_to_cluster not in cluster_ids:
+            raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
+    if status == ConsensusAuditStatus.REVISED and not revised_command:
+        raise ValueError("Auditor returned status='revised' but no revised_command")
 
 
 def build_auditor_prompt(
@@ -240,20 +243,19 @@ async def call_auditor_llm(
         response_format=response_format,
     )
 
-    if settings is None:
-        raise ValueError(f"Failed to generate LiteLLM settings for model {model}")
-
     current_prompt = prompt
     if attempt > 0:
         current_prompt += "\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY a valid JSON object. No Markdown fences, no prose, no preamble."
 
     contents = [Content(role=Role.USER, parts=[Part.from_text(current_prompt)])]
     prepare_provider_call(provider, g8e_context=g8e_context, retry_count=attempt)
-    input_artifact_hash = model_boundary_hash({
-        "model": model,
-        "contents": contents,
-        "settings": settings,
-    })
+    input_artifact_hash = model_boundary_hash(
+        {
+            "model": model,
+            "contents": contents,
+            "settings": settings,
+        }
+    )
     monotonic_start = time.monotonic()
     try:
         response = await provider.generate_content_lite(
@@ -328,24 +330,9 @@ async def call_auditor_llm(
     )
 
 
-async def run_auditor(
-    provider: LLMProvider,
-    model: str,
-    request: str,
-    guidelines: str,
-    mode: ConsensusAuditMode,
-    vote_winner: str | None,
-    vote_breakdown: VoteBreakdown,
-    tied_candidates: list[CandidateCommand] | None,
-    operator_context: OperatorContext | None,
-    emitter: TribunalEmitter,
-    command_constraints_message: str,
-    auditor_persona: AgentPersona,
-    whitelisting_enabled: bool = False,
-    blacklisting_enabled: bool = False,
-) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:
-    """Run the dissent-aware Auditor (Deprecated: Use stage orchestrator instead)."""
-    # Prepare cluster info and mapping
+def _prepare_legacy_audit_clusters(
+    vote_winner: str | None, vote_breakdown: VoteBreakdown
+) -> tuple[str, list[AuditorClusterInfo], dict[str, str], dict[str, list[str]]]:
     clusters: list[AuditorClusterInfo] = []
     cluster_to_cmd: dict[str, str] = {}
     cluster_to_members: dict[str, list[str]] = {}
@@ -378,6 +365,167 @@ async def run_auditor(
         )
         idx += 1
 
+    return target_cmd, clusters, cluster_to_cmd, cluster_to_members
+
+
+async def _handle_legacy_auditor_decision(
+    emitter: TribunalEmitter,
+    request: str,
+    status: ConsensusAuditStatus,
+    revised_raw: str | None,
+    swap_to_cluster: str | None,
+    mode: ConsensusAuditMode,
+    target_cmd: str,
+    cluster_to_cmd: dict[str, str],
+    cluster_to_members: dict[str, list[str]],
+    whitelisting_enabled: bool,
+    blacklisting_enabled: bool,
+    operator_context: OperatorContext | None,
+    auditor_start_time: float,
+    correlation_id: str | None,
+) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None] | None:
+    if status == ConsensusAuditStatus.OK:
+        total_duration_ms = (time.time() - auditor_start_time) * 1000
+        logger.info(
+            "[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f",
+            total_duration_ms,
+        )
+        await emitter.emit(
+            EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
+            TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
+            correlation_id=correlation_id,
+        )
+        return True, target_cmd, None, AuditorReason.OK, None, None
+
+    if status == ConsensusAuditStatus.SWAP and swap_to_cluster:
+        final_cmd = cluster_to_cmd[swap_to_cluster]
+        swap_to_member = cluster_to_members[swap_to_cluster][0]  # Pick first member for telemetry
+
+        # RE-VALIDATE SWAP TARGET SAFETY (L1Doctrine Technical Bedrock)
+        safety_result = validate_command_safety(
+            final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context
+        )
+        if not safety_result.is_safe:
+            reason = (
+                AuditorReason.WHITELIST_VIOLATION
+                if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION
+                else AuditorReason.NO_VALID_REVISION
+            )
+            await fail_auditor(
+                emitter,
+                request,
+                reason,
+                f"Swap target technical safety failure: {safety_result.error_message}",
+                target_cmd,
+            )
+
+        total_duration_ms = (time.time() - auditor_start_time) * 1000
+        logger.info(
+            "[TRIBUNAL-AUDITOR] Completed with status=swap total_duration_ms=%.2f",
+            total_duration_ms,
+        )
+        await emitter.emit(
+            EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
+            TribunalAuditorCompletedPayload(
+                passed=True,
+                reason=AuditorReason.SWAPPED_TO_DISSENTER,
+                swap_to_cluster=swap_to_cluster,
+                swap_to_member=swap_to_member,
+            ),
+            correlation_id=correlation_id,
+        )
+        return (
+            True,
+            final_cmd,
+            None,
+            AuditorReason.SWAPPED_TO_DISSENTER,
+            swap_to_cluster,
+            swap_to_member,
+        )
+
+    # Handle revised
+    if status == ConsensusAuditStatus.REVISED and revised_raw:
+        revised_str = str(revised_raw)
+        revised = normalise_command(revised_str)
+        if not revised:
+            await fail_auditor(
+                emitter,
+                request,
+                AuditorReason.NO_VALID_REVISION,
+                "Empty revision",
+                target_cmd,
+            )
+
+    # RE-VALIDATE REVISION SAFETY (L1Doctrine Technical Bedrock)
+    # revised is defined if status == "revised" and normalise_command succeeded
+    if status == ConsensusAuditStatus.REVISED:
+        # Ensure revised is bound for safety, though normalise_command check above handles it
+        revised_final = locals().get("revised")
+        if not revised_final:
+            await fail_auditor(
+                emitter,
+                request,
+                AuditorReason.NO_VALID_REVISION,
+                "Missing revision variable",
+                target_cmd,
+            )
+
+        safety_result = validate_command_safety(
+            revised_final, whitelisting_enabled, blacklisting_enabled, operator_context
+        )
+        if not safety_result.is_safe:
+            reason = (
+                AuditorReason.WHITELIST_VIOLATION
+                if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION
+                else AuditorReason.NO_VALID_REVISION
+            )
+            await fail_auditor(
+                emitter,
+                request,
+                reason,
+                f"Revision technical safety failure: {safety_result.error_message}",
+                target_cmd,
+            )
+
+        reason = (
+            AuditorReason.REVISED_FROM_DISSENT
+            if mode in (ConsensusAuditMode.MAJORITY, ConsensusAuditMode.TIED)
+            else AuditorReason.REVISED
+        )
+        total_duration_ms = (time.time() - auditor_start_time) * 1000
+        logger.info(
+            "[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f",
+            total_duration_ms,
+        )
+        await emitter.emit(
+            EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
+            TribunalAuditorCompletedPayload(passed=False, revision=revised_final, reason=reason),
+            correlation_id=correlation_id,
+        )
+        return False, revised_final, revised_final, reason, None, None
+    return None
+
+
+async def run_auditor(
+    provider: LLMProvider,
+    model: str,
+    request: str,
+    guidelines: str,
+    mode: ConsensusAuditMode,
+    vote_winner: str | None,
+    vote_breakdown: VoteBreakdown,
+    operator_context: OperatorContext | None,
+    emitter: TribunalEmitter,
+    command_constraints_message: str,
+    auditor_persona: AgentPersona,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
+) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:
+    """Run the dissent-aware Auditor (Deprecated: Use stage orchestrator instead)."""
+    target_cmd, clusters, cluster_to_cmd, cluster_to_members = _prepare_legacy_audit_clusters(
+        vote_winner, vote_breakdown
+    )
+
     correlation_id = getattr(emitter, "correlation_id", None)
 
     await emitter.emit(
@@ -403,139 +551,44 @@ async def run_auditor(
 
     for attempt in range(max_attempts):
         try:
-            call_result = await call_auditor_llm(
-                provider, model, prompt, auditor_persona, attempt
-            )
+            call_result = await call_auditor_llm(provider, model, prompt, auditor_persona, attempt)
             if call_result.error:
                 raise call_result.error
             status, revised_raw, swap_to_cluster = parse_auditor_response(
                 call_result.raw_text, mode, list(cluster_to_cmd.keys())
             )
 
-            if status == ConsensusAuditStatus.OK:
-                total_duration_ms = (time.time() - auditor_start_time) * 1000
-                logger.info(
-                    "[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f",
-                    total_duration_ms,
-                )
-                await emitter.emit(
-                    EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
-                    TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
-                    correlation_id=correlation_id,
-                )
-                return True, target_cmd, None, AuditorReason.OK, None, None
+            decision = await _handle_legacy_auditor_decision(
+                emitter,
+                request,
+                status,
+                revised_raw,
+                swap_to_cluster,
+                mode,
+                target_cmd,
+                cluster_to_cmd,
+                cluster_to_members,
+                whitelisting_enabled,
+                blacklisting_enabled,
+                operator_context,
+                auditor_start_time,
+                correlation_id,
+            )
+            if decision is not None:
+                return decision
 
-            if status == ConsensusAuditStatus.SWAP and swap_to_cluster:
-                final_cmd = cluster_to_cmd[swap_to_cluster]
-                swap_to_member = cluster_to_members[swap_to_cluster][
-                    0
-                ]  # Pick first member for telemetry
-
-                # RE-VALIDATE SWAP TARGET SAFETY (L1Doctrine Technical Bedrock)
-                safety_result = validate_command_safety(
-                    final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context
-                )
-                if not safety_result.is_safe:
-                    reason = (
-                        AuditorReason.WHITELIST_VIOLATION
-                        if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION
-                        else AuditorReason.NO_VALID_REVISION
-                    )
-                    await fail_auditor(
-                        emitter,
-                        request,
-                        reason,
-                        f"Swap target technical safety failure: {safety_result.error_message}",
-                        target_cmd,
-                    )
-
-                total_duration_ms = (time.time() - auditor_start_time) * 1000
-                logger.info(
-                    "[TRIBUNAL-AUDITOR] Completed with status=swap total_duration_ms=%.2f",
-                    total_duration_ms,
-                )
-                await emitter.emit(
-                    EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
-                    TribunalAuditorCompletedPayload(
-                        passed=True,
-                        reason=AuditorReason.SWAPPED_TO_DISSENTER,
-                        swap_to_cluster=swap_to_cluster,
-                        swap_to_member=swap_to_member,
-                    ),
-                    correlation_id=correlation_id,
-                )
-                return (
-                    True,
-                    final_cmd,
-                    None,
-                    AuditorReason.SWAPPED_TO_DISSENTER,
-                    swap_to_cluster,
-                    swap_to_member,
-                )
-
-            # Handle revised
-            if status == ConsensusAuditStatus.REVISED and revised_raw:
-                revised_str = str(revised_raw)
-                revised = normalise_command(revised_str)
-                if not revised:
-                    await fail_auditor(
-                        emitter,
-                        request,
-                        AuditorReason.NO_VALID_REVISION,
-                        "Empty revision",
-                        target_cmd,
-                    )
-
-            # RE-VALIDATE REVISION SAFETY (L1Doctrine Technical Bedrock)
-            # revised is defined if status == "revised" and normalise_command succeeded
-            if status == ConsensusAuditStatus.REVISED:
-                # Ensure revised is bound for safety, though normalise_command check above handles it
-                revised_final = locals().get("revised")
-                if not revised_final:
-                    await fail_auditor(
-                        emitter,
-                        request,
-                        AuditorReason.NO_VALID_REVISION,
-                        "Missing revision variable",
-                        target_cmd,
-                    )
-
-                safety_result = validate_command_safety(
-                    revised_final, whitelisting_enabled, blacklisting_enabled, operator_context
-                )
-                if not safety_result.is_safe:
-                    reason = (
-                        AuditorReason.WHITELIST_VIOLATION
-                        if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION
-                        else AuditorReason.NO_VALID_REVISION
-                    )
-                    await fail_auditor(
-                        emitter,
-                        request,
-                        reason,
-                        f"Revision technical safety failure: {safety_result.error_message}",
-                        target_cmd,
-                    )
-
-                reason = (
-                    AuditorReason.REVISED_FROM_DISSENT
-                    if mode in (ConsensusAuditMode.MAJORITY, ConsensusAuditMode.TIED)
-                    else AuditorReason.REVISED
-                )
-                total_duration_ms = (time.time() - auditor_start_time) * 1000
-                logger.info(
-                    "[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f",
-                    total_duration_ms,
-                )
-                await emitter.emit(
-                    EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
-                    TribunalAuditorCompletedPayload(
-                        passed=False, revision=revised_final, reason=reason
-                    ),
-                    correlation_id=correlation_id,
-                )
-                return False, revised_final, revised_final, reason, None, None
-
+        except ContextWindowExceededError as exc:
+            logger.error(
+                "[TRIBUNAL-AUDITOR] Prompt exceeded the model context window, not retrying: %s",
+                exc,
+            )
+            await fail_auditor(
+                emitter,
+                request,
+                AuditorReason.CONTEXT_OVERFLOW,
+                f"The conversation exceeded the model's context window: {exc!s}",
+                target_cmd,
+            )
         except (ValueError, OllamaEmptyResponseError) as exc:
             last_error = exc
             logger.warning(
@@ -572,11 +625,10 @@ async def run_auditor(
             logger.info(
                 "[TRIBUNAL-AUDITOR] Unexpected error total_duration_ms=%.2f", total_duration_ms
             )
-            logger.error(
+            logger.exception(
                 "[TRIBUNAL-AUDITOR] Unexpected error: %s (raw_text=%r)",
                 exc,
                 raw_text[:200] if raw_text else "None",
-                exc_info=True,
             )
             await fail_auditor(emitter, request, AuditorReason.AUDITOR_ERROR, str(exc), target_cmd)
 
@@ -618,9 +670,13 @@ async def commit_reputation(
     latest = await reputation_data_service.get_latest_commitment()
     prev_root = latest.merkle_root if latest is not None else GENESIS_PREV_ROOT
 
-    signature = await reputation_data_service.sign_commitment(ReputationSignRequest(
-        merkle_root=root, prev_root=prev_root, tribunal_command_id=tribunal_command_id,
-    ))
+    signature = await reputation_data_service.sign_commitment(
+        ReputationSignRequest(
+            merkle_root=root,
+            prev_root=prev_root,
+            tribunal_command_id=tribunal_command_id,
+        )
+    )
 
     commitment = ReputationCommitment(
         investigation_id=investigation_id,

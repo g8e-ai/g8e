@@ -31,10 +31,7 @@ def test_g8ee_outbound_payload_union_is_exhaustive():
     # Get the types included in the Union
     union_types = get_args(G8eOutboundPayload)
 
-    missing = []
-    for cls in payload_classes:
-        if cls not in union_types:
-            missing.append(cls.__name__)
+    missing = [cls.__name__ for cls in payload_classes if cls not in union_types]
 
     assert not missing, (
         f"G8eOutboundPayload union is missing these request payload types: {', '.join(missing)}. "

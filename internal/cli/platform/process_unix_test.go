@@ -361,7 +361,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 		finder := &mockProcessFinder{}
 		sleeper := &mockSleeper{}
 		tickerFactory := &mockTickerFactory{}
-		err := pm.stopProcessWithDeps(0, "test", finder, sleeper, tickerFactory, 10*time.Second)
+		err := pm.stopProcessWithDeps(0, finder, sleeper, tickerFactory, 10*time.Second)
 		if err != nil {
 			t.Errorf("expected nil for PID 0, got %v", err)
 		}
@@ -375,7 +375,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 		}
 		sleeper := &mockSleeper{}
 		tickerFactory := &mockTickerFactory{}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 10*time.Second)
+		err := pm.stopProcessWithDeps(123, finder, sleeper, tickerFactory, 10*time.Second)
 		if err != nil {
 			t.Errorf("expected nil when process not running, got %v", err)
 		}
@@ -400,7 +400,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 		}
 		sleeper := &mockSleeper{}
 		tickerFactory := &mockTickerFactory{}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 10*time.Second)
+		err := pm.stopProcessWithDeps(123, finder, sleeper, tickerFactory, 10*time.Second)
 		if err == nil {
 			t.Error("expected error when FindProcess fails")
 		}
@@ -421,7 +421,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 		}
 		sleeper := &mockSleeper{}
 		tickerFactory := &mockTickerFactory{}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 10*time.Second)
+		err := pm.stopProcessWithDeps(123, finder, sleeper, tickerFactory, 10*time.Second)
 		if err == nil {
 			t.Error("expected error when SIGTERM fails")
 		}
@@ -459,7 +459,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 				}
 			},
 		}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 10*time.Second)
+		err := pm.stopProcessWithDeps(123, finder, sleeper, tickerFactory, 10*time.Second)
 		if err != nil {
 			t.Errorf("expected nil when process exits after SIGTERM, got %v", err)
 		}
@@ -499,7 +499,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 		// Use a short timeout by manipulating time.After indirectly
 		// Since we can't mock time.After, we'll just test the SIGKILL path
 		// by ensuring the ticker never fires
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 50*time.Millisecond)
+		err := pm.stopProcessWithDeps(123, finder, sleeper, tickerFactory, 50*time.Millisecond)
 		// With a 50ms timeout, the SIGKILL path is exercised quickly.
 		_ = err
 	})
@@ -532,7 +532,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 				}
 			},
 		}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 50*time.Millisecond)
+		err := pm.stopProcessWithDeps(123, finder, sleeper, tickerFactory, 50*time.Millisecond)
 		_ = err
 	})
 
@@ -570,7 +570,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 				}
 			},
 		}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 50*time.Millisecond)
+		err := pm.stopProcessWithDeps(123, finder, sleeper, tickerFactory, 50*time.Millisecond)
 		_ = err
 	})
 }

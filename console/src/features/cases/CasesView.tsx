@@ -21,7 +21,13 @@ import {
   setApprovalState,
   type TimelineState,
 } from '../../lib/timeline';
-import type { CaseSummary, ChatStartedResponse, ChatStopResponse, Investigation } from '../../lib/types';
+import {
+  InvestigationStatus,
+  type CaseSummary,
+  type ChatStartedResponse,
+  type ChatStopResponse,
+  type Investigation,
+} from '../../lib/types';
 import { useApprovals } from '../../state/approvals';
 import { useStream, useStreamEvents } from '../../state/stream';
 import { errorText, useToast } from '../../state/toast';
@@ -259,7 +265,7 @@ export function CasesView({
           setCaseInvestigations((list) =>
             list.some((i) => i.id === res.investigation_id)
               ? list
-              : [...list, { id: res.investigation_id, case_id: res.case_id, case_title: '', user_id: '', status: 'open', created_at: new Date().toISOString() }],
+              : [...list, { id: res.investigation_id, case_id: res.case_id, case_title: '', user_id: '', status: InvestigationStatus.Open, created_at: new Date().toISOString() }],
           );
         }
         scheduleCasesReload();

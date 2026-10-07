@@ -32,11 +32,11 @@ import (
 // reports an unknown remote outcome rather than a clean timeout.
 const ProviderRequestTimeout = 5 * time.Minute
 
-// ProviderStatusTimeout bounds the read-only startup readiness check against
+// ProviderStatusTimeout bounds an explicit read-only readiness check against
 // the remote provider. It is deliberately shorter than
 // ProviderRequestTimeout: a /api/tags round trip is cheap, and an
-// unreachable provider must fail operator startup promptly rather than
-// after the generation deadline.
+// status request should finish before the generation deadline. Provider
+// availability does not gate Operator startup.
 const ProviderStatusTimeout = 30 * time.Second
 
 // defaultMaxResponseBytes bounds every response body read from the remote
@@ -325,9 +325,23 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	}
 	defer resp.Body.Close()
 
-	// Receive and preserve the entire bounded body before interpreting it.
-	// Neither response parsing nor progress delivery can interrupt ingestion.
-	responseBody, received, readErr := b.receiveResponse(resp.Body, requestStartedAt)
+	// Ingestion owns the bounded raw bytes independently of parsing and delivery.
+	// A slow reporter or invalid frame cannot truncate the provider artifact.
+	capture := newProviderResponseCapture(b.maxResponseBytes, requestStartedAt)
+	go capture.receive(resp.Body)
+	var chatResp ollamaChatResponse
+	var parts []*operatorv1.InferenceResponsePart
+	var timeToFirstToken *int64
+	var decodeErr error
+	if resp.StatusCode == http.StatusOK {
+		var reporter ProgressReporter
+		if req.Stream {
+			reporter = ProgressReporterFromContext(ctx)
+		}
+		allowParallelToolCalls := req.ParallelToolCalls == nil || *req.ParallelToolCalls
+		chatResp, parts, timeToFirstToken, decodeErr = b.decodeChatStream(capture, capture.arrivalTime, allowParallelToolCalls, req.ContextLimit, req.ProviderAttemptID, reporter)
+	}
+	responseBody, readErr := capture.result()
 	if store := attemptStoreFromContext(ctx); store != nil {
 		if err := store.SaveRawResponse(context.WithoutCancel(ctx), req.ProviderAttemptID, responseBody); err != nil {
 			return nil, errors.Join(readErr, fmt.Errorf("ollama_backend: save raw response: %w", err))
@@ -357,14 +371,8 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		}
 	}
 
-	allowParallelToolCalls := req.ParallelToolCalls == nil || *req.ParallelToolCalls
-	var reporter ProgressReporter
-	if req.Stream {
-		reporter = ProgressReporterFromContext(ctx)
-	}
-	chatResp, parts, timeToFirstToken, err := b.decodeChatStream(responseBody, received, allowParallelToolCalls, req.ProviderAttemptID, reporter)
-	if err != nil {
-		return nil, err
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	finishReason := chatResp.DoneReason
@@ -382,6 +390,13 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		if promptTokens < 0 || completionTokens < 0 {
 			return nil, fmt.Errorf("ollama_backend: generate: token usage: %w", constants.ErrInferenceProviderResponseInvalid)
 		}
+	}
+	// Ollama truncates an over-long prompt to num_ctx and still answers 200, so
+	// a prompt that fills the window is indistinguishable from a silently
+	// truncated one. Fail typed rather than score or act on a degraded answer.
+	// The raw response is already preserved above.
+	if ollamaPromptFillsContext(chatResp.PromptEvalCount, req.ContextLimit) {
+		return nil, ollamaContextOverflowError(promptTokens, *req.ContextLimit)
 	}
 	cacheTokens := chatResp.PromptEvalCachedCount
 	if cacheTokens != nil && *cacheTokens < 0 {
@@ -432,6 +447,17 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		NormalizedRequestHash: normalizedRequestHash,
 		OutputHash:            outputHash,
 	}, nil
+}
+
+// ollamaPromptFillsContext reports whether the evaluated prompt reached the
+// requested num_ctx. It is false when either value is unreported, because the
+// provider's own default window is then unknown.
+func ollamaPromptFillsContext(promptEvalCount, contextLimit *int32) bool {
+	return promptEvalCount != nil && contextLimit != nil && *promptEvalCount >= *contextLimit
+}
+
+func ollamaContextOverflowError(promptTokens, contextLimit int32) error {
+	return fmt.Errorf("ollama_backend: generate: %w: prompt_tokens=%d context_limit=%d", constants.ErrInferenceContextOverflow, promptTokens, contextLimit)
 }
 
 func inferenceMessagesToOllama(messages []*operatorv1.InferenceMessage) ([]ollamaChatMessage, error) {
@@ -583,34 +609,15 @@ type responseRead struct {
 	elapsedNS int64
 }
 
-func (b *OllamaBackend) receiveResponse(body io.Reader, startedAt time.Time) ([]byte, []responseRead, error) {
-	limited := io.LimitReader(body, b.maxResponseBytes+1)
-	var raw bytes.Buffer
-	var received []responseRead
-	buffer := make([]byte, 32<<10)
-	for {
-		n, err := limited.Read(buffer)
-		if n > 0 {
-			raw.Write(buffer[:n])
-			received = append(received, responseRead{endOffset: int64(raw.Len()), elapsedNS: time.Since(startedAt).Nanoseconds()})
-		}
-		if errors.Is(err, io.EOF) {
-			return raw.Bytes(), received, nil
-		}
-		if err != nil {
-			return raw.Bytes(), received, err
-		}
-	}
-}
-
 func (b *OllamaBackend) decodeChatStream(
-	body []byte,
-	received []responseRead,
+	body io.Reader,
+	arrivalTime func(int64) *int64,
 	allowParallelToolCalls bool,
+	contextLimit *int32,
 	providerAttemptID string,
 	reporter ProgressReporter,
 ) (ollamaChatResponse, []*operatorv1.InferenceResponsePart, *int64, error) {
-	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder := json.NewDecoder(body)
 	parts := make([]*operatorv1.InferenceResponsePart, 0)
 	var terminal *ollamaChatResponse
 	var servedModel string
@@ -645,13 +652,7 @@ func (b *OllamaBackend) decodeChatStream(
 		}
 		if len(eventParts) > 0 {
 			if timeToFirstToken == nil {
-				for _, read := range received {
-					if read.endOffset >= decoder.InputOffset() {
-						duration := read.elapsedNS
-						timeToFirstToken = &duration
-						break
-					}
-				}
+				timeToFirstToken = arrivalTime(decoder.InputOffset())
 			}
 			if reporter != nil {
 				progressSequence++
@@ -676,8 +677,17 @@ func (b *OllamaBackend) decodeChatStream(
 			terminal = &event
 		}
 	}
-	if terminal == nil || terminal.Model == "" || servedModel != terminal.Model || len(parts) == 0 {
-		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: %w", constants.ErrInferenceProviderResponseInvalid)
+	switch {
+	case terminal == nil:
+		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: stream ended without a done event: %w", constants.ErrInferenceProviderResponseInvalid)
+	case terminal.Model == "":
+		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: done event carries no model: %w", constants.ErrInferenceProviderResponseInvalid)
+	case len(parts) == 0 && ollamaPromptFillsContext(terminal.PromptEvalCount, contextLimit):
+		// An over-long prompt that Ollama truncated surfaces as an empty 200;
+		// classify it as overflow before the generic empty-output rejection.
+		return ollamaChatResponse{}, nil, nil, ollamaContextOverflowError(*terminal.PromptEvalCount, *contextLimit)
+	case len(parts) == 0:
+		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: provider produced no text, thinking, or tool call (done_reason %q): %w", terminal.DoneReason, constants.ErrInferenceProviderResponseInvalid)
 	}
 	return *terminal, parts, timeToFirstToken, nil
 }

@@ -20,7 +20,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/audit"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/eval"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gw"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/mcp"
@@ -39,13 +38,13 @@ func TestExecute(t *testing.T) {
 		assert.Contains(t, rootCmd.Short, "g8e Platform Manager")
 		assert.Contains(t, rootCmd.Short, "g8e Gateway")
 		assert.Contains(t, rootCmd.Short, "g8e Operator")
-		assert.Len(t, rootCmd.Commands(), 17)
+		assert.Len(t, rootCmd.Commands(), 16)
 	})
 
 	t.Run("root command has all expected subcommands", func(t *testing.T) {
 		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
-		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "ensemble", "audit", "swagger", "report", "public", "version", "compliance", "eval"}
+		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "docker", "ensemble", "audit", "swagger", "report", "public", "version", "compliance", "eval"}
 		for _, expected := range expectedCommands {
 			found := false
 			for _, cmd := range rootCmd.Commands() {
@@ -82,7 +81,6 @@ func TestExecute(t *testing.T) {
 		assert.Contains(t, output, "operator")
 		assert.Contains(t, output, "vault")
 		assert.Contains(t, output, "test")
-		assert.Contains(t, output, "demos")
 		assert.Contains(t, output, "audit")
 		assert.Contains(t, output, "swagger")
 		assert.Contains(t, output, "eval")
@@ -112,8 +110,8 @@ func TestRootCommandValidation(t *testing.T) {
 			expectedUse:    "g8e",
 			expectedShort:  "g8e Platform Manager",
 			expectedLong:   "zero-trust execution platform",
-			expectedCmds:   []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "ensemble", "audit", "swagger", "report", "public", "tui", "version", "compliance", "eval"},
-			expectedCmdLen: 17,
+			expectedCmds:   []string{"gw", "auth", "mcp", "operator", "vault", "test", "docker", "ensemble", "audit", "swagger", "report", "public", "tui", "version", "compliance", "eval"},
+			expectedCmdLen: 16,
 		},
 	}
 
@@ -180,7 +178,6 @@ func TestSubcommandRegistration(t *testing.T) {
 		assert.NotNil(t, operatorcmd.Cmd(), "operatorCmd should not be nil")
 		assert.NotNil(t, vaultcmd.Cmd(), "vaultCmd should not be nil")
 		assert.NotNil(t, testcmd.Cmd(), "testCmd should not be nil")
-		assert.NotNil(t, demos.Cmd(), "demosCmd should not be nil")
 		assert.NotNil(t, audit.Cmd(), "auditCmd should not be nil")
 		assert.NotNil(t, swagger.Cmd(), "swaggerCmd should not be nil")
 		assert.NotNil(t, eval.Cmd(), "evalCmd should not be nil")
@@ -194,7 +191,6 @@ func TestSubcommandRegistration(t *testing.T) {
 			operatorcmd.Cmd(),
 			vaultcmd.Cmd(),
 			testcmd.Cmd(),
-			demos.Cmd(),
 			audit.Cmd(),
 			swagger.Cmd(),
 			eval.Cmd(),
@@ -257,7 +253,6 @@ func TestRootCommandConsistency(t *testing.T) {
 			operatorcmd.Cmd(),
 			vaultcmd.Cmd(),
 			testcmd.Cmd(),
-			demos.Cmd(),
 			audit.Cmd(),
 			swagger.Cmd(),
 		}

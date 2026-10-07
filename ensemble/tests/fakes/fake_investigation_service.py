@@ -10,11 +10,13 @@
 from unittest.mock import MagicMock
 
 from app.constants import EventType, HistoryActor
-from app.models.http_context import RequestContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import (
+    ConversationHistoryMessage,
     ConversationMessageMetadata,
     EnrichedInvestigationContext,
     InvestigationModel,
+    InvestigationUpdateRequest,
 )
 from app.models.operators import FileOperation
 from app.models.tool_results import CommandInternalResult, FileEditResult
@@ -28,29 +30,42 @@ class FakeInvestigationService:
     """
 
     def __init__(self) -> None:
-        self.operator_actions: list[dict] = []
-        self.command_results: list[dict] = []
-        self.messages: list[dict] = []
+        self.operator_actions: list[dict[str, object]] = []
+        self.command_results: list[dict[str, object]] = []
+        self.messages: list[dict[str, object]] = []
         self._investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
 
     @property
     def investigation_data_service(self) -> InvestigationDataServiceProtocol:
         return self._investigation_data_service
 
-    async def get_investigation_context(self, *args, **kwargs) -> EnrichedInvestigationContext:
+    async def get_investigation_context(
+        self,
+        context: RequestContext,
+        case_id: str | None = None,
+        investigation_id: str | None = None,
+        user_id: str | None = None,
+    ) -> EnrichedInvestigationContext:
         return MagicMock(spec=EnrichedInvestigationContext)
 
-    async def get_investigation(self, investigation_id: str):
+    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
         return None
 
-    async def get_chat_messages(self, investigation_id: str):
+    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
         return []
 
-    async def get_enriched_investigation_context(self, investigation, user_id, g8e_context):
+    async def get_enriched_investigation_context(
+        self, investigation: EnrichedInvestigationContext, user_id: str, g8e_context: G8eHttpContext
+    ) -> EnrichedInvestigationContext:
         return investigation
 
-    async def update_investigation(self, investigation_id, request, actor=None):
-        return None
+    async def update_investigation(
+        self,
+        investigation_id: str,
+        request: InvestigationUpdateRequest,
+        actor: HistoryActor = HistoryActor.SYSTEM,
+    ) -> InvestigationModel:
+        return MagicMock(spec=InvestigationModel)
 
     async def add_history_entry(
         self,
@@ -78,7 +93,6 @@ class FakeInvestigationService:
         command: str,
         result: CommandInternalResult,
         operator_id: str,
-        operator_session_id: str,
         context: RequestContext,
         actor: HistoryActor = HistoryActor.G8EO,
     ) -> InvestigationModel:
@@ -89,7 +103,6 @@ class FakeInvestigationService:
                 "command": command,
                 "result": result,
                 "operator_id": operator_id,
-                "operator_session_id": operator_session_id,
                 "actor": actor,
             }
         )
@@ -116,13 +129,11 @@ class FakeInvestigationService:
         self,
         investigation_id: str,
         execution_id: str,
-        operator_id: str,
         event_type: EventType,
         file_path: str,
         result: FileEditResult,
         operation: FileOperation,
         context: RequestContext,
-        operator_session_id: str,
     ) -> InvestigationModel:
         return MagicMock(spec=InvestigationModel)
 

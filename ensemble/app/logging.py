@@ -11,6 +11,8 @@ import re
 import sys
 from typing import Any
 
+from uvicorn.logging import AccessFormatter
+
 from .models.settings import G8eeAppSettings
 
 PII_FIELDS: list[str] = [
@@ -96,14 +98,6 @@ def redact_message(message: str) -> str:
     return EMAIL_REGEX.sub(lambda m: redact_email(m.group(0)), message)
 
 
-try:
-    from uvicorn.logging import AccessFormatter
-
-    HAS_UVICORN = True
-except ImportError:
-    HAS_UVICORN = False
-    AccessFormatter = object  # type: ignore[assignment,misc]
-
 COMPONENT_PATTERN = re.compile(
     r"(?:"
     r"\/services\/(g8ee|g8e[a-z]+)\/"
@@ -148,60 +142,60 @@ class ComponentFormatter(logging.Formatter):
         }
 
     def format(self, record):
-        if self.component_name:
-            component = self.component_name
-        else:
-            component = ""
-            if hasattr(record, "name") and record.name:
-                logger_parts = record.name.split(".")
-                for i in range(len(logger_parts), 0, -1):
-                    parent_name = ".".join(logger_parts[:i])
-                    if parent_name in _logger_component_registry:
-                        component = _logger_component_registry[parent_name]
-                        break
-
-            if not component:
-                if hasattr(record, "module") and record.module:
-                    match = COMPONENT_PATTERN.search(record.module)
-                    if match:
-                        component = next((g for g in match.groups() if g), "")
-
-                if not component and hasattr(record, "pathname"):
-                    match = COMPONENT_PATTERN.search(record.pathname)
-                    if match:
-                        component = next((g for g in match.groups() if g), "")
-                if not component and hasattr(record, "name"):
-                    match = COMPONENT_PATTERN.search(record.name)
-                    if match:
-                        component = next((g for g in match.groups() if g), "")
-
-        record.component = component
+        record.component = self.component_name or _resolve_component(record)
         if hasattr(record, "msg") and isinstance(record.msg, str):
             record.msg = redact_message(record.msg)
 
         formatted_message = super().format(record)
-        extra_fields = {}
-        for key, value in record.__dict__.items():
-            if key not in self.standard_attributes:
-                extra_fields[key] = value
+        extra_fields = {
+            key: value
+            for key, value in record.__dict__.items()
+            if key not in self.standard_attributes
+        }
 
         if extra_fields:
             extra_fields = redact_pii(extra_fields)
         if extra_fields:
-            try:
-                extra_str = json.dumps(extra_fields, sort_keys=True, separators=(",", ":"))
-                formatted_message += f" | extra={extra_str}"
-            except (TypeError, ValueError):
-                extra_parts = []
-                for key, value in extra_fields.items():
-                    try:
-                        extra_parts.append(f"{key}={value!r}")
-                    except Exception:
-                        extra_parts.append(f"{key}=<unserializable>")
-                if extra_parts:
-                    formatted_message += " | extra={" + ", ".join(extra_parts) + "}"
+            formatted_message += _format_extra_fields(extra_fields)
 
         return formatted_message
+
+
+def _resolve_component(record: logging.LogRecord) -> str:
+    """Derive the component name for ``record`` from the registry or its origin."""
+    if hasattr(record, "name") and record.name:
+        logger_parts = record.name.split(".")
+        for i in range(len(logger_parts), 0, -1):
+            parent_name = ".".join(logger_parts[:i])
+            if parent_name in _logger_component_registry:
+                return _logger_component_registry[parent_name]
+
+    for attr in ("module", "pathname", "name"):
+        value = getattr(record, attr, None)
+        if not value:
+            continue
+        match = COMPONENT_PATTERN.search(value)
+        if match:
+            component = next((g for g in match.groups() if g), "")
+            if component:
+                return component
+    return ""
+
+
+def _format_extra_fields(extra_fields: dict[str, Any]) -> str:
+    try:
+        extra_str = json.dumps(extra_fields, sort_keys=True, separators=(",", ":"))
+    except (TypeError, ValueError):
+        extra_parts = []
+        for key, value in extra_fields.items():
+            try:
+                extra_parts.append(f"{key}={value!r}")
+            except Exception:
+                extra_parts.append(f"{key}=<unserializable>")
+        if extra_parts:
+            return " | extra={" + ", ".join(extra_parts) + "}"
+        return ""
+    return f" | extra={extra_str}"
 
 
 def register_component_logger(logger_name: str, component_name: str):
@@ -240,22 +234,19 @@ def setup_logging(settings: G8eeAppSettings, component_name: str):
 
         logger.info("Logging configured with level %s", settings.log_level)
 
-        if HAS_UVICORN and AccessFormatter is not None:
-            uvicorn_access_logger = logging.getLogger("uvicorn.access")
-            if uvicorn_access_logger.hasHandlers():
-                for handler in uvicorn_access_logger.handlers[:]:
-                    uvicorn_access_logger.removeHandler(handler)
-            uvicorn_access_handler = logging.StreamHandler(sys.stdout)
-            uvicorn_access_formatter = AccessFormatter(
-                fmt='%(asctime)s - %(levelname)s - %(client_addr)s - "%(request_line)s" %(status_code)s'
-            )
-            uvicorn_access_handler.setFormatter(uvicorn_access_formatter)
-            uvicorn_access_logger.addHandler(uvicorn_access_handler)
-            uvicorn_access_logger.setLevel(log_level)
-            uvicorn_access_logger.propagate = False
-            logger.info("Uvicorn access logging configured with level %s", settings.log_level)
-        else:
-            logger.info("Uvicorn not available - skipping uvicorn access logging configuration")
+        uvicorn_access_logger = logging.getLogger("uvicorn.access")
+        if uvicorn_access_logger.hasHandlers():
+            for handler in uvicorn_access_logger.handlers[:]:
+                uvicorn_access_logger.removeHandler(handler)
+        uvicorn_access_handler = logging.StreamHandler(sys.stdout)
+        uvicorn_access_formatter = AccessFormatter(
+            fmt='%(asctime)s - %(levelname)s - %(client_addr)s - "%(request_line)s" %(status_code)s'
+        )
+        uvicorn_access_handler.setFormatter(uvicorn_access_formatter)
+        uvicorn_access_logger.addHandler(uvicorn_access_handler)
+        uvicorn_access_logger.setLevel(log_level)
+        uvicorn_access_logger.propagate = False
+        logger.info("Uvicorn access logging configured with level %s", settings.log_level)
 
     else:
         logger = logging.getLogger()

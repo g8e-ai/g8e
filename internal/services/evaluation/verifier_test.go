@@ -466,11 +466,11 @@ func buildVerifierSignedReceipt(t *testing.T, privateKey ed25519.PrivateKey, sig
 	return receipt
 }
 
-func verifierEvidenceRef(artifactID string, artifactType complianceevidence.ArtifactType, runID, scenarioID, attemptID, transactionID string) *compliancev1.ComplianceEvidenceReference {
+func verifierEvidenceRef(artifactID string, artifactType complianceevidence.ArtifactType, _ string, scenarioID, attemptID, transactionID string) *compliancev1.ComplianceEvidenceReference {
 	_, digest, _ := complianceevidence.ParseContentAddress(artifactID)
 	return &compliancev1.ComplianceEvidenceReference{
 		ArtifactId: artifactID, ArtifactType: string(artifactType), Sha256: digest, MediaType: constants.MediaTypeJSON,
-		RunId: runID, ScenarioId: scenarioID, AttemptId: attemptID, TransactionId: transactionID,
+		RunId: vRunID, ScenarioId: scenarioID, AttemptId: attemptID, TransactionId: transactionID,
 	}
 }
 
@@ -485,7 +485,7 @@ func verifierIntObs(id, obsType, runID, scenarioID, attemptID string, value int6
 	}
 }
 
-func verifierBoolObs(id, obsType, runID, scenarioID, attemptID string, value bool, evidenceRefs []*compliancev1.ComplianceEvidenceReference, authority evalv1.EvaluationEvidenceAuthority, source evalv1.EvaluationObservationSource, observedAt time.Time) *evalv1.EvaluationObservation {
+func verifierBoolObs(id, obsType string, _ string, scenarioID, attemptID string, _ bool, evidenceRefs []*compliancev1.ComplianceEvidenceReference, authority evalv1.EvaluationEvidenceAuthority, source evalv1.EvaluationObservationSource, observedAt time.Time) *evalv1.EvaluationObservation {
 	refs := make([]*compliancev1.ComplianceEvidenceReference, len(evidenceRefs))
 	for i, ref := range evidenceRefs {
 		refs[i] = proto.Clone(ref).(*compliancev1.ComplianceEvidenceReference)
@@ -493,8 +493,8 @@ func verifierBoolObs(id, obsType, runID, scenarioID, attemptID string, value boo
 	return &evalv1.EvaluationObservation{
 		ObservationId: id, ObservationType: versioned(obsType, RegistryVersion),
 		Source: source, Authority: authority, ObservedAt: timestamppb.New(observedAt),
-		RunId: runID, ScenarioId: scenarioID, AttemptId: attemptID,
-		Value:        &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: value}},
+		RunId: vRunID, ScenarioId: scenarioID, AttemptId: attemptID,
+		Value:        &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: true}},
 		EvidenceRefs: refs,
 	}
 }
@@ -515,9 +515,9 @@ func verifierIntOutcomeObs(id, obsType, runID, scenarioID, attemptID string, val
 }
 
 // readReport reads and unmarshals the report from the reader.
-func readReport(t *testing.T, reader *verifierArtifactReader, runID string) *evalv1.EvaluationReport {
+func readReport(t *testing.T, reader *verifierArtifactReader, _ string) *evalv1.EvaluationReport {
 	t.Helper()
-	body, ok := reader.files[filepath.Join(evaluationRunDir(runID), constants.EvaluationReportFilename)]
+	body, ok := reader.files[filepath.Join(evaluationRunDir(vRunID), constants.EvaluationReportFilename)]
 	if !ok {
 		return nil
 	}
@@ -529,23 +529,23 @@ func readReport(t *testing.T, reader *verifierArtifactReader, runID string) *eva
 }
 
 // writeReport marshals and writes the report to the reader.
-func writeReport(t *testing.T, reader *verifierArtifactReader, runID string, report *evalv1.EvaluationReport) {
+func writeReport(t *testing.T, reader *verifierArtifactReader, _ string, report *evalv1.EvaluationReport) {
 	t.Helper()
 	body, err := evalv1.MarshalCanonical(report)
 	require.NoError(t, err)
-	reader.files[filepath.Join(evaluationRunDir(runID), constants.EvaluationReportFilename)] = body
+	reader.files[filepath.Join(evaluationRunDir(vRunID), constants.EvaluationReportFilename)] = body
 }
 
 // writeEvidence writes an evidence artifact body to the reader.
-func writeEvidence(reader *verifierArtifactReader, runID, artifactID string, body []byte) {
+func writeEvidence(reader *verifierArtifactReader, _ string, artifactID string, body []byte) {
 	_, digest, _ := complianceevidence.ParseContentAddress(artifactID)
-	reader.files[filepath.Join(evaluationEvidenceDir(runID), digest+constants.FileExtJSON)] = body
+	reader.files[filepath.Join(evaluationEvidenceDir(vRunID), digest+constants.FileExtJSON)] = body
 }
 
 // removeEvidence removes an evidence artifact from the reader.
-func removeEvidence(reader *verifierArtifactReader, runID, artifactID string) {
+func removeEvidence(reader *verifierArtifactReader, _ string, artifactID string) {
 	_, digest, _ := complianceevidence.ParseContentAddress(artifactID)
-	delete(reader.files, filepath.Join(evaluationEvidenceDir(runID), digest+constants.FileExtJSON))
+	delete(reader.files, filepath.Join(evaluationEvidenceDir(vRunID), digest+constants.FileExtJSON))
 }
 
 // --- Mutation matrix tests ---

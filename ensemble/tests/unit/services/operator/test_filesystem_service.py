@@ -6,19 +6,19 @@
 # released under the Apache License, Version 2.0.
 
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock
-from app.services.operator.filesystem_service import OperatorFilesystemService
+
+from app.constants.generated_status import ComponentName
 from app.models.command_request_payloads import FsGrepRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.constants.generated_status import ComponentName
+from app.services.operator.filesystem_service import OperatorFilesystemService
 
 
 @pytest.mark.asyncio
 async def test_filesystem_service_grep_import_fix():
-    from unittest.mock import AsyncMock
-
     # This test primarily verifies that the imports in filesystem_service.py are correct
     # and don't raise NameError when the methods are called/referenced.
     execution_service = MagicMock()

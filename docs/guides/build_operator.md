@@ -61,7 +61,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Gateway start command and flags | `internal/cli/cmd/gw/gateway.go` (gatewayStartCmd) | `./g8e gw start --help` |
 | Operator list/bind/run/stop commands | `internal/cli/cmd/operator/operator.go` | `./g8e operator --help` |
 | Vault administration | `internal/cli/cmd/vault/` | `./g8e vault --help` |
-| Public protocol Go module | `github.com/g8e-ai/g8e/v2@v2.2.6` | `go get -d github.com/g8e-ai/g8e/v2@v2.2.6` |
+| Public protocol Go module | `github.com/g8e-ai/g8e/v2@v2.3.2` | `go get -d github.com/g8e-ai/g8e/v2@v2.3.2` |
 
 ## Procedures
 
@@ -116,7 +116,7 @@ The binary is self-contained, but the running Operator is stateful. It creates a
 | `make fips-build` | Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`. |
 | `make fips-verify` | Builds the FIPS variant and runs `g8e version --fips` with FIPS-only enforcement enabled. |
 
-`make fmt`, the host-native `make host-up` / `make host-down` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` also removes `.g8e/` runtime state, so do not use it to clean only build artifacts on a host with state that must be retained.
+`make fmt`, the host-native `make host-up` / `make host-down` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` removes build artifacts and Go caches while preserving `.g8e/` runtime state and workload identities. Use `./g8e gw clean` explicitly to reset Gateway state.
 
 #### Cross-Compilation
 
@@ -327,7 +327,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.6
+go get github.com/g8e-ai/g8e/v2@v2.3.2
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -339,7 +339,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.2.6
+pip install g8e==2.3.2
 ```
 
 See the [Protocol Library architecture document](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.
@@ -370,14 +370,14 @@ The matching root targets are `make test-unit`, `make test-integration`, `make t
 
 `g8e operator cp <target>` copies the currently running binary to a local file or directory. `g8e operator scp <user@host:path>` invokes the system `scp` command and supports the flags shown by `g8e operator scp --help`.
 
-`g8e operator deploy --hosts <host[,host...]> [--remote-dir <dir>] [--background] --endpoint <gateway-host>` copies the running binary to `<remote-dir>/g8e` over SSH (`--remote-dir` defaults to `~`), uploading it as `g8e.new` and renaming it into place so an already-running or hard-linked `g8e` does not block the copy. With `--background` it stops any Operator previously started from that directory, then starts `g8e operator start --endpoint <gateway-host> --working-dir <remote-dir>` there and writes `start.log` in that directory; `--endpoint` is required with `--background`. Each distinct `--remote-dir` on a host is a separate Operator working directory with its own `.g8e/` state and enrollment request. `--count N` deploys N Operators per host into `<remote-dir>/op-00001` through `op-N`. The command exits non-zero if any Operator fails to deploy. Without `--approve` the started worker still needs its enrollment request approved (`g8e auth enroll approve`); with `--approve` (which requires `--background`) deploy approves each Operator's request itself and waits until it is active, as described in [Connect Many Operators](connect_operator_to_gateway.md#connect-many-operators).
+`g8e operator deploy --local --dest-dir <dir> --count N --roles data --background --approve --endpoint <gateway-host>` deploys isolated Operators on this system. Replace `--local` with `--hosts <host[,host...]>` for SSH deployment, or use `--docker-context <context> --docker-image <image> --dest-dir </absolute/container/path>` for one persistent volume and container per Operator. `--remote-dir` remains an alias for `--dest-dir`. The command installs one shared binary per SSH/local host or resolves one immutable image ID per Docker batch, uses separate directories and identities, and supports ranges of up to 5000 Operators with `--count` and `--start-index`. `--parallel` bounds concurrent enrollment (default and maximum 4). Role flags are forwarded to `operator start`; supported roles are data, provenance, inference, and observer. With `--approve`, the command approves only its own requests and verifies all sessions are active. Use `scripts/build-operator-image.sh` to prepare an allowlisted runtime-only image on an explicit context. See [Connect Many Operators](connect_operator_to_gateway.md#connect-many-operators) for batch growth, role settings, Docker lifecycle, and retry behavior.
 
 The current Cobra wrapper for `operator stream` parses its public flags before calling the native stream parser, so options such as `--endpoint`, `--hosts`, and `--binary-dir` are not forwarded to the implementation. Do not use `operator stream` as an automated Operator rollout path in this version.
 
 ## Anti-patterns
 
 - Treating the Lattice adapter path as implemented (INV-BUILD-OP-02: flags parse but do not affect runtime).
-- Using `make clean` on a host with operational state (INV-BUILD-OP-04: removes `.g8e/` runtime state).
+- Using `./g8e gw clean` to clean build artifacts on a host whose operational state must be retained (INV-BUILD-OP-04).
 - Assuming protocol package re-exports guarantee behavioral compatibility (INV-BUILD-OP-05: independent implementations require full L1-L5 stack).
 - Relying on `operator stream` for production rollout (its flags are not forwarded; use `operator deploy` or an external deployment system).
 

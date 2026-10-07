@@ -10,11 +10,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.constants import AuditorReason, CommandGenerationOutcome, EventType
+from app.constants.generated_status import ConsensusAuditMode
+from app.errors import ContextWindowExceededError
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part, Role, UsageMetadata
 from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown
 from app.models.http_context import RequestContext
+from app.services.ai.auditor_service import run_auditor
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+from app.utils.agent_persona_loader import get_agent_persona
 
 
 @pytest.mark.asyncio
@@ -43,7 +47,6 @@ class TestRunAuditStage:
             guidelines="",
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
-            tied_candidates=None,
             operator_context=mock_operator_context,
             auditor_enabled=False,
             command_constraints_message="No whitelist or blacklist constraints are active.",
@@ -89,7 +92,6 @@ class TestRunAuditStage:
             guidelines="",
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
-            tied_candidates=None,
             operator_context=mock_operator_context,
             auditor_enabled=True,
             command_constraints_message="No whitelist or blacklist constraints are active.",
@@ -121,12 +123,26 @@ class TestRunAuditStage:
         )
         responses = [
             GenerateContentResponse(
-                candidates=[Candidate(content=Content(role=Role.MODEL, parts=[Part(text="invalid")]), finish_reason="stop")],
-                usage_metadata=UsageMetadata(prompt_token_count=10, candidates_token_count=2, total_token_count=12),
+                candidates=[
+                    Candidate(
+                        content=Content(role=Role.MODEL, parts=[Part(text="invalid")]),
+                        finish_reason="stop",
+                    )
+                ],
+                usage_metadata=UsageMetadata(
+                    prompt_token_count=10, candidates_token_count=2, total_token_count=12
+                ),
             ),
             GenerateContentResponse(
-                candidates=[Candidate(content=Content(role=Role.MODEL, parts=[Part(text='{"status": "ok"}')]), finish_reason="stop")],
-                usage_metadata=UsageMetadata(prompt_token_count=12, candidates_token_count=4, total_token_count=16),
+                candidates=[
+                    Candidate(
+                        content=Content(role=Role.MODEL, parts=[Part(text='{"status": "ok"}')]),
+                        finish_reason="stop",
+                    )
+                ],
+                usage_metadata=UsageMetadata(
+                    prompt_token_count=12, candidates_token_count=4, total_token_count=16
+                ),
             ),
         ]
         provider = make_mock_provider(generate_content_lite_side_effect=responses)
@@ -145,7 +161,6 @@ class TestRunAuditStage:
             guidelines="",
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
-            tied_candidates=None,
             operator_context=mock_operator_context,
             auditor_enabled=True,
             command_constraints_message="No whitelist or blacklist constraints are active.",
@@ -177,7 +192,9 @@ class TestRunAuditStage:
         ("kwargs", "expected_role"),
         [
             pytest.param({}, "primary", id="auditor-runs-on-the-primary-tier-by-default"),
-            pytest.param({"model_role": "lite"}, "lite", id="fallback-to-the-lite-provider-is-reported"),
+            pytest.param(
+                {"model_role": "lite"}, "lite", id="fallback-to-the-lite-provider-is-reported"
+            ),
         ],
     )
     async def test_auditor_attributes_its_calls_to_the_tier_it_was_resolved_from(
@@ -204,7 +221,9 @@ class TestRunAuditStage:
                     finish_reason="stop",
                 )
             ],
-            usage_metadata=UsageMetadata(prompt_token_count=10, candidates_token_count=2, total_token_count=12),
+            usage_metadata=UsageMetadata(
+                prompt_token_count=10, candidates_token_count=2, total_token_count=12
+            ),
         )
         provider = make_mock_provider(generate_content_lite_side_effect=[response])
         event_service = MagicMock()
@@ -222,7 +241,6 @@ class TestRunAuditStage:
             guidelines="",
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
-            tied_candidates=None,
             operator_context=mock_operator_context,
             auditor_enabled=True,
             command_constraints_message="No whitelist or blacklist constraints are active.",
@@ -276,7 +294,6 @@ class TestRunAuditStage:
                 guidelines="",
                 vote_winner="ls -la",
                 vote_breakdown=vote_breakdown,
-                tied_candidates=None,
                 operator_context=mock_operator_context,
                 auditor_enabled=True,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
@@ -300,3 +317,107 @@ class TestRunAuditStage:
         assert all(call.error_type == "OllamaEmptyResponseError" for call in model_calls)
         assert all(call.monotonic_end >= call.monotonic_start for call in model_calls)
         assert all(call.input_artifact_hash for call in model_calls)
+
+
+def _context_overflow_error() -> ContextWindowExceededError:
+    return ContextWindowExceededError(
+        "prompt filled the context window",
+        model="test-model",
+        service_name="ollama",
+        num_ctx=65536,
+        prompt_tokens=65536,
+        channel="lite",
+    )
+
+
+@pytest.mark.asyncio
+class TestAuditorContextOverflow:
+    async def test_overflow_fails_auditor_once_with_overflow_reason(
+        self, make_mock_provider, mock_g8e_context, mock_operator_context, mock_reputation_service
+    ):
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
+        provider = make_mock_provider(generate_content_lite_side_effect=_context_overflow_error())
+        event_service = MagicMock()
+        event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(event_service, mock_g8e_context, correlation_id="tribunal-test")
+        auditor = TribunalAuditor(
+            emitter=emitter,
+            reputation_data_service=mock_reputation_service,
+        )
+
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
+            await auditor.run(
+                provider=provider,
+                model="test-model",
+                request="list files",
+                guidelines="",
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                operator_context=mock_operator_context,
+                auditor_enabled=True,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
+                investigation_id="inv-1",
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-1",
+                ),
+            )
+
+        assert exc_info.value.reason == AuditorReason.CONTEXT_OVERFLOW
+        assert exc_info.value.error is not None
+        assert "context window" in exc_info.value.error
+        assert "empty" not in exc_info.value.error.lower()
+        # Retrying the same prompt cannot succeed.
+        assert provider.generate_content_lite.await_count == 1
+
+        failed_event = next(
+            call.args[0]
+            for call in event_service.publish.await_args_list
+            if call.args[0].event_type == EventType.AI_CONSENSUS_SESSION_AUDITOR_FAILED
+        )
+        assert failed_event.payload.reason == AuditorReason.CONTEXT_OVERFLOW
+        assert [call.error_type for call in failed_event.payload.model_calls] == [
+            "ContextWindowExceededError"
+        ]
+
+    async def test_deprecated_run_auditor_fails_once_with_overflow_reason(
+        self, make_mock_provider, mock_g8e_context
+    ):
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
+        provider = make_mock_provider(generate_content_lite_side_effect=_context_overflow_error())
+        emitter = TribunalEmitter(None, mock_g8e_context)
+
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
+            await run_auditor(
+                provider=provider,
+                model="test-model",
+                request="list files",
+                guidelines="",
+                mode=ConsensusAuditMode.UNANIMOUS,
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                operator_context=None,
+                emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
+                auditor_persona=get_agent_persona("auditor"),
+            )
+
+        assert exc_info.value.reason == AuditorReason.CONTEXT_OVERFLOW
+        assert exc_info.value.error is not None
+        assert "context window" in exc_info.value.error
+        assert provider.generate_content_lite.await_count == 1

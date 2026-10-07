@@ -59,7 +59,7 @@ func (c *recordingFormationChatClient) GetEvaluationTrace(_ context.Context, _ h
 	return trace, nil
 }
 
-func heterogeneousFormationTraces(t *testing.T, baseAttempt string, outputs map[FormationRole]string, failRole FormationRole) map[string]EvaluationTrace {
+func heterogeneousFormationTraces(t *testing.T, outputs map[FormationRole]string, failRole FormationRole) map[string]EvaluationTrace {
 	t.Helper()
 	traces := make(map[string]EvaluationTrace, 3)
 	for _, role := range []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary} {
@@ -78,7 +78,7 @@ func heterogeneousFormationTraces(t *testing.T, baseAttempt string, outputs map[
 		digest, err := ComputeChatProbeTraceDigest(trace)
 		require.NoError(t, err)
 		trace["trace_digest"] = digest
-		traces[baseAttempt+":"+string(role)] = trace
+		traces["attempt-heterogeneous-1:"+string(role)] = trace
 	}
 	return traces
 }
@@ -190,7 +190,7 @@ func TestCampaignFormationChatRunner_ExecutesRolesInOrderThroughG8ee(t *testing.
 		FormationRoleAssistant: "assistant output",
 		FormationRolePrimary:   "primary output",
 	}
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", outputs, "")}
+	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, outputs, "")}
 	dispatcher := &recordingFormationInferenceDispatcher{}
 	modelDispatcher := &recordingOllamaModelCommandDispatcher{}
 	runner := NewCampaignFormationChatRunner(client, harnessclient.Persona{ID: "campaign-cli", UserID: "user-1", CLISessionID: "cli-1"}, "data-op", waitForTraceImmediately, nil,
@@ -270,7 +270,7 @@ func TestCampaignFormationChatRunner_SharesOneWorkspaceAcrossRoles(t *testing.T)
 	t.Parallel()
 	timeline := &orderedWorkspaceEvents{}
 	writer := &recordingWorkspaceFileWriter{timeline: timeline}
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", map[FormationRole]string{FormationRoleLite: "lite output"}, "")}
+	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, map[FormationRole]string{FormationRoleLite: "lite output"}, "")}
 	runner := NewCampaignFormationChatRunner(&timelineFormationChatClient{recordingFormationChatClient: client, timeline: timeline}, harnessclient.Persona{ID: "campaign-cli", UserID: "user-1", CLISessionID: "cli-1"}, "data-op", waitForTraceImmediately, writer,
 		g8eeFormationProductionDeps(g8eeFormationObserver(), &recordingFormationInferenceDispatcher{}, &recordingOllamaModelCommandDispatcher{}))
 	runContext := heterogeneousFormationRunContext()
@@ -316,7 +316,7 @@ func TestCampaignFormationChatRunner_FailsClosedWhenWorkspaceFileWriterMissing(t
 	t.Parallel()
 	variants := testHeterogeneousVariants()
 	stack := mustHeterogeneousStack(t)
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", nil, "")}
+	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, nil, "")}
 	runner := newTestFormationChatRunner(client, nil, g8eeFormationObserver())
 	input := formationTestInput()
 	input.WorkspaceFiles = []ScenarioWorkspaceFile{
@@ -335,7 +335,7 @@ func TestCampaignFormationChatRunner_StopsBeforeAnyRoleWhenWorkspaceFileWriteFai
 	ws, err := NewScenarioWorkspace(runContext.DataOperatorWorkingDirectory, runContext.RunID, runContext.EvaluationAttemptID)
 	require.NoError(t, err)
 	writer := &recordingWorkspaceFileWriter{failOnPath: ws.Root + "/config/retry-config.env"}
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", nil, "")}
+	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, nil, "")}
 	runner := newTestFormationChatRunner(client, writer, g8eeFormationObserver())
 	input := formationTestInput()
 	input.WorkspaceFiles = []ScenarioWorkspaceFile{{Label: "retry-config", RelPath: "config/retry-config.env", Content: "retry_limit=3"}}
@@ -349,7 +349,7 @@ func TestCampaignFormationChatRunner_StopsBeforeAnyRoleWhenWorkspaceFileWriteFai
 
 func TestCampaignFormationChatRunner_FailsClosedWithoutOperatorWorkingDirectory(t *testing.T) {
 	t.Parallel()
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", nil, "")}
+	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, nil, "")}
 	runner := newTestFormationChatRunner(client, &recordingWorkspaceFileWriter{}, g8eeFormationObserver())
 	runContext := heterogeneousFormationRunContext()
 	runContext.DataOperatorWorkingDirectory = ""
@@ -365,7 +365,7 @@ func TestCampaignFormationChatRunner_FailsClosedWithoutOperatorWorkingDirectory(
 // formation whose later roles run without the earlier roles' outputs.
 func TestCampaignFormationChatRunner_RejectsHandoffForScenarioWithoutSeed(t *testing.T) {
 	t.Parallel()
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", map[FormationRole]string{FormationRoleLite: "lite output"}, "")}
+	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, map[FormationRole]string{FormationRoleLite: "lite output"}, "")}
 	runner := newTestFormationChatRunner(client, nil, g8eeFormationObserver())
 	input := formationTestInput()
 	input.Seed = InvestigationSeed{}
@@ -412,7 +412,7 @@ func TestCampaignFormationChatRunner_StopsOnFirstRoleSubmissionFailure(t *testin
 	variants := testHeterogeneousVariants()
 	stack := mustHeterogeneousStack(t)
 	client := &recordingFormationChatClient{
-		traces:        heterogeneousFormationTraces(t, "attempt-heterogeneous-1", nil, ""),
+		traces:        heterogeneousFormationTraces(t, nil, ""),
 		failOnAttempt: "attempt-heterogeneous-1:assistant",
 	}
 	runner := newTestFormationChatRunner(client, nil, g8eeFormationObserver())
@@ -431,7 +431,7 @@ func TestCampaignFormationChatRunner_StopsOnFailedRoleTrace(t *testing.T) {
 	t.Parallel()
 	variants := testHeterogeneousVariants()
 	stack := mustHeterogeneousStack(t)
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", nil, FormationRoleAssistant)}
+	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, nil, FormationRoleAssistant)}
 	runner := newTestFormationChatRunner(client, nil, g8eeFormationObserver())
 
 	initialState := formationTestInitialState(t, formationTestInput())
@@ -465,7 +465,7 @@ func TestFormationRoleResultFromTrace_AggregatesEveryProviderCall(t *testing.T) 
 
 func TestCampaignFormationChatRunner_FailsWithoutObserverWindowForEveryAttempt(t *testing.T) {
 	t.Parallel()
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", nil, "")}
+	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, nil, "")}
 	runner := newTestFormationChatRunner(client, nil, g8eeFormationObserver(g8eeAttemptID(FormationRolePrimary, 2)))
 	initialState := formationTestInitialState(t, formationTestInput())
 

@@ -146,6 +146,7 @@ export const EventType = Object.freeze({
     APP_TASK_FAILED: 'g8e.v1.app.task.failed',
     APP_TASK_STARTED: 'g8e.v1.app.task.started',
     APP_TASK_UPDATED: 'g8e.v1.app.task.updated',
+    MODEL_PROVENANCE_PREFLIGHT_PROGRESS: 'g8e.v1.inference.model.provenance.preflight.updated',
     OPERATOR_A2A_CALL_REQUESTED: 'g8e.v1.operator.a2a.call.requested',
     OPERATOR_AUDIT_AI_RECORD_REQUESTED: 'g8e.v1.operator.audit.ai.record.requested',
     OPERATOR_AUDIT_AI_RECORDED: 'g8e.v1.operator.audit.ai.recorded',
@@ -1210,6 +1211,12 @@ export const EventRegistry = Object.freeze({
         producers: ['ensemble'],
         persistence: 'gateway.docstore',
         reserved: true,
+    }),
+    MODEL_PROVENANCE_PREFLIGHT_PROGRESS: Object.freeze({
+        kind: 'fact',
+        transport: ['sse'],
+        producers: ['gateway'],
+        persistence: 'ephemeral',
     }),
     OPERATOR_A2A_CALL_REQUESTED: Object.freeze({
         kind: 'request',

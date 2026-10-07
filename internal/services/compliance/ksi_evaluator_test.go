@@ -41,7 +41,7 @@ type mockAuditReader struct {
 	mutationsErr error
 }
 
-func (m *mockAuditReader) ListActionReceipts(_ string, _, _ int) ([]*models.ActionReceiptRecord, error) {
+func (m *mockAuditReader) ListActionReceipts(_ models.AuditScope, _, _ int) ([]*models.ActionReceiptRecord, error) {
 	if m.receiptsErr != nil {
 		return nil, m.receiptsErr
 	}

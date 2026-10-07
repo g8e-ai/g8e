@@ -15,9 +15,9 @@ Uses a lightweight model optimized for quick text generation tasks.
 import logging
 import time
 
-from app.errors import OllamaEmptyResponseError
-from app.llm import get_generative_lite_provider, Role
-from app.llm.llm_types import Content, Part, LiteLLMSettings
+from app.errors import ContextWindowExceededError, OllamaEmptyResponseError
+from app.llm import Role, get_generative_lite_provider
+from app.llm.llm_types import Content, LiteLLMSettings, Part
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
 from app.models.agents.title_generator import CaseTitleResult
@@ -57,6 +57,18 @@ async def generate_case_title(
             generated_title=_create_fallback_title(description, max_length), fallback=True
         )
 
+    return await _generate_title_with_provider(
+        description, max_length=max_length, settings=settings, g8e_context=g8e_context
+    )
+
+
+async def _generate_title_with_provider(
+    description: str,
+    *,
+    max_length: int,
+    settings: G8eeUserSettings,
+    g8e_context: G8eHttpContext | None,
+) -> CaseTitleResult:
     try:
         provider = get_generative_lite_provider(settings.llm)
         model = settings.llm.resolved_generative_lite_model
@@ -90,11 +102,13 @@ async def generate_case_title(
         )
         prepare_provider_call(provider, g8e_context=g8e_context)
         contents = [Content(role=Role.USER, parts=[Part.from_text(prompt)])]
-        input_artifact_hash = model_boundary_hash({
-            "model": model,
-            "contents": contents,
-            "settings": lite_llm_settings,
-        })
+        input_artifact_hash = model_boundary_hash(
+            {
+                "model": model,
+                "contents": contents,
+                "settings": lite_llm_settings,
+            }
+        )
         monotonic_start = time.monotonic()
         try:
             response = await provider.generate_content_lite(
@@ -141,6 +155,26 @@ async def generate_case_title(
                     ctx_overflow_suspected=False,
                 )
             generated_title = response.text.strip()
+        except ContextWindowExceededError as exc:
+            logger.warning(
+                "[TITLE-GEN] Prompt exceeded the model context window, using fallback title without retry: %s",
+                exc,
+            )
+            failed_call = build_model_call_telemetry(
+                provider=provider,
+                agent_role="scribe",
+                model_role="lite",
+                model=model,
+                monotonic_start=monotonic_start,
+                input_artifact_hash=input_artifact_hash,
+                succeeded=False,
+                error_type=type(exc).__name__,
+            )
+            return CaseTitleResult(
+                generated_title=_create_fallback_title(description, max_length),
+                fallback=True,
+                model_call=failed_call,
+            )
         except OllamaEmptyResponseError as exc:
             logger.warning("[TITLE-GEN] No response from LLM, using fallback title: %s", exc)
             failed_call = build_model_call_telemetry(

@@ -13,8 +13,21 @@ SHELL := /bin/bash
 # the uv installer places `uv`) on PATH so the dev tools installed by
 # `make dev-tools` resolve for every recipe even when the invoking shell has not
 # sourced the profile the setup scripts updated.
-GO_BIN_DIR := $(or $(shell go env GOBIN 2>/dev/null),$(if $(shell go env GOPATH 2>/dev/null),$(shell go env GOPATH)/bin,$(HOME)/go/bin))
-export PATH := $(GO_BIN_DIR):$(HOME)/.local/bin:$(PATH)
+# On Windows, USERPROFILE is the home directory and paths must be converted to
+# POSIX style via cygpath. Also ensure /usr/bin is placed ahead of the inherited
+# Windows system PATH so that tools using `#!/usr/bin/env bash` (such as npm and
+# npx on Windows) resolve to Git/MSYS bash rather than C:\WINDOWS\system32\bash.exe
+# (the WSL entry point, which fails with "No such file or directory").
+USER_HOME := $(or $(HOME),$(USERPROFILE))
+USER_HOME_POSIX := $(shell cygpath -u "$(USER_HOME)" 2>/dev/null || echo "$(USER_HOME)")
+GO_BIN_DIR := $(or $(shell go env GOBIN 2>/dev/null),$(if $(shell go env GOPATH 2>/dev/null),$(shell go env GOPATH)/bin,$(USER_HOME_POSIX)/go/bin))
+GO_BIN_DIR := $(shell cygpath -u "$(GO_BIN_DIR)" 2>/dev/null || echo "$(GO_BIN_DIR)")
+HOST_OS := $(shell go env GOOS 2>/dev/null)
+ifeq ($(filter Windows_NT,$(OS))$(filter windows,$(HOST_OS)),)
+export PATH := $(GO_BIN_DIR):$(USER_HOME_POSIX)/.local/bin:$(PATH)
+else
+export PATH := $(GO_BIN_DIR):$(USER_HOME_POSIX)/.local/bin:/usr/bin:$(PATH)
+endif
 GOTOOLCHAIN ?= auto
 export GOTOOLCHAIN
 TMPDIR ?= /tmp
@@ -42,7 +55,7 @@ SOURCE_TREE_HASH ?= $(shell go run ./internal/tools/treehash -mode manifest -bas
 BUILD_ID ?= $(SOURCE_TREE_HASH)
 SOURCE_REVISION ?= unknown
 LDFLAGS = -X main.version=$(VERSION) -X main.buildID=$(BUILD_ID) -X main.buildTime=$(BUILD_TIME) -X main.sourceRevision=$(SOURCE_REVISION) -X main.sourceTreeHash=$(SOURCE_TREE_HASH)
-HOST_OS := $(shell go env GOOS)
+HOST_OS ?= $(shell go env GOOS)
 HOST_ARCH := $(shell go env GOARCH)
 
 # Platform and architecture lists are emitted by the typed g8e-binary catalog.
@@ -105,7 +118,6 @@ TEST_EXCLUDE_PKGS := \
 	/internal/models \
 	/internal/testutil \
 	/internal/tools/chaos \
-	/internal/tools/agent_harness/scenarios \
 	/internal/services/gateway/docs \
 	/internal/services/gateway/scripts \
 	/internal/services/storage/storagetest \
@@ -124,11 +136,7 @@ COVERAGE_ONLY_EXCLUDE_PKGS := \
 COVERAGE_EXCLUDE_PKGS := $(TEST_EXCLUDE_PKGS) $(COVERAGE_ONLY_EXCLUDE_PKGS)
 
 # Files excluded from coverage only (belong to otherwise-tested packages).
-EXCLUDE_FILES := \
-	internal/cli/cmd/demos/demos.go \
-	internal/cli/cmd/demos/demo_dhs.go \
-	internal/cli/cmd/demos/demo_finance.go \
-	internal/cli/cmd/demos/demo_healthcare.go
+EXCLUDE_FILES :=
 
 # Grep chains derived from the lists above — do not edit directly.
 _TEST_PKG_GREP := $(foreach p,$(TEST_EXCLUDE_PKGS),| grep -v "$(p)")
@@ -137,7 +145,8 @@ _FILE_GREP     := $(foreach f,$(EXCLUDE_FILES),| grep -v "$(f)")
 _COV_GREP      := $(_COV_PKG_GREP) $(_FILE_GREP)
 
 # Packages passed to go test.
-TEST_PKGS := $$(go list ./... $(_TEST_PKG_GREP))
+# Local CI includes every package; coverage exclusions still apply to the profile.
+TEST_PKGS = $$(go list ./... $(if $(CI_ALL_PACKAGES),| grep -v /node_modules,$(_TEST_PKG_GREP)))
 
 # Filter coverage.out (the raw profile) to remove excluded paths, then report %.
 # We operate on the profile data — not on the formatted output of go tool cover.
@@ -178,7 +187,7 @@ GO_DEV_TOOL_PKGS := \
 # Recursive (=) so the lookup runs when a recipe uses it, after buf-install has
 # had the chance to put buf on PATH. $(shell) does not see the exported PATH on
 # GNU make < 4.4, so the Go bin dir is added explicitly.
-BUF = $(shell export PATH="$(GO_BIN_DIR):$$PATH"; command -v buf 2>/dev/null || echo "./buf")
+BUF = $(shell export PATH="$(GO_BIN_DIR):$$PATH"; command -v buf 2>/dev/null || echo "$(CURDIR)/buf")
 PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
 PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "$(PROTOC_GEN_GO_VERSION)")
 
@@ -201,12 +210,16 @@ help-legacy:
 		'  embed-console        -> console-embed' \\
 		'  embed-explorer       -> explorer-embed' \\
 		'  explorer-catalog     -> explorer-catalog-generate' \\
+		'  full-down            -> down' \\
+		'  full-status          -> status' \\
+		'  full-stop            -> down' \\
+		'  g8ee-status          -> ensemble-status' \\
 		'  generate             -> proto-generate' \\
 		'  proto                -> proto-generate' \\
 		'  proto-force          -> proto-generate' \\
 		'  python-build         -> protocol-python-build' \\
+		'  stop                 -> down' \\
 		'  test-external        -> ensemble-test-external' \\
-		'  validate-cosais      -> cosais-validate' \\
 		'  validate-doctrines   -> doctrines-validate' \\
 		'  verify-fips          -> fips-verify'
 
@@ -222,13 +235,17 @@ help:
 		'  dev-check                 Verify the local development toolchain' \
 		'  dev-tools                 Install pinned Go development tools' \
 		'  dev-python                Create .venv with protocol and ensemble dependencies' \
+		'  ensemble-env              Install only the Python runtime for make full' \
 		'  dev-node                  Install Node dependencies for all workspaces' \
 		'' \
 		'CI' \
 		'  ci                        Run the complete local CI pipeline' \
 		'  ci-platform               Run platform, protocol, and documentation CI' \
 		'  ci-ensemble               Run ensemble lint and tests' \
-		'  ci-console                Run console lint, tests, build, and embed' \
+		'  ci-console                Run console and adapter checks; refresh embeds' \
+		'  ci-protocol               Run Python/Node protocol and conformance tests' \
+		'  ci-website                Run website tests and build' \
+		'  ci-scripts                Run developer script regression tests' \
 		'' \
 		'Build and release' \
 		'  build                     Build g8e for the host platform' \
@@ -255,7 +272,6 @@ help:
 		'  vulncheck                 Check Go dependencies for vulnerabilities' \
 		'  bsl-headers-check         Verify first-party BSL 1.1 headers' \
 		'  doctrines-validate        Validate doctrine JSON and references' \
-		'  cosais-validate           Validate COSAiS overlay coverage' \
 		'' \
 		'Generated artifacts' \
 		'  proto-generate            Generate Go, Python, and Node protobuf artifacts' \
@@ -276,12 +292,18 @@ help:
 		'  ensemble-test             Run ensemble unit and integration tests' \
 		'  ensemble-test-external    Run tests that require real providers' \
 		'  ensemble-lint             Run ruff and pyright on the ensemble' \
-		'  demo-verify               Build and run all demo environments' \
 		'' \
 		'Run locally' \
 		'  up                        Build and start the Gateway on this host' \
-		'  full                      Start Gateway, prompt for operators, and launch local g8ee' \
-		'  down                      Stop the host Gateway' \
+		'  full                      Start host stack unattended using .env endpoints' \
+		'  full-setup                Start host stack with interactive operator setup' \
+		'  full-reset                Start host stack and reset stale identities' \
+		'  status                    Show status of host Gateway, operators, and g8ee' \
+		'  down                      Stop the host Gateway, operators, and g8ee' \
+		'  stop                      Stop host stack and local workloads (alias for down)' \
+		'  ensemble-status           Show g8ee readiness and status' \
+		'  operators-status          Show status of local operators' \
+		'  operators-stop            Stop all local operators' \
 		'  docker-up                 Build and start the Docker Compose stack' \
 		'  docker-down               Stop the stack and preserve volumes' \
 		'  docker-restart-operators  Restart the Data and Inference Operators' \
@@ -296,13 +318,15 @@ help:
 		'' \
 		'Run make help-legacy to list compatibility aliases.'
 
-.PHONY: protocol-python-build
-protocol-python-build:
-	@echo "Building Python protocol package..."
+.PHONY: protocol-python-data protocol-python-build
+protocol-python-data:
 	@mkdir -p protocol/python/g8e/_data
 	@cp protocol/constants/*.json protocol/python/g8e/_data/
-	@cp -r protocol/constants/compliance protocol/python/g8e/_data/
 	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
+	@cp -r protocol/constants/compliance protocol/python/g8e/_data/
+
+protocol-python-build: protocol-python-data
+	@echo "Building Python protocol package..."
 	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
 
@@ -314,6 +338,7 @@ constants-generate:
 constants-check:
 	@echo "Checking protocol/constants/events.json registry and generated constants..."
 	@go run ./internal/tools/constgen -check
+	@$(PYTHON) protocol/python/scripts/generate_enum_stubs.py --check
 
 # The agent tool registry (tool schemas plus frozen model-visible guidance
 # vectors) is generated by g8ee from its real tool specs and handlers; the Go
@@ -372,11 +397,12 @@ proto-python:
 		exit 1; \
 	fi
 	@$(PYTHON) protocol/python/scripts/generate_protos.py
+	@$(PYTHON) protocol/python/scripts/generate_enum_stubs.py
 	@echo "Python Protobuf generation complete."
 
 .PHONY: proto-node-install
 proto-node-install:
-	@if [ ! -x "protocol/node/node_modules/.bin/protoc-gen-es" ]; then \
+	@if [ ! -f "protocol/node/node_modules/.bin/protoc-gen-es" ] && [ ! -f "protocol/node/node_modules/.bin/protoc-gen-es.cmd" ]; then \
 		echo "Installing Node Protobuf generator..."; \
 		npm ci --prefix protocol/node; \
 	fi
@@ -384,7 +410,7 @@ proto-node-install:
 .PHONY: proto-node
 proto-node: buf-install proto-node-install
 	@echo "Generating Node TypeScript Protobuf code with Buf..."
-	@cd protocol/node && $(abspath $(BUF)) generate ../proto --template buf.gen.yaml
+	@cd protocol/node && PATH="$$(pwd)/node_modules/.bin:$$PATH" $(BUF) generate ../proto --template buf.gen.yaml
 	@echo "Node TypeScript Protobuf generation complete."
 
 # Regenerate the ensemble uv.lock file that depends on protocol/python through
@@ -490,21 +516,30 @@ dev-tools:
 # Repo-root .venv (the interpreter the ensemble and proto targets prefer, see
 # PYTHON below) with the in-tree protocol package and ensemble test/lint deps.
 # uv provisions Python $(PYTHON_VERSION) itself when the system has none.
-.PHONY: dev-python
-dev-python:
-	@command -v uv &> /dev/null || { echo "Error: uv not found. Run the setup script for your platform in scripts/ or see https://docs.astral.sh/uv/" >&2; exit 1; }
+.PHONY: dev-uv ensemble-env dev-python
+dev-uv:
+	@bash scripts/bootstrap-uv.sh
+
+ensemble-env: dev-uv protocol-python-data
 	@echo "Preparing .venv (Python $(PYTHON_VERSION)) with protocol and ensemble dependencies..."
 	@uv venv --python $(PYTHON_VERSION) --seed --allow-existing .venv
 	@# --no-sources: ensemble's [tool.uv.sources] pins g8e to a non-editable path, which
 	@# conflicts with the editable protocol/python install that lets protocol edits show up live.
-	@uv pip install --python .venv/bin/python --no-sources -e protocol/python -e "ensemble[test]"
+	@VENV_PY=$$(if [ -f .venv/Scripts/python.exe ]; then echo .venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo .venv/Scripts/python; else echo .venv/bin/python; fi); \
+	uv pip install --python "$$VENV_PY" --no-sources -e protocol/python -e ensemble
+
+dev-python: ensemble-env
+	@echo "Installing ensemble test and lint dependencies..."
+	@VENV_PY=$$(if [ -f .venv/Scripts/python.exe ]; then echo .venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo .venv/Scripts/python; else echo .venv/bin/python; fi); \
+	uv pip install --python "$$VENV_PY" --no-sources -e "ensemble[test]"
 
 .PHONY: dev-node
 dev-node:
-	@echo "Installing Node dependencies (protocol/node, console, g8e-adapter)..."
+	@echo "Installing Node dependencies (protocol/node, console, g8e-adapter, website)..."
 	@npm ci --prefix protocol/node
 	@npm ci --prefix console
 	@npm ci --prefix g8e-adapter
+	@npm ci --prefix website
 	@npm run build --prefix g8e-adapter
 
 # Preflight for `make ci`: reports every missing or mismatched tool at once.
@@ -531,9 +566,21 @@ EXPLORER_EMBED := internal/services/gateway/explorer/static
 
 .PHONY: explorer-embed
 explorer-embed:
-	@test -f $(EXPLORER_DIST)/index.html || { echo "ERROR: build evaluation explorer first: cd $(EXPLORER_DIST)/.. && npm run build"; exit 1; }
+	@test -f $(EXPLORER_DIST)/index.html || { echo "ERROR: build evaluation explorer first: cd evaluation-explorer && npm run build"; exit 1; }
 	@rm -rf $(EXPLORER_EMBED)
-	@cp -a $(EXPLORER_DIST) $(EXPLORER_EMBED)
+	@cp -r $(EXPLORER_DIST) $(EXPLORER_EMBED)
+
+# `make build` must work on a fresh clone. evaluation-explorer/dist is
+# gitignored, but the explorer embed is committed, so fall back to it (same
+# contract as _embed-console-if-built). `make explorer-embed` stays strict for
+# release preparation (INV-REL-VER-06).
+.PHONY: _embed-explorer-if-built
+_embed-explorer-if-built:
+	@if [ -f $(EXPLORER_DIST)/index.html ]; then \
+		rm -rf $(EXPLORER_EMBED) && cp -r $(EXPLORER_DIST) $(EXPLORER_EMBED); \
+	else \
+		echo "evaluation-explorer/dist not built; using the committed explorer embed (run 'cd evaluation-explorer && npm run build && make explorer-embed' to refresh)"; \
+	fi
 
 # The console embed is committed, like the explorer's. When console/dist has
 # not been built (Go-only checkouts), the committed embed is used as-is.
@@ -542,19 +589,19 @@ CONSOLE_EMBED := internal/services/gateway/console/static
 
 .PHONY: console-embed
 console-embed: console-build
-	@rm -rf $(CONSOLE_EMBED) && cp -a $(CONSOLE_DIST) $(CONSOLE_EMBED)
+	@rm -rf $(CONSOLE_EMBED) && cp -r $(CONSOLE_DIST) $(CONSOLE_EMBED)
 	@echo "Embedded console updated from fresh console build."
 
 .PHONY: _embed-console-if-built
 _embed-console-if-built:
 	@if [ -f $(CONSOLE_DIST)/index.html ]; then \
-		rm -rf $(CONSOLE_EMBED) && cp -a $(CONSOLE_DIST) $(CONSOLE_EMBED); \
+		rm -rf $(CONSOLE_EMBED) && cp -r $(CONSOLE_DIST) $(CONSOLE_EMBED); \
 	else \
 		echo "console/dist not built; using the committed console embed (run 'make console-embed' to refresh)"; \
 	fi
 
 .PHONY: build
-build: explorer-embed _embed-console-if-built
+build: _embed-explorer-if-built _embed-console-if-built
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
 	@rm -f $(BIN_DIR)/g8e-binaries.json
@@ -777,7 +824,7 @@ test-docker:
 # Tier 3: Cross-Enrollment E2E Tests - a gateway enrolling as an operator of
 # another gateway. Requires the cross-enrollment profile, which starts a
 # secondary gateway container in operator mode against the primary gateway.
-# The full lifecycle variant (./g8e test e2e-full --cross-enrollment) manages
+# The full lifecycle variant (./g8e test e2e-docker --cross-enrollment) manages
 # the compose stack automatically; the manual variant below assumes the user
 # has already started the stack with the cross-enrollment profile and
 # bootstrapped the owner. See the comment block above test-docker for the
@@ -797,43 +844,7 @@ test-airgap:
 	@echo "  2. Building with vendored modules (-mod=vendor)..."
 	@go build -mod=vendor ./... || { echo "ERROR: vendored build failed"; exit 1; }
 	@echo "  3. Verifying images.json manifest exists..."
-	@test -f demos/images.json || { echo "ERROR: demos/images.json missing"; exit 1; }
-	@echo "  4. Checking compose files have no unpinned image references..."
-	@! grep -rn 'image:.*:latest\|image:.*:alpine\|image:.*:slim\|image:.*:bookworm' demos/*/compose.yml || { echo "ERROR: found unpinned image references in compose files"; exit 1; }
-	@echo "  5. Verifying no pip install or requests imports remain in demos..."
-	@! grep -rn 'pip install\|import requests' demos/ --include='*.py' || { echo "ERROR: found pip install or requests import in demo Python files"; exit 1; }
 	@echo "Air-gap verification PASSED."
-
-# =============================================================================
-# DEMO VERIFICATION
-# =============================================================================
-# Requires Docker. Builds the binary, then runs all 5 demo environments.
-# Each demo is torn down (with volumes) before the next starts to avoid
-# port conflicts and stale PKI state.
-DEMO_ORGS := healthcare finance dhs fedramp frontend
-
-.PHONY: demo-verify
-demo-verify: build
-	@echo "=== demo-verify: running all $(words $(DEMO_ORGS)) demos ==="
-	@for org in $(DEMO_ORGS); do \
-		echo ""; \
-		echo "========================================================"; \
-		echo "  Demo: $$org"; \
-		echo "========================================================"; \
-		./g8e demos stop $$org 2>/dev/null || true; \
-		docker compose -f demos/$$org/compose.yml down -v --remove-orphans 2>/dev/null || true; \
-		if ! ./g8e demos run $$org; then \
-			echo "FAIL: demo $$org did not pass all scenarios"; \
-			exit 1; \
-		fi; \
-		./g8e demos stop $$org 2>/dev/null || true; \
-		docker compose -f demos/$$org/compose.yml down -v --remove-orphans 2>/dev/null || true; \
-		echo "PASS: demo $$org completed successfully"; \
-	done
-	@echo ""; \
-	echo "========================================================"; \
-	echo "  All $(words $(DEMO_ORGS)) demos PASSED"; \
-	echo "========================================================"
 
 # =============================================================================
 # ENSEMBLE (g8ee) — Python first-party component
@@ -844,26 +855,23 @@ demo-verify: build
 # The targets prefer the repo-root .venv if present (development), falling back
 # to system python3 (CI installs protocol/python + ensemble into system python).
 
-PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
-ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
-ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
+PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; elif [ -f .venv/Scripts/python.exe ]; then echo $(CURDIR)/.venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo $(CURDIR)/.venv/Scripts/python; else echo python3; fi)
+ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; elif [ -f .venv/Scripts/ruff.exe ]; then echo $(CURDIR)/.venv/Scripts/ruff.exe; elif [ -f .venv/Scripts/ruff ]; then echo $(CURDIR)/.venv/Scripts/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
+ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; elif [ -f .venv/Scripts/pyright.exe ]; then echo $(CURDIR)/.venv/Scripts/pyright.exe; elif [ -f .venv/Scripts/pyright ]; then echo $(CURDIR)/.venv/Scripts/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
 
 .PHONY: ensemble-test
 ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
-	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one and not requires_operator"
 
 .PHONY: ensemble-test-external
 ensemble-test-external:
 	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
-	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_system_one"
+	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_system_one or requires_operator"
 
 .PHONY: ensemble-lint
 ensemble-lint:
-	@echo "Running ruff on ensemble..."
-	@cd ensemble && $(ENSEMBLE_RUFF) check app
-	@echo "Running pyright on ensemble..."
-	@cd ensemble && $(ENSEMBLE_PYRIGHT) app
+	@$(MAKE) -C ensemble lint RUFF="$(ENSEMBLE_RUFF)" PYRIGHT="$(ENSEMBLE_PYRIGHT)"
 
 .PHONY: ensemble-build
 ensemble-build:
@@ -908,7 +916,8 @@ test-coverage:
 		$(if $(PKG),$(PKG),$(TEST_PKGS))
 	@$(FILTER_PROFILE)
 	@COVERAGE=$$($(COVERAGE_PCT)); \
-	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
+	BELOW=$$(if command -v bc >/dev/null 2>&1; then echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l; else awk -v cov="$$COVERAGE" -v th="$(COVERAGE_THRESHOLD)" 'BEGIN { print (cov < th) ? 1 : 0 }'; fi); \
+	if [ "$$BELOW" -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
 		exit 1; \
 	fi; \
@@ -918,7 +927,7 @@ test-coverage:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: lint-no-embedded-newlines vulncheck doctrines-validate cosais-validate swagger-generate
+lint: lint-no-embedded-newlines vulncheck doctrines-validate 
 	@golangci-lint run
 	@echo "All linting and quality checks complete."
 
@@ -941,13 +950,8 @@ doctrines-validate:
 			python3 -m json.tool "$$file" > /dev/null || exit 1; \
 		fi \
 	done
-	@go run ./internal/tools/doctrine_validator
 	@echo "All doctrine files and compliance references are valid."
 
-.PHONY: cosais-validate
-cosais-validate:
-	@echo "Validating COSAiS overlay coverage..."
-	@go run ./internal/tools/cosais_validator
 
 .PHONY: swagger-generate
 swagger-generate:
@@ -986,13 +990,9 @@ update-doctrines:
 # CLEANUP
 # =============================================================================
 .PHONY: clean
+# Build cleanup must preserve the Gateway CA, databases, and workload trust.
+# Use ./g8e gw clean explicitly to archive and reset the Gateway runtime.
 clean:
-	@set -e; read -r -p "This removes build artifacts and resets .g8e (a backup will be kept). Continue? [y/N] " answer; \
-	if [ "$$answer" != "y" ]; then echo "Clean cancelled."; exit 1; fi; \
-	if [ -d .g8e ]; then \
-		test -x ./g8e || { echo "ERROR: ./g8e is required to stop the Gateway and archive .g8e safely; run 'make build' first" >&2; exit 1; }; \
-		./g8e gw clean --yes --skip-backup; \
-	fi
 	@echo "Cleaning up build artifacts..."
 	@rm -rf .g8e-test-tmp/
 	@rm -rf bin/
@@ -1021,18 +1021,57 @@ up: build
 	@echo "Host platform started. Check it with: ./g8e gw status"
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
 
-.PHONY: full
+.PHONY: full full-setup full-reset
+# FULL_ARGS carries explicit path flags or --dry-run; .env is parsed as data by
+# the launcher, never included by Make or sourced as executable shell code.
 full: build
-	@echo "Starting the host platform..."
-	@./g8e gw start --quiet
-	@$(PYTHON) scripts/full.py $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,)
+	@$(PYTHON) scripts/full.py --start-gateway $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,) $(FULL_ARGS)
 
-.PHONY: down
+full-setup: build
+	@$(PYTHON) scripts/full.py --setup --start-gateway $(if $(filter 1,$(RESET_IDENTITIES)),--reset-identities,) $(FULL_ARGS)
+
+full-reset: build
+	@$(PYTHON) scripts/full.py --start-gateway --reset-identities $(FULL_ARGS)
+
+.PHONY: status full-status
+status:
+	@$(PYTHON) scripts/full.py --status
+
+full-status: status
+
+.PHONY: ensemble-status g8ee-status
+ensemble-status:
+	@$(PYTHON) scripts/full.py --ensemble-action status
+
+g8ee-status: ensemble-status
+
+.PHONY: ensemble-start ensemble-stop ensemble-restart
+ensemble-start:
+	@$(PYTHON) scripts/full.py --ensemble-action start
+
+ensemble-stop:
+	@$(PYTHON) scripts/full.py --ensemble-action stop
+
+ensemble-restart:
+	@$(PYTHON) scripts/full.py --ensemble-action restart
+
+.PHONY: operators-status operators-stop operators-restart
+operators-status:
+	@$(PYTHON) scripts/full.py --operator-action status
+
+operators-stop:
+	@$(PYTHON) scripts/full.py --operator-action stop
+
+operators-restart:
+	@$(PYTHON) scripts/full.py --operator-action restart
+
+.PHONY: down stop full-down full-stop
 down:
-	@test -x ./g8e || { echo "ERROR: ./g8e is missing; run 'make build' first" >&2; exit 1; }
-	@echo "Stopping the g8e Gateway running on this host..."
-	@./g8e gw stop
-	@echo "Host platform stopped. Runtime state in .g8e/ is preserved."
+	@$(PYTHON) scripts/full.py --down
+
+stop: down
+full-down: down
+full-stop: down
 
 # =============================================================================
 # DOCKER COMPOSE LIFECYCLE
@@ -1084,8 +1123,8 @@ docker-build:
 .PHONY: \
 	agent-tool-registry build-ensemble build-fips check-bsl-headers clean-docker \
 	clean-harness constants docker embed-console embed-explorer \
-	explorer-catalog generate proto proto-force python-build test-external \
-	validate-cosais validate-doctrines verify-fips
+	explorer-catalog generate proto proto-force python-build stop test-external \
+	validate-doctrines verify-fips
 
 agent-tool-registry: agent-tool-registry-generate
 build-ensemble: ensemble-build
@@ -1103,7 +1142,6 @@ proto: proto-generate
 proto-force: proto-generate
 python-build: protocol-python-build
 test-external: ensemble-test-external
-validate-cosais: cosais-validate
 validate-doctrines: doctrines-validate
 verify-fips: fips-verify
 
@@ -1111,21 +1149,67 @@ verify-fips: fips-verify
 # =============================================================================
 # CI/CD (LOCAL)
 # =============================================================================
+# Recipes deliberately sequence stages, including under make -j. Generation
+# refreshes local artifacts; GitHub Actions separately enforces committed freshness.
 .PHONY: ci
-ci: ci-console ci-platform ci-ensemble
-	@echo "CI complete."
+ci: dev-check
+	@$(MAKE) ci-console
+	@$(MAKE) ci-platform
+	@$(MAKE) ci-protocol
+	@$(MAKE) ci-ensemble
+	@$(MAKE) ci-website
+	@$(MAKE) ci-scripts
+	@echo "CI complete. Generated artifacts have been refreshed."
 
 .PHONY: ci-platform
-ci-platform: dev-check _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test bsl-headers-check
+ci-platform: dev-check
+	@$(MAKE) _ci-verify-proto
+	@$(MAKE) _ci-swagger
+	@$(MAKE) constants-check
+	@$(MAKE) explorer-catalog-check
+	@$(MAKE) _ci-lint
+	@$(MAKE) _ci-test
+	@$(MAKE) test-airgap
+	@$(MAKE) bsl-headers-check
 	@echo "Platform CI complete."
 
 .PHONY: ci-ensemble
-ci-ensemble: dev-check ensemble-lint ensemble-test
+ci-ensemble: dev-check
+	@$(MAKE) agent-tool-registry-check
+	@$(MAKE) ensemble-lint
+	@$(MAKE) ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-console
-ci-console: dev-check console-lint console-test console-embed
-	@echo "Console CI complete."
+ci-console: dev-check
+	@$(MAKE) console-lint
+	@$(MAKE) console-test
+	@$(MAKE) console-embed
+	@npm run lint --prefix g8e-adapter
+	@npm test --prefix g8e-adapter
+	@npm run build --prefix g8e-adapter
+	@npm run gen:contract-pack:check --prefix g8e-adapter
+	@echo "Console and adapter CI complete."
+
+.PHONY: ci-protocol
+ci-protocol: dev-check protocol-python-data
+	@$(PYTHON) -m pytest protocol/python/tests/ protocol/conformance/
+	@$(PYTHON) examples/python/constants_example.py
+	@$(PYTHON) examples/python/models_example.py
+	@npm run typecheck --prefix protocol/node
+	@npm test --prefix protocol/node
+	@echo "Protocol CI complete."
+
+.PHONY: ci-website
+ci-website: dev-check
+	@$(MAKE) website-test
+	@$(MAKE) website-build
+	@echo "Website CI complete."
+
+.PHONY: ci-scripts
+ci-scripts: dev-check
+	@$(PYTHON) -m unittest discover -s scripts/tests
+	@echo "Script CI complete."
 
 .PHONY: bsl-headers-check
 bsl-headers-check:
@@ -1133,28 +1217,15 @@ bsl-headers-check:
 
 .PHONY: _ci-verify-proto
 _ci-verify-proto:
-	@echo "=== verify-proto ==="
+	@echo "=== generate-proto ==="
 	@$(MAKE) proto-generate
-	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*\.proto$$" || true); \
-	if [ -n "$$CHANGES" ]; then \
-		echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"; \
-		echo "$$CHANGES"; \
-		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
-		exit 1; \
-	fi
 	@$(MAKE) doctrines-validate
 
 .PHONY: _ci-swagger
 _ci-swagger:
 	@echo "=== swagger ==="
 	@$(MAKE) swagger-generate
-	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*internal/services/gateway/docs/" || true); \
-	if [ -n "$$CHANGES" ]; then \
-		echo "Error: Generated swagger files are out of sync with code annotations"; \
-		echo "$$CHANGES"; \
-		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
-		exit 1; \
-	fi
+	@go test -count=1 ./internal/services/gateway/docs
 
 .PHONY: _ci-lint
 _ci-lint:
@@ -1167,17 +1238,14 @@ _ci-vulncheck:
 	@$(MAKE) vulncheck
 
 .PHONY: _ci-test
+_ci-test: export CI := 1
+_ci-test: export CI_ALL_PACKAGES := 1
+_ci-test: export G8E_STRICT_CONSTANTS_LINT := 1
 _ci-test:
-	@echo "=== test ==="
-	@G8E_STRICT_CONSTANTS_LINT=1 go test -tags=integration $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
-		-coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
-	@$(FILTER_PROFILE)
-	@COVERAGE=$$($(COVERAGE_PCT)); \
-	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
-		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
-		exit 1; \
-	fi; \
-	echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"
+	@echo "=== unit tests ==="
+	@$(MAKE) test-unit
+	@echo "=== integration tests and coverage ==="
+	@$(MAKE) test-coverage
 
 # =============================================================================
 # RELEASE

@@ -213,6 +213,13 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 
 	opts := platform.OperatorStartOptions{
 		GatewayConfig: serve.GatewayConfig{
+			OperatorRoles:                      constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference, constants.OperatorRoleProvenance, constants.OperatorRoleObserver},
+			InferenceOllamaEndpoint:            "http://localhost:11434",
+			InferenceKeepAlive:                 "-1",
+			ProviderBoundaryObserverID:         "observer",
+			ProvenanceOperatorID:               "provenance",
+			ProvenanceOperatorModelStorageRoot: "/models",
+
 			Posture:                           g8econfig.GatewayPosture("doctrine"),
 			HTTPPort:                          8080,
 			HTTPSPort:                         8443,

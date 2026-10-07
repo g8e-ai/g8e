@@ -15,6 +15,7 @@ uses these types instead of any provider-specific SDK types.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from importlib import import_module
 
 from app.constants import ThinkingLevel
 
@@ -55,7 +56,7 @@ def schema_from_model(model_cls: type, required_override: list[str] | None = Non
     This is a lazy wrapper around app.llm.llm_schema.schema_from_model to break
     circular imports between llm_types -> llm_schema -> models -> agent -> llm_types.
     """
-    from app.llm.llm_schema import schema_from_model as _schema_from_model
+    _schema_from_model = import_module("app.llm.llm_schema").schema_from_model
 
     return _schema_from_model(model_cls, required_override)
 

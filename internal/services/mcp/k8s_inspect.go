@@ -105,6 +105,7 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 				Error:     err.Error(),
 			}
 			resultJSON, _ := json.Marshal(result)
+			//nolint:nilerr // intentional fallback: validation error formatted into CallToolResult payload
 			return CallToolResult{
 				Content: []TextContent{
 					{
@@ -153,6 +154,7 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 				Error:     err.Error(),
 			}
 			resultJSON, _ := json.Marshal(result)
+			//nolint:nilerr // intentional fallback: validation error formatted into CallToolResult payload
 			return CallToolResult{
 				Content: []TextContent{
 					{
@@ -174,6 +176,7 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 				Error:     err.Error(),
 			}
 			resultJSON, _ := json.Marshal(result)
+			//nolint:nilerr // intentional fallback: validation error formatted into CallToolResult payload
 			return CallToolResult{
 				Content: []TextContent{
 					{

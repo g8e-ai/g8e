@@ -1167,3 +1167,22 @@ func TestNormalizeCanonicalJSON_EscapesHTMLCharacters(t *testing.T) {
 
 // Verify the handler implements governance.ExecutionHandler at compile time.
 var _ governance.ExecutionHandler = (*InferenceExecutionHandler)(nil)
+
+func TestInferenceHandler_ProviderOutageFailsOnlyCurrentRequest(t *testing.T) {
+	t.Parallel()
+	backend := &stubBackend{generateErr: constants.ErrInferenceBackendUnavailable}
+	handler := mustNewHandler(t, backend, &config.Config{Inference: config.InferenceConfig{Enabled: true}}, mustNewScrubbingSvc(t), testutil.NewTestLogger())
+	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:                "test-model", Messages: textInferenceMessages("test"),
+	})
+	command := &testCommandMessage{payload: payload}
+	_, err := handler.ExecuteVerifiedTransaction(t.Context(), constants.Event.Operator.Inference.Requested, command)
+	require.ErrorIs(t, err, constants.ErrInferenceBackendUnavailable)
+
+	backend.generateErr = nil
+	backend.generateResp = &models.GenerateResponse{Parts: textInferenceResponseParts("recovered"), FinishReason: "stop", Model: "test-model"}
+	_, err = handler.ExecuteVerifiedTransaction(t.Context(), constants.Event.Operator.Inference.Requested, command)
+	require.NoError(t, err, "the same handler must serve requests after provider recovery")
+}

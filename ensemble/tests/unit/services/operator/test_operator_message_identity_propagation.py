@@ -17,11 +17,13 @@ identity fields.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.constants import FileOperation, G8EE_COMPONENT
+import pytest
+
+from app.clients.gateway_operator_client import GatewayOperatorClient
+from app.constants import G8EE_COMPONENT, FileOperation
+from app.constants.config import ExecutionStatus
 from app.models.command_request_payloads import (
     FileEditRequestPayload,
     FsGrepRequestPayload,
@@ -29,12 +31,14 @@ from app.models.command_request_payloads import (
     FsReadRequestPayload,
 )
 from app.models.http_context import G8eHttpContext, RequestContext
-from app.models.investigations import EnrichedInvestigationContext
 from app.models.internal_api import DirectCommandRequest
+from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import OperatorDocument
 from app.models.pubsub_messages import FileEditResultPayload
 from app.models.tool_results import CommandInternalResult
-from app.constants.config import ExecutionStatus
+from app.services.operator.execution_service import OperatorExecutionService
+from app.services.operator.lfaa_service import OperatorLFAAService
+from app.services.protocols import FileServiceProtocol, FilesystemServiceProtocol
 from tests.fakes.builder import build_command_service
 
 
@@ -61,20 +65,48 @@ def _mock_envelope() -> MagicMock:
     envelope = MagicMock()
     envelope.payload = FileEditResultPayload(
         execution_id="exec-123",
-        operation="read",
+        operation=FileOperation.READ,
         file_path="/etc/test",
         status=ExecutionStatus.COMPLETED,
+        duration_seconds=0.0,
+        stdout_size=0,
+        stderr_size=0,
+        stdout_hash=None,
+        stderr_hash=None,
+        stored_locally=False,
+        bytes_written=None,
+        lines_changed=None,
+        backup_path=None,
+        error_message=None,
+        error_type=None,
         content="test content",
     )
     return envelope
 
 
-def _stub_execute_for_identity(service) -> None:
+def _stub_execute_for_identity(
+    service: FileServiceProtocol | FilesystemServiceProtocol,
+) -> AsyncMock:
     """Wire execution_service.execute to a no-op AsyncMock returning a completed result."""
     internal_result = CommandInternalResult(status=ExecutionStatus.COMPLETED, output="")
-    service.execution_service.execute = AsyncMock(
-        return_value=(internal_result, _mock_envelope())
+    execute = AsyncMock(return_value=(internal_result, _mock_envelope()))
+    service.execution_service.execute = execute
+    return execute
+
+
+def _execution_service_with_dispatch() -> tuple[OperatorExecutionService, AsyncMock]:
+    """Build an execution service whose Gateway dispatch is a recording AsyncMock."""
+    dispatch = AsyncMock(return_value={"success": True})
+    gateway_client = MagicMock(spec=GatewayOperatorClient)
+    gateway_client.dispatch = dispatch
+    exec_service = OperatorExecutionService(
+        approval_service=MagicMock(),
+        settings=MagicMock(),
+        ai_response_analyzer=MagicMock(),
+        investigation_service=MagicMock(),
+        gateway_operator_client=gateway_client,
     )
+    return exec_service, dispatch
 
 
 class TestFileServiceIdentityPropagation:
@@ -85,7 +117,7 @@ class TestFileServiceIdentityPropagation:
         command_service = build_command_service()
         file_service = command_service._file_service
 
-        _stub_execute_for_identity(file_service)
+        execute = _stub_execute_for_identity(file_service)
         mock_op = _mock_operator()
         file_service.execution_service.resolve_operators = MagicMock(return_value=[mock_op])
 
@@ -107,7 +139,7 @@ class TestFileServiceIdentityPropagation:
 
         await file_service.execute_file_edit(args, g8e_context, investigation)
 
-        msg = file_service.execution_service.execute.call_args.kwargs["g8e_message"]
+        msg = execute.call_args.kwargs["g8e_message"]
         assert msg.user_id == "user-123", "user_id must be propagated from g8e_context"
         assert msg.cli_session_id == "cli-456", "cli_session_id must be propagated from g8e_context"
 
@@ -120,7 +152,7 @@ class TestFilesystemServiceIdentityPropagation:
         command_service = build_command_service()
         fs_service = command_service._filesystem_service
 
-        _stub_execute_for_identity(fs_service)
+        execute = _stub_execute_for_identity(fs_service)
         mock_op = _mock_operator()
         fs_service.execution_service.resolve_operators = MagicMock(return_value=[mock_op])
 
@@ -140,7 +172,7 @@ class TestFilesystemServiceIdentityPropagation:
 
         await fs_service.execute_fs_list(args, investigation, g8e_context)
 
-        msg = fs_service.execution_service.execute.call_args.kwargs["g8e_message"]
+        msg = execute.call_args.kwargs["g8e_message"]
         assert msg.user_id == "user-123"
         assert msg.cli_session_id == "cli-456"
 
@@ -149,7 +181,7 @@ class TestFilesystemServiceIdentityPropagation:
         command_service = build_command_service()
         fs_service = command_service._filesystem_service
 
-        _stub_execute_for_identity(fs_service)
+        execute = _stub_execute_for_identity(fs_service)
         mock_op = _mock_operator()
         fs_service.execution_service.resolve_operators = MagicMock(return_value=[mock_op])
 
@@ -170,7 +202,7 @@ class TestFilesystemServiceIdentityPropagation:
 
         await fs_service.execute_fs_grep(args, investigation, g8e_context)
 
-        msg = fs_service.execution_service.execute.call_args.kwargs["g8e_message"]
+        msg = execute.call_args.kwargs["g8e_message"]
         assert msg.user_id == "user-123"
         assert msg.cli_session_id == "cli-456"
 
@@ -179,7 +211,7 @@ class TestFilesystemServiceIdentityPropagation:
         command_service = build_command_service()
         fs_service = command_service._filesystem_service
 
-        _stub_execute_for_identity(fs_service)
+        execute = _stub_execute_for_identity(fs_service)
         mock_op = _mock_operator()
         fs_service.execution_service.resolve_operators = MagicMock(return_value=[mock_op])
 
@@ -199,7 +231,7 @@ class TestFilesystemServiceIdentityPropagation:
 
         await fs_service.execute_file_read(args, investigation, g8e_context)
 
-        msg = fs_service.execution_service.execute.call_args.kwargs["g8e_message"]
+        msg = execute.call_args.kwargs["g8e_message"]
         assert msg.user_id == "user-123"
         assert msg.cli_session_id == "cli-456"
 
@@ -209,11 +241,7 @@ class TestExecutionServiceIdentityPropagation:
 
     @pytest.mark.asyncio
     async def test_send_command_to_operator_propagates_user_id_and_cli_session_id(self):
-        command_service = build_command_service()
-        exec_service = command_service._execution_service
-
-        exec_service._gateway_operator_client = MagicMock()
-        exec_service._gateway_operator_client.dispatch = AsyncMock(return_value={"success": True})
+        exec_service, dispatch = _execution_service_with_dispatch()
 
         mock_op = MagicMock()
         mock_op.operator_id = "op-123"
@@ -237,17 +265,14 @@ class TestExecutionServiceIdentityPropagation:
         for _ in range(5):
             await asyncio.sleep(0)
 
-        dispatch_kwargs = exec_service._gateway_operator_client.dispatch.call_args.kwargs
+        assert dispatch.call_args is not None
+        dispatch_kwargs = dispatch.call_args.kwargs
         assert dispatch_kwargs["context"].user_id == "user-123"
         assert dispatch_kwargs["context"].cli_session_id == "cli-456"
 
     @pytest.mark.asyncio
     async def test_cancel_command_propagates_user_id_and_cli_session_id(self):
-        command_service = build_command_service()
-        exec_service = command_service._execution_service
-
-        exec_service._gateway_operator_client = MagicMock()
-        exec_service._gateway_operator_client.dispatch = AsyncMock(return_value={"success": True})
+        exec_service, dispatch = _execution_service_with_dispatch()
 
         g8e_context = _identity_context()
 
@@ -258,7 +283,8 @@ class TestExecutionServiceIdentityPropagation:
             g8e_context=g8e_context,
         )
 
-        dispatch_kwargs = exec_service._gateway_operator_client.dispatch.call_args.kwargs
+        assert dispatch.call_args is not None
+        dispatch_kwargs = dispatch.call_args.kwargs
         assert dispatch_kwargs["context"].user_id == "user-123"
         assert dispatch_kwargs["context"].cli_session_id == "cli-456"
 
@@ -268,12 +294,10 @@ class TestLFAAServiceIdentityPropagation:
 
     @pytest.mark.asyncio
     async def test_send_direct_exec_audit_event_propagates_user_id_and_cli_session_id(self):
-        command_service = build_command_service()
-        lfaa_service = command_service._lfaa_service
-
-        lfaa_service._gateway_operator_client.ingest_audit_record = AsyncMock(
-            return_value={"seq": 1, "hash": "abc"}
-        )
+        ingest_audit_record = AsyncMock(return_value={"seq": 1, "hash": "abc"})
+        gateway_client = MagicMock(spec=GatewayOperatorClient)
+        gateway_client.ingest_audit_record = ingest_audit_record
+        lfaa_service = OperatorLFAAService(gateway_client)
 
         g8e_context = _identity_context()
         g8e_context.bound_operators = [
@@ -285,6 +309,9 @@ class TestLFAAServiceIdentityPropagation:
         )
 
         assert result is True
-        kwargs = lfaa_service._gateway_operator_client.ingest_audit_record.await_args.kwargs
+        assert ingest_audit_record.await_args is not None
+        kwargs = ingest_audit_record.await_args.kwargs
         assert kwargs["user_id"] == "user-123", "user_id must be propagated from g8e_context"
-        assert kwargs["cli_session_id"] == "cli-456", "cli_session_id must be propagated from g8e_context"
+        assert kwargs["cli_session_id"] == "cli-456", (
+            "cli_session_id must be propagated from g8e_context"
+        )

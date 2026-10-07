@@ -34,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/ollama"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/spf13/cobra"
 )
 
@@ -41,6 +42,7 @@ type operatorListEntry struct {
 	OperatorID                      string                   `json:"operator_id"`
 	OperatorSessionID               string                   `json:"operator_session_id"`
 	OperatorType                    constants.OperatorType   `json:"operator_type"`
+	OperatorRoles                   constants.OperatorRoles  `json:"operator_roles"`
 	Status                          constants.OperatorStatus `json:"status"`
 	Component                       constants.ComponentName  `json:"component"`
 	Hostname                        string                   `json:"hostname,omitempty"`
@@ -284,6 +286,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 						OperatorID:        op.ID,
 						OperatorSessionID: op.OperatorSessionID,
 						OperatorType:      op.OperatorType,
+						OperatorRoles:     operatorcapability.GetOperatorRoles(op),
 						Status:            op.Status,
 						Component:         op.Component,
 						Hostname:          operatorHostnameValue(op),
@@ -332,6 +335,7 @@ func operatorStartCmd() *cobra.Command {
 	var latticeSandboxesToken string
 	var latticeEntityName string
 	var latticePostureFloor string
+	var roles constants.OperatorRoles
 	var inferenceEnabled bool
 	var inferenceOllamaEndpoint string
 	var inferenceKeepAlive string
@@ -351,6 +355,7 @@ func operatorStartCmd() *cobra.Command {
 			}
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			opts := serve.ServeOperatorOptions{
+				OperatorRoles:                   roles,
 				LogLevel:                        logLevel,
 				Endpoint:                        endpoint,
 				TrustBundlePath:                 trustBundle,
@@ -374,6 +379,23 @@ func operatorStartCmd() *cobra.Command {
 				ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot,
 			}
 
+			if roles.Has(constants.OperatorRoleEmbedded) {
+				return serve.RunGateway(serve.GatewayConfig{
+					WorkingDir: workingDir,
+					OperatorRoles: operatorcapability.ResolveOperatorRoles(&models.RuntimeConfig{
+						Roles:                           roles,
+						InferenceEnabled:                inferenceEnabled,
+						ProvenanceOperatorEnabled:       provenanceOperatorEnabled,
+						ProviderBoundaryObserverEnabled: providerBoundaryObserverEnabled,
+					}),
+					LogLevel:                           logLevel,
+					InferenceOllamaEndpoint:            inferenceOllamaEndpoint,
+					InferenceKeepAlive:                 inferenceKeepAlive,
+					ProviderBoundaryObserverID:         providerBoundaryObserverID,
+					ProvenanceOperatorID:               provenanceOperatorID,
+					ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot,
+				}, shared.VersionInfoFromCmd(cmd))
+			}
 			// Run operator (this blocks until shutdown)
 			serve.RunOperator(opts, shared.VersionInfoFromCmd(cmd))
 			return nil
@@ -399,6 +421,7 @@ func operatorStartCmd() *cobra.Command {
 
 	// Inference (g8ellama) flags. Enable when the operator runs as an
 	// Inference Node calling the configured remote Ollama provider.
+	cmd.Flags().Var(&roles, "roles", "Comma-separated operator roles: embedded,data,inference,provenance,observer (repeatable; default: data). Embedded runs the Gateway in process")
 	cmd.Flags().BoolVar(&inferenceEnabled, "inference-enabled", false, "Enable governed LLM inference backend (g8ellama)")
 	cmd.Flags().StringVar(&inferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Remote Ollama provider endpoint (default: http://127.0.0.1:11434)")
 	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", fmt.Sprintf("Ollama keep-alive duration (default: %s for infinite)", constants.InferenceDefaultKeepAlive))
@@ -495,7 +518,7 @@ func operatorScpCmd() *cobra.Command {
 			}
 
 			if prompt {
-				if err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression); err != nil {
+				if err := promptForScpOptions(cmd, &port, &identityFile, &preserve, &verbose, &compression); err != nil {
 					return err
 				}
 			}
@@ -532,7 +555,7 @@ func operatorScpCmd() *cobra.Command {
 	return cmd
 }
 
-func promptForScpOptions(cmd *cobra.Command, port *int, identityFile *string, recursive, preserve, verbose, compression *bool) error {
+func promptForScpOptions(cmd *cobra.Command, port *int, identityFile *string, preserve, verbose, compression *bool) error {
 	reader := bufio.NewReader(cmd.InOrStdin())
 
 	cmd.Println("\nSCP Configuration (press Enter to use default/skip):")

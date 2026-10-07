@@ -5,6 +5,8 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
+//go:build integration
+
 package governance
 
 import (
@@ -22,7 +24,6 @@ import (
 )
 
 func TestRemoteStateRootProvider_GetCurrentStateRoot_Success(t *testing.T) {
-	t.Parallel()
 
 	wantRoot := "abc123def456"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +42,6 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_Success(t *testing.T) {
 }
 
 func TestRemoteStateRootProvider_GetCurrentStateRoot_Non200Status(t *testing.T) {
-	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -58,7 +58,6 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_Non200Status(t *testing.T) 
 }
 
 func TestRemoteStateRootProvider_GetCurrentStateRoot_EmptyRoot(t *testing.T) {
-	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -78,7 +77,6 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_EmptyRoot(t *testing.T) {
 }
 
 func TestRemoteStateRootProvider_GetCurrentStateRoot_InvalidJSON(t *testing.T) {
-	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -96,7 +94,6 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_InvalidJSON(t *testing.T) {
 }
 
 func TestRemoteStateRootProvider_GetCurrentStateRoot_UnreachableServer(t *testing.T) {
-	t.Parallel()
 
 	// Create a server and immediately close it to simulate an unreachable gateway.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))

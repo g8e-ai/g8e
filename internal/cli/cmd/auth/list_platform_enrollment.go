@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -98,23 +99,11 @@ completed enrollment.`,
 					enrollment.InstanceID,
 					enrollment.Hostname,
 					string(enrollment.State),
-					platformEnrollmentIssuedIdentity(enrollment),
+					auth.PlatformEnrollmentIssuedIdentity(enrollment),
 				)
 			}
 			return nil
 		},
 	}
 	return cmd
-}
-
-func platformEnrollmentIssuedIdentity(enrollment models.PlatformEnrollmentEnrolledRequest) string {
-	switch enrollment.ComponentKind {
-	case models.PlatformComponentOperator:
-		if enrollment.OperatorID != "" {
-			return enrollment.OperatorID
-		}
-		return enrollment.OperatorSessionID
-	default:
-		return enrollment.PolicyID
-	}
 }

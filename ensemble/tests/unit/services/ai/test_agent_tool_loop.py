@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import StreamChunkFromModelType
+from app.constants import CommandGenerationOutcome, StreamChunkFromModelType
 from app.llm.llm_types import ToolCall
 from app.models.agent import ExecutorCommandArgs, OperatorContext, SageOperatorRequest
 from app.models.http_context import G8eHttpContext
@@ -37,9 +37,11 @@ from app.services.ai.generator import (
     TribunalDisabledError,
 )
 from app.services.ai.tool_service import AIToolService
+from app.services.operator.execution_service import OperatorExecutionService
+from app.utils.time_ids.ids import is_valid_command_execution_id
 from app.utils.validation.blacklist_validator import CommandBlacklistValidator
 from app.utils.validation.whitelist_validator import CommandWhitelistValidator
-from app.utils.time_ids.ids import is_valid_command_execution_id
+from tests.fakes.tool_helpers import create_tool_service_fake
 
 pytestmark = [pytest.mark.unit]
 
@@ -129,7 +131,9 @@ async def test_execute_turn_tool_calls_assigns_execution_id_when_orchestration_f
         chunks = [
             chunk
             async for chunk in execute_turn_tool_calls(
-                pending_tool_calls=[ToolCall(id="call-1", name="query_investigation_context", args={})],
+                pending_tool_calls=[
+                    ToolCall(id="call-1", name="query_investigation_context", args={})
+                ],
                 tool_executor=mock_tool_executor,
                 investigation=mock_investigation,
                 g8e_context=mock_g8e_context,
@@ -144,6 +148,7 @@ async def test_execute_turn_tool_calls_assigns_execution_id_when_orchestration_f
         StreamChunkFromModelType.TOOL_RESULT,
     ]
     assert chunks[0].data.execution_id == chunks[1].data.execution_id
+    assert chunks[0].data.execution_id is not None
     assert is_valid_command_execution_id(chunks[0].data.execution_id)
 
 
@@ -155,6 +160,9 @@ class TestTribunalInvokerFetchCommandConstraints:
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=False,
             enable_blacklisting=False,
+            whitelisted_commands="",
+            enable_auto_approve=True,
+            auto_approved_commands="",
         )
         mock_tool_executor.whitelist_validator.all_commands = []
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(
@@ -173,6 +181,9 @@ class TestTribunalInvokerFetchCommandConstraints:
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=True,
             enable_blacklisting=False,
+            whitelisted_commands="",
+            enable_auto_approve=True,
+            auto_approved_commands="",
         )
         mock_tool_executor.whitelist_validator.all_commands = ["cat", "ls", "ping"]
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(
@@ -199,6 +210,9 @@ class TestTribunalInvokerFetchCommandConstraints:
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=False,
             enable_blacklisting=True,
+            whitelisted_commands="",
+            enable_auto_approve=True,
+            auto_approved_commands="",
         )
         mock_tool_executor.whitelist_validator.all_commands = []
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(
@@ -226,6 +240,8 @@ class TestTribunalInvokerFetchCommandConstraints:
             enable_whitelisting=True,
             enable_blacklisting=False,
             whitelisted_commands="uptime,df,free",
+            enable_auto_approve=True,
+            auto_approved_commands="",
         )
         mock_tool_executor.whitelist_validator.all_commands = []
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(
@@ -263,11 +279,13 @@ class TestTribunalInvokerRun:
         mock_tool_executor,
     ):
         """Test raises TribunalError when Tribunal fails and surfaces it unchanged."""
-        from unittest.mock import patch
 
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=False,
             enable_blacklisting=False,
+            whitelisted_commands="",
+            enable_auto_approve=True,
+            auto_approved_commands="",
         )
         mock_tool_executor.whitelist_validator.all_commands = []
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(
@@ -302,11 +320,13 @@ class TestTribunalInvokerRun:
         mock_tool_executor,
     ):
         """Test preserves target_operators, expected_output_lines, timeout_seconds (regression test)."""
-        from unittest.mock import patch
 
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=False,
             enable_blacklisting=False,
+            whitelisted_commands="",
+            enable_auto_approve=True,
+            auto_approved_commands="",
         )
         mock_tool_executor.whitelist_validator.all_commands = []
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(
@@ -318,7 +338,7 @@ class TestTribunalInvokerRun:
             request="List all files in /tmp",
             guidelines="Use ls with detailed output",
             final_command="ls -la /tmp",
-            outcome="verified",
+            outcome=CommandGenerationOutcome.VERIFIED,
             vote_score=1.0,
             auditor_passed=True,
             auditor_revision=None,
@@ -355,11 +375,13 @@ class TestTribunalInvokerRun:
         mock_tool_executor,
     ):
         """Test correctly propagates operator context defaults when investigation.operator_documents is empty."""
-        from unittest.mock import patch
 
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=False,
             enable_blacklisting=False,
+            whitelisted_commands="",
+            enable_auto_approve=True,
+            auto_approved_commands="",
         )
         mock_tool_executor.whitelist_validator.all_commands = []
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(
@@ -373,7 +395,7 @@ class TestTribunalInvokerRun:
             request="List all files in /tmp",
             guidelines="Use ls with detailed output",
             final_command="ls -la /tmp",
-            outcome="verified",
+            outcome=CommandGenerationOutcome.VERIFIED,
             vote_score=1.0,
             auditor_passed=True,
             auditor_revision=None,
@@ -409,11 +431,13 @@ class TestTribunalInvokerRun:
         mock_tool_executor,
     ):
         """Contract test: SageOperatorRequest → TribunalInvoker.run() → ExecutorCommandArgs preserves target_operators, expected_output_lines, timeout_seconds."""
-        from unittest.mock import patch
 
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=False,
             enable_blacklisting=False,
+            whitelisted_commands="",
+            enable_auto_approve=True,
+            auto_approved_commands="",
         )
         mock_tool_executor.whitelist_validator.all_commands = []
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(
@@ -425,7 +449,7 @@ class TestTribunalInvokerRun:
             request="List all files in /tmp",
             guidelines="Use ls with detailed output",
             final_command="ls -la /tmp",
-            outcome="verified",
+            outcome=CommandGenerationOutcome.VERIFIED,
             vote_score=1.0,
             auditor_passed=True,
             auditor_revision=None,
@@ -473,13 +497,12 @@ class TestAIToolServiceAiResponseAnalyzer:
 
     def test_ai_response_analyzer_delegates_to_execution_service(self):
         """AIToolService.ai_response_analyzer returns the analyzer from the wired execution service."""
-        from tests.fakes.tool_helpers import create_tool_service_fake
 
         fake_analyzer = MagicMock()
         tool_service = create_tool_service_fake()
-        tool_service.operator_command_service._execution_service._ai_response_analyzer = (
-            fake_analyzer
-        )
+        execution_service = tool_service.operator_command_service._execution_service
+        assert isinstance(execution_service, OperatorExecutionService)
+        execution_service._ai_response_analyzer = fake_analyzer
 
         result = tool_service.ai_response_analyzer
 
@@ -487,7 +510,6 @@ class TestAIToolServiceAiResponseAnalyzer:
 
     def test_ai_response_analyzer_attribute_exists_on_real_tool_service(self):
         """AIToolService exposes ai_response_analyzer (regression: AttributeError in TribunalInvoker.run)."""
-        from tests.fakes.tool_helpers import create_tool_service_fake
 
         tool_service = create_tool_service_fake()
 

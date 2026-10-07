@@ -142,9 +142,9 @@ func TestGatewayProtocols_MalformedRequestsReturnJSONRPCErrors(t *testing.T) {
 	af := newAdapterFixture(t, "error-cases", downstreamServer.URL)
 
 	for _, adapter := range bothAdapters() {
-		adapter := adapter
+
 		for _, tc := range errorCases {
-			tc := tc
+
 			t.Run(adapter.name()+"/"+tc.name, func(t *testing.T) {
 				body := tc.buildBody(adapter)
 				status, respBody := af.postAdapterWithStatus(t, adapter, body)

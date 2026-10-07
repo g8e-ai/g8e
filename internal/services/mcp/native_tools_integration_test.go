@@ -712,7 +712,16 @@ func checkOperatorReachable(t *testing.T, operatorURL string) {
 	conn.Close()
 }
 
-func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, error) {
+// mustUUID returns a fresh UUID string, failing the test on the
+// (practically impossible) failure of the OS random source.
+func mustUUID(t *testing.T) string {
+	t.Helper()
+	id, err := uuid.NewString()
+	require.NoError(t, err)
+	return id
+}
+
+func setupMTLSClient(t *testing.T, _ string) (*http.Client, string, error) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
@@ -763,13 +772,13 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 	// Build governance envelope with native tool call
 	now := time.Now()
 	envelope := &commonv1.GovernanceEnvelope{
-		Id:              uuid.NewString(),
+		Id:              mustUUID(t),
 		Timestamp:       timestamppb.New(now),
 		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
 		TransactionHash: computeTransactionHash(toolName, arguments),
 		ActionType:      string(constants.ActionTypeMcpCall),
 		EventType:       string(constants.EventOperatorMcpCallRequested),
-		Payload:         buildToolCallPayload(toolName, arguments),
+		Payload:         buildToolCallPayload(t, toolName, arguments),
 		Governance: &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
 				ConsensusSetId: "test-consensus",
@@ -812,11 +821,11 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 	return &receipt
 }
 
-func buildToolCallPayload(toolName string, arguments json.RawMessage) []byte {
+func buildToolCallPayload(t *testing.T, toolName string, arguments json.RawMessage) []byte {
 	mcpPayload := &operatorv1.McpCallRequested{
 		ToolName:      toolName,
 		ArgumentsJson: string(arguments),
-		ExecutionId:   uuid.NewString(),
+		ExecutionId:   mustUUID(t),
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -833,7 +842,7 @@ func computeTransactionHash(toolName string, arguments json.RawMessage) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func verifyAuditVaultPersistence(t *testing.T, transactionID, sessionID string) {
+func verifyAuditVaultPersistence(t *testing.T, transactionID, _ string) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))

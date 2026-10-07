@@ -10,9 +10,8 @@ package tui
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -26,383 +25,67 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-func TestParseStage(t *testing.T) {
-	tests := []struct {
-		input string
-		want  PipelineStage
-	}{
-		{"L1", StageL1},
-		{"L2", StageL2},
-		{"L3", StageL3},
-		{"L4", StageL4},
-		{"L5", StageL5},
-		{"l1", StageL1},
-		{"l3", StageL3},
-		{"unknown", StageL1},
-		{"", StageL1},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.want, parseStage(tt.input))
-		})
-	}
-}
-
-func TestParseStatus(t *testing.T) {
-	tests := []struct {
-		input string
-		want  PipelineStatus
-	}{
-		{"active", StatusActive},
-		{"processing", StatusActive},
-		{"waiting", StatusWaiting},
-		{"passed", StatusPassed},
-		{"ok", StatusPassed},
-		{"failed", StatusFailed},
-		{"blocked", StatusFailed},
-		{"idle", StatusIdle},
-		{"unknown", StatusIdle},
-		{"", StatusIdle},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.want, parseStatus(tt.input))
-		})
-	}
-}
-
 func TestTranslateSSEEvent(t *testing.T) {
 	fixedTime := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
 	originalTimeNow := timeNow
 	t.Cleanup(func() { timeNow = originalTimeNow })
 	timeNow = func() time.Time { return fixedTime }
 
-	t.Run("pipeline.advance maps to PipelineMsg active", func(t *testing.T) {
-		data := `{"type":"pipeline.advance","payload":{"stage":"L1","status":"active","tx_id":"tx-001","detail":"doctrine check"}}`
-		msgs := translateSSEEvents("pipeline.advance", data)
-		msg := msgs[0]
-		pm, ok := msg.(PipelineMsg)
-		require.True(t, ok, "expected PipelineMsg, got %T", msg)
-		assert.Equal(t, StageL1, pm.Stage)
-		assert.Equal(t, StatusActive, pm.Status)
-		assert.Equal(t, "tx-001", pm.TxID)
-		assert.Equal(t, "doctrine check", pm.Detail)
-	})
-
-	t.Run("pipeline.waiting maps to PipelineMsg waiting", func(t *testing.T) {
-		data := `{"type":"pipeline.waiting","payload":{"stage":"L3","status":"waiting","detail":"FIDO2 touch required"}}`
-		msgs := translateSSEEvents("pipeline.waiting", data)
-		msg := msgs[0]
-		pm, ok := msg.(PipelineMsg)
+	t.Run("unknown event type falls back to LedgerMsg", func(t *testing.T) {
+		data := `{"type":"system.heartbeat","data":{"status":"ok"}}`
+		msgs := translateSSEEvents("system.heartbeat", data)
+		require.Len(t, msgs, 1)
+		lm, ok := msgs[0].(LedgerMsg)
 		require.True(t, ok)
-		assert.Equal(t, StageL3, pm.Stage)
-		assert.Equal(t, StatusWaiting, pm.Status)
-		assert.Equal(t, "FIDO2 touch required", pm.Detail)
-	})
-
-	t.Run("pipeline.failed maps to PipelineMsg failed", func(t *testing.T) {
-		data := `{"type":"pipeline.failed","payload":{"stage":"L1","status":"failed","detail":"PII EGRESS BLOCKED"}}`
-		msgs := translateSSEEvents("pipeline.failed", data)
-		msg := msgs[0]
-		pm, ok := msg.(PipelineMsg)
-		require.True(t, ok)
-		assert.Equal(t, StageL1, pm.Stage)
-		assert.Equal(t, StatusFailed, pm.Status)
-		assert.Equal(t, "PII EGRESS BLOCKED", pm.Detail)
-	})
-
-	t.Run("ledger.entry maps to LedgerMsg with level", func(t *testing.T) {
-		data := `{"type":"ledger.entry","payload":{"level":"critical","message":"PII EGRESS BLOCKED"}}`
-		msgs := translateSSEEvents("ledger.entry", data)
-		msg := msgs[0]
-		lm, ok := msg.(LedgerMsg)
-		require.True(t, ok)
-		assert.Equal(t, LevelCritical, lm.Level)
-		assert.Equal(t, "PII EGRESS BLOCKED", lm.Message)
+		assert.Contains(t, lm.Message, "system.heartbeat")
 		assert.Equal(t, fixedTime, lm.Time)
 	})
 
-	t.Run("ledger.entry maps warn level", func(t *testing.T) {
-		data := `{"type":"ledger.entry","payload":{"level":"warn","message":"approaching threshold"}}`
-		msgs := translateSSEEvents("ledger.entry", data)
-		msg := msgs[0]
-		lm, ok := msg.(LedgerMsg)
-		require.True(t, ok)
-		assert.Equal(t, LevelWarn, lm.Level)
-	})
-
-	t.Run("consensus.vote maps to ConsensusMsg", func(t *testing.T) {
-		data := `{"type":"consensus.vote","payload":{"member":"axiom","decision":true,"signed":true,"quorum":3,"total":5}}`
-		msgs := translateSSEEvents("consensus.vote", data)
-		msg := msgs[0]
-		cm, ok := msg.(ConsensusMsg)
-		require.True(t, ok)
-		assert.Equal(t, constants.ConsensusMemberAxiom, cm.Member)
-		assert.True(t, cm.Decision)
-		assert.True(t, cm.Signed)
-		assert.Equal(t, 3, cm.Quorum)
-		assert.Equal(t, 5, cm.Total)
-		assert.Equal(t, ConsensusPending, cm.Result)
-	})
-
-	t.Run("consensus.result maps to ConsensusMsg with result", func(t *testing.T) {
-		data := `{"type":"consensus.result","payload":{"result":"rejected","hash":"abcdef1234567890"}}`
-		msgs := translateSSEEvents("consensus.result", data)
-		msg := msgs[0]
-		cm, ok := msg.(ConsensusMsg)
-		require.True(t, ok)
-		assert.Equal(t, ConsensusRejected, cm.Result)
-		assert.Equal(t, "abcdef1234567890", cm.Hash)
-	})
-
-	t.Run("consensus.result reached", func(t *testing.T) {
-		data := `{"type":"consensus.result","payload":{"result":"reached","hash":"abc123"}}`
-		msgs := translateSSEEvents("consensus.result", data)
-		msg := msgs[0]
-		cm, ok := msg.(ConsensusMsg)
-		require.True(t, ok)
-		assert.Equal(t, ConsensusReached, cm.Result)
-	})
-
-	t.Run("unknown event type falls back to LedgerMsg", func(t *testing.T) {
-		data := `{"type":"system.heartbeat","payload":{"status":"ok"}}`
-		msgs := translateSSEEvents("system.heartbeat", data)
-		msg := msgs[0]
-		lm, ok := msg.(LedgerMsg)
-		require.True(t, ok)
-		assert.Contains(t, lm.Message, "system.heartbeat")
+	t.Run("event families with no Gateway producer are not special-cased", func(t *testing.T) {
+		for _, eventType := range []string{"pipeline.advance", "ledger.entry", "consensus.vote"} {
+			msgs := translateSSEEvents("", `{"type":"`+eventType+`","data":{}}`)
+			require.Len(t, msgs, 1, eventType)
+			_, ok := msgs[0].(LedgerMsg)
+			assert.True(t, ok, "%s should fall back to a ledger line", eventType)
+		}
 	})
 
 	t.Run("non-JSON data falls back to LedgerMsg with raw text", func(t *testing.T) {
 		msgs := translateSSEEvents("unknown", "plain text message")
-		msg := msgs[0]
-		lm, ok := msg.(LedgerMsg)
+		require.Len(t, msgs, 1)
+		lm, ok := msgs[0].(LedgerMsg)
 		require.True(t, ok)
 		assert.Equal(t, "plain text message", lm.Message)
 		assert.Equal(t, LevelInfo, lm.Level)
 	})
 
 	t.Run("uses event type from SSE header when payload type is empty", func(t *testing.T) {
-		data := `{"type":"","payload":{"stage":"L2","status":"active"}}`
-		msgs := translateSSEEvents("pipeline.advance", data)
-		msg := msgs[0]
-		pm, ok := msg.(PipelineMsg)
+		data := `{"type":"","data":{"approval_id":"app-2","file_path":"/etc/hosts"}}`
+		msgs := translateSSEEvents(string(constants.EventOperatorFileEditApprovalRequested), data)
+		require.Len(t, msgs, 2)
+		pm, ok := msgs[0].(PipelineMsg)
 		require.True(t, ok)
-		assert.Equal(t, StageL2, pm.Stage)
-		assert.Equal(t, StatusActive, pm.Status)
+		assert.Equal(t, StageL3, pm.Stage)
+		assert.Contains(t, pm.Detail, "/etc/hosts")
 	})
 
 	t.Run("R14: extracts type from SSEPushPayload envelope when eventType is empty", func(t *testing.T) {
-		// When the server omits the event: field (R14), eventType is empty
-		// and the top-level JSON has no "type" field. The data is a
-		// SSEPushPayload envelope wrapping the inner event JSON. The adapter
-		// must extract the type from the inner event.
-		innerEvent := `{"type":"pipeline.advance","payload":{"stage":"L3","status":"waiting","detail":"FIDO2 touch"}}`
-		envelope := models.SSEPushPayload{
-			CliSessionID: "cli-123",
-			Event:        json.RawMessage(innerEvent),
-		}
-		envelopeJSON, err := json.Marshal(envelope)
+		innerEvent := `{"type":"` + string(constants.EventOperatorIntentApprovalRequested) + `","data":{"approval_id":"app-3","intent_name":"network.read"}}`
+		envelopeJSON, err := json.Marshal(models.SSEPushPayload{CliSessionID: "cli-123", Event: json.RawMessage(innerEvent)})
 		require.NoError(t, err)
 
 		msgs := translateSSEEvents("", string(envelopeJSON))
-		msg := msgs[0]
-		pm, ok := msg.(PipelineMsg)
-		require.True(t, ok, "expected PipelineMsg from SSEPushPayload envelope, got %T", msg)
-		assert.Equal(t, StageL3, pm.Stage)
+		require.Len(t, msgs, 2)
+		pm, ok := msgs[0].(PipelineMsg)
+		require.True(t, ok, "expected PipelineMsg from SSEPushPayload envelope, got %T", msgs[0])
 		assert.Equal(t, StatusWaiting, pm.Status)
-		assert.Equal(t, "FIDO2 touch", pm.Detail)
-	})
-
-	t.Run("R14: extracts consensus type from SSEPushPayload envelope when eventType is empty", func(t *testing.T) {
-		innerEvent := `{"type":"consensus.vote","payload":{"member":"axiom","decision":true,"signed":true,"quorum":3,"total":5}}`
-		envelope := models.SSEPushPayload{
-			UserID: "user-123",
-			Event:  json.RawMessage(innerEvent),
-		}
-		envelopeJSON, err := json.Marshal(envelope)
-		require.NoError(t, err)
-
-		msgs := translateSSEEvents("", string(envelopeJSON))
-		msg := msgs[0]
-		cm, ok := msg.(ConsensusMsg)
-		require.True(t, ok, "expected ConsensusMsg from SSEPushPayload envelope, got %T", msg)
-		assert.Equal(t, constants.ConsensusMemberAxiom, cm.Member)
-		assert.True(t, cm.Decision)
+		assert.Equal(t, "app-3", pm.TxID)
+		assert.Contains(t, pm.Detail, "network.read")
 	})
 }
 
-func TestParsePipelineEvent(t *testing.T) {
-	t.Run("parses all fields", func(t *testing.T) {
-		payload, _ := json.Marshal(map[string]string{
-			"stage":  "L4",
-			"status": "passed",
-			"tx_id":  "tx-xyz",
-			"detail": "warden verified",
-		})
-		msg := parsePipelineEvent(payload)
-		pm, ok := msg.(PipelineMsg)
-		require.True(t, ok)
-		assert.Equal(t, StageL4, pm.Stage)
-		assert.Equal(t, StatusPassed, pm.Status)
-		assert.Equal(t, "tx-xyz", pm.TxID)
-		assert.Equal(t, "warden verified", pm.Detail)
-	})
-
-	t.Run("defaults to idle for unknown status", func(t *testing.T) {
-		payload, _ := json.Marshal(map[string]string{
-			"stage":  "L1",
-			"status": "bogus",
-		})
-		msg := parsePipelineEvent(payload)
-		pm, ok := msg.(PipelineMsg)
-		require.True(t, ok)
-		assert.Equal(t, StatusIdle, pm.Status)
-	})
-}
-
-func TestParseLedgerEvent(t *testing.T) {
-	fixedTime := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
-	originalTimeNow := timeNow
-	t.Cleanup(func() { timeNow = originalTimeNow })
-	timeNow = func() time.Time { return fixedTime }
-
-	tests := []struct {
-		name      string
-		level     string
-		wantLevel LedgerLevel
-	}{
-		{"info", "info", LevelInfo},
-		{"warn", "warn", LevelWarn},
-		{"warning", "warning", LevelWarn},
-		{"crit", "crit", LevelCritical},
-		{"critical", "critical", LevelCritical},
-		{"unknown defaults to info", "bogus", LevelInfo},
-		{"empty defaults to info", "", LevelInfo},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			payload, _ := json.Marshal(map[string]string{
-				"level":   tt.level,
-				"message": "test message",
-			})
-			msg := parseLedgerEvent(payload)
-			lm, ok := msg.(LedgerMsg)
-			require.True(t, ok)
-			assert.Equal(t, tt.wantLevel, lm.Level)
-			assert.Equal(t, "test message", lm.Message)
-			assert.Equal(t, fixedTime, lm.Time)
-		})
-	}
-}
-
-func TestParseConsensusEvent(t *testing.T) {
-	t.Run("parses vote with all fields", func(t *testing.T) {
-		payload, _ := json.Marshal(map[string]interface{}{
-			"member":   "nemesis",
-			"decision": false,
-			"signed":   true,
-			"quorum":   3,
-			"total":    5,
-			"result":   "rejected",
-			"hash":     "deadbeef",
-		})
-		msg := parseConsensusEvent(payload)
-		cm, ok := msg.(ConsensusMsg)
-		require.True(t, ok)
-		assert.Equal(t, constants.ConsensusMemberNemesis, cm.Member)
-		assert.False(t, cm.Decision)
-		assert.True(t, cm.Signed)
-		assert.Equal(t, 3, cm.Quorum)
-		assert.Equal(t, 5, cm.Total)
-		assert.Equal(t, ConsensusRejected, cm.Result)
-		assert.Equal(t, "deadbeef", cm.Hash)
-	})
-
-	t.Run("approved result maps to reached", func(t *testing.T) {
-		payload, _ := json.Marshal(map[string]interface{}{
-			"result": "approved",
-		})
-		msg := parseConsensusEvent(payload)
-		cm, ok := msg.(ConsensusMsg)
-		require.True(t, ok)
-		assert.Equal(t, ConsensusReached, cm.Result)
-	})
-
-	t.Run("unknown result defaults to pending", func(t *testing.T) {
-		payload, _ := json.Marshal(map[string]interface{}{
-			"result": "bogus",
-		})
-		msg := parseConsensusEvent(payload)
-		cm, ok := msg.(ConsensusMsg)
-		require.True(t, ok)
-		assert.Equal(t, ConsensusPending, cm.Result)
-	})
-}
-
-func TestAdapterNewAdapter(t *testing.T) {
-	t.Run("creates adapter with nil client default", func(t *testing.T) {
-		a := NewAdapter("http://localhost:8080/sse", "token", "", nil, nil)
-		assert.NotNil(t, a.sseClient)
-		assert.Nil(t, a.sender)
-	})
-
-	t.Run("creates adapter with provided http client", func(t *testing.T) {
-		a := NewAdapter("url", "", "", nil, &http.Client{Timeout: 5 * time.Second})
-		assert.NotNil(t, a.sseClient)
-	})
-}
-
-// TestAdapterNewAdapter_SetsCLISessionHeader verifies that the CLI session ID
-// passed to NewAdapter is sent as the X-G8E-CLI-Session-ID header on the SSE
-// request. Without this header, the gateway mTLS auth middleware cannot locate
-// the CLI session and returns 401.
-func TestAdapterNewAdapter_SetsCLISessionHeader(t *testing.T) {
-	var mu sync.Mutex
-	var gotHeader string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		gotHeader = r.Header.Get(constants.HeaderCLISessionID)
-		mu.Unlock()
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"type\":\"ledger.entry\",\"payload\":{\"level\":\"info\",\"message\":\"hi\"}}\n\n")
-	}))
-	defer srv.Close()
-
-	sender := &mockSender{}
-	a := NewAdapter(srv.URL, "", "cli-sess-123", sender, nil)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		a.Run(ctx)
-		close(done)
-	}()
-
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return gotHeader != ""
-	}, 3*time.Second, 50*time.Millisecond, "SSE request never received the CLI session header")
-
-	mu.Lock()
-	assert.Equal(t, "cli-sess-123", gotHeader, "X-G8E-CLI-Session-ID header must match cliSessionID arg")
-	mu.Unlock()
-
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("adapter.Run did not return after context cancellation")
-	}
-}
-
-func TestAdapterRunEmptyURL(t *testing.T) {
-	a := NewAdapter("", "", "", nil, nil)
+func TestAdapterRunNilSession(t *testing.T) {
+	a := NewAdapter(nil, "", &mockSender{})
 	done := make(chan struct{})
 	go func() {
 		a.Run(t.Context())
@@ -411,8 +94,120 @@ func TestAdapterRunEmptyURL(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(1 * time.Second):
-		t.Fatal("adapter.Run with empty URL should return immediately")
+		t.Fatal("adapter.Run with nil session should return immediately")
 	}
+}
+
+// testSession is a Session over a plain-HTTP test server: the SSE stream is
+// served at url, and Gateway requests return the configured JSON (or err).
+type testSession struct {
+	url              string
+	pendingJSON      string
+	operatorsJSON    string
+	healthJSON       string
+	auditEventsJSON  string
+	auditSummaryJSON string
+	auditVerifyJSON  string
+	statusJSON       string
+	err              error
+	mu               sync.Mutex
+	listCalls        int
+	paths            []string
+
+	enrollPendingJSON string
+	enrolledJSON      string
+	decisionJSON      string
+	revokeJSON        string
+	stopJSON          string
+	recoveryJSON      string
+	bindJSON          string
+	unbindJSON        string
+	postErr           error
+	enrollListCalls   int
+	posted            []interface{}
+}
+
+func (s *testSession) NewSSEClient() *sse.Client { return sse.NewClient(s.url, nil) }
+
+func (s *testSession) DoRequestContext(_ context.Context, method, path string, body interface{}) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.paths = append(s.paths, path)
+	if s.err != nil {
+		return nil, s.err
+	}
+	if method == http.MethodPost {
+		s.posted = append(s.posted, body)
+		if s.postErr != nil {
+			return nil, s.postErr
+		}
+		switch path {
+		case constants.APIPaths.AuthPlatformEnrollmentDecision:
+			return []byte(orDefault(s.decisionJSON, `{"request_id":"req-1","state":"approved"}`)), nil
+		case constants.APIPaths.AuthPlatformEnrollmentRevoke:
+			return []byte(orDefault(s.revokeJSON, `{"request_id":"req-1","component_kind":"operator","state":"revoked"}`)), nil
+		case constants.APIPaths.OperatorsStop:
+			return []byte(orDefault(s.stopJSON, `{"success":true,"operator_id":"op-remote","operator_session_id":"sess-remote"}`)), nil
+		case constants.APIPaths.AuthCLIRecoveryApproveCLI:
+			return []byte(orDefault(s.recoveryJSON, `{"success":true,"state":"approved"}`)), nil
+		case constants.APIPaths.AuthCLIBind:
+			return []byte(orDefault(s.bindJSON, `{"success":true,"cli_session_id":"cli-new","user_id":"user-1","operator_id":"op-remote","operator_session_id":"sess-remote","bound":[{"operator_id":"op-remote","operator_session_id":"sess-remote"}]}`)), nil
+		case constants.APIPaths.AuthCLIUnbind:
+			return []byte(orDefault(s.unbindJSON, `{"success":true,"cli_session_id":"cli-unbound","user_id":"user-1"}`)), nil
+		}
+		return nil, constants.ErrNotFound
+	}
+	if method != http.MethodGet {
+		return nil, constants.ErrNotFound
+	}
+	switch {
+	case path == constants.APIPaths.AuthPlatformEnrollmentPending:
+		s.enrollListCalls++
+		return []byte(orDefault(s.enrollPendingJSON, `{"requests":[]}`)), nil
+	case path == constants.APIPaths.AuthPlatformEnrollmentEnrolled:
+		return []byte(orDefault(s.enrolledJSON, `{"enrollments":[]}`)), nil
+	case path == constants.APIPaths.ApprovalsCLIList:
+		s.listCalls++
+		return []byte(orDefault(s.pendingJSON, `{"transactions":[]}`)), nil
+	case strings.HasPrefix(path, constants.APIPaths.Operators):
+		return []byte(orDefault(s.operatorsJSON, `{"success":true,"operators":[]}`)), nil
+	case path == constants.APIPaths.Health:
+		return []byte(orDefault(s.healthJSON, `{"status":"ok","posture":"notary"}`)), nil
+	case strings.HasPrefix(path, constants.APIPaths.AuditEvents):
+		return []byte(orDefault(s.auditEventsJSON, `{"success":true,"events":[],"count":0}`)), nil
+	case path == constants.APIPaths.AuditSummary:
+		return []byte(orDefault(s.auditSummaryJSON, `{"success":true,"events_summary":{},"events_total":0,"receipts_summary":{},"receipts_total":0,"total_records":0}`)), nil
+	case strings.HasPrefix(path, constants.APIPaths.AuditVerify):
+		return []byte(orDefault(s.auditVerifyJSON, `{"success":true,"ok":true,"verified_from_seq":0,"head_seq":0,"head_hash":""}`)), nil
+	case strings.HasPrefix(path, constants.APIPaths.ApprovalsCLIStatus):
+		return []byte(orDefault(s.statusJSON, `{"status":"approved"}`)), nil
+	}
+	return nil, constants.ErrNotFound
+}
+
+func (s *testSession) enrollmentListCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.enrollListCalls
+}
+
+func (s *testSession) pendingListCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.listCalls
+}
+
+func (s *testSession) requestedPaths() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.paths...)
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }
 
 // mockSender captures tea.Msg values sent by the adapter for test assertions.
@@ -435,66 +230,6 @@ func (m *mockSender) snapshot() []tea.Msg {
 	return out
 }
 
-// newAdapterWithSender constructs an Adapter wired to a mock sender for tests.
-func newAdapterWithSender(sseURL string, sender messageSender) *Adapter {
-	c := sse.NewClient(sseURL, nil)
-	return &Adapter{
-		sseURL:    sseURL,
-		sseClient: c,
-		sender:    sender,
-	}
-}
-
-func TestAdapterRun_EmitsConnConnectedOnFirstEvent(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"type\":\"ledger.entry\",\"payload\":{\"level\":\"info\",\"message\":\"hello\"}}\n\n")
-	}))
-	defer srv.Close()
-
-	sender := &mockSender{}
-	a := newAdapterWithSender(srv.URL, sender)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		a.Run(ctx)
-		close(done)
-	}()
-
-	require.Eventually(t, func() bool {
-		msgs := sender.snapshot()
-		for _, m := range msgs {
-			if cs, ok := m.(ConnStatusMsg); ok && cs.Status == ConnConnected {
-				return true
-			}
-		}
-		return false
-	}, 3*time.Second, 50*time.Millisecond, "adapter never emitted ConnConnected")
-
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("adapter.Run did not return after context cancellation")
-	}
-
-	msgs := sender.snapshot()
-	var connecting, connected bool
-	for _, m := range msgs {
-		if cs, ok := m.(ConnStatusMsg); ok {
-			if cs.Status == ConnConnecting {
-				connecting = true
-			}
-			if cs.Status == ConnConnected {
-				connected = true
-			}
-		}
-	}
-	assert.True(t, connecting, "expected ConnConnecting before ConnConnected")
-	assert.True(t, connected, "expected ConnConnected after first event")
-}
-
 func TestTranslateSSEEvents_ChatAndApprovals(t *testing.T) {
 	fixedTime := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
 	originalTimeNow := timeNow
@@ -514,7 +249,7 @@ func TestTranslateSSEEvents_ChatAndApprovals(t *testing.T) {
 	})
 
 	t.Run("chat text chunk received", func(t *testing.T) {
-		msgs := translateSSEEvents(string(constants.EventAiLLMChatIterationTextChunkReceived), `{"type":"g8e.v1.ai.llm.chat.iteration.text.chunk.received","payload":{"chunk":"hello world"}}`)
+		msgs := translateSSEEvents(string(constants.EventAiLLMChatIterationTextChunkReceived), `{"type":"g8e.v1.ai.llm.chat.iteration.text.chunk.received","data":{"chunk":"hello world"}}`)
 		require.Len(t, msgs, 1)
 		lm, ok := msgs[0].(LedgerMsg)
 		require.True(t, ok)
@@ -522,7 +257,7 @@ func TestTranslateSSEEvents_ChatAndApprovals(t *testing.T) {
 	})
 
 	t.Run("command approval requested", func(t *testing.T) {
-		msgs := translateSSEEvents(string(constants.EventOperatorCommandApprovalRequested), `{"type":"g8e.v1.operator.command.approval.requested","payload":{"approval_id":"app-1","command":"rm -rf /tmp/test"}}`)
+		msgs := translateSSEEvents(string(constants.EventOperatorCommandApprovalRequested), `{"type":"g8e.v1.operator.command.approval.requested","data":{"approval_id":"app-1","command":"rm -rf /tmp/test"}}`)
 		require.Len(t, msgs, 2)
 		pm, ok := msgs[0].(PipelineMsg)
 		require.True(t, ok)
@@ -536,12 +271,66 @@ func TestTranslateSSEEvents_ChatAndApprovals(t *testing.T) {
 	})
 
 	t.Run("approval completed", func(t *testing.T) {
-		msgs := translateSSEEvents(constants.SSEEventTypeApprovalCompleted, `{"type":"approval.completed","payload":{"tx_hash":"tx-999"}}`)
+		msgs := translateSSEEvents(constants.SSEEventTypeApprovalCompleted, `{"type":"approval.completed","tx_hash":"tx-999"}`)
+		assert.Equal(t, []tea.Msg{ApprovalCompletedMsg{TxHash: "tx-999"}}, msgs)
+	})
+}
+
+// gatewayFrame builds an SSE data payload exactly as the Gateway's
+// SSEEventPublisher does: SSEPushPayload{event: {type, data}}.
+func gatewayFrame(t *testing.T, eventType string, data any) string {
+	t.Helper()
+	dataJSON, err := json.Marshal(data)
+	require.NoError(t, err)
+	inner, err := json.Marshal(struct {
+		Type string          `json:"type"`
+		Data json.RawMessage `json:"data"`
+	}{Type: eventType, Data: dataJSON})
+	require.NoError(t, err)
+	frame, err := json.Marshal(models.SSEPushPayload{UserID: "user-1", CliSessionID: "cli-1", Event: inner})
+	require.NoError(t, err)
+	return string(frame)
+}
+
+func TestTranslateSSEEvents_GatewayWireShape(t *testing.T) {
+	t.Run("publisher envelope payload is decoded from data", func(t *testing.T) {
+		frame := gatewayFrame(t, string(constants.EventOperatorCommandApprovalRequested), map[string]string{"approval_id": "app-7", "command": "systemctl restart nginx"})
+		msgs := translateSSEEvents("", frame)
 		require.Len(t, msgs, 2)
 		pm, ok := msgs[0].(PipelineMsg)
 		require.True(t, ok)
-		assert.Equal(t, StageL3, pm.Stage)
-		assert.Equal(t, StatusPassed, pm.Status)
-		assert.Equal(t, "tx-999", pm.TxID)
+		assert.Equal(t, "app-7", pm.TxID)
+		assert.Contains(t, pm.Detail, "systemctl restart nginx")
+	})
+
+	t.Run("approval.completed is read from the flat event", func(t *testing.T) {
+		event, err := json.Marshal(models.ApprovalCompletedEvent{Type: constants.SSEEventTypeApprovalCompleted, UserID: "user-1", TxHash: "tx-abc"})
+		require.NoError(t, err)
+		frame, err := json.Marshal(models.SSEPushPayload{UserID: "user-1", CliSessionID: "cli-1", Event: event})
+		require.NoError(t, err)
+		msgs := translateSSEEvents("", string(frame))
+		assert.Equal(t, []tea.Msg{ApprovalCompletedMsg{TxHash: "tx-abc"}}, msgs)
+	})
+
+	t.Run("transaction approvals.changed produces no message", func(t *testing.T) {
+		frame := gatewayFrame(t, string(constants.EventPlatformApprovalsChanged), models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedTransactions})
+		assert.Empty(t, translateSSEEvents("", frame))
+	})
+
+	t.Run("enrollment approvals.changed produces no message", func(t *testing.T) {
+		// The adapter re-lists enrollments; the model announces new requests.
+		frame := gatewayFrame(t, string(constants.EventPlatformApprovalsChanged), models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedEnrollments})
+		assert.Empty(t, translateSSEEvents("", frame))
+	})
+
+	t.Run("replay error sentinel surfaces as a warning", func(t *testing.T) {
+		sentinel, err := json.Marshal(models.SSEErrorEvent{Type: "error", Reason: "replay_failed"})
+		require.NoError(t, err)
+		msgs := translateSSEEvents("", string(sentinel))
+		require.Len(t, msgs, 1)
+		lm, ok := msgs[0].(LedgerMsg)
+		require.True(t, ok)
+		assert.Equal(t, LevelWarn, lm.Level)
+		assert.Contains(t, lm.Message, "replay_failed")
 	})
 }

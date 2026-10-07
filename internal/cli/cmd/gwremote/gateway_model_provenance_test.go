@@ -11,8 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -122,37 +120,6 @@ func TestNewModelProvenanceRemote_ReturnsClientWhenGatewayHealthy(t *testing.T) 
 	remote, err := newModelProvenanceRemote(fileSvc, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, remote)
-}
-
-func TestLoadModelProvenanceAttestation_ReturnsGatewayWindow(t *testing.T) {
-	t.Parallel()
-	WithGatewayHealthCheck(t, true)
-	cfg, _, fileSvc := cmdtest.SetupApproveSSETestEnv(t)
-	window, _ := testModelProvenanceWindow("preflight-provenance")
-	windowBody, err := evalv1.MarshalCanonical(window)
-	require.NoError(t, err)
-	respBody, err := json.Marshal(models.ModelProvenanceAttestResponse{
-		Status:              "ready",
-		ServedModelTag:      window.GetServedModelTag(),
-		ExpectedModelDigest: window.GetExpectedModelDigest(),
-		Window:              windowBody,
-	})
-	require.NoError(t, err)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, constants.APIPaths.InferenceModelProvenanceAttestations+"_attest") {
-			w.Header().Set("Content-Type", "application/json")
-			_, writeErr := w.Write(respBody)
-			require.NoError(t, writeErr)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	t.Cleanup(server.Close)
-	cmdtest.WithEndpointOverride(t, server.URL)
-
-	loaded, err := LoadModelProvenanceAttestation(fileSvc, cfg, window.GetServedModelTag(), window.GetExpectedModelDigest())
-	require.NoError(t, err)
-	assert.Equal(t, window.GetAttestationDigest(), loaded.GetAttestationDigest())
 }
 
 func TestNewCampaignModelProvenanceReader_WiresRemoteWhenHealthy(t *testing.T) {

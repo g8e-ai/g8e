@@ -24,45 +24,34 @@ Bootstrap responsibilities (this file):
 """
 
 import logging
-from typing import cast
 from contextlib import asynccontextmanager
+from typing import cast
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-load_dotenv(override=False)
 
 from .clients.blob_client import BlobClient
 from .clients.db_client import DBClient
 from .clients.governance_client import GovernanceClient
 from .clients.kv_cache_client import KVCacheClient
 from .constants import (
-    AUTHORIZATION,
-    CORS_ALLOWED_ORIGIN_G8EE,
-    CORS_ALLOWED_ORIGIN_LOCALHOST,
-    CORS_ALLOWED_ORIGIN_CLIENT_HTTP,
-    CORS_ALLOWED_ORIGIN_CLIENT_HTTPS,
     ACCEPT,
     ACCEPT_LANGUAGE,
     ACCESS_CONTROL_ALLOW_CREDENTIALS,
     ACCESS_CONTROL_ALLOW_ORIGIN,
     ACCESS_CONTROL_REQUEST_HEADERS,
     ACCESS_CONTROL_REQUEST_METHOD,
+    AUTHORIZATION,
     CACHE_CONTROL,
     CONTENT_LANGUAGE,
     CONTENT_TYPE,
     COOKIE,
+    CORS_ALLOWED_ORIGIN_CLIENT_HTTP,
+    CORS_ALLOWED_ORIGIN_CLIENT_HTTPS,
+    CORS_ALLOWED_ORIGIN_G8EE,
+    CORS_ALLOWED_ORIGIN_LOCALHOST,
     EXECUTION_ID,
-    LAST_EVENT_ID,
-    HTTP_METHOD_DELETE,
-    HTTP_METHOD_GET,
-    HTTP_METHOD_OPTIONS,
-    HTTP_METHOD_POST,
-    HTTP_METHOD_PUT,
-    PRAGMA,
-    REQUESTED_WITH,
-    SET_COOKIE,
     G8EE_APP_CONTACT_EMAIL,
     G8EE_APP_CONTACT_NAME,
     G8EE_APP_CONTACT_URL,
@@ -70,33 +59,48 @@ from .constants import (
     G8EE_APP_LICENSE_NAME,
     G8EE_APP_LICENSE_URL,
     G8EE_APP_TITLE,
+    G8EE_COMPONENT,
+    HTTP_METHOD_DELETE,
+    HTTP_METHOD_GET,
+    HTTP_METHOD_OPTIONS,
+    HTTP_METHOD_POST,
+    HTTP_METHOD_PUT,
+    LAST_EVENT_ID,
+    PRAGMA,
+    REQUESTED_WITH,
+    SET_COOKIE,
 )
 from .constants.generated_paths import PortConstants
-from .models.state import G8eeAppState
-from .models.settings import TLSConfig
 from .db.blob_service import BlobService
 from .db.db_service import DBService
 from .db.kv_service import KVService
+from .decision.validation import (
+    log_jev_generative_lite_warning,
+    validate_jev_lite_coexistence,
+)
+from .errors import ConfigurationError
+from .llm import clear_provider_cache
+from .llm.factory import set_internal_http_client, set_settings
 from .logging import setup_logging
-from .routers import chat_router, health_router
-from .routers.internal_router import router as internal_router
 from .middleware.exception_handlers import setup_exception_handlers
 from .middleware.http_context import G8eHttpContextMiddleware
+from .models.settings import G8eeAppSettings, TLSConfig
+from .models.state import G8eeAppState
+from .routers import chat_router, health_router
+from .routers.internal_router import router as internal_router
 from .services.cache.cache_aside import CacheAsideService
-from .errors import ConfigurationError
-from .services.infra.app_enrollment_service import AppEnrollmentService
+from .services.infra.app_enrollment_service import AppEnrollmentService, AppIdentity
 from .services.infra.settings_service import SettingsService
-from .services.service_factory import ServiceFactory
-from .llm.factory import set_settings, set_internal_http_client
+from .services.service_factory import AllServices, ServiceFactory
 from .utils.service_init import initialize_g8e_service
 from .utils.version import get_version
-from .llm import clear_provider_cache
-from app.constants import G8EE_COMPONENT
+
+load_dotenv(override=False)
 
 logger = logging.getLogger(__name__)
 
 
-async def _connect_clients(settings, tls_config):
+async def _connect_clients(tls_config: TLSConfig):
     """Create and connect the core operator transport clients.
 
     Returns (db_client, kv_cache_client, blob_client).
@@ -128,6 +132,54 @@ async def _close_client(client, label: str) -> None:
         logger.error("Error disconnecting %s: %s", label, exc)
 
 
+async def _resolve_app_identity(enrollment_service: AppEnrollmentService) -> AppIdentity:
+    """Load the ensemble's app identity from disk, enrolling with the gateway if needed."""
+    try:
+        return enrollment_service.load_identity()
+    except ConfigurationError as exc:
+        # If cert and key exist but CA bundle is missing, pull bundle via HTTP like the operator does
+        if "gateway CA bundle not found" in str(exc):
+            try:
+                await enrollment_service.fetch_ca_bundle()
+                return enrollment_service.load_identity()
+            except Exception:
+                return await enrollment_service.enroll()
+        return await enrollment_service.enroll()
+
+
+def _validate_jev_lite(settings: G8eeAppSettings) -> None:
+    log_jev_generative_lite_warning(logger, settings.llm)
+    jev_startup_errors = validate_jev_lite_coexistence(settings.llm)
+    if jev_startup_errors:
+        raise ConfigurationError(
+            "Jev lite provider configuration is incompatible with enabled features: "
+            + " ".join(jev_startup_errors)
+        )
+
+
+async def _shutdown(state: G8eeAppState, all_services: AllServices | None) -> None:
+    await clear_provider_cache()
+
+    if all_services:
+        await ServiceFactory.stop_services(all_services)
+
+    await _close_client(getattr(state, "kv_cache_client", None), "KV cache client")
+    await _close_client(getattr(state, "blob_client", None), "Blob client")
+    await _close_client(
+        getattr(state, "internal_http_client", None),
+        "client HTTP client",
+    )
+
+    services = getattr(state, "services", None)
+    db_service = getattr(services, "db_service", None) if services else None
+    if db_service is not None:
+        try:
+            await db_service.close()
+            logger.info("operator document service closed")
+        except Exception as exc:
+            logger.error("Error closing operator document service: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize application resources on startup and clean up on shutdown."""
@@ -154,19 +206,7 @@ async def lifespan(app: FastAPI):
         # the gateway to obtain a fresh one. This runs before the operator
         # clients connect so the TLS config below points at the ensemble's
         # own enrolled credentials.
-        enrollment_service = AppEnrollmentService()
-        try:
-            app_identity = enrollment_service.load_identity()
-        except ConfigurationError as exc:
-            # If cert and key exist but CA bundle is missing, pull bundle via HTTP like the operator does
-            if "gateway CA bundle not found" in str(exc):
-                try:
-                    await enrollment_service.fetch_ca_bundle()
-                    app_identity = enrollment_service.load_identity()
-                except Exception:
-                    app_identity = await enrollment_service.enroll()
-            else:
-                app_identity = await enrollment_service.enroll()
+        app_identity = await _resolve_app_identity(AppEnrollmentService())
         logger.info(
             "App identity ready (app_id=%s, cert=%s)",
             app_identity.app_id,
@@ -185,7 +225,7 @@ async def lifespan(app: FastAPI):
             state.db_client,
             state.kv_cache_client,
             state.blob_client,
-        ) = await _connect_clients(settings, tls_config)
+        ) = await _connect_clients(tls_config)
         logger.info("operator transport clients connected (db, kv, blob)")
 
         # -- Phase 2: Handler services (sole users of each client) --
@@ -201,7 +241,7 @@ async def lifespan(app: FastAPI):
             default_ttl=settings.gateway.default_ttl,
             read_enabled=settings.gateway.enable_cache_read,
         )
-        settings_service._cache_aside = cache_aside_service
+        settings_service.attach_cache_aside(cache_aside_service)
 
         # -- Phase 4: Platform settings from operator --
         settings = await settings_service.get_app_settings()
@@ -209,18 +249,7 @@ async def lifespan(app: FastAPI):
         set_settings(settings)
         logger.info("Platform settings merged: port=%s", settings.port)
 
-        from app.decision.validation import (
-            log_jev_generative_lite_warning,
-            validate_jev_lite_coexistence,
-        )
-
-        log_jev_generative_lite_warning(logger, settings.llm)
-        jev_startup_errors = validate_jev_lite_coexistence(settings.llm)
-        if jev_startup_errors:
-            raise ConfigurationError(
-                "Jev lite provider configuration is incompatible with enabled features: "
-                + " ".join(jev_startup_errors)
-            )
+        _validate_jev_lite(settings)
 
         # -- Phase 4.5: GovernanceClient for governed collection writes --
         governance_client = GovernanceClient(
@@ -263,26 +292,7 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("=== g8ee SHUTDOWN INITIATED ===")
 
-        await clear_provider_cache()
-
-        if all_services:
-            await ServiceFactory.stop_services(all_services)
-
-        await _close_client(getattr(state, "kv_cache_client", None), "KV cache client")
-        await _close_client(getattr(state, "blob_client", None), "Blob client")
-        await _close_client(
-            getattr(state, "internal_http_client", None),
-            "client HTTP client",
-        )
-
-        services = getattr(state, "services", None)
-        db_service = getattr(services, "db_service", None) if services else None
-        if db_service is not None:
-            try:
-                await db_service.close()
-                logger.info("operator document service closed")
-            except Exception as exc:
-                logger.error("Error closing operator document service: %s", exc)
+        await _shutdown(state, all_services)
 
         logger.info("g8ee shutdown complete")
 

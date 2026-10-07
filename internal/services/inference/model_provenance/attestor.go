@@ -135,7 +135,7 @@ func (a *OllamaStorageAttestor) attestBlob(ctx context.Context, digestRef, media
 	defer file.Close()
 
 	hasher := sha256.New()
-	size, err := io.Copy(hasher, file)
+	size, err := io.Copy(hasher, &provenanceContextReader{ctx: ctx, reader: file})
 	if err != nil {
 		return nil, fmt.Errorf("model provenance attestor: hash blob %s: %w", digestHex, err)
 	}
@@ -154,6 +154,20 @@ func (a *OllamaStorageAttestor) attestBlob(ctx context.Context, digestRef, media
 		SizeBytes:  uint64(size),
 		MediaType:  mediaType,
 	}, nil
+}
+
+// Check cancellation between filesystem reads rather than after the entire
+// multi-gigabyte blob. An in-flight OS read still completes normally.
+type provenanceContextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *provenanceContextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
 }
 
 func resolveOllamaManifestPath(storageRoot, servedModelTag string) (string, error) {

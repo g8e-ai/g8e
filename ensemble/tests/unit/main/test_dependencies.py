@@ -5,17 +5,20 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import Request
 
 from app.constants import (
-    AuthMethod,
     G8EE_COMPONENT,
+    AuthMethod,
     HealthStatus,
 )
+from app.constants.generated_paths import PortConstants
+from app.constants.platform import LogLevel
 from app.dependencies import (
+    get_g8ee_app_settings,
     get_g8ee_attachment_service,
     get_g8ee_cache_aside_service,
     get_g8ee_case_data_service,
@@ -26,17 +29,16 @@ from app.dependencies import (
     get_g8ee_kv_cache_client,
     get_g8ee_operator_cache,
     get_g8ee_operator_command_service,
-    get_g8ee_app_settings,
     health_check_dependencies,
     require_authenticated_context,
     require_authenticated_user,
 )
-from app.constants.generated_paths import PortConstants
 from app.errors import (
     AuthenticationError,
     ConfigurationError,
     ServiceUnavailableError,
 )
+from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeAppSettings
 from tests.fakes.factories import build_authenticated_user
 
@@ -61,7 +63,15 @@ def mock_request():
 class TestGetG8eeAppSettings:
     async def test_returns_settings_from_app_state(self, mock_request):
         # We need a real G8eeAppSettings object for this test to be meaningful
-        settings = G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
+        settings = G8eeAppSettings(
+            port=PortConstants.G8E_PORT_G8EE_HTTPS,
+            host="0.0.0.0",
+            log_level=LogLevel.INFO,
+            enable_logging=True,
+            session_ttl=28800,
+            absolute_session_timeout=86400,
+            docs_dir="docs",
+        )
         mock_request.app.state.settings = settings
         result = await get_g8ee_app_settings(mock_request)
         assert result.port == settings.port
@@ -265,7 +275,7 @@ def _make_internal_request(client_ip, path, headers=None, settings_token=None):
 
 
 class TestRequireAuthenticatedUser:
-    async def test_proxy_headers_return_authenticated_user(self, mock_request, mock_settings):
+    async def test_proxy_headers_return_authenticated_user(self, mock_request):
         mock_auth_service = MagicMock()
         mock_auth_service.authenticate_request = AsyncMock(
             return_value=build_authenticated_user(
@@ -277,27 +287,27 @@ class TestRequireAuthenticatedUser:
                 auth_method=AuthMethod.PROXY,
             )
         )
-        result = await require_authenticated_user(mock_request, mock_settings, mock_auth_service)
+        result = await require_authenticated_user(mock_request, mock_auth_service)
         assert result.uid == "user-abc"
         assert result.email == "user@example.com"
         assert result.organization_id == "org-xyz"
         assert result.auth_method == AuthMethod.PROXY
 
-    async def test_no_auth_raises_authentication_error(self, mock_request, mock_settings):
+    async def test_no_auth_raises_authentication_error(self, mock_request):
         mock_auth_service = MagicMock()
         mock_auth_service.authenticate_request = AsyncMock(
             side_effect=AuthenticationError("Authentication required")
         )
         with pytest.raises(AuthenticationError, match="Authentication required"):
-            await require_authenticated_user(mock_request, mock_settings, mock_auth_service)
+            await require_authenticated_user(mock_request, mock_auth_service)
 
-    async def test_authentication_error_http_status_is_401(self, mock_request, mock_settings):
+    async def test_authentication_error_http_status_is_401(self, mock_request):
         mock_auth_service = MagicMock()
         mock_auth_service.authenticate_request = AsyncMock(
             side_effect=AuthenticationError("Authentication required")
         )
         with pytest.raises(AuthenticationError) as exc_info:
-            await require_authenticated_user(mock_request, mock_settings, mock_auth_service)
+            await require_authenticated_user(mock_request, mock_auth_service)
         assert exc_info.value.get_http_status() == 401
 
 
@@ -312,16 +322,13 @@ class TestRequireAuthenticatedContext:
             auth_method=AuthMethod.PROXY,
         )
         mock_auth_service = MagicMock()
-        from app.models.http_context import G8eHttpContext
 
         mock_context = G8eHttpContext(user_id="user-123", source_component=G8EE_COMPONENT)
         mock_auth_service.get_validated_context = AsyncMock(return_value=mock_context)
 
         result = await require_authenticated_context(mock_request, mock_user, mock_auth_service)
         assert result == mock_context
-        mock_auth_service.get_validated_context.assert_called_once_with(
-            mock_request, mock_user, is_exempt_path=False
-        )
+        mock_auth_service.get_validated_context.assert_called_once_with(mock_request, mock_user)
 
 
 class TestHealthCheckDependencies:

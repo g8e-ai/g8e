@@ -7,7 +7,10 @@
 
 package constants
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // OperatorHeartbeatStaleAfter is how long a remote Operator may go without a
 // heartbeat before the Gateway marks its document stale. Operators heartbeat
@@ -94,6 +97,7 @@ const (
 type OperatorRole string
 
 const (
+	OperatorRoleEmbedded   OperatorRole = "embedded"
 	OperatorRoleInference  OperatorRole = "inference"
 	OperatorRoleProvenance OperatorRole = "provenance"
 	OperatorRoleObserver   OperatorRole = "observer"
@@ -516,6 +520,7 @@ const (
 	AuditorReasonNoValidRevision    AuditorReason = "no_valid_revision"
 	AuditorReasonAuditorError       AuditorReason = "auditor_error"
 	AuditorReasonEmptyResponse      AuditorReason = "empty_response"
+	AuditorReasonContextOverflow    AuditorReason = "context_overflow"
 )
 
 // TieBreakReason is a typed string for tie-break reason.
@@ -645,3 +650,68 @@ const (
 	AuthMethodOperatorSession AuthMethod = "operator_session"
 	AuthMethodTest            AuthMethod = "test"
 )
+
+// InvestigationStatus is a typed string for investigation status.
+type InvestigationStatus string
+
+const (
+	InvestigationStatusClosed    InvestigationStatus = "Closed"
+	InvestigationStatusEscalated InvestigationStatus = "Escalated"
+	InvestigationStatusOpen      InvestigationStatus = "Open"
+	InvestigationStatusResolved  InvestigationStatus = "Resolved"
+)
+
+// NormalizeInvestigationStatus converts string representations (including case variations like "open")
+// to canonical InvestigationStatus.
+func NormalizeInvestigationStatus(s string) InvestigationStatus {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "closed":
+		return InvestigationStatusClosed
+	case "escalated":
+		return InvestigationStatusEscalated
+	case "open":
+		return InvestigationStatusOpen
+	case "resolved":
+		return InvestigationStatusResolved
+	default:
+		return InvestigationStatus(s)
+	}
+}
+
+// CaseStatus is a typed string for case status.
+type CaseStatus string
+
+const (
+	CaseStatusClosed             CaseStatus = "Closed"
+	CaseStatusEscalated          CaseStatus = "Escalated"
+	CaseStatusHumanReview        CaseStatus = "HumanReview"
+	CaseStatusInProgress         CaseStatus = "InProgress"
+	CaseStatusNew                CaseStatus = "New"
+	CaseStatusResolved           CaseStatus = "Resolved"
+	CaseStatusTriage             CaseStatus = "Triage"
+	CaseStatusWaitingForCustomer CaseStatus = "WaitingForCustomer"
+)
+
+// NormalizeCaseStatus converts string representations to canonical CaseStatus.
+func NormalizeCaseStatus(s string) CaseStatus {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "closed":
+		return CaseStatusClosed
+	case "escalated":
+		return CaseStatusEscalated
+	case "humanreview", "human_review":
+		return CaseStatusHumanReview
+	case "inprogress", "in_progress":
+		return CaseStatusInProgress
+	case "new":
+		return CaseStatusNew
+	case "resolved":
+		return CaseStatusResolved
+	case "triage":
+		return CaseStatusTriage
+	case "waitingforcustomer", "waiting_for_customer":
+		return CaseStatusWaitingForCustomer
+	default:
+		return CaseStatus(s)
+	}
+}

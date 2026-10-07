@@ -528,10 +528,10 @@ func seedObserveEvalProjection(t *testing.T, svc *ObserveService, userID, runID 
 	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveEvals), runID, payload))
 }
 
-func seedObserveDownloadProjection(t *testing.T, svc *ObserveService, userID, artifactID string, generatedAt time.Time) {
+func seedObserveDownloadProjection(t *testing.T, svc *ObserveService, _ string, artifactID string, generatedAt time.Time) {
 	t.Helper()
 	proj := downloadProjection{
-		UserID: userID,
+		UserID: "user-1",
 		DownloadArtifact: models.DownloadArtifact{
 			SchemaVersion:         constants.ObserveAPIReadModelSchemaVersion,
 			ArtifactID:            artifactID,

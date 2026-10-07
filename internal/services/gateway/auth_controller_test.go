@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
@@ -27,7 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func setupTestBootstrapController(t *testing.T) (*BootstrapController, *config.Config) {
+func setupTestBootstrapController(t *testing.T) *BootstrapController {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 	return newBootstrapController(BootstrapControllerDeps{
@@ -40,10 +39,10 @@ func setupTestBootstrapController(t *testing.T) (*BootstrapController, *config.C
 		OperatorSessionSvc: infra.OperatorSessionSvc,
 		EmbeddedOperator:   infra.Embedded,
 		Responder:          infra.Responder,
-	}), infra.Cfg
+	})
 }
 
-func setupTestEnrollmentTokenController(t *testing.T) (*EnrollmentTokenController, *config.Config) {
+func setupTestEnrollmentTokenController(t *testing.T) *EnrollmentTokenController {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 	enrollmentTokenSvc := NewEnrollmentTokenService(infra.DocStore, infra.Logger)
@@ -52,10 +51,10 @@ func setupTestEnrollmentTokenController(t *testing.T) (*EnrollmentTokenControlle
 		Logger:             infra.Logger,
 		EnrollmentTokenSvc: enrollmentTokenSvc,
 		Responder:          infra.Responder,
-	}), infra.Cfg
+	})
 }
 
-func setupTestUserController(t *testing.T) (*UserController, *config.Config) {
+func setupTestUserController(t *testing.T) *UserController {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 	return newUserController(UserControllerDeps{
@@ -63,10 +62,10 @@ func setupTestUserController(t *testing.T) (*UserController, *config.Config) {
 		Logger:    infra.Logger,
 		UserSvc:   infra.UserSvc,
 		Responder: infra.Responder,
-	}), infra.Cfg
+	})
 }
 
-func setupTestSessionController(t *testing.T) (*SessionController, *config.Config) {
+func setupTestSessionController(t *testing.T) *SessionController {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 	return newSessionController(SessionControllerDeps{
@@ -74,7 +73,7 @@ func setupTestSessionController(t *testing.T) (*SessionController, *config.Confi
 		DocStore:    infra.DocStore,
 		Responder:   infra.Responder,
 		CrossOrigin: false,
-	}), infra.Cfg
+	})
 }
 
 // setupTestPasskeyService creates a PasskeyHandler with approval dependencies for testing.

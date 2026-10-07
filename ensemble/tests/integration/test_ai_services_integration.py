@@ -1,4 +1,3 @@
-from app.constants.message_sender import MessageSender
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -6,46 +5,57 @@ from app.constants.message_sender import MessageSender
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""
-Integration tests: AI Services Real LLM Calls
+"""Integration tests: AI Services Real LLM Calls.
 
 These tests exercise AI services with real LLM providers to verify end-to-end functionality.
 Tests use real g8ee services and LLM providers with an in-memory operator cache fake for app document setup.
 
-Segment 1: Memory Generation Service
-Segment 2: Title Generation Service
-Segment 3: Triage Service
-Segment 4: Command Generation Service
-Segment 5: Response Analysis Service
+Segments: Memory Generation Service, Title Generation Service, Triage Service,
+Command Generation Service, Response Analysis Service.
 """
 
+import inspect
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
 
 from app.constants import (
+    FORBIDDEN_COMMAND_PATTERNS,
     AgentMode,
+    CommandCategory,
     InvestigationStatus,
     TriageComplexityClassification,
     TriageConfidence,
 )
+from app.constants.generated_status import Platform
+from app.constants.message_sender import MessageSender
+from app.llm.prompts import build_command_constraints_message, build_forbidden_patterns_message
+from app.models.agent import OperatorContext
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.http_context import RequestContext
 from app.models.investigations import ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
+from app.models.settings import G8eeUserSettings
 from app.models.tool_results import CommandRiskContext
+from app.models.tribunal_commands import TribunalGenerationRequest
+from app.models.whitelist import WhitelistedCommand
 from app.services.ai.generator import generate_command
 from app.services.ai.memory_generation_service import MemoryGenerationService
 from app.services.ai.response_analyzer import AIResponseAnalyzer
 from app.services.ai.title_generator import generate_case_title
 from app.services.ai.triage import TriageAgent
+from app.services.service_factory import ServiceFactory
+from app.utils.validation.safety import map_os_string_to_platform, validate_command_safety
 from tests.fakes.factories import (
     build_request_context,
     create_investigation_request,
 )
+from tests.integration.cleanup import IntegrationCleanupTracker
+from tests.integration.conftest import make_write_through_governance_client
 
 pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.slow]
 
@@ -57,10 +67,6 @@ def cache_aside_service(fake_cache_aside_service):
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def all_services(cache_aside_service, test_settings):
-    from unittest.mock import MagicMock
-
-    from app.services.service_factory import ServiceFactory
-    from tests.integration.conftest import make_write_through_governance_client
 
     services = ServiceFactory.create_all_services(
         test_settings,
@@ -76,7 +82,6 @@ async def all_services(cache_aside_service, test_settings):
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def cleanup(cache_aside_service):
-    from tests.integration.cleanup import IntegrationCleanupTracker
 
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker
@@ -153,7 +158,6 @@ class TestMemoryGenerationServiceIntegration:
                 web_session_id="test-session",
                 user_id=created_investigation.user_id,
                 source_component="test",
-                request_id="test-request",
             ),
         )
 
@@ -271,7 +275,6 @@ class TestMemoryGenerationServiceIntegration:
                 web_session_id="test-session",
                 user_id=created_investigation.user_id,
                 source_component="test",
-                request_id="test-request",
             ),
         )
 
@@ -367,7 +370,6 @@ class TestMemoryGenerationServiceIntegration:
                 web_session_id="test-session",
                 user_id=created_investigation.user_id,
                 source_component="test",
-                request_id="test-request",
             ),
         )
 
@@ -453,13 +455,13 @@ class TestTitleGenerationIntegration:
         assert "kubernetes" in title.generated_title.lower()
 
     async def test_generate_case_title_fallback_handling(self):
-        """generate_case_title returns fallback when no settings provided."""
+        """generate_case_title returns a fallback when no model is configured."""
         description = "Complex technical issue that needs a good title"
 
         title = await generate_case_title(
             description=description,
             max_length=80,
-            settings=None,  # No settings to trigger fallback
+            settings=G8eeUserSettings(),
         )
 
         # Verify fallback behavior
@@ -471,13 +473,13 @@ class TestTitleGenerationIntegration:
         assert title.generated_title.lower().startswith("complex technical")
 
     async def test_generate_case_title_empty_description(self, user_settings):
-        """generate_case_title handles empty/None descriptions."""
+        """generate_case_title handles empty descriptions."""
         if not user_settings.llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
-        # Test with None description
+        # Empty descriptions return the fallback without a model call.
         title = await generate_case_title(
-            description=None,
+            description="",
             max_length=80,
             settings=user_settings,
         )
@@ -646,8 +648,6 @@ class TestCommandGenerationIntegration:
         assert callable(generate_command)
 
         # Verify function signature uses TribunalGenerationRequest context object
-        import inspect
-        from app.models.tribunal_commands import TribunalGenerationRequest
 
         sig = inspect.signature(generate_command)
         actual_params = list(sig.parameters.keys())
@@ -656,8 +656,6 @@ class TestCommandGenerationIntegration:
 
     async def test_forbidden_patterns_dynamic_integration(self, user_settings):
         """Test that FORBIDDEN_COMMAND_PATTERNS changes are reflected in Tribunal prompts."""
-        from app.constants import FORBIDDEN_COMMAND_PATTERNS
-        from app.llm.prompts import build_forbidden_patterns_message
 
         if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
@@ -680,8 +678,6 @@ class TestCommandGenerationIntegration:
 
     async def test_command_constraints_message_formatting(self, test_settings):
         """Test that command constraints (whitelist/blacklist) are properly formatted for Tribunal prompts."""
-        from app.llm.prompts import build_command_constraints_message
-        from app.models.whitelist import WhitelistedCommand
 
         # Test with no constraints
         message = build_command_constraints_message(
@@ -696,13 +692,13 @@ class TestCommandGenerationIntegration:
         whitelisted_metadata = [
             WhitelistedCommand(
                 command="ping",
-                category="network_diagnostics",
+                category=CommandCategory.NETWORK_DIAGNOSTICS,
                 safe_options=["-c <count>", "-W <timeout>"],
                 validation={"count": r"^\d+$", "timeout": r"^\d+$"},
             ),
             WhitelistedCommand(
                 command="ls",
-                category="system_diagnostics",
+                category=CommandCategory.SYSTEM_DIAGNOSTICS,
                 safe_options=["-la", "-lh"],
                 validation={},
             ),
@@ -765,9 +761,6 @@ class TestCommandGenerationIntegration:
         blocks commands that violate whitelist constraints, ensuring the Auditor
         has the correct context to flag WHITELIST_VIOLATION reasons.
         """
-        from app.constants.generated_status import Platform
-        from app.models.agent import OperatorContext
-        from app.utils.validation.safety import map_os_string_to_platform, validate_command_safety
 
         # Create a mock operator context
         operator_context = OperatorContext(
@@ -801,6 +794,7 @@ class TestCommandGenerationIntegration:
             operator_context=operator_context,
         )
         assert not result.is_safe, "sudo command should be blocked by forbidden patterns"
+        assert result.error_message is not None
         assert "forbidden" in result.error_message.lower() or "sudo" in result.error_message.lower()
 
         # Test 3: Platform mapping works correctly
@@ -835,8 +829,6 @@ class TestResponseAnalysisIntegration:
 
         context = CommandRiskContext(
             working_directory="/home/user/Alpine-Delta",
-            hostname="Alpine-Delta",
-            username="dc-tech",
         )
 
         result = await analyzer.analyze_command_risk(
@@ -865,8 +857,6 @@ class TestResponseAnalysisIntegration:
 
         context = CommandRiskContext(
             working_directory="/",
-            hostname="dc-manager-bunker",
-            username="root",
         )
 
         result = await analyzer.analyze_command_risk(

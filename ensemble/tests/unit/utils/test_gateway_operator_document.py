@@ -5,9 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from app.constants import OperatorStatus
+from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import OperatorDocument
 from app.utils.gateway_decoding.gateway_operator_document import operator_document_from_gateway
 
@@ -19,6 +22,7 @@ def test_operator_document_from_gateway_accepts_canonical_id():
         {
             "id": "op-1",
             "user_id": "user-1",
+            "operator_type": "remote",
             "status": OperatorStatus.ACTIVE,
             "current_hostname": "worker-1",
         }
@@ -34,6 +38,7 @@ def test_operator_document_from_gateway_normalizes_operator_id_alias():
         {
             "operator_id": "op-2",
             "user_id": "user-1",
+            "operator_type": "remote",
             "status": OperatorStatus.BOUND,
         }
     )
@@ -46,6 +51,7 @@ def test_operator_document_from_gateway_parses_canonical_heartbeat_snapshot():
         {
             "id": "op-3",
             "user_id": "user-1",
+            "operator_type": "remote",
             "status": OperatorStatus.ACTIVE,
             "latest_heartbeat_snapshot": {
                 "timestamp": "2026-09-18T12:00:00Z",
@@ -69,9 +75,6 @@ def test_operator_document_from_gateway_parses_canonical_heartbeat_snapshot():
 
 def test_operator_document_validator_tolerates_magicmock_in_enriched_context():
     """Regression: after-validator must not break MagicMock(spec=OperatorDocument) test doubles."""
-    from unittest.mock import MagicMock
-
-    from app.models.investigations import EnrichedInvestigationContext
 
     mock_op = MagicMock(spec=OperatorDocument)
     mock_op.id = "op-mock"

@@ -56,11 +56,20 @@ func newTestActuator(t *testing.T) (*L5Actuator, ed25519.PublicKey) {
 	return actuator, pubKey
 }
 
+// mustUUID returns a fresh UUID string, failing the test on the
+// (practically impossible) failure of the OS random source.
+func mustUUID(t *testing.T) string {
+	t.Helper()
+	id, err := uuid.NewString()
+	require.NoError(t, err)
+	return id
+}
+
 func TestL5ActuatorRecordRejectedTransactionSignsFailedStageEvidence(t *testing.T) {
 	t.Parallel()
 	actuator, publicKey := newTestActuator(t)
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-rejected-hash",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -104,7 +113,7 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 
 	// Create verified transaction
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -192,7 +201,7 @@ func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 	handler.err = errors.New("handler execution failed")
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -253,7 +262,7 @@ func TestL5ActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 	}
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -288,7 +297,7 @@ func TestL5ActuatorExecuteReceiptPersistFail(t *testing.T) {
 	}
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -324,7 +333,7 @@ func TestL5ActuatorExecuteFinalPersistenceAttestationWriteFailure(t *testing.T) 
 	}
 	vt := &VerifiedTransaction{
 		Envelope: &govtypes.GovernanceEnvelope{
-			Id:                uuid.NewString(),
+			Id:                mustUUID(t),
 			TransactionHash:   "test-final-persistence-write-failure",
 			OperatorId:        "test-operator",
 			OperatorSessionId: "test-operator-session",
@@ -446,7 +455,7 @@ func TestL5ActuatorExecuteMissingSigningKey(t *testing.T) {
 	actuator.SigningKey = nil
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -473,7 +482,7 @@ func TestL5ActuatorExecuteMissingExecutionHandler(t *testing.T) {
 	actuator.ExecutionHandler = nil
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -542,7 +551,7 @@ func TestL5ActuatorExecuteCallsReceiptPublisherOnSuccess(t *testing.T) {
 	actuator.ReceiptPublisher = publisher
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-receipt-pub",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -592,7 +601,7 @@ func TestL5ActuatorExecuteDoesNotCallReceiptPublisherWhenFinalReceiptFails(t *te
 	actuator.ReceiptPublisher = publisher
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-receipt-pub-fail",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -620,7 +629,7 @@ func TestL5ActuatorExecuteNilReceiptPublisherDoesNotPanic(t *testing.T) {
 	require.Nil(t, actuator.ReceiptPublisher)
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-nil-pub",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -650,7 +659,7 @@ func TestL5ActuatorExecuteReceiptPublisherErrorDoesNotFailExecution(t *testing.T
 	actuator.ReceiptPublisher = publisher
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-pub-err",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -758,6 +767,7 @@ func TestClassifyReceiptFailure_MapsTypedSentinelsToCodes(t *testing.T) {
 		{name: "generation options invalid", execErr: constants.ErrInferenceGenerationOptionsInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID},
 		{name: "capability unsupported", execErr: constants.ErrInferenceCapabilityUnsupported, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED},
 		{name: "tools unsupported", execErr: constants.ErrInferenceToolsUnsupported, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED},
+		{name: "context overflow", execErr: constants.ErrInferenceContextOverflow, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW},
 		{name: "provider attempt required", execErr: constants.ErrInferenceProviderAttemptRequired, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED},
 		{name: "identity mismatch", execErr: constants.ErrInferenceIdentityMismatch, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH},
 		{name: "model digest mismatch", execErr: constants.ErrInferenceModelDigestMismatch, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH},

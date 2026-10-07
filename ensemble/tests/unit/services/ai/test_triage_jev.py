@@ -14,8 +14,8 @@ from unittest.mock import patch
 import pytest
 
 from app.constants import (
-    AgentMode,
     JEV_DEFAULT_MODEL,
+    AgentMode,
     LLMProvider,
     TriageComplexityClassification,
     TriageConfidence,
@@ -23,11 +23,13 @@ from app.constants import (
     TriageRequestPosture,
 )
 from app.decision.types import (
+    Answer,
     ChoiceAnswer,
     EvaluateResponse,
     EvaluateUsage,
 )
 from app.models.agents.triage import TriageRequest
+from app.models.attachments import AttachmentMetadata
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.triage import JEV_TRIAGE_HIGH_CONFIDENCE_THRESHOLD, TriageAgent
 from tests.fakes.fake_decision_provider import FakeDecisionProvider
@@ -39,16 +41,16 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 def jev_settings() -> G8eeUserSettings:
     return G8eeUserSettings(
         llm=LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
-            primary_model="main-model",
-            lite_provider=LLMProvider.JEV,
-            lite_model=JEV_DEFAULT_MODEL,
+            llm_primary_provider=LLMProvider.OLLAMA,
+            llm_model="main-model",
+            llm_lite_provider=LLMProvider.JEV,
+            llm_lite_model=JEV_DEFAULT_MODEL,
         )
     )
 
 
 def _jev_response(**overrides) -> EvaluateResponse:
-    answers = {
+    answers: dict[str, Answer] = {
         "complexity": ChoiceAnswer(
             choice="simple",
             confidence=0.95,
@@ -124,6 +126,7 @@ async def test_triage_jev_batches_questions_in_one_evaluate_call(
 
     assert fake_provider.last_request is not None
     questions = fake_provider.last_request["questions"]
+    assert isinstance(questions, dict)
     assert set(questions.keys()) == {"complexity", "intent", "request_posture"}
     assert fake_provider.last_request["model"] == JEV_DEFAULT_MODEL
     assert "Reset my password" in str(fake_provider.last_request["state"])
@@ -186,7 +189,6 @@ async def test_triage_jev_escalates_on_provider_failure(jev_settings: G8eeUserSe
 async def test_triage_jev_short_circuits_attachments_without_decision_provider(
     jev_settings: G8eeUserSettings,
 ):
-    from app.models.attachments import AttachmentMetadata
 
     agent = TriageAgent()
     request = TriageRequest(

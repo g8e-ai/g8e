@@ -23,7 +23,7 @@ import (
 // interface is intentionally narrow: only the receipt retrieval methods the
 // native tools require are exposed, so the tools cannot mutate audit state.
 type AuditReceiptQuery interface {
-	ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error)
+	ListActionReceipts(scope models.AuditScope, limit, offset int) ([]*models.ActionReceiptRecord, error)
 	ListActionReceiptsSince(since time.Time, limit int) ([]*models.ActionReceiptRecord, error)
 	GetActionReceipt(transactionID string) (*models.ActionReceiptRecord, error)
 }
@@ -133,7 +133,7 @@ func (t *AuditReceiptListTool) Execute(ctx context.Context, args json.RawMessage
 		limit = 50
 	}
 
-	receipts, err := q.ListActionReceipts(req.OperatorSessionID, limit, req.Offset)
+	receipts, err := q.ListActionReceipts(models.AuditScope{OperatorSessionID: req.OperatorSessionID}, limit, req.Offset)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("audit_receipt_list: query: %w", err)
 	}

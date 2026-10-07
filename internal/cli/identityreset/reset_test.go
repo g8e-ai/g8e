@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,7 +66,7 @@ func TestResetRefusesSymlinkBeforeRemovingCredentials(t *testing.T) {
 	dir := t.TempDir()
 	cert := write(t, dir, "pki/operator.crt")
 	outside := t.TempDir()
-	require.NoError(t, os.Symlink(outside, filepath.Join(dir, ".g8e/pki/trust")))
+	testutil.Symlink(t, outside, filepath.Join(dir, ".g8e/pki/trust"))
 	require.ErrorContains(t, Reset(dir, "operator"), "symlink")
 	_, err := os.Stat(cert)
 	require.NoError(t, err)

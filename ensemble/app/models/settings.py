@@ -12,41 +12,52 @@ import os
 from pathlib import Path
 from typing import Any
 
+from g8e.models.settings import (
+    BatchExecutionSettings as _ProtocolBatchExecutionSettings,
+)
+from g8e.models.settings import (
+    CommandValidationSettings as _ProtocolCommandValidationSettings,
+)
+from g8e.models.settings import (
+    EvalJudgeSettings as _ProtocolEvalJudgeSettings,
+)
+from g8e.models.settings import (
+    SearchSettings as _ProtocolSearchSettings,
+)
+
 from app.constants import (
+    ANTHROPIC_DEFAULT_ENDPOINT,
     CACHE_TTL_DEFAULT,
     DB_COLLECTION_API_KEYS,
     DB_COLLECTION_CASES,
-    DB_COLLECTION_SETTINGS,
     DB_COLLECTION_INVESTIGATIONS,
     DB_COLLECTION_MEMORIES,
-    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_OPERATOR_SESSIONS,
+    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_ORGANIZATIONS,
+    DB_COLLECTION_SETTINGS,
     DB_COLLECTION_TASKS,
-    DB_COLLECTION_WEB_SESSIONS,
     DB_COLLECTION_USERS,
-    OPENAI_DEFAULT_ENDPOINT,
-    OLLAMA_DEFAULT_ENDPOINT,
-    ANTHROPIC_DEFAULT_ENDPOINT,
-    LLAMACPP_DEFAULT_ENDPOINT,
+    DB_COLLECTION_WEB_SESSIONS,
     JEV_DEFAULT_MODEL,
+    LLAMACPP_DEFAULT_ENDPOINT,
+    OLLAMA_DEFAULT_ENDPOINT,
+    OPENAI_DEFAULT_ENDPOINT,
     LLMProvider,
     LogLevel,
 )
 from app.constants.bootstrap import get_bootstrap
 from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PortConstants
-from app.constants.paths import PATHS
-from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel, PrivateAttr, field_validator
-from g8e.models.settings import (
-    BatchExecutionSettings as _ProtocolBatchExecutionSettings,
-    CommandValidationSettings as _ProtocolCommandValidationSettings,
-    EvalJudgeSettings as _ProtocolEvalJudgeSettings,
-    LLMSettings as _ProtocolLLMSettings,
-    SearchSettings as _ProtocolSearchSettings,
-    G8eeUserSettings as _ProtocolG8eeUserSettings,
+from app.constants.paths import PATHS, get_app_cert_paths
+from app.models.base import (
+    ConfigDict,
+    Field,
+    G8eBaseModel,
+    G8eIdentifiableModel,
+    PrivateAttr,
+    field_validator,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +95,6 @@ class AuthSettings(G8eBaseModel):
     internal_api_key: str | None = Field(None, repr=False)
 
 
-
 def _env_or(name: str, default: str) -> str:
     """Return the env var when set and non-empty, otherwise the default."""
     return os.environ.get(name) or default
@@ -104,10 +114,15 @@ class ComponentURLsSettings(G8eBaseModel):
     """
 
     g8ee_url: str = Field(
-        default_factory=lambda: f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
+        default_factory=lambda: (
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
+        )
     )
     client_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_url or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_url
+            or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
+        )
     )
 
 
@@ -235,13 +250,22 @@ class GatewaySettings(G8eBaseModel):
     """operator (Operator Gateway mode) configuration."""
 
     http_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_https_url
+            or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        )
     )
     pubsub_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_pubsub_url or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_pubsub_url
+            or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        )
     )
     blob_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_https_url
+            or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
+        )
     )
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
     enable_cache_read: bool = Field(False)
@@ -261,21 +285,17 @@ class GatewaySettings(G8eBaseModel):
 class EvalJudgeSettings(_ProtocolEvalJudgeSettings):
     """Evaluation judge configuration for grading agent performance."""
 
-    model_config = ConfigDict(coerce_numbers_from_str=True)
 
+class LLMSettings(G8eBaseModel):
+    """LLM provider configuration with application enum values."""
 
-class LLMSettings(_ProtocolLLMSettings):
-    """LLM provider configuration.
+    primary_model: str | None = Field(default=None, alias="llm_model")
+    assistant_model: str | None = Field(default=None, alias="llm_assistant_model")
+    lite_model: str | None = Field(default=None, alias="llm_lite_model")
 
-    Enum fields (primary_provider, assistant_provider, lite_provider) stay
-    as ``LLMProvider`` enum instances inside the application boundary - the
-    G8eBaseModel contract. Wire/DB serialization runs through
-    ``flatten_for_*`` which uses ``mode="json"`` and emits string values.
-    """
-
-    model_config = ConfigDict(coerce_numbers_from_str=True)
-
-    primary_provider: LLMProvider | None = Field(default=None, alias="llm_primary_provider")
+    primary_provider: LLMProvider | None = Field(
+        default=LLMProvider.G8E, alias="llm_primary_provider"
+    )
     assistant_provider: LLMProvider | None = Field(default=None, alias="llm_assistant_provider")
     lite_provider: LLMProvider | None = Field(default=None, alias="llm_lite_provider")
 
@@ -507,9 +527,9 @@ class G8eeAppSettings(G8eBaseModel):
     log_level: LogLevel = Field(LogLevel.INFO)
     enable_logging: bool = Field(True)
 
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    gateway: GatewaySettings = Field(default_factory=GatewaySettings)
-    auth: AuthSettings = Field(default_factory=AuthSettings)
+    database: DatabaseSettings = Field(default_factory=lambda: DatabaseSettings.model_validate({}))
+    gateway: GatewaySettings = Field(default_factory=lambda: GatewaySettings.model_validate({}))
+    auth: AuthSettings = Field(default_factory=lambda: AuthSettings.model_validate({}))
     component_urls: ComponentURLsSettings = Field(default_factory=ComponentURLsSettings)
 
     session_ttl: int = Field(28800)
@@ -517,11 +537,12 @@ class G8eeAppSettings(G8eBaseModel):
     docs_dir: str = Field(PATHS["infra"]["docs_dir"])
 
     app_url: str = Field(
-        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
+        default_factory=lambda: (
+            get_bootstrap().gateway_https_url
+            or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
+        )
     )
-    allowed_origins: str = Field(
-        default_factory=lambda: _env_or(EnvVar.ALLOWED_ORIGINS, "")
-    )
+    allowed_origins: str = Field(default_factory=lambda: _env_or(EnvVar.ALLOWED_ORIGINS, ""))
     passkey_rp_name: str = Field(
         default_factory=lambda: _env_or(EnvVar.PASSKEY_RP_NAME, PATHS.get("host", "localhost"))
     )
@@ -529,15 +550,24 @@ class G8eeAppSettings(G8eBaseModel):
         default_factory=lambda: _env_or(EnvVar.PASSKEY_RP_ID, PATHS.get("host", "localhost"))
     )
     passkey_origin: str = Field(
-        default_factory=lambda: _env_or(EnvVar.PASSKEY_ORIGIN, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}")
+        default_factory=lambda: _env_or(
+            EnvVar.PASSKEY_ORIGIN,
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
+        )
     )
 
-    llm: LLMSettings = Field(default_factory=LLMSettings)
-    command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
-    search: SearchSettings = Field(default_factory=SearchSettings)
-    eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
-    reputation: ReputationSettings = Field(default_factory=ReputationSettings)
-    batch_execution: BatchExecutionSettings = Field(default_factory=BatchExecutionSettings)
+    llm: LLMSettings = Field(default_factory=lambda: LLMSettings.model_validate({}))
+    command_validation: CommandValidationSettings = Field(
+        default_factory=lambda: CommandValidationSettings.model_validate({})
+    )
+    search: SearchSettings = Field(default_factory=lambda: SearchSettings.model_validate({}))
+    eval_judge: EvalJudgeSettings = Field(
+        default_factory=lambda: EvalJudgeSettings.model_validate({})
+    )
+    reputation: ReputationSettings = Field(default_factory=lambda: ReputationSettings.model_validate({}))
+    batch_execution: BatchExecutionSettings = Field(
+        default_factory=lambda: BatchExecutionSettings.model_validate({})
+    )
 
     # Private fields for overrides (GDD §18.2)
     _ca_cert_path: str | None = PrivateAttr(default=None)
@@ -551,13 +581,13 @@ class G8eeAppSettings(G8eBaseModel):
             return self._ca_cert_path
         ca_path = PATHS["infra"]["ca_cert_path"]
         try:
-            with open(ca_path):
+            with Path(ca_path).open():
                 return ca_path
         except OSError:
             pki_dir = Path(PATHS["infra"]["pki_dir"])
             candidate = pki_dir / "trust" / "g8eg-ca-bundle.pem"
             try:
-                with open(candidate):
+                with candidate.open():
                     return str(candidate)
             except OSError:
                 return None
@@ -567,13 +597,11 @@ class G8eeAppSettings(G8eBaseModel):
         """Client certificate path for mTLS."""
         if self._client_cert_path is not None:
             return self._client_cert_path
-        from app.constants.paths import get_app_cert_paths
-
         cert_path, _ = get_app_cert_paths()
         if not cert_path:
             return None
         try:
-            with open(cert_path):
+            with Path(cert_path).open():
                 return cert_path
         except OSError:
             return None
@@ -583,13 +611,11 @@ class G8eeAppSettings(G8eBaseModel):
         """Client private key path for mTLS."""
         if self._client_key_path is not None:
             return self._client_key_path
-        from app.constants.paths import get_app_cert_paths
-
         _, key_path = get_app_cert_paths()
         if not key_path:
             return None
         try:
-            with open(key_path):
+            with Path(key_path).open():
                 return key_path
         except OSError:
             return None
@@ -600,11 +626,20 @@ class G8eeAppSettings(G8eBaseModel):
         return await settings_service.get_app_settings()
 
 
-class G8eeUserSettings(_ProtocolG8eeUserSettings):
+class G8eeUserSettings(G8eBaseModel):
     """Per-user settings, overlaid on platform settings."""
 
-    llm: LLMSettings = Field(default_factory=LLMSettings)
-    command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
+    llm: LLMSettings = Field(default_factory=lambda: LLMSettings.model_validate({}))
+    search: SearchSettings = Field(default_factory=lambda: SearchSettings.model_validate({}))
+    eval_judge: EvalJudgeSettings = Field(
+        default_factory=lambda: EvalJudgeSettings.model_validate({})
+    )
+    command_validation: CommandValidationSettings = Field(
+        default_factory=lambda: CommandValidationSettings.model_validate({})
+    )
+    batch_execution: BatchExecutionSettings = Field(
+        default_factory=lambda: BatchExecutionSettings.model_validate({})
+    )
 
     @classmethod
     async def from_db(cls, settings_service: Any, user_id: str) -> G8eeUserSettings:

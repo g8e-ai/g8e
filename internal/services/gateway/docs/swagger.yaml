@@ -215,6 +215,7 @@ definitions:
     - g8e.v1.app.task.failed
     - g8e.v1.app.task.started
     - g8e.v1.app.task.updated
+    - g8e.v1.inference.model.provenance.preflight.updated
     - g8e.v1.operator.a2a.call.requested
     - g8e.v1.operator.audit.ai.record.requested
     - g8e.v1.operator.audit.ai.recorded
@@ -560,6 +561,7 @@ definitions:
     - EventAppTaskFailed
     - EventAppTaskStarted
     - EventAppTaskUpdated
+    - EventModelProvenancePreflightProgress
     - EventOperatorA2aCallRequested
     - EventOperatorAuditAiRecordRequested
     - EventOperatorAuditAiRecorded
@@ -2411,6 +2413,7 @@ definitions:
     - 17
     - 18
     - 19
+    - 20
     format: int32
     type: integer
     x-enum-varnames:
@@ -2434,6 +2437,7 @@ definitions:
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW
   operatorv1.ReceiptPersistenceAttestation:
     properties:
       audit_record_id:
@@ -3079,6 +3083,10 @@ paths:
         in: query
         name: action_type
         type: string
+      - description: Acting app identity filter
+        in: query
+        name: acting_app_id
+        type: string
       - description: Operator session filter for list results
         in: query
         name: operator_session_id
@@ -3129,6 +3137,10 @@ paths:
       - description: Inclusive receipt timestamp in RFC3339 format
         in: query
         name: since
+        type: string
+      - description: Acting app identity filter
+        in: query
+        name: acting_app_id
         type: string
       - description: Operator session filter
         in: query
@@ -3481,7 +3493,8 @@ paths:
           schema:
             type: string
         "422":
-          description: Unprocessable Entity — target operator session is not inference-capable
+          description: Unprocessable Entity — context overflow, unsupported tools,
+            or target operator session is not inference-capable
           schema:
             type: string
         "500":

@@ -109,7 +109,7 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	// Direct handling of operator approval response when local suspended transaction exists
 	// or when posture requires L3 grounding.
 	if method == http.MethodPost && (upstreamPath == constants.APIPaths.EnsembleOperatorApprovalPrefix+"respond" || strings.HasSuffix(upstreamPath, "/operator/approval/respond")) {
-		if c.handleApprovalRespond(w, r, userID, webSessionID, cliSessionID, body) {
+		if c.handleApprovalRespond(w, r, userID, cliSessionID, body) {
 			return
 		}
 	}
@@ -222,7 +222,7 @@ func (c *EnsembleBrowserProxyController) handleProxySigningKey(w http.ResponseWr
 // handleApprovalRespond handles approval decisions directly when a local
 // suspended transaction exists, enforcing posture-specific security guarantees
 // (WebAuthn for web callers, mTLS for CLI callers under ratify or notary postures).
-func (c *EnsembleBrowserProxyController) handleApprovalRespond(w http.ResponseWriter, r *http.Request, userID, webSessionID, cliSessionID string, body []byte) bool {
+func (c *EnsembleBrowserProxyController) handleApprovalRespond(w http.ResponseWriter, r *http.Request, userID, cliSessionID string, body []byte) bool {
 	var req struct {
 		ApprovalID string `json:"approval_id"`
 		Approved   bool   `json:"approved"`
@@ -405,17 +405,17 @@ type browserProxyContext struct {
 // caller; a query-string user_id is never honored. Field order matches
 // encoding/json map key order.
 type browserInvestigationsQuery struct {
-	CaseID            string              `json:"case_id,omitempty"`
-	Context           browserProxyContext `json:"context"`
-	InvestigationType string              `json:"investigation_type,omitempty"`
-	Limit             int                 `json:"limit"`
-	OrderBy           string              `json:"order_by,omitempty"`
-	OrderDirection    string              `json:"order_direction,omitempty"`
-	Priority          string              `json:"priority,omitempty"`
-	Status            string              `json:"status,omitempty"`
-	UserID            string              `json:"user_id"`
-	WebSessionID      string              `json:"web_session_id,omitempty"`
-	CLISessionID      string              `json:"cli_session_id,omitempty"`
+	CaseID            string                        `json:"case_id,omitempty"`
+	Context           browserProxyContext           `json:"context"`
+	InvestigationType string                        `json:"investigation_type,omitempty"`
+	Limit             int                           `json:"limit"`
+	OrderBy           string                        `json:"order_by,omitempty"`
+	OrderDirection    string                        `json:"order_direction,omitempty"`
+	Priority          string                        `json:"priority,omitempty"`
+	Status            constants.InvestigationStatus `json:"status,omitempty"`
+	UserID            string                        `json:"user_id"`
+	WebSessionID      string                        `json:"web_session_id,omitempty"`
+	CLISessionID      string                        `json:"cli_session_id,omitempty"`
 }
 
 func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request, userID, webSessionID string, cliSessionIDs ...string) ([]byte, error) {
@@ -443,7 +443,7 @@ func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request
 		case "web_session_id":
 			payload.WebSessionID = vals[0]
 		case "status":
-			payload.Status = vals[0]
+			payload.Status = constants.NormalizeInvestigationStatus(vals[0])
 		case "investigation_type":
 			payload.InvestigationType = vals[0]
 		case "priority":
@@ -473,6 +473,7 @@ func injectBrowserContext(body []byte, userID, webSessionID string, bound []brow
 	}
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
+		//nolint:nilerr // intentional fallback: non-JSON body returned unchanged
 		return body, nil
 	}
 	ctx, _ := payload["context"].(map[string]interface{})

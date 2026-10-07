@@ -13,8 +13,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
-from app.constants.prompts import PromptFile
 from app.constants.generated_status import CommandErrorType, OperatorToolName
+from app.constants.prompts import PromptFile
 from app.errors import ConfigurationError
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
@@ -46,6 +46,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del investigation, g8e_context, request_settings, execution_id
     args = SshInventoryArgs.model_validate(tool_args)
     logger.info("[SSH_INVENTORY] justification=%s", args.justification)
 

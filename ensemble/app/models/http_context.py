@@ -14,9 +14,10 @@ from g8e.models.context import BoundOperator as _G8eBoundOperator
 from g8e.models.context import RequestContext as _G8eRequestContext
 from g8e.models.internal_api import EvaluationInferenceContext
 
+from app import errors as app_errors
 from app.constants import (
-    ComponentName,
     G8EE_COMPONENT,
+    ComponentName,
     OperatorStatus,
 )
 from app.utils.time_ids.ids import generate_execution_id
@@ -186,6 +187,30 @@ class G8eHttpContext(G8eBaseModel):
         """Returns True if at least one operator has status bound."""
         return any(op.status == OperatorStatus.BOUND for op in self.bound_operators)
 
+    def _validate_session_ids_against_user(self, user: Any) -> None:
+        """Verify web and CLI session IDs against the authenticated user."""
+        # 2. Web session validation
+        if self.web_session_id:
+            if not user.web_session_id:
+                raise app_errors.AuthenticationError(
+                    "Web session context provided but not authenticated as a web session"
+                )
+            if self.web_session_id != user.web_session_id:
+                raise app_errors.AuthenticationError(
+                    f"Web session ID mismatch: context={self.web_session_id}, auth={user.web_session_id}"
+                )
+
+        # 3. CLI session validation
+        if self.cli_session_id:
+            if not user.cli_session_id:
+                raise app_errors.AuthenticationError(
+                    "CLI session context provided but not authenticated as a CLI session"
+                )
+            if self.cli_session_id != user.cli_session_id:
+                raise app_errors.AuthenticationError(
+                    f"CLI session ID mismatch: context={self.cli_session_id}, auth={user.cli_session_id}"
+                )
+
     def validate_against_user(self, user: Any):
         """Verify that session IDs in context match the authenticated user's sessions.
 
@@ -194,48 +219,14 @@ class G8eHttpContext(G8eBaseModel):
         """
         # 1. User ID must match
         if self.user_id and self.user_id != user.uid:
-            from app.errors import AuthenticationError
+            raise app_errors.AuthenticationError(f"User ID mismatch: context={self.user_id}, auth={user.uid}")
 
-            raise AuthenticationError(f"User ID mismatch: context={self.user_id}, auth={user.uid}")
-
-        # 2. Web session validation
-        if self.web_session_id:
-            if not user.web_session_id:
-                from app.errors import AuthenticationError
-
-                raise AuthenticationError(
-                    "Web session context provided but not authenticated as a web session"
-                )
-            if self.web_session_id != user.web_session_id:
-                from app.errors import AuthenticationError
-
-                raise AuthenticationError(
-                    f"Web session ID mismatch: context={self.web_session_id}, auth={user.web_session_id}"
-                )
-
-        # 3. CLI session validation
-        if self.cli_session_id:
-            if not user.cli_session_id:
-                from app.errors import AuthenticationError
-
-                raise AuthenticationError(
-                    "CLI session context provided but not authenticated as a CLI session"
-                )
-            if self.cli_session_id != user.cli_session_id:
-                from app.errors import AuthenticationError
-
-                raise AuthenticationError(
-                    f"CLI session ID mismatch: context={self.cli_session_id}, auth={user.cli_session_id}"
-                )
+        self._validate_session_ids_against_user(user)
 
         if self.operator_session_id and self.operator_session_id != user.operator_session_id:
-            from app.errors import AuthenticationError
-
-            raise AuthenticationError("Operator session ID mismatch")
+            raise app_errors.AuthenticationError("Operator session ID mismatch")
         if self.operator_id and self.operator_id != user.operator_id:
-            from app.errors import AuthenticationError
-
-            raise AuthenticationError(
+            raise app_errors.AuthenticationError(
                 f"Operator ID mismatch: context={self.operator_id}, auth={user.operator_id}"
             )
 
@@ -243,15 +234,11 @@ class G8eHttpContext(G8eBaseModel):
         if self.bound_operators and user.operator_session_id and not self.operator_session_id:
             for op in self.bound_operators:
                 if op.operator_session_id and op.operator_session_id != user.operator_session_id:
-                    from app.errors import AuthenticationError
-
-                    raise AuthenticationError(
+                        raise app_errors.AuthenticationError(
                         f"Operator session ID mismatch for operator {op.operator_id}"
                     )
                 if user.operator_id and op.operator_id != user.operator_id:
-                    from app.errors import AuthenticationError
-
-                    raise AuthenticationError(
+                        raise app_errors.AuthenticationError(
                         f"Operator ID mismatch: context={op.operator_id}, auth={user.operator_id}"
                     )
 

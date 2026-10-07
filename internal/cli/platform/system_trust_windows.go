@@ -21,10 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// envCertPath passes the certificate file path to PowerShell via an
-// environment variable, avoiding command injection from string interpolation.
-const envCertPath = "G8E_SYSTRUST_CERT_PATH"
-
 // isTrustedPlatform enumerates the LocalMachine\Root store and compares
 // SHA-256 fingerprints. The fingerprint is passed via environment variable to
 // the PowerShell script; no PEM or path data is interpolated into the command

@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
@@ -29,6 +30,8 @@ import (
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	cligateway "github.com/g8e-ai/g8e/v2/internal/cli/gateway"
+	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/cli/wizard"
@@ -52,6 +55,13 @@ func getBinaryName() string {
 // It is populated by addGatewayFlags and converted to serve.GatewayConfig
 // via gatewayFlagsToServeConfig.
 type GatewayFlags struct {
+	OperatorRoles                      constants.OperatorRoles
+	InferenceOllamaEndpoint            string
+	InferenceKeepAlive                 string
+	ProviderBoundaryObserverID         string
+	ProvenanceOperatorID               string
+	ProvenanceOperatorModelStorageRoot string
+
 	Posture             string
 	HTTPPort            int
 	HTTPSPort           int
@@ -91,6 +101,13 @@ type GatewayFlags struct {
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
 // binding them to the provided GatewayFlags struct.
 func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
+	cmd.Flags().Var(&f.OperatorRoles, "roles", "Comma-separated embedded operator roles: data,inference,provenance,observer (repeatable; default: embedded,data)")
+	cmd.Flags().StringVar(&f.InferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Approved Ollama endpoint for embedded inference")
+	cmd.Flags().StringVar(&f.InferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration")
+	cmd.Flags().StringVar(&f.ProviderBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity")
+	cmd.Flags().StringVar(&f.ProvenanceOperatorID, "provenance-operator-id", "", "Stable provenance identity")
+	cmd.Flags().StringVar(&f.ProvenanceOperatorModelStorageRoot, "model-storage-root", "", "Root directory containing model weight blobs")
+
 	cmd.Flags().StringVar(&f.Posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced)")
 	cmd.Flags().IntVar(&f.HTTPPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
 	cmd.Flags().IntVar(&f.HTTPSPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
@@ -174,39 +191,45 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 // gateway config struct.
 func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	return serve.GatewayConfig{
-		Posture:                           g8econfig.GatewayPosture(f.Posture),
-		HTTPPort:                          f.HTTPPort,
-		HTTPSPort:                         f.HTTPSPort,
-		DataDir:                           f.DataDir,
-		PKIDir:                            f.PKIDir,
-		SecretsDir:                        f.SecretsDir,
-		VaultDir:                          f.VaultDir,
-		VaultKeyPath:                      f.VaultKeyPath,
-		PasskeyRpID:                       f.PasskeyRpID,
-		PasskeyRpName:                     f.PasskeyRpName,
-		PasskeyRpOrigins:                  f.PasskeyRpOrigins,
-		RateLimitRPS:                      f.RateLimitRPS,
-		RateLimitBurst:                    f.RateLimitBurst,
-		LogLevel:                          f.LogLevel,
-		CertIdentityMode:                  f.CertIdentityMode,
-		ConsensusID:                       f.ConsensusID,
-		ConsensusURL:                      f.ConsensusURL,
-		ConsensusBootstrap:                f.ConsensusBootstrap,
-		MCPDownstreamURL:                  f.MCPDownstreamURL,
-		MCPDownstreamCmd:                  f.MCPDownstreamCmd,
-		MCPDownstreamArgs:                 parseDownstreamArgs(f.MCPDownstreamArgs),
-		A2ADownstreamURL:                  f.A2ADownstreamURL,
-		EnsembleUpstreamURL:               f.EnsembleUpstreamURL,
-		PublicBaseURL:                     f.PublicBaseURL,
-		AllowedOrigins:                    f.AllowedOrigins,
-		DoctrineDir:                       f.DoctrineDir,
-		PublicSpectatorEnabled:            f.PublicSpectatorEnabled,
-		PublicSpectatorPrivateAddr:        f.PublicSpectatorPrivateAddr,
-		PublicSpectatorPublicAddr:         f.PublicSpectatorPublicAddr,
-		PublicSpectatorAllowContainerBind: f.PublicSpectatorAllowContainerBind,
-		EvalExplorerAddr:                  f.EvalExplorerAddr,
-		EvalExplorerRoot:                  f.EvalExplorerRoot,
-		PublicSpectatorTrustedProxyCIDRs:  f.PublicSpectatorTrustedProxyCIDRs,
+		OperatorRoles:                      f.OperatorRoles,
+		InferenceOllamaEndpoint:            f.InferenceOllamaEndpoint,
+		InferenceKeepAlive:                 f.InferenceKeepAlive,
+		ProviderBoundaryObserverID:         f.ProviderBoundaryObserverID,
+		ProvenanceOperatorID:               f.ProvenanceOperatorID,
+		ProvenanceOperatorModelStorageRoot: f.ProvenanceOperatorModelStorageRoot,
+		Posture:                            g8econfig.GatewayPosture(f.Posture),
+		HTTPPort:                           f.HTTPPort,
+		HTTPSPort:                          f.HTTPSPort,
+		DataDir:                            f.DataDir,
+		PKIDir:                             f.PKIDir,
+		SecretsDir:                         f.SecretsDir,
+		VaultDir:                           f.VaultDir,
+		VaultKeyPath:                       f.VaultKeyPath,
+		PasskeyRpID:                        f.PasskeyRpID,
+		PasskeyRpName:                      f.PasskeyRpName,
+		PasskeyRpOrigins:                   f.PasskeyRpOrigins,
+		RateLimitRPS:                       f.RateLimitRPS,
+		RateLimitBurst:                     f.RateLimitBurst,
+		LogLevel:                           f.LogLevel,
+		CertIdentityMode:                   f.CertIdentityMode,
+		ConsensusID:                        f.ConsensusID,
+		ConsensusURL:                       f.ConsensusURL,
+		ConsensusBootstrap:                 f.ConsensusBootstrap,
+		MCPDownstreamURL:                   f.MCPDownstreamURL,
+		MCPDownstreamCmd:                   f.MCPDownstreamCmd,
+		MCPDownstreamArgs:                  parseDownstreamArgs(f.MCPDownstreamArgs),
+		A2ADownstreamURL:                   f.A2ADownstreamURL,
+		EnsembleUpstreamURL:                f.EnsembleUpstreamURL,
+		PublicBaseURL:                      f.PublicBaseURL,
+		AllowedOrigins:                     f.AllowedOrigins,
+		DoctrineDir:                        f.DoctrineDir,
+		PublicSpectatorEnabled:             f.PublicSpectatorEnabled,
+		PublicSpectatorPrivateAddr:         f.PublicSpectatorPrivateAddr,
+		PublicSpectatorPublicAddr:          f.PublicSpectatorPublicAddr,
+		PublicSpectatorAllowContainerBind:  f.PublicSpectatorAllowContainerBind,
+		EvalExplorerAddr:                   f.EvalExplorerAddr,
+		EvalExplorerRoot:                   f.EvalExplorerRoot,
+		PublicSpectatorTrustedProxyCIDRs:   f.PublicSpectatorTrustedProxyCIDRs,
 	}
 }
 
@@ -652,7 +675,8 @@ func gatewayStatusCmdWithConfig(
 		Short: "Check Gateway health and status",
 		Long: `Check whether the g8e Gateway is running by first attempting an HTTP health
 check against the gateway API, then falling back to a process-manager check.
-Reports connected operators when the gateway is running.
+Reports enrollments (pending, operators, applications, dashboard) and users when
+the gateway is running.
 Also reports the status of the Docker Compose unified stack when containers are running.
 Displays the process ID and endpoint URLs when the gateway is running.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -726,10 +750,11 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 				}
 			}
 
-			// Report connected operators when the gateway is running.
+			// Report enrollments (pending, operators, applications, dashboard)
+			// when the gateway is running.
 			if running {
 				cmd.Println()
-				printConnectedOperators(cmd.OutOrStdout(), apiClient, fileSvc, cfg)
+				printEnrollments(cmd.OutOrStdout(), apiClient, fileSvc, cfg)
 			}
 
 			// Report the Docker Compose unified stack status if at least one
@@ -748,12 +773,94 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 	return cmd
 }
 
-func printConnectedOperators(w io.Writer, client authcmd.APIClient, fileSvc fs.RuntimeFileService, cfg *config.Config) {
-	fmt.Fprintln(w, "Connected Operators")
-	fmt.Fprintln(w, "-------------------")
+// printEnrollments renders the Enrollments section: pending requests, connected
+// operators, completed (non-revoked) application and dashboard enrollments, and
+// registered users.
+func printEnrollments(w io.Writer, client authcmd.APIClient, fileSvc fs.RuntimeFileService, cfg *config.Config) {
+	fmt.Fprintln(w, "Enrollments")
+	fmt.Fprintln(w, "-----------")
 
+	printPendingEnrollments(w, client)
+	fmt.Fprintln(w)
+	printConnectedOperators(w, client, fileSvc, cfg)
+	fmt.Fprintln(w)
+
+	enrolled, ok := fetchEnrolled(client)
+	printEnrolledKinds(w, "Applications", "No enrolled applications", enrolled, ok,
+		models.PlatformComponentApplication, models.PlatformComponentEnsemble)
+	fmt.Fprintln(w)
+	printEnrolledKinds(w, "Dashboard", "No enrolled dashboard", enrolled, ok,
+		models.PlatformComponentDashboard)
+	fmt.Fprintln(w)
+	printUsers(w, client)
+}
+
+func printUsers(w io.Writer, client authcmd.APIClient) {
+	fmt.Fprintln(w, "Users")
 	if client == nil {
-		fmt.Fprintln(w, "No connected operators")
+		fmt.Fprintln(w, "  No users")
+		return
+	}
+	body, err := client.Get(constants.APIPaths.Users)
+	if err != nil {
+		fmt.Fprintln(w, "  Users unavailable; check enrollment or Gateway logs")
+		return
+	}
+	var users []models.User
+	if err := json.Unmarshal(body, &users); err != nil {
+		fmt.Fprintln(w, "  Users unavailable; check enrollment or Gateway logs")
+		return
+	}
+	if len(users) == 0 {
+		fmt.Fprintln(w, "  No users")
+		return
+	}
+	fmt.Fprintf(w, "  %-36s  %-10s  %-20s  %-8s\n", "ID", "Status", "Roles", "Passkeys")
+	for _, u := range users {
+		status := string(u.Status)
+		if status == "" {
+			status = "-"
+		}
+		roles := strings.Join(u.Roles, ",")
+		if roles == "" {
+			roles = "-"
+		}
+		fmt.Fprintf(w, "  %-36s  %-10s  %-20s  %-8d\n", u.ID, status, roles, len(u.PasskeyCredentials))
+	}
+}
+
+func printPendingEnrollments(w io.Writer, client authcmd.APIClient) {
+	fmt.Fprintln(w, "Pending")
+	if client == nil {
+		fmt.Fprintln(w, "  No pending enrollments")
+		return
+	}
+	body, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentPending)
+	if err != nil {
+		fmt.Fprintln(w, "  Pending enrollments unavailable; check enrollment or Gateway logs")
+		return
+	}
+	var pending models.PlatformEnrollmentPendingResponse
+	if err := json.Unmarshal(body, &pending); err != nil {
+		fmt.Fprintln(w, "  Pending enrollments unavailable; check enrollment or Gateway logs")
+		return
+	}
+	if len(pending.Requests) == 0 {
+		fmt.Fprintln(w, "  No pending enrollments")
+		return
+	}
+	fmt.Fprintf(w, "  %-36s  %-12s  %-24s  %-30s  %-24s\n", "Request ID", "Kind", "Name", "Instance ID", "Hostname")
+	for _, r := range pending.Requests {
+		fmt.Fprintf(w, "  %-36s  %-12s  %-24s  %-30s  %-24s\n",
+			r.RequestID, string(r.ComponentKind), r.ComponentName, r.InstanceID, r.Hostname)
+	}
+	fmt.Fprintln(w, "  Approve with: g8e auth enroll approve <request-id>")
+}
+
+func printConnectedOperators(w io.Writer, client authcmd.APIClient, fileSvc fs.RuntimeFileService, cfg *config.Config) {
+	fmt.Fprintln(w, "Operators")
+	if client == nil {
+		fmt.Fprintln(w, "  No connected operators")
 		return
 	}
 
@@ -765,25 +872,25 @@ func printConnectedOperators(w io.Writer, client authcmd.APIClient, fileSvc fs.R
 
 	resp, err := client.Get(reqPath)
 	if err != nil {
-		fmt.Fprintln(w, "No connected operators")
+		fmt.Fprintln(w, "  No connected operators")
 		return
 	}
 
 	var slotResp models.OperatorSlotResponse
 	if err := json.Unmarshal(resp, &slotResp); err != nil {
-		fmt.Fprintln(w, "No connected operators")
+		fmt.Fprintln(w, "  No connected operators")
 		return
 	}
 
 	var connected []models.OperatorDocumentGo
 	for _, op := range slotResp.Operators {
-		if isOperatorConnected(op) {
+		if clioperator.IsConnected(op) {
 			connected = append(connected, op)
 		}
 	}
 
 	if len(connected) == 0 {
-		fmt.Fprintln(w, "No connected operators")
+		fmt.Fprintln(w, "  No connected operators")
 		return
 	}
 
@@ -803,30 +910,40 @@ func printConnectedOperators(w io.Writer, client authcmd.APIClient, fileSvc fs.R
 	}
 }
 
-func isOperatorConnected(op models.OperatorDocumentGo) bool {
-	if op.IsSlot && !op.Claimed {
-		return false
+// fetchEnrolled returns the completed (non-revoked) platform enrollments. The
+// bool is false when the list could not be retrieved.
+func fetchEnrolled(client authcmd.APIClient) ([]models.PlatformEnrollmentEnrolledRequest, bool) {
+	if client == nil {
+		return nil, true
 	}
-	switch op.Status {
-	case constants.OperatorStatusActive, constants.OperatorStatusBound, constants.OperatorStatusStale:
-		return true
-	default:
-		return false
+	return cligateway.FetchEnrolled(client.Get)
+}
+
+func printEnrolledKinds(w io.Writer, title, empty string, enrolled []models.PlatformEnrollmentEnrolledRequest, ok bool, kinds ...models.PlatformComponentKind) {
+	fmt.Fprintln(w, title)
+	if !ok {
+		fmt.Fprintf(w, "  %s unavailable; check enrollment or Gateway logs\n", title)
+		return
+	}
+	var rows []models.PlatformEnrollmentEnrolledRequest
+	for _, e := range enrolled {
+		if slices.Contains(kinds, e.ComponentKind) {
+			rows = append(rows, e)
+		}
+	}
+	if len(rows) == 0 {
+		fmt.Fprintf(w, "  %s\n", empty)
+		return
+	}
+	fmt.Fprintf(w, "  %-24s  %-12s  %-30s  %-24s  %-36s\n", "Name", "Kind", "Instance ID", "Hostname", "Request ID")
+	for _, e := range rows {
+		fmt.Fprintf(w, "  %-24s  %-12s  %-30s  %-24s  %-36s\n",
+			e.ComponentName, string(e.ComponentKind), e.InstanceID, e.Hostname, e.RequestID)
 	}
 }
 
 func operatorRoleDisplay(op models.OperatorDocumentGo) string {
-	if op.OperatorRole != "" {
-		return string(op.OperatorRole)
-	}
-	role := operatorcapability.GetOperatorRole(op)
-	if role != "" {
-		return string(role)
-	}
-	if op.OperatorType != "" {
-		return string(op.OperatorType)
-	}
-	return "-"
+	return operatorcapability.GetOperatorRoles(op).String()
 }
 
 func operatorHostnameDisplay(op models.OperatorDocumentGo) string {

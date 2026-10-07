@@ -6,9 +6,9 @@
 # released under the Apache License, Version 2.0.
 
 
-from app.constants import Platform, CommandCategory
+from app.constants import CommandCategory, Platform
 
-from .base import G8eBaseModel, Field
+from .base import Field, G8eBaseModel
 
 
 class WhitelistedCommand(G8eBaseModel):

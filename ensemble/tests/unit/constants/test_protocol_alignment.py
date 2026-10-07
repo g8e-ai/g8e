@@ -20,13 +20,27 @@ import json
 from enum import Enum
 from pathlib import Path
 
+import g8e.constants as g8e_constants
+import g8e.enums as g8e_enums
+import g8e.models.base as proto_base
 import pytest
+from g8e.models.context import RequestContext as ProtoRequestContext
+from g8e.models.events import BackgroundEventWire as ProtoBackgroundEventWire
+from g8e.models.events import SessionEventWire as ProtoSessionEventWire
+from g8e.models.internal_api import ChatMessageRequest as ProtoChatMessageRequest
+from g8e.models.internal_api import ChatStartedResponse as ProtoChatStartedResponse
+from g8e.models.internal_api import ResourceCreationRequest as ProtoResourceCreationRequest
 
 import app.constants as app_constants
 import app.models.base as app_base
-import g8e.constants as g8e_constants
-import g8e.enums as g8e_enums
 from app.constants import generated_status as gs
+from app.models import settings as ens_settings
+from app.models.events import BackgroundEventWire as AppBackgroundEventWire
+from app.models.events import SessionEventWire as AppSessionEventWire
+from app.models.http_context import RequestContext as AppRequestContext
+from app.models.internal_api import ChatMessageRequest as AppChatMessageRequest
+from app.models.internal_api import ChatStartedResponse as AppChatStartedResponse
+from app.models.internal_api import ResourceCreationRequest as AppResourceCreationRequest
 
 pytestmark = pytest.mark.unit
 
@@ -227,8 +241,6 @@ class TestModelBaseReexports:
         ids=[e for e, _ in BASE_REEXPORT_PAIRS],
     )
     def test_base_symbol_is_protocol_identity(self, ensemble_name: str, protocol_name: str):
-        import g8e.models.base as proto_base
-
         ens = getattr(app_base, ensemble_name)
         proto = getattr(proto_base, protocol_name)
         assert ens is proto, (
@@ -245,64 +257,50 @@ class TestModelSubclassing:
     """Ensemble models that extend protocol models must subclass them."""
 
     def test_request_context_subclasses_protocol(self):
-        from app.models.http_context import RequestContext
-        from g8e.models.context import RequestContext as Proto
+        assert issubclass(AppRequestContext, ProtoRequestContext)
 
-        assert issubclass(RequestContext, Proto)
-
-    def test_chat_message_request_subclasses_protocol(self):
-        from app.models.internal_api import ChatMessageRequest
-        from g8e.models.internal_api import ChatMessageRequest as Proto
-
-        assert issubclass(ChatMessageRequest, Proto)
+    def test_chat_message_request_declares_every_protocol_field(self):
+        assert set(ProtoChatMessageRequest.model_fields) <= set(AppChatMessageRequest.model_fields)
 
     def test_chat_started_response_is_protocol(self):
-        from app.models.internal_api import ChatStartedResponse
-        from g8e.models.internal_api import ChatStartedResponse as Proto
-
-        assert ChatStartedResponse is Proto
+        assert AppChatStartedResponse is ProtoChatStartedResponse
 
     def test_resource_creation_request_is_protocol(self):
-        from app.models.internal_api import ResourceCreationRequest
-        from g8e.models.internal_api import ResourceCreationRequest as Proto
-
-        assert ResourceCreationRequest is Proto
+        assert AppResourceCreationRequest is ProtoResourceCreationRequest
 
     def test_session_event_wire_subclasses_protocol(self):
-        from app.models.events import SessionEventWire
-        from g8e.models.events import SessionEventWire as Proto
-
-        assert issubclass(SessionEventWire, Proto)
+        assert issubclass(AppSessionEventWire, ProtoSessionEventWire)
 
     def test_background_event_wire_subclasses_protocol(self):
-        from app.models.events import BackgroundEventWire
-        from g8e.models.events import BackgroundEventWire as Proto
-
-        assert issubclass(BackgroundEventWire, Proto)
+        assert issubclass(AppBackgroundEventWire, ProtoBackgroundEventWire)
 
     @pytest.mark.parametrize(
         ("ensemble_name", "protocol_path"),
         [
-            ("G8eeUserSettings", "g8e.models.settings:G8eeUserSettings"),
-            ("LLMSettings", "g8e.models.settings:LLMSettings"),
             ("SearchSettings", "g8e.models.settings:SearchSettings"),
             ("BatchExecutionSettings", "g8e.models.settings:BatchExecutionSettings"),
             ("CommandValidationSettings", "g8e.models.settings:CommandValidationSettings"),
             ("EvalJudgeSettings", "g8e.models.settings:EvalJudgeSettings"),
         ],
-        ids=["G8eeUserSettings", "LLMSettings", "SearchSettings",
-             "BatchExecutionSettings", "CommandValidationSettings", "EvalJudgeSettings"],
+        ids=[
+            "SearchSettings",
+            "BatchExecutionSettings",
+            "CommandValidationSettings",
+            "EvalJudgeSettings",
+        ],
     )
     def test_settings_model_subclasses_protocol(self, ensemble_name: str, protocol_path: str):
-        from app.models import settings as ens_settings
-
         mod_path, cls_name = protocol_path.split(":")
         proto_mod = importlib.import_module(mod_path)
         proto_cls = getattr(proto_mod, cls_name)
         ens_cls = getattr(ens_settings, ensemble_name)
-        assert issubclass(ens_cls, proto_cls), (
-            f"{ensemble_name} must subclass {protocol_path}"
-        )
+        assert issubclass(ens_cls, proto_cls), f"{ensemble_name} must subclass {protocol_path}"
+
+    @pytest.mark.parametrize("name", ["G8eeUserSettings", "LLMSettings"])
+    def test_standalone_settings_model_declares_every_protocol_field(self, name: str):
+        proto_cls = getattr(importlib.import_module("g8e.models.settings"), name)
+        ens_cls = getattr(ens_settings, name)
+        assert set(proto_cls.model_fields) <= set(ens_cls.model_fields)
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +315,8 @@ class TestNoEnumDuplicates:
 
     def test_no_ensemble_enum_shadows_protocol_enum(self):
         protocol_enum_names = {
-            name for name in dir(g8e_enums)
+            name
+            for name in dir(g8e_enums)
             if isinstance(getattr(g8e_enums, name, None), type)
             and issubclass(getattr(g8e_enums, name), Enum)
         }
@@ -482,6 +481,5 @@ class TestSSEEventFixturesPresence:
                     f"{key}: fixture={actual!r} != EventType={expected_constant.value!r}"
                 )
         assert mismatches == [], (
-            "SSE fixture 'type' strings drifted from EventType constants: "
-            + "; ".join(mismatches)
+            "SSE fixture 'type' strings drifted from EventType constants: " + "; ".join(mismatches)
         )

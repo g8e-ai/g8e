@@ -9,8 +9,6 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, PrivateAttr, TypeAdapter, ValidationInfo, computed_field
-
 from g8e.models.base import (
     ConfigDict,
     Field,
@@ -21,6 +19,7 @@ from g8e.models.base import (
     field_validator,
     model_validator,
 )
+from pydantic import BaseModel, PrivateAttr, TypeAdapter, ValidationInfo, computed_field
 
 __all__ = [
     "BaseModel",

@@ -12,7 +12,7 @@ These are the argument shapes used by the AI when calling Operator tools.
 They are validated by the tool_service before being converted to pub/sub payloads.
 """
 
-from app.models.base import G8eBaseModel, Field
+from app.models.base import Field, G8eBaseModel
 from app.models.command_request_payloads import TargetedOperatorBase
 
 __all__ = [
@@ -352,5 +352,3 @@ class SshInventoryArgs(G8eBaseModel):
     justification: str = Field(
         ..., description="Clear explanation of why you need to see the SSH fleet inventory."
     )
-
-

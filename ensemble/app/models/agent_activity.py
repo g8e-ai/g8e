@@ -10,7 +10,7 @@ Metadata models for AI agent activity tracking and data science analysis.
 """
 
 from app.constants import AgentMode, TriageComplexityClassification, TriageConfidence
-from app.models.base import G8eIdentifiableModel, Field
+from app.models.base import Field, G8eIdentifiableModel
 from app.models.tool_results import TokenUsage
 
 

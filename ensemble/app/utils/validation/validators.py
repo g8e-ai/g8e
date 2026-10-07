@@ -11,16 +11,19 @@ from app.utils.validation.auto_approved_validator import (
     CommandAutoApprovedValidator,
     get_auto_approved_validator,
     register_auto_approved_validator,
+    reset_auto_approved_validator,
 )
 from app.utils.validation.blacklist_validator import (
     CommandBlacklistValidator,
     get_blacklist_validator,
     register_blacklist_validator,
+    reset_blacklist_validator,
 )
 from app.utils.validation.whitelist_validator import (
     CommandWhitelistValidator,
     get_whitelist_validator,
     register_whitelist_validator,
+    reset_whitelist_validator,
 )
 
 __all__ = [
@@ -33,4 +36,7 @@ __all__ = [
     "register_auto_approved_validator",
     "register_blacklist_validator",
     "register_whitelist_validator",
+    "reset_auto_approved_validator",
+    "reset_blacklist_validator",
+    "reset_whitelist_validator",
 ]

@@ -23,12 +23,11 @@ var importNow = time.Unix(1_700_000_000, 0).UTC()
 
 func importIDs(prefix string) string { return prefix + "-id" }
 
-func sealTrace(t *testing.T, trace EvaluationTrace) EvaluationTrace {
+func sealTrace(t *testing.T, trace EvaluationTrace) {
 	t.Helper()
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	return trace
 }
 
 // seededImportFixture is a request and honest trace for one real catalog
@@ -84,7 +83,7 @@ func newSeededImportFixture(t *testing.T, scenarioID string, mutate func(f *seed
 	trace["triage_model_call"] = EvaluationTrace{"succeeded": true}
 	trace["designated_role_output"] = "Retried against the workspace; the match is AUTH_FAILURE user=svc-deploy."
 	trace["tool_calls"] = []any{operatorCall(t, "c1", toolGrep, true, map[string]any{"pattern": "AUTH_FAILURE", "path": ws.Root, "target_operators": []string{"op-1"}}, map[string]any{"loop_turn": float64(2)})}
-	trace["governed_actions"] = []any{governedAllow("c1")}
+	trace["governed_actions"] = []any{governedAllow()}
 
 	f := seededImportFixture{req: req, trace: trace, ws: ws}
 	if mutate != nil {

@@ -52,7 +52,7 @@ func loadActionTypeMeta(path string) (map[string]actionTypeMeta, error) {
 	return out, nil
 }
 
-func generateActionTypesGo(actionTypes map[string]actionTypeMeta) (string, error) {
+func generateActionTypesGo(actionTypes map[string]actionTypeMeta) string {
 	keys := make([]string, 0, len(actionTypes))
 	for k := range actionTypes {
 		keys = append(keys, k)
@@ -132,5 +132,5 @@ func (a ActionType) IsBootstrapAction() bool {
 	}
 }
 `)
-	return b.String(), nil
+	return b.String()
 }

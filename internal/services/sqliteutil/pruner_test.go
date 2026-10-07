@@ -381,7 +381,7 @@ func TestPruner_Tier1_FnErrorHandling(t *testing.T) {
 func TestPruner_Tier1_ContextPassedToFn(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	var receivedCtx context.Context
+	var receivedCtx any
 	fn := func(ctx context.Context, _ *DB, _ *slog.Logger) error {
 		receivedCtx = ctx
 		return nil

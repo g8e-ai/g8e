@@ -12,6 +12,12 @@ type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
 var EnvVar = struct {
+	Hostname              EnvVarKey
+	OllamaEndpoint        EnvVarKey
+	ProvenanceHost        EnvVarKey
+	ObserverHost          EnvVarKey
+	InferenceHost         EnvVarKey
+	DataHost              EnvVarKey
 	ConsensusID           EnvVarKey
 	ConsensusURL          EnvVarKey
 	ConsensusBootstrap    EnvVarKey
@@ -34,11 +40,10 @@ var EnvVar = struct {
 	LatticeSandboxesToken EnvVarKey
 	LatticeEntityName     EnvVarKey
 	LatticePostureFloor   EnvVarKey
-	DemoRunID             EnvVarKey
-	DemoScenarioID        EnvVarKey
 	Home                  EnvVarKey
 	User                  EnvVarKey
 	SSHAuthSock           EnvVarKey
+	VirtualEnv            EnvVarKey
 	CloudflareAPIToken    EnvVarKey
 	CFAPIToken            EnvVarKey
 	OllamaHost            EnvVarKey
@@ -47,6 +52,12 @@ var EnvVar = struct {
 	HarnessLLMModel       EnvVarKey
 	TestReexec            EnvVarKey
 }{
+	Hostname:              EnvVarKey("G8E_HOSTNAME"),
+	OllamaEndpoint:        EnvVarKey("G8E_OLLAMA_ENDPOINT"),
+	ProvenanceHost:        EnvVarKey("G8E_PROVENANCE_HOST"),
+	ObserverHost:          EnvVarKey("G8E_OBSERVER_HOST"),
+	InferenceHost:         EnvVarKey("G8E_INFERENCE_HOST"),
+	DataHost:              EnvVarKey("G8E_DATA_HOST"),
 	ConsensusID:           EnvVarKey("G8E_CONSENSUS_ID"),
 	ConsensusURL:          EnvVarKey("G8E_CONSENSUS_URL"),
 	ConsensusBootstrap:    EnvVarKey("G8E_CONSENSUS_BOOTSTRAP"),
@@ -69,11 +80,10 @@ var EnvVar = struct {
 	LatticeSandboxesToken: EnvVarKey("SANDBOXES_TOKEN"),
 	LatticeEntityName:     EnvVarKey("LATTICE_ENTITY_NAME"),
 	LatticePostureFloor:   EnvVarKey("LATTICE_POSTURE_FLOOR"),
-	DemoRunID:             EnvVarKey("G8E_DEMO_RUN_ID"),
-	DemoScenarioID:        EnvVarKey("G8E_DEMO_SCENARIO_ID"),
 	Home:                  EnvVarKey("HOME"),
 	User:                  EnvVarKey("USER"),
 	SSHAuthSock:           EnvVarKey("SSH_AUTH_SOCK"),
+	VirtualEnv:            EnvVarKey("VIRTUAL_ENV"),
 	CloudflareAPIToken:    EnvVarKey("CLOUDFLARE_API_TOKEN"),
 	CFAPIToken:            EnvVarKey("CF_API_TOKEN"),
 	OllamaHost:            EnvVarKey("OLLAMA_HOST"),

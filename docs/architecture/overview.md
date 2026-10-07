@@ -3,8 +3,8 @@ doc_id: overview
 title: Platform Architecture Overview
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - cmd/g8e/
   - internal/cli/
@@ -90,7 +90,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-ARCH-NODE-01 | The Gateway (PDP) and Operator (PEP) MUST be instantiated from the single static `g8e` Go binary (`g8e gw start` and `g8e operator start`). The Gateway coordinates ingress, PKI, and L1-L3 deliberation; the Operator maintains sovereign execution and local audit evidence. |
 | INV-ARCH-NODE-02 | Outbound Operators MUST establish outbound-only mTLS connections to the Gateway and subscribe to exact session-specific command channels (`cmd:<operator_id>:<operator_session_id>`). The Gateway MUST NOT expose or require inbound management listeners into remote Operator environments. |
-| INV-ARCH-NODE-03 | Multiple Operator instances running on the same host MUST be disambiguated by a composite SHA-256 system fingerprint combining host properties with `local_dir`, `account`, `port`, and `operator_role` (`inference`, `provenance`, `observer`, `data`). Witness operators (`provenance`, `observer`) MUST hard-reject arbitrary command execution. |
+| INV-ARCH-NODE-03 | Multiple Operator instances running on the same host MUST be disambiguated by a composite SHA-256 system fingerprint combining host properties with `local_dir`, `account`, `port`, and `operator_roles` (`embedded`, `inference`, `provenance`, `observer`, `data`). Witness-only operators (`provenance`, `observer`) MUST reject arbitrary command execution; adding Data enables governed commands in the same process. |
 | INV-ARCH-NODE-04 | Every read of an Operator document MUST first move a remote Operator in `active` status with no heartbeat for more than 60 seconds (`constants.OperatorHeartbeatStaleAfter`) to `stale` and persist that transition. The check lives in the Gateway document store, so no reader can observe a silent Operator as `active`. A heartbeat restores `stale` to `active`; it never revives `stopped` or `terminated`. The embedded Operator is exempt. `g8e operator start` MUST reject a `--heartbeat-interval` above half that window so a healthy Operator can miss one beat. |
 | INV-ARCH-NODE-05 | Enrolling an Operator whose `system_fingerprint` matches a non-terminated remote Operator the same owner already holds MUST terminate the earlier Operator document and deactivate its Operator session as part of the governed issuance. One Operator identity MUST NOT hold two live leases. |
 
@@ -132,7 +132,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Agentic Ensemble service (g8ee) | `ensemble/` | `cd ensemble && pytest` |
 | Console (Gateway-embedded browser frontend) | `console/`, `internal/services/gateway/console/` | `make console-test` |
 | Protocol definitions and bindings | `protocol/proto/g8e/`, `protocol/` | `make proto-generate` and `make doctrines-validate` |
-| Compliance catalogs and KSI verification | `protocol/compliance/`, `internal/cli/cmd/compliance/` | `g8e compliance demo-run verify` |
+| Compliance catalogs and KSI verification | `protocol/compliance/`, `internal/cli/cmd/compliance/` | `g8e compliance evidence-graph verify --eval-run <run-id>` |
 
 ## Procedures
 
@@ -245,9 +245,9 @@ The reference binary compiles a native registry of 32 typed tools in `internal/s
 
 ### Governed Operator Roles and Multi-Operator Coexistence
 
-The g8e Operator is a compact binary, and multiple operator processes can execute concurrently on the exact same host system for entirely different purposes. Operators running on the same host are differentiated by four key factors: `local_dir`, `account`, `port`, and `operator_role`.
+The g8e Operator is a compact binary, and multiple operator processes can execute concurrently on the exact same host system for entirely different purposes. Operators running on the same host are differentiated by four key factors: `local_dir`, `account`, `port`, and `operator_roles`.
 
-The canonical `system_fingerprint` is a SHA-256 composite hash combining immutable host properties (`os`, `arch`, `cpu_count`, `machine_id`, `hostname`) with `local_dir`, `account`, `port`, and `operator_role`. This ensures distinct, collision-free identities in the Gateway operator registry.
+The canonical `system_fingerprint` is a SHA-256 composite hash combining immutable host properties (`os`, `arch`, `cpu_count`, `machine_id`, `hostname`) with `local_dir`, `account`, `port`, and `operator_roles`. This ensures distinct, collision-free identities in the Gateway operator registry.
 
 | Role | Activation Flags | Responsibilities | Execution Boundaries |
 | --- | --- | --- | --- |
@@ -346,16 +346,16 @@ The platform provides layered observation capabilities separated by strict trust
 
 The g8e Protocol Library (`protocol/`) defines canonical wire contracts, schemas, and models:
 - **Protobuf Schemas**: Defined in `protocol/proto/g8e/` and generated via `make proto-generate` using `buf`. Generated Go, Python, and TypeScript bindings provide typed message structures.
-- **Constants Registries**: JSON registries in `protocol/constants/` serve as single sources of truth for doctrines, COSAiS overlays, ports, and errors, validated via `make doctrines-validate` and `make cosais-validate`.
+- **Constants Registries**: JSON registries in `protocol/constants/` serve as single sources of truth for doctrines, ports, errors, and public contract values, validated through `make doctrines-validate`, `make constants-check`, and the protocol conformance suites.
 - **JSON Model Schemas**: Canonical schemas in `protocol/models/` and `protocol/schemas/` define structures for consensus policies, audit events, and compliance records.
 - **Canonical Serialization**: Transactions use canonical protojson serialization for deterministic hashing and cryptographic signatures. See [Protocol Library](protocol.md).
 
 ### Compliance Evidence and KSI Verification Foundation
 
 The platform incorporates a protocol-owned compliance evidence foundation:
-- **Catalog Infrastructure**: Canonical assertion, framework, crosswalk, and demo-scenario catalogs are digest-verified against FedRAMP 20x Key Security Indicators (KSI).
-- **Demo Run Evidence**: Compliance demo runs persist manifests, scenario definitions, receipts, and metric evidence under `.g8e/data/compliance/demo-evidence/<run-id>/`.
-- **Deterministic Verification**: The read-only verification command `g8e compliance demo-run verify <run-id>` verifies manifests, SHA-256 provenance hashes, content-addressed artifacts, protocol signatures, and directory integrity, exiting nonzero on any discrepancy.
+- **Catalog Infrastructure**: Canonical assertion, framework, and crosswalk catalogs define the reviewed FedRAMP 20x and NIST mappings. The retained demo-scenario catalog is historical data; the `g8e demos` group, `g8e compliance demo-run`, and demo catalog import are removed.
+- **Evaluation Evidence**: Verified evaluation bundles can be imported into a typed content-addressed graph with `g8e compliance evidence-graph verify --eval-run <run-id>`.
+- **Operational Release Evidence**: `g8e compliance release-prepare` exports bounded Gateway operational evidence, creates external trust policies, generates and signs a public report bundle, verifies it offline, and projects its canonical Markdown and CSV into the release-notes directory.
 
 ### Docker Compose Unified Stack and Deployment Topologies
 
@@ -366,6 +366,8 @@ The root `docker-compose.yml` launches the complete platform in the default prof
 - `g8e-ensemble`: First-party Python agentic ensemble on port 8000.
 
 **Binary Precedence Rule**: Host binaries mounted at `./bin:/opt/g8e/bin:ro` take precedence over image baked-in binaries (`/g8e`). Running `make build` and restarting containers immediately updates all services without rebuilding container images. See [Unified Docker Stack Guide](../guides/unified_stack.md).
+
+**Host-native alternative**: `make full` starts the Gateway, the four Operator roles, and g8ee as local processes through `scripts/full.py` without Docker. See [Host lifecycle launcher](../guides/unified_stack.md#host-lifecycle-launcher-make-full).
 
 ## Anti-patterns
 
@@ -395,7 +397,7 @@ The root `docker-compose.yml` launches the complete platform in the default prof
 - [Ensemble Architecture](ensemble.md): First-party Python agentic ensemble runtime and tool loops.
 - [Console Architecture](console.md): Gateway-embedded browser frontend and its trust boundaries.
 - [Protocol Library](protocol.md): Protobuf definitions, JSON registries, and code generation.
-- [Scripts Reference](scripts.md): Bootstrap, smoke test, deployment, and demo scripts.
+- [Scripts Reference](scripts.md): Bootstrap, host launcher, smoke test, and deployment scripts.
 - [Documentation Guide](../devs/docs.md): Invariant definitions, metadata specifications, and audit workflows.
 - [Developer Guidelines](../devs/devs.md): Repository coding standards and invariant rules.
 - [Unified Docker Stack Guide](../guides/unified_stack.md): Container compose setup and campaign execution.

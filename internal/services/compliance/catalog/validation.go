@@ -210,39 +210,6 @@ func ValidateCatalogSet(assertions *compliancev1.ControlAssertionCatalog, framew
 	return nil
 }
 
-func ValidateDemoScenarioCatalog(catalog *compliancev1.DemoScenarioCatalog, assertions *compliancev1.ControlAssertionCatalog, frameworks *compliancev1.FrameworkCatalog) error {
-	if catalog == nil || catalog.CatalogId == "" || catalog.CatalogVersion == "" || len(catalog.Definitions) == 0 {
-		return fmt.Errorf("%w: demo scenario catalog requires identity, version, and definitions", constants.ErrInvalidEvidenceGraph)
-	}
-	if err := validateSHA256(catalog.Sha256); err != nil {
-		return err
-	}
-	seen := make(map[string]struct{}, len(catalog.Definitions))
-	for _, definition := range catalog.Definitions {
-		if err := ValidateDemoScenarioDefinition(definition, assertions, frameworks); err != nil {
-			return err
-		}
-		key := versionedKey(definition.ScenarioId, definition.ScenarioVersion)
-		if _, exists := seen[key]; exists {
-			return fmt.Errorf("%w: duplicate demo scenario %s", constants.ErrInvalidEvidenceGraph, key)
-		}
-		seen[key] = struct{}{}
-	}
-	return nil
-}
-
-func FindDemoScenarioDefinition(catalog *compliancev1.DemoScenarioCatalog, id, version string) *compliancev1.DemoScenarioDefinition {
-	if catalog == nil {
-		return nil
-	}
-	for _, definition := range catalog.Definitions {
-		if definition.ScenarioId == id && definition.ScenarioVersion == version {
-			return definition
-		}
-	}
-	return nil
-}
-
 func validateUnavailableAssessmentContext(records []*compliancev1.UnavailableAssessmentContext) (map[compliancev1.AssessmentContextKind]string, error) {
 	unavailable := make(map[compliancev1.AssessmentContextKind]string, len(records))
 	for _, record := range records {
@@ -829,34 +796,6 @@ func FindCrosswalk(catalog *compliancev1.ControlCrosswalkCatalog, id string) *co
 	return nil
 }
 
-func FindCrosswalksForControl(catalog *compliancev1.ControlCrosswalkCatalog, frameworkID, frameworkVersion, controlID string) []*compliancev1.ControlCrosswalk {
-	if catalog == nil {
-		return nil
-	}
-	var result []*compliancev1.ControlCrosswalk
-	for _, crosswalk := range catalog.Mappings {
-		if crosswalk == nil || crosswalk.FrameworkRef == nil {
-			continue
-		}
-		if crosswalk.FrameworkRef.Id == frameworkID && crosswalk.FrameworkRef.Version == frameworkVersion && crosswalk.ControlId == controlID {
-			result = append(result, crosswalk)
-		}
-	}
-	return result
-}
-
-func FindAssertionAssessment(assessments []*compliancev1.ControlAssertionAssessment, assertionID, assertionVersion string) *compliancev1.ControlAssertionAssessment {
-	for _, assessment := range assessments {
-		if assessment == nil || assessment.AssertionRef == nil {
-			continue
-		}
-		if assessment.AssertionRef.Id == assertionID && assessment.AssertionRef.Version == assertionVersion {
-			return assessment
-		}
-	}
-	return nil
-}
-
 func CatalogDigest(message proto.Message) (string, error) {
 	candidate := proto.Clone(message)
 	switch typed := candidate.(type) {
@@ -867,8 +806,6 @@ func CatalogDigest(message proto.Message) (string, error) {
 	case *compliancev1.FrameworkDefinition:
 		typed.CatalogSha256 = ""
 	case *compliancev1.ControlCrosswalkCatalog:
-		typed.Sha256 = ""
-	case *compliancev1.DemoScenarioCatalog:
 		typed.Sha256 = ""
 	default:
 		return "", fmt.Errorf("%w: unsupported catalog message %T", constants.ErrInvalidEvidenceGraph, message)

@@ -18,20 +18,27 @@ there is no operator list, bind, dispatch, or audit-ingest model to substitute.
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from app.clients.http_client import GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG
 from app.errors import NetworkError
 from app.models.http_context import G8eHttpContext
 
 if TYPE_CHECKING:
-    from app.services.infra.internal_http_client import InternalHttpClient
+    from app.clients.http_client import HTTPClient
+
+
+class InternalHttpClientProtocol(Protocol):
+    @property
+    def client(self) -> HTTPClient: ...
+
+    def ensure_mtls(self) -> None: ...
 
 
 class GatewayOperatorClient:
     """Call the Gateway's Operator API without creating a g8ee Operator service."""
 
-    def __init__(self, internal_http_client: InternalHttpClient) -> None:
+    def __init__(self, internal_http_client: InternalHttpClientProtocol) -> None:
         self._internal_http_client = internal_http_client
 
     async def list(self, *, user_id: str) -> list[dict[str, Any]]:
@@ -82,9 +89,7 @@ class GatewayOperatorClient:
             "unbind operators",
         )
 
-    async def stop(
-        self, *, context: G8eHttpContext, operator_session_id: str, reason: str = ""
-    ) -> dict[str, Any]:
+    async def stop(self, *, operator_session_id: str, reason: str = "") -> dict[str, Any]:
         return await self._post(
             "/api/v1/operators/stop",
             {"operator_session_id": operator_session_id, "reason": reason},
@@ -184,11 +189,9 @@ class GatewayOperatorClient:
         return await self._post("/api/v1/audit/records", body, "ingest audit record")
 
     def _ensure_mtls(self) -> None:
-        self._internal_http_client._ensure_mtls()
+        self._internal_http_client.ensure_mtls()
 
-    async def _post(
-        self, path: str, body: dict[str, Any], operation: str
-    ) -> dict[str, Any]:
+    async def _post(self, path: str, body: dict[str, Any], operation: str) -> dict[str, Any]:
         self._ensure_mtls()
         response = await self._internal_http_client.client.post(
             path,

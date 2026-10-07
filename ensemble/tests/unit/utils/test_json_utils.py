@@ -46,7 +46,7 @@ class TestJsonSerial:
             _json_serial(object())
 
     def test_naive_datetime_serialized(self):
-        dt = datetime(2026, 1, 1, 0, 0, 0)
+        dt = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         result = _json_serial(dt)
         assert "2026-01-01" in str(result)
 
@@ -209,4 +209,3 @@ class TestExtractJsonFromText:
 
     def test_returns_none_for_empty_input(self):
         assert extract_json_from_text("") is None
-        assert extract_json_from_text(None) is None

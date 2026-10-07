@@ -144,6 +144,9 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 		}
 		resultRows = append(resultRows, DBRow{Values: rowValues})
 	}
+	if err := rows.Err(); err != nil {
+		return CallToolResult{}, fmt.Errorf("%w: failed during rows iteration: %w", constants.ErrSQLQueryFailed, err)
+	}
 
 	result := DBIsolatedReadResult{
 		Rows:    resultRows,

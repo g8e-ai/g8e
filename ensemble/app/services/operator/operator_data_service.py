@@ -10,8 +10,8 @@ import logging
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants.collections import DB_COLLECTION_CLI_SESSIONS, DB_COLLECTION_OPERATORS
 from app.errors import ValidationError
-from app.models.sessions import CliSessionDocument
 from app.models.operators import OperatorDocument
+from app.models.sessions import CliSessionDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
 from app.utils.gateway_decoding.gateway_operator_document import operator_document_from_gateway
@@ -42,8 +42,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
         operators = await self._gateway_operator_client.list(user_id=user_id)
         for operator_doc in operators:
-            if not isinstance(operator_doc, dict):
-                continue
             doc_id = operator_doc.get("id") or operator_doc.get("operator_id")
             if str(doc_id) == operator_id:
                 return operator_document_from_gateway(operator_doc)
@@ -56,8 +54,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
         operator_doc = await self._gateway_operator_client.get_by_session(session_id=session_id)
         if not operator_doc:
-            return None
-        if not isinstance(operator_doc, dict):
             return None
         return operator_document_from_gateway(operator_doc)
 
@@ -99,7 +95,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         self,
         field_filters: list[dict[str, object]] | None = None,
         limit: int = 1000,
-        bypass_cache: bool = False,
         *,
         user_id: str,
     ) -> list[OperatorDocument]:
@@ -111,7 +106,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         docs = [
             operator_document_from_gateway(operator_doc)
             for operator_doc in operators
-            if isinstance(operator_doc, dict)
         ]
 
         if field_filters:
@@ -120,9 +114,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         return docs[:limit]
 
     @staticmethod
-    def _matches_filters(
-        doc: OperatorDocument, field_filters: list[dict[str, object]]
-    ) -> bool:
+    def _matches_filters(doc: OperatorDocument, field_filters: list[dict[str, object]]) -> bool:
         payload = doc.model_dump(mode="json")
         for field_filter in field_filters:
             field = field_filter.get("field")

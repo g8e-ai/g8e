@@ -51,7 +51,7 @@ func panickingNativeEvalDeps(t *testing.T) nativeEvalDeps {
 			return nil, nil
 		},
 		now:   time.Now,
-		newID: func() string { return "run-id" },
+		newID: func() (string, error) { return "run-id", nil },
 	}
 }
 
@@ -221,7 +221,7 @@ func nativeEvalCommandDeps(t *testing.T, store nativeEvalStore, runner nativeEva
 		storeFactory:    func(fs.RuntimeFileService) nativeEvalStore { return store },
 		verifierFactory: func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier { return verifier },
 		now:             time.Now,
-		newID:           func() string { return "run-1" },
+		newID:           func() (string, error) { return "run-1", nil },
 	}
 }
 

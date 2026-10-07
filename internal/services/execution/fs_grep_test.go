@@ -11,7 +11,6 @@ package execution
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -27,7 +26,7 @@ import (
 
 func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 	t.Parallel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger := slog.New(slog.DiscardHandler)
 	workDir := testutil.TempDir(t)
 
 	// Setup test files

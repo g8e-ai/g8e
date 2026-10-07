@@ -11,8 +11,9 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"testing"
+
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func TestOpenForAppend_CreatesParentDirectories(t *testing.T) {
 	require.NoError(t, err)
 	defer f.Close()
 
-	_, err = f.Write([]byte("first"))
+	_, err = f.WriteString("first")
 	require.NoError(t, err)
 
 	got, err := svc.ReadFile(ctx, "nested/deep/dir/append.log")
@@ -56,7 +57,7 @@ func TestOpenForAppend_AppendsToExistingFile(t *testing.T) {
 
 	f, err := svc.OpenForAppend(ctx, "append.log", constants.PermFilePrivate)
 	require.NoError(t, err)
-	_, err = f.Write([]byte("line2\n"))
+	_, err = f.WriteString("line2\n")
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 
@@ -75,7 +76,7 @@ func TestOpenForAppend_RespectsMode(t *testing.T) {
 
 	info, err := svc.Stat(ctx, "mode.log")
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm())
 }
 
 func TestOpenForRead_ReturnsErrNotFoundForMissingFile(t *testing.T) {

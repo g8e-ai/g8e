@@ -11,7 +11,7 @@
 // require real process management (copyBinaryToBinDir, cmd.Start, Kill, Wait,
 // PID file I/O) and therefore belong in Tier 2 (integration). The test binary
 // is re-executed by StartOperator as a subprocess; TestMain (in
-// testmain_helper_test.go) detects the re-execution via os.Args[1] == "gw"
+// testmain_helper_integration_test.go) detects the re-execution via os.Args[1] == "gw"
 // and exits immediately, so the subprocess never becomes healthy. This lets
 // the tests exercise the PID-write-failure and process-death-during-health-
 // check cleanup paths without a real Gateway binary.
@@ -84,19 +84,21 @@ func assertNoLiveChildAndNoPIDFile(t *testing.T, pm *ProcessManager, fileSvc fs.
 	assert.False(t, exists, "no stale PID file should remain after failed start")
 }
 
-// TestStartOperator_PIDWriteFailureTerminatesChildAndLeavesNoPIDFile
-// verifies that when writePID fails after cmd.Start() succeeds, stopFailedStart
-// terminates the child process and no stale PID file is left behind. The
-// .g8e/pids/ directory is made read-only so writePID fails, but
-// copyBinaryToBinDir and cmd.Start() succeed because .g8e/bin/ and .g8e/logs/
-// remain writable.
-func TestStartOperator_PIDWriteFailureTerminatesChildAndLeavesNoPIDFile(t *testing.T) {
-	fileSvc := newStartFailureFileSvc(t)
+type pidWriteFailingFileSvc struct {
+	fs.RuntimeFileService
+}
 
-	// Make .g8e/pids/ read-only so writePID fails after cmd.Start() succeeds.
-	pidsAbsPath := fileSvc.Resolve(constants.PidDirname)
-	require.NoError(t, os.Chmod(pidsAbsPath, 0500))
-	t.Cleanup(func() { _ = os.Chmod(pidsAbsPath, constants.PermDirStandard) })
+func (s *pidWriteFailingFileSvc) WriteFile(ctx context.Context, relPath string, data []byte, mode os.FileMode) error {
+	if relPath == pidRelPath() {
+		return os.ErrPermission
+	}
+	return s.RuntimeFileService.WriteFile(ctx, relPath, data, mode)
+}
+
+// Inject only the PID write failure: chmod on a directory does not prevent
+// writes on Windows. Binary copying, process creation, and cleanup stay real.
+func TestStartOperator_PIDWriteFailureTerminatesChildAndLeavesNoPIDFile(t *testing.T) {
+	fileSvc := &pidWriteFailingFileSvc{RuntimeFileService: newStartFailureFileSvc(t)}
 
 	pm, err := NewProcessManager(fileSvc)
 	require.NoError(t, err)

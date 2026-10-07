@@ -16,8 +16,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -48,24 +46,19 @@ func TestGatewayConnectCmd_RunningGatewayWithDifferingConfigYesFlagAttemptsResta
 
 	// Spawn a dummy subprocess whose PID will be written to the PID file.
 	// StopOperator will kill this process, not the test process.
-	//
-	// The dummy is started via "sh -c 'sleep 300 & echo $!'" so the shell
-	// exits immediately and sleep is reparented to init (PID 1). This avoids
-	// a zombie: when StopOperator sends SIGTERM/SIGKILL, init reaps the dead
-	// sleep automatically. If the test process were the parent, the killed
-	// sleep would remain a zombie until Wait() is called, and
-	// isProcessRunningWithFinder (which uses Signal(0)) would keep reporting
-	// it alive, causing StopOperator to fail with ErrProcessSigKillTimeout
-	// before StartOperator is reached.
-	dummyCmd := exec.Command("sh", "-c", "sleep 300 >/dev/null 2>&1 & echo $!")
-	output, err := dummyCmd.Output()
-	require.NoError(t, err)
-	dummyPID, err := strconv.Atoi(strings.TrimSpace(string(output)))
-	require.NoError(t, err)
+	// Wait concurrently so StopOperator's liveness check cannot see an
+	// unreaped zombie. The test owns both the child and its waiter.
+	dummyCmd := exec.Command("sleep", "300")
+	require.NoError(t, dummyCmd.Start())
+	dummyPID := dummyCmd.Process.Pid
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = dummyCmd.Wait()
+	}()
 	t.Cleanup(func() {
-		// Best-effort kill in case the test fails before StopOperator runs.
-		// The process is reparented to init, so no Wait() is needed here.
-		_ = syscall.Kill(dummyPID, syscall.SIGKILL)
+		_ = dummyCmd.Process.Kill()
+		<-done
 	})
 
 	// Write the dummy subprocess's PID to the PID file.
@@ -107,7 +100,7 @@ func TestGatewayConnectCmd_RunningGatewayWithDifferingConfigYesFlagAttemptsResta
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err = cmd.RunE(cmd, []string{"https://your-app.lovable.app"})
+	err := cmd.RunE(cmd, []string{"https://your-app.lovable.app"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrProcessStartFailed)
 	assert.Contains(t, buf.String(), "Stopping g8e Gateway")

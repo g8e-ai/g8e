@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -109,7 +111,7 @@ func TestPublicInitCmd_PersistsPrivateConfigurationAndSecrets(t *testing.T) {
 	for _, relPath := range []string{constants.PublicFeedExportConfigPath, constants.PublicFeedSigningKeyPath, constants.PublicFeedIngestTokenPath} {
 		info, statErr := fileSvc.Stat(context.Background(), relPath)
 		require.NoError(t, statErr)
-		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
+		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm())
 	}
 }
 

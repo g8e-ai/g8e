@@ -56,7 +56,7 @@ func (r *transitionRecorder) recorded() []OperatorStatusTransition {
 
 // putWebSession persists a web session for userID that expires expiresIn from
 // now (negative for an already expired session) and returns its id.
-func putWebSession(t *testing.T, store *DocumentStoreService, id, userID string, expiresIn time.Duration) string {
+func putWebSession(t *testing.T, store *DocumentStoreService, id, userID string, expiresIn time.Duration) {
 	t.Helper()
 	body, err := json.Marshal(models.WebSession{
 		ID:              id,
@@ -66,18 +66,17 @@ func putWebSession(t *testing.T, store *DocumentStoreService, id, userID string,
 	})
 	require.NoError(t, err)
 	require.NoError(t, store.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), id, body))
-	return id
 }
 
 // putSilentOperator persists an active remote Operator owned by userID whose
 // last heartbeat is long past the stale window.
-func putSilentOperator(t *testing.T, store *DocumentStoreService, id, userID, name string) {
+func putSilentOperator(t *testing.T, store *DocumentStoreService, _, _, _ string) {
 	t.Helper()
 	op := remoteOperator(constants.OperatorStatusActive)
-	op.UserID = userID
-	op.Name = name
+	op.UserID = statusEventOwner
+	op.Name = "edge-1"
 	op.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 2)
-	putOperator(t, store, id, op, time.Hour)
+	putOperator(t, store, "op-silent", op, time.Hour)
 }
 
 // webSessionEvents returns the operator status events delivered to one web

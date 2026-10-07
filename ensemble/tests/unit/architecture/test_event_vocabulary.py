@@ -48,7 +48,8 @@ ACTION_TYPE_STRING_KW = re.compile(r'\baction_type\s*=\s*["\']')
 
 def _python_files_under(path: Path) -> list[Path]:
     return sorted(
-        p for p in path.rglob("*.py")
+        p
+        for p in path.rglob("*.py")
         if not any(part.startswith(".") for part in p.parts)
         and "venv" not in p.parts
         and "__pycache__" not in p.parts
@@ -79,9 +80,11 @@ class TestEventVocabularyArchitecture:
             if path in SKIP_BANNED_VOCABULARY_FILES:
                 continue
             text = _read(path)
-            for needle in BANNED_SUBSTRINGS:
-                if needle in text:
-                    offenders.append(f"{path.relative_to(REPO_ROOT)} matches {needle}")
+            offenders.extend(
+                f"{path.relative_to(REPO_ROOT)} matches {needle}"
+                for needle in BANNED_SUBSTRINGS
+                if needle in text
+            )
         assert offenders == [], f"Banned vocabulary reappeared in ensemble/app: {offenders}"
 
     def test_no_action_type_string_keyword_args_in_ensemble_app(self):

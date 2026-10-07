@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
+
 from app.llm.utils import (
     ModelOverrideResolver,
     is_internal_endpoint,

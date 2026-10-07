@@ -54,23 +54,21 @@ func inventoryPayload(t *testing.T, campaignID string, variants []*evalv1.ModelV
 }
 
 // writeTestModelInventory writes the runtime model registry.
-func writeTestModelInventory(t *testing.T, root string, variants []*evalv1.ModelVariant) string {
+func writeTestModelInventory(t *testing.T, root string, variants []*evalv1.ModelVariant) {
 	t.Helper()
 	inventoryDir := filepath.Join(root, constants.RuntimeDirname, "eval")
 	require.NoError(t, os.MkdirAll(inventoryDir, 0o755))
 	path := filepath.Join(inventoryDir, "model-inventory.json")
 	require.NoError(t, os.WriteFile(path, inventoryPayload(t, "eval-test-campaign", variants), 0o644))
-	return path
 }
 
 // writeTestCatalogInventory writes the checked-in model catalog.
-func writeTestCatalogInventory(t *testing.T, root string, variants []*evalv1.ModelVariant) string {
+func writeTestCatalogInventory(t *testing.T, root string, variants []*evalv1.ModelVariant) {
 	t.Helper()
 	baseDir := filepath.Join(root, "eval")
 	require.NoError(t, os.MkdirAll(baseDir, 0o755))
 	path := filepath.Join(baseDir, "base-model-inventory.json")
 	require.NoError(t, os.WriteFile(path, inventoryPayload(t, "eval-base", variants), 0o644))
-	return path
 }
 
 func testDeps(root string) nativeEvalDeps {

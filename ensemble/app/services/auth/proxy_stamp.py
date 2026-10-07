@@ -27,6 +27,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import NoReturn
 
 from fastapi import Request
 from nacl.exceptions import BadSignatureError
@@ -36,6 +37,7 @@ from app.constants import (
     BROWSER_PROXY_STAMP_DOMAIN,
     BROWSER_PROXY_STAMP_MAX_SKEW_SECONDS,
     G8EE_COMPONENT,
+    X_PROXY_CLI_SESSION_ID,
     X_PROXY_ISSUED_AT,
     X_PROXY_KEY_ID,
     X_PROXY_NONCE,
@@ -43,7 +45,6 @@ from app.constants import (
     X_PROXY_SIGNATURE,
     X_PROXY_USER_EMAIL,
     X_PROXY_USER_ID,
-    X_PROXY_CLI_SESSION_ID,
     X_PROXY_WEB_SESSION_ID,
 )
 from app.errors import AuthenticationError
@@ -190,7 +191,10 @@ class ProxyStampVerifier:
                 return self._verify_key
 
             current_time = self._clock()
-            can_fetch = self._last_fetch is None or current_time - self._last_fetch >= KEY_REFRESH_MIN_INTERVAL_SECONDS
+            can_fetch = (
+                self._last_fetch is None
+                or current_time - self._last_fetch >= KEY_REFRESH_MIN_INTERVAL_SECONDS
+            )
             if not can_fetch:
                 self._reject("unknown key id")
 
@@ -214,6 +218,6 @@ class ProxyStampVerifier:
         self._nonces[nonce] = now
 
     @staticmethod
-    def _reject(reason: str):
+    def _reject(reason: str) -> NoReturn:
         logger.warning("[ProxyStamp] rejected: %s", reason)
         raise AuthenticationError(_REJECTED, component=G8EE_COMPONENT)

@@ -21,11 +21,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from app.models.base import BaseModel, ConfigDict
-
+from app.constants.paths import resolve_config_path
 from app.errors import ConfigurationError
+from app.models.base import BaseModel, ConfigDict
 from app.utils.config_loader import load_json_config
-from app.utils.path import resolve_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -169,13 +168,21 @@ class CommandAutoApprovedValidator:
         return [entry["value"] for entry in self._entries]
 
 
-_validator: CommandAutoApprovedValidator | None = None
+class _ValidatorState:
+    instance: CommandAutoApprovedValidator | None = None
+
+
+_validator_state = _ValidatorState()
 
 
 def register_auto_approved_validator(validator: CommandAutoApprovedValidator) -> None:
     """Explicitly register the global auto-approved validator instance."""
-    global _validator
-    _validator = validator
+    _validator_state.instance = validator
+
+
+def reset_auto_approved_validator() -> None:
+    """Clear the registered validator so it is reloaded on next access."""
+    _validator_state.instance = None
 
 
 def get_auto_approved_validator(
@@ -187,14 +194,13 @@ def get_auto_approved_validator(
     the default path (or the provided path). This backward-compatibility mode
     is deprecated; new code should use register_auto_approved_validator().
     """
-    global _validator
-    if _validator is None:
+    if _validator_state.instance is None:
         logger.warning(
             "get_auto_approved_validator() called without explicit registration; "
             "creating validator implicitly. Use register_auto_approved_validator() for explicit DI."
         )
-        _validator = CommandAutoApprovedValidator(auto_approved_path=auto_approved_path or "")
-    return _validator
+        _validator_state.instance = CommandAutoApprovedValidator(auto_approved_path=auto_approved_path or "")
+    return _validator_state.instance
 
 
 def is_command_auto_approved(

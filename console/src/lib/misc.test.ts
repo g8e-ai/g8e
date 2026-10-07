@@ -6,7 +6,7 @@ import { deployCommands } from '../features/operators/DeployPanel';
 import { credentialPathId } from '../features/account/AccountView';
 import { groupCases } from './cases';
 import { parseFragment } from './fragment';
-import type { Investigation } from './types';
+import { InvestigationStatus, type Investigation } from './types';
 
 describe('parseFragment', () => {
   it('reads each deep-link intent', () => {
@@ -24,7 +24,7 @@ const inv = (id: string, caseId: string, created: string, updated: string, title
   case_id: caseId,
   case_title: title,
   user_id: 'u',
-  status: 'open',
+  status: InvestigationStatus.Open,
   created_at: created,
   updated_at: updated,
 });

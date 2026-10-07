@@ -107,12 +107,25 @@ func (b *EvalBackup) Create(ctx context.Context, outputDir string) (*EvalBackupR
 	}
 
 	createdAt := b.now().UTC()
-	snapshotDir := filepath.Join(destRoot, constants.EvaluationBackupDirPrefix+createdAt.Format(constants.EvaluationBackupTimestampLayout))
+	snapshotBase := filepath.Join(destRoot, constants.EvaluationBackupDirPrefix+createdAt.Format(constants.EvaluationBackupTimestampLayout))
+	snapshotDir := snapshotBase
 	if err := os.MkdirAll(destRoot, constants.PermDirPrivate); err != nil {
 		return nil, fmt.Errorf("evaluation: backup: create destination: %w", err)
 	}
-	if err := os.Mkdir(snapshotDir, constants.PermDirPrivate); err != nil {
-		return nil, fmt.Errorf("evaluation: backup: create snapshot directory: %w", err)
+	// Reserve each name atomically so simultaneous and same-second backups
+	// cannot overwrite one another. Keep the unsuffixed name for the first.
+	for sequence := 1; ; sequence++ {
+		err := os.Mkdir(snapshotDir, constants.PermDirPrivate)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, fmt.Errorf("evaluation: backup: create snapshot directory: %w", err)
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		snapshotDir = fmt.Sprintf("%s-%06d", snapshotBase, sequence)
 	}
 
 	report, err := b.writeSnapshot(ctx, snapshotDir, createdAt, files)

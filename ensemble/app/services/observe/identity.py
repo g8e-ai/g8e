@@ -15,8 +15,7 @@ session, or host data in agent IDs.
 
 from __future__ import annotations
 
-from app.models.personas import PERSONA_REGISTRY, AgentPersonaModel
-from app.models.personas import get_persona
+from app.models.personas import PERSONA_REGISTRY, AgentPersonaModel, get_persona
 
 # Single schema version accepted at the gateway producer boundary. Mirrors the
 # Go constant internal/constants/paths.go:ObserveEventPayloadSchemaVersion.

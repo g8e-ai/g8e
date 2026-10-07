@@ -68,7 +68,23 @@ type nativeEvalDeps struct {
 	runControl                 runControlDeps
 	canaryRunner               environmentCanaryRunner
 	now                        func() time.Time
-	newID                      func() string
+	newID                      func() (string, error)
+}
+
+// adaptNewID adapts a fallible ID generator to the evaluation framework's
+// infallible func(string) string seams (evaluation.NewRunner,
+// NewCampaignController, and friends), which predate error-aware ID
+// generation and cannot propagate errors. An OS random-source failure
+// (practically impossible) yields a visibly-invalid ID rather than a
+// silent empty string or a panic (INV-CODE-06).
+func adaptNewID(newID func() (string, error)) func(string) string {
+	return func(prefix string) string {
+		id, err := newID()
+		if err != nil {
+			return prefix + "-uuid-generation-failed"
+		}
+		return prefix + "-" + id
+	}
 }
 
 // chatDeps projects the shared dependencies onto the operator-facing helpers.
@@ -154,10 +170,10 @@ func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Heterogeneous model sets",
 	}
 	cmd.AddCommand(
-		formationsListEvalCmd(deps),
-		formationsShowEvalCmd(deps),
-		formationsAddEvalCmd(deps),
-		formationsRemoveEvalCmd(deps),
+		formationsListEvalCmd(),
+		formationsShowEvalCmd(),
+		formationsAddEvalCmd(),
+		formationsRemoveEvalCmd(),
 		formationsSmokeEvalCmd(deps),
 	)
 	return cmd
@@ -268,12 +284,15 @@ func boundaryEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: initialize gateway client: %w", err)
 			}
-			runID := deps.newID()
+			runID, err := deps.newID()
+			if err != nil {
+				return err
+			}
 			target := filepath.Join(constants.EvaluationTargetContainerDir, constants.EvaluationTargetFilenamePrefix+runID+constants.FileExtText)
 			marker := constants.EvaluationTargetFilenamePrefix + runID
 			store := deps.storeFactory(fileSvc)
 			lane := deps.laneFactory(gatewayClient, fileSvc, harnessclient.Persona{ID: "g8e-native-evaluator", CLISessionID: authContext.CLISessionID, UserID: authContext.UserID})
-			runner := deps.runnerFactory(lane, deps.observerFactory(cfg.ProjectRoot), store, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			runner := deps.runnerFactory(lane, deps.observerFactory(cfg.ProjectRoot), store, deps.now, adaptNewID(deps.newID))
 			report, runErr := runner.Run(cmd.Context(), evaluation.RunRequest{RunID: runID, TargetResource: target, Marker: marker, Deployment: nativeEvalDeployment(cfg, authContext, runID, target)})
 			if report == nil {
 				return runErr

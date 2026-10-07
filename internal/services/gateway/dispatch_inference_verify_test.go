@@ -92,6 +92,7 @@ func newInferenceDispatchService(t *testing.T, signerStore governance.SignerStor
 		governance.NewL1Doctrine(),
 		nil,
 		signerStore,
+		nil,
 	)
 }
 
@@ -357,6 +358,7 @@ func TestVerifyInferenceCompletion_FailureCodeMapping(t *testing.T) {
 		{name: "generation options invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID, want: constants.ErrInferenceGenerationOptionsInvalid},
 		{name: "capability unsupported", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED, want: constants.ErrInferenceCapabilityUnsupported},
 		{name: "tools unsupported", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED, want: constants.ErrInferenceToolsUnsupported},
+		{name: "context overflow", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW, want: constants.ErrInferenceContextOverflow},
 		{name: "provider attempt required", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED, want: constants.ErrInferenceProviderAttemptRequired},
 		{name: "identity mismatch", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH, want: constants.ErrInferenceIdentityMismatch},
 		{name: "model digest mismatch", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH, want: constants.ErrInferenceModelDigestMismatch},

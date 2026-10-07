@@ -110,6 +110,7 @@ func (r *governedCapabilityProbeRunner) probeCompletionCapability(ctx context.Co
 	req.Prompt = "Reply with exactly: capability-probe-ok"
 	resp, err := r.dispatchCapabilityProbe(ctx, req)
 	if err != nil {
+		//nolint:nilerr // intentional fallback: probe failure recorded as observation verdict
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_COMPLETION, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "provider completion probe failed"), nil
 	}
 	if inferenceResultHasText(resp.GetResult(), "capability-probe-ok") {
@@ -125,6 +126,7 @@ func (r *governedCapabilityProbeRunner) probeToolCallingCapability(ctx context.C
 	req.ToolChoice = &operatorv1.InferenceToolChoice{Mode: operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_REQUIRED}
 	resp, err := r.dispatchCapabilityProbe(ctx, req)
 	if err != nil {
+		//nolint:nilerr // intentional fallback: tool probe rejection recorded as observation verdict
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_TOOL_CALLING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSUPPORTED, "provider rejected tool-call probe"), nil
 	}
 	if inferenceResultHasToolCall(resp.GetResult(), "probe_echo") {
@@ -139,6 +141,7 @@ func (r *governedCapabilityProbeRunner) probeStructuredOutputCapability(ctx cont
 	req.ResponseFormat = ProbeStructuredResponseFormat()
 	resp, err := r.dispatchCapabilityProbe(ctx, req)
 	if err != nil {
+		//nolint:nilerr // intentional fallback: structured output rejection recorded as observation verdict
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSUPPORTED, "provider rejected structured-output probe"), nil
 	}
 	payload, ok := inferenceResultStructuredJSON(resp.GetResult())
@@ -149,6 +152,7 @@ func (r *governedCapabilityProbeRunner) probeStructuredOutputCapability(ctx cont
 		Answer string `json:"answer"`
 	}
 	if err := json.Unmarshal([]byte(payload), &decoded); err != nil || decoded.Answer != "capability-probe-json" {
+		//nolint:nilerr // intentional fallback: JSON decode failure recorded as observation verdict
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "structured-output probe returned invalid schema payload"), nil
 	}
 	return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "structured-output probe returned valid JSON"), nil
@@ -160,6 +164,7 @@ func (r *governedCapabilityProbeRunner) probeThinkingCapability(ctx context.Cont
 	req.Thinking = &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}}
 	resp, err := r.dispatchCapabilityProbe(ctx, req)
 	if err != nil {
+		//nolint:nilerr // intentional fallback: thinking probe rejection recorded as observation verdict
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_THINKING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSUPPORTED, "provider rejected thinking probe"), nil
 	}
 	if inferenceResultHasThinking(resp.GetResult()) || inferenceResultHasText(resp.GetResult(), "capability-probe-thinking") {

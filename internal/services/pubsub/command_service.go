@@ -95,6 +95,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 
 	command := protoCmd.Command
 	if err := operatorcapability.ValidateWitnessCommand(&models.RuntimeConfig{
+		Roles:                           cs.config.EffectiveOperatorRoles(),
 		ProviderBoundaryObserverEnabled: cs.config.ProviderBoundaryObserver.Enabled,
 		ProvenanceOperatorEnabled:       cs.config.ProvenanceOperator.Enabled,
 	}, command); err != nil {

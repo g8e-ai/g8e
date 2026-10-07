@@ -169,7 +169,7 @@ export function EvaluationsView() {
 
   return (
     <div className="evaluations-view">
-      <RoleLeadersPanel models={models} catalogs={catalogs} />
+      <RoleLeadersPanel models={models} catalogs={catalogs} evaluations={releaseEvaluations} />
       <SectionHeading
         kicker="EVALUATIONS"
         title="Evaluation runs"

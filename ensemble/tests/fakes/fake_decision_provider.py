@@ -7,6 +7,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import override
+
 from app.decision.provider import DecisionProvider
 from app.decision.types import DecisionState, EvaluateResponse, Question
 
@@ -27,7 +30,7 @@ class FakeDecisionProvider(DecisionProvider):
         *,
         model: str,
         state: DecisionState,
-        questions: dict[str, Question],
+        questions: Mapping[str, Question],
     ) -> EvaluateResponse:
         self.last_request = {
             "model": model,
@@ -39,5 +42,6 @@ class FakeDecisionProvider(DecisionProvider):
         return self.responses.pop(0)
 
     @staticmethod
+    @override
     def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
         return []

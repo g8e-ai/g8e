@@ -15,13 +15,14 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 // ObservationResultPublisher publishes completed provider-boundary observation
 // windows to the observer operator results channel.
 type ObservationResultPublisher interface {
-	PublishProviderBoundaryObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ProviderBoundaryObservationCompleted) error
+	PublishProviderBoundaryObservationCompleted(ctx context.Context, origin *commonv1.GovernanceEnvelope, completion *evalv1.ProviderBoundaryObservationCompleted) error
 }
 
 // Handler processes pubsub observation commands on the remote provider host.
@@ -41,7 +42,7 @@ func NewHandler(tracker *Tracker, publisher ObservationResultPublisher, logger *
 
 // HandleCommand processes one ProviderBoundaryObservationCommand delivered on
 // the observer operator cmd channel.
-func (h *Handler) HandleCommand(ctx context.Context, msgID string, payload []byte) (string, error) {
+func (h *Handler) HandleCommand(ctx context.Context, origin *commonv1.GovernanceEnvelope, payload []byte) (string, error) {
 	command := &evalv1.ProviderBoundaryObservationCommand{}
 	if err := proto.Unmarshal(payload, command); err != nil {
 		return "", fmt.Errorf("provider observer handler: unmarshal command: %w", err)
@@ -61,7 +62,7 @@ func (h *Handler) HandleCommand(ctx context.Context, msgID string, payload []byt
 			return "", err
 		}
 		completion := &evalv1.ProviderBoundaryObservationCompleted{Window: window}
-		if err := h.publisher.PublishProviderBoundaryObservationCompleted(ctx, msgID, completion); err != nil {
+		if err := h.publisher.PublishProviderBoundaryObservationCompleted(ctx, origin, completion); err != nil {
 			return "", fmt.Errorf("provider observer handler: publish completion: %w", err)
 		}
 		h.logger.Info("Provider-boundary observation completed",

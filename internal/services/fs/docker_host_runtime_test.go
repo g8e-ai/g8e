@@ -11,6 +11,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,6 +56,9 @@ func TestVerifyRuntimeDirWritable_AllowsMissingRuntimeDir(t *testing.T) {
 }
 
 func TestVerifyRuntimeDirWritable_RejectsUnwritableRuntimeDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows directory access is governed by ACLs, not POSIX mode bits")
+	}
 	baseDir := t.TempDir()
 	runtimeDir := filepath.Join(baseDir, constants.RuntimeDirname)
 	require.NoError(t, os.MkdirAll(runtimeDir, 0o500))

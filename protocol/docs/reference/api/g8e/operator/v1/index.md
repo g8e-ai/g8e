@@ -2993,6 +2993,7 @@ string-matching the result_summary. It is bound into the receipt signature.
 | RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID | 17 |  |
 | RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID | 18 |  |
 | RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED | 19 |  |
+| RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW | 20 | The prompt filled the provider&#39;s context window, so the provider truncated it or left no room to generate. |
 
 
  

@@ -26,12 +26,12 @@ import (
 
 func TestHandleUsers(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		c, _ := setupTestUserController(t)
+		c := setupTestUserController(t)
 		testMethodNotAllowed(t, c.handleUsers, http.MethodPut, "/api/v1/users")
 	})
 
 	t.Run("Success - lists users", func(t *testing.T) {
-		c, _ := setupTestUserController(t)
+		c := setupTestUserController(t)
 		_, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
 
@@ -48,12 +48,12 @@ func TestHandleUsers(t *testing.T) {
 	})
 
 	t.Run("Failure - invalid JSON", func(t *testing.T) {
-		c, _ := setupTestUserController(t)
+		c := setupTestUserController(t)
 		testInvalidJSON(t, c.handleUsers, http.MethodPost, "/api/v1/users")
 	})
 
 	t.Run("Success - creates user", func(t *testing.T) {
-		c, _ := setupTestUserController(t)
+		c := setupTestUserController(t)
 		body := map[string]string{
 			"name": "Test User",
 		}
@@ -75,7 +75,7 @@ func TestHandleUsers(t *testing.T) {
 
 func TestHandleUserMe(t *testing.T) {
 	t.Run("Failure - missing user_id in context", func(t *testing.T) {
-		c, _ := setupTestUserController(t)
+		c := setupTestUserController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		rr := httptest.NewRecorder()
 
@@ -86,7 +86,7 @@ func TestHandleUserMe(t *testing.T) {
 	})
 
 	t.Run("Success - returns user data", func(t *testing.T) {
-		c, _ := setupTestUserController(t)
+		c := setupTestUserController(t)
 		user, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
 
@@ -105,7 +105,7 @@ func TestHandleUserMe(t *testing.T) {
 	})
 
 	t.Run("Failure - user not found", func(t *testing.T) {
-		c, _ := setupTestUserController(t)
+		c := setupTestUserController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "nonexistent-user"))
 		rr := httptest.NewRecorder()

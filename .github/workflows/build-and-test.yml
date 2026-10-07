@@ -15,6 +15,28 @@ permissions:
   contents: read
 
 jobs:
+  onboarding:
+    name: Fresh container onboarding
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Dogfood setup and native startup as a new contributor
+        run: |
+          docker run --rm --init --volume "$PWD:/source:ro" ubuntu:24.04 bash -euc '
+            set -o pipefail
+            apt-get update
+            apt-get install -y --no-install-recommends ca-certificates git sudo
+            useradd --create-home --shell /bin/bash contributor
+            echo "contributor ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/contributor
+            mkdir /workspace
+            git -c safe.directory=/source -C /source archive HEAD | tar -x -C /workspace
+            chown -R contributor:contributor /workspace
+            su - contributor -c "cd /workspace && bash scripts/ci/onboarding-smoke.sh"
+          '
+
   ci:
     name: Build & Test
     runs-on: ubuntu-latest
@@ -59,10 +81,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python proto tools and uv
+      - name: Install Python proto tools, uv, and script test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install grpcio-tools==1.84.0 uv==0.11.21
+          python -m pip install grpcio-tools==1.84.0 uv==0.11.21 python-dotenv==1.2.3
+
+      - name: Test developer setup and host launcher scripts
+        run: python -m unittest discover -s scripts/tests -v
 
       - name: Verify Version Sync
         run: |
@@ -88,9 +113,6 @@ jobs:
           make proto-generate
           git diff --exit-code
           make doctrines-validate
-
-      - name: Validate COSAiS Overlay Coverage
-        run: make cosais-validate
 
       - name: Generate & Validate Swagger Docs
         run: |
@@ -328,13 +350,8 @@ jobs:
         working-directory: ensemble
         run: make proto
 
-      - name: Run ruff
-        working-directory: ensemble
-        run: ruff check app
-
-      - name: Run pyright
-        working-directory: ensemble
-        run: pyright app
+      - name: Lint and typecheck ensemble
+        run: make ensemble-lint
 
       - name: Run ensemble unit + in-process integration tests
         working-directory: ensemble
@@ -356,6 +373,7 @@ jobs:
           cache-dependency-path: |
             console/package-lock.json
             g8e-adapter/package-lock.json
+            evaluation-explorer/package-lock.json
 
       - name: Install dependencies
         working-directory: console
@@ -375,6 +393,16 @@ jobs:
           diff -r console/dist internal/services/gateway/console/static || {
             echo "ERROR: The embedded console (internal/services/gateway/console/static) is stale."
             echo "Run 'make ci' (or 'make console-embed') locally and commit the refreshed embed."
+            exit 1
+          }
+
+      - name: Verify the embedded explorer is current
+        run: |
+          npm ci --prefix evaluation-explorer
+          npm run build --prefix evaluation-explorer
+          diff -r evaluation-explorer/dist internal/services/gateway/explorer/static || {
+            echo "ERROR: The embedded explorer (internal/services/gateway/explorer/static) is stale."
+            echo "Run 'make ci' (or 'make explorer-embed') locally and commit the refreshed embed."
             exit 1
           }
 

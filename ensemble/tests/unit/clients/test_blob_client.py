@@ -35,7 +35,7 @@ def blob_client(mock_listen_settings):
         mock_settings.client_key_path = None
         mock_svc.get_local_settings.return_value = mock_settings
 
-        tls_config = TLSConfig(ca_cert_path="/path/to/ca.crt")
+        tls_config = TLSConfig.model_validate({"ca_cert_path": "/path/to/ca.crt"})
         return BlobClient(
             tls_config=tls_config,
             operator_session_id="test-session",

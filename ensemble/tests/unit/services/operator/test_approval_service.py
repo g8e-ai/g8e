@@ -7,15 +7,16 @@
 
 """Unit tests for OperatorApprovalService."""
 
-import asyncio
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants import FileOperation
 from app.constants.generated_status import EventType
 from app.constants.intents import CloudIntent
-from app.constants import FileOperation
-from app.models.http_context import RequestContext, G8eHttpContext
+from app.errors import ValidationError
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import ApprovalMetadata
 from app.models.operators import (
@@ -110,7 +111,7 @@ class TestHandleApprovalResponse:
             approval_id=approval_id,
             approval_type=ApprovalType.INTENT,
             intent_name=CloudIntent.EC2_MANAGEMENT,
-            requested_at="2022-01-01 12:00:00",
+            requested_at=datetime(2022, 1, 1, 12, 0, tzinfo=UTC),
             case_id="case-1",
             investigation_id="inv-1",
             user_id="user-1",
@@ -181,10 +182,8 @@ class TestHandleApprovalResponse:
             ),
         )
 
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ValidationError, match="approval_id must be provided"):
             await service.handle_approval_response(response)
-
-        assert "approval_id must be provided" in str(exc_info.value)
 
 
 class TestMarkPendingApprovalsAsFeedback:
@@ -824,21 +823,15 @@ class TestRequestAgentContinueApproval:
             turns_completed=25,
         )
 
-        # Resolve the pending approval in the background as feedback
-        async def _resolve_as_feedback():
-            while not service._pending_approvals:
-                await asyncio.sleep(0)
-            approval_id = next(iter(service._pending_approvals))
-            service._pending_approvals[approval_id].resolve(
+        def _resolve_as_feedback(approval_id, pending) -> None:
+            pending.resolve(
                 approved=False,
                 reason="User typed a new message",
                 feedback=True,
             )
 
-        result, _ = await asyncio.gather(
-            service.request_agent_continue_approval(request),
-            _resolve_as_feedback(),
-        )
+        service.set_on_approval_requested(_resolve_as_feedback)
+        result = await service.request_agent_continue_approval(request)
 
         assert result.approved is False
         assert result.feedback is True
@@ -965,7 +958,6 @@ class TestAudit:
         )
 
         await service._audit(
-            operator_id="op-1",
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
             context=RequestContext.from_app_context(g8e_context),
@@ -1000,7 +992,6 @@ class TestAudit:
         )
 
         await service._audit(
-            operator_id=None,
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
             context=RequestContext.from_app_context(g8e_context),
@@ -1035,7 +1026,6 @@ class TestAudit:
         )
 
         await service._audit(
-            operator_id=None,
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
             context=RequestContext.from_app_context(g8e_context),
@@ -1142,10 +1132,7 @@ class TestApprovalPreRegistrationOrdering:
 
         assert result.approved is True
         assert approval_id in publish_log, "publish was never called"
-        assert (
-            publish_log[approval_id][0]
-            == EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED
-        )
+        assert publish_log[approval_id][0] == EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED
 
     @patch("app.services.operator.approval_service.generate_approval_id")
     @patch("app.services.operator.approval_service.PendingApproval")
@@ -1182,11 +1169,7 @@ class TestApprovalPreRegistrationOrdering:
 
         assert result.approved is True
         assert approval_id in publish_log, "publish was never called"
-        assert (
-            publish_log[approval_id][0]
-            == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED
-        )
-
+        assert publish_log[approval_id][0] == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED
 
     @patch("app.services.operator.approval_service.generate_approval_id")
     @patch("app.services.operator.approval_service.PendingApproval")
@@ -1270,7 +1253,6 @@ class TestApprovalPreRegistrationOrdering:
             "pending entry should be cleaned up on publish failure"
         )
 
-
     async def test_handle_approval_response_resolves_immediately_after_publish(self):
         """Simulates the CI/headless race: an auto-approver responds during
         event_service.publish (before publish returns). The pending entry must
@@ -1305,7 +1287,9 @@ class TestApprovalPreRegistrationOrdering:
 
         event_service.publish = AsyncMock(side_effect=_publish_then_auto_respond)
 
-        with patch("app.services.operator.approval_service.generate_approval_id", return_value=approval_id):
+        with patch(
+            "app.services.operator.approval_service.generate_approval_id", return_value=approval_id
+        ):
             request = FileEditApprovalRequest(
                 g8e_context=self._base_context(),
                 timeout_seconds=30,
@@ -1324,4 +1308,3 @@ class TestApprovalPreRegistrationOrdering:
             "response would have been rejected as 'unknown approval_id'"
         )
         assert result.approved is True
-

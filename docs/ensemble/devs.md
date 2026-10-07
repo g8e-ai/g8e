@@ -3,8 +3,8 @@ doc_id: ensemble-devs
 title: Ensemble Development Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.7
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - ensemble/
   - ensemble/app/
@@ -62,7 +62,9 @@ Most application modules import Pydantic types through `app.models.base`; [app/l
 
 ## Local setup
 
-Run these commands from `ensemble/` unless stated otherwise. Python 3.12 or newer is required.
+Python 3.12 or newer is required. From the repository root, `make dev-python` provisions the repository-root `.venv` with uv (uv installs Python 3.12 itself when the system has none) and installs the editable `protocol/python` package and `ensemble[test]`. Both the root and `ensemble/` Makefiles prefer that `.venv`.
+
+To manage an environment by hand, run these commands from `ensemble/`:
 
 ```bash
 cd ensemble
@@ -70,10 +72,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ../protocol/python
 pip install -e ".[dev,test,docs]"
-pre-commit install
 ```
 
-`make setup` from `ensemble/` installs the editable protocol package and the ensemble `dev` and `test` extras. The `docs` extra is not included by that target; install `.[dev,test,docs]` when working on MkDocs documentation. The root Makefile also uses a repository-root `.venv` for its ensemble targets, so install the editable packages into that environment when using `make ensemble-test` or `make ensemble-lint` from the repository root.
+`make setup` from `ensemble/` installs the editable protocol package and the ensemble `dev` and `test` extras. The `docs` extra is not included by that target; install `.[dev,test,docs]` when working on MkDocs documentation.
 
 After changing [protocol/python/](../../protocol/python/), refresh the environment used by the command you are running:
 
@@ -86,13 +87,13 @@ The service reads `.env` with `python-dotenv` at import time without overriding 
 
 ## Development commands
 
-The [ensemble/Makefile](../../ensemble/Makefile) selects `ensemble/.venv/bin/python`, `ruff`, and `pyright` when those files exist and otherwise falls back to tools on `PATH`.
+The [ensemble/Makefile](../../ensemble/Makefile) selects `python`, `ruff`, and `pyright` from the repository-root `.venv` first, then `ensemble/.venv`, and otherwise falls back to tools on `PATH` (`python3` for Python).
 
 ```bash
 # From ensemble/
 make setup       # Install editable protocol and ensemble dev/test packages
-make test        # Run all tests under tests/
-make lint        # Run Ruff on app/ and Pyright on app/
+make test        # Run all tests under tests/ (includes external-marker tests)
+make lint        # Run Ruff on app/ and tests/ and Pyright with pyrightconfig.json
 make format      # Format app/ and tests/ with Ruff
 make check       # Format, lint, then test
 make proto       # Check canonical Python protobuf stubs
@@ -103,12 +104,12 @@ Use the repository-root targets when you need the supported split between local 
 
 ```bash
 make ensemble-test    # tests/unit and tests/integration, excluding external-service markers
-make ensemble-test-external    # integration tests marked ai_integration, requires_web_search, requires_api, or requires_system_one
-make ensemble-lint    # Ruff and Pyright for ensemble/app
+make ensemble-test-external    # integration tests marked ai_integration, requires_web_search, requires_api, requires_system_one, or requires_operator
+make ensemble-lint    # Ruff and Pyright for ensemble/app and ensemble/tests (delegates to ensemble make lint)
 make ensemble-build   # Build g8e-ensemble:<VERSION> from ensemble/Dockerfile
 ```
 
-The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one"`. The `make ensemble-test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_system_one"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_system_one`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
+The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one and not requires_operator"`. The `make ensemble-test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_system_one or requires_operator"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_system_one`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
 
 For a focused test, use the environment selected by the target or invoke the ensemble interpreter explicitly:
 
@@ -121,7 +122,7 @@ Tests use the pytest configuration in [ensemble/pyproject.toml](../../ensemble/p
 ## Coding standards
 
 - Use Ruff for linting and formatting. The configured target is Python 3.12, with a 100-character line length and four-space indentation.
-- Use Pyright against `app/`; the project configuration enables strict typing rules.
+- Use Pyright against `app/` and `tests/` with the shared `pyrightconfig.json` (the `standard` preset). Lint configuration and rationale live in [Python Linting](../devs/python-linting.md); do not duplicate them here.
 - Route new Pydantic imports through `app.models.base` and use typed protocol or application models rather than raw dictionaries for known shapes.
 - Import shared constants, API paths, model types, and enums from the in-tree `g8e` package. Keep values in `app/constants/` only when they are ensemble-owned.
 - Keep service construction and dependency wiring in `ServiceFactory` and its typed `CoreServices`, `DataServices`, `DomainServices`, `OperatorServices`, and `AllServices` containers. Do not create a second production wiring path in a router or provider.
@@ -133,13 +134,13 @@ Tests use the pytest configuration in [ensemble/pyproject.toml](../../ensemble/p
 - Add unit tests for isolated behavior and integration tests for real Gateway, Operator, HTTP dispatch, or provider boundaries. Add a regression test before fixing a bug.
 - Keep documentation under [docs/ensemble/](../) synchronized when interfaces, models, provider boundaries, lifecycle behavior, or test commands change.
 
-Pre-commit runs the configured Ruff and Pyright checks on staged files. It is an additional local check, not a replacement for the Make targets or the relevant integration tests.
-
 ## LLM provider boundary
 
 LLM provider adapters live under [ensemble/app/llm/providers/](../../ensemble/app/llm/providers/). Supported providers are OpenAI, Anthropic, Gemini, Ollama, llama.cpp, g8e (governed inference), and fake (testing only). Provider selection and role-specific model configuration are typed in `app.models.settings`; roles are primary, assistant, and lite. The lite role may be set to Jev (see [Decision Providers](decision-providers.md)) for triage and eval judge—not a generative LLM but a decision API. Optional Vertex AI Search grounding is represented by `GroundingService` and `WebSearchProvider` when search is enabled.
 
-The `g8e` provider routes inference through the Gateway's governed `/api/v1/inference/dispatch` endpoint via the internal HTTP client. Other provider adapters remain provider integrations and inherit no automatic governance from originating in g8ee. Provider behavior, native network access, and side channels remain outside the g8e execution boundary.
+The primary provider defaults to `g8e`. An unset assistant role inherits primary; an unset lite role inherits assistant and then primary through `LLMSettings.resolve`; a model still requires caller configuration. Explicit saved provider selections remain authoritative. The console lists governed inference first. The `g8e` provider routes inference through the Gateway's governed `/api/v1/inference/dispatch` endpoint via the internal HTTP client. Other provider adapters remain provider integrations and inherit no automatic governance from originating in g8ee. Provider behavior, native network access, and side channels remain outside the g8e execution boundary.
+
+Governed streaming delivers provisional text and thinking as progress arrives. The Operator captures bounded raw provider bytes independently of parsing and progress publication; it preserves the captured response even when parsing or delivery fails. The ensemble likewise captures Gateway frames independently, bounded to 32 MiB of serialized evidence and 65,536 frames, and drains subsequent frames after a processing failure. Cancellation closes and joins its ingestion task. Tool calls and terminal usage are emitted only after the verified completion passes identity and receipt/result binding checks and its ordered parts match the progress. Completion does not replay previously streamed text. A failed terminal outcome invalidates provisional output; progress is not an authorization to execute tools. Direct provider adapters retain their own streaming behavior.
 
 ### Tool declaration and the eval-only tool gate
 
@@ -149,6 +150,16 @@ Production chat declares tools through `AIToolService.get_tools()`, which consul
 - It never applies to production chat. Production still strips tools from unregistered models; that is a separate, known bug class and is not fixed by the eval path.
 - The `g8e` provider records the tool names it actually sent (`LLMProvider.declared_tool_names`, captured immediately before dispatch and cleared per call by `prepare_provider_call`). `build_model_call_telemetry` copies that capture onto the call's `ModelCallTelemetry.tools_declared` (`None` = not reported, `[]` = none declared), on both successful and failed calls, so the trace's `model_calls` carry what was actually sent and it is never recomputed from the registry.
 - If the provider refuses the declaration, the `g8e` provider raises `ToolsNotSupportedError`. The Gateway reports its typed `inference: tools unsupported` (backed by `RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED`, with legacy fallback to `inference: requested capability unsupported`), so the fingerprint lives in `app/llm/providers/_capability.py` with the other provider-rejection heuristics, and it is attributed to tools when the call declared tools. The agent loop turns that error into a `provider_tool_rejection` record on the trace and the assignment finalizes as a failed trace, not an infrastructure error.
+
+### Context-window overflow
+
+Both unary responses and direct Ollama terminal stream frames use the same overflow predicate. Buffered direct streams reject overflow before yielding their output. Primary responses containing only tool calls are valid output; overflow checks still take precedence over tool-call acceptance.
+
+A prompt that fills the Ollama context window (`num_ctx`, `LLM_OLLAMA_DEFAULT_NUM_CTX` = 65536, sent on every request by both Ollama-backed providers) is truncated by Ollama, which returns an empty or degraded answer with HTTP 200. g8ee reports this as `ContextWindowExceededError`, a distinct `ExternalServiceError` that is deliberately not a subclass of `OllamaEmptyResponseError`, so an `except OllamaEmptyResponseError` block never handles overflow by accident.
+
+- **Detection.** One predicate, `_prompt_filled_context` in `app/llm/providers/ollama.py`, applies `prompt_eval_count >= num_ctx` to every non-streaming Ollama response and terminal stream frame, including a non-empty answer. The Gateway applies the same rule in the Ollama backend and fails with `ErrInferenceContextOverflow`, which the Actuator stamps as `RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW` and the dispatch endpoint returns as HTTP 422. The `g8e` provider translates that rejection into the same exception for non-streaming, streaming, and stream-failure responses. `prompt_eval_count` includes prompt tokens served from Ollama's prompt cache (observed on Ollama 0.35.1), so a cached prefix does not hide an overflow.
+- **Handling.** Overflow is never retried, because the same prompt cannot succeed, and is never reported as an empty response. Each catch site names it explicitly before any generic handler: the Auditor stages fail with `AuditorReason.CONTEXT_OVERFLOW`; Tribunal generation records a pass error that says the conversation exceeded the model's context window; the response analyzer returns its fail-closed fallback with an overflow reason; triage escalates to the full model with `error_code="MODEL_CONTEXT_OVERFLOW"`; title and memory generation fall back without retry; and the eval judge raises `EvalJudgeError`, so the case is recorded as errored and never scored.
+- **History compaction.** `AIRequestBuilder.build_contents_from_history` accepts `history_token_budget`. The chat pipeline passes `LLM_OLLAMA_DEFAULT_NUM_CTX * LLM_OLLAMA_HISTORY_BUDGET_FRACTION` (half the window, leaving room for the system prompt, tool schemas, and generation) only when the primary provider is `ollama` or `g8e`; other providers keep untrimmed history because their windows are not `num_ctx`. Tokens are estimated as characters divided by `LLM_ESTIMATED_CHARS_PER_TOKEN` (4), with no tokenizer. When history exceeds the budget, the oldest whole messages are dropped first and one `HISTORY_OMITTED_MARKER` user message is prepended. The last user message and its attachments are never dropped, even if they alone exceed the budget; the provider then reports `ContextWindowExceededError`. Scrubbing observations of dropped messages are omitted from `BuiltContents` because they were not sent. Tool-result growth inside one ReAct turn is not compacted; overflow there surfaces as the typed error.
 
 ### Agent tool registry export
 

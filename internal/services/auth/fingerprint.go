@@ -27,15 +27,15 @@ import (
 
 // SystemFingerprint represents a unique, stable identifier for the system or specific operator instance.
 type SystemFingerprint struct {
-	Fingerprint  string `json:"fingerprint"`
-	OS           string `json:"os"`
-	Architecture string `json:"architecture"`
-	CPUCount     int    `json:"cpu_count"`
-	MachineID    string `json:"machine_id,omitempty"`
-	LocalDir     string `json:"local_dir,omitempty"`
-	Account      string `json:"account,omitempty"`
-	Port         int    `json:"port,omitempty"`
-	Role         string `json:"role,omitempty"`
+	Fingerprint  string                  `json:"fingerprint"`
+	OS           string                  `json:"os"`
+	Architecture string                  `json:"architecture"`
+	CPUCount     int                     `json:"cpu_count"`
+	MachineID    string                  `json:"machine_id,omitempty"`
+	LocalDir     string                  `json:"local_dir,omitempty"`
+	Account      string                  `json:"account,omitempty"`
+	Port         int                     `json:"port,omitempty"`
+	Roles        constants.OperatorRoles `json:"roles,omitempty"`
 }
 
 // FingerprintOptions specifies operator-specific parameters that differentiate
@@ -44,7 +44,7 @@ type FingerprintOptions struct {
 	LocalDir string
 	Account  string
 	Port     int
-	Role     string
+	Roles    constants.OperatorRoles
 }
 
 // ResolveCurrentAccount returns the current operating system user account username or UID.
@@ -70,6 +70,11 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 // local directory, launching account, port, and operator role. This guarantees that
 // multiple operators running on the same host for unique purposes are completely separated.
 func GenerateOperatorFingerprint(logger *slog.Logger, opts FingerprintOptions) (*SystemFingerprint, error) {
+	if err := opts.Roles.Validate(); err != nil {
+		return nil, err
+	}
+	opts.Roles = opts.Roles.Canonical()
+
 	logger.Info("Generating system fingerprint based on immutable system and operator properties...")
 
 	osType := runtime.GOOS
@@ -110,8 +115,8 @@ func GenerateOperatorFingerprint(logger *slog.Logger, opts FingerprintOptions) (
 		components = append(components, fmt.Sprintf("port:%d", opts.Port))
 	}
 
-	if opts.Role != "" {
-		components = append(components, fmt.Sprintf("role:%s", opts.Role))
+	if len(opts.Roles) > 0 {
+		components = append(components, fmt.Sprintf("role:%s", opts.Roles))
 	}
 
 	hasher := sha256.New()
@@ -128,7 +133,7 @@ func GenerateOperatorFingerprint(logger *slog.Logger, opts FingerprintOptions) (
 		LocalDir:     cleanDir,
 		Account:      account,
 		Port:         opts.Port,
-		Role:         opts.Role,
+		Roles:        opts.Roles,
 	}
 
 	logger.Info("System fingerprint generated successfully",
@@ -140,7 +145,7 @@ func GenerateOperatorFingerprint(logger *slog.Logger, opts FingerprintOptions) (
 		"local_dir", cleanDir,
 		"account", account,
 		"port", opts.Port,
-		"role", opts.Role,
+		"role", opts.Roles,
 		"fingerprint", fingerprintHash[:16])
 
 	return fingerprint, nil

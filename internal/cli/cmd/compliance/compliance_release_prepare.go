@@ -580,7 +580,7 @@ func newReleasePrepareDeps() releasePrepareDeps {
 		copyGatewayDB:  defaultCopyGatewayDB,
 		gitRevision:    defaultGitRevision,
 		newGenerateCmd: func() *cobra.Command {
-			return complianceReportGenerateCmdWithConfig(shared.NewFileSvc, defaultProvenanceSourceFactory, loadComplianceReportSigningIdentity, time.Now)
+			return complianceReportGenerateCmdWithConfig(shared.NewFileSvc, loadComplianceReportSigningIdentity, time.Now)
 		},
 		newVerifyCmd: func() *cobra.Command {
 			return complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, time.Now)

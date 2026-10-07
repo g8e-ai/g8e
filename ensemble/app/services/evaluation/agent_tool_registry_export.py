@@ -29,6 +29,7 @@ import json
 import sys
 from pathlib import Path
 
+from g8e.models.context import BoundOperator
 from pydantic import ValidationError as PydanticValidationError
 
 from app.constants.config import FORBIDDEN_COMMAND_PATTERNS
@@ -39,7 +40,6 @@ from app.services.ai.tool_registry import TOOL_SPECS
 from app.services.ai.tool_service import forbidden_command_violation, tool_execution_failure
 from app.services.ai.tools import recursive_grep
 from app.services.evaluation.tool_evidence import POLICY_DENY_ERROR_TYPES
-from g8e.models.context import BoundOperator
 
 AGENT_TOOL_REGISTRY_SCHEMA_VERSION = "1"
 
@@ -48,7 +48,11 @@ AGENT_TOOL_REGISTRY_SCHEMA_VERSION = "1"
 GUIDANCE_EXECUTION_ID = "cmd_seeded_guidance"
 
 REGISTRY_PATH = (
-    Path(__file__).resolve().parents[4] / "protocol" / "constants" / "agenttools" / "agent-tool-registry.json"
+    Path(__file__).resolve().parents[4]
+    / "protocol"
+    / "constants"
+    / "agenttools"
+    / "agent-tool-registry.json"
 )
 
 
@@ -76,8 +80,10 @@ class AgentToolGuidanceVector(G8eBaseModel):
 
 class AgentToolRegistry(G8eBaseModel):
     schema_version: str = AGENT_TOOL_REGISTRY_SCHEMA_VERSION
-    tools: list[AgentToolSchema] = Field(default_factory=list)
-    guidance_vectors: list[AgentToolGuidanceVector] = Field(default_factory=list)
+    tools: list[AgentToolSchema] = Field(default_factory=list[AgentToolSchema])
+    guidance_vectors: list[AgentToolGuidanceVector] = Field(
+        default_factory=list[AgentToolGuidanceVector]
+    )
     policy_deny_error_types: list[str] = Field(default_factory=list)
 
 
@@ -164,19 +170,27 @@ def build_agent_tool_registry() -> AgentToolRegistry:
     return AgentToolRegistry(
         tools=_tool_schemas(),
         guidance_vectors=[_recursive_grep_missing_path(), _run_commands_privilege_escalation()],
-        policy_deny_error_types=sorted(str(error_type.value) for error_type in POLICY_DENY_ERROR_TYPES),
+        policy_deny_error_types=sorted(
+            str(error_type.value) for error_type in POLICY_DENY_ERROR_TYPES
+        ),
     )
 
 
 def render_agent_tool_registry(registry: AgentToolRegistry) -> str:
-    return json.dumps(registry.model_dump(mode="json"), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    return (
+        json.dumps(registry.model_dump(mode="json"), indent=2, sort_keys=True, ensure_ascii=False)
+        + "\n"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    description = __doc__.splitlines()[0] if __doc__ else "Agent tool registry export"
+    parser = argparse.ArgumentParser(description=description)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true", help="write the generated registry")
-    mode.add_argument("--check", action="store_true", help="fail when the committed registry is stale")
+    mode.add_argument(
+        "--check", action="store_true", help="fail when the committed registry is stale"
+    )
     parser.add_argument("--path", type=Path, default=REGISTRY_PATH)
     args = parser.parse_args(argv)
 

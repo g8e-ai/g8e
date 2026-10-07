@@ -33,6 +33,7 @@ import logging
 from collections.abc import AsyncGenerator
 
 import httpx
+from google import genai
 from google.genai import types as genai_types
 from tenacity import (
     AsyncRetrying,
@@ -45,11 +46,11 @@ from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
     Content,
-    LiteLLMSettings,
-    PrimaryLLMSettings,
-    ToolCall,
     GenerateContentResponse,
+    LiteLLMSettings,
     Part,
+    PrimaryLLMSettings,
+    ResponseFormat,
     Role,
     SdkGroundingChunk,
     SdkGroundingRawData,
@@ -59,16 +60,15 @@ from app.llm.llm_types import (
     SdkSearchEntryPoint,
     StreamChunkFromModel,
     ThoughtSignature,
-    UsageMetadata,
+    ToolCall,
     ToolGroup,
-    ResponseFormat,
+    UsageMetadata,
 )
-from app.models.base import G8eBaseModel, Field
-from app.models.model_configs import get_model_config
-from app.llm.thinking import translate_for_gemini
-
 from app.llm.provider import LLMProvider
 from app.llm.providers._capability import translate_capability_error
+from app.llm.thinking import translate_for_gemini
+from app.models.base import Field, G8eBaseModel
+from app.models.model_configs import get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -204,14 +204,14 @@ def _tool_group_to_genai(tool_group: ToolGroup) -> list:
     """Convert ToolGroup to google.genai Tool format for LLM boundary."""
     genai_tools = []
     funcs = []
-    for tool in tool_group.tools:
-        funcs.append(
+    funcs.extend(
             {
                 "name": tool.name,
                 "description": tool.description,
                 "parameters_json_schema": tool.parameters.to_json_schema(),
             }
-        )
+            for tool in tool_group.tools
+    )
     if funcs:
         genai_tools.append(genai_types.Tool(function_declarations=funcs))
 
@@ -359,7 +359,6 @@ class GeminiProvider(LLMProvider):
 
     def __init__(self, api_key: str):
         super().__init__()
-        from google import genai
 
         http_options = genai_types.HttpOptions(
             timeout=300_000,
@@ -371,11 +370,13 @@ class GeminiProvider(LLMProvider):
         logger.info("Gemini provider initialized")
 
     def _record_genai_boundary(self, model: str, contents: list[dict], config) -> str:
-        return self._record_model_boundary({
-            "model": model,
-            "contents": contents,
-            "config": config.model_dump(mode="json", exclude_none=True, by_alias=True),
-        })
+        return self._record_model_boundary(
+            {
+                "model": model,
+                "contents": contents,
+                "config": config.model_dump(mode="json", exclude_none=True, by_alias=True),
+            }
+        )
 
     async def _close_resources(self):
         """Clean up SDK client using public API."""
@@ -399,6 +400,7 @@ class GeminiProvider(LLMProvider):
             List of validation error messages. Empty if configuration is valid.
         """
         errors = []
+        _ = endpoint
         if not api_key:
             errors.append("Provider 'gemini' requires an API key.")
         return errors
@@ -444,11 +446,12 @@ class GeminiProvider(LLMProvider):
             )
 
             tool_config = None
+            fc_cfg = None
             if settings.tool_config and settings.tool_config.tool_calling_config:
                 fc_cfg = settings.tool_config.tool_calling_config
                 tool_config = genai_types.ToolConfig(
                     function_calling_config=genai_types.FunctionCallingConfig(
-                        mode=fc_cfg.mode,
+                        mode=genai_types.FunctionCallingConfigMode(fc_cfg.mode),
                         allowed_function_names=fc_cfg.allowed_tool_names,
                     )
                 )
@@ -478,7 +481,7 @@ class GeminiProvider(LLMProvider):
                     f"tools_count={len(genai_tools) if genai_tools else 0}",
                     f"thinking_level={logged_thinking_level}",
                     f"include_thoughts={logged_include_thoughts}",
-                    f"tool_calling_mode={fc_cfg.mode if settings.tool_config and settings.tool_config.tool_calling_config else None}",
+                    f"tool_calling_mode={fc_cfg.mode if fc_cfg is not None else None}",
                     f"allowed_tools={len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0}",
                 ]
             )
@@ -580,7 +583,7 @@ class GeminiProvider(LLMProvider):
             result.append(
                 StreamChunkFromModel(
                     usage_metadata=_usage_from_sdk(chunk.usage_metadata),
-                    finish_reason=finish_reason,
+                    finish_reason=finish_reason or "STOP",
                 )
             )
         elif finish_reason:
@@ -617,11 +620,11 @@ class GeminiProvider(LLMProvider):
             candidates=[
                 Candidate(
                     content=Content(role="model", parts=parts),
-                    finish_reason=finish_reason,
+                    finish_reason=finish_reason or "STOP",
                 )
             ],
             usage_metadata=usage or UsageMetadata(),
-            grounding_raw=grounding_raw,
+            grounding_raw=grounding_raw or SdkGroundingRawData(),
         )
 
     def _sync_generate(self, model: str, contents: list[dict], config):

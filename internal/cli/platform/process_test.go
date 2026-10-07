@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -104,48 +103,6 @@ func TestEnsureDirectories(t *testing.T) {
 				t.Errorf("directory %s has incorrect permissions %o, expected %o", d.path, info.Mode().Perm(), d.mode)
 			}
 		}
-	}
-}
-
-func TestFindAvailablePort(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
-	fileSvc := newPlatformTestFileSvc(t, tmpDir)
-	pm, err := NewProcessManager(fileSvc)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	// Find an available port
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to find available port: %v", err)
-	}
-	addr := listener.Addr().(*net.TCPAddr)
-	availablePort := addr.Port
-	listener.Close()
-
-	// Test available port
-	port, err := pm.findAvailablePort(availablePort, "test")
-	if err != nil {
-		t.Errorf("port %d should be available: %v", availablePort, err)
-	}
-	if port != availablePort {
-		t.Errorf("expected port %d, got %d", availablePort, port)
-	}
-
-	// Test port in use by untracked process
-	listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", availablePort))
-	if err != nil {
-		t.Fatalf("failed to listen on port %d: %v", availablePort, err)
-	}
-	defer listener.Close()
-
-	port, err = pm.findAvailablePort(availablePort, "test")
-	if err != nil {
-		t.Errorf("should find next available port: %v", err)
-	}
-	if port == availablePort {
-		t.Error("should return different port when default is in use")
 	}
 }
 
@@ -759,22 +716,6 @@ func TestReadPIDWhitespace(t *testing.T) {
 	}
 }
 
-func TestFindAvailablePortInvalidPort(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
-	fileSvc := newPlatformTestFileSvc(t, tmpDir)
-	pm, err := NewProcessManager(fileSvc)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	// Test with a port that's out of valid range (should still work for the check)
-	// The actual bind will fail, but the check itself should attempt it
-	_, err = pm.findAvailablePort(70000, "test")
-	if err == nil {
-		t.Error("expected error for invalid port 70000")
-	}
-}
-
 func TestDeletePIDNonExistent(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newPlatformTestFileSvc(t, tmpDir)
@@ -862,40 +803,5 @@ func TestCleanWithNonExistentRuntime(t *testing.T) {
 	}
 	if archived != "" {
 		t.Errorf("nothing to archive, got %q", archived)
-	}
-}
-
-func TestCheckPortAvailable(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
-	fileSvc := newPlatformTestFileSvc(t, tmpDir)
-	pm, err := NewProcessManager(fileSvc)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	// Find an available port
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to find available port: %v", err)
-	}
-	addr := listener.Addr().(*net.TCPAddr)
-	availablePort := addr.Port
-	listener.Close()
-
-	// Test available port
-	if err := pm.checkPortAvailable(availablePort, "test"); err != nil {
-		t.Errorf("port %d should be available: %v", availablePort, err)
-	}
-
-	// Test port in use
-	listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", availablePort))
-	if err != nil {
-		t.Fatalf("failed to listen on port %d: %v", availablePort, err)
-	}
-	defer listener.Close()
-
-	err = pm.checkPortAvailable(availablePort, "test")
-	if err == nil {
-		t.Error("expected error for port in use")
 	}
 }

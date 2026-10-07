@@ -51,9 +51,12 @@ Only the WebSearchProvider network boundary is replaced:
 
 import pytest
 
-from app.constants import EventType, G8EE_COMPONENT, OperatorToolName, StreamChunkFromModelType
+from app.constants import G8EE_COMPONENT, EventType, OperatorToolName, StreamChunkFromModelType
+from app.constants.config import GroundingSource
 from app.models.agent import StreamChunkData, StreamChunkFromModel
-from app.models.grounding import GroundingMetadata
+from app.models.events import SessionEvent
+from app.models.grounding import GroundingChunk, GroundingMetadata
+from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import SearchWebResult, WebSearchResultItem
 from app.services.ai.agent_sse import deliver_via_sse
@@ -112,16 +115,10 @@ async def _collect_sse_events(chunks, inputs=None, state=None):
 
     await deliver_via_sse(stream=_gen(), inputs=inputs, state=state, event_service=event_svc)
     # Check both publish and publish_investigation_event calls for compatibility
-    events = []
-    for call in event_svc.publish.call_args_list:
-        events.append(call.args[0])
+    events = [call.args[0] for call in event_svc.publish.call_args_list]
     for call in event_svc.publish_investigation_event.call_args_list:
         # Calls are made with keyword arguments
         if call.kwargs:
-            from app.models.events import SessionEvent
-            from app.models.http_context import RequestContext
-
-
             ctx = RequestContext(
                 web_session_id=call.kwargs.get("web_session_id"),
                 user_id=call.kwargs.get("user_id"),
@@ -218,6 +215,7 @@ class TestSearchWebRouting:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         assert result.query == "docker container logs"
 
     async def test_result_success_true_on_happy_path(self):
@@ -232,6 +230,7 @@ class TestSearchWebRouting:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         assert result.success is True
 
 
@@ -264,6 +263,7 @@ class TestSearchWebResponseShape:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         assert len(result.results) == 2
 
     async def test_result_items_are_web_search_result_item_type(self):
@@ -279,6 +279,7 @@ class TestSearchWebResponseShape:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         assert isinstance(result.results[0], WebSearchResultItem)
 
     async def test_result_item_fields_preserved(self):
@@ -300,6 +301,7 @@ class TestSearchWebResponseShape:
             execution_id="test-execution-id",
         )
 
+        assert isinstance(result, SearchWebResult)
         item = result.results[0]
         assert item.title == "Prometheus docs"
         assert item.link == "https://prometheus.io/docs/"
@@ -510,8 +512,6 @@ class TestSearchWebSSEEvents:
         assert tool_call_event.payload.display_detail == "nginx upstream timeout"
 
     async def test_citations_chunk_fires_citations_ready_event(self):
-        from app.constants.config import GroundingSource
-        from app.models.grounding import GroundingChunk, GroundingMetadata
 
         grounding = GroundingMetadata(
             grounding_used=True,

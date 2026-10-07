@@ -255,7 +255,7 @@ func TestBuildConfigImporter_Import_ProducesValidGraph(t *testing.T) {
 	fixture := newBuildConfigImporterFixture(t)
 	nodes, err := NewBuildConfigImporter(fixture.reader, fixture.binding).Import(context.Background())
 	require.NoError(t, err)
-	graph := NewEvidenceGraph(constants.DemoRunMaxArtifactBytes, []string{constants.MediaTypeJSON})
+	graph := NewEvidenceGraph(maxArtifactBytes, []string{constants.MediaTypeJSON})
 	for _, node := range nodes {
 		require.NoError(t, graph.AddNode(node))
 	}

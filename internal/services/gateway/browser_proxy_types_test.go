@@ -28,7 +28,7 @@ func TestInvestigationsQueryBody_JSONMatchesSortedMapShape(t *testing.T) {
 	body, err := (&EnsembleBrowserProxyController{}).investigationsQueryBody(req, "user-1", "web-1")
 	require.NoError(t, err)
 
-	const want = `{"case_id":"c1","context":{"user_id":"user-1","web_session_id":"web-1"},"investigation_type":"triage","limit":5,"order_by":"updated","order_direction":"desc","priority":"high","status":"open","user_id":"user-1","web_session_id":"from-query"}`
+	const want = `{"case_id":"c1","context":{"user_id":"user-1","web_session_id":"web-1"},"investigation_type":"triage","limit":5,"order_by":"updated","order_direction":"desc","priority":"high","status":"Open","user_id":"user-1","web_session_id":"from-query"}`
 	assert.JSONEq(t, want, string(body))
 	assert.Equal(t, want, string(body))
 }

@@ -15,7 +15,14 @@ import httpx
 import pytest
 
 from app.decision.providers.jev import JevProvider
-from app.decision.types import ChoiceQuestion, NoulQuestion, ScoreQuestion
+from app.decision.types import (
+    ChoiceAnswer,
+    ChoiceQuestion,
+    NoulAnswer,
+    NoulQuestion,
+    ScoreAnswer,
+    ScoreQuestion,
+)
 from app.errors import ExternalServiceError, RateLimitError
 
 pytestmark = pytest.mark.unit
@@ -68,7 +75,7 @@ class TestJevProviderEvaluate:
         def handler(request: httpx.Request) -> httpx.Response:
             captured["authorization"] = request.headers.get("Authorization")
             captured["url"] = str(request.url)
-            captured["body"] = json.loads(request.content.decode())
+            captured["body_model"] = json.loads(request.content.decode())["model"]
             return httpx.Response(200, json=_success_payload())
 
         provider = JevProvider(
@@ -94,13 +101,19 @@ class TestJevProviderEvaluate:
         )
 
         assert response.model == "nimble"
-        assert response.answers["topic"].choice == "billing"
-        assert response.answers["severity"].score == 3.0
-        assert response.answers["escalate"].noul == 0.8
+        topic = response.answers["topic"]
+        severity = response.answers["severity"]
+        escalate = response.answers["escalate"]
+        assert isinstance(topic, ChoiceAnswer)
+        assert isinstance(severity, ScoreAnswer)
+        assert isinstance(escalate, NoulAnswer)
+        assert topic.choice == "billing"
+        assert severity.score == 3.0
+        assert escalate.noul == 0.8
         assert response.usage.input_tokens == 434
         assert captured["authorization"] is None
         assert captured["url"] == "http://localhost:11434/v1/systemone"
-        assert captured["body"]["model"] == "nimble"
+        assert captured["body_model"] == "nimble"
         assert provider.input_artifact_hash
 
     @pytest.mark.asyncio

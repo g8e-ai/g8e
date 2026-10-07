@@ -36,10 +36,12 @@ class TestTriagePersonaAlignment:
     def test_triage_output_contract_explicitly_forbids_questions(self):
         """Triage's output_contract must explicitly state it does not emit questions."""
         persona = TriagePersona()
-        assert "NO QUESTIONS" in persona.output_contract, (
+        output_contract = persona.output_contract
+        assert output_contract is not None
+        assert "NO QUESTIONS" in output_contract, (
             "Triage output_contract must explicitly forbid question emission."
         )
-        assert "classifier only" in persona.output_contract.lower(), (
+        assert "classifier only" in output_contract.lower(), (
             "Triage output_contract must state it is a classifier only."
         )
 

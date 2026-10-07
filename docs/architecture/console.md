@@ -3,8 +3,8 @@ doc_id: console
 title: Console Architecture and Development Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-03
-version: v2.3.0
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - console/
   - internal/services/gateway/console/
@@ -40,6 +40,8 @@ The console covers what an owner needs to operate the platform from a browser:
 - **Approvals**: L3 Notary approval of suspended transactions (`#approve=…`), CLI recovery approval (`#recovery=…`), and platform workload enrollment review (`#platform-enrollment=…`).
 - **Operator inventory**: list with each Operator's role (`data`, `inference`, and the read-only witness roles `provenance` and `observer`, shown as distinct badges; the Gateway resolves `operator_role` on every listed Operator), deploy commands, bind and unbind to the browser's web session, and stop remote Operators. An enrolled, live Operator shows `Active`; once bound to a web session it shows `Bound`.
 - **Cases, investigations, and chat**: a case groups investigations; each investigation is one chat session with the ensemble (g8ee), including streamed replies, governed command activity, and in-line approval of ensemble approval requests.
+- **Model selection and inference**: provider connection management (endpoints and API keys in the Inference view), per-role model assignments in the sidebar (Primary, Assistant, Lite), and automated model discovery.
+- **API reference**: native browsable reference for the Gateway's OpenAPI 2.0 specification (`?view=api`).
 - **Account**: identity, passkey list, and passkey revocation.
 
 ## Quick index
@@ -90,8 +92,8 @@ The console covers what an owner needs to operate the platform from a browser:
 | Ensemble browser proxy (identity and bound-Operator stamping) | `internal/services/gateway/ensemble_browser_proxy_controller.go` | `./g8e test unit --pkg ./internal/services/gateway --run 'TestInvestigationsQueryBody\|TestInjectBrowserContext\|TestBoundOperators'` |
 | Browser Operator routes | `internal/services/gateway/operator_browser.go`, `operator_controller.go` | `./g8e test unit --pkg ./internal/services/gateway --run TestOperator` |
 | API reference view | `console/src/features/api/`, `console/src/lib/openapi.ts`, `internal/services/gateway/gateway_http_router.go` (`handleSwaggerDoc`) | `make console-test`; `./g8e test unit --pkg ./internal/services/gateway --run TestHandleSwaggerDoc`; `./g8e test integration --pkg ./internal/services/gateway --run TestRouteAuthRegistry_SwaggerDocIsDualAuth` |
-| Per-role model selection | `ensemble/app/services/infra/llm_role_settings.py`, `ensemble/app/llm/model_catalog.py`, `console/src/lib/inference.ts` | `ensemble/.venv/bin/python -m pytest tests/unit/services/infra/test_llm_role_settings.py tests/unit/llm/test_model_catalog.py`; `make console-test` |
-| Investigation creation within a case | `ensemble/app/routers/internal_router.py` (`resource_creation.create_investigation`) | `ensemble/.venv/bin/python -m pytest tests/unit/routers/test_internal_router.py` |
+| Per-role model selection | `ensemble/app/services/infra/llm_role_settings.py`, `ensemble/app/llm/model_catalog.py`, `console/src/lib/inference.ts` | `ensemble/.venv/bin/python -m pytest ensemble/tests/unit/services/infra/test_llm_role_settings.py ensemble/tests/unit/llm/test_model_catalog.py`; `make console-test` |
+| Investigation creation within a case | `ensemble/app/routers/internal_router.py` (`resource_creation.create_investigation`) | `ensemble/.venv/bin/python -m pytest ensemble/tests/unit/routers/test_internal_router.py` |
 
 ## Source Layout
 
@@ -99,17 +101,17 @@ The console covers what an owner needs to operate the platform from a browser:
 console/
   src/
     main.tsx              Reads URL-fragment intents, mounts providers and App
-    App.tsx               Signed-out vs signed-in shell, navigation, views
+    App.tsx               Signed-out vs signed-in shell, navigation, sidebar role selectors, views
     lib/                  Pure modules: paths, api (credentialed fetch), webauthn,
                           sse (normalize + GatewayStream), timeline, cases,
-                          fragment, events, inference (role form + wire body), openapi
+                          fragment, events, inference (provider forms + wire body), openapi
                           (Swagger 2.0 reader for the API view), types
     state/                React providers: session, stream (one SSE connection),
-                          operators, approvals, inference, toast
+                          operators, approvals, inference (settings + model catalog), toast
     features/             auth, cases (CasesView, Timeline, Composer),
                           operators (OperatorsView, DeployPanel), inference
-                          (per-role model selection), approvals, api (API reference),
-                          account
+                          (InferenceView: provider connections, endpoints, API keys),
+                          approvals, api (API reference), account
     components/           Markdown (React-node renderer: code, headings, lists, GFM tables, inline), shared UI pieces
     generated/events.ts   Generated by `make constants-generate`; do not edit
   tests/                  Component tests that drive App against a fake Gateway
@@ -122,7 +124,7 @@ The console is untrusted presentation. It holds no keys and has no authority of 
 - **Authentication** ends at the Gateway. WebAuthn ceremonies run in the console page; the Gateway verifies them and sets the HttpOnly, Secure `g8e_web_session_cookie`. See [Build a g8e-Compatible Frontend](../guides/build_frontend.md#webauthn-flow-requirements) for the wire contract.
 - **Ensemble reachability** is the Gateway's concern: the proxy forwards to `--ensemble-upstream-url` (default `http://127.0.0.1:8000`; `http://g8e-ensemble:8000` in the unified Compose stack). The console holds no ensemble address.
 - **Authority to act** belongs to Operators and the governance pipeline. The ensemble proposes actions for the Operators bound to the web session; every mutation still passes L1–L5, and L3-gated actions wait for a passkey approval in the console.
-- **Ensemble approvals** (command, file edit, intent, stream, and agent-continue requests) are answered with `POST /api/v1/operator/approval/respond`. They are distinct from L3 Notary approvals, which are passkey-signed and live under `/api/v1/approvals`.
+- **Ensemble approvals** (command, file edit, intent, and agent-continue requests) are answered with `POST /api/v1/operator/approval/respond`. When a local suspended transaction exists for the approval ID, or when platform posture requires L3 grounding (under `ratify` or `notary`), the Gateway's browser proxy handles the decision directly—enforcing session grounding (requiring WebAuthn enrollment for web session callers) and approving or deleting the transaction locally. Otherwise, the proxy signs and forwards the approval response to g8ee. These are distinct from deep-linked L3 Notary approvals, which are passkey-signed ceremonies under `/api/v1/approvals`.
 
 ## Cases and Investigations
 
@@ -136,7 +138,9 @@ All three start through `POST /api/v1/chat`:
 | New investigation in a case | `{"message": …, "context": {"case_id": …}, "resource_creation": {"create_investigation": true}}` |
 | Continue an investigation | `{"message": …, "context": {"case_id": …, "investigation_id": …}}` |
 
-The response returns `case_id` and `investigation_id` immediately; the reply streams over SSE. g8ee opens a new investigation only under a case the caller owns, and reports another user's case as not found. The selected case and investigation are kept in the URL query (`?case=…&investigation=…`) so a refresh restores them.
+Case and investigation statuses are typed constants in `console/src/lib/types.ts` (`CaseStatus`, `InvestigationStatus`) rather than free-form strings. The response returns `case_id` and `investigation_id` immediately; the reply streams over SSE. g8ee opens a new investigation only under a case the caller owns, and reports another user's case as not found. The selected case and investigation are kept in the URL query (`?case=…&investigation=…`) so a refresh restores them.
+
+When the ensemble is starting up or awaiting workload approval, `CasesView` displays an empty state with a spinner ("Connecting to ensemble…" or "Ensemble enrolling…") and an action to review in Approvals when an enrollment request is pending. It automatically reloads when SSE events (`platform.approvals.changed`, `g8e.v1.ai.*`, `g8e.v1.app.*`) or stream reconnects signal that the ensemble is ready.
 
 ## Operator Binding
 
@@ -144,11 +148,13 @@ Binding attaches an Operator to the browser's web session (`POST /api/v1/operato
 
 ## Model Selection
 
-The Inference page manages one endpoint and API key per provider. A separate Model Roles section in the left navigation assigns a provider/model pair to Primary (reasoning and tool use), Assistant (supporting steps), and Lite (triage, titles, memory). Assistant and Lite may be left unset to inherit; resolution falls back from Lite to Assistant to Primary, as in [LLM Providers](../ensemble/llm-providers.md). The selectable providers and their connection requirements come from the ensemble (`POST /api/v1/settings/llm/get`), not from console code. Jev and the test-only fake provider are not offered. Every provider, `g8e` included, takes a model the user picks. The Inference Operator is a worker and never decides a role's model: the role editor offers the models its Ollama provider serves and saves the chosen one on the role.
+The Inference page (`?view=inference`) manages provider connection settings: one endpoint and API key per provider. A separate Model Roles section in the left navigation sidebar assigns a provider/model pair to Primary (reasoning and tool use), Assistant (supporting steps), and Lite (triage, titles, memory). Assistant and Lite may be left unset to inherit; resolution falls back from Lite to Assistant to Primary, as in [LLM Providers](../ensemble/llm-providers.md). The selectable providers and their connection requirements come from the ensemble (`POST /api/v1/settings/llm/get`), not from console code. Jev and the test-only fake provider are not offered. Every provider, `g8e` included, takes a model the user picks. The Inference Operator is a worker and never decides a role's model: the role selector offers the models its provider serves and saves the chosen one on the role.
 
-Saving (`POST /api/v1/settings/llm`) writes provider connections and role selections as separate fields of the caller's `user_settings_{user_id}` document and invalidates its cache entry. API keys are write-only: responses expose only `api_key_set`, and an omitted key preserves the stored value while an empty key removes it. g8ee reads user settings on every chat request, so the next message uses the new selection with no reload. The composer shows the Primary model and links to its role editor, or warns when no model is selected.
+Each role in the sidebar renders a dropdown grouping available models by provider (`optgroup`). Changing a dropdown immediately saves the role selection (`POST /api/v1/settings/llm`), shows saving progress, and displays a confirmation toast. The composer shows the Primary model and focuses its sidebar selector when clicked (or routes to Inference if unmounted), warning when no model is configured.
 
-`POST /api/v1/settings/llm/models` accepts only a provider and lists the models its saved connection serves (Ollama `/api/tags`, OpenAI-compatible and llama.cpp `/v1/models`, Anthropic `/v1/models`, Gemini `models`). For `g8e` governed inference, g8ee resolves the caller's sole active Inference Operator through the Gateway and requests its typed model inventory through governed Operator dispatch, and the response lists the models it serves, from which the user picks the role's model. A failed listing reports only the HTTP status or transport error, never the upstream body.
+Saving (`POST /api/v1/settings/llm`) writes provider connections and role selections as separate fields of the caller's `user_settings_{user_id}` document and invalidates its cache entry. API keys are write-only: responses expose only `api_key_set`, and an omitted key preserves the stored value while an empty key removes it. g8ee reads user settings on every chat request, so the next message uses the new selection with no reload.
+
+`POST /api/v1/settings/llm/models` accepts a provider name and lists the models its saved connection serves (Ollama `/api/tags`, OpenAI-compatible and llama.cpp `/v1/models`, Anthropic `/v1/models`, Gemini `models`). For `g8e` governed inference, g8ee resolves the caller's sole active Inference Operator through the Gateway and requests its typed model inventory through governed Operator dispatch, and the response lists the models it serves. The console's inference state loads models for all configured providers in parallel and populates the role dropdowns. A failed listing reports only the HTTP status or transport error, never the upstream body. When the ensemble is enrolling or starting up, the Inference view shows the enrollment state with a shortcut to the Approvals view.
 
 ## API Reference
 
@@ -162,7 +168,7 @@ The console opens one `EventSource` per signed-in session to `/api/v1/sse/stream
 
 Events the registry marks `persistence: ephemeral` (streamed model output, for example) have no durable row, so the Gateway sends them without an `id:` line. The browser's `lastEventId` still holds the previous frame's ID for such a frame, so the console resolves every ephemeral event type to ID 0 from the generated registry. An ID-0 event bypasses de-duplication and never advances the resume cursor; trusting `lastEventId` would drop it as already seen.
 
-Events are routed by type and `data.investigation_id`: chat and tool events update the selected investigation's timeline. A turn ends (the composer leaves its Stop state) on `ai.llm.chat.iteration.text.completed`, `...iteration.failed`, or `...iteration.stopped`; `...iteration.completed` fires per tool round and does not end the turn. Stop posts `/api/v1/chat/stop`; when g8ee reports `was_active: false` no stopped event follows, so the console clears the stale busy state itself; `app.case.*` events refresh the case list; `operator.status.updated.*` events refresh the Operator inventory, including the `active` event the Gateway publishes when an Operator is newly enrolled or claims its slot, so a newly approved Operator appears without a reload. `platform.approvals.changed` (ephemeral, no payload beyond the changed list) refreshes the pending approvals — L3 suspensions and platform enrollment requests — and the console also re-lists each time the stream (re)opens, since an ephemeral event cannot be replayed. The console does not poll.
+Events are routed by type and `data.investigation_id`: chat and tool events update the selected investigation's timeline. A turn ends (the composer leaves its Stop state) on `ai.llm.chat.iteration.text.completed`, `...iteration.failed`, or `...iteration.stopped`; `...iteration.completed` fires per tool round and does not end the turn. Stop posts `/api/v1/chat/stop`; when g8ee reports `was_active: false` no stopped event follows, so the console clears the stale busy state itself; `app.case.*` events refresh the case list; `operator.status.updated.*` events refresh the Operator inventory, including the `active` event the Gateway publishes when an Operator is newly enrolled or claims its slot, so a newly approved Operator appears without a reload. `platform.approvals.changed` (ephemeral, no payload beyond the changed list) refreshes pending approvals — L3 suspensions and platform enrollment requests —, and triggers a reload of uninitialized cases or inference settings. Both cases and inference settings also listen for incoming `g8e.v1.ai.*` and `g8e.v1.app.*` events to automatically retry if they failed during ensemble startup. The console re-lists pending items each time the stream (re)opens, since an ephemeral event cannot be replayed. The console does not poll.
 
 ## Procedures
 
@@ -182,6 +188,8 @@ The fastest loop is to rebuild and reload the Gateway-served console, which keep
 make console-build console-embed && make build && ./g8e gw restart
 ```
 
+The embed is committed. When `console/dist` is absent (a fresh clone without Node), `make build` uses the committed embed as-is; when `console/dist` exists, `make build` copies it into the embed first.
+
 To use the Vite dev server (`npm run dev`, `http://127.0.0.1:5174/console/`), the page and the Gateway are different origins, so the Gateway must allow the dev origin first: `./g8e gw connect http://localhost:5174`. Relative API paths then need a dev proxy or an absolute Gateway origin; keep such changes local.
 
 ### Test
@@ -200,7 +208,7 @@ Component tests in `tests/app.test.tsx` stub `fetch` and `EventSource` with a fa
 2. Commit `internal/services/gateway/console/static/` with the source change.
 3. If you changed the Gateway handler's Swagger annotations, run `make swagger-generate`.
 
-The `console-tests` CI job runs typecheck and lint, the Vitest suite, a fresh `npm run build` diffed against `internal/services/gateway/console/static`, and the `g8e-adapter` build with `npm run gen:contract-pack:check`. `make ci-console` (and `make ci`) runs lint, tests, and refreshes the embed locally after `make dev-check`; the `g8e-adapter` build and contract-pack check run only in CI.
+The `console-tests` CI job runs typecheck and lint, the Vitest suite, a fresh `npm run build` diffed against `internal/services/gateway/console/static`, and the `g8e-adapter` build with `npm run gen:contract-pack:check`. `make ci-console` (and `make ci`) runs lint, tests, and refreshes the embed locally after `make dev-check`; it also runs the adapter typechecks, tests, build, and contract-pack check.
 
 ### Verify a console change end to end
 
@@ -228,4 +236,5 @@ The `console-tests` CI job runs typecheck and lint, the Vitest suite, a fresh `n
 - [SSE Architecture](sse.md)
 - [Ensemble Architecture](ensemble.md)
 - [Developer Guidelines](../devs/devs.md)
-- [Documentation Rules](../devs/docs.md)
+- [Documentation Guide](../devs/docs.md)
+

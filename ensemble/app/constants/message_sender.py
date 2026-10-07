@@ -10,9 +10,20 @@
 These are NOT SSE event types. They identify the source of a message
 in the database (user, AI, system, operator terminal) for conversation
 history tracking and display.
+
+Values are sourced from the protocol SSOT (``protocol/constants/senders.json``
+via the ``g8e`` package) — do not hand-roll duplicates here; see
+``generated_status.py``.
 """
 
 from enum import StrEnum
+
+from g8e.constants import MSG as _PROTOCOL_SENDERS
+
+
+def _sender(name: str) -> str:
+    """Return the wire value for a sender from the protocol SSOT."""
+    return _PROTOCOL_SENDERS["senders"][name]["value"]
 
 
 class MessageSender(StrEnum):
@@ -22,9 +33,9 @@ class MessageSender(StrEnum):
     They are NOT SSE event types - use EventType for pub/sub events.
     """
 
-    USER_CHAT = "g8e.v1.source.user.chat"
-    USER_TERMINAL = "g8e.v1.source.user.terminal"
-    AI_PRIMARY = "g8e.v1.source.ai.primary"
-    AI_ASSISTANT = "g8e.v1.source.ai.assistant"
-    AI_TRIAGE = "g8e.v1.source.ai.triage"
-    SYSTEM = "g8e.v1.source.system"
+    USER_CHAT = _sender("UserChat")
+    USER_TERMINAL = _sender("UserTerminal")
+    AI_PRIMARY = _sender("AiPrimary")
+    AI_ASSISTANT = _sender("AiAssistant")
+    AI_TRIAGE = _sender("AiTriage")
+    SYSTEM = _sender("System")

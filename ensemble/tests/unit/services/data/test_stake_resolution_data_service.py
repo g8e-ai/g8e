@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants import DB_COLLECTION_STAKE_RESOLUTIONS, EventType, G8EE_COMPONENT
+from app.constants import DB_COLLECTION_STAKE_RESOLUTIONS, G8EE_COMPONENT, EventType
 from app.errors import DatabaseError, ValidationError
 from app.models.http_context import RequestContext
 from app.models.reputation import SlashTier, StakeResolution
@@ -102,9 +102,7 @@ class TestCreate:
     def mock_cache(self, mock_cache_aside_service):
         return mock_cache_aside_service
 
-    async def test_create_writes_with_composite_id(
-        self, service, mock_cache, governance_client
-    ):
+    async def test_create_writes_with_composite_id(self, service, mock_cache, governance_client):
         mock_cache.get_document_with_cache.return_value = None
         r = _make_resolution()
         await service.create(r, _context())

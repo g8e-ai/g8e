@@ -24,8 +24,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
-	"syscall"
 	"testing"
 	"time"
 
@@ -58,80 +56,6 @@ func (w *launchProfileWriteFailingFileSvc) WriteFile(ctx context.Context, relPat
 		return w.failErr
 	}
 	return w.RuntimeFileService.WriteFile(ctx, relPath, data, mode)
-}
-
-// withServeReExec sets G8E_TEST_REEXEC=serve so the re-executed test binary
-// starts a minimal HTTP health server instead of exiting immediately. The
-// env var is restored via t.Cleanup. It also registers a cleanup that reaps
-// any remaining child process and removes stale PID files, because the test
-// process is the parent of the re-executed subprocess and must call waitpid
-// to reap zombies (in production the CLI exits after starting the Gateway,
-// so init adopts and reaps it).
-func withServeReExec(t *testing.T, fileSvc fs.RuntimeFileService) {
-	t.Helper()
-	old, hadOld := os.LookupEnv("G8E_TEST_REEXEC")
-	require.NoError(t, os.Setenv("G8E_TEST_REEXEC", "serve"))
-	t.Cleanup(func() {
-		if hadOld {
-			_ = os.Setenv("G8E_TEST_REEXEC", old)
-		} else {
-			_ = os.Unsetenv("G8E_TEST_REEXEC")
-		}
-	})
-	t.Cleanup(func() {
-		reapRemainingChild(t, fileSvc)
-	})
-}
-
-// startZombieReaper starts a background goroutine that polls for and reaps
-// any exited child processes (zombies) using Wait4 with WNOHANG. This is
-// necessary because the test process is the parent of all re-executed
-// subprocesses; in production the CLI exits after starting the Gateway and
-// init reaps it, but in tests the parent must explicitly wait. Without this,
-// StopOperator's isProcessRunning check sees the zombie and reports the
-// process as still running, causing StopOperator to fail.
-//
-// The goroutine is stopped via t.Cleanup.
-func startZombieReaper(t *testing.T) {
-	t.Helper()
-	stop := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-stop:
-				return
-			default:
-				var ws syscall.WaitStatus
-				pid, err := syscall.Wait4(-1, &ws, syscall.WNOHANG, nil)
-				if err != nil || pid == 0 {
-					time.Sleep(5 * time.Millisecond)
-				}
-			}
-		}
-	}()
-	t.Cleanup(func() { close(stop) })
-}
-
-// reapRemainingChild reads the operator PID file, sends SIGKILL to the process
-// if it still exists, reaps the zombie via waitpid, and removes the PID file.
-// This is necessary because the test process is the parent of the re-executed
-// subprocess; in production the CLI exits after starting the Gateway and init
-// reaps it, but in tests the parent must explicitly wait.
-func reapRemainingChild(t *testing.T, fileSvc fs.RuntimeFileService) {
-	t.Helper()
-	pidRel := filepath.Join(constants.PidDirname, constants.OperatorPIDFilename)
-	data, err := fileSvc.ReadFile(context.Background(), pidRel)
-	if err != nil {
-		return // PID file already gone — nothing to reap.
-	}
-	pid, err := strconv.Atoi(string(data))
-	if err != nil || pid == 0 {
-		return
-	}
-	_ = syscall.Kill(pid, syscall.SIGKILL)
-	var ws syscall.WaitStatus
-	_, _ = syscall.Wait4(pid, &ws, 0, nil)
-	_ = fileSvc.Remove(context.Background(), pidRel)
 }
 
 // assertGatewayStopped asserts that OperatorStatus reports no running Gateway

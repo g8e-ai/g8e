@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -59,13 +60,7 @@ func (c *Client) DiscoverInferenceOperator(ctx context.Context, operatorSessionI
 	}
 	var matches []models.OperatorDocumentGo
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
-			continue
-		}
-		if op.RuntimeConfig == nil || !op.RuntimeConfig.InferenceEnabled {
-			continue
-		}
-		if op.OperatorSessionID == "" {
+		if op.RuntimeConfig == nil || !operatorcapability.HasActiveRole(op, constants.OperatorRoleInference) {
 			continue
 		}
 		if operatorSessionID != "" && op.OperatorSessionID != operatorSessionID {

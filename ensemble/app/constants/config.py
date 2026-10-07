@@ -24,8 +24,8 @@ from g8e.enums import (
     ToolDisplayCategory,
 )
 
-from app.constants.paths import PATHS
 from app.constants.models import SecurityConstraintsConstants
+from app.constants.paths import PATHS
 
 
 def _load_security_constraints() -> SecurityConstraintsConstants:
@@ -33,7 +33,7 @@ def _load_security_constraints() -> SecurityConstraintsConstants:
     try:
         config_path = Path(__file__).parent.parent.parent / "config" / "security_constraints.json"
         if config_path.exists():
-            with open(config_path) as f:
+            with config_path.open() as f:
                 constraints = json.load(f)
             return SecurityConstraintsConstants.model_validate(constraints)
     except Exception:
@@ -130,16 +130,12 @@ class NonceErrorCode(StrEnum):
     CHECK_FAILED = "NONCE_CHECK_FAILED"
 
 
-
-
 class APIKeyStatus(StrEnum):
     def __str__(self) -> str:
         return self.value
 
     ACTIVE = "active"
     REVOKED = "revoked"
-
-
 
 
 class EntityType(StrEnum):
@@ -239,8 +235,6 @@ class CommandGenerationOutcome(StrEnum):
     CONSENSUS_FAILED = "consensus_failed"
 
 
-
-
 class BatchWriteOpType(StrEnum):
     def __str__(self) -> str:
         return self.value
@@ -328,8 +322,6 @@ class ResponseType(StrEnum):
         return self.value
 
     ERROR_RESPONSE = "error.response"
-
-
 
 
 # OpenAI models
@@ -467,8 +459,21 @@ DEFAULT_OPERATOR_CONFIG = {
 # Ollama-only: default context window passed as options.num_ctx.
 # Ollama's server default is 4096, which silently truncates real-world prompts
 # (system + chat history) and leaves thinking models with no budget for visible
-# output. 32768 matches common modern model context sizes.
-LLM_OLLAMA_DEFAULT_NUM_CTX = 32768
+# output. 65536 leaves room for the system prompt, tool schemas and a long
+# history; 32768 proved tight in practice.
+LLM_OLLAMA_DEFAULT_NUM_CTX = 65536
+
+# Share of the Ollama context window that cross-turn chat history may occupy.
+# The remainder is headroom for what history does not include: the system
+# prompt (persona, memories, operator context), the declared tool schemas, and
+# the generation budget (thinking models spend several thousand tokens before
+# visible output). The estimate below also undercounts code and JSON, which
+# tokenise nearer 3 characters per token, so history is deliberately capped at
+# half the window rather than packed to the limit.
+LLM_OLLAMA_HISTORY_BUDGET_FRACTION = 0.5
+
+# Dependency-free token estimate (no tokenizer): characters divided by this.
+LLM_ESTIMATED_CHARS_PER_TOKEN = 4
 
 CACHE_TTL_DEFAULT = 3600
 CACHE_TTL_SHORT = 300
@@ -528,6 +533,10 @@ FILE_SECURITY_WARNING_PREFIX_TEMPLATE = (
 ATTACHED_DOCUMENT_HEADER_TEMPLATE = "\n\n--- Attached Document: {filename} ---\n"
 ATTACHED_DOCUMENT_FOOTER_TEMPLATE = "--- End of {filename} ---\n"
 ATTACHMENT_FILENAMES_PREFIX_TEMPLATE = "[ATTACHMENTS: {filenames}]\n\n"
+HISTORY_OMITTED_MARKER = (
+    "[SYSTEM NOTE: Earlier messages in this conversation were omitted to fit "
+    "the model's context window.]"
+)
 BATCH_OUTPUT_SECTION_SEPARATOR = "\n\n"
 TRUNCATED_LINES_MARKER_TEMPLATE = "\n\n... [{count} lines truncated] ...\n\n"
 DOCS_UNAVAILABLE_TEMPLATE = (

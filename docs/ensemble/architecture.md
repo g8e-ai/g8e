@@ -3,8 +3,8 @@ doc_id: ensemble_architecture
 title: Ensemble Architecture
 audience: platform and feature developers, coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - ensemble/app/
   - ensemble/app/main.py
@@ -105,6 +105,8 @@ IDs are stable. Append the next free number in a topic. Do not renumber.
 
 ### Startup and Service Initialization
 
+At package import, `ensemble/app/__init__.py` calls `sanitize_proxy_env` (`ensemble/app/utils/proxy_env.py`), which rewrites bracketed IPv6 literals in `NO_PROXY`/`no_proxy` (for example `[::1]`) to the bare form before third-party HTTP clients read them.
+
 1. Application creates local settings from environment and bootstrap files.
 2. App enrollment service loads or creates an enrolled app identity with Gateway approval.
 3. Client connections are established for DB, KV, Blob, and internal HTTP.
@@ -112,7 +114,7 @@ IDs are stable. Append the next free number in a topic. Do not renumber.
 5. Platform settings are loaded through cache-aside and overlaid on bootstrap settings.
 6. `GovernanceClient` is constructed with mTLS config and operator session ID.
 7. `ServiceFactory.create_all_services()` constructs all domain services in one call.
-8. `InternalHttpClient` is injected into the LLM provider factory for governed-dispatch inference.
+8. `InternalHttpClient` is injected into the LLM provider factory for governed-dispatch inference. The factory (`get_llm_provider_class`) imports only the selected provider's module, so other providers' SDKs are never loaded; an import failure for the selected provider propagates instead of switching providers.
 9. All services transition to started state; readiness is signaled only after this completes.
 
 ### Request Authentication and Routing
@@ -131,6 +133,7 @@ IDs are stable. Append the next free number in a topic. Do not renumber.
 2. Triage routes simple turns to Dash and complex turns or triage failures to Sage.
 3. Selected provider streams response through sequential ReAct loop.
 4. Tool results return to model for subsequent turns.
+   - For the `ollama` and `g8e` providers, `ChatPipeline` passes a history token budget of half of `num_ctx` (`LLM_OLLAMA_HISTORY_BUDGET_FRACTION`) to `build_contents_from_history`, which drops the oldest whole messages and prepends one marker message. The last user message is never dropped; if it alone exceeds the window, the provider raises `ContextWindowExceededError`. A Gateway governed-dispatch rejection reporting `context window exceeded` is translated to the same error.
 5. When operator command is needed, Tribunal generates candidates through five independent persona passes (Axiom, Concord, Variance, Pragma, Nemesis).
 6. Tribunal voting selects a command with at least two votes; ties are broken deterministically.
 7. Command passes Marshal risk analysis, deterministic validation, and g8ee approval service.

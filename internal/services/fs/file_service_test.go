@@ -69,6 +69,16 @@ func TestWriteFile_CreatesFileWithCorrectContent(t *testing.T) {
 	assert.Equal(t, data, got)
 }
 
+func TestWriteFile_ReplacesReadOnlyFile(t *testing.T) {
+	svc := setupTestFS(t)
+	ctx := context.Background()
+	require.NoError(t, svc.WriteFile(ctx, "report.json", []byte("original"), constants.PermFileReadOnly))
+	require.NoError(t, svc.WriteFile(ctx, "report.json", []byte("updated"), constants.PermFileReadOnly))
+	body, err := svc.ReadFile(ctx, "report.json")
+	require.NoError(t, err)
+	assert.Equal(t, "updated", string(body))
+}
+
 func TestWriteFile_CreatesParentDirectories(t *testing.T) {
 	svc := setupTestFS(t)
 	ctx := context.Background()
@@ -90,7 +100,7 @@ func TestWriteFile_EnforcesPermissions(t *testing.T) {
 
 	info, err := svc.Stat(ctx, "secret.txt")
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm())
 }
 
 func TestWriteFile_OverwritesExistingFile(t *testing.T) {
@@ -310,7 +320,7 @@ func TestCreateRuntimeTree_SecretsDirIsPrivate(t *testing.T) {
 
 	info, err := os.Stat(paths.Infra.SecretsDir)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermDirPrivate), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermDirPrivate, info.IsDir()), info.Mode().Perm())
 }
 
 func TestCreateRuntimeTree_VaultDirIsPrivate(t *testing.T) {
@@ -321,7 +331,7 @@ func TestCreateRuntimeTree_VaultDirIsPrivate(t *testing.T) {
 
 	info, err := os.Stat(paths.Infra.VaultDir)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermDirPrivate), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermDirPrivate, info.IsDir()), info.Mode().Perm())
 }
 
 func TestCreateRuntimeTree_PkiDirsAreStandard(t *testing.T) {
@@ -341,7 +351,7 @@ func TestCreateRuntimeTree_PkiDirsAreStandard(t *testing.T) {
 	for _, dir := range pkiDirs {
 		info, err := os.Stat(dir)
 		require.NoError(t, err, "failed to stat: %s", dir)
-		assert.Equal(t, os.FileMode(constants.PermDirStandard), info.Mode().Perm(),
+		assert.Equal(t, testutil.FileMode(constants.PermDirStandard, info.IsDir()), info.Mode().Perm(),
 			"wrong permissions for: %s", dir)
 	}
 }
@@ -367,7 +377,7 @@ func TestEnforceFilePermissions_SetsMode(t *testing.T) {
 
 	info, err := svc.Stat(ctx, "perm.txt")
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm())
 }
 
 func TestEnforceDirPermissions_Recursive(t *testing.T) {
@@ -380,11 +390,11 @@ func TestEnforceDirPermissions_Recursive(t *testing.T) {
 
 	info, err := svc.Stat(ctx, "enforce/sub/file.txt")
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermDirPrivate), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermDirPrivate, info.IsDir()), info.Mode().Perm())
 
 	info, err = svc.Stat(ctx, "enforce/sub")
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermDirPrivate), info.Mode().Perm())
+	assert.Equal(t, testutil.FileMode(constants.PermDirPrivate, info.IsDir()), info.Mode().Perm())
 }
 
 func TestWriteFile_CancelledContextReturnsError(t *testing.T) {

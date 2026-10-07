@@ -617,7 +617,7 @@ func Run(cfg Config) error {
 				return
 			}
 
-			fireOne(id, c, env, currentRoot, warden, act, logger, &cnt, rejectionBatch)
+			fireOne(id, c, env, warden, act, logger, &cnt, rejectionBatch)
 		}(idx, catCopy, sessionID)
 	}
 
@@ -680,7 +680,6 @@ func fireOne(
 	id int,
 	cat category,
 	env *govpkg.GovernanceEnvelope,
-	stateRoot string,
 	warden *governance.L4Warden,
 	actuator *governance.L5Actuator,
 	logger *slog.Logger,

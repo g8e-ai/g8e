@@ -12,7 +12,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,14 +28,9 @@ import (
 type ArtifactType string
 
 const (
-	ArtifactTypeDemoManifest                     ArtifactType = "demo-manifest"
-	ArtifactTypeDemoResult                       ArtifactType = "demo-result"
-	ArtifactTypeDemoStepResult                   ArtifactType = "demo-step-result"
-	ArtifactTypeDemoDefinition                   ArtifactType = "demo-definition"
 	ArtifactTypeActionReceipt                    ArtifactType = "action-receipt"
 	ArtifactTypeReceiptPersistence               ArtifactType = "receipt-persistence"
 	ArtifactTypeStateObservation                 ArtifactType = "state-observation"
-	ArtifactTypeDemoMetric                       ArtifactType = "demo-metric"
 	ArtifactTypeProtocolChain                    ArtifactType = "protocol-chain"
 	ArtifactTypeEvalManifest                     ArtifactType = "eval-manifest"
 	ArtifactTypeEvalTask                         ArtifactType = "eval-task"
@@ -68,14 +62,9 @@ func EvalScopeID(suiteID string) string {
 
 func SupportedArtifactTypes() []ArtifactType {
 	return []ArtifactType{
-		ArtifactTypeDemoManifest,
-		ArtifactTypeDemoResult,
-		ArtifactTypeDemoStepResult,
-		ArtifactTypeDemoDefinition,
 		ArtifactTypeActionReceipt,
 		ArtifactTypeReceiptPersistence,
 		ArtifactTypeStateObservation,
-		ArtifactTypeDemoMetric,
 		ArtifactTypeProtocolChain,
 		ArtifactTypeEvalManifest,
 		ArtifactTypeEvalTask,
@@ -162,9 +151,9 @@ type EvidenceImporter interface {
 // GraphFailure records one validation failure detected during graph
 // construction or validation.
 type GraphFailure struct {
-	Code    error
-	Subject string
-	Reason  string
+	Code    error  `json:"code,omitempty"`
+	Subject string `json:"subject,omitempty"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 // EvidenceGraph is the content-addressed evidence graph. Nodes are indexed
@@ -581,15 +570,5 @@ func sameScopeBinding(a, b *EvidenceNode) bool {
 // bundle paths. Bundle paths must be relative and must not escape the bundle
 // root.
 func validBundlePath(path string) bool {
-	if path == "" || filepath.IsAbs(path) {
-		return false
-	}
-	clean := filepath.Clean(path)
-	if clean == "." || clean == ".." {
-		return false
-	}
-	if strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return false
-	}
-	return true
+	return ValidRelativePath(path)
 }

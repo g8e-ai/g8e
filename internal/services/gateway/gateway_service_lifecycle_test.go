@@ -11,17 +11,27 @@ package gateway
 
 import (
 	"context"
+	"net"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 func TestGatewayModeService_StartStop(t *testing.T) {
 	ls := newTestGatewayService(t, testGatewayOpts{httpPort: 0})
+	// Test configuration must keep real listeners on loopback so Windows does
+	// not request firewall access for the test binary.
+	for _, server := range []*http.Server{ls.server, ls.publicServer} {
+		host, _, err := net.SplitHostPort(server.Addr)
+		require.NoError(t, err)
+		assert.Equal(t, constants.LocalhostIP, host)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

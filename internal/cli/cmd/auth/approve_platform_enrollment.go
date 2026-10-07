@@ -20,6 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -151,9 +152,9 @@ func revokePlatformEnrollmentCmdWithConfig(
 			if err != nil {
 				return fmt.Errorf("enroll revoke: post revocation: %w", err)
 			}
-			var response models.PlatformEnrollmentRevokeResponse
-			if err := json.Unmarshal(body, &response); err != nil {
-				return fmt.Errorf("enroll revoke: parse response: %w", err)
+			response, err := auth.DecodePlatformEnrollmentRevoke(body)
+			if err != nil {
+				return fmt.Errorf("enroll revoke: %w", err)
 			}
 			cmd.Printf("Platform enrollment %s revoked (%s).\n", response.RequestID, response.ComponentKind)
 			return nil
@@ -335,11 +336,7 @@ func PostPlatformEnrollmentDecision(client APIClient, decisionReq models.Platfor
 	if err != nil {
 		return nil, fmt.Errorf("post decision: %w", err)
 	}
-	var resp models.PlatformEnrollmentDecisionResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return nil, fmt.Errorf("parse decision response: %w", err)
-	}
-	return &resp, nil
+	return auth.DecodePlatformEnrollmentDecision(respBody)
 }
 
 // selectPendingRequests resolves each selector against the pending list by exact
@@ -389,32 +386,11 @@ func PrintPlatformEnrollmentRequestDetails(cmd *cobra.Command, req *models.Platf
 	cmd.Printf("  Created:       %s\n", req.CreatedAt.Format("2006-01-02 15:04:05 MST"))
 	cmd.Printf("  Expires:       %s\n", req.ExpiresAt.Format("2006-01-02 15:04:05 MST"))
 
-	fingerprints := nonEmptyFingerprints(req.Fingerprints)
+	fingerprints := auth.PlatformEnrollmentFingerprints(req.Fingerprints)
 	if len(fingerprints) > 0 {
 		cmd.Printf("  Key fingerprints (compare with the workload output):\n")
 		for _, fp := range fingerprints {
-			cmd.Printf("    %s: %s\n", fp.label, fp.value)
+			cmd.Printf("    %s: %s\n", fp.Label, fp.Value)
 		}
 	}
-}
-
-type fingerprintDisplay struct {
-	label string
-	value string
-}
-
-// nonEmptyFingerprints returns the non-empty CSR fingerprints from a pending
-// request as label/value pairs for display.
-func nonEmptyFingerprints(fps models.PlatformEnrollmentCSRFingerprints) []fingerprintDisplay {
-	var out []fingerprintDisplay
-	if fps.App != "" {
-		out = append(out, fingerprintDisplay{label: "App key", value: fps.App})
-	}
-	if fps.Operator != "" {
-		out = append(out, fingerprintDisplay{label: "Operator key", value: fps.Operator})
-	}
-	if fps.CLI != "" {
-		out = append(out, fingerprintDisplay{label: "CLI key", value: fps.CLI})
-	}
-	return out
 }

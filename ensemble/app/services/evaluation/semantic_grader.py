@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 
+from g8e.models.internal_api import EvaluationGoldSummary, EvaluationInferenceContext
+
 from app.constants import LLMProvider
 from app.decision import get_decision_provider
 from app.errors import ConfigurationError
@@ -19,9 +21,8 @@ from app.models.evaluation_trace import (
     EvaluationToolCallRecord,
 )
 from app.models.http_context import G8eHttpContext
-from app.models.settings import G8eeUserSettings
+from app.models.settings import EvalJudgeSettings, G8eeUserSettings
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
-from g8e.models.internal_api import EvaluationGoldSummary, EvaluationInferenceContext
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ async def grade_campaign_assignment_semantically(
             judge = EvalJudge(
                 decision_provider=decision_provider,
                 model=judge_model,
-                settings=judge_settings.eval_judge,
+                settings=EvalJudgeSettings.model_validate(judge_settings.eval_judge.model_dump()),
                 g8e_context=grader_context,
             )
         else:
@@ -94,7 +95,7 @@ async def grade_campaign_assignment_semantically(
             judge = EvalJudge(
                 provider=provider,
                 model=judge_model,
-                settings=judge_settings.eval_judge,
+                settings=EvalJudgeSettings.model_validate(judge_settings.eval_judge.model_dump()),
                 g8e_context=grader_context,
             )
         grade = await judge.grade_turn(

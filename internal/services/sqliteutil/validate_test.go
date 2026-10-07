@@ -46,7 +46,7 @@ func TestValidateIdentifier(t *testing.T) {
 	}
 
 	for _, name := range valid {
-		name := name
+
 		t.Run("valid/"+name, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateIdentifier(name)
@@ -119,7 +119,7 @@ func TestValidateIdentifier(t *testing.T) {
 	}
 
 	for _, tc := range invalid {
-		tc := tc
+
 		t.Run("invalid/"+tc.name, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateIdentifier(tc.input)
@@ -157,7 +157,7 @@ func TestValidateIdentifier_SecurityEdgeCases(t *testing.T) {
 	}
 
 	for _, pattern := range sqlInjectionPatterns {
-		pattern := pattern
+
 		t.Run("sql_injection/"+pattern, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateIdentifier(pattern)
@@ -203,7 +203,7 @@ func TestValidateIdentifier_LengthBoundaries(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateIdentifier(tt.input)
@@ -235,7 +235,7 @@ func TestValidateIdentifier_RegexConsistency(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
+
 		t.Run(tc, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateIdentifier(tc)
@@ -262,7 +262,7 @@ func TestValidateIdentifier_ErrorMessages(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateIdentifier(tt.input)
@@ -315,7 +315,7 @@ func TestValidateIdentifier_CharacterClasses(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateIdentifier(tt.input)

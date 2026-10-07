@@ -276,30 +276,6 @@ func TestVersionedKey_ConcatenatesWithAtSign(t *testing.T) {
 	assert.Equal(t, "grader@1.0.0", VersionedKey("grader", "1.0.0"))
 }
 
-func TestMarshalCanonicalProto_RoundTripsDemoManifest(t *testing.T) {
-	manifest := &compliancev1.DemoManifest{
-		DemoId: "fedramp", RunId: "run-1", ScopeId: "scope-1",
-		GeneratedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
-	}
-	body, err := MarshalCanonicalProto(manifest)
-	require.NoError(t, err)
-	assert.NotEmpty(t, body)
-
-	decoded := &compliancev1.DemoManifest{}
-	require.NoError(t, UnmarshalCanonicalProto(body, decoded))
-	assert.Equal(t, manifest.GetDemoId(), decoded.GetDemoId())
-	assert.Equal(t, manifest.GetRunId(), decoded.GetRunId())
-}
-
-func TestDemoScope_MapsKnownDemoIDs(t *testing.T) {
-	assert.Equal(t, constants.DemoScopeFedRAMP, DemoScope(constants.DemosOrgFedRAMP))
-	assert.Equal(t, constants.DemoScopeHealthcare, DemoScope(constants.DemosOrgHealthcare))
-}
-
-func TestDemoScope_ReturnsEmptyForUnknownID(t *testing.T) {
-	assert.Equal(t, "", DemoScope("unknown"))
-}
-
 func TestBuildVerifiedReceiptEvidence_RequiresExactScopeAndTargetBinding(t *testing.T) {
 	binding := ReceiptBinding{
 		RunID:                   "run-1",
@@ -377,12 +353,12 @@ func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *te
 		ReportId:        "run-1",
 		Valid:           true,
 		VerifiedAt:      timestamppb.New(verifiedAt),
-		VerifierId:      constants.DemoRunVerifierID,
-		VerifierVersion: constants.DemoRunVerifierVersion,
+		VerifierId:      constants.EvalRunVerifierID,
+		VerifierVersion: constants.EvalRunVerifierVersion,
 		Checks: []*compliancev1.VerificationCheckResult{NewVerificationCheckResult(
-			constants.DemoRunVerificationCheck,
-			constants.DemoRunVerifierID,
-			constants.DemoRunVerifierVersion,
+			constants.EvalRunVerificationCheck,
+			constants.EvalRunVerifierID,
+			constants.EvalRunVerifierVersion,
 			[]string{"run-1"},
 			nil,
 		)},
@@ -396,7 +372,7 @@ func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *te
 		{name: "valid bound report", notAfter: verifiedAt},
 		{name: "wrong report identity", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.ReportId = "run-2" }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "wrong verifier identity", mutate: func(report *compliancev1.ComplianceVerificationReport) {
-			report.VerifierId = constants.EvalRunVerifierID
+			report.VerifierId = constants.EvidenceGraphVerifierID
 		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "wrong verifier version", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.VerifierVersion = "2.0.0" }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "invalid report", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.Valid = false }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
@@ -408,7 +384,7 @@ func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *te
 			report.Checks = append(report.Checks, proto.Clone(report.Checks[0]).(*compliancev1.VerificationCheckResult))
 		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "wrong verification check identity", mutate: func(report *compliancev1.ComplianceVerificationReport) {
-			report.Checks[0].CheckId = constants.EvalRunVerificationCheck
+			report.Checks[0].CheckId = "unsupported-check"
 		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "unspecified verification check status", mutate: func(report *compliancev1.ComplianceVerificationReport) {
 			report.Checks[0].Status = compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_UNSPECIFIED
@@ -417,7 +393,7 @@ func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *te
 			report.Checks[0].EvidenceRefs = []string{"other-run"}
 		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "verification check verifier mismatch", mutate: func(report *compliancev1.ComplianceVerificationReport) {
-			report.Checks[0].VerifierId = constants.EvalRunVerifierID
+			report.Checks[0].VerifierId = constants.EvidenceGraphVerifierID
 		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "missing verification time", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.VerifiedAt = nil }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "verification after cutoff", notAfter: verifiedAt.Add(-time.Nanosecond), targetErr: constants.ErrReportVerificationFailed},
@@ -432,7 +408,7 @@ func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *te
 			body, err := compliancev1.MarshalCanonical(report)
 			require.NoError(t, err)
 
-			decoded, err := ValidateVerificationReport(body, "run-1", constants.DemoRunVerifierID, constants.DemoRunVerifierVersion, test.notAfter)
+			decoded, err := ValidateVerificationReport(body, "run-1", constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, test.notAfter)
 			if test.targetErr != nil {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, test.targetErr)
@@ -446,7 +422,7 @@ func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *te
 }
 
 func TestValidateVerificationReport_RejectsNoncanonicalBody(t *testing.T) {
-	report, err := ValidateVerificationReport([]byte(`{"report_id": "run-1"}`), "run-1", constants.DemoRunVerifierID, constants.DemoRunVerifierVersion, time.Unix(1_700_000_000, 0).UTC())
+	report, err := ValidateVerificationReport([]byte(`{"report_id": "run-1"}`), "run-1", constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, time.Unix(1_700_000_000, 0).UTC())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
 	assert.Nil(t, report)

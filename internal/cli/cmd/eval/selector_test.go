@@ -82,23 +82,23 @@ func TestModelSelectorResolve(t *testing.T) {
 }
 
 func TestModelSelectorFilterAllowsUnsetAndEmptyResults(t *testing.T) {
-	all, err := ModelSelector{}.Filter(selectorFixture())
+	all, err := (&ModelSelector{}).Filter(selectorFixture())
 	require.NoError(t, err)
 	assert.Len(t, all, 4)
 
-	none, err := ModelSelector{Family: []string{"llama"}}.Filter(selectorFixture())
+	none, err := (&ModelSelector{Family: []string{"llama"}}).Filter(selectorFixture())
 	require.NoError(t, err)
 	assert.Empty(t, none)
 
-	_, err = ModelSelector{All: true, Family: []string{"qwen3"}}.Filter(selectorFixture())
+	_, err = (&ModelSelector{All: true, Family: []string{"qwen3"}}).Filter(selectorFixture())
 	require.Error(t, err)
 }
 
 func TestModelSelectorWithArgsTrimsBlanks(t *testing.T) {
-	selector := ModelSelector{}.withArgs([]string{" qwen3:4b ", "", "  "})
+	selector := (&ModelSelector{}).withArgs([]string{" qwen3:4b ", "", "  "})
 	assert.Equal(t, []string{"qwen3:4b"}, selector.IDs)
 	assert.True(t, selector.IsSet())
-	assert.False(t, ModelSelector{}.withArgs([]string{" "}).IsSet())
+	assert.False(t, (&ModelSelector{}).withArgs([]string{" "}).IsSet())
 }
 
 func TestModelSelectorBindFlags(t *testing.T) {

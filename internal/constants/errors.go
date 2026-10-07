@@ -19,6 +19,7 @@ var (
 var (
 	ErrUserNotFound                 = errors.New("user not found")
 	ErrNoPasskeysRegistered         = errors.New("no passkeys registered")
+	ErrOperatorRoleInvalid          = errors.New("invalid operator role")
 	ErrInvalidJSONBody              = errors.New("invalid JSON body")
 	ErrUserIDRequired               = errors.New("user_id required")
 	ErrMethodNotAllowed             = errors.New("method not allowed")
@@ -1174,6 +1175,9 @@ var (
 	ErrGatewayServiceNil               = errors.New("gateway service is nil")
 	ErrGatewayStoresNil                = errors.New("gateway stores is nil")
 
+	// SSE stream errors
+	ErrSSEStreamClosed = errors.New("SSE stream closed by server")
+
 	// SSE approval errors
 	ErrApprovalSSETimeout              = errors.New("L3 approval: timed out waiting for SSE event")
 	ErrApprovalReceiptReferenceInvalid = errors.New("L3 approval completed without a valid receipt reference")
@@ -1264,7 +1268,6 @@ var (
 	ErrEvidenceArtifactTooLarge       = errors.New("compliance: evidence artifact exceeds size limit")
 	ErrEvidenceArtifactPersistFailed  = errors.New("compliance: evidence artifact persistence failed")
 	ErrEvidenceDirectoryLimitExceeded = errors.New("compliance: evidence directory resource limit exceeded")
-	ErrDemoRunVerificationFailed      = errors.New("compliance: demo run verification failed")
 	ErrEvalRunVerificationFailed      = errors.New("compliance: eval run verification failed")
 	ErrComplianceReleaseEvidence      = errors.New("compliance: release evidence generation failed")
 
@@ -1311,14 +1314,6 @@ var (
 
 	// Host runtime directory errors
 	ErrRuntimeDirNotWritable = errors.New("runtime directory is not writable by the current user")
-
-	// Demo scenario execution errors
-	ErrDemoScenarioFailed        = errors.New("demo: one or more scenarios failed")
-	ErrDemoScenarioCancelled     = errors.New("demo: scenario cancelled")
-	ErrDemoDatalinkDisconnect    = errors.New("demo: coalition datalink disconnect failed")
-	ErrDemoDatalinkRestoration   = errors.New("demo: coalition datalink restoration failed")
-	ErrDemoEvidencePersistFailed = errors.New("demo: typed evidence persistence failed")
-	ErrDemoRunIDMissing          = errors.New("demo: run ID is required")
 
 	// OSCAL validator errors
 	ErrOSCALSchemaDigestMismatch     = errors.New("oscal: embedded schema digest mismatch")
@@ -1513,6 +1508,7 @@ var (
 	ErrInferenceGenerationOptionsInvalid  = errors.New("inference: generation options invalid")
 	ErrInferenceCapabilityUnsupported     = errors.New("inference: requested capability unsupported")
 	ErrInferenceToolsUnsupported          = errors.New("inference: tools unsupported")
+	ErrInferenceContextOverflow           = errors.New("inference: context window exceeded")
 	ErrInferenceProviderAttemptRequired   = errors.New("inference: provider attempt ID required")
 	ErrInferenceProviderAttemptIDInvalid  = errors.New("inference: provider attempt ID invalid")
 	ErrInferenceIdentityMismatch          = errors.New("inference: request and result identity mismatch")

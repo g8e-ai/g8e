@@ -183,9 +183,7 @@ def test_static_sections_stay_within_budget():
     )
 
     for section, budget in SECTION_BUDGET_CHARS.items():
-        assert sizes[section] <= budget, (
-            f"{section} is {sizes[section]} chars, budget {budget}"
-        )
+        assert sizes[section] <= budget, f"{section} is {sizes[section]} chars, budget {budget}"
     combined = sizes[PromptSection.LOYALTY] + sizes[PromptSection.DISSENT]
     assert combined <= LOYALTY_PLUS_DISSENT_BUDGET_CHARS
     assert sizes[PromptSection.AGENT_PERSONA] <= DASH_PERSONA_BUDGET_CHARS

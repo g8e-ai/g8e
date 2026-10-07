@@ -174,7 +174,7 @@ func generateOperatorHierarchy(hierarchy map[string]string) string {
 	typeNames := map[string]string{}
 	collectHierarchyTypeNames(root, "Operator", typeNames)
 	emitHierarchyTypes(&b, root, "Operator", typeNames)
-	emitHierarchyVar(&b, root, "Operator", typeNames)
+	emitHierarchyVar(&b, root, typeNames)
 	return b.String()
 }
 
@@ -217,7 +217,7 @@ func emitHierarchyTypes(b *strings.Builder, node *hierarchyNode, path string, ty
 	}
 }
 
-func emitHierarchyVar(b *strings.Builder, node *hierarchyNode, path string, typeNames map[string]string) {
+func emitHierarchyVar(b *strings.Builder, node *hierarchyNode, typeNames map[string]string) {
 	b.WriteString("var Event = struct {\n")
 	fmt.Fprintf(b, "\tOperator %s\n", typeNames["Operator"])
 	b.WriteString("}{\n")

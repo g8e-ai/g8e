@@ -15,13 +15,14 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 // AttestationResultPublisher publishes completed model provenance attestation
 // windows to the provenance operator results channel.
 type AttestationResultPublisher interface {
-	PublishModelProvenanceObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ModelProvenanceObservationCompleted) error
+	PublishModelProvenanceObservationCompleted(ctx context.Context, origin *commonv1.GovernanceEnvelope, completion *evalv1.ModelProvenanceObservationCompleted) error
 }
 
 // Handler processes pubsub provenance commands on the storage-side operator.
@@ -41,7 +42,7 @@ func NewHandler(tracker *Tracker, publisher AttestationResultPublisher, logger *
 
 // HandleCommand processes one ModelProvenanceObservationCommand delivered on
 // the provenance operator cmd channel.
-func (h *Handler) HandleCommand(ctx context.Context, msgID string, payload []byte) (string, error) {
+func (h *Handler) HandleCommand(ctx context.Context, origin *commonv1.GovernanceEnvelope, payload []byte) (string, error) {
 	command := &evalv1.ModelProvenanceObservationCommand{}
 	if err := proto.Unmarshal(payload, command); err != nil {
 		return "", fmt.Errorf("model provenance handler: unmarshal command: %w", err)
@@ -62,7 +63,7 @@ func (h *Handler) HandleCommand(ctx context.Context, msgID string, payload []byt
 			return "", err
 		}
 		completion := &evalv1.ModelProvenanceObservationCompleted{Window: window}
-		if err := h.publisher.PublishModelProvenanceObservationCompleted(ctx, msgID, completion); err != nil {
+		if err := h.publisher.PublishModelProvenanceObservationCompleted(ctx, origin, completion); err != nil {
 			return "", fmt.Errorf("model provenance handler: publish completion: %w", err)
 		}
 		h.logger.Info("Model provenance observation completed",

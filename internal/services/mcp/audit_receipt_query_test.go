@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // stubAuditReceiptQuery is a Tier 1 stub implementation of AuditReceiptQuery
@@ -40,8 +41,8 @@ type stubAuditReceiptQuery struct {
 	lastGetID       string
 }
 
-func (s *stubAuditReceiptQuery) ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
-	s.lastListSession = operatorSessionID
+func (s *stubAuditReceiptQuery) ListActionReceipts(scope models.AuditScope, limit, offset int) ([]*models.ActionReceiptRecord, error) {
+	s.lastListSession = scope.OperatorSessionID
 	s.lastListLimit = limit
 	s.lastListOffset = offset
 	if s.listErr != nil {
@@ -67,17 +68,17 @@ func (s *stubAuditReceiptQuery) GetActionReceipt(transactionID string) (*models.
 	return s.getByID[transactionID], nil
 }
 
-func sampleReceiptRecord(txID, sessionID, actionType string, executedAt time.Time, status operatorv1.ExecutionStatus) *models.ActionReceiptRecord {
+func sampleReceiptRecord(txID, _ string, actionType string, executedAt time.Time, _ operatorv1.ExecutionStatus) *models.ActionReceiptRecord {
 	return &models.ActionReceiptRecord{
 		TransactionID:     txID,
 		TransactionHash:   "hash-" + txID,
 		OperatorID:        "op-1",
-		OperatorSessionID: sessionID,
+		OperatorSessionID: "sess-1",
 		RequestorUserID:   "user-1",
 		ActingAppID:       "app-1",
 		ActionType:        constants.ActionType(actionType),
 		TargetResource:    "/tmp/file.txt",
-		Status:            status,
+		Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		ResultSummary:     "ok",
 		StateRootBefore:   "root-before",
 		StateRootAfter:    "root-after",

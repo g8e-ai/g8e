@@ -131,6 +131,7 @@ func getContainerStatus(ctx context.Context, containerName string, executor comm
 
 	output, err := executor.CombinedOutput(ctx, "podman", "inspect", containerName)
 	if err != nil {
+		//nolint:nilerr // intentional fallback: inspect error recorded in containerStatusResult
 		return containerStatusResult{
 			ContainerName: containerName,
 			Error:         string(output),

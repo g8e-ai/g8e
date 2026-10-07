@@ -8,7 +8,7 @@
 from datetime import datetime
 
 from app.constants import EventType, InvestigationStatus
-from app.models.base import G8eBaseModel, Field
+from app.models.base import Field, G8eBaseModel
 
 
 class CaseHistoryQuery(G8eBaseModel):

@@ -31,7 +31,7 @@ import (
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, e2e-full, lint, chaos)",
+		Short: "Run test suites (unit, integration, e2e, e2e-docker, lint, chaos)",
 		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Chaos generates governance events for testing.`,
 	}
 
@@ -39,7 +39,7 @@ func Cmd() *cobra.Command {
 		testUnitCmd(),
 		testIntegrationCmd(),
 		testE2ECmd(),
-		testE2EFullCmd(),
+		testE2EDockerCmd(),
 		testCoverageCmd(),
 		testLintCmd(),
 		publicLoopCmd(),
@@ -229,21 +229,26 @@ scenario such as pending enrollment, headless, denial, or cross-enrollment.`,
 	return cmd
 }
 
-func testE2EFullCmd() *cobra.Command {
-	return testE2EFullCmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
+func testE2EDockerCmd() *cobra.Command {
+	return testE2EDockerCmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
 }
 
-// testE2EFullCmdWithRunner constructs the full lifecycle Tier 3 executor.
-// It starts the unified Docker Compose stack, waits for health, runs the E2E tests,
-// and tears down on completion or failure.
-func testE2EFullCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
+// testE2EDockerCmdWithRunner constructs the Docker-backed Tier 3 executor.
+// Docker is optional for the platform itself; this command exists only to run the
+// E2E suite against the Compose stack. It starts the unified Docker Compose stack,
+// waits for health, runs the E2E tests, and tears down on completion or failure.
+func testE2EDockerCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	var runRegexp string
 	var crossEnrollment bool
 
 	cmd := &cobra.Command{
-		Use:   "e2e-full",
-		Short: "Run full lifecycle Tier 3 E2E tests (start compose, test, tear down)",
-		Long: `Start the unified Docker Compose stack (--profile bootstrapped), wait for
+		Use:   "e2e-docker",
+		Short: "Run Tier 3 E2E tests against a Docker Compose stack (requires Docker; start, test, tear down)",
+		Long: `Requires Docker. The g8e platform does not need Docker to run; this command is
+the Docker-backed variant of the Tier 3 suite (use "e2e" against a stack you already
+started by other means).
+
+Start the unified Docker Compose stack (--profile bootstrapped), wait for
 services to become healthy, run the Tier 3 E2E test suite, and tear down
 (docker compose down -v) on completion or failure.
 

@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -20,8 +19,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -34,8 +35,9 @@ type tuiDeps struct {
 	fileSvcFactory       func(string, *slog.Logger) (fs.RuntimeFileService, error)
 	checkOperatorRunning func(*config.Config) error
 	inspectDockerGateway func(context.Context) (dockerContainerState, error)
-	loadCredentials      func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error)
-	buildMTLSClient      func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error)
+	loadAuthContext      func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
+	newSession           func(fs.RuntimeFileService, *config.Config) (tui.Session, error)
+	openBrowser          func(string) error
 	tuiRun               func(context.Context, tui.Options) error
 }
 
@@ -66,10 +68,20 @@ func defaultTUIDeps() tuiDeps {
 		fileSvcFactory:       shared.NewFileSvc,
 		checkOperatorRunning: auth.CheckOperatorRunning,
 		inspectDockerGateway: inspectDockerGateway,
-		loadCredentials:      auth.LoadCredentials,
-		buildMTLSClient:      auth.BuildMTLSClient,
+		loadAuthContext:      auth.LoadClientAuthContext,
+		newSession:           newAPISession,
+		openBrowser:          platform.OpenBrowser,
 		tuiRun:               tui.Run,
 	}
+}
+
+// newAPISession opens the same mTLS API client every other CLI command uses.
+func newAPISession(fileSvc fs.RuntimeFileService, cfg *config.Config) (tui.Session, error) {
+	client, err := api.NewClient(fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 func inspectDockerGateway(ctx context.Context) (dockerContainerState, error) {
@@ -117,29 +129,64 @@ func tuiCmdWithDeps(deps tuiDeps) *cobra.Command {
 		Use:   "tui",
 		Short: "Launch the Tactical Governance Console (TUI)",
 		Long: `Launch the Tactical Governance Console — a real-time terminal UI that
-connects to a running g8e Gateway via SSE and visualizes the execution
-pipeline (L1-L5), Sovereign Audit Ledger, and L2 Consensus.
+connects to a running g8e Gateway over the enrolled CLI session (mTLS + SSE).
+The header shows your CLI identity and the Gateway's governance posture; number
+keys switch the main area between views:
+
+  1 Overview     the execution pipeline (L1-L5), the Sovereign Audit Ledger,
+                 the pending L3 approval queue, and your connected Operators
+  2 Approvals    every pending L3 transaction with its details
+  3 Operators    your connected Operators; press Enter for full heartbeat
+                 details and stop a remote Operator
+  5 Audit        paged audit events, summary totals, and hash-chain verification
+  6 Enrollments  pending platform enrollment requests and completed
+                 enrollments (platform owner only)
+  7 Status       Gateway health, connected Operators, and enrolled workloads
+  8 Recovery     approve or deny a headless CLI recovery request
+
+Pending approvals and enrollments are listed on connect and whenever the
+Gateway reports a change. Approving a transaction opens the same browser
+WebAuthn page as 'g8e auth approve <tx_hash>' and verifies the result.
+Enrollment decisions and revocations make the same mTLS requests as
+'g8e auth enroll approve|deny|revoke', stopping an Operator makes the same
+governed shutdown request as 'g8e operator stop <session_id>', and every one
+asks y/N first.
 
 The Gateway must be running and the CLI must be enrolled (g8e auth enroll user)
-before launching the TUI.
+before launching the TUI. If the CLI session expires, run 'g8e auth refresh'.
 
 Controls:
-  q / Ctrl+C   Quit
-  j / ↓        Scroll ledger down (newer)
-  k / ↑        Scroll ledger up (older)
-  G            Jump to ledger bottom (newest)
-  g            Jump to ledger top (oldest)`,
+  q / Ctrl+C       Quit
+  1 2 3 5 6 7 8    Switch view
+  ?                Show the keys for the current view
+  Tab / Shift+Tab  Focus the next / previous pane (overview: ledger, approvals,
+                   operators; enrollments: pending requests, enrollments)
+  j / ↓, k / ↑     Move in the focused pane (ledger: newer / older)
+  G / g            Jump to ledger bottom (newest) / top (oldest)
+  a / Enter        Approve the selected pending transaction (browser WebAuthn)
+  a / d / x        Enrollments view: approve / deny the selected request,
+                   revoke the selected enrollment
+  Enter            Operators view: show the selected Operator's heartbeat details
+  b / u            Operators view: bind / unbind this CLI session (replacement session)
+  n / p            Audit view: next / previous event page
+  v                Audit view: verify the Gateway audit hash chain
+  j / k            Status view: move through enrolled workloads
+  Tab              Recovery view: toggle approve / deny
+  s                Operators view: stop the selected remote Operator
+  Esc              Return from Operator details to the Operators list
+  y / n, Esc       Confirm / cancel the pending action
+  r                Refresh approvals, operators, enrollments, and posture`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTUI(cmd, args, deps)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runTUI(cmd, deps)
 		},
 	}
 
 	return cmd
 }
 
-func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
+func runTUI(cmd *cobra.Command, deps tuiDeps) error {
 	cfg, err := deps.configLoader("")
 	if err != nil {
 		return fmt.Errorf("tui: load config: %w", err)
@@ -156,40 +203,60 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
-	// Load CLI credentials (must be enrolled).
-	creds, err := deps.loadCredentials(fileSvc, cfg)
+	// Load the enrolled CLI identity with the same validation and errors as
+	// the rest of the CLI.
+	authCtx, err := deps.loadAuthContext(fileSvc, cfg)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-	}
-	if creds == nil {
-		return fmt.Errorf("%w — run 'g8e auth enroll user' first", constants.ErrNotEnrolled)
+		return fmt.Errorf("tui: %w", err)
 	}
 
-	// Build mTLS HTTP client for SSE streaming (no timeout — context-controlled).
-	httpClient, err := deps.buildMTLSClient(fileSvc, cfg, 0)
+	// Open the CLI session: the same mTLS identity, CLI session header, and
+	// SSE stream every other CLI command uses.
+	session, err := deps.newSession(fileSvc, cfg)
 	if err != nil {
-		return fmt.Errorf("tui: build mTLS client: %w", err)
+		return fmt.Errorf("tui: open CLI session: %w", err)
 	}
-
-	// Construct the SSE stream URL. The CLI session ID is sent via the
-	// X-G8E-CLI-Session-ID header (set by the TUI adapter from opts.CLISessionID),
-	// not in the URL query string. The mTLS cert binds user_id at the gateway.
-	sseURL := cfg.OperatorHTTPURL() + constants.APIPaths.SSEStream
 
 	version := cmd.Root().Version
 	if version == "" {
 		version = string(constants.VersionStabilityDev)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	return deps.tuiRun(ctx, tui.Options{
-		Version:      version,
-		NodeName:     creds.OperatorID,
-		NetLabel:     "mTLS",
-		SSEURL:       sseURL,
-		CLISessionID: creds.CLISessionID,
-		HTTPClient:   httpClient,
+		Version: version,
+		Identity: tui.Identity{
+			UserID:            authCtx.UserID,
+			CLISessionID:      authCtx.CLISessionID,
+			OperatorID:        authCtx.OperatorID,
+			OperatorSessionID: authCtx.OperatorSessionID,
+		},
+		Session: session,
+		RebuildSession: func(ctx context.Context, identity tui.Identity) (tui.Session, error) {
+			creds, err := auth.LoadCredentials(fileSvc, cfg)
+			if err != nil {
+				return nil, err
+			}
+			if creds == nil {
+				return nil, constants.ErrNotAuthenticated
+			}
+			creds.UserID = identity.UserID
+			creds.CLISessionID = identity.CLISessionID
+			creds.OperatorID = identity.OperatorID
+			creds.OperatorSessionID = identity.OperatorSessionID
+			if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
+				return nil, err
+			}
+			if _, err := deps.loadAuthContext(fileSvc, cfg); err != nil {
+				return nil, err
+			}
+			return deps.newSession(fileSvc, cfg)
+		},
+		ApprovalURL: func(txHash string) string { return auth.ApprovalPageURL(cfg, txHash) },
+		OpenBrowser: deps.openBrowser,
 	})
 }

@@ -340,7 +340,7 @@ func TestCheckGrammar_ValidatesTerminalSegmentAgainstClosedList(t *testing.T) {
 				return
 			}
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Contains(t, filepath.ToSlash(err.Error()), tt.wantErr)
 		})
 	}
 }
@@ -475,7 +475,7 @@ func TestExecute_ReportsMissingInputRegistries(t *testing.T) {
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, os.ErrNotExist)
-			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Contains(t, filepath.ToSlash(err.Error()), tt.wantErr)
 		})
 	}
 }

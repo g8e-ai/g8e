@@ -7,6 +7,9 @@
 
 """Typed fake for ApprovalServiceProtocol."""
 
+from collections.abc import Callable
+from unittest.mock import MagicMock
+
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.operators import (
     AgentContinueApprovalRequest,
@@ -16,7 +19,13 @@ from app.models.operators import (
     IntentApprovalRequest,
     PendingApproval,
 )
-from app.services.protocols import ApprovalServiceProtocol
+from app.services.protocols import (
+    ApprovalServiceProtocol,
+    InvestigationDataServiceProtocol,
+    OperatorDataServiceProtocol,
+)
+
+from .fake_operator_cache import FakeOperatorCache
 
 
 class FakeApprovalService:
@@ -33,22 +42,26 @@ class FakeApprovalService:
         self.file_edit_approval_calls: list[FileEditApprovalRequest] = []
         self.intent_approval_calls: list[IntentApprovalRequest] = []
         self.agent_continue_approval_calls: list[AgentContinueApprovalRequest] = []
-        self.approval_responses: list[dict] = []
+        self.approval_responses: list[dict[str, object]] = []
         self._pending_approvals: dict[str, PendingApproval] = {}
-        self._on_approval_requested = None
+        self._on_approval_requested: Callable[[str, PendingApproval], None] | None = None
+        self._operator_data_service = FakeOperatorCache()
+        self._investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
 
     @property
-    def operator_data_service(self):
-        return None
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        return self._operator_data_service
 
     @property
-    def investigation_data_service(self):
-        return None
+    def investigation_data_service(self) -> InvestigationDataServiceProtocol:
+        return self._investigation_data_service
 
-    def set_on_approval_requested(self, callback) -> None:
+    def set_on_approval_requested(
+        self, callback: Callable[[str, PendingApproval], None] | None
+    ) -> None:
         self._on_approval_requested = callback
 
-    async def request_stream_approval(self, request) -> ApprovalResult:
+    async def request_stream_approval(self, request: object) -> ApprovalResult:
         return ApprovalResult(approved=self._approved, approval_id=self._approval_id)
 
     async def request_command_approval(self, request: CommandApprovalRequest) -> ApprovalResult:

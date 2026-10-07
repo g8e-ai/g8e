@@ -9,6 +9,8 @@
 Integration test to confirm AI agent thinking capabilities with a puzzle.
 """
 
+from collections import namedtuple
+
 import pytest
 
 import app.llm.llm_types as types
@@ -18,9 +20,13 @@ from app.constants import (
     InvestigationStatus,
     PromptFile,
 )
+from app.llm.factory import get_llm_settings
+from app.llm.prompts import load_prompt
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.model_configs import get_model_config
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from tests.fakes.factories import (
     build_g8e_http_context,
 )
@@ -40,7 +46,6 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     4. Thinking events properly precede text events in the stream.
     5. The final response contains a reasonable answer to the puzzle.
     """
-    from app.llm.factory import get_llm_settings
 
     llm = get_llm_settings()
     if not llm or not llm.primary_model:
@@ -84,12 +89,10 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     )
 
     # Load system prompt
-    from app.llm.prompts import load_prompt
 
     sys_prompt = load_prompt(PromptFile.CORE_IDENTITY)
 
     # Create generation config
-    from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 
     gen_config = AIGenerationConfigBuilder.build_primary_settings(
         model=model_name,
@@ -101,7 +104,6 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     # Create agent inputs (immutable request-scoped data).
     # contents / generation_config / model_to_use live on AgentInputs now so
     # run_with_sse does not re-accept them as separate arguments.
-    from app.models.settings import G8eeUserSettings, LLMSettings
 
     agent_inputs = AgentInputs(
         case_id="case-puzzle-1",
@@ -131,7 +133,6 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         cli_session_id=None,
     ):
         # Construct a mock event object with the structure the test expects
-        from collections import namedtuple
 
         MockEvent = namedtuple("MockEvent", ["event_type", "payload"])
         event = MockEvent(event_type=event_type, payload=payload)

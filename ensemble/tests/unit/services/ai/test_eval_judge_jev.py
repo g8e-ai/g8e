@@ -20,6 +20,7 @@ from app.decision.types import (
 from app.errors import RateLimitError
 from app.services.ai.eval_judge import PASSING_THRESHOLD, EvalJudge, EvalJudgeError
 from tests.fakes.fake_decision_provider import FakeDecisionProvider
+from tests.fakes.fake_llm_provider import FakeLLMProvider
 
 pytestmark = pytest.mark.unit
 
@@ -80,7 +81,7 @@ class TestEvalJudgeJevConstruction:
     def test_rejects_both_providers(self, fake_decision_provider: FakeDecisionProvider):
         with pytest.raises(EvalJudgeError, match="not both"):
             EvalJudge(
-                provider=object(),
+                provider=FakeLLMProvider(),
                 decision_provider=fake_decision_provider,
                 model="nimble",
             )
@@ -106,7 +107,9 @@ class TestEvalJudgeJevHappyPath:
         assert result.model_calls[0].agent_role == "judge"
         assert result.model_calls[0].succeeded is True
 
-    async def test_low_score_fails(self, jev_judge: EvalJudge, fake_decision_provider: FakeDecisionProvider):
+    async def test_low_score_fails(
+        self, jev_judge: EvalJudge, fake_decision_provider: FakeDecisionProvider
+    ):
         fake_decision_provider.add_response(_jev_grade_response(score_index=1.0))
 
         result = await jev_judge.grade_turn(**GRADE_KWARGS)
@@ -142,6 +145,7 @@ class TestEvalJudgeJevHappyPath:
         assert "checkout-api is the failing service" in state
         assert "file_read_on_operator" in state
         questions = fake_decision_provider.last_request["questions"]
+        assert isinstance(questions, dict)
         assert "rubric_score" in questions
         assert "meets_passing_threshold" in questions
 
@@ -198,7 +202,7 @@ class TestEvalJudgeJevErrorPaths:
                 raise RateLimitError("System One rate limit exceeded.", component="ollama")
             return _jev_grade_response()
 
-        fake_decision_provider.evaluate = flaky_evaluate  # type: ignore[method-assign]
+        fake_decision_provider.evaluate = flaky_evaluate
 
         result = await jev_judge.grade_turn(**GRADE_KWARGS)
 

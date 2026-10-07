@@ -161,7 +161,6 @@ func (t *RunShellCommandTool) Execute(ctx context.Context, args json.RawMessage)
 
 // validateCommandSafety checks if a command is safe to execute based on denylist.
 func validateCommandSafety(command string, args []string, workingDir string) error {
-
 	// Check base command
 	cmdBase := command
 	if idx := strings.Index(command, " "); idx >= 0 {

@@ -16,7 +16,7 @@ from app.models.settings import TLSConfig
 class TestDBClientBootstrapAuth:
     async def test_init_uses_operator_session_id(self):
         operator_session_id = "session-456"
-        tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
+        tls_config = TLSConfig.model_validate({"ca_cert_path": "/mock/ca.crt"})
         client = DBClient(tls_config=tls_config, operator_session_id=operator_session_id)
 
         assert client._operator_session_id == operator_session_id

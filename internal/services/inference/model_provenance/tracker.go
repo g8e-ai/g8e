@@ -29,9 +29,10 @@ type TrackerConfig struct {
 // Tracker maintains in-memory active attestation contexts keyed by
 // provider_attempt_id between BEGIN and FINALIZE commands.
 type Tracker struct {
-	cfg    TrackerConfig
-	mu     sync.Mutex
-	active map[string]*trackedAttestation
+	cfg       TrackerConfig
+	mu        sync.Mutex
+	active    map[string]*trackedAttestation
+	hashSlots chan struct{}
 }
 
 type trackedAttestation struct {
@@ -49,7 +50,7 @@ func NewTracker(cfg TrackerConfig) (*Tracker, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Tracker{cfg: cfg, active: make(map[string]*trackedAttestation)}, nil
+	return &Tracker{cfg: cfg, active: make(map[string]*trackedAttestation), hashSlots: make(chan struct{}, constants.ModelProvenanceHashConcurrency)}, nil
 }
 
 // Begin records the expected model binding for one provider attempt.
@@ -102,6 +103,17 @@ func (t *Tracker) Finalize(ctx context.Context, command *evalv1.ModelProvenanceO
 		return nil, fmt.Errorf("model provenance tracker: finalize: missing model binding")
 	}
 
+	// Command delivery is asynchronous. Bound full storage reads so a fast
+	// campaign cannot launch hundreds of competing multi-gigabyte hashes.
+	select {
+	case t.hashSlots <- struct{}{}:
+		defer func() { <-t.hashSlots }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	window, err := t.cfg.Attestor.Attest(ctx, servedModelTag, expectedDigest, t.cfg.Now().UTC())
 	if err != nil {
 		return nil, err

@@ -21,6 +21,7 @@ callback into ``g8e_agent.run_with_sse`` such that:
 
 from __future__ import annotations
 
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -45,6 +46,7 @@ from app.models.http_context import RequestContext
 from app.models.investigations import AIResponseMetadata
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.chat_pipeline import ChatPipelineService
+from app.services.infra.event_service import EventService
 from app.services.investigation.investigation_service import InvestigationService
 from tests.fakes.factories import (
     build_bound_operator,
@@ -67,7 +69,7 @@ HIGH_CONFIDENCE_COMPLEX_TRIAGE = TriageResult(
 
 def _make_pipeline() -> ChatPipelineService:
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.event_service = FakeEventService()
+    svc.event_service = cast(EventService, FakeEventService())
     svc.g8e_agent = MagicMock()
     svc.investigation_service = MagicMock()
     svc.investigation_service.investigation_data_service.add_chat_message = AsyncMock(
@@ -151,10 +153,10 @@ def _make_ctx(
     return inputs, state
 
 
-def _ai_primary_calls(mock_add: AsyncMock) -> list[dict]:
+def _ai_primary_calls(mock_add: AsyncMock) -> list[dict[str, object]]:
     """Return only the AI_PRIMARY add_chat_message invocations."""
     return [
-        call.kwargs
+        dict(call.kwargs)
         for call in mock_add.call_args_list
         if call.kwargs.get("sender") == MessageSender.AI_PRIMARY
     ]
@@ -213,7 +215,7 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
         )
 
     primary_calls = _ai_primary_calls(
-        svc.investigation_service.investigation_data_service.add_chat_message
+        cast(AsyncMock, svc.investigation_service.investigation_data_service.add_chat_message)
     )
     contents = [c["content"] for c in primary_calls]
 
@@ -309,7 +311,7 @@ async def test_final_persist_skipped_when_response_text_is_whitespace_only():
         )
 
     primary_calls = _ai_primary_calls(
-        svc.investigation_service.investigation_data_service.add_chat_message
+        cast(AsyncMock, svc.investigation_service.investigation_data_service.add_chat_message)
     )
     contents = [c["content"] for c in primary_calls]
 
@@ -353,7 +355,7 @@ async def test_iteration_callback_skips_whitespace_only_text():
     contents = [
         c["content"]
         for c in _ai_primary_calls(
-            svc.investigation_service.investigation_data_service.add_chat_message
+            cast(AsyncMock, svc.investigation_service.investigation_data_service.add_chat_message)
         )
     ]
     assert contents == ["Real commentary.", "Final answer."]
@@ -407,7 +409,7 @@ async def test_iteration_callback_passed_to_run_with_sse():
     assert callable(captured["on_iteration_text"])
 
     primary_calls = _ai_primary_calls(
-        svc.investigation_service.investigation_data_service.add_chat_message
+        cast(AsyncMock, svc.investigation_service.investigation_data_service.add_chat_message)
     )
     # Exactly one intermediate row (the callback invocation) plus the final
     # row from _persist_ai_response.

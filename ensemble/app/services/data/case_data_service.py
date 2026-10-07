@@ -6,29 +6,28 @@
 # released under the Apache License, Version 2.0.
 
 import logging
-from typing import TypeVar
 from collections.abc import Awaitable
+from typing import TypeVar
 from uuid import uuid4
 
-T = TypeVar("T")
-
-from app.models.settings import G8eeAppSettings
+from app.clients.governance_client import GovernanceClient
 from app.constants import (
-    CaseStatus,
     DB_COLLECTION_CASES,
     DB_COLLECTION_TASKS,
+    G8EE_COMPONENT,
+    AITaskId,
+    CaseStatus,
     EntityType,
     ErrorCode,
     EventType,
-    G8EE_COMPONENT,
     TaskStatus,
 )
 from app.errors import (
     BusinessLogicError,
     DatabaseError,
+    G8eError,
     ResourceNotFoundError,
     ValidationError,
-    G8eError,
 )
 from app.models import (
     CaseCreateRequest,
@@ -37,13 +36,17 @@ from app.models import (
 )
 from app.models.cache import FieldFilter
 from app.models.cases import CaseModel, HistoryEntry
-from app.models.events import SessionEvent
+from app.models.command_request_payloads import DocumentUpdateRequestPayload
 from app.models.db_queries import CaseHistoryQuery
+from app.models.events import SessionEvent
 from app.models.http_context import RequestContext
+from app.models.pubsub_messages import G8eMessage
+from app.models.settings import G8eeAppSettings
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.event_service import EventService
 from app.utils.time_ids.timestamp import now
-from app.clients.governance_client import GovernanceClient
+
+T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +69,7 @@ class CaseDataService:
         self.tasks_collection = settings.database.tasks_collection or DB_COLLECTION_TASKS
 
     async def _with_error_handling(
-        self, coro: Awaitable[T], action_msg: str, case_id: str, error_code: str
+        self, coro: Awaitable[T], action_msg: str, case_id: str, error_code: ErrorCode
     ) -> T:
         """Helper to centralize database error handling boilerplate."""
         try:
@@ -74,7 +77,7 @@ class CaseDataService:
         except G8eError:
             raise
         except Exception as e:
-            logger.error("Failed to %s %s: %s", action_msg, case_id, e, exc_info=True)
+            logger.exception("Failed to %s %s: %s", action_msg, case_id, e)
             raise DatabaseError(
                 message=f"Failed to {action_msg}: {e}",
                 code=error_code,
@@ -136,10 +139,6 @@ class CaseDataService:
         )
 
         async def _create():
-            from app.models.pubsub_messages import G8eMessage
-            from app.models.command_request_payloads import DocumentUpdateRequestPayload
-            from app.constants import EventType, AITaskId
-
             payload = DocumentUpdateRequestPayload(
                 collection=self.cases_collection,
                 document_id=case_id,
@@ -337,8 +336,6 @@ class CaseDataService:
             return
 
         try:
-            from app.models.http_context import RequestContext
-
             ctx = RequestContext(
                 web_session_id=web_session_id,
                 cli_session_id=cli_session_id,

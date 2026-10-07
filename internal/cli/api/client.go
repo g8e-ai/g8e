@@ -9,9 +9,11 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/sse"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
@@ -97,7 +100,35 @@ func newClient(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string
 	}, nil
 }
 
+// StatusError is a Gateway response with an HTTP error status. It matches
+// constants.ErrHTTPStatusError with errors.Is; use errors.As (or
+// IsUnauthorized) to branch on the status code instead of the rendered text.
+type StatusError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("%s: status %d: %s", constants.ErrHTTPStatusError, e.StatusCode, e.Body)
+}
+
+// Is reports whether target is constants.ErrHTTPStatusError.
+func (e *StatusError) Is(target error) bool {
+	return target == constants.ErrHTTPStatusError
+}
+
+// IsUnauthorized reports whether err carries a Gateway 401: the CLI session
+// is expired or invalid and 'g8e auth refresh' is the recovery path.
+func IsUnauthorized(err error) bool {
+	var statusErr *StatusError
+	return errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusUnauthorized
+}
+
 func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error) {
+	return c.DoRequestContext(context.Background(), method, path, body)
+}
+
+func (c *Client) DoRequestContext(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		bodyBytes, err := json.Marshal(body)
@@ -112,7 +143,7 @@ func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error
 		baseURL = c.cfg.OperatorHTTPURL()
 	}
 	url := baseURL + path
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
@@ -138,7 +169,7 @@ func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
+		return nil, &StatusError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 
 	// Validate response is valid JSON
@@ -163,4 +194,19 @@ func (c *Client) Put(path string, body interface{}) ([]byte, error) {
 
 func (c *Client) Delete(path string) ([]byte, error) {
 	return c.DoRequest("DELETE", path, nil)
+}
+
+// NewSSEClient uses the same mTLS identity and CLI session as API requests.
+// The caller must bound its lifetime with a context and await SetOnConnect
+// before starting work whose ephemeral events it needs to receive.
+func (c *Client) NewSSEClient() *sse.Client {
+	streamHTTP := *c.httpClient
+	streamHTTP.Timeout = 0
+	baseURL := c.baseURL
+	if baseURL == "" {
+		baseURL = c.cfg.OperatorHTTPURL()
+	}
+	stream := sse.NewClient(baseURL+constants.APIPaths.SSEStream+"?since_id=0", &streamHTTP)
+	stream.SetHeader(constants.HeaderCLISessionID, c.creds.CLISessionID)
+	return stream
 }

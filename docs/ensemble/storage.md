@@ -3,8 +3,8 @@ doc_id: ensemble-storage
 title: Ensemble Storage
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - ensemble/app/clients/
   - ensemble/app/services/data/
@@ -48,7 +48,7 @@ Invariant groups: [Document collections and access](#document-collections-and-ac
 
 | ID | Rule |
 | --- | --- |
-| INV-COLLECTIONS-01 | The document store organizes JSON records by collection and identifier. g8ee uses it for cases, investigations, tasks, memories, settings, users, Operator workflow records, certificate-revocation records, agent activity metadata, reputation state and commitments, and stake resolutions. Conversation entries are embedded in investigation documents and linked by entry hashes. |
+| INV-COLLECTIONS-01 | The document store organizes JSON records by collection and identifier. g8ee uses it for cases, investigations, tasks, memories, settings, users, Operator workflow records, certificate-revocation records, agent activity metadata, reputation state and commitments, and stake resolutions. Conversation entries are embedded in investigation documents and linked by entry hashes. Case and investigation `status` fields are typed protocol enums (`CaseStatus`, `InvestigationStatus`); the ensemble models validate them on construction and reject unknown values. |
 | INV-COLLECTIONS-02 | Protected application collections (cases, investigations, tasks, memories, agent_activity_metadata, reputation_state, reputation_commitments, stake_resolutions) require GovernanceEnvelope submission; the Gateway rejects direct mutations with a 409 Conflict redirect to `/api/v1/governance/envelopes`. |
 | INV-COLLECTIONS-03 | Direct-mutation allowed collections (settings, users, operators, operator_sessions, bound_sessions, passkey_challenges, revoked_certificates, trusted_signers, console_audit) bypass governance validation. The api_keys collection is not on this allowlist and requests are rejected. |
 | INV-COLLECTIONS-04 | Authenticated reads retrieve individual records or filter a collection with comparison operators, one ordering field, and a result limit. g8ee applies field projection after the Gateway returns a query and always retains the document `id`. Document replacement overwrites the full stored record; merge updates are applied by the Gateway. |

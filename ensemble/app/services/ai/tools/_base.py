@@ -15,17 +15,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.models.base import G8eBaseModel
+
 if TYPE_CHECKING:
     from app.models.investigations import EnrichedInvestigationContext
 
 
-def convert_args_to_payload[T](
+def convert_args_to_payload[PayloadModel: G8eBaseModel](
     args_dict: dict[str, object],
-    payload_cls: type[T],
+    payload_cls: type[PayloadModel],
     execution_id: str,
     investigation: EnrichedInvestigationContext | None = None,
     **extra_fields: object,
-) -> T:
+) -> PayloadModel:
     """Convert raw LLM tool args into a downstream Payload, injecting ``execution_id``.
 
     Centralises the Args -> Payload conversion so the ``execution_id`` hand-off
@@ -37,8 +39,11 @@ def convert_args_to_payload[T](
     payload_dict = {**args_dict, "execution_id": execution_id, **extra_fields}
 
     # Inject ["all"] for single-operator ergonomics when target_operators is not provided
-    if investigation and len(investigation.bound_operators) == 1:
-        if "target_operators" not in payload_dict or payload_dict["target_operators"] is None:
-            payload_dict["target_operators"] = ["all"]
+    if (
+        investigation
+        and len(investigation.bound_operators) == 1
+        and ("target_operators" not in payload_dict or payload_dict["target_operators"] is None)
+    ):
+        payload_dict["target_operators"] = ["all"]
 
     return payload_cls.model_validate(payload_dict)

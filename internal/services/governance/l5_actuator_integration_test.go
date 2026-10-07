@@ -19,16 +19,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
-	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	"github.com/g8e-ai/g8e/v2/internal/services/storage"
-	"github.com/g8e-ai/g8e/v2/internal/services/vault"
-	"github.com/g8e-ai/g8e/v2/internal/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -70,7 +70,7 @@ func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 	actuator, auditStore := newCommitmentTestActuator(t)
 
 	envelope := &govtypes.GovernanceEnvelope{
-		Id:                uuid.NewString(),
+		Id:                mustUUID(t),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
@@ -125,7 +125,7 @@ func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 	require.NotEmpty(t, commitments[0].WardenIntentSignatureDigest)
 	require.NotEmpty(t, commitments[0].Signature)
 
-	listedReceipts, err := auditStore.ListActionReceipts(envelope.OperatorSessionId, 10, 0)
+	listedReceipts, err := auditStore.ListActionReceipts(models.AuditScope{OperatorSessionID: envelope.OperatorSessionId}, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, listedReceipts, 1)
 	require.True(t, proto.Equal(receipt, listedReceipts[0].ActionReceipt),
@@ -144,7 +144,7 @@ func TestL5ActuatorExecuteCommitmentFailureStopsBeforeHandler(t *testing.T) {
 	actuator.AuditorKeyID = strings.Repeat("0", ed25519.PublicKeySize*2)
 	vt := &VerifiedTransaction{
 		Envelope: &govtypes.GovernanceEnvelope{
-			Id:                uuid.NewString(),
+			Id:                mustUUID(t),
 			TransactionHash:   "test-hash-commitment-failure",
 			OperatorId:        "test-operator",
 			OperatorSessionId: "test-operator-session",

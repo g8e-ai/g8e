@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src/gen/g8e/*/v1/*_pb.ts"]
+}

@@ -154,7 +154,7 @@ func (e *mirrorTestEnv) makeProofIngestRequest(filename string, content []byte) 
 
 // sendIngest sends a batch to the mirror's ingest endpoint and returns the
 // response.
-func (e *mirrorTestEnv) sendIngest(batch models.PublicFeedBatch) (int, models.PublicIngestResponse) {
+func (e *mirrorTestEnv) sendIngest(batch models.PublicFeedBatch) (int, models.PublicIngestResponse) { //nolint:unparam // Keep the HTTP status available for future mirror transport assertions.
 	e.t.Helper()
 	reqBody := models.PublicIngestRequest{Batch: batch}
 	bodyBytes, err := json.Marshal(reqBody)

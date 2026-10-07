@@ -22,11 +22,16 @@ main.py responsibilities:
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from app.constants.generated_paths import PortConstants
 from fastapi import FastAPI
 
+from app.constants.generated_paths import PortConstants
+from app.constants.paths import PATHS, get_app_cert_paths
+from app.errors import ConfigurationError
 from app.main import lifespan
+from app.models.settings import G8eeAppSettings
+from app.services.infra import app_enrollment_service
+from app.services.infra.app_enrollment_service import AppIdentity
+from app.services.service_factory import AllServices
 
 pytestmark = [pytest.mark.unit]
 
@@ -50,7 +55,6 @@ _PATCHES = [
 
 def _build_mocks():
     """Start all patches and return (mocks_dict, patches_list)."""
-    from app.services.infra.app_enrollment_service import AppIdentity
 
     patches = [patch(p) for p in _PATCHES]
     mocks = {}
@@ -67,7 +71,6 @@ def _build_mocks():
     # Mock both paths: load_identity as a sync method that raises, enroll as
     # an async method that returns an AppIdentity with the cert/key/ca paths
     # that TLSConfig and the operator clients are built from.
-    from app.errors import ConfigurationError
 
     app_identity = AppIdentity(
         app_id="test-app-id",
@@ -75,22 +78,18 @@ def _build_mocks():
         key_path="/tmp/test-app-key.pem",
         ca_cert_path="/tmp/test-ca-bundle.pem",
     )
-    mocks["AppEnrollmentService"].return_value.load_identity.side_effect = (
-        ConfigurationError("no existing cert")
+    mocks["AppEnrollmentService"].return_value.load_identity.side_effect = ConfigurationError(
+        "no existing cert"
     )
-    mocks["AppEnrollmentService"].return_value.enroll = AsyncMock(
-        return_value=app_identity
-    )
+    mocks["AppEnrollmentService"].return_value.enroll = AsyncMock(return_value=app_identity)
 
     return mocks, patches
 
 
 def _configure_settings(mocks):
     """Wire up SettingsService + initialize_g8e_service to return a usable mock settings."""
-    from app.constants.paths import get_app_cert_paths, PATHS
-    from app.models.settings import G8eeAppSettings
 
-    settings = G8eeAppSettings()
+    settings = G8eeAppSettings.model_validate({})
     cert_path, key_path = get_app_cert_paths()
     settings._ca_cert_path = PATHS["infra"]["ca_cert_path"]
     settings._client_cert_path = cert_path
@@ -111,7 +110,6 @@ def _configure_settings(mocks):
 
 def _configure_factory(mocks):
     """Set up ServiceFactory.create_all_services / bind / start / stop."""
-    from app.services.service_factory import AllServices
 
     factory = mocks["ServiceFactory"]
 
@@ -250,12 +248,10 @@ class TestLifespanEnrollmentFailsClosed:
     """Startup never continues without an enrolled identity issued by the gateway."""
 
     def test_no_self_issued_identity_path_exists(self):
-        from app.services.infra import app_enrollment_service
 
         assert not hasattr(app_enrollment_service.AppEnrollmentService, "enroll_test_identity")
 
     async def test_enrollment_failure_aborts_startup(self, mock_app):
-        from app.errors import ConfigurationError
 
         mocks, patches = _build_mocks()
         _configure_settings(mocks)
@@ -275,10 +271,7 @@ class TestLifespanEnrollmentFailsClosed:
             for p in patches:
                 p.stop()
 
-    async def test_enrollment_failure_after_ca_bundle_fetch_failure_aborts_startup(
-        self, mock_app
-    ):
-        from app.errors import ConfigurationError
+    async def test_enrollment_failure_after_ca_bundle_fetch_failure_aborts_startup(self, mock_app):
 
         mocks, patches = _build_mocks()
         _configure_settings(mocks)
@@ -340,10 +333,10 @@ class TestLifespanShutdown:
             async with lifespan(mock_app):
                 pass
 
-            assert (
-                not hasattr(mock_app.state, "heartbeat_client")
-                or not getattr(mock_app.state.heartbeat_client, "close", MagicMock()).called
+            heartbeat_close = getattr(
+                getattr(mock_app.state, "heartbeat_client", None), "close", None
             )
+            assert not isinstance(heartbeat_close, MagicMock) or not heartbeat_close.called
         finally:
             for p in patches:
                 p.stop()

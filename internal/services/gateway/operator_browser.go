@@ -80,7 +80,7 @@ func (c *OperatorController) handleBrowserGetOperator(w http.ResponseWriter, r *
 		c.responder.Error(w, http.StatusForbidden, constants.ErrRegistrationOperatorNotBelongToUser.Error())
 		return
 	}
-	withResolvedOperatorRole(op)
+	withResolvedOperatorRoles(op)
 	c.responder.JSON(w, http.StatusOK, op)
 }
 

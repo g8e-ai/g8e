@@ -55,7 +55,7 @@ func (i *CommitmentImporter) Import(ctx context.Context) ([]EvidenceNode, error)
 		return nil, err
 	}
 	_, digest, _ := ParseExpectedContentReference(i.binding.Reference, constants.CommitmentReferencePrefix)
-	result, err := ReadAndDigest(i.reader, ctx, i.binding.Path, constants.DemoRunMaxArtifactBytes)
+	result, err := ReadAndDigest(i.reader, ctx, i.binding.Path, maxArtifactBytes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %w", constants.ErrEvidenceImporterFailed, i.binding.Path, err)
 	}

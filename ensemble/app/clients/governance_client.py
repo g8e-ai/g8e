@@ -24,24 +24,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-import logging
 import json
+import logging
 import secrets
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import aiohttp
-
-from g8e.registry import action_for
-from app.models.pubsub_messages import G8eMessage
-from app.models.reputation import ReputationSignRequest, ReputationSignResponse
-from app.models.settings import GatewaySettings, TLSConfig
-from app.services.infra.settings_service import SettingsService
-from app.constants import AUTHORIZATION, GatewayAPIPaths
-from app.constants.config import G8EE_COMPONENT
-from app.errors import G8eError, NetworkError, ValidationError, ErrorCode, ErrorCategory
-from app.utils.aiohttp_session import create_component_http_session
+from cryptography import x509
 from g8e.models.governance import (
     GovernanceEnvelope,
     GovernanceL2,
@@ -50,6 +41,20 @@ from g8e.models.governance import (
     GovernanceMetadata,
     compute_transaction_hash,
 )
+from g8e.registry import action_for
+
+from app.constants import AUTHORIZATION, EventType, GatewayAPIPaths
+from app.constants.config import G8EE_COMPONENT
+from app.errors import ErrorCategory, ErrorCode, G8eError, NetworkError, ValidationError
+from app.models.command_request_payloads import (
+    DocumentDeleteRequestPayload,
+    DocumentUpdateRequestPayload,
+)
+from app.models.pubsub_messages import G8eMessage
+from app.models.reputation import ReputationSignRequest, ReputationSignResponse
+from app.models.settings import GatewaySettings, TLSConfig
+from app.services.infra.settings_service import SettingsService
+from app.utils.aiohttp_session import create_component_http_session
 
 logger = logging.getLogger(__name__)
 
@@ -421,9 +426,7 @@ class GovernanceClient:
         if not self._client_cert_path:
             return None
         try:
-            from cryptography import x509
-
-            with open(self._client_cert_path, "rb") as f:
+            with Path(self._client_cert_path).open("rb") as f:
                 cert = x509.load_pem_x509_certificate(f.read())
             for ext in cert.extensions:
                 if isinstance(ext.value, x509.SubjectAlternativeName):
@@ -482,6 +485,35 @@ class GovernanceClient:
 
         return self._operator_identity_cache
 
+    def _bind_operator_identity(self, message: G8eMessage) -> G8eMessage:
+        """Normalize the operator identity carried by ``message`` for its action type."""
+        action_type = action_for(message.event_type)
+        if action_type in ("DOCUMENT_UPDATE", "DOCUMENT_DELETE"):
+            # App document mutations must remain unbound under INV-AUTH-ID-05 and
+            # INV-GOV-WARD-07 so they execute through the Gateway's embedded operator.
+            if message.operator_id or message.operator_session_id:
+                return message.model_copy(
+                    update={"operator_id": None, "operator_session_id": None}
+                )
+            return message
+        if message.operator_id and message.operator_session_id:
+            return message
+        # Inject the operator transport identity (operator_id +
+        # operator_session_id) when the message omits either field for host actions.
+        cert_op_id, cert_op_session = self._resolve_operator_identity_from_cert()
+        updates: dict[str, str | None] = {}
+        if not message.operator_id and cert_op_id:
+            updates["operator_id"] = cert_op_id
+        if not message.operator_session_id and cert_op_session:
+            updates["operator_session_id"] = cert_op_session
+        if updates:
+            return message.model_copy(update=updates)
+        if not message.operator_session_id and self._operator_session_id:
+            # Fall back to the constructor-provided session ID when the
+            # cert has no SPIFFE URI SAN (e.g. app cert fallback path).
+            return message.model_copy(update={"operator_session_id": self._operator_session_id})
+        return message
+
     async def submit_envelope(
         self,
         message: G8eMessage,
@@ -517,31 +549,7 @@ class GovernanceClient:
             NetworkError: If the HTTP request fails
             ValidationError: If the envelope is rejected by governance gates
         """
-        action_type = action_for(message.event_type)
-        if action_type in ("DOCUMENT_UPDATE", "DOCUMENT_DELETE"):
-            # App document mutations must remain unbound under INV-AUTH-ID-05 and
-            # INV-GOV-WARD-07 so they execute through the Gateway's embedded operator.
-            if message.operator_id or message.operator_session_id:
-                message = message.model_copy(
-                    update={"operator_id": None, "operator_session_id": None}
-                )
-        # Inject the operator transport identity (operator_id +
-        # operator_session_id) when the message omits either field for host actions.
-        elif not message.operator_id or not message.operator_session_id:
-            cert_op_id, cert_op_session = self._resolve_operator_identity_from_cert()
-            updates: dict[str, str | None] = {}
-            if not message.operator_id and cert_op_id:
-                updates["operator_id"] = cert_op_id
-            if not message.operator_session_id and cert_op_session:
-                updates["operator_session_id"] = cert_op_session
-            if updates:
-                message = message.model_copy(update=updates)
-            elif not message.operator_session_id and self._operator_session_id:
-                # Fall back to the constructor-provided session ID when the
-                # cert has no SPIFFE URI SAN (e.g. app cert fallback path).
-                message = message.model_copy(
-                    update={"operator_session_id": self._operator_session_id}
-                )
+        message = self._bind_operator_identity(message)
 
         async with self._submission_lock:
             # Retry loop: re-fetch the state root on TX_STATE_MISMATCH. The state
@@ -633,10 +641,14 @@ class GovernanceClient:
                 component="g8ee",
             )
 
-    async def sign_reputation_commitment(self, request: ReputationSignRequest) -> ReputationSignResponse:
+    async def sign_reputation_commitment(
+        self, request: ReputationSignRequest
+    ) -> ReputationSignResponse:
         """Ask the Gateway to sign a reputation claim without exporting its key."""
         if not self._client_cert_path or not self._client_key_path:
-            raise ValidationError("app mTLS credentials required for reputation signing", component="g8ee")
+            raise ValidationError(
+                "app mTLS credentials required for reputation signing", component="g8ee"
+            )
         try:
             session = await self._get_http_session()
             async with session.post(
@@ -644,17 +656,21 @@ class GovernanceClient:
                 json=request.model_dump(mode="json"),
             ) as response:
                 if response.status != 200:
-                    raise NetworkError(f"Gateway reputation signing HTTP {response.status}", component="g8ee")
+                    raise NetworkError(
+                        f"Gateway reputation signing HTTP {response.status}", component="g8ee"
+                    )
                 return ReputationSignResponse.model_validate(await response.json())
         except aiohttp.ClientError as exc:
-            raise NetworkError("Gateway reputation signing failed", component="g8ee", cause=exc) from exc
+            raise NetworkError(
+                "Gateway reputation signing failed", component="g8ee", cause=exc
+            ) from exc
 
     async def update_governed_doc(
         self,
         collection: str,
         document_id: str,
         updates: dict[str, Any],
-        event_type: str,
+        event_type: EventType,
         *,
         case_id: str | None = None,
         investigation_id: str | None = None,
@@ -688,9 +704,6 @@ class GovernanceClient:
             NetworkError: If the HTTP request fails
             ValidationError: If the envelope is rejected by governance gates
         """
-        from app.models.pubsub_messages import G8eMessage
-        from app.models.command_request_payloads import DocumentUpdateRequestPayload
-
         payload = DocumentUpdateRequestPayload(
             collection=collection,
             document_id=document_id,
@@ -718,7 +731,7 @@ class GovernanceClient:
         self,
         collection: str,
         document_id: str,
-        event_type: str,
+        event_type: EventType,
         *,
         case_id: str | None = None,
         investigation_id: str | None = None,
@@ -749,9 +762,6 @@ class GovernanceClient:
             NetworkError: If the HTTP request fails
             ValidationError: If the envelope is rejected by governance gates
         """
-        from app.models.pubsub_messages import G8eMessage
-        from app.models.command_request_payloads import DocumentDeleteRequestPayload
-
         payload = DocumentDeleteRequestPayload(
             collection=collection,
             document_id=document_id,

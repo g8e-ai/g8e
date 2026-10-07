@@ -33,6 +33,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
@@ -252,6 +253,9 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	reg := NewRegistrationService(docStore, kvStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	if err := reg.UpdateOperatorRuntimeConfig(string(constants.DocIDEmbeddedOperator), &models.RuntimeConfig{Roles: cfg.EffectiveOperatorRoles(), HTTPPort: cfg.HTTPPort, LocalDir: cfg.WorkDir, InferenceEnabled: cfg.Inference.Enabled, InferenceOllamaEndpoint: cfg.Inference.OllamaEndpoint, ProvenanceOperatorEnabled: cfg.ProvenanceOperator.Enabled, ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperator.ModelStorageRoot, ProviderBoundaryObserverEnabled: cfg.ProviderBoundaryObserver.Enabled}); err != nil {
+		return nil, fmt.Errorf("gateway: embedded runtime config: %w", err)
+	}
 
 	// --- Passkey ---
 	passkeyCfg := &PasskeyConfig{
@@ -365,6 +369,14 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		execSvc := execution.NewExecutionService(cfg, embeddedOperatorLogger)
 		fileEditSvc := execution.NewFileEditService(cfg, embeddedOperatorLogger)
 		loopbackClient := pubsub.NewInProcessPubSubClient(wsHandler, embeddedOperatorLogger)
+		results, err := pubsub.NewPubSubResultsService(cfg, embeddedOperatorLogger, loopbackClient)
+		if err != nil {
+			return nil, fmt.Errorf("gateway: operator results: %w", err)
+		}
+		handlers, err := pubsub.NewRoleHandlers(cfg, embeddedOperatorLogger, b.fileSvc, scrubbingService, results, nil)
+		if err != nil {
+			return nil, fmt.Errorf("gateway: embedded role handlers: %w", err)
+		}
 
 		govModeDeps := &pubsub.GatewayModeDeps{
 			GovernanceCoreDeps:     govCore,
@@ -378,17 +390,22 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 		cmdSvc, err = pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
 			CommandServiceConfig: pubsub.CommandServiceConfig{
-				Config:             cfg,
-				Logger:             embeddedOperatorLogger,
-				Execution:          execSvc,
-				FileEdit:           fileEditSvc,
-				PubSubClient:       loopbackClient,
-				AuditStore:         auditStore,
-				Scrubbing:          scrubbingService,
-				ActuatorSigningKey: actuatorPriv,
-				ActuatorKeyID:      actuatorKeyID,
-				AuditorSigningKey:  auditorPriv,
-				AuditorKeyID:       auditorKeyID,
+				Config:                   cfg,
+				ResultsService:           results,
+				Inference:                handlers.Inference,
+				InferenceAttemptStore:    handlers.InferenceAttemptStore,
+				ProviderBoundaryObserver: handlers.ProviderBoundaryObserver,
+				ModelProvenanceOperator:  handlers.ModelProvenanceOperator,
+				Logger:                   embeddedOperatorLogger,
+				Execution:                execSvc,
+				FileEdit:                 fileEditSvc,
+				PubSubClient:             loopbackClient,
+				AuditStore:               auditStore,
+				Scrubbing:                scrubbingService,
+				ActuatorSigningKey:       actuatorPriv,
+				ActuatorKeyID:            actuatorKeyID,
+				AuditorSigningKey:        auditorPriv,
+				AuditorKeyID:             auditorKeyID,
 			},
 			GovDeps: govModeDeps,
 		})
@@ -465,7 +482,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// L2 signatures). Under postures that require L3 proof (ratify, notary),
 	// mutation dispatches are rejected at envelope construction because the
 	// gateway dispatch path cannot mint human proofs.
-	dispatchSvc := NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture), doctrine, l2Deliberator, signerStore)
+	dispatchSvc := NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture), doctrine, l2Deliberator, signerStore, cmdSvc)
 	inferenceDispatchSvc := dispatch.NewDispatchService(
 		&gatewayDispatcherAdapter{svc: dispatchSvc},
 		&gatewayOperatorListerAdapter{svc: reg},
@@ -636,7 +653,7 @@ func resolveFullCertificateIdentity(identityFile string, detector networkIdentit
 	if err != nil {
 		logger.Warn("Failed to detect full network identity, falling back to basic IP detection", "error", err)
 		extraIPs := detectBasicNonLoopbackIPv4Addresses()
-		return extraIPs, nil, nil
+		return extraIPs, []string{"localhost"}, nil
 	}
 
 	extraIPs := netIdentity.GetAllIPs()
@@ -691,6 +708,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
 	modelProvenanceDeps.ProvenanceCoordinator = ls.modelProvenanceCoord
+	modelProvenanceDeps.ProgressPublisher = NewSSEEventPublisher(ls.sseStore, ls.pubsub)
 
 	proxySigner, err := ls.newBrowserProxySigner()
 	if err != nil {
@@ -957,8 +975,12 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	// Browser clients (console, WebAuthn flows) reach public routes without a client cert.
 	tlsConfig := pki.TLSConfig()
 	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
+	listenHost := cfg.Gateway.ListenHost
+	if listenHost == "" {
+		listenHost = "0.0.0.0"
+	}
 	ls.server = &http.Server{
-		Addr:              fmt.Sprintf("0.0.0.0:%d", cfg.Gateway.HTTPPort),
+		Addr:              net.JoinHostPort(listenHost, strconv.Itoa(cfg.Gateway.HTTPPort)),
 		Handler:           ls.handler.buildHTTPRouter(),
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
@@ -969,7 +991,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 
 	// HTTPS server: mTLS for all routes (API, public, enrollment)
 	ls.publicServer = &http.Server{
-		Addr:              fmt.Sprintf("0.0.0.0:%d", cfg.Gateway.HTTPSPort),
+		Addr:              net.JoinHostPort(listenHost, strconv.Itoa(cfg.Gateway.HTTPSPort)),
 		Handler:           ls.handler,
 		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
@@ -1255,7 +1277,7 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		}
 
 		// Update server Addr if it was dynamic
-		if s.Addr == "0.0.0.0:0" {
+		if _, port, _ := net.SplitHostPort(s.Addr); port == "0" {
 			s.Addr = ln.Addr().String()
 		}
 
@@ -1302,7 +1324,7 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 	}()
 
 	// Listen for context cancellation and trigger shutdown
-	// nolint:gosec // G118: ctx is already cancelled, need fresh context for shutdown timeout
+	//nolint:gosec // G118: ctx is already cancelled, need fresh context for shutdown timeout
 	go func() {
 		<-ctx.Done()
 		ls.logger.Info("Context cancelled, initiating server shutdown")

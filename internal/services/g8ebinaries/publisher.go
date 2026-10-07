@@ -128,7 +128,7 @@ func extractArchive(reader io.Reader, root string) error {
 		if header.Size < 0 || header.Size > maxExportArtifactSize {
 			return fmt.Errorf("%w: entry %q exceeds size limit", constants.ErrG8eBinaryArchive, name)
 		}
-		if _, ok := targetByFilename(name); !ok && name != constants.G8eBinariesManifestFilename {
+		if !isSupportedArtifactFilename(name) && name != constants.G8eBinariesManifestFilename {
 			return fmt.Errorf("%w: unsupported entry %q", constants.ErrG8eBinaryArchive, name)
 		}
 		path := filepath.Join(root, name)

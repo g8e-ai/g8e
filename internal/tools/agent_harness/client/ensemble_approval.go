@@ -199,6 +199,7 @@ type ensembleApprovalResponse struct {
 func (a *ApprovalAutoApprover) handleSSEEvent(ctx context.Context, eventType, data string) error {
 	var payload models.SSEPushPayload
 	if err := json.Unmarshal([]byte(data), &payload); err != nil {
+		//nolint:nilerr // intentional fallback: ignore unparseable SSE frame
 		return nil
 	}
 
@@ -210,6 +211,7 @@ func (a *ApprovalAutoApprover) handleSSEEvent(ctx context.Context, eventType, da
 		Data json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(payload.Event, &wire); err != nil {
+		//nolint:nilerr // intentional fallback: ignore non-matching wire event
 		return nil
 	}
 
@@ -229,6 +231,7 @@ func (a *ApprovalAutoApprover) handleSSEEvent(ctx context.Context, eventType, da
 	var approvalData ensembleFileEditApproval
 
 	if err := json.Unmarshal(wire.Data, &approvalData); err != nil {
+		//nolint:nilerr // intentional fallback: ignore unparseable approval payload
 		return nil
 	}
 	if approvalData.ApprovalID == "" {

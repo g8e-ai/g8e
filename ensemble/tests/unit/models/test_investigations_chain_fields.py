@@ -6,9 +6,9 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
+from g8e.enums import HistoryActor
 
 from app.constants import EventType
-from g8e.enums import HistoryActor
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,
@@ -38,10 +38,9 @@ def test_conversation_history_message_with_hash_fields():
 
 def test_conversation_history_message_without_hash_fields():
     """ConversationHistoryMessage requires prev_hash and entry_hash (no backward compat in ephemeral architecture)."""
-    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
-        ConversationHistoryMessage(
-            sender="user.chat",
-            content="Test message",
+    with pytest.raises(ValueError, match=r"prev_hash|entry_hash"):
+        ConversationHistoryMessage.model_validate(
+            {"sender": "user.chat", "content": "Test message"}
         )
 
 
@@ -77,7 +76,7 @@ def test_conversation_history_message_round_trip_without_hashes():
         "metadata": {},
     }
 
-    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+    with pytest.raises(ValueError, match=r"prev_hash|entry_hash"):
         ConversationHistoryMessage.model_validate(original_data)
 
 
@@ -105,12 +104,14 @@ def test_investigation_history_entry_with_hash_fields():
 
 def test_investigation_history_entry_without_hash_fields():
     """InvestigationHistoryEntry requires prev_hash and entry_hash (no backward compat in ephemeral architecture)."""
-    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
-        InvestigationHistoryEntry(
-            attempt_number=1,
-            event_type=EventType.APP_INVESTIGATION_CREATED,
-            actor=HistoryActor.SYSTEM,
-            summary="Test entry",
+    with pytest.raises(ValueError, match=r"prev_hash|entry_hash"):
+        InvestigationHistoryEntry.model_validate(
+            {
+                "attempt_number": 1,
+                "event_type": EventType.APP_INVESTIGATION_CREATED,
+                "actor": HistoryActor.SYSTEM,
+                "summary": "Test entry",
+            }
         )
 
 
@@ -148,7 +149,7 @@ def test_investigation_history_entry_round_trip_without_hashes():
         "details": {},
     }
 
-    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+    with pytest.raises(ValueError, match=r"prev_hash|entry_hash"):
         InvestigationHistoryEntry.model_validate(original_data)
 
 
@@ -163,16 +164,15 @@ def test_hash_field_validation_length():
         entry_hash=valid_hash,
     )
 
+    assert message.prev_hash is not None
+    assert message.entry_hash is not None
     assert len(message.prev_hash) == 64
     assert len(message.entry_hash) == 64
 
 
 def test_hash_field_accepts_none():
     """Hash fields do not accept None (no backward compat in ephemeral architecture)."""
-    with pytest.raises(ValueError):
-        ConversationHistoryMessage(
-            sender="user.chat",
-            content="Test",
-            prev_hash=None,
-            entry_hash=None,
+    with pytest.raises(ValueError, match=r"valid string"):
+        ConversationHistoryMessage.model_validate(
+            {"sender": "user.chat", "content": "Test", "prev_hash": None, "entry_hash": None}
         )

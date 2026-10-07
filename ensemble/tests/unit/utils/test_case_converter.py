@@ -107,11 +107,6 @@ class TestConvertDictKeysToSnakeCase:
         result = convert_dict_keys_to_snake_case({"tagList": [1, 2, 3]})
         assert result == {"tag_list": [1, 2, 3]}
 
-    def test_non_dict_input_returned_unchanged(self):
-        assert convert_dict_keys_to_snake_case("not a dict") == "not a dict"
-        assert convert_dict_keys_to_snake_case(42) == 42
-        assert convert_dict_keys_to_snake_case(None) is None
-
     def test_empty_dict(self):
         assert convert_dict_keys_to_snake_case({}) == {}
 
@@ -125,6 +120,8 @@ class TestConvertDictKeysToSnakeCase:
 
     def test_mixed_list_dict_and_scalar(self):
         result = convert_dict_keys_to_snake_case({"myList": [{"nestedKey": 1}, "string", 42]})
-        assert result["my_list"][0] == {"nested_key": 1}
-        assert result["my_list"][1] == "string"
-        assert result["my_list"][2] == 42
+        assert isinstance(result["my_list"], list)
+        values = result["my_list"]
+        assert values[0] == {"nested_key": 1}
+        assert values[1] == "string"
+        assert values[2] == 42

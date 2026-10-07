@@ -16,6 +16,7 @@ import pytest
 
 from app.constants import EventType
 from app.models.events import SSE_PAYLOADS
+
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]

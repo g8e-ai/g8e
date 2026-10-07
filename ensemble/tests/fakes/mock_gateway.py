@@ -47,18 +47,23 @@ import asyncio
 import datetime
 import fnmatch
 import logging
-import os
+import shutil
 import ssl
 import tempfile
+from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
 import aiohttp
 from aiohttp import web
-
-from app.constants import GatewayAPIPaths, PubSubAction, PubSubWireEventType
-from app.models.settings import GatewaySettings, TLSConfig
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent, PubSubMessage
+
+from app.constants import CACHE_TTL_DEFAULT, GatewayAPIPaths, PubSubAction, PubSubWireEventType
+from app.models.settings import GatewaySettings, TLSConfig
 
 logger = logging.getLogger(__name__)
 
@@ -73,18 +78,15 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
 
     Returns (ca_cert_path, server_cert_path, server_key_path).
     """
-    from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.x509.oid import NameOID
-
     now = datetime.datetime.now(datetime.UTC)
 
     # --- CA ---
     ca_key = ec.generate_private_key(ec.SECP256R1())
-    ca_subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, "g8e-test-mock-ca"),
-    ])
+    ca_subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "g8e-test-mock-ca"),
+        ]
+    )
     ca_cert = (
         x509.CertificateBuilder()
         .subject_name(ca_subject)
@@ -100,15 +102,17 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
         .sign(ca_key, hashes.SHA256())
     )
 
-    ca_path = os.path.join(tmpdir, "ca.pem")
-    with open(ca_path, "wb") as f:
+    ca_path = Path(tmpdir) / "ca.pem"
+    with ca_path.open("wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     # --- Server cert signed by CA ---
     server_key = ec.generate_private_key(ec.SECP256R1())
-    server_subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
-    ])
+    server_subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+        ]
+    )
     server_cert = (
         x509.CertificateBuilder()
         .subject_name(server_subject)
@@ -118,21 +122,23 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
         .not_valid_before(now - datetime.timedelta(days=1))
         .not_valid_after(now + datetime.timedelta(days=365))
         .add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName("localhost"),
-                x509.IPAddress(__import__("ipaddress").ip_address("127.0.0.1")),
-            ]),
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(__import__("ipaddress").ip_address("127.0.0.1")),
+                ]
+            ),
             critical=False,
         )
         .sign(ca_key, hashes.SHA256())
     )
 
-    cert_path = os.path.join(tmpdir, "server.pem")
-    with open(cert_path, "wb") as f:
+    cert_path = Path(tmpdir) / "server.pem"
+    with cert_path.open("wb") as f:
         f.write(server_cert.public_bytes(serialization.Encoding.PEM))
 
-    key_path = os.path.join(tmpdir, "server.key")
-    with open(key_path, "wb") as f:
+    key_path = Path(tmpdir) / "server.key"
+    with key_path.open("wb") as f:
         f.write(
             server_key.private_bytes(
                 serialization.Encoding.PEM,
@@ -141,7 +147,7 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
             )
         )
 
-    return ca_path, cert_path, key_path
+    return str(ca_path), str(cert_path), str(key_path)
 
 
 # ---------------------------------------------------------------------------
@@ -216,6 +222,8 @@ class _DocStore:
         docs = list(self._col(collection).values())
         for f in filters or []:
             field = f.get("field")
+            if not isinstance(field, str):
+                continue
             op = f.get("op", "==")
             value = f.get("value")
             if op == "==":
@@ -390,7 +398,11 @@ class MockGateway:
 
     @property
     def tls_config(self) -> TLSConfig:
-        return TLSConfig(ca_cert_path=self._ca_cert_path)
+        return TLSConfig(
+            ca_cert_path=self._ca_cert_path,
+            client_cert_path=None,
+            client_key_path=None,
+        )
 
     @property
     def gateway_settings(self) -> GatewaySettings:
@@ -399,6 +411,8 @@ class MockGateway:
             http_url=base,
             pubsub_url=f"wss://localhost:{self._port}",
             blob_url=base,
+            default_ttl=CACHE_TTL_DEFAULT,
+            enable_cache_read=False,
         )
 
     @property
@@ -431,8 +445,9 @@ class MockGateway:
         await self._site.start()
 
         # Discover the actual port
-        sockets = self._site._server.sockets
-        self._port = sockets[0].getsockname()[1]
+        if self._runner is None or not self._runner.addresses:
+            raise RuntimeError("Mock gateway server did not expose a listening socket")
+        self._port = self._runner.addresses[0][1]
         logger.info("[MOCK-GATEWAY] Listening on https://localhost:%d", self._port)
 
     async def stop(self) -> None:
@@ -441,8 +456,6 @@ class MockGateway:
             self._runner = None
             self._site = None
         # Clean up temp dir
-        import shutil
-
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     # ------------------------------------------------------------------
@@ -456,8 +469,12 @@ class MockGateway:
         # DB endpoints (GatewayAPIPaths.DATA_DB = "/api/v1/data/")
         app.router.add_get(GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_get)
         app.router.add_put(GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_put)
-        app.router.add_patch(GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_patch)
-        app.router.add_delete(GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_delete)
+        app.router.add_patch(
+            GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_patch
+        )
+        app.router.add_delete(
+            GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_delete
+        )
         app.router.add_post(GatewayAPIPaths.DATA_DB + "{collection}/_query", self._handle_db_query)
 
         # KV endpoints (GatewayAPIPaths.KV_PREFIX = "/api/v1/kv/")
@@ -467,13 +484,23 @@ class MockGateway:
         app.router.add_put(GatewayAPIPaths.KV_PREFIX + "{key}/_expire", self._handle_kv_expire)
         app.router.add_get(GatewayAPIPaths.KV_PREFIX + "{key}/_ttl", self._handle_kv_ttl)
         app.router.add_post(GatewayAPIPaths.KV_PREFIX + "_keys", self._handle_kv_keys)
-        app.router.add_post(GatewayAPIPaths.KV_PREFIX + "_delete_pattern", self._handle_kv_delete_pattern)
+        app.router.add_post(
+            GatewayAPIPaths.KV_PREFIX + "_delete_pattern", self._handle_kv_delete_pattern
+        )
 
         # Blob endpoints (GatewayAPIPaths.DATA_BLOBS_PREFIX = "/api/v1/blobs/")
-        app.router.add_put(GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_put)
-        app.router.add_get(GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_get)
-        app.router.add_delete(GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_delete)
-        app.router.add_delete(GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}", self._handle_blob_delete_ns)
+        app.router.add_put(
+            GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_put
+        )
+        app.router.add_get(
+            GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_get
+        )
+        app.router.add_delete(
+            GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}/{blob_id}", self._handle_blob_delete
+        )
+        app.router.add_delete(
+            GatewayAPIPaths.DATA_BLOBS_PREFIX + "{namespace}", self._handle_blob_delete_ns
+        )
 
         # WebSocket pub/sub (GatewayAPIPaths.PUBSUB_STREAM = "/api/v1/pubsub/stream")
         app.router.add_get(GatewayAPIPaths.PUBSUB_STREAM, self._handle_ws_pubsub)

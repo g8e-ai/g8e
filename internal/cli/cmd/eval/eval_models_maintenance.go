@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
-	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
 type governedModelMaintenanceEnv struct {
@@ -28,7 +27,7 @@ type governedModelMaintenanceEnv struct {
 }
 
 // resolveGovernedModelMaintenance targets provider maintenance at the inference
-// operator and the stack's data-operator.
+// operator.
 func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (governedModelMaintenanceEnv, error) {
 	chatDeps := deps.chatDeps()
 	cfg, fileSvc, authContext, err := chatEvalEnvironment(cmd, chatDeps)
@@ -39,7 +38,7 @@ func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (g
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	sessions, err := resolveOperatorSessionsFrom(operators, operatorRoleInference, operatorRoleData)
+	sessions, err := resolveOperatorSessionsFrom(operators, operatorRoleInference)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
@@ -47,15 +46,11 @@ func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (g
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	dataOperator, err := operatorcapability.SelectDataOperator(operators)
+	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, chatDeps)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatDeps)
-	if err != nil {
-		return governedModelMaintenanceEnv{}, err
-	}
-	prefixedNewID := func(prefix string) string { return prefix + "-" + deps.newID() }
+	prefixedNewID := adaptNewID(deps.newID)
 	inferenceSessionID := sessions.InferenceSessionID
 	return governedModelMaintenanceEnv{
 		Maintenance: evaluation.OllamaModelMaintenanceContext{

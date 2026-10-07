@@ -94,8 +94,12 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
+			providerAttemptID, err := deps.newID()
+			if err != nil {
+				return fmt.Errorf("evaluation: gates inference: %w", err)
+			}
 			baseReq := evaluation.InferenceProbeRequest{
-				ProviderAttemptID:       deps.newID(),
+				ProviderAttemptID:       providerAttemptID,
 				Role:                    probeRole,
 				Model:                   model,
 				TargetOperatorSessionID: selected.OperatorSessionID,
@@ -104,7 +108,11 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			failures := 0
 			for _, acceptanceCase := range cases {
 				probeReq := acceptanceCase.Apply(baseReq)
-				probeReq.ProviderAttemptID = deps.newID()
+				attemptID, err := deps.newID()
+				if err != nil {
+					return fmt.Errorf("evaluation: gates inference: %w", err)
+				}
+				probeReq.ProviderAttemptID = attemptID
 				probeReq.Stream = acceptanceCase.Stream
 				ctx, cancel := context.WithTimeout(cmd.Context(), 6*time.Minute)
 				response, progress, runErr := inferenceEvalExecuteProbe(ctx, appClient, probeReq)
@@ -210,8 +218,12 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates probe: %w", err)
 			}
+			providerAttemptID, err := deps.newID()
+			if err != nil {
+				return fmt.Errorf("evaluation: gates probe: %w", err)
+			}
 			probeReq := evaluation.InferenceProbeRequest{
-				ProviderAttemptID:       deps.newID(),
+				ProviderAttemptID:       providerAttemptID,
 				Role:                    probeRole,
 				Model:                   model,
 				TargetOperatorSessionID: selected.OperatorSessionID,

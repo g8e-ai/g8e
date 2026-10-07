@@ -5,18 +5,18 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import os
-import pytest
 import shutil
 import tempfile
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app.services.auth.certificate_service import CertificateService
 from app.services.auth.certificate_data_service import CertificateDataService
+from app.services.auth.certificate_service import CertificateService
 
 
 @pytest.fixture
@@ -61,12 +61,11 @@ def ca_cert(ca_key):
 
 @pytest.fixture
 def setup_ca_files(temp_pki_dir, ca_cert):
-    trust_dir = os.path.join(temp_pki_dir, "trust")
-    os.makedirs(trust_dir, exist_ok=True)
-    cert_path = os.path.join(trust_dir, "g8eg-ca-bundle.pem")
+    trust_dir = Path(temp_pki_dir) / "trust"
+    trust_dir.mkdir(parents=True, exist_ok=True)
+    cert_path = trust_dir / "g8eg-ca-bundle.pem"
 
-    with open(cert_path, "wb") as f:
-        f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
+    cert_path.write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     return temp_pki_dir
 
@@ -79,7 +78,7 @@ def mock_data_service():
 
     # Mock the internal HTTP client structure used in generate_operator_certificate
     mock_db_client = AsyncMock()
-    mock_db_client._request_json.return_value = {
+    mock_db_client.request_json.return_value = {
         "success": True,
         "certificate_pem": "-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----",
         "serial": "MOCK-SERIAL-ABC123DEF",
@@ -108,17 +107,17 @@ async def test_initialize_success(setup_ca_files, mock_data_service):
 @pytest.mark.asyncio
 async def test_initialize_alternate_path(temp_pki_dir, ca_cert, mock_data_service):
     # Test path: pki_dir/authorities/hub_ca.crt
-    auth_subdir = os.path.join(temp_pki_dir, "authorities")
-    os.makedirs(auth_subdir)
+    auth_subdir = Path(temp_pki_dir) / "authorities"
+    auth_subdir.mkdir()
 
-    cert_path = os.path.join(auth_subdir, "hub_ca.crt")
+    cert_path = auth_subdir / "hub_ca.crt"
 
-    with open(cert_path, "wb") as f:
+    with cert_path.open("wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
 
     service = CertificateService(
-        pki_dir=os.path.join(temp_pki_dir, "missing"),
-        ca_cert_path=cert_path,
+        pki_dir=str(Path(temp_pki_dir) / "missing"),
+        ca_cert_path=str(cert_path),
         data_service=mock_data_service,
     )
     await service.initialize()
@@ -156,7 +155,7 @@ async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     await service.initialize()
 
     res = await service.generate_operator_certificate(
-        operator_id="test-op", user_id="test-user", organization_id="test-org"
+        operator_id="test-op", user_id="test-user"
     )
 
     assert "cert" in res
@@ -171,8 +170,8 @@ async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     assert "-----BEGIN PRIVATE KEY-----" in res["key"]
 
     # Verify the signing request was made
-    mock_data_service.cache.db.client._request_json.assert_called_once()
-    call_args = mock_data_service.cache.db.client._request_json.call_args
+    mock_data_service.cache.db.client.request_json.assert_called_once()
+    call_args = mock_data_service.cache.db.client.request_json.call_args
     assert call_args[0][0] == "POST"
     assert call_args[0][1] == "/.well-known/g8e/pki/sign-csr"
     payload = call_args[1]["json"]
@@ -186,7 +185,7 @@ async def test_generate_without_initialize_triggers_init(setup_ca_files, mock_da
     # Don't call initialize() explicitly
 
     res = await service.generate_operator_certificate(
-        operator_id="test-op", user_id="test-user", organization_id="test-org"
+        operator_id="test-op", user_id="test-user"
     )
     assert service.initialized is True
     assert "cert" in res
@@ -196,7 +195,7 @@ async def test_generate_without_initialize_triggers_init(setup_ca_files, mock_da
 async def test_generate_even_if_no_ca_cert(temp_pki_dir, mock_data_service):
     # If ca.crt is missing, it logs an error but doesn't prevent signing via API
     service = CertificateService(pki_dir=temp_pki_dir, data_service=mock_data_service)
-    res = await service.generate_operator_certificate("op", "user", "org")
+    res = await service.generate_operator_certificate("op", "user")
     assert "cert" in res
 
 

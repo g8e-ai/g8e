@@ -33,7 +33,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway/scripts"
@@ -62,7 +61,7 @@ type httpTestCase struct {
 	validateResp   func(*testing.T, *httptest.ResponseRecorder)
 }
 
-func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *CanonicalDBService) {
+func setupTestPKIController(t *testing.T) (*PKIController, *CanonicalDBService) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -93,7 +92,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
 	controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, Registration: reg, Responder: resp})
-	return controller, cfg, db
+	return controller, db
 }
 
 // setupMinimalPKIController creates a PKIController with only config, logger,
@@ -116,7 +115,7 @@ func setupMinimalPKIController(t *testing.T) *PKIController {
 func runHTTPTest(t *testing.T, tc httpTestCase, handler func(*httptest.ResponseRecorder, *http.Request)) {
 	t.Helper()
 
-	c, _, db := setupTestPKIController(t)
+	c, db := setupTestPKIController(t)
 
 	if tc.setup != nil {
 		tc.setup(t, c, db)
@@ -199,10 +198,10 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
-				c, _, _ := setupTestPKIController(t)
+				c, _ := setupTestPKIController(t)
 				if tc.setup != nil {
 					tc.setup(t, c, nil)
 				}
@@ -259,10 +258,10 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
-				c, _, _ := setupTestPKIController(t)
+				c, _ := setupTestPKIController(t)
 				if tc.setup != nil {
 					tc.setup(t, c, nil)
 				}
@@ -283,7 +282,7 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 	}
 
 	t.Run("Failure - no mTLS returns 401", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader(mustMarshalJSON(t, validCSRPayload)))
 		req.TLS = nil
 		rr := httptest.NewRecorder()
@@ -293,7 +292,7 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 	})
 
 	t.Run("Success - POST with mTLS signs CSR and returns cert", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader(mustMarshalJSON(t, validCSRPayload)))
 		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, testUserID)}}
 		rr := httptest.NewRecorder()
@@ -307,7 +306,7 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 	})
 
 	t.Run("Failure - GET method not allowed", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.PKICSRSign, nil)
 		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, testUserID)}}
 		rr := httptest.NewRecorder()
@@ -317,7 +316,7 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 	})
 
 	t.Run("Failure - Invalid JSON", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader([]byte("invalid json")))
 		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, testUserID)}}
 		rr := httptest.NewRecorder()
@@ -326,7 +325,7 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 	})
 
 	t.Run("Failure - PKI signing error", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader(mustMarshalJSON(t, map[string]string{
 			"csr_pem":   "invalid csr",
 			"leaf_type": "operator",
@@ -395,10 +394,10 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
-				c, _, _ := setupTestPKIController(t)
+				c, _ := setupTestPKIController(t)
 				if tc.setup != nil {
 					tc.setup(t, c, nil)
 				}
@@ -442,10 +441,10 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
-				c, _, _ := setupTestPKIController(t)
+				c, _ := setupTestPKIController(t)
 				if tc.setup != nil {
 					tc.setup(t, c, nil)
 				}
@@ -457,7 +456,7 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 
 func TestPKIController_ReadBody(t *testing.T) {
 	t.Run("Success - Reads body within limit", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 
 		body := []byte("test body content")
 		req := httptest.NewRequest(http.MethodPost, "/test", bytes.NewReader(body))
@@ -468,7 +467,7 @@ func TestPKIController_ReadBody(t *testing.T) {
 	})
 
 	t.Run("Failure - Body exceeds max payload", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 
 		largeBody := make([]byte, c.cfg.Gateway.MaxPayloadBytes+1)
 		req := httptest.NewRequest(http.MethodPost, "/test", bytes.NewReader(largeBody))
@@ -502,7 +501,7 @@ func TestNewPKIController(t *testing.T) {
 }
 
 func TestPKIController_HandlePKICABundle(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
+	c, _ := setupTestPKIController(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/ca-bundle", nil)
 	rr := httptest.NewRecorder()
@@ -515,7 +514,7 @@ func TestPKIController_HandlePKICABundle(t *testing.T) {
 }
 
 func TestPKIController_HandleG8eBinaryDownload(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
+	c, _ := setupTestPKIController(t)
 
 	// Create binaries directory and a test binary
 	binDir := t.TempDir()
@@ -536,7 +535,7 @@ func TestPKIController_HandleG8eBinaryDownload(t *testing.T) {
 }
 
 func TestPKIController_HandleG8eBinaryDownload_NotFound(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
+	c, _ := setupTestPKIController(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-linux-amd64", nil)
 	rr := httptest.NewRecorder()
@@ -564,7 +563,7 @@ func (r testG8eBinaryReader) Artifact(name string) (io.ReadSeeker, os.FileInfo, 
 }
 
 func TestPKIController_HandleG8eBinaryDownload_ImageBakedBinDir(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
+	c, _ := setupTestPKIController(t)
 
 	binDir := t.TempDir()
 	testContent := []byte("image-baked binary content")
@@ -584,7 +583,7 @@ func TestPKIController_HandleG8eBinaryDownload_ImageBakedBinDir(t *testing.T) {
 }
 
 func TestPKIController_HandleG8eBinaryDownload_InvalidName(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
+	c, _ := setupTestPKIController(t)
 
 	testCases := []string{
 		"../../../etc/passwd",
@@ -674,7 +673,7 @@ func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 
 	t.Run("Failure - GET method not allowed", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/pki/devices/enroll", nil)
 		rr := httptest.NewRecorder()
 		c.handlePKIDevicesEnroll(rr, req)
@@ -682,7 +681,7 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 	})
 
 	t.Run("Failure - no TLS", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/devices/enroll", nil)
 		rr := httptest.NewRecorder()
 		c.handlePKIDevicesEnroll(rr, req)
@@ -690,7 +689,7 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 	})
 
 	t.Run("Failure - empty peer certificates", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/devices/enroll", nil)
 		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{}}
 		rr := httptest.NewRecorder()
@@ -699,7 +698,7 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 	})
 
 	t.Run("Failure - invalid JSON body", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/devices/enroll", bytes.NewReader([]byte("{invalid")))
 		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
 		rr := httptest.NewRecorder()
@@ -708,7 +707,7 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 	})
 
 	t.Run("Failure - missing CSR", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c, _ := setupTestPKIController(t)
 		payload := map[string]string{}
 		body, _ := json.Marshal(payload)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/devices/enroll", bytes.NewReader(body))

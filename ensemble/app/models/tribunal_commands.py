@@ -7,12 +7,23 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
+from typing import TYPE_CHECKING
 
-from app.constants import CommandGenerationOutcome, AuditorReason
+from app.constants import AuditorReason, CommandGenerationOutcome
 from app.models.agents.tribunal import CandidateCommand, TribunalObserver, VoteBreakdown
 
-from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime, Field
+from .base import Field, G8eBaseModel, G8eIdentifiableModel, UTCDatetime
+
+if TYPE_CHECKING:
+    from app.models.agent import OperatorContext
+    from app.models.http_context import G8eHttpContext
+    from app.models.investigations import InvestigationCurrentState
+    from app.models.settings import G8eeUserSettings
+    from app.models.whitelist import WhitelistedCommand
+    from app.services.data.reputation_data_service import ReputationDataService
+    from app.services.protocols import AIResponseAnalyzerProtocol, EventServiceProtocol
 
 
 @dataclass
@@ -31,7 +42,7 @@ class TribunalGenerationRequest:
     settings: G8eeUserSettings | None = None
     reputation_data_service: ReputationDataService | None = None
     ai_response_analyzer: AIResponseAnalyzerProtocol | None = None
-    investigation_state: str = ""
+    investigation_state: InvestigationCurrentState | None = None
     investigation_context: str = ""
     whitelisting_enabled: bool = False
     blacklisting_enabled: bool = False

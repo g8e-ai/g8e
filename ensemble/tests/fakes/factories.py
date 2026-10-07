@@ -9,8 +9,10 @@
 
 import uuid
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 
 from app.constants import (
+    G8EE_COMPONENT,
     AuthMethod,
     CaseStatus,
     ComponentName,
@@ -18,13 +20,13 @@ from app.constants import (
     ConsensusMember,
     EscalationRisk,
     EventType,
-    G8EE_COMPONENT,
     InvestigationStatus,
     OperatorStatus,
     OperatorType,
     Priority,
     Severity,
 )
+from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.agents.tribunal import (
     CandidateCommand,
 )
@@ -221,7 +223,7 @@ def build_request_context(
 
 
 def build_g8e_http_context(
-    web_session_id: str = "test-web-session",
+    web_session_id: str | None = "test-web-session",
     user_id: str = "test-user-id",
     case_id: str | None = None,
     investigation_id: str | None = None,
@@ -304,7 +306,7 @@ def build_minimal_operator_document(
                 cpu_count=2,
                 memory_mb=4096,
             ),
-            network=HeartbeatNetworkInfo(),
+            network_info=HeartbeatNetworkInfo(),
             environment=HeartbeatEnvironment(pwd="/home/test-user"),
         ),
     )
@@ -322,8 +324,6 @@ def build_production_operator_document(
     Linux host.  This ensures accuracy tests exercise the agent's reasoning
     without colliding with the security layer that blocks ``sudo``.
     """
-    import uuid
-
     if operator_id is None:
         operator_id = f"test-op-{uuid.uuid4().hex[:8]}"
     operator_session_id = f"test-sess-{uuid.uuid4().hex[:8]}"
@@ -344,11 +344,11 @@ def build_production_operator_document(
                 cpu_count=8,
                 memory_mb=16384,
             ),
-            network=HeartbeatNetworkInfo(),
+            network_info=HeartbeatNetworkInfo(),
             user_details=HeartbeatUserDetails(
                 username="root",
-                uid="0",
-                gid="0",
+                uid=0,
+                gid=0,
                 home="/root",
                 shell="/bin/bash",
             ),
@@ -427,16 +427,17 @@ def create_mock_llm_provider(text: str):
 
     If text is provided, generate_content returns a mock response with that text.
     """
-    from unittest.mock import AsyncMock, MagicMock
-
-    from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
-
     provider = MagicMock()
     provider.generate_content_stream = AsyncMock()
 
     if text is not None:
         mock_response = GenerateContentResponse(
-            candidates=[Candidate(content=Content(role="model", parts=[Part.from_text(text)]))]
+            candidates=[
+                Candidate(
+                    content=Content(role="model", parts=[Part.from_text(text)]),
+                    finish_reason="STOP",
+                )
+            ]
         )
         provider.generate_content = AsyncMock(return_value=mock_response)
     else:
