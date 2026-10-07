@@ -283,6 +283,11 @@ func TestImportAssignmentResultFromFormationRun_MissingSemanticJudgeInRoleTraces
 	outcome, err := AssignmentTerminalOutcome(result.GetLifecycleStatus(), result)
 	require.NoError(t, err)
 	assert.Equal(t, TerminalOutcomeGraderFailed, outcome)
+
+	available := findDeterministicGradeByID(result.GetDeterministicGrades(), req.Assignment.GetAssignmentId()+":semantic-judge-available")
+	require.NotNil(t, available, "the grader failure must leave a diagnostic grade naming the missing judge")
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, available.GetStatus())
+	assert.Equal(t, "semantic-judge-available", available.GetCriterionId())
 }
 
 func TestImportAssignmentResultFromFormationRun_DoesNotPublishUnavailablePromptUsageAsZero(t *testing.T) {

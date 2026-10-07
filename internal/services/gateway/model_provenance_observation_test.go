@@ -116,6 +116,33 @@ func TestModelProvenanceObservationCoordinator_PreflightCommandDelivery_FailsWit
 	assert.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
 }
 
+func TestModelProvenanceObservationCoordinator_PreflightCommandDelivery_EmbeddedOperatorUsesProcessor(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	windowStore, err := model_provenance.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	pubsubHandler := NewGatewayWebSocketHandler(logger)
+	lister := &stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
+		{
+			Id:                string(constants.DocIDEmbeddedOperator),
+			OperatorSessionId: "sess-embedded",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeEmbedded),
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
+		},
+	}}
+	processor := embeddedEnvelopeProcessorFunc(func(context.Context, []byte) (*operatorv1.ActionReceipt, error) {
+		return &operatorv1.ActionReceipt{}, nil
+	})
+
+	withProcessor := NewModelProvenanceObservationCoordinator(&DispatchService{pubsub: pubsubHandler, embeddedProcessor: processor}, lister, pubsubHandler, windowStore, logger)
+	require.NoError(t, withProcessor.PreflightCommandDelivery(context.Background()))
+
+	withoutProcessor := NewModelProvenanceObservationCoordinator(&DispatchService{pubsub: pubsubHandler}, lister, pubsubHandler, windowStore, logger)
+	err = withoutProcessor.PreflightCommandDelivery(context.Background())
+	assert.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
+}
+
 func TestModelProvenanceObservationCoordinator_IngestPersistsAttestationWindow(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
