@@ -761,19 +761,20 @@ class FullTests(unittest.TestCase):
 
     def test_stop_operator_terminates_process(self):
         with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            # Linux checks the command line before stopping an owned workload.
+            script = directory / "g8e-operator-fixture.py"
+            script.write_text(
+                "import time; print('ready', flush=True); time.sleep(30)\n"
+            )
             process = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-c",
-                    "import time; print('ready', flush=True); time.sleep(30)",
-                ],
+                [sys.executable, str(script)],
                 stdout=subprocess.PIPE,
                 text=True,
             )
             self.addCleanup(self.terminate_process, process)
             self.addCleanup(process.stdout.close)
             self.assertEqual(process.stdout.readline().strip(), "ready")
-            directory = Path(temp)
             pid_file = directory / "full.pid"
             pid_file.write_text(str(process.pid))
             FULL.stop_operator("data", directory)
