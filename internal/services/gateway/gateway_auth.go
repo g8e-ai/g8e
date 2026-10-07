@@ -519,17 +519,8 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		return nil, &AuthError{Message: constants.ErrOperatorIdentityDisabled.Error(), Status: http.StatusUnauthorized}
 	}
 
-	// Enforce session expiry (TTL) for remote operators. Default session
-	// TTL is 24h if not specified. The embedded operator is the gateway's
-	// own in-process substrate — its document persists for the lifetime of
-	// the gateway deployment and is exempt from the document-age TTL.
-	if op.OperatorType != constants.OperatorTypeEmbedded {
-		sessionTTL := 24 * time.Hour
-		// We use the Document store's authoritative CreatedAt for TTL enforcement.
-		if !docs[0].CreatedAt.IsZero() && time.Since(docs[0].CreatedAt) > sessionTTL {
-			return nil, &AuthError{Message: constants.ErrOperatorSessionExpired.Error(), Status: http.StatusUnauthorized}
-		}
-	}
+	// Operator registration age does not expire a persistent runtime identity.
+	// Authentication retains transport certificate checks and identity retirement.
 
 	// Check if the linked user is active (plan §4.6)
 	// This is the single chokepoint that makes retirement real - without it,

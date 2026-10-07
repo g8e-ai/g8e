@@ -80,43 +80,6 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db.GetDocStore(), logger)
-	personaSvc := NewPersonaService(db.GetDocStore(), logger)
-	res := response.NewWriter(logger)
-	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
-
-	// Create an active user
-	userID := "user-456"
-	userDoc := &models.User{
-		ID:     userID,
-		Status: constants.UserStatusActive,
-	}
-	userBytes, err := json.Marshal(userDoc)
-	require.NoError(t, err)
-	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
-
-	// Create an Operator session with old timestamp using the test hook
-	operatorSessionID := "expired-session"
-	oldTime := time.Now().UTC().Add(-25 * time.Hour)
-	opDoc := &models.OperatorDocumentGo{
-		ID:                "op-456",
-		OperatorSessionID: operatorSessionID,
-		Status:            constants.OperatorStatusActive,
-		UserID:            userID,
-		CreatedAt:         oldTime,
-		UpdatedAt:         oldTime,
-	}
-	opBytes, err := json.Marshal(opDoc)
-	require.NoError(t, err)
-	require.NoError(t, db.GetDocStore().DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
-
-	_, err = auth.ValidateOperatorSession(operatorSessionID)
-	require.Error(t, err)
-}
-
 func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
@@ -2014,11 +1977,9 @@ func TestHandleCLIAuth_RejectsOperatorHeadersOnUnboundSession(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), constants.ErrOperatorBindingMismatch.Error())
 }
 
-// TestAuthService_ValidateOperatorSession_EmbeddedExemptFromTTL verifies
-// that the embedded operator — the gateway's own in-process substrate —
-// is exempt from the 24h document-age TTL that applies to remote
-// operators. A remote operator document of the same age is rejected.
-func TestAuthService_ValidateOperatorSession_EmbeddedExemptFromTTL(t *testing.T) {
+// Persistent Operator identities remain valid regardless of registry document age.
+// Transport certificate validation and identity retirement govern their lifetime.
+func TestAuthService_ValidateOperatorSession_PersistentIdentity(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db.GetDocStore(), logger)
@@ -2050,10 +2011,21 @@ func TestAuthService_ValidateOperatorSession_EmbeddedExemptFromTTL(t *testing.T)
 	persistAged("op-remote-old", "sess-remote-old", constants.OperatorTypeRemote)
 
 	op, err := auth.ValidateOperatorSession("sess-embedded-old")
-	require.NoError(t, err, "embedded operator is exempt from the document-age TTL")
+	require.NoError(t, err, "embedded operator remains valid regardless of document age")
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.ID)
 
-	_, err = auth.ValidateOperatorSession("sess-remote-old")
-	require.Error(t, err, "remote operator document older than the TTL is rejected")
-	assert.Contains(t, err.Error(), constants.ErrOperatorSessionExpired.Error())
+	for _, status := range []constants.OperatorStatus{constants.OperatorStatusActive, constants.OperatorStatusStale, constants.OperatorStatusOffline} {
+		t.Run(string(status), func(t *testing.T) {
+			opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+				ID: "op-remote-old", OperatorSessionID: "sess-remote-old", Status: status,
+				UserID: userID, OperatorType: constants.OperatorTypeRemote, CreatedAt: oldTime, UpdatedAt: oldTime,
+			})
+			require.NoError(t, err)
+			require.NoError(t, db.GetDocStore().DocSetWithTimestamps(
+				marshaler.CollectionName(constants.CollectionOperators), "op-remote-old", opBytes, oldTime, oldTime))
+			op, err := auth.ValidateOperatorSession("sess-remote-old")
+			require.NoError(t, err, "remote operator remains valid regardless of document age and liveness")
+			assert.Equal(t, "op-remote-old", op.ID)
+		})
+	}
 }
