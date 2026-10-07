@@ -50,7 +50,7 @@ The Operator's workload certificate carries a SPIFFE URI SAN in the `g8e.local` 
 
 ## Enrollment and startup
 
-`g8e operator start` runs in the foreground. It creates the `.g8e/` runtime tree, loads an explicit or installed trust bundle and Operator certificate/key, and initializes the local services required for execution. With `--endpoint` and no installed Operator credentials, it fetches the Gateway trust bundle over the Gateway discovery HTTP listener and starts the owner-approved platform enrollment flow. The flow creates Operator and companion CLI CSRs, persists resumable pending state, waits for owner approval, verifies the completion transcript, and atomically writes the issued credentials. A restart from the same launch directory resumes the pending request.
+`g8e operator start` runs in the foreground. It creates the `.g8e/` runtime tree, loads an explicit or installed trust bundle and Operator certificate/key, and initializes the local services required for execution. With `--endpoint` and no installed Operator credentials, it fetches the Gateway trust bundle over the Gateway discovery HTTP listener and starts the owner-approved platform enrollment flow. The flow creates Operator and companion CLI CSRs, persists resumable pending state, waits for owner approval, verifies the completion transcript, and atomically writes the issued credentials. A restart using the same runtime root (`--working-dir`, or the process working directory when omitted) resumes the pending request.
 
 After credentials are available, the worker connects to the Gateway over mTLS, obtains bootstrap information including its Operator and session identity, and subscribes to an exact command channel:
 
@@ -69,7 +69,7 @@ The startup command accepts numerous flags controlling enrollment, runtime behav
 | `--cert <path>` | Path to Operator client certificate for mTLS enrollment. |
 | `-k, --key <path>` | Path to Operator private key matching the certificate. |
 | `--trust-bundle <path>` | Explicit Gateway CA bundle; otherwise uses installed runtime bundle or endpoint discovery. |
-| `--working-dir <path>` | Working directory for command execution; does not relocate `.g8e/` runtime tree. |
+| `--working-dir <path>` | Root for command execution and the Operator's `.g8e/` runtime state; defaults to the process working directory. |
 | `-c, --cloud` | Enables cloud Operator mode. |
 | `--provider <aws\|gcp\|azure>` | Selects cloud provider when used with `--cloud`. |
 | `--heartbeat-interval <int>` | Sets heartbeat frequency in seconds (default: 30; accepted range 0-30, where 0 selects the default). Startup rejects larger values because the Gateway marks an Operator stale after 60 seconds without a heartbeat, so the interval must leave room for one missed beat. |
@@ -102,7 +102,7 @@ The g8e Operator is a compact binary, and multiple operator processes can execut
 Operators running on the same host are differentiated and separated by four key factors:
 1. **Local Directory (`local_dir`)**: The working and runtime root where the instance maintains its sovereign `.g8e/` state and execution tree.
 2. **Launching Account (`account`)**: The operating system account or user profile that spawned the process.
-3. **Port (`port`)**: The HTTP/HTTPS port dialed or bound by the operator instance.
+3. **Port (`port`)**: The Gateway port dialed by a remote Operator, or listener port used by an embedded runtime. Remote Operators bind no inbound ports.
 4. **Operational Roles (`operator_roles`)**: The complete typed set of capabilities enabled by startup flags.
 
 The canonical `system_fingerprint` is a SHA-256 composite hash of immutable host properties (`os`, `arch`, `cpu_count`, `machine_id`, `hostname`) combined with `local_dir`, `account`, `port`, and the canonical `roles` set. This ensures that each operator running on the same host produces a distinct, collision-free identity in the Gateway operator registry and SQLite document store, allowing idempotent re-enrollment and unambiguous slot binding. Platform enrollment (`operatorFingerprintOptions` in `internal/cli/serve/operator.go`) and runtime bootstrap (`internal/services/auth/bootstrap.go`) derive the complete role set from the same startup flags and both include `port`. An Operator enrolled by an earlier release computed its enrollment fingerprint without `port`, so re-enrolling it after an upgrade yields a different fingerprint and does not supersede the earlier document; revoke the earlier enrollment explicitly.
@@ -184,7 +184,7 @@ The Actuator returns execution errors after final receipt processing. The host-l
 
 The Operator's `.g8e/` runtime tree contains local PKI material and enrollment state, encrypted SQLite data including replay protection and audit records, the execution-vault key and state, and optional Git-backed file-ledger data. Runtime paths are owned by the Operator process and its local volume; they are not shared with the Gateway unless deployment configuration explicitly mounts them.
 
-The reference binary registers 32 native tools in the MCP service. The catalog includes database triage, log digestion, process and resource inspection, network and TLS checks, system introspection, file operations, cloud and Kubernetes inspection, Git operations, shell execution, Operator deployment, and governed audit-receipt queries. The native catalog is compiled into the binary and is not evidence that an arbitrary external MCP server is governed.
+The reference binary explicitly registers native tools in `RegisterNativeTools` (`internal/services/mcp/native_tool_registry.go`). The catalog includes database triage, log digestion, process and resource inspection, network and TLS checks, system introspection, file operations, cloud and Kubernetes inspection, Git operations, shell execution, Operator deployment, and governed audit-receipt queries. The native catalog is compiled into the binary and is not evidence that an arbitrary external MCP server is governed.
 
 Native tools are dispatched only after the request has crossed a governed Gateway ingress or arrived as a complete envelope and passed the applicable verification path. A third-party MCP server is governed only when it is configured as Gateway downstream egress, so its tool calls traverse the full pipeline and produce signed receipts; a server that a client talks to directly gains none of that merely by running alongside g8e. Client-native tools, direct filesystem access, unrestricted network access, and other side channels remain outside this boundary. See [AI Agents and the g8e Governance Boundary](./agents.md).
 

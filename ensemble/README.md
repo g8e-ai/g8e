@@ -35,7 +35,7 @@ After enrollment completes, the ensemble health endpoint is available at `http:/
 - Python 3.12 or later, as specified by `requires-python` in `pyproject.toml`
 - A running and enrolled g8e gateway and operator for application startup and live integration tests
 
-The ensemble depends on the in-tree `g8e` Python protocol package. From the repository root:
+The ensemble depends on the in-tree `g8e` Python protocol package. From the repository root, `make dev-python` provisions `.venv` with uv and installs the editable protocol package plus the ensemble test and lint dependencies. To manage an environment manually from `ensemble/`:
 
 ```bash
 cd ensemble
@@ -46,7 +46,7 @@ cp .env.example .env
 make proto
 ```
 
-`make setup` installs `../protocol/python` and the ensemble with its development and test dependencies in editable mode. `make proto` verifies that the canonical Python protobuf stubs generated from the protocol definitions are current.
+`make setup` installs the protocol package and the ensemble with its development and test dependencies in editable mode. `make proto` verifies that the canonical Python protobuf stubs generated from the protocol definitions are current.
 
 `.env` holds only LLM secrets (API keys) and user-specific endpoints; the ensemble reads it without overriding variables already present in the process environment. Gateway URLs and runtime directories are launch arguments to `python -m app.serve` (see `--help`), and provider and model selection are Gateway-backed platform settings. See [LLM Providers](../docs/ensemble/llm-providers.md) for provider settings and [PKI and Trust](../docs/ensemble/pki.md) for workload identity and certificate requirements.
 
@@ -72,7 +72,7 @@ make ensemble-test
 make ensemble-lint
 ```
 
-`make ensemble-test` runs Tier 1 unit tests and Tier 2 in-process integration tests without live LLM or external API calls. `make ensemble-lint` runs Ruff and Pyright against the application. Run `make ci-ensemble` to execute both checks.
+`make ensemble-test` runs Tier 1 unit tests and Tier 2 in-process integration tests without live LLM or external API calls. `make ensemble-lint` runs Ruff and Pyright against both `ensemble/app/` and `ensemble/tests/`. Run `make ci-ensemble` to execute the agent-tool-registry check, lint, and tests.
 
 Tier 4 tests use live LLM providers or external APIs and run separately:
 

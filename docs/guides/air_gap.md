@@ -4,7 +4,7 @@ title: Air-Gapped Deployment
 audience: platform operators and infrastructure teams
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - docs/guides/air_gap.md
   - Dockerfile
@@ -118,7 +118,7 @@ The Operator initiates an outbound-only mTLS WebSocket connection to the Gateway
 
 Outbound network integrations that require review before deployment:
 
-- `--jwks-url`: Fetches identity provider keys. Leave empty if using local passkeys and mTLS only.
+- If JWT authentication uses an external JWKS provider, configure its endpoint to an approved internal service. Leave JWT/JWKS integration unset when using local passkeys and mTLS only.
 - `--mcp-downstream-url` and `--a2a-downstream-url`: Proxy to configured services. Must point to approved internal endpoints.
 - Consensus and Operator endpoints: Connect to their configured private addresses.
 - LLM provider: The ensemble calls the selected provider. Use the built-in `fake` provider for deterministic operation without a model server, or configure an internal Ollama, llama.cpp, or compatible endpoint. Do not configure public OpenAI, Anthropic, Gemini, or internet-facing services.
@@ -151,7 +151,7 @@ GOTOOLCHAIN=local GOFLAGS=-mod=vendor make test-airgap
 
 # If the evaluation-explorer asset is not already staged, build it while connected.
 cd evaluation-explorer && npm run build
-cd ../../../
+cd ..
 
 # Build for the connected host's OS and architecture.
 GOTOOLCHAIN=local GOFLAGS=-mod=vendor make build
@@ -272,7 +272,7 @@ This is a build and static-reference check. It does NOT verify container build o
 - Deny outbound traffic at the host firewall and network perimeter, then test the denial.
 - Apply container-network firewall policy if containers must have no egress beyond approved peers. (Repository bridge networks are not egress-deny boundaries.)
 - Start containers with `--no-build --pull never` and confirm all services become ready without registry or package-repository access.
-- Keep `--jwks-url`, public LLM endpoints, and public downstream MCP/A2A URLs unset.
+- Keep any external JWT/JWKS integration, public LLM endpoints, and public downstream MCP/A2A URLs unset.
 - Point consensus, Gateway, Operator, model, DNS, NTP, and other required services at approved private endpoints.
 - Verify transferred binary and image digests through the organization's media-transfer process.
 - Persist and back up each `.g8e/` runtime tree or named Docker volume according to local retention policy.

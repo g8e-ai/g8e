@@ -7,6 +7,8 @@ g8e helps teams let AI systems propose actions without giving them direct contro
 [![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE)
 [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml)
 
+The repository targets **v2.3.2**. See the [release notes](docs/release_notes/v2.3.x/v2.3.2.md) for changes, validation, and outstanding release gates.
+
 This project is a work-in-progress, built by a small solo effort, and is looking for a good home: pilot users, operators, researchers, and contributors who want to push this idea into real deployments.
 
 ## What g8e does
@@ -71,8 +73,7 @@ make up
 
 This builds the binary and starts the Gateway on localhost.
 
-This Gateway-only track needs Git, Go 1.26.6, Make, and Node.js 22+ for the
-embedded explorer build. It has no Python, Ollama, or model SDK requirement.
+This Gateway-only track needs Git, Go 1.26.6, and Make. Fresh clones use the committed Console and Evaluation Explorer embeds; Node.js 22+ and npm are needed only to rebuild those frontends. It has no Python, Ollama, or model SDK requirement.
 For setup details, see the [Getting Started guide](docs/guides/getting_started.md#native-host-build).
 
 For interactive setup with the Operator roles and the first-party ensemble, use:
@@ -106,13 +107,13 @@ If you want the Docker Compose stack instead, that's still supported, but it is 
 The repo includes a protocol layer and example integrations with Python and Go.
 
 ```bash
-pip install g8e==2.3.1
+pip install g8e==2.3.2
 ```
 
 Go:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.3.1
+go get github.com/g8e-ai/g8e/v2@v2.3.2
 ```
 
 ### 3. Docker fallback

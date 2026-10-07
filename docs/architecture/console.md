@@ -64,7 +64,7 @@ The console covers what an owner needs to operate the platform from a browser:
 
 | ID | Rule |
 | --- | --- |
-| INV-CONSOLE-01 | The console is served only by the Gateway at `/console/` from the embedded `internal/services/gateway/console/static` build. Its source is `console/`; the embed changes only through `make console-build console-embed`, and `make console-embed-check` fails when it is stale. |
+| INV-CONSOLE-01 | The console is served only by the Gateway at `/console/` from the embedded `internal/services/gateway/console/static` build. Its source is `console/`; `make console-embed` builds and refreshes the embed, and `make console-embed-check` fails when it is stale. |
 | INV-CONSOLE-02 | The console calls only Gateway routes classified `RouteAuthNone`, `RouteAuthWebSession`, or `RouteAuthDual` in `internal/services/gateway/gateway_auth.go`. It never calls g8ee directly; chat, case, investigation, and approval-response calls go through the Gateway ensemble browser proxy. |
 | INV-CONSOLE-03 | The console never sends user, web-session, or bound-Operator identity as routing input. The Gateway derives user and web session from the HttpOnly cookie, and the ensemble browser proxy stamps `context.user_id`, `context.web_session_id`, and `context.bound_operators` from its own registry, replacing any browser-supplied values. |
 | INV-CONSOLE-04 | Every request uses `credentials: 'include'`; the SSE stream uses `EventSource` with `withCredentials: true` and carries only the non-secret `since_id` cursor. |
@@ -75,7 +75,7 @@ The console covers what an owner needs to operate the platform from a browser:
 | INV-CONSOLE-09 | The ensemble browser proxy signs every request it forwards to g8ee with the Gateway's Actuator Ed25519 key. The signature covers the method, upstream path and query, the SHA-256 of the forwarded body, the stamped user, web session, and a per-request nonce and issue time. g8ee derives proxy identity only from a request whose signature verifies, so no network position (a loopback bind, a Compose network, a shared volume) is part of the trust decision. A proxy with no signing key refuses to forward. |
 | INV-CONSOLE-DEV-01 | Gateway route strings live only in `src/lib/paths.ts`; event type strings come only from `src/generated/events.ts` through `src/lib/events.ts`. |
 | INV-CONSOLE-DEV-02 | Wire-protocol logic (WebAuthn encoding, SSE normalization and reconnect, the investigation timeline reducer, case grouping, fragment intents) stays in pure modules under `src/lib/` with unit tests. Components hold presentation and wiring only. |
-| INV-CONSOLE-DEV-03 | A change to `console/` ships with a refreshed embed (`make console-build console-embed`) in the same commit; CI runs `make console-embed-check`. |
+| INV-CONSOLE-DEV-03 | A change to `console/` ships with a refreshed embed (`make console-embed`) in the same commit; CI runs `make console-embed-check`. |
 | INV-CONSOLE-DEV-04 | The console adds runtime dependencies only when the platform cannot reasonably do without them. Current runtime dependencies are `react` and `react-dom`. |
 
 ## Owned surfaces
@@ -185,7 +185,7 @@ cd console && npm ci
 The fastest loop is to rebuild and reload the Gateway-served console, which keeps the console same-origin with the Gateway:
 
 ```bash
-make console-build console-embed && make build && ./g8e gw restart
+make console-embed && make build && ./g8e gw restart
 ```
 
 The embed is committed. When `console/dist` is absent (a fresh clone without Node), `make build` uses the committed embed as-is; when `console/dist` exists, `make build` copies it into the embed first.
@@ -204,7 +204,7 @@ Component tests in `tests/app.test.tsx` stub `fetch` and `EventSource` with a fa
 
 ### Ship a change
 
-1. `make ci` (or `make ci-console`, which typechecks, lints, tests, builds the console SPA, and refreshes the embed automatically). Alternatively, `make console-embed` will build and embed directly.
+1. `make ci-console`, which typechecks, lints, tests, builds the console SPA, and refreshes the embed automatically. Alternatively, `make console-embed` builds and embeds directly. `make ci` runs the broader repository checks, including `ci-console`.
 2. Commit `internal/services/gateway/console/static/` with the source change.
 3. If you changed the Gateway handler's Swagger annotations, run `make swagger-generate`.
 
@@ -213,7 +213,7 @@ The `console-tests` CI job runs typecheck and lint, the Vitest suite, a fresh `n
 ### Verify a console change end to end
 
 1. `make console-lint console-test` and `make constants-check`.
-2. `make console-build console-embed`, then `./g8e test unit --pkg ./internal/services/gateway/console`.
+2. `make console-embed`, then `./g8e test unit --pkg ./internal/services/gateway/console`.
 3. `make build`, start the stack, and open `https://localhost:8443/console/`.
 4. Sign in, bind an Operator, start a case, open a second investigation in it, approve an ensemble request, and confirm `GET /api/v1/sse/stream` stays connected in DevTools.
 
@@ -237,4 +237,3 @@ The `console-tests` CI job runs typecheck and lint, the Vitest suite, a fresh `n
 - [Ensemble Architecture](ensemble.md)
 - [Developer Guidelines](../devs/devs.md)
 - [Documentation Guide](../devs/docs.md)
-

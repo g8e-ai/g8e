@@ -3,8 +3,8 @@ doc_id: build_operator
 title: Build and Run an Operator
 audience: developers, deployers, independent implementations
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - docs/guides/
   - cmd/g8e
@@ -48,7 +48,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | --- | --- |
 | INV-BUILD-OP-01 | The reference binary compilation path is `GOOS/GOARCH` Go environment variables passed to `make build` or `make build-<platform>`. The resulting binary embeds the evaluation explorer SPA and carries provenance stamps (version, build ID, build time, platform). |
 | INV-BUILD-OP-02 | The `operator start` command accepts mTLS connection parameters (`--endpoint`, `--cert`, `--key`, `--trust-bundle`) and role-specific flags (`--inference-enabled`, `--provider-boundary-observer-enabled`, `--provenance-operator-enabled`). Unknown flags and flags not copied to `ServeOperatorOptions` do not affect runtime behavior. |
-| INV-BUILD-OP-03 | Multiple Operators on the same host use distinct working directories, separate ports/endpoints, and role-specific flags to prevent fingerprint collisions. The Gateway differentiates instances by SHA-256 composite fingerprint incorporating system properties, directory, account, port, and role. |
+| INV-BUILD-OP-03 | Multiple Operators on the same host use distinct working directories and role-specific flags to prevent fingerprint collisions. They may share a Gateway endpoint and expose no inbound ports. The Gateway differentiates instances by SHA-256 composite fingerprint incorporating system properties, directory, account, port, and role. |
 | INV-BUILD-OP-04 | The canonical runtime state tree `.g8e/` contains pki/, data/, vault/, and (optionally) data/ledger/ subdirectories. Auto-initialization occurs on first `operator start` without a separate `vault init` step. |
 | INV-BUILD-OP-05 | L1 Doctrine re-execution, L2/L3 posture verification, replay and expiry checks, transaction hash equality, state-root binding, and receipt signing are performed in L4 Warden before L5 Actuator execution. Verification failures produce deterministic stage evidence. |
 
@@ -71,16 +71,17 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 - **Go 1.26.6 or later**, as declared by the root Go module.
 - **Make** on Linux and macOS. Windows builds use the repository's PowerShell workflow and still invoke Make.
-- **Node.js 22 or later** and **npm**, because the Go build embeds the evaluation explorer frontend.
+- **Node.js 22 or later** and **npm**, only when rebuilding the Evaluation Explorer or Console. Fresh clones use the committed embeds.
 - **PowerShell 7 or later (`pwsh`)** for the native Windows setup script.
 
-Before running `make build` or `make build-compressed`, install the evaluation explorer dependencies and build its production bundle:
+To refresh the Evaluation Explorer embed, run these commands from the repository root:
 
 ```bash
 cd evaluation-explorer
 npm ci
 npm run build
-cd ../../..
+cd ..
+make explorer-embed
 ```
 
 The repository setup scripts validate the development tools, offer to install missing tools, build the evaluation explorer when needed, and run `make build`. The Linux and macOS scripts also install the toolchain behind `make ci` unless you pass `--build-only`:
@@ -97,11 +98,11 @@ cd g8e
 make build
 ```
 
-`make build` first copies the built evaluation explorer from `evaluation-explorer/dist/` into the Go binary, then creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows). If the explorer bundle has not been built, `make build` stops with an instruction to build it first.
+`make build` copies any existing `evaluation-explorer/dist/` and `console/dist/` bundles into their Gateway embeds, using the committed embeds when those directories are absent. It then creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows). It does not build either frontend; explicit embed refreshes are part of [release preparation](../devs/release_process.md).
 
 The build sets `CGO_ENABLED=0`, uses the `netgo` and `osusergo` build tags, strips symbol and debug data, and embeds the platform version, build ID, build time, and target platform. The resulting binary does not require a Go toolchain or a system SQLite library on the target host.
 
-The binary is self-contained, but the running Operator is stateful. It creates a `.g8e/` runtime tree below its launch directory, requires write access there, stores enrollment credentials and encrypted local state there, and requires network access to its Gateway. Use `--working-dir` to select the host execution directory; it does not relocate the `.g8e/` runtime tree.
+The binary is self-contained, but the running Operator is stateful. `--working-dir` selects both its command execution directory and the root below which it stores `.g8e/` enrollment credentials, encrypted local state, and evidence. When omitted, the process working directory is used. The Operator requires write access to its runtime root and network access to its Gateway.
 
 #### Build Targets
 
@@ -116,7 +117,7 @@ The binary is self-contained, but the running Operator is stateful. It creates a
 | `make fips-build` | Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`. |
 | `make fips-verify` | Builds the FIPS variant and runs `g8e version --fips` with FIPS-only enforcement enabled. |
 
-`make fmt`, the host-native `make host-up` / `make host-down` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` removes build artifacts and Go caches while preserving `.g8e/` runtime state and workload identities. Use `./g8e gw clean` explicitly to reset Gateway state.
+`make fmt`, the host-native `make up` / `make down` and `make full` / `make full-setup` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` removes build artifacts and Go caches while preserving `.g8e/` runtime state and workload identities. Use `./g8e gw clean` explicitly to reset Gateway state.
 
 #### Cross-Compilation
 
@@ -184,7 +185,7 @@ The current worker path applies these options:
 | `--cert <path>` | Uses an explicit Operator client certificate instead of runtime-tree discovery or enrollment. |
 | `-k, --key <path>` | Uses the private key paired with `--cert`. |
 | `--trust-bundle <path>` | Loads an explicit CA trust bundle. With an endpoint and no local bundle, the Operator fetches the Gateway bundle from its well-known HTTP endpoint. |
-| `--working-dir <path>` | Sets the working directory used by command execution. The default comes from runtime configuration and resolves to the process working directory. |
+| `--working-dir <path>` | Sets the command execution directory and the root for the Operator's `.g8e/` runtime state. Defaults to the process working directory. |
 | `-c, --cloud` | Enables cloud Operator mode. |
 | `--provider <aws\|gcp\|azure>` | Sets the cloud provider recorded in cloud Operator configuration. |
 | `-s, --execution-vault` (default true) | Enables the execution vault and defaults to `true`. Outbound startup currently requires it; setting it to `false` fails closed during service initialization. |
@@ -192,6 +193,7 @@ The current worker path applies these options:
 | `-l, --log <level>` | Sets `info`, `error`, or `debug` logging. |
 | `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds and the accepted range is 0-30 (0 selects the default). Larger values are rejected at startup because the Gateway marks an Operator `stale` after 60 seconds without a heartbeat. |
 | `--lattice-endpoint <url>` and related `--lattice-*` flags | These flags are exposed by Cobra but `operatorStartCmd` does not copy their values into `ServeOperatorOptions`, so the flags currently have no effect. The service-layer environment path uses `LATTICE_ENDPOINT`, `LATTICE_CLIENT_ID`, `LATTICE_CLIENT_SECRET`, `SANDBOXES_TOKEN`, `LATTICE_ENTITY_NAME`, and `LATTICE_POSTURE_FLOOR`; the adapter remains incomplete. |
+| `--roles <roles>` | Enables a comma-separated, repeatable set of `embedded`, `data`, `inference`, `provenance`, and `observer` capabilities. Defaults to Data for a remote worker; Embedded runs the Gateway in process. |
 | `--inference-enabled` | Enables the governed inference backend for an Inference Operator. |
 | `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. The Operator holds no model configuration; each governed request names the model the user chose in the Console. |
 | `--inference-keep-alive <duration>` | Sets the Ollama keep-alive duration (default: -1 for infinite). |
@@ -201,7 +203,7 @@ The current worker path applies these options:
 | `--provenance-operator-id <id>` | Sets the stable Provenance Operator identity pseudonym. |
 | `--model-storage-root <path>` | Selects the local content-addressed model storage tree read by the Provenance Operator. |
 
-One Inference Operator serves console chat and evaluation campaigns at the same time; authority is decided per request. A request without campaign authority runs on the configured model for its role and is rejected if it names any other model. A request with campaign authority carries its campaign ID, model registry, and registry digest on the dispatch; the Operator recomputes the digest and rejects malformed registries, absent models, digest changes, and incomplete assignment correlation. Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest.
+One Inference Operator serves console chat and evaluation campaigns at the same time; authority is decided per request. A request without campaign authority must name the user-selected model carried in the governed request; the Operator holds no role-to-model configuration, and an unknown model is rejected by the provider. A request with campaign authority carries its campaign ID, model registry, and registry digest on the dispatch; the Operator recomputes the digest and rejects malformed registries, absent models, digest changes, and incomplete assignment correlation. Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest.
 
 Use `./g8e operator start --help` as the command-surface reference. The Lattice-named flags currently appear in Cobra help but are not copied into `ServeOperatorOptions` by `operatorStartCmd`; setting those flags does not enable the adapter. The adapter's environment-variable path exists in the service layer, but its task handler currently records receipt of a task without dispatching it. Do not treat the Lattice path as an implemented Operator execution integration.
 
@@ -235,7 +237,7 @@ The g8e operator is a lightweight binary designed so that multiple instances can
 To run multiple operators on the same host without collisions:
 
 1. **Use Distinct Local Directories**: Launch each operator from its own distinct directory (or configure `--working-dir`). Each instance maintains its own isolated `.g8e/` runtime tree, SQLite storage, and enrollment keys.
-2. **Account and Port Separation**: Operators can run under different user accounts and bind different ports (via configured endpoints).
+2. **Accounts and Connectivity**: Operators can run under different user accounts and share the same Gateway endpoint. They connect outbound and do not bind inbound ports.
 3. **Role Determination via Flags**: Trigger the specific role using dedicated startup flags:
    - Inference Operator: `--inference-enabled` (plus `--inference-ollama-endpoint`)
    - Provenance Operator: `--provenance-operator-enabled` (plus `--model-storage-root`)
@@ -270,7 +272,7 @@ Binding pins the authenticated CLI session to one or more active operator sessio
 
 ```bash
 ./g8e operator run <operator-session-id> [<operator-session-id>...] \
-  --cmd "echo hello from $(hostname)"
+  --cmd 'echo hello from $(hostname)'
 ```
 
 `operator run` fans out governed `EXECUTE_BASH` dispatches in parallel through `POST /api/v1/operators/commands`. Each target must belong to the authenticated user and be `active`. The gateway constructs the envelope, publishes to the operator `cmd:` channel, waits for a terminal result, and returns per-target stdout, stderr, exit code, and transaction ID. Use `--timeout` to override the per-operator dispatch timeout (default 30 seconds, maximum 300).
@@ -360,11 +362,11 @@ Run platform tests through the `g8e test` command or the corresponding root targ
 | --- | --- |
 | `./g8e test unit` | Tier 1 unit tests. |
 | `./g8e test integration` | Tier 2 in-process integration tests with SQLite, PKI, and local pub/sub. |
-| `./g8e test e2e` | Tier 3 Docker E2E tests against a running, enrolled platform. |
+| `./g8e test e2e` | Tier 3 E2E tests against a running, enrolled platform. |
 | `./g8e test coverage` | Unit and integration coverage with the 75% threshold. |
 | `./g8e test lint` | Platform lint and quality checks. |
 
-The matching root targets are `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, and `make lint`. `make test` runs unit and integration tests. `make test-docker` runs the configured steady-state E2E subset and requires the Docker platform to be running and its enrollment requests approved. `make ci` runs the full platform, ensemble, dashboard, protocol-generation, documentation-generation, lint, vulnerability, and test pipeline.
+The matching root targets are `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, and `make lint`. `make test` runs unit and integration tests. `make test-docker` runs the configured steady-state E2E subset and requires a running native or Docker platform with its enrollment requests approved. `make ci` runs the full Console/adapter, platform, protocol, Ensemble, website, and script checks.
 
 ### Deployment Commands
 

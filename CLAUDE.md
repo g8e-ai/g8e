@@ -41,7 +41,7 @@ make build
 ./g8e test e2e           # Tier 3: against an already-running stack
 ./g8e test e2e-docker    # Tier 3 (requires Docker): compose up, wait for health, run e2e, compose down -v
 ./g8e test coverage
-./g8e test lint          # also: make lint (vulncheck, doctrine/COSAiS validation, golangci-lint)
+./g8e test lint          # golangci-lint; make lint also runs vulncheck and doctrine validation
 ./g8e test chaos
 ./g8e test summary
 ./g8e test public-loop --candidate candidate.json --output evidence.json
@@ -59,7 +59,7 @@ ensemble/.venv/bin/python -m pytest tests/unit/services/evaluation/test_trace_se
 cd console && npm test             # Vitest once
 make console-test                  # Vitest suite from repo root
 make console-lint                  # tsc --noEmit + ESLint
-make console-build embed-console   # rebuild and refresh the Gateway embed (commit static/ with the source change)
+make console-embed   # rebuild and refresh the Gateway embed (commit static/ with the source change)
 make console-embed-check           # fail if the committed embed is stale
 
 # Protocol / generated code
@@ -67,7 +67,6 @@ make proto-generate       # regenerates Go, Python, TS bindings + lockfiles — 
 make constants-check      # verify generated event/action-type constants are current
 make swagger-generate     # regenerate Gateway OpenAPI from Go Swagger annotations
 make doctrines-validate
-make cosais-validate
 ```
 
 ## High-level architecture
@@ -116,8 +115,8 @@ source of truth over an Operator's local store. All `.g8e/` I/O must go through 
 
 ```text
 cmd/g8e/              Binary entry point
-internal/cli/cmd/     Cobra CLI groups (gw, auth, mcp, operator, vault, test, demos, docker, audit,
-                       report, public, swagger, tui, version, compliance, eval)
+internal/cli/cmd/     Cobra CLI groups (gw, auth, mcp, operator, vault, test, docker, audit,
+                       report, public, swagger, tui, version, compliance, ensemble, eval)
 internal/services/    Gateway, outbound Operator, governance (L1-L5), consensus, storage, network,
                        vault, sse, pubsub, mcp (native tool registry), evaluation, compliance
 protocol/             Protobuf contracts, constants registries, generated Go/Python/TS bindings
@@ -126,7 +125,6 @@ console/              Browser console (React/TS), embedded in the Gateway at /co
 g8e-adapter/          Audited browser adapter + observe-frontend contract pack
 evaluation-explorer/  Frontend for live model-campaign inspection
 eval/                 Evaluation fixtures, campaign schemas, benchmark datasets
-demos/                Healthcare / finance / DHS / FedRAMP sealed demo environments
 docs/                 Full platform documentation (see below)
 ```
 
@@ -171,8 +169,8 @@ the linked docs above.
   `internal/constants/paths.go`.
 - A new native MCP tool implements `mcp.NativeTool` and is registered explicitly in `RegisterNativeTools`
   (`internal/services/mcp/native_tool_registry.go`) — never from `init()`, and never copy the tool list into docs.
-- Generated artifacts (protobuf bindings, Gateway OpenAPI, doctrine/COSAiS JSON) change only through their source
-  + generator (`make proto-generate`, `make swagger-generate`, `make doctrines-validate`/`make cosais-validate`) — never
+- Generated artifacts (protobuf bindings, Gateway OpenAPI, doctrine JSON) change only through their source
+  + generator (`make proto-generate`, `make swagger-generate`, `make doctrines-validate`) — never
   hand-edited.
 - Run platform suites only through `./g8e test <suite>` or the matching `make` target — never `go test` directly
   for a platform suite — and never call `t.Parallel()` in a Go integration or E2E test.
