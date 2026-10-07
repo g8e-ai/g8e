@@ -168,8 +168,8 @@ func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "formations",
-		Aliases: []string{"formation"},
+		Use:     "formation",
+		Aliases: []string{"formations"},
 		Short:   "Heterogeneous model sets",
 	}
 	cmd.AddCommand(
@@ -184,8 +184,8 @@ func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "gates",
-		Aliases: []string{"gate"},
+		Use:     "gate",
+		Aliases: []string{"gates"},
 		Short:   "Pre-campaign acceptance gates",
 	}
 	cmd.AddCommand(
