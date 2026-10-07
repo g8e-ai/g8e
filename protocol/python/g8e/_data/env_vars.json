@@ -7,6 +7,12 @@
     "violation": "Platform configuration or test switch read from the environment; scheduled for removal in the env-config-purge follow-on"
   },
   "env_vars": {
+    "E2EFleetSessions": {
+      "_go_const": "EnvVar.E2EFleetSessions",
+      "value": "G8E_E2E_FLEET_SESSIONS",
+      "category": "user_endpoint",
+      "description": "Comma-separated owner Operator session identities selecting the live E2E fleet; unset selects the entire remote registry"
+    },
     "ConsensusID": {
       "_go_const": "EnvVar.ConsensusID",
       "value": "G8E_CONSENSUS_ID",

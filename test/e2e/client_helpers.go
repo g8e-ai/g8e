@@ -24,12 +24,6 @@ import (
 // command results).
 const maxResponseBytes = 1 << 20
 
-// maxListResponseBytes bounds the operator registry listing, which grows with
-// fleet size (each Operator document carries its latest heartbeat) and with
-// retained stopped or stale registrations. A 500-Operator fleet alone exceeds
-// maxResponseBytes.
-const maxListResponseBytes = 64 << 20
-
 // defaultClientTimeout is the per-request timeout for standard E2E client
 // operations. Long-running operations (command dispatch) override this.
 const defaultClientTimeout = 30 * time.Second
