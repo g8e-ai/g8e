@@ -19,7 +19,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-
 // reconcileOperatorStaleness moves every remote Operator document that has been
 // silent for longer than constants.OperatorHeartbeatStaleAfter from active to
 // stale, persisting the transition before the caller reads. It is a no-op for

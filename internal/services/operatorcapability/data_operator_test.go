@@ -251,11 +251,11 @@ func TestActiveDataOperators_EmptyHeartbeatLeavesWorkingDirectoryEmpty(t *testin
 
 	operators := []*operatorv1.OperatorDocument{
 		{
-			Id:                "stack",
-			OperatorSessionId: "sess-stack",
-			Status:            string(constants.OperatorStatusActive),
-			OperatorType:      string(constants.OperatorTypeRemote),
-			CurrentHostname:   constants.DataOperatorHostname,
+			Id:                      "stack",
+			OperatorSessionId:       "sess-stack",
+			Status:                  string(constants.OperatorStatusActive),
+			OperatorType:            string(constants.OperatorTypeRemote),
+			CurrentHostname:         constants.DataOperatorHostname,
 			LatestHeartbeatSnapshot: nil,
 		},
 	}

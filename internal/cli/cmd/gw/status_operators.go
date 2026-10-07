@@ -88,7 +88,7 @@ func operatorStatusFromDocument(op *operatorv1.OperatorDocument) operatorStatus 
 	row := operatorStatus{
 		ID:       op.Id,
 		Type:     operatorTypeDisplay(constants.OperatorType(op.OperatorType)),
-		Status:   string(op.Status),
+		Status:   op.Status,
 		Host:     operatorHostnameDisplay(op),
 		Dir:      op.LocalDir,
 		Port:     int(op.Port),

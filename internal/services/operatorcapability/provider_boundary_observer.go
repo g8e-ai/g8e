@@ -36,7 +36,7 @@ func ActiveProviderBoundaryObservers(operators []*operatorv1.OperatorDocument) [
 		matches = append(matches, ProviderBoundaryObserverStatus{
 			OperatorID:        op.Id,
 			OperatorSessionID: op.OperatorSessionId,
-			Status:            string(op.Status),
+			Status:            op.Status,
 			ObserverEnabled:   true,
 			Platform:          op.RuntimeConfig.Platform,
 		})

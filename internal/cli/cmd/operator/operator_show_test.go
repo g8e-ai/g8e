@@ -143,11 +143,11 @@ func TestOperatorShowCmdWithConfig_PrintsHeartbeatDetails(t *testing.T) {
 					Timestamp: "2026-09-18T12:00:00Z",
 					Status:    "automatic",
 					SystemIdentity: &operatorv1.SystemIdentity{
-						Hostname:    "dev-host",
-						Os:          "linux",
+						Hostname:     "dev-host",
+						Os:           "linux",
 						Architecture: "amd64",
-						CurrentUser: "bob",
-						Pwd:         "/home/bob",
+						CurrentUser:  "bob",
+						Pwd:          "/home/bob",
 					},
 					PerformanceMetrics: &operatorv1.PerformanceMetrics{
 						CpuPercent:    10.0,

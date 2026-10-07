@@ -57,8 +57,8 @@ func (m Model) renderOperatorsView(width, height int) string {
 			detailRow("ID", op.Id),
 			detailRow("Hostname", operatorHostname(op)),
 			detailRow("Roles", operatorcapability.GetOperatorRoles(op).String()),
-			detailRow("Status", string(op.Status)),
-			detailRow("Type", string(op.OperatorType)),
+			detailRow("Status", op.Status),
+			detailRow("Type", op.OperatorType),
 			detailRow("Session", op.OperatorSessionId),
 			detailRow("Bound", bound),
 			detailRow("Started", formatOptionalProtoTime(op.StartedAt)),
@@ -84,14 +84,6 @@ func formatOptionalTime(t *time.Time) string {
 		return ""
 	}
 	return t.Format(detailTimeFormat)
-}
-
-// formatHeartbeat renders the last heartbeat time and its age.
-func formatHeartbeat(t *time.Time) string {
-	if t == nil || t.IsZero() {
-		return ""
-	}
-	return fmt.Sprintf("%s (%s ago)", t.Format("15:04:05"), timeNow().Sub(*t).Truncate(time.Second))
 }
 
 // formatOptionalProtoTime renders an optional proto timestamp, or "".

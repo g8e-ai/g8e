@@ -59,8 +59,8 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_SubscribesToOwner
 			{
 				Id:                "observer-1",
 				OperatorSessionId: "sess-observer-1",
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 			},
 		}},
@@ -91,8 +91,8 @@ func TestProviderBoundaryObservationCoordinator_NotifyAttemptBegin_FailsWithoutC
 			{
 				Id:                op.Id,
 				OperatorSessionId: op.OperatorSessionId,
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 			},
 		}},
@@ -119,8 +119,8 @@ func TestProviderBoundaryObservationCoordinator_PreflightCommandDelivery_FailsWi
 			{
 				Id:                "observer-1",
 				OperatorSessionId: "sess-observer-1",
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 			},
 		}},
@@ -144,8 +144,8 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSes
 		{
 			Id:                "observer-1",
 			OperatorSessionId: "sess-observer-old",
-			Status: string(constants.OperatorStatusActive),
-			OperatorType: string(constants.OperatorTypeRemote),
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		},
 	}}
@@ -166,8 +166,8 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSes
 		{
 			Id:                "observer-2",
 			OperatorSessionId: "sess-observer-new",
-			Status: string(constants.OperatorStatusActive),
-			OperatorType: string(constants.OperatorTypeRemote),
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		},
 	}
@@ -225,8 +225,8 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_LogsNotFound(t *t
 			{
 				Id:                "data-1",
 				OperatorSessionId: "sess-data-1",
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 			},
 		}},
@@ -248,8 +248,8 @@ func duplicateObserverOperators() []*operatorv1.OperatorDocument {
 		return &operatorv1.OperatorDocument{
 			Id:                id,
 			OperatorSessionId: session,
-			Status: string(constants.OperatorStatusActive),
-			OperatorType: string(constants.OperatorTypeRemote),
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			SystemFingerprint: "fp-observer-host",
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		}
@@ -260,8 +260,8 @@ func duplicateObserverOperators() []*operatorv1.OperatorDocument {
 		{
 			Id:                "inference-1",
 			OperatorSessionId: "sess-inference-1",
-			Status: string(constants.OperatorStatusActive),
-			OperatorType: string(constants.OperatorTypeRemote),
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			SystemFingerprint: "fp-inference-host",
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 		},
@@ -331,8 +331,8 @@ func TestProviderBoundaryObservationCoordinator_IngestAfterDispatchContextCancel
 			{
 				Id:                "observer-1",
 				OperatorSessionId: "sess-observer-1",
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 			},
 		}},

@@ -370,7 +370,7 @@ func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID str
 			BoundWebSessionID: op.BoundWebSessionId,
 			OperatorID:        op.Id,
 			OperatorSessionID: op.OperatorSessionId,
-			Status:            string(status),
+			Status:            status,
 		})
 	}
 	if len(boundCLI) > 0 {

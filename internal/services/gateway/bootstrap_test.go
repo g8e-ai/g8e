@@ -104,7 +104,7 @@ func TestBootstrapFlow(t *testing.T) {
 	assert.True(t, op.Claimed, "embedded operator is claimed by bootstrap")
 	assert.Equal(t, bootstrapUserID, op.UserId)
 	assert.Equal(t, bootstrapSessionID, op.OperatorSessionId)
-	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
+	assert.Equal(t, string(constants.OperatorTypeEmbedded), op.OperatorType)
 	assert.Equal(t, "test-fingerprint", op.SystemFingerprint)
 
 	opSession, err := infra.OperatorSessionSvc.GetActiveSessionForUser(bootstrapUserID)

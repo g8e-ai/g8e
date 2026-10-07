@@ -73,8 +73,8 @@ func TestModelProvenanceObservationCoordinator_EnsureOperator_SubscribesToProven
 			{
 				Id:                "prov-1",
 				OperatorSessionId: "sess-prov-1",
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
@@ -101,8 +101,8 @@ func TestModelProvenanceObservationCoordinator_PreflightCommandDelivery_FailsWit
 			{
 				Id:                "prov-1",
 				OperatorSessionId: "sess-prov-1",
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
@@ -129,8 +129,8 @@ func TestModelProvenanceObservationCoordinator_IngestPersistsAttestationWindow(t
 			{
 				Id:                "prov-1",
 				OperatorSessionId: "sess-prov-1",
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
@@ -175,8 +175,8 @@ func TestModelProvenanceObservationCoordinator_NotifyAttemptBegin_FailsWithoutCm
 			{
 				Id:                op.Id,
 				OperatorSessionId: op.OperatorSessionId,
-				Status: string(constants.OperatorStatusActive),
-				OperatorType: string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
+				OperatorType:      string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},

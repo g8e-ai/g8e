@@ -70,8 +70,8 @@ func TestRegisterPendingEmbeddedOperator_Idempotent(t *testing.T) {
 
 	op := loadEmbeddedOperatorDoc(t, infra.DocStore)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.Id)
-	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
-	assert.Equal(t, constants.ComponentNameG8EO, op.Component)
+	assert.Equal(t, string(constants.OperatorTypeEmbedded), op.OperatorType)
+	assert.Equal(t, string(constants.ComponentNameG8EO), op.Component)
 	assert.Equal(t, string(constants.OperatorStatusAvailable), op.Status)
 	assert.False(t, op.Claimed)
 	assert.False(t, op.IsSlot)
@@ -120,7 +120,7 @@ func TestBootstrap_ClaimsEmbeddedOperatorAndBindsCLISession(t *testing.T) {
 	assert.True(t, op.Claimed)
 	assert.Equal(t, resp.User.ID, op.UserId)
 	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionId)
-	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
+	assert.Equal(t, string(constants.OperatorTypeEmbedded), op.OperatorType)
 
 	// The operator session document exists for the minted session.
 	opSession, err := infra.OperatorSessionSvc.GetActiveSessionForUser(resp.User.ID)

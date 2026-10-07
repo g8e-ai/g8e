@@ -144,12 +144,12 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 		return constants.ErrMissingRequiredField
 	}
 	type configUpdatePayload struct {
-		RuntimeConfig json.RawMessage       `json:"runtime_config"`
+		RuntimeConfig json.RawMessage         `json:"runtime_config"`
 		OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
-		LocalDir      string                `json:"local_dir,omitempty"`
-		Account       string                `json:"account,omitempty"`
-		Port          int32                 `json:"port,omitempty"`
-		UpdatedAt     time.Time             `json:"updated_at"`
+		LocalDir      string                  `json:"local_dir,omitempty"`
+		Account       string                  `json:"account,omitempty"`
+		Port          int32                   `json:"port,omitempty"`
+		UpdatedAt     time.Time               `json:"updated_at"`
 	}
 	runtimeConfigBytes, err := models.MarshalOperatorRuntimeConfig(runtimeConfig)
 	if err != nil {

@@ -37,7 +37,7 @@ func ActiveProvenanceOperators(operators []*operatorv1.OperatorDocument) []Prove
 		matches = append(matches, ProvenanceOperatorStatus{
 			OperatorID:        op.Id,
 			OperatorSessionID: op.OperatorSessionId,
-			Status:            string(op.Status),
+			Status:            op.Status,
 			ProvenanceEnabled: true,
 			ModelStorageRoot:  op.RuntimeConfig.ProvenanceOperatorModelStorageRoot,
 			Platform:          op.RuntimeConfig.Platform,

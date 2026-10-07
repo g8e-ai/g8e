@@ -119,12 +119,12 @@ func testRunOperators() []*operatorv1.OperatorDocument {
 			},
 		},
 		{
-			Id:                "data-op",
-			OperatorSessionId: testDataSession,
-			CurrentHostname:   constants.DataOperatorHostname,
-			Status:            string(constants.OperatorStatusActive),
-			OperatorType:      string(constants.OperatorTypeRemote),
-			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false},
+			Id:                      "data-op",
+			OperatorSessionId:       testDataSession,
+			CurrentHostname:         constants.DataOperatorHostname,
+			Status:                  string(constants.OperatorStatusActive),
+			OperatorType:            string(constants.OperatorTypeRemote),
+			RuntimeConfig:           &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false},
 			LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{Environment: &operatorv1.EnvironmentDetails{Pwd: testDataOperatorWorkingDirectory}},
 		},
 	}

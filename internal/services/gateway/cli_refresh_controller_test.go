@@ -312,11 +312,11 @@ func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testi
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		Id:                "op-id-registry-active",
 		UserId:            user.ID,
-		Status: string(constants.OperatorStatusActive),
-		OperatorType: string(constants.OperatorTypeRemote),
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
 		OperatorSessionId: activeSessionID,
-		CreatedAt: timestamppb.New(now),
-		UpdatedAt: timestamppb.New(now),
+		CreatedAt:         timestamppb.New(now),
+		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(
@@ -410,11 +410,11 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 	embeddedBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		Id:                string(constants.DocIDEmbeddedOperator),
 		UserId:            user.ID,
-		Status: string(constants.OperatorStatusActive),
-		OperatorType: string(constants.OperatorTypeEmbedded),
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeEmbedded),
 		OperatorSessionId: "embedded-sess-refresh",
-		CreatedAt: timestamppb.New(now),
-		UpdatedAt: timestamppb.New(now),
+		CreatedAt:         timestamppb.New(now),
+		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator), embeddedBytes))

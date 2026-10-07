@@ -74,7 +74,7 @@ func ActiveDataOperators(operators []*operatorv1.OperatorDocument) []DataOperato
 		status := DataOperatorStatus{
 			OperatorID:        op.Id,
 			OperatorSessionID: op.OperatorSessionId,
-			Status:            string(op.Status),
+			Status:            op.Status,
 			WorkingDirectory:  wd,
 		}
 		switch {
