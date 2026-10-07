@@ -178,44 +178,7 @@ Choose a stricter posture only after configuring the proofs it requires:
 
 Consensus and notary require an enabled consensus policy, trusted signers, and an available in-process consensus service. `--consensus-bootstrap` can seed the policy and signer keys for deterministic deployments. Ratify and notary require L3 human authorization for mutations.
 
-### Gateway Mode Flags
-
-- `--posture <mode>` - g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced)
-- `--http-port <port>` - Plain HTTP port for bootstrap, health checks, and PKI discovery (default: 8080)
-- `--https-port <port>` - HTTPS port for mTLS API and public surface (default: 8443)
-- `--data-dir <dir>` - Data directory for SQLite database (default: .g8e/data in working directory)
-- `--pki-dir <dir>` - Directory for TLS certificates (default: .g8e/pki)
-- `--secrets-dir <dir>` - Directory for platform secrets (default: .g8e/secrets)
-- `--vault-dir <dir>` - Directory for vault data (default: .g8e/vault)
-- `--vault-key <path>` - Path to the vault private key (default: `.g8e/secrets/key`)
-- `--passkey-rp-id <id>` - RP ID for passkey operations (default: localhost)
-- `--passkey-rp-name <name>` - RP Name for passkey operations (default: g8e)
-- `--passkey-rp-origin <origin>` - Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)
-- `--rate-limit-rps <rps>` - Gateway requests per second limit (set to 0 to disable, default: 0)
-- `--rate-limit-burst <burst>` - Gateway rate limit burst size (default: 0)
-- `--roles <roles>` - Embedded Operator roles: data, inference, provenance, observer (repeatable; default: embedded,data)
-- `--ensemble-upstream-url <url>` - HTTP URL of the g8ee Ensemble for browser proxy forwarding (default: `http://127.0.0.1:8000`)
-- `--log <level>` - Log level: info, error, debug (default: info)
-- `--cert-mode <mode>` - Certificate identity mode: `full` includes detected hostnames and IP addresses (default), while `localhost` uses only loopback identities
-- `--consensus-id <id>` - ID of the enabled `ConsensusPolicy` used by the L2-enforcing `consensus` and `notary` postures
-- `--consensus-url <url>` - Optional consensus service URL carried in startup configuration; the reference gateway currently deliberates through its in-process consensus service
-- `--consensus-bootstrap <path>` - Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup
-- `--mcp-downstream-url <url>` - URL of a downstream MCP server to proxy discovery and execution to (default: none)
-- `--mcp-downstream-cmd <command>` - Command of a downstream stdio MCP server the Gateway spawns and proxies discovery and execution to (default: none)
-- `--mcp-downstream-args <args>` - Comma-separated arguments for the downstream MCP subprocess (default: none)
-- `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
-- `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
-- `--public-spectator` - Start the in-process public mirror and Evaluation Explorer listeners (enabled by default)
-- `--public-spectator-private-listen <address>` - Authenticated mirror-ingest listener (default: `127.0.0.1:8081`)
-- `--public-spectator-public-listen <address>` - Anonymous mirror read and SSE listener (default: `127.0.0.1:8082`)
-- `--public-spectator-trusted-proxy-cidr <cidr>` - Trusted proxy CIDR permitted to supply exactly one `CF-Connecting-IP` value (repeatable)
-- `--public-spectator-allow-container-bind` - Allow the public mirror and Evaluation Explorer listeners to bind `0.0.0.0` so a container network can reach them; set only inside a container deployment
-- `--eval-explorer-listen <address>` - Evaluation Explorer listener (default: `127.0.0.1:5173`)
-- `--eval-explorer-root <dir>` - Directory containing built Evaluation Explorer assets
-- `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
-- `--doctrine-dir <dir>` - Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)
-- `-f, --follow` - Run gateway in foreground instead of background (Ctrl+C stops gateway)
-- `-i, --interactive` - Launch the interactive onboarding wizard before starting the gateway
+Use `./g8e gw start --help` for the current startup flags and defaults. The command accepts configuration for governance posture, listener ports, storage, passkeys, downstream services, public surfaces, and embedded Operator roles; consult the help output for the options available in the binary you are running.
 
 The root command also displays global `-e, --endpoint` and `-p, --port` flags. Those flags select the remote HTTP discovery and HTTPS/mTLS endpoints for enrollment and client commands; they do not configure the gateway's listening ports. Use `--http-port` and `--https-port` for the listeners.
 

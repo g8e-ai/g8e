@@ -4,7 +4,7 @@ title: Developer Guidelines
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - go.mod
   - Makefile
@@ -73,7 +73,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-ENV-01 | The Go toolchain MUST satisfy the `go` line in `go.mod` (1.26.6). Setup scripts read that line and also check `git`, `make`, Node.js 22+, and `npm`. |
+| INV-ENV-01 | The Go toolchain MUST satisfy the `go` line in `go.mod` (1.26.6). Setup scripts read that line and check the development toolchain, including Node.js 22+ and `npm`; a fresh `make build` uses committed frontend embeds and does not require Node.js. |
 | INV-ENV-02 | Commands in this guide MUST be run from the repository root unless the owning component guide says otherwise. |
 | INV-ENV-03 | CLI behavior MUST be taken from `./g8e <command> --help`. This file MUST NOT grow a flag inventory. |
 | INV-ENV-04 | Environment variables MUST be read only for secrets (API keys, tokens, encryption keys), user-specific endpoints or identities that have no correct universal default (for example the approved Ollama endpoint, the hostname the browser uses), and host facts the OS provides (`HOME`, `USER`, `SHELL`, `LANG`, `TERM`, `TZ`, `SystemRoot`). All other platform configuration (ports, container prefix, model roles, paths, service URLs, app names) MUST be a typed default in code and vary per deployment only through explicit, checked-in command flags. MUST NOT add an env fallback behind a flag, and MUST NOT key a code path or security check off an env switch. Every env key MUST be declared with a `category` in `protocol/constants/env_vars.json`; raw-string keys outside the registry are a violation (INV-TYPE-06). |
@@ -222,7 +222,7 @@ The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full m
 | Claim | Path | Verify |
 | --- | --- | --- |
 | Go version and module | `go.mod` | `go` directive is `1.26.6` |
-| Setup prerequisites | `scripts/lib/dev-setup-common.sh`, `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, `scripts/windows-setup.ps1`, `scripts/dev-check.sh` | Scripts read the Go version from `go.mod` and other tool pins from the `Makefile`, check `git`, `make`, `curl`, Node.js 22+, `npm`, and (unless `--build-only`) `python3`, `uv`, `rg`, `bc`, and a C compiler, offer to install what is missing, build `evaluation-explorer/dist/index.html` when it is absent, run `make build` and `make dev-setup`, add the repo root and dev tool directories to the user path, and finish with `make dev-check`; the `ci` targets run `make dev-check` first |
+| Setup prerequisites | `scripts/lib/dev-setup-common.sh`, `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, `scripts/windows-setup.ps1`, `scripts/dev-check.sh` | Setup scripts read the Go version from `go.mod` and tool pins from the `Makefile`; their development-toolchain checks include Node.js 22+ and `npm`, and full setup also checks Python and test tooling. The scripts build the Evaluation Explorer when its bundle is absent, run `make build` and `make dev-setup`, and finish with `make dev-check`; CI targets run `make dev-check` first. Fresh clones can run `make build` using committed frontend embeds without building either frontend. |
 | Platform CLI binary | `Makefile` (`MAIN_PKG := ./cmd/g8e`), `cmd/g8e` | `make build` writes `bin/g8e-<os>-<arch>` and copies a runnable binary to the repo root |
 | Cobra root and groups | `internal/cli/cmd/main.go`, `internal/cli/cmd/<group>/` | `./g8e --help` |
 | Sentinel errors | `internal/constants/errors.go` | `constants.Err*` declarations, including `ErrFileServiceInit` |
