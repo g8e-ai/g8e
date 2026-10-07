@@ -273,6 +273,147 @@ class FullTests(unittest.TestCase):
         self.assertIn("https://dev.example:8443", gateway)
         self.assertFalse(identities.call_args.kwargs["interactive"])
 
+    def test_embedded_gateway_preview_assigns_every_role_to_embedded_operator(self):
+        output = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["full.py", "--dry-run", "--embedded-gateway"]),
+            patch.object(
+                FULL,
+                "load_environment",
+                return_value={
+                    "Hostname": "dev.example",
+                    "OllamaEndpoint": "http://gpu:11434",
+                },
+            ),
+            patch.object(FULL, "model_root", return_value="/models"),
+            patch.object(FULL.subprocess, "run") as run,
+            patch("builtins.input", side_effect=AssertionError("unexpected prompt")),
+            contextlib.redirect_stdout(output),
+        ):
+            FULL.main()
+        run.assert_not_called()
+        text = output.getvalue()
+        self.assertIn("--roles provenance,observer,inference,data", text)
+        self.assertIn("--model-storage-root /models", text)
+        self.assertIn("--inference-ollama-endpoint http://gpu:11434", text)
+        self.assertIn("https://dev.example:8443", text)
+
+    def test_embedded_gateway_starts_only_the_gateway(self):
+        output = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["full.py", "--embedded-gateway"]),
+            patch.object(FULL, "load_environment", return_value={}),
+            patch.object(FULL, "model_root", return_value="/models"),
+            patch.object(FULL, "stop_ensemble") as stop_ens,
+            patch.object(FULL, "stop_operators") as stop_ops,
+            patch.object(FULL.subprocess, "run") as run,
+            patch.object(FULL, "prepare_identities") as identities,
+            patch.object(FULL, "start_local") as start_local,
+            patch.object(FULL, "start_ensemble") as start_ensemble,
+            contextlib.redirect_stdout(output),
+        ):
+            FULL.main()
+        identities.assert_not_called()
+        start_local.assert_not_called()
+        start_ensemble.assert_not_called()
+        stop_ens.assert_called_once_with(False)
+        stop_ops.assert_called_once_with(False)
+        self.assertEqual(
+            [call.args[0][1:3] for call in run.call_args_list],
+            [["gw", "stop"], ["gw", "start"], ["gw", "status"]],
+        )
+        command = run.call_args_list[1].args[0]
+        self.assertEqual(command[1:4], ["gw", "start", "--quiet"])
+        self.assertEqual(
+            command[command.index("--roles") + 1], "provenance,observer,inference,data"
+        )
+        self.assertEqual(run.call_args.kwargs["cwd"], FULL.ROOT)
+
+        self.assertEqual(run.call_args.args[0][1:], ["gw", "status"])
+        self.assertEqual(output.getvalue(), "")
+
+    def test_embedded_gateway_without_endpoint_keeps_gateway_inference_default(self):
+        output = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["full.py", "--dry-run", "--embedded-gateway"]),
+            patch.object(FULL, "load_environment", return_value={}),
+            patch.object(FULL, "model_root", return_value="/models"),
+            contextlib.redirect_stdout(output),
+        ):
+            FULL.main()
+        self.assertNotIn("--inference-ollama-endpoint", output.getvalue())
+
+    def test_embedded_gateway_explicit_model_storage_root_skips_detection(self):
+        output = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                ["full.py", "--dry-run", "--embedded-gateway",
+                 "--model-storage-root", "/srv/ollama/models"],
+            ),
+            patch.object(FULL, "load_environment", return_value={}),
+            patch.object(FULL, "model_root", side_effect=AssertionError("detected")),
+            contextlib.redirect_stdout(output),
+        ):
+            FULL.main()
+        self.assertIn("--model-storage-root /srv/ollama/models", output.getvalue())
+
+    def test_embedded_gateway_invalid_environment_fails_before_side_effects(self):
+        for values in (
+            {"OllamaEndpoint": "file:///private"},
+            {"OllamaEndpoint": ""},
+            {"Hostname": "$(touch /tmp/sentinel)"},
+        ):
+            with (
+                self.subTest(values=values),
+                patch.object(sys, "argv", ["full.py", "--embedded-gateway"]),
+                patch.object(FULL, "load_environment", return_value=values),
+                patch.object(FULL, "model_root", return_value="/models"),
+                patch.object(FULL.subprocess, "run") as run,
+                self.assertRaises(ValueError),
+            ):
+                FULL.main()
+            run.assert_not_called()
+
+    def test_embedded_gateway_stop_failure_prevents_start(self):
+        with (
+            patch.object(sys, "argv", ["full.py", "--embedded-gateway"]),
+            patch.object(FULL, "load_environment", return_value={}),
+            patch.object(FULL, "model_root", return_value="/models"),
+            patch.object(FULL, "stop_ensemble"),
+            patch.object(FULL, "stop_operators"),
+            patch.object(FULL.subprocess, "run",
+                         side_effect=subprocess.CalledProcessError(1, ["gw", "stop"])) as run,
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
+            FULL.main()
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0][1:], ["gw", "stop"])
+        self.assertTrue(run.call_args.kwargs["check"])
+
+    def test_full_restarts_gateway_with_only_embedded_role_and_unique_operators(self):
+        events = []
+        with (
+            patch.object(sys, "argv", ["full.py", "--start-gateway"]),
+            patch.object(FULL, "load_environment", return_value={"OllamaEndpoint": "http://gpu:11434"}),
+            patch.object(FULL, "model_root", return_value="/models"),
+            patch.object(FULL, "stop_gateway", side_effect=lambda dry: events.append("stop")),
+            patch.object(FULL.subprocess, "run", side_effect=lambda command, **kw: events.append(command)) as run,
+            patch.object(FULL, "prepare_identities"),
+            patch.object(FULL, "start_local") as launch,
+            patch.object(FULL, "start_ensemble"),
+            patch.object(FULL, "report_workloads", return_value=False),
+            patch.object(FULL, "print_summary"),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            FULL.main()
+        command = run.call_args_list[-1].args[0]
+        self.assertEqual(command[command.index("--roles") + 1], "embedded")
+        self.assertEqual(events[-2], "stop")
+        self.assertEqual([call.args[0] for call in launch.call_args_list], list(FULL.ROLES))
+        self.assertEqual(len({call.args[1] for call in launch.call_args_list}), 4)
+
     def test_ensemble_start_uses_this_python_and_shared_runtime(self):
         with patch.object(FULL, "start_local") as launch:
             FULL.start_ensemble()
@@ -603,7 +744,7 @@ class FullTests(unittest.TestCase):
             contextlib.redirect_stdout(output),
         ):
             FULL.print_summary()
-        self.assertEqual(run.call_args_list[0].args[0][1:], ["gw", "status", "--brief"])
+        self.assertEqual(run.call_args_list[0].args[0][1:], ["gw", "status"])
         self.assertEqual(run.call_args_list[1].args[0][1:], ["ensemble", "status"])
         text = output.getvalue()
         self.assertIn("2 connected", text)

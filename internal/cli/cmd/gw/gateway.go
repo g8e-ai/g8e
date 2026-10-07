@@ -8,7 +8,6 @@
 package gw
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,7 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
-	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
@@ -26,12 +25,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	cligateway "github.com/g8e-ai/g8e/v2/internal/cli/gateway"
-	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/cli/wizard"
@@ -41,7 +37,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
-	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
 func getBinaryName() string {
@@ -669,286 +664,60 @@ func gatewayStatusCmdWithConfig(
 	clientFactory authcmd.APIClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
-	var brief bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check Gateway health and status",
-		Long: `Check whether the g8e Gateway is running by first attempting an HTTP health
-check against the gateway API, then falling back to a process-manager check.
-Reports enrollments (pending, operators, applications, dashboard) and users when
-the gateway is running.
-Also reports the status of the Docker Compose unified stack when containers are running.
-Displays the process ID and endpoint URLs when the gateway is running.`,
+		Long:  "Show Gateway status, Operator capabilities, and enrollment counts.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
-
-			if brief {
-				return printBriefStatus(cmd, cfg, clientFactory, fileSvcFactory)
-			}
-
-			cmd.Println("g8e Gateway Status")
-			cmd.Println("========================")
-
-			// Try HTTP check first (works for Docker/foreground/background modes)
-			fileSvc, err := fileSvcFactory("", slog.Default())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-			}
-
-			cmd.Println()
-			cmd.Println("Localhost Gateway")
-			cmd.Println("-----------------")
-			httpOK := false
-			var apiClient authcmd.APIClient
-			client, err := clientFactory(fileSvc, cfg)
-			if err == nil {
-				apiClient = client
-				respBody, err := client.Get("/api/v1/health")
-				if err == nil {
-					var health models.HealthResponse
-					_ = json.Unmarshal(respBody, &health)
-					if health.PID > 0 {
-						cmd.Printf("State: RUNNING (PID: %d)\n", health.PID)
-					} else {
-						cmd.Println("State: RUNNING (HTTP check)")
-					}
-					cmd.Printf("\nEndpoints:\n")
-					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
-					httpOK = true
-				}
-			}
-
-			// Fallback to ProcessManager check (for background/host mode) when
-			// the HTTP health probe did not succeed. Fail-closed on internal
-			// errors, matching the pre-Docker-section behavior.
-			running := httpOK
-			if !httpOK {
-				pm, err := platform.NewProcessManager(fileSvc)
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-				}
-				pmRunning, pid, err := pm.OperatorStatus()
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
-				}
-				if pmRunning {
-					running = true
-					cmd.Printf("State: RUNNING (PID: %d)\n", pid)
-					cmd.Printf("\nEndpoints:\n")
-					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
-				} else {
-					cmd.Println("State: STOPPED")
-				}
-			}
-
-			// Report enrollments (pending, operators, applications, dashboard)
-			// when the gateway is running.
-			if running {
-				cmd.Println()
-				printEnrollments(cmd.OutOrStdout(), apiClient, fileSvc, cfg)
-			}
-
-			// Report the Docker Compose unified stack status if at least one
-			// container is actually running.
-			var dockerBuf bytes.Buffer
-			if err := docker.PrintDockerStackStatus(&dockerBuf, ""); err == nil && dockerBuf.Len() > 0 {
-				cmd.Println()
-				cmd.Print(dockerBuf.String())
-			}
-
-			return nil
+			return printGatewayStatus(cmd, cfg, clientFactory, fileSvcFactory)
 		},
 	}
 
-	cmd.Flags().BoolVar(&brief, "brief", false, "Show a compact Gateway and connected operator summary")
 	return cmd
 }
 
-// printEnrollments renders the Enrollments section: pending requests, connected
-// operators, completed (non-revoked) application and dashboard enrollments, and
-// registered users.
-func printEnrollments(w io.Writer, client authcmd.APIClient, fileSvc fs.RuntimeFileService, cfg *config.Config) {
-	fmt.Fprintln(w, "Enrollments")
-	fmt.Fprintln(w, "-----------")
-
-	printPendingEnrollments(w, client)
-	fmt.Fprintln(w)
-	printConnectedOperators(w, client, fileSvc, cfg)
-	fmt.Fprintln(w)
-
-	enrolled, ok := fetchEnrolled(client)
-	printEnrolledKinds(w, "Applications", "No enrolled applications", enrolled, ok,
-		models.PlatformComponentApplication, models.PlatformComponentEnsemble)
-	fmt.Fprintln(w)
-	printEnrolledKinds(w, "Dashboard", "No enrolled dashboard", enrolled, ok,
-		models.PlatformComponentDashboard)
-	fmt.Fprintln(w)
-	printUsers(w, client)
-}
-
-func printUsers(w io.Writer, client authcmd.APIClient) {
-	fmt.Fprintln(w, "Users")
+func printEnrollmentSummary(w io.Writer, client authcmd.APIClient) {
 	if client == nil {
-		fmt.Fprintln(w, "  No users")
+		fmt.Fprintln(w, "Enrollments  unavailable (CLI not enrolled)")
 		return
 	}
-	body, err := client.Get(constants.APIPaths.Users)
-	if err != nil {
-		fmt.Fprintln(w, "  Users unavailable; check enrollment or Gateway logs")
-		return
-	}
-	var users []models.User
-	if err := json.Unmarshal(body, &users); err != nil {
-		fmt.Fprintln(w, "  Users unavailable; check enrollment or Gateway logs")
-		return
-	}
-	if len(users) == 0 {
-		fmt.Fprintln(w, "  No users")
-		return
-	}
-	fmt.Fprintf(w, "  %-36s  %-10s  %-20s  %-8s\n", "ID", "Status", "Roles", "Passkeys")
-	for _, u := range users {
-		status := string(u.Status)
-		if status == "" {
-			status = "-"
-		}
-		roles := strings.Join(u.Roles, ",")
-		if roles == "" {
-			roles = "-"
-		}
-		fmt.Fprintf(w, "  %-36s  %-10s  %-20s  %-8d\n", u.ID, status, roles, len(u.PasskeyCredentials))
-	}
-}
-
-func printPendingEnrollments(w io.Writer, client authcmd.APIClient) {
-	fmt.Fprintln(w, "Pending")
-	if client == nil {
-		fmt.Fprintln(w, "  No pending enrollments")
-		return
-	}
+	pendingCount, userCount, appCount, dashboardCount := "?", "?", "?", "?"
 	body, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentPending)
-	if err != nil {
-		fmt.Fprintln(w, "  Pending enrollments unavailable; check enrollment or Gateway logs")
-		return
-	}
 	var pending models.PlatformEnrollmentPendingResponse
-	if err := json.Unmarshal(body, &pending); err != nil {
-		fmt.Fprintln(w, "  Pending enrollments unavailable; check enrollment or Gateway logs")
-		return
+	if err == nil && json.Unmarshal(body, &pending) == nil {
+		pendingCount = strconv.Itoa(len(pending.Requests))
 	}
-	if len(pending.Requests) == 0 {
-		fmt.Fprintln(w, "  No pending enrollments")
-		return
+	body, err = client.Get(constants.APIPaths.Users)
+	var users []models.User
+	if err == nil && json.Unmarshal(body, &users) == nil {
+		userCount = strconv.Itoa(len(users))
 	}
-	fmt.Fprintf(w, "  %-36s  %-12s  %-24s  %-30s  %-24s\n", "Request ID", "Kind", "Name", "Instance ID", "Hostname")
-	for _, r := range pending.Requests {
-		fmt.Fprintf(w, "  %-36s  %-12s  %-24s  %-30s  %-24s\n",
-			r.RequestID, string(r.ComponentKind), r.ComponentName, r.InstanceID, r.Hostname)
-	}
-	fmt.Fprintln(w, "  Approve with: g8e auth enroll approve <request-id>")
-}
-
-func printConnectedOperators(w io.Writer, client authcmd.APIClient, fileSvc fs.RuntimeFileService, cfg *config.Config) {
-	fmt.Fprintln(w, "Operators")
-	if client == nil {
-		fmt.Fprintln(w, "  No connected operators")
-		return
-	}
-
-	creds, _ := auth.LoadCredentials(fileSvc, cfg)
-	reqPath := constants.APIPaths.Operators
-	if creds != nil && creds.UserID != "" {
-		reqPath += "?user_id=" + creds.UserID
-	}
-
-	resp, err := client.Get(reqPath)
-	if err != nil {
-		fmt.Fprintln(w, "  No connected operators")
-		return
-	}
-
-	var slotResp models.OperatorSlotResponse
-	if err := json.Unmarshal(resp, &slotResp); err != nil {
-		fmt.Fprintln(w, "  No connected operators")
-		return
-	}
-
-	var connected []models.OperatorDocumentGo
-	for _, op := range slotResp.Operators {
-		if clioperator.IsConnected(op) {
-			connected = append(connected, op)
+	enrolled, ok := cligateway.FetchEnrolled(client.Get)
+	if ok {
+		apps, dashboards := 0, 0
+		for _, entry := range enrolled {
+			switch entry.ComponentKind {
+			case models.PlatformComponentApplication, models.PlatformComponentEnsemble:
+				apps++
+			case models.PlatformComponentDashboard:
+				dashboards++
+			}
 		}
+		appCount, dashboardCount = strconv.Itoa(apps), strconv.Itoa(dashboards)
 	}
-
-	if len(connected) == 0 {
-		fmt.Fprintln(w, "  No connected operators")
-		return
-	}
-
-	fmt.Fprintf(w, "  %-36s  %-12s  %-24s  %-36s  %-15s\n", "ID", "Role", "Hostname", "Session ID", "Status")
-	for _, op := range connected {
-		sessionID := op.OperatorSessionID
-		if sessionID == "" {
-			sessionID = "-"
-		}
-		fmt.Fprintf(w, "  %-36s  %-12s  %-24s  %-36s  %-15s\n",
-			op.ID,
-			operatorRoleDisplay(op),
-			operatorHostnameDisplay(op),
-			sessionID,
-			op.Status,
-		)
-	}
-}
-
-// fetchEnrolled returns the completed (non-revoked) platform enrollments. The
-// bool is false when the list could not be retrieved.
-func fetchEnrolled(client authcmd.APIClient) ([]models.PlatformEnrollmentEnrolledRequest, bool) {
-	if client == nil {
-		return nil, true
-	}
-	return cligateway.FetchEnrolled(client.Get)
-}
-
-func printEnrolledKinds(w io.Writer, title, empty string, enrolled []models.PlatformEnrollmentEnrolledRequest, ok bool, kinds ...models.PlatformComponentKind) {
-	fmt.Fprintln(w, title)
-	if !ok {
-		fmt.Fprintf(w, "  %s unavailable; check enrollment or Gateway logs\n", title)
-		return
-	}
-	var rows []models.PlatformEnrollmentEnrolledRequest
-	for _, e := range enrolled {
-		if slices.Contains(kinds, e.ComponentKind) {
-			rows = append(rows, e)
-		}
-	}
-	if len(rows) == 0 {
-		fmt.Fprintf(w, "  %s\n", empty)
-		return
-	}
-	fmt.Fprintf(w, "  %-24s  %-12s  %-30s  %-24s  %-36s\n", "Name", "Kind", "Instance ID", "Hostname", "Request ID")
-	for _, e := range rows {
-		fmt.Fprintf(w, "  %-24s  %-12s  %-30s  %-24s  %-36s\n",
-			e.ComponentName, string(e.ComponentKind), e.InstanceID, e.Hostname, e.RequestID)
-	}
-}
-
-func operatorRoleDisplay(op models.OperatorDocumentGo) string {
-	return operatorcapability.GetOperatorRoles(op).String()
+	fmt.Fprintf(w, "Enrollments  users %s · pending %s · apps %s · dashboards %s\n", userCount, pendingCount, appCount, dashboardCount)
 }
 
 func operatorHostnameDisplay(op models.OperatorDocumentGo) string {
 	if op.CurrentHostname != "" {
 		return op.CurrentHostname
+	}
+	if op.OperatorType == constants.OperatorTypeEmbedded {
+		return "local"
 	}
 	if op.Name != "" {
 		return op.Name

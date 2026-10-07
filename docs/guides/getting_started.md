@@ -275,6 +275,44 @@ chmod +x g8e-linux-amd64
 make up
 ```
 
+**Start the Gateway with its embedded Operator acting as every role:**
+
+```bash
+make ensemble-env # one-time runtime setup
+make gw
+```
+
+`make gw` starts only the Gateway, in a single process, with `--roles provenance,observer,inference,data` on its embedded Operator. There are no separate Operator processes, working directories, or enrollments, and g8ee is not started. It reads `G8E_HOSTNAME` and `G8E_OLLAMA_ENDPOINT` from `.env` the same way `make full` does, except that an unset Ollama endpoint keeps the Gateway's default (`http://127.0.0.1:11434`) instead of failing. The provenance model store is detected from host storage. Override it, or preview the command, with:
+
+```bash
+make gw GW_ARGS='--model-storage-root /srv/ollama/models'
+make gw GW_ARGS='--dry-run'
+```
+
+Roles are fixed when the Gateway starts. `make gw` stops the launcher-managed local Operators and g8ee, then stops and starts the Gateway with every capability on its embedded Operator. Runtime state and enrolled identities are preserved. Startup ends with the same output as `gw status`, which `make full` also prints. `gw status` has one output format whichever target started the Gateway: a Gateway row, an Operators table with one row per connected Operator ID, an Operator flags table, enrollment counts (`?` means unavailable), and the Console URL.
+
+```text
+Gateway  online (PID 29424)
+
+Operators
+  OPERATOR ID        TYPE      STATUS  HOST   HTTP PORT  CAPABILITIES                                 DIRECTORY
+  embedded-operator  embedded  active  local  8080       embedded,data,inference,provenance,observer  /home/you/g8e
+
+Operator flags
+  OPERATOR ID        CAPABILITY  FLAG                             VALUE
+  embedded-operator  inference   --inference-ollama-endpoint      http://192.168.1.2:11434
+  embedded-operator  inference   --inference-keep-alive           (default)
+  embedded-operator  provenance  --model-storage-root             /mnt/d/ai/Ollama/models
+  embedded-operator  provenance  --provenance-operator-id         (default)
+  embedded-operator  observer    --provider-boundary-observer-id  (default)
+
+Enrollments  users 1 · pending 0 · apps 0 · dashboards 0
+
+Console  https://localhost:8443/console/
+```
+
+The Operators table lists `embedded` and `remote` Operators together, embedded first, then by ID. `HTTP PORT` is the Gateway HTTP port for the embedded Operator and the Gateway port a remote Operator dials. `DIRECTORY` is the Operator working directory. The Operator flags table has one row per start flag: `--log`, `--cloud`, `--provider`, and `--no-git` appear only when set to a non-default value, and each capability's flags appear for every Operator holding that capability. `(default)` means the flag was not set at start. The Gateway lists only values an Operator reported at registration, plus the launch profile for its embedded Operator, so a remote Operator's `--endpoint`, `--provenance-operator-id`, `--provider-boundary-observer-id`, and `--inference-keep-alive` are not listed. Before CLI enrollment, the local embedded Operator is still listed from its launch profile, and the output states that remote Operators and enrollments are unavailable. Authenticated registry records take precedence when available; an unreachable registry is reported as unavailable rather than empty. On a fresh Gateway, enroll the first user to claim the embedded Operator. Stop it with `make down`. Remote Operators must be stopped on their own hosts.
+
 **Start the Gateway + Operators + Ensemble:**
 
 ```bash
@@ -282,7 +320,7 @@ make ensemble-env # one-time runtime setup
 make full
 ```
 
-`make full` reads the repository-root `.env` and starts without launcher prompts. Set `G8E_OLLAMA_ENDPOINT` to the approved HTTP(S) provider URL. `G8E_HOSTNAME` selects the Gateway hostname for Operators, Ensemble, browser approval links, CORS, and passkey origins; if omitted, the host launcher retains `g8e.local`. Exported process variables take precedence, including empty values. Missing or empty Ollama endpoints and invalid hostnames fail before Gateway startup. The launcher parses quoted values and comments as data, without shell execution or variable interpolation, and leaves `.env` unchanged.
+`make full` reads the repository-root `.env` and starts without launcher prompts. It stops and starts the Gateway with only the `embedded` role, then launches separate provenance, observer, inference, and data Operators in unique working directories with their own enrollment identities, plus g8ee. This also switches a Gateway previously started by `make gw` back to separate Operators. Set `G8E_OLLAMA_ENDPOINT` to the approved HTTP(S) provider URL. `G8E_HOSTNAME` selects the Gateway hostname for Operators, Ensemble, browser approval links, CORS, and passkey origins; if omitted, the host launcher retains `g8e.local`. Exported process variables take precedence, including empty values. Missing or empty Ollama endpoints and invalid hostnames fail before Gateway startup. The launcher parses quoted values and comments as data, without shell execution or variable interpolation, and leaves `.env` unchanged.
 
 The four roles run locally by default. Optional `G8E_PROVENANCE_HOST`, `G8E_OBSERVER_HOST`, `G8E_INFERENCE_HOST`, and `G8E_DATA_HOST` select remote hosts. Remote roles print commands to run on those hosts; the launcher does not connect to them. The Gateway and Ensemble always run locally. The hostname must resolve to this Gateway, be reachable by the selected hosts, and match its existing TLS certificate.
 
@@ -519,7 +557,7 @@ g8e integrates with popular AI agent binaries to provide governed MCP tool acces
 After the Gateway is running and the CLI is authenticated:
 
 ```bash
-./g8e gw status           # Gateway health, endpoints, enrollments
+./g8e gw status           # Gateway health, Operators (type, capabilities, start flags), enrollment counts
 ./g8e gw data operators   # List enrolled operators
 ./g8e gw data users       # List users
 ./g8e gw data audit list  # Inspect the audit vault

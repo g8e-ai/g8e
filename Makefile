@@ -295,6 +295,7 @@ help:
 		'' \
 		'Run locally' \
 		'  up                        Build and start the Gateway on this host' \
+		'  gw                        Start the Gateway with its embedded Operator as every role' \
 		'  full                      Start host stack unattended using .env endpoints' \
 		'  full-setup                Start host stack with interactive operator setup' \
 		'  full-reset                Start host stack and reset stale identities' \
@@ -1020,6 +1021,12 @@ up: build
 	@./g8e gw start
 	@echo "Host platform started. Check it with: ./g8e gw status"
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
+
+.PHONY: gw
+# GW_ARGS carries --model-storage-root, --env-file, or --dry-run. Like `full`, the
+# launcher parses .env as data (G8E_HOSTNAME, G8E_OLLAMA_ENDPOINT) and never sources it.
+gw: build
+	@$(PYTHON) scripts/full.py --embedded-gateway $(GW_ARGS)
 
 .PHONY: full full-setup full-reset
 # FULL_ARGS carries explicit path flags or --dry-run; .env is parsed as data by

@@ -209,7 +209,7 @@ func TestGatewayStatusCmd_NotRunningReturnsStopped(t *testing.T) {
 
 	err := cmd.RunE(cmd, nil)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "STOPPED")
+	assert.Contains(t, buf.String(), "Gateway  stopped")
 }
 
 // TestGatewayStatusCmd_DoesNotShowDockerSectionWhenNoContainersRunning verifies that
@@ -227,7 +227,7 @@ func TestGatewayStatusCmd_DoesNotShowDockerSectionWhenNoContainersRunning(t *tes
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "Localhost Gateway")
+	assert.Contains(t, output, "Gateway  ")
 	assert.NotContains(t, output, "Docker Compose Stack")
 }
 
@@ -251,7 +251,7 @@ func TestGatewayStatusCmd_DockerSectionNotShownWhenDockerMissing(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "STOPPED")
+	assert.Contains(t, output, "Gateway  stopped")
 	assert.NotContains(t, output, "Docker Compose Stack")
 }
 
@@ -338,10 +338,10 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 	require.NoError(t, err)
 
 	out := buf.String()
-	assert.Contains(t, out, "Localhost Gateway")
-	assert.Contains(t, out, "State: RUNNING (PID: 9999)")
+	assert.Contains(t, out, "Gateway  ")
+	assert.Contains(t, out, "Gateway  online (PID 9999)")
 	assert.Contains(t, out, "Enrollments")
-	assert.Contains(t, out, "Operators")
+	assert.Contains(t, out, "OPERATOR")
 	assert.Contains(t, out, "g8e-model-provenance-operator")
 	assert.Contains(t, out, "provenance")
 	assert.Contains(t, out, "g8e-provider-boundary-observer")
@@ -384,10 +384,9 @@ func TestGatewayStatusCmd_ReportsNoConnectedOperatorsWhenEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	out := buf.String()
-	assert.Contains(t, out, "Localhost Gateway")
+	assert.Contains(t, out, "Gateway  ")
 	assert.Contains(t, out, "Enrollments")
-	assert.Contains(t, out, "Operators")
-	assert.Contains(t, out, "No connected operators")
+	assert.Contains(t, out, "Operators  none")
 	assert.NotContains(t, out, "Docker Compose Stack")
 }
 
@@ -436,22 +435,10 @@ func TestGatewayStatusCmd_ReportsEnrollmentSections(t *testing.T) {
 	require.NoError(t, cmd.RunE(cmd, nil))
 
 	out := buf.String()
-	pending := strings.Index(out, "\nPending\n")
-	operators := strings.Index(out, "\nOperators\n")
-	apps := strings.Index(out, "\nApplications\n")
-	dashboard := strings.Index(out, "\nDashboard\n")
-	users := strings.Index(out, "\nUsers\n")
-	require.True(t, pending > 0 && pending < operators && operators < apps && apps < dashboard && dashboard < users, "sections out of order:\n%s", out)
-
-	assert.Contains(t, out, "Enrollments")
-	assert.Contains(t, out[pending:operators], "req-pending")
-	assert.Contains(t, out[apps:dashboard], "my-app")
-	assert.Contains(t, out[apps:dashboard], "g8ee")
-	assert.Contains(t, out[dashboard:users], "g8ed")
-	assert.Contains(t, out[users:], "user-1")
-	assert.Contains(t, out[users:], "admin")
+	assert.Contains(t, out, "Enrollments  users 1 · pending 1 · apps 2 · dashboards 1")
 	assert.NotContains(t, out, "revoked-app")
 	assert.NotContains(t, out, "op-inst")
+
 }
 
 func TestGatewayStatusCmd_ReportsEmptyEnrollmentSections(t *testing.T) {
@@ -483,11 +470,8 @@ func TestGatewayStatusCmd_ReportsEmptyEnrollmentSections(t *testing.T) {
 
 	require.NoError(t, cmd.RunE(cmd, nil))
 	out := buf.String()
-	assert.Contains(t, out, "No pending enrollments")
-	assert.Contains(t, out, "No connected operators")
-	assert.Contains(t, out, "No enrolled applications")
-	assert.Contains(t, out, "No enrolled dashboard")
-	assert.Contains(t, out, "No users")
+	assert.Contains(t, out, "Enrollments  users 0 · pending 0 · apps 0 · dashboards 0")
+	assert.Contains(t, out, "Operators  none")
 }
 
 func TestGatewayStatusCmd_EnrollmentListUnavailable(t *testing.T) {
@@ -513,10 +497,8 @@ func TestGatewayStatusCmd_EnrollmentListUnavailable(t *testing.T) {
 
 	require.NoError(t, cmd.RunE(cmd, nil))
 	out := buf.String()
-	assert.Contains(t, out, "Pending enrollments unavailable")
-	assert.Contains(t, out, "Applications unavailable")
-	assert.Contains(t, out, "Dashboard unavailable")
-	assert.Contains(t, out, "Users unavailable")
+	assert.Contains(t, out, "Enrollments  users ? · pending ? · apps ? · dashboards ?")
+
 }
 
 func TestGatewayLogsCmd_NoLogFileReturnsMessage(t *testing.T) {
@@ -614,7 +596,7 @@ func TestGatewayCleanCmd_WarningMessagesPrintedBeforePrompt(t *testing.T) {
 	assert.Contains(t, output, "Aborted")
 }
 
-func TestGatewayStatusCmd_OutputContainsHeader(t *testing.T) {
+func TestGatewayStatusCmd_StoppedOutputIsOneLine(t *testing.T) {
 	setupGatewayTestEnv(t)
 
 	cmd := gatewayStatusCmd()
@@ -624,6 +606,6 @@ func TestGatewayStatusCmd_OutputContainsHeader(t *testing.T) {
 
 	err := cmd.RunE(cmd, nil)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "g8e Gateway Status")
-	assert.True(t, strings.Contains(buf.String(), "========================"))
+	assert.Contains(t, buf.String(), "Gateway  ")
+	assert.Equal(t, "Gateway  stopped\n", buf.String())
 }

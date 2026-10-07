@@ -8,6 +8,8 @@
 """Host stack launcher: unattended `make full`, interactive `make full-setup`."""
 
 import argparse
+import contextlib
+import io
 import ctypes
 import hashlib
 import ipaddress
@@ -351,6 +353,61 @@ def prompt(label, default):
 
 def is_local(system):
     return system.lower() in ("localhost", "127.0.0.1", "::1")
+
+
+def gateway_browser_flags(host):
+    origin = f"https://{url_host(host)}:8443"
+    return [
+        "--public-base-url",
+        origin,
+        "--passkey-rp-id",
+        host,
+        "--passkey-rp-origin",
+        origin,
+        "--cors-origin",
+        origin,
+    ]
+
+
+def embedded_gateway_command(binary, host, storage, ollama):
+    """Gateway whose embedded Operator also acts as every other Operator role."""
+    command = [
+        binary,
+        "gw",
+        "start",
+        "--quiet",
+        "--roles",
+        ",".join(ROLES),
+        "--model-storage-root",
+        storage,
+    ]
+    if ollama:
+        command += ["--inference-ollama-endpoint", ollama]
+    return command + gateway_browser_flags(host)
+
+
+def start_embedded_gateway(args):
+    environment = load_environment(args.env_file)
+    host = validate_host(environment.get("Hostname", GATEWAY_HOST))
+    # Unset keeps the Gateway's own default Ollama endpoint; set (even empty) is validated.
+    ollama = (
+        validate_ollama(environment["OllamaEndpoint"])
+        if "OllamaEndpoint" in environment
+        else None
+    )
+    storage = str(Path(args.model_storage_root or model_root()).expanduser().resolve())
+    command = embedded_gateway_command(resolve_g8e_binary(), host, storage, ollama)
+    # Stop launcher-managed outbound workloads before selecting Gateway-only mode.
+    # Roles are immutable in a running Gateway; start alone would silently reuse it.
+    with (contextlib.nullcontext() if args.dry_run else contextlib.redirect_stdout(io.StringIO())):
+        stop_ensemble(args.dry_run)
+        stop_operators(args.dry_run)
+        stop_gateway(args.dry_run)
+    if args.dry_run:
+        print("Gateway: " + shlex.join(command))
+        return
+    subprocess.run(command, cwd=ROOT, check=True)
+    subprocess.run([command[0], "gw", "status"], cwd=ROOT, check=True)
 
 
 def operator_args(role, gateway, directory, storage, ollama):
@@ -707,20 +764,8 @@ def stop_gateway(dry_run=False):
         print("Gateway: stop running Gateway service")
         return
     binary = resolve_g8e_binary()
-    if Path(binary).exists() and os.access(binary, os.X_OK):
-        try:
-            subprocess.run(
-                [binary, "gw", "stop"],
-                cwd=ROOT,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            print("  g8e-gw       stopped (host)")
-        except OSError:
-            print("  g8e-gw       stopped (host)")
-    else:
-        print("  g8e-gw       stopped (host)")
+    subprocess.run([binary, "gw", "stop"], cwd=ROOT, capture_output=True, text=True, check=True)
+    print("  g8e-gw       stopped (host)")
 
 
 def stop_all(dry_run=False, stop_gw=True):
@@ -747,7 +792,7 @@ def show_status(dry_run=False):
     if Path(binary).exists() and os.access(binary, os.X_OK):
         try:
             result = subprocess.run(
-                [binary, "gw", "status", "--brief"],
+                [binary, "gw", "status"],
                 cwd=ROOT,
                 capture_output=True,
                 text=True,
@@ -876,6 +921,11 @@ def main():
     )
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--start-gateway", action="store_true")
+    parser.add_argument(
+        "--embedded-gateway",
+        action="store_true",
+        help="Start only the Gateway, with its embedded Operator holding every role",
+    )
     parser.add_argument("--model-storage-root", help="Explicit model store path")
     for role in ROLES:
         parser.add_argument(
@@ -929,6 +979,10 @@ def main():
 
     if args.status or args.action == "status":
         show_status(args.dry_run)
+        return
+
+    if args.embedded_gateway:
+        start_embedded_gateway(args)
         return
 
     if args.operator_action:
@@ -1056,18 +1110,10 @@ def main():
             ) from exc
     if args.start_gateway:
         binary = resolve_g8e_binary()
-        gateway_command = [binary, "gw", "start", "--quiet"]
+        gateway_command = [binary, "gw", "start", "--quiet", "--roles", "embedded"]
         if not args.setup:
-            gateway_command += [
-                "--public-base-url",
-                f"https://{url_host(gateway_host)}:8443",
-                "--passkey-rp-id",
-                gateway_host,
-                "--passkey-rp-origin",
-                f"https://{url_host(gateway_host)}:8443",
-                "--cors-origin",
-                f"https://{url_host(gateway_host)}:8443",
-            ]
+            gateway_command += gateway_browser_flags(gateway_host)
+        stop_gateway(args.dry_run)
         if args.dry_run:
             print("Gateway: " + shlex.join(gateway_command))
         else:
@@ -1107,7 +1153,7 @@ def print_summary(dry_run=False, has_remote=False, gateway=GATEWAY_HOST):
     if not dry_run:
         binary = resolve_g8e_binary()
         for command, label in (
-            (["gw", "status", "--brief"], "Gateway / operators"),
+            (["gw", "status"], "Gateway / operators"),
             (["ensemble", "status"], "g8ee"),
         ):
             try:

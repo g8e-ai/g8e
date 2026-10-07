@@ -117,7 +117,7 @@ The binary is self-contained, but the running Operator is stateful. `--working-d
 | `make fips-build` | Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`. |
 | `make fips-verify` | Builds the FIPS variant and runs `g8e version --fips` with FIPS-only enforcement enabled. |
 
-`make fmt`, the host-native `make up` / `make down` and `make full` / `make full-setup` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` removes build artifacts and Go caches while preserving `.g8e/` runtime state and workload identities. Use `./g8e gw clean` explicitly to reset Gateway state.
+`make fmt`, the host-native `make up` / `make gw` / `make down` and `make full` / `make full-setup` lifecycle, the separate `make docker-up` lifecycle, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` removes build artifacts and Go caches while preserving `.g8e/` runtime state and workload identities. Use `./g8e gw clean` explicitly to reset Gateway state.
 
 #### Cross-Compilation
 

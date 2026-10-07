@@ -149,7 +149,7 @@ Callers never spoof `CF-Connecting-IP` against a public target to manufacture id
 ## Manual record publish (advanced)
 
 `g8e public publish`, `g8e public push`, `g8e public status`, `g8e public repair-outbox`, and `g8e public restore` cover host publisher state and gateway-owned mirror reconciliation.
-Publication and retry use a **configured remote mirror origin**; repair compacts the local host outbox and snapshot; restore republishes verified campaign runs to the gateway-owned public mirror after a volume wipe.
+Publication and retry use a **configured remote mirror origin**; repair compacts the local host outbox and snapshot; restore republishes completed campaign runs with passing verification reports to the gateway-owned public mirror after a volume wipe.
 These commands do not start a local mirror process.
 Evaluation campaigns use gateway-mediated publication instead.
 

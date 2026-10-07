@@ -89,8 +89,8 @@ func (r *CampaignMirrorReconciler) ReconcileAllVerifiedRunsFromStore(ctx context
 	}
 	verifiedRunIDs := make([]string, 0)
 	for _, runID := range runIDs {
-		report, err := r.store.LoadCampaignVerification(ctx, runID)
-		if err == nil && report != nil && report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		eligible, err := r.completedAndVerified(ctx, runID)
+		if err == nil && eligible {
 			verifiedRunIDs = append(verifiedRunIDs, runID)
 		}
 	}
@@ -174,7 +174,11 @@ func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, q
 	entries := queue.FilterByStatus("verified")
 	runIDs := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if entry.VerifiedRunID != "" {
+		if entry.VerifiedRunID == "" {
+			continue
+		}
+		eligible, err := r.completedAndVerified(ctx, entry.VerifiedRunID)
+		if err == nil && eligible {
 			runIDs = append(runIDs, entry.VerifiedRunID)
 		}
 	}
@@ -251,6 +255,13 @@ func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID strin
 	if r == nil || r.publication == nil || r.store == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: reconcile run: dependencies: %w", constants.ErrMissingRequiredField)
 	}
+	eligible, err := r.completedAndVerified(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	if !eligible {
+		return 0, fmt.Errorf("evaluation: run %q is not completed and verified: %w", runID, constants.ErrNotFound)
+	}
 	if r.probe != nil && !force {
 		present, err := r.probe.DatasetPresent(ctx, CampaignDatasetID(runID))
 		if err != nil {
@@ -261,6 +272,21 @@ func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID strin
 		}
 	}
 	return r.restoreRun(ctx, runID, force)
+}
+
+func (r *CampaignMirrorReconciler) completedAndVerified(ctx context.Context, runID string) (bool, error) {
+	run, err := r.store.LoadRun(ctx, runID)
+	if err != nil {
+		return false, err
+	}
+	if run == nil || run.GetCompletedAt() == nil || !run.GetCompletedAt().IsValid() {
+		return false, nil
+	}
+	report, err := r.store.LoadCampaignVerification(ctx, runID)
+	if err != nil || report == nil || report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *CampaignMirrorReconciler) restoreRun(ctx context.Context, runID string, force bool) (int, error) {

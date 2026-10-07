@@ -74,7 +74,7 @@ Starts the Governance Gateway with a specified posture. The binary runs as the p
 
 Commands:
 - `g8e gw start [--posture doctrine|consensus|ratify|notary] [--http-port 8080] [--https-port 8443]` — Starts Gateway with optional port overrides.
-- `g8e gw status` — Reports health, connected operators, and Docker Compose stack status (if running in Compose).
+- `g8e gw status` — Reports health, an Operators table (one row per connected Operator: type, status, host, port, capabilities, directory), an Operator flags table (the start values each Operator reported), and enrollment counts. See [Getting started](../guides/getting_started.md) for the output.
 - `g8e gw restart` — Reads persisted launch profile from `.g8e/pids/operator-launch-profile.json` and re-runs network identity detection before restart. Fails closed if profile is missing or malformed.
 - `g8e gw stop` — Gracefully shuts down the Gateway.
 

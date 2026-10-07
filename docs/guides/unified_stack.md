@@ -803,13 +803,13 @@ docker compose logs <service>
 
 `docker init --clean` (or `docker compose down -v`) wipes the standard Docker containers, networks, and named volumes, including the gateway mirror and trust-domain state. Host campaign evidence under `.g8e/data/eval/runs/<run-id>/` and the rollout queue under `.g8e/eval/` are unchanged.
 
-Restore every verified queue entry to the gateway-owned mirror:
+Restore completed runs with passing verification reports from the campaign queue to the gateway-owned mirror:
 
 ```bash
 ./g8e public restore --queue
 ```
 
-Or one run:
+Or one run, provided it has completed and has a passing verification report:
 
 ```bash
 ./g8e public restore <run-id>

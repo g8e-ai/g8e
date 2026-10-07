@@ -115,7 +115,7 @@ func PublicRestoreCmdWithConfig(configLoader func(string) (*config.Config, error
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&queue, "queue", false, "Restore every verified run listed in .g8e/eval/init-campaign-queue.json")
+	cmd.Flags().BoolVar(&queue, "queue", false, "Restore completed, passing verified runs from the campaign queue")
 	cmd.Flags().BoolVar(&force, "force", false, "Clear host publication idempotency before restoring missing datasets; with --run-id, also republish when already present")
 	cmd.Flags().StringVar(&runID, "run-id", "", "Restore one canonical campaign run")
 	cmd.Flags().DurationVar(&runTimeout, "run-timeout", evaluation.CampaignMirrorDefaultRunTimeout, "Base per-run timeout; scales up with assignment count during restore")
