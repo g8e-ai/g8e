@@ -71,6 +71,11 @@ func ActiveDataOperators(operators []*operatorv1.OperatorDocument) []DataOperato
 			continue
 		}
 		wd := extractWorkingDirectory(op.GetLatestHeartbeatSnapshot())
+		if wd == "" && constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
+			// The embedded Operator never heartbeats; the Gateway registers
+			// its working directory in the runtime config instead.
+			wd = op.GetRuntimeConfig().GetLocalDir()
+		}
 		status := DataOperatorStatus{
 			OperatorID:        op.Id,
 			OperatorSessionID: op.OperatorSessionId,

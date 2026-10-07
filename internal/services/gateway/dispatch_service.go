@@ -418,16 +418,36 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	//    so no result can ever arrive.
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
 	var delivered int
+	var embeddedDone chan error
 	if constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
+		// The embedded Operator runs in-process and emits results while
+		// ProcessEnvelope is still executing, so it must run beside the wait
+		// loop below: draining concurrently is what keeps long inference
+		// progress streams from overflowing the result buffer.
 		if d.embeddedProcessor == nil {
 			return nil, fmt.Errorf("dispatch embedded operator: %w", constants.ErrDispatchNoDelivery)
 		}
-		if _, err := d.embeddedProcessor.ProcessEnvelope(ctx, wire); err != nil {
-			return nil, fmt.Errorf("dispatch embedded operator: %w", err)
-		}
+		embeddedDone = make(chan error, 1)
+		go func() {
+			_, perr := d.embeddedProcessor.ProcessEnvelope(ctx, wire)
+			embeddedDone <- perr
+		}()
 		delivered = 1
 	} else {
 		delivered = d.pubsub.Publish(cmdChannel, wire)
+	}
+	// awaitEmbedded reports a processing failure before any final result is
+	// returned, so a failed embedded execution is never reported as a result.
+	awaitEmbedded := func() error {
+		if embeddedDone == nil {
+			return nil
+		}
+		perr := <-embeddedDone
+		embeddedDone = nil
+		if perr != nil {
+			return fmt.Errorf("dispatch embedded operator: %w", perr)
+		}
+		return nil
 	}
 	d.logger.Info("dispatch: published command",
 		"transaction_id", txHash,
@@ -453,6 +473,11 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		select {
 		case overflowErr := <-overflow:
 			return nil, fmt.Errorf("dispatch: %w", overflowErr)
+		case perr := <-embeddedDone:
+			embeddedDone = nil
+			if perr != nil {
+				return nil, fmt.Errorf("dispatch embedded operator: %w", perr)
+			}
 		case resultEnv := <-resultCh:
 			if actionType == constants.ActionTypeInference {
 				if progress, ok := decodeInferenceProgressEnvelope(resultEnv); ok {
@@ -464,6 +489,9 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 					}
 					continue
 				}
+				if err := awaitEmbedded(); err != nil {
+					return nil, err
+				}
 				result, err := d.verifyInferenceCompletion(env, resultEnv)
 				if err != nil {
 					return nil, err
@@ -474,6 +502,9 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 					}
 				}
 				return result, nil
+			}
+			if err := awaitEmbedded(); err != nil {
+				return nil, err
 			}
 			if isShellCommandDispatch(req.EventType) {
 				if payload := operatorCommandResultPayload(resultEnv); len(payload) > 0 {
@@ -494,6 +525,33 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			return nil, fmt.Errorf("dispatch: %w after %s (transaction %s)", constants.ErrDispatchResultTimeout, deadline, txHash)
 		}
 	}
+}
+
+// deliverCommand hands a signed command envelope to its target Operator. The
+// embedded Operator has no cmd-channel subscriber: it is processed in-process,
+// so every dispatch path must go through here rather than publishing directly.
+// It returns the number of recipients (zero means nothing received it).
+func (d *DispatchService) deliverCommand(ctx context.Context, op *operatorv1.OperatorDocument, cmdChannel string, wire []byte) (int, error) {
+	if constants.OperatorType(op.OperatorType) != constants.OperatorTypeEmbedded {
+		return d.pubsub.Publish(cmdChannel, wire), nil
+	}
+	if d.embeddedProcessor == nil {
+		return 0, fmt.Errorf("dispatch embedded operator: %w", constants.ErrDispatchNoDelivery)
+	}
+	if _, err := d.embeddedProcessor.ProcessEnvelope(ctx, wire); err != nil {
+		return 0, fmt.Errorf("dispatch embedded operator: %w", err)
+	}
+	return 1, nil
+}
+
+// commandDeliverable reports whether a command for the Operator can currently
+// be delivered: the embedded Operator through its in-process processor, any
+// other Operator through a cmd-channel subscriber on the broker.
+func (d *DispatchService) commandDeliverable(operatorID, cmdChannel string, broker *GatewayWebSocketHandler) bool {
+	if operatorID == string(constants.DocIDEmbeddedOperator) {
+		return d != nil && d.embeddedProcessor != nil
+	}
+	return broker != nil && broker.ChannelSubscriberCount(cmdChannel) > 0
 }
 
 func decodeInferenceProgressEnvelope(env *commonv1.GovernanceEnvelope) (*operatorv1.InferenceProgressEvent, bool) {

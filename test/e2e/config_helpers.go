@@ -10,6 +10,7 @@ package e2e
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -31,6 +32,21 @@ func resolveRepoRoot() (string, error) {
 		return "", fmt.Errorf("go list -m returned empty directory")
 	}
 	return filepath.Clean(root), nil
+}
+
+// e2eRuntimeRootEnv names the directory whose .g8e/ tree the suite targets
+// instead of the repository root. Scenarios that run their own isolated
+// Gateway (scripts/ci/operator-fleet-smoke.sh) set it so the suite never reads
+// the developer's own runtime.
+const e2eRuntimeRootEnv = "G8E_E2E_RUNTIME_ROOT"
+
+// resolveRuntimeRoot returns the directory holding the .g8e/ tree under test:
+// G8E_E2E_RUNTIME_ROOT when set, otherwise the repository root.
+func resolveRuntimeRoot() (string, error) {
+	if root := strings.TrimSpace(os.Getenv(e2eRuntimeRootEnv)); root != "" {
+		return filepath.Clean(root), nil
+	}
+	return resolveRepoRoot()
 }
 
 // replacePort parses a URL, replaces its port, and returns the reconstructed

@@ -56,6 +56,24 @@ func TestResolveRepoRoot(t *testing.T) {
 	})
 }
 
+func TestResolveRuntimeRoot(t *testing.T) {
+	t.Run("env override wins and is cleaned", func(t *testing.T) {
+		t.Setenv(e2eRuntimeRootEnv, "/tmp/isolated/../isolated-root/")
+		root, err := resolveRuntimeRoot()
+		require.NoError(t, err)
+		assert.Equal(t, "/tmp/isolated-root", root)
+	})
+
+	t.Run("falls back to the repository root", func(t *testing.T) {
+		t.Setenv(e2eRuntimeRootEnv, "")
+		want, err := resolveRepoRoot()
+		require.NoError(t, err)
+		got, err := resolveRuntimeRoot()
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+	})
+}
+
 func TestReplacePort(t *testing.T) {
 	tests := []struct {
 		name          string

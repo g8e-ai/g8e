@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -89,6 +90,41 @@ func reportPaths(files []EvalBackupFile) []string {
 	return paths
 }
 
+// payloadPath is where a snapshot keeps the content of one backed-up file.
+func payloadPath(snapshotDir string, file EvalBackupFile) string {
+	return evalBackupObjectPath(filepath.Dir(snapshotDir), file.SHA256)
+}
+
+func objectCount(t *testing.T, backupDir string) int {
+	t.Helper()
+	count := 0
+	require.NoError(t, filepath.WalkDir(filepath.Join(backupDir, evalBackupObjectsDir), func(_ string, entry os.DirEntry, err error) error {
+		if err == nil && entry.Type().IsRegular() {
+			count++
+		}
+		return err
+	}))
+	return count
+}
+
+// writeLegacySnapshot lays out a version 1 snapshot: every file copied beside its manifest.
+func writeLegacySnapshot(t *testing.T, backupDir, name string, files map[string]string) string {
+	t.Helper()
+	dir := filepath.Join(backupDir, name)
+	manifest := EvalBackupManifest{SchemaVersion: evalBackupManifestVersionInline}
+	for rel, body := range files {
+		target := filepath.Join(dir, filepath.FromSlash(rel))
+		require.NoError(t, os.MkdirAll(filepath.Dir(target), constants.PermDirPrivate))
+		require.NoError(t, os.WriteFile(target, []byte(body), constants.PermFilePrivate))
+		manifest.Files = append(manifest.Files, EvalBackupFile{Path: rel, Size: int64(len(body)), SHA256: evalBackupDigest([]byte(body))})
+	}
+	sort.Slice(manifest.Files, func(i, j int) bool { return manifest.Files[i].Path < manifest.Files[j].Path })
+	raw, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, constants.EvaluationBackupManifestFilename), raw, constants.PermFilePrivate))
+	return dir
+}
+
 func TestEvalBackup_CreateCopiesEvidenceOnly(t *testing.T) {
 	f := newEvalBackupFixture(t)
 
@@ -97,20 +133,36 @@ func TestEvalBackup_CreateCopiesEvidenceOnly(t *testing.T) {
 	assert.Equal(t, filepath.Join(f.outRoot, backupSnapshotPrefix), report.SnapshotDir)
 	assert.Equal(t, []string{backupCampaignPath, backupRunReportPath, backupQueueLogPath, backupInventoryPath}, reportPaths(report.Files))
 	for _, file := range report.Files {
-		copied, err := os.ReadFile(filepath.Join(report.SnapshotDir, filepath.FromSlash(file.Path)))
+		copied, err := os.ReadFile(payloadPath(report.SnapshotDir, file))
 		require.NoError(t, err)
 		assert.Equal(t, f.read(t, file.Path), string(copied))
 		assert.Equal(t, evalBackupDigest(copied), file.SHA256)
 	}
-	for _, excluded := range []string{backupRunLeasePath, backupActiveRunPath, backupUnrelatedPath} {
-		_, err := os.Stat(filepath.Join(report.SnapshotDir, filepath.FromSlash(excluded)))
-		assert.ErrorIs(t, err, os.ErrNotExist, excluded)
-	}
+	snapshotEntries, err := os.ReadDir(report.SnapshotDir)
+	require.NoError(t, err)
+	require.Len(t, snapshotEntries, 1, "a snapshot holds only its manifest")
+	assert.Equal(t, constants.EvaluationBackupManifestFilename, snapshotEntries[0].Name())
+	assert.Equal(t, len(report.Files), objectCount(t, f.outRoot), "excluded files (lease, active run, unrelated data) are never stored")
 	var manifest EvalBackupManifest
 	raw, err := os.ReadFile(filepath.Join(report.SnapshotDir, constants.EvaluationBackupManifestFilename))
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	assert.Equal(t, report.Files, manifest.Files)
+	assert.Equal(t, evalBackupManifestVersionObjects, manifest.SchemaVersion)
+}
+
+func TestEvalBackup_RepeatedBackupsStoreEachContentOnce(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	first := f.create(t)
+	stored := objectCount(t, f.outRoot)
+	require.Equal(t, len(first.Files), stored)
+
+	f.create(t)
+	assert.Equal(t, stored, objectCount(t, f.outRoot), "an identical backup copies nothing")
+
+	f.write(t, backupRunReportPath, `{"run":2}`)
+	f.create(t)
+	assert.Equal(t, stored+1, objectCount(t, f.outRoot), "a changed file adds exactly one object")
 }
 
 func TestEvalBackup_CreateRejectsDestinationInsideRuntime(t *testing.T) {
@@ -162,12 +214,15 @@ func TestEvalBackup_CreateSameSecondPreservesSnapshots(t *testing.T) {
 
 	assert.Equal(t, first.SnapshotDir+"-000001", second.SnapshotDir)
 	assert.Equal(t, first.SnapshotDir+"-000002", third.SnapshotDir)
-	data, err := os.ReadFile(filepath.Join(first.SnapshotDir, backupRunReportPath))
-	require.NoError(t, err)
-	assert.JSONEq(t, `{"run":1}`, string(data))
-	data, err = os.ReadFile(filepath.Join(second.SnapshotDir, backupRunReportPath))
-	require.NoError(t, err)
-	assert.JSONEq(t, `{"run":2}`, string(data))
+	for snapshot, want := range map[*EvalBackupReport]string{first: `{"run":1}`, second: `{"run":2}`} {
+		for _, file := range snapshot.Files {
+			if file.Path == backupRunReportPath {
+				data, err := os.ReadFile(payloadPath(snapshot.SnapshotDir, file))
+				require.NoError(t, err)
+				assert.JSONEq(t, want, string(data))
+			}
+		}
+	}
 	latest, err := LatestEvalBackupSnapshot(f.outRoot)
 	require.NoError(t, err)
 	assert.Equal(t, third.SnapshotDir, latest)
@@ -255,8 +310,13 @@ func TestEvalBackup_RestoreRejectsTamperedFile(t *testing.T) {
 	f := newEvalBackupFixture(t)
 	report := f.create(t)
 	ctx := context.Background()
-	require.NoError(t, os.WriteFile(filepath.Join(report.SnapshotDir, filepath.FromSlash(backupInventoryPath)), []byte("tampered"), constants.PermFilePrivate))
+	for _, file := range report.Files {
+		if file.Path == backupInventoryPath {
+			require.NoError(t, os.WriteFile(payloadPath(report.SnapshotDir, file), []byte("tampered"), constants.PermFilePrivate))
+		}
+	}
 	require.NoError(t, f.files.RemoveAll(ctx, constants.EvaluationDataPath))
+	require.NoError(t, f.files.RemoveAll(ctx, constants.EvaluationDirname))
 
 	_, err := f.backup.Restore(ctx, report.SnapshotDir, false)
 
@@ -293,7 +353,7 @@ func TestEvalBackup_RestoreRejectsManifestPathsOutsideEvidenceTrees(t *testing.T
 		t.Run(bad, func(t *testing.T) {
 			snapshot := t.TempDir()
 			raw, err := json.Marshal(EvalBackupManifest{
-				SchemaVersion: evalBackupManifestVersion,
+				SchemaVersion: evalBackupManifestVersionInline,
 				Files:         []EvalBackupFile{{Path: bad, Size: 1, SHA256: digest}},
 			})
 			require.NoError(t, err)
@@ -320,9 +380,10 @@ func TestEvalBackup_CreateIfChangedSkipsIdenticalEvidence(t *testing.T) {
 	assert.True(t, report.Unchanged)
 	assert.Equal(t, first.SnapshotDir, report.SnapshotDir)
 	assert.Equal(t, first.Files, report.Files)
-	entries, err := os.ReadDir(f.outRoot)
+	snapshots, err := AllEvalBackupSnapshots(f.outRoot)
 	require.NoError(t, err)
-	assert.Len(t, entries, 1, "an unchanged backup must not leave a second snapshot")
+	assert.Len(t, snapshots, 1, "an unchanged backup must not leave a second snapshot")
+	assert.Equal(t, len(first.Files), objectCount(t, f.outRoot))
 }
 
 func TestEvalBackup_CreateIfChangedKeepsSnapshotWhenEvidenceChanged(t *testing.T) {
@@ -398,4 +459,104 @@ func TestEvalBackup_CreateIfChangedComparesWithNewestSnapshot(t *testing.T) {
 	snapshots, err := AllEvalBackupSnapshots(f.outRoot)
 	require.NoError(t, err)
 	assert.Equal(t, []string{older.SnapshotDir, newer.SnapshotDir}, snapshots)
+}
+
+func TestEvalBackup_RestoreAllMergesSnapshotsNewestWins(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	ctx := context.Background()
+	older := f.create(t)
+	// The later snapshot changes one file and no longer lists another, as when a
+	// campaign is deleted between backups.
+	f.write(t, backupRunReportPath, `{"run":2}`)
+	require.NoError(t, f.files.Remove(ctx, backupCampaignPath))
+	newer := f.laterBackup(time.Minute)
+	_, err := newer.Create(ctx, f.outRoot)
+	require.NoError(t, err)
+	require.NoError(t, f.files.RemoveAll(ctx, constants.EvaluationDataPath))
+	require.NoError(t, f.files.RemoveAll(ctx, constants.EvaluationDirname))
+
+	report, err := f.backup.RestoreAll(ctx, f.outRoot, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, report.Snapshots)
+	assert.Equal(t, `{"run":2}`, f.read(t, backupRunReportPath), "the newest snapshot's content wins")
+	assert.Equal(t, `{"campaign":1}`, f.read(t, backupCampaignPath), "evidence only an older snapshot holds is recovered")
+	assert.Len(t, report.Restored, len(older.Files))
+	assert.Empty(t, report.Unchanged)
+
+	again, err := f.backup.RestoreAll(ctx, f.outRoot, false)
+
+	require.NoError(t, err)
+	assert.Empty(t, again.Restored, "a second restore has nothing to do")
+	assert.Len(t, again.Unchanged, len(older.Files))
+}
+
+func TestEvalBackup_RestoreAllReadsLegacyAndObjectSnapshots(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	ctx := context.Background()
+	legacyDir := writeLegacySnapshot(t, f.outRoot, "eval-backup-20260101T000000Z", map[string]string{
+		backupCampaignPath:  `{"campaign":"legacy"}`,
+		backupRunReportPath: `{"run":"legacy"}`,
+	})
+	_, err := f.backup.Restore(ctx, legacyDir, true)
+	require.NoError(t, err)
+	assert.Equal(t, `{"run":"legacy"}`, f.read(t, backupRunReportPath), "a version 1 snapshot still restores")
+
+	f.write(t, backupRunReportPath, `{"run":"current"}`)
+	f.create(t)
+	require.NoError(t, f.files.RemoveAll(ctx, constants.EvaluationDataPath))
+
+	_, err = f.backup.RestoreAll(ctx, f.outRoot, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, `{"run":"current"}`, f.read(t, backupRunReportPath))
+	assert.Equal(t, `{"campaign":"legacy"}`, f.read(t, backupCampaignPath), "the object-store snapshot lists the campaign too, with the same content")
+}
+
+func TestEvalBackup_RestoreAllConflictWritesNothingUnlessOverwrite(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	ctx := context.Background()
+	f.create(t)
+	f.write(t, backupRunReportPath, `{"run":"changed"}`)
+	require.NoError(t, f.files.Remove(ctx, backupCampaignPath))
+
+	_, err := f.backup.RestoreAll(ctx, f.outRoot, false)
+
+	require.ErrorIs(t, err, constants.ErrEvaluationBackupConflict)
+	campaignExists, err := f.files.FileExists(ctx, backupCampaignPath)
+	require.NoError(t, err)
+	assert.False(t, campaignExists)
+
+	_, err = f.backup.RestoreAll(ctx, f.outRoot, true)
+
+	require.NoError(t, err)
+	assert.Equal(t, `{"run":1}`, f.read(t, backupRunReportPath))
+}
+
+func TestEvalBackup_RestoreAllRejectsCorruptObjectBeforeAnyWrite(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	ctx := context.Background()
+	report := f.create(t)
+	for _, file := range report.Files {
+		if file.Path == backupInventoryPath {
+			require.NoError(t, os.WriteFile(payloadPath(report.SnapshotDir, file), []byte("tampered"), constants.PermFilePrivate))
+		}
+	}
+	require.NoError(t, f.files.RemoveAll(ctx, constants.EvaluationDataPath))
+	require.NoError(t, f.files.RemoveAll(ctx, constants.EvaluationDirname))
+
+	_, err := f.backup.RestoreAll(ctx, f.outRoot, false)
+
+	require.ErrorIs(t, err, constants.ErrEvaluationBackupIntegrity)
+	exists, err := f.files.FileExists(ctx, backupRunReportPath)
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func TestEvalBackup_RestoreAllWithoutSnapshotsFails(t *testing.T) {
+	f := newEvalBackupFixture(t)
+
+	_, err := f.backup.RestoreAll(context.Background(), f.outRoot, false)
+
+	assert.ErrorIs(t, err, constants.ErrEvaluationBackupNone)
 }

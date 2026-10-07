@@ -159,6 +159,10 @@ func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 // argument propagation and failure wrapping without starting platform tests.
 type e2eCommandRunner func(ctx context.Context, name string, args ...string) (int, error)
 
+// defaultE2ETimeout bounds the approved-stack suite. Long scenarios such as the
+// Operator fleet soak raise it with --timeout.
+const defaultE2ETimeout = 300 * time.Second
+
 const defaultE2ERunRegexp = "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestConsole_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)"
 
 // realE2ERunner runs the Go test binary as a child process, streaming stdout
@@ -191,6 +195,7 @@ func testE2ECmd() *cobra.Command {
 // owns Docker lifecycle; this command performs network requests and assertions only.
 func testE2ECmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	var runRegexp string
+	var timeout time.Duration
 
 	cmd := &cobra.Command{
 		Use:   "e2e",
@@ -203,7 +208,7 @@ scenario such as pending enrollment, headless, denial, or cross-enrollment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 
-			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s", "-v"}
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", timeout.String(), "-v"}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}
@@ -226,6 +231,7 @@ scenario such as pending enrollment, headless, denial, or cross-enrollment.`,
 	}
 
 	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which E2E tests to run (passed to go test -run)")
+	cmd.Flags().DurationVar(&timeout, "timeout", defaultE2ETimeout, "Overall time limit for the E2E run (passed to go test -timeout); raise it for long soak scenarios")
 
 	return cmd
 }
@@ -278,7 +284,7 @@ the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 			}
 
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
-			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s", "-v"}
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", timeout.String(), "-v"}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}

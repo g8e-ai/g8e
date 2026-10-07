@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -83,7 +84,8 @@ func TestBackupRestore_DefaultsToProjectEvalBackups(t *testing.T) {
 
 	var restored evalRestoreJSON
 	require.NoError(t, env.runJSON(t, &restored, "restore"))
-	assert.Equal(t, created.SnapshotDir, restored.SnapshotDir)
+	assert.Equal(t, filepath.Dir(created.SnapshotDir), restored.SnapshotDir, "a default restore reports the backup directory it merged")
+	assert.Equal(t, 1, restored.SnapshotCount)
 	assert.Len(t, restored.Restored, created.FileCount)
 }
 
@@ -104,7 +106,7 @@ func TestAutoBackupEval_SnapshotsOnceThenSkipsUnchangedEvidence(t *testing.T) {
 
 	autoBackupEval(env.cmd, env.deps, false)
 	assert.Contains(t, out.String(), "Backed up evaluation evidence")
-	snapshots, err := os.ReadDir(backupDir)
+	snapshots, err := evaluation.AllEvalBackupSnapshots(backupDir)
 	require.NoError(t, err)
 	require.Len(t, snapshots, 1)
 
@@ -112,7 +114,7 @@ func TestAutoBackupEval_SnapshotsOnceThenSkipsUnchangedEvidence(t *testing.T) {
 	env.deps.now = func() time.Time { return time.Unix(1789657337, 0).UTC().Add(time.Minute) }
 	autoBackupEval(env.cmd, env.deps, false)
 	assert.Contains(t, out.String(), "already backed up")
-	snapshots, err = os.ReadDir(backupDir)
+	snapshots, err = evaluation.AllEvalBackupSnapshots(backupDir)
 	require.NoError(t, err)
 	assert.Len(t, snapshots, 1)
 }
@@ -156,7 +158,9 @@ func TestRunsResume_BacksUpEvidenceWhenItFinishes(t *testing.T) {
 	assert.Contains(t, out, "Backed up evaluation evidence")
 	latest, err := evaluation.LatestEvalBackupSnapshot(filepath.Join(env.root, "eval", "backups"))
 	require.NoError(t, err)
-	assert.DirExists(t, filepath.Join(latest, constants.EvaluationDataPath, constants.EvaluationRunsDirname, runID))
+	raw, err := os.ReadFile(filepath.Join(latest, constants.EvaluationBackupManifestFilename))
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), path.Join(constants.EvaluationDataPath, constants.EvaluationRunsDirname, runID)+"/")
 }
 
 func TestRunsResume_NoBackupFlagSkipsTheBackup(t *testing.T) {

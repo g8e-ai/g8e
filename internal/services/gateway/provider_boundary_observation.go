@@ -236,7 +236,8 @@ func (c *ProviderBoundaryObservationCoordinator) Stop() {
 }
 
 // PreflightCommandDelivery verifies that the active observer is enrolled and
-// has at least one cmd-channel WebSocket subscriber on this gateway broker.
+// is deliverable: the embedded Operator through its in-process processor, any
+// other observer through at least one cmd-channel WebSocket subscriber.
 func (c *ProviderBoundaryObservationCoordinator) PreflightCommandDelivery(ctx context.Context) error {
 	if err := c.synchronizeObserverSubscription(ctx); err != nil {
 		return fmt.Errorf("provider-boundary observation preflight: %w", err)
@@ -248,7 +249,7 @@ func (c *ProviderBoundaryObservationCoordinator) PreflightCommandDelivery(ctx co
 		return fmt.Errorf("provider-boundary observation preflight: %w", constants.ErrProviderBoundaryObserverNotFound)
 	}
 	cmdChannel := pubsub.CmdChannel(observer.OperatorID, observer.OperatorSessionID)
-	if c.pubsub == nil || c.pubsub.ChannelSubscriberCount(cmdChannel) == 0 {
+	if !c.dispatch.commandDeliverable(observer.OperatorID, cmdChannel, c.pubsub) {
 		return fmt.Errorf("provider-boundary observation preflight: %w: cmd channel %s",
 			constants.ErrEvaluationObservationUnavailable, cmdChannel)
 	}
@@ -432,7 +433,10 @@ func (d *DispatchService) PublishCommand(ctx context.Context, req PublishCommand
 		wire = deliberated
 	}
 	cmdChannel := pubsub.CmdChannel(op.Id, op.OperatorSessionId)
-	delivered := d.pubsub.Publish(cmdChannel, wire)
+	delivered, err := d.deliverCommand(ctx, op, cmdChannel, wire)
+	if err != nil {
+		return "", fmt.Errorf("dispatch: publish command: %w", err)
+	}
 	if delivered == 0 {
 		return "", fmt.Errorf("dispatch: publish command: %w", constants.ErrDispatchNoDelivery)
 	}

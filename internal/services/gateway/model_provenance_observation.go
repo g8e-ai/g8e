@@ -174,7 +174,7 @@ func (c *ModelProvenanceObservationCoordinator) PreflightCommandDelivery(ctx con
 		return fmt.Errorf("model provenance observation preflight: %w", constants.ErrProvenanceOperatorNotFound)
 	}
 	cmdChannel := pubsub.CmdChannel(operator.OperatorID, operator.OperatorSessionID)
-	if c.pubsub == nil || c.pubsub.ChannelSubscriberCount(cmdChannel) == 0 {
+	if !c.dispatch.commandDeliverable(operator.OperatorID, cmdChannel, c.pubsub) {
 		return fmt.Errorf("model provenance observation preflight: %w: cmd channel %s",
 			constants.ErrEvaluationObservationUnavailable, cmdChannel)
 	}

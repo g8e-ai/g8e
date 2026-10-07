@@ -382,3 +382,30 @@ func TestProviderBoundaryObservationCoordinator_IngestAfterDispatchContextCancel
 	require.NoError(t, err)
 	assert.Equal(t, "attempt-async-1", loaded.GetProviderAttemptId())
 }
+
+func TestProviderBoundaryObservationCoordinator_PreflightCommandDelivery_EmbeddedObserverUsesProcessor(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	windowStore, err := provider_observer.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	pubsubHandler := NewGatewayWebSocketHandler(logger)
+	lister := &stubProviderBoundaryOperatorLister{operators: []*operatorv1.OperatorDocument{
+		{
+			Id:                string(constants.DocIDEmbeddedOperator),
+			OperatorSessionId: "sess-embedded",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeEmbedded),
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
+		},
+	}}
+	processor := embeddedEnvelopeProcessorFunc(func(context.Context, []byte) (*operatorv1.ActionReceipt, error) {
+		return &operatorv1.ActionReceipt{}, nil
+	})
+
+	withProcessor := NewProviderBoundaryObservationCoordinator(&DispatchService{pubsub: pubsubHandler, embeddedProcessor: processor}, lister, pubsubHandler, windowStore, logger)
+	require.NoError(t, withProcessor.PreflightCommandDelivery(context.Background()))
+
+	withoutProcessor := NewProviderBoundaryObservationCoordinator(&DispatchService{pubsub: pubsubHandler}, lister, pubsubHandler, windowStore, logger)
+	err = withoutProcessor.PreflightCommandDelivery(context.Background())
+	assert.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
+}

@@ -137,6 +137,28 @@ func TestTestE2ECmd_RunFlagAppendsRegexp(t *testing.T) {
 	assert.Equal(t, "TestApproved", captured[idx+1])
 }
 
+func TestTestE2ECmd_TimeoutFlagDefaultsAndOverrides(t *testing.T) {
+	timeoutArg := func(captured []string) string {
+		for i, a := range captured {
+			if a == "-timeout" && i+1 < len(captured) {
+				return captured[i+1]
+			}
+		}
+		return ""
+	}
+
+	var defaulted []string
+	cmd := testE2ECmdWithRunner(recordingE2ERunner(0, nil, &defaulted))
+	require.NoError(t, cmd.RunE(cmd, nil))
+	assert.Equal(t, "5m0s", timeoutArg(defaulted), "default stays 300 seconds")
+
+	var raised []string
+	cmd = testE2ECmdWithRunner(recordingE2ERunner(0, nil, &raised))
+	require.NoError(t, cmd.Flags().Set("timeout", "45m"))
+	require.NoError(t, cmd.RunE(cmd, nil))
+	assert.Equal(t, "45m0s", timeoutArg(raised))
+}
+
 func TestTestE2ECmd_NonzeroExitWrapsErrE2ETestsFailed(t *testing.T) {
 	runnerErr := fmt.Errorf("child process failed")
 	cmd := testE2ECmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))

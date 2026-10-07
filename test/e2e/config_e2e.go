@@ -51,9 +51,9 @@ const healthCheckTimeout = 10 * time.Second
 // derived from CLI config; the ensemble URL uses the docker-compose
 // deployment default port.
 func loadE2EConfig() (*e2eConfig, error) {
-	repoRoot, err := resolveRepoRoot()
+	repoRoot, err := resolveRuntimeRoot()
 	if err != nil {
-		return nil, fmt.Errorf("e2e: resolve repo root: %w", err)
+		return nil, fmt.Errorf("e2e: resolve runtime root: %w", err)
 	}
 
 	cfg, err := config.Load(repoRoot)

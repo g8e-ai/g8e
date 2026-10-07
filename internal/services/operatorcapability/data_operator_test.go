@@ -305,3 +305,30 @@ func TestDataOperatorTiering(t *testing.T) {
 	require.Equal(t, []*operatorv1.OperatorDocument{remote}, PreferDedicatedDataOperators([]*operatorv1.OperatorDocument{embedded, remote}))
 	require.Equal(t, []*operatorv1.OperatorDocument{embedded}, PreferDedicatedDataOperators([]*operatorv1.OperatorDocument{embedded}))
 }
+
+func TestActiveDataOperators_EmbeddedWorkingDirectoryFromRuntimeConfig(t *testing.T) {
+	t.Parallel()
+
+	embedded := &operatorv1.OperatorDocument{
+		Id:                "embedded-operator",
+		OperatorSessionId: "sess-embedded",
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeEmbedded),
+		OperatorRoles:     models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleEmbedded, constants.OperatorRoleData}),
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{LocalDir: "/srv/g8e"},
+	}
+	matches := ActiveDataOperators([]*operatorv1.OperatorDocument{embedded})
+	require.Len(t, matches, 1)
+	assert.Equal(t, "/srv/g8e", matches[0].WorkingDirectory)
+
+	remote := &operatorv1.OperatorDocument{
+		Id:                "remote-1",
+		OperatorSessionId: "sess-remote",
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{LocalDir: "/srv/other"},
+	}
+	matches = ActiveDataOperators([]*operatorv1.OperatorDocument{remote})
+	require.Len(t, matches, 1)
+	assert.Empty(t, matches[0].WorkingDirectory, "only the embedded Operator falls back to its registered directory")
+}

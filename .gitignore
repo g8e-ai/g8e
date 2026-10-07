@@ -158,4 +158,7 @@ test-results/
 auditor-out/
 auditor-out/*
 # --- Eval evidence backups (g8e eval backup / automatic post-run snapshots) ---
-/eval/backups/
+eval/backups/
+eval/backups/*
+workspaces/
+workspaces/*

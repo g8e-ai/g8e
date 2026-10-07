@@ -25,7 +25,15 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-const evalBackupManifestVersion = "1.0.0"
+// Manifest versions name the snapshot layout. Version 1 snapshots hold a full
+// copy of every file beside the manifest. Version 2 snapshots hold only the
+// manifest; file content lives once per distinct digest in the sibling
+// evalBackupObjectsDir, shared by every snapshot.
+const (
+	evalBackupManifestVersionInline  = "1.0.0"
+	evalBackupManifestVersionObjects = "2.0.0"
+	evalBackupObjectsDir             = "objects"
+)
 
 // evalBackupConflictSample bounds how many conflicting paths a restore error names.
 const evalBackupConflictSample = 5
@@ -59,9 +67,19 @@ type EvalBackupReport struct {
 
 // EvalRestoreReport describes a completed restore.
 type EvalRestoreReport struct {
+	// SnapshotDir is the restored snapshot, or the backup directory when every
+	// snapshot was merged by RestoreAll.
 	SnapshotDir string
-	Restored    []EvalBackupFile
-	Unchanged   []EvalBackupFile
+	// Snapshots counts the snapshots the restored file set was drawn from.
+	Snapshots int
+	Restored  []EvalBackupFile
+	Unchanged []EvalBackupFile
+}
+
+// evalBackupSource is one file to restore and where its verified content is read from.
+type evalBackupSource struct {
+	file    EvalBackupFile
+	payload string
 }
 
 // EvalBackup copies evaluation evidence between the runtime tree and a plain
@@ -93,25 +111,87 @@ func evalBackupTransient(relPath string) bool {
 }
 
 // Create writes a new timestamped snapshot under outputDir and returns it.
+// File content is stored once per digest beneath outputDir/objects, so only
+// files the backup directory has not seen before are copied.
 func (b *EvalBackup) Create(ctx context.Context, outputDir string) (*EvalBackupReport, error) {
 	destRoot, err := b.validateDestination(outputDir)
 	if err != nil {
 		return nil, err
 	}
-	files, err := b.collect(ctx)
+	report, err := b.capture(ctx, destRoot)
 	if err != nil {
 		return nil, err
 	}
-	if len(files) == 0 {
+	return b.commitSnapshot(ctx, destRoot, report)
+}
+
+// CreateIfChanged is Create for repeated automatic use: when the evidence is
+// identical to the newest complete snapshot in outputDir, no snapshot is
+// written and the report names the existing one with Unchanged set.
+func (b *EvalBackup) CreateIfChanged(ctx context.Context, outputDir string) (*EvalBackupReport, error) {
+	destRoot, err := b.validateDestination(outputDir)
+	if err != nil {
+		return nil, err
+	}
+	previousDir, err := LatestEvalBackupSnapshot(destRoot)
+	if err != nil && !errors.Is(err, constants.ErrEvaluationBackupNone) {
+		return nil, err
+	}
+	report, err := b.capture(ctx, destRoot)
+	if err != nil {
+		return nil, err
+	}
+	if previousDir != "" {
+		previous, err := readEvalBackupManifest(previousDir)
+		if err != nil {
+			return nil, err
+		}
+		if evalBackupSameFiles(previous.Files, report.Files) {
+			report.SnapshotDir = previousDir
+			report.Unchanged = true
+			return report, nil
+		}
+	}
+	return b.commitSnapshot(ctx, destRoot, report)
+}
+
+// capture reads the evidence and stores any content the object store lacks.
+// It writes no snapshot, so an unchanged tree costs reads and hashes only.
+func (b *EvalBackup) capture(ctx context.Context, destRoot string) (*EvalBackupReport, error) {
+	relPaths, err := b.collect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(relPaths) == 0 {
 		return nil, constants.ErrEvaluationBackupEmpty
 	}
-
-	createdAt := b.now().UTC()
-	snapshotBase := filepath.Join(destRoot, constants.EvaluationBackupDirPrefix+createdAt.Format(constants.EvaluationBackupTimestampLayout))
-	snapshotDir := snapshotBase
 	if err := os.MkdirAll(destRoot, constants.PermDirPrivate); err != nil {
 		return nil, fmt.Errorf("evaluation: backup: create destination: %w", err)
 	}
+	report := &EvalBackupReport{CreatedAt: b.now().UTC()}
+	for _, relPath := range relPaths {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		data, err := b.fileSvc.ReadFile(ctx, relPath)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: backup: read %s: %w", relPath, err)
+		}
+		file := EvalBackupFile{Path: relPath, Size: int64(len(data)), SHA256: evalBackupDigest(data)}
+		if err := storeEvalBackupObject(destRoot, file, data); err != nil {
+			return nil, err
+		}
+		report.Files = append(report.Files, file)
+		report.TotalBytes += file.Size
+	}
+	return report, nil
+}
+
+// commitSnapshot reserves a snapshot directory and writes its manifest last,
+// so a directory without one is an interrupted backup that is never restored.
+func (b *EvalBackup) commitSnapshot(ctx context.Context, destRoot string, report *EvalBackupReport) (*EvalBackupReport, error) {
+	snapshotBase := filepath.Join(destRoot, constants.EvaluationBackupDirPrefix+report.CreatedAt.Format(constants.EvaluationBackupTimestampLayout))
+	snapshotDir := snapshotBase
 	// Reserve each name atomically so simultaneous and same-second backups
 	// cannot overwrite one another. Keep the unsuffixed name for the first.
 	for sequence := 1; ; sequence++ {
@@ -127,46 +207,60 @@ func (b *EvalBackup) Create(ctx context.Context, outputDir string) (*EvalBackupR
 		}
 		snapshotDir = fmt.Sprintf("%s-%06d", snapshotBase, sequence)
 	}
-
-	report, err := b.writeSnapshot(ctx, snapshotDir, createdAt, files)
+	manifest, err := json.MarshalIndent(EvalBackupManifest{
+		SchemaVersion: evalBackupManifestVersionObjects,
+		CreatedAt:     report.CreatedAt.Format(time.RFC3339),
+		Files:         report.Files,
+	}, "", "  ")
+	if err == nil {
+		err = os.WriteFile(filepath.Join(snapshotDir, constants.EvaluationBackupManifestFilename), manifest, constants.PermFilePrivate)
+	}
 	if err != nil {
 		// The directory was created by this call, so removing it cannot touch prior backups.
 		_ = os.RemoveAll(snapshotDir)
-		return nil, err
+		return nil, fmt.Errorf("evaluation: backup: write manifest: %w", err)
 	}
+	report.SnapshotDir = snapshotDir
 	return report, nil
 }
 
-// CreateIfChanged is Create for repeated automatic use: when the evidence is
-// identical to the newest complete snapshot in outputDir, the new snapshot is
-// discarded and the report names the existing one with Unchanged set.
-func (b *EvalBackup) CreateIfChanged(ctx context.Context, outputDir string) (*EvalBackupReport, error) {
-	destRoot, err := b.validateDestination(outputDir)
+// evalBackupObjectPath is where the content for sha lives in the object store
+// shared by the snapshots in backupDir.
+func evalBackupObjectPath(backupDir, sha string) string {
+	return filepath.Join(backupDir, evalBackupObjectsDir, sha[:2], sha)
+}
+
+// storeEvalBackupObject writes data to the object store unless an object of
+// the expected size is already there. Objects appear atomically (temp file,
+// then rename), so a present object is always complete.
+func storeEvalBackupObject(backupDir string, file EvalBackupFile, data []byte) error {
+	target := evalBackupObjectPath(backupDir, file.SHA256)
+	if info, err := os.Stat(target); err == nil && info.Size() == file.Size {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(target), constants.PermDirPrivate); err != nil {
+		return fmt.Errorf("evaluation: backup: create object directory for %s: %w", file.Path, err)
+	}
+	temp, err := os.CreateTemp(filepath.Dir(target), ".tmp-*")
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("evaluation: backup: store %s: %w", file.Path, err)
 	}
-	previousDir, err := LatestEvalBackupSnapshot(destRoot)
-	if err != nil && !errors.Is(err, constants.ErrEvaluationBackupNone) {
-		return nil, err
+	tempName := temp.Name()
+	_, err = temp.Write(data)
+	if closeErr := temp.Close(); err == nil {
+		err = closeErr
 	}
-	report, err := b.Create(ctx, destRoot)
-	if err != nil || previousDir == "" {
-		return report, err
+	if err == nil {
+		err = os.Chmod(tempName, constants.PermFilePrivate)
 	}
-	previous, err := readEvalBackupManifest(previousDir)
+	if err == nil {
+		err = os.Rename(tempName, target)
+	}
 	if err != nil {
-		return nil, err
+		_ = os.Remove(tempName)
+		return fmt.Errorf("evaluation: backup: store %s: %w", file.Path, err)
 	}
-	if !evalBackupSameFiles(previous.Files, report.Files) {
-		return report, nil
-	}
-	// The directory was created by this call, so removing it cannot touch prior backups.
-	if err := os.RemoveAll(report.SnapshotDir); err != nil {
-		return nil, fmt.Errorf("evaluation: backup: discard unchanged snapshot: %w", err)
-	}
-	report.SnapshotDir = previousDir
-	report.Unchanged = true
-	return report, nil
+	return nil
 }
 
 func evalBackupSameFiles(a, b []EvalBackupFile) bool {
@@ -185,15 +279,17 @@ func evalBackupSameFiles(a, b []EvalBackupFile) bool {
 // backupDir. A snapshot without a valid manifest is an interrupted backup and
 // is skipped. It returns ErrEvaluationBackupNone when there is no such snapshot.
 func LatestEvalBackupSnapshot(backupDir string) (string, error) {
-	snapshots, err := AllEvalBackupSnapshots(backupDir)
+	abs, names, err := evalBackupSnapshotNames(backupDir)
 	if err != nil {
 		return "", err
 	}
-	if len(snapshots) == 0 {
-		abs, _ := filepath.Abs(backupDir)
-		return "", fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
+	for i := len(names) - 1; i >= 0; i-- {
+		dir := filepath.Join(abs, names[i])
+		if _, err := readEvalBackupManifest(dir); err == nil {
+			return dir, nil
+		}
 	}
-	return snapshots[len(snapshots)-1], nil
+	return "", fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
 }
 
 // AllEvalBackupSnapshots returns all complete snapshot directories in backupDir,
@@ -201,26 +297,10 @@ func LatestEvalBackupSnapshot(backupDir string) (string, error) {
 // an interrupted backup and is skipped. It returns ErrEvaluationBackupNone when
 // there are no such snapshots.
 func AllEvalBackupSnapshots(backupDir string) ([]string, error) {
-	abs, err := filepath.Abs(backupDir)
+	abs, names, err := evalBackupSnapshotNames(backupDir)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: backup: resolve directory: %w", err)
+		return nil, err
 	}
-	entries, err := os.ReadDir(abs)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
-		}
-		return nil, fmt.Errorf("evaluation: backup: list %s: %w", abs, err)
-	}
-	var names []string
-	for _, entry := range entries {
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), constants.EvaluationBackupDirPrefix) {
-			names = append(names, entry.Name())
-		}
-	}
-	// The timestamp layout is fixed-width UTC, so name order is creation order.
-	// Sort ascending to get oldest first, then collect valid snapshots.
-	sort.Strings(names)
 	var snapshots []string
 	for _, name := range names {
 		dir := filepath.Join(abs, name)
@@ -234,41 +314,46 @@ func AllEvalBackupSnapshots(backupDir string) ([]string, error) {
 	return snapshots, nil
 }
 
-func (b *EvalBackup) writeSnapshot(ctx context.Context, snapshotDir string, createdAt time.Time, relPaths []string) (*EvalBackupReport, error) {
-	report := &EvalBackupReport{SnapshotDir: snapshotDir, CreatedAt: createdAt}
-	for _, relPath := range relPaths {
-		data, err := b.fileSvc.ReadFile(ctx, relPath)
-		if err != nil {
-			return nil, fmt.Errorf("evaluation: backup: read %s: %w", relPath, err)
-		}
-		target := filepath.Join(snapshotDir, filepath.FromSlash(relPath))
-		if err := os.MkdirAll(filepath.Dir(target), constants.PermDirPrivate); err != nil {
-			return nil, fmt.Errorf("evaluation: backup: create directory for %s: %w", relPath, err)
-		}
-		if err := os.WriteFile(target, data, constants.PermFilePrivate); err != nil {
-			return nil, fmt.Errorf("evaluation: backup: write %s: %w", relPath, err)
-		}
-		report.Files = append(report.Files, EvalBackupFile{Path: relPath, Size: int64(len(data)), SHA256: evalBackupDigest(data)})
-		report.TotalBytes += int64(len(data))
-	}
-
-	manifest, err := json.MarshalIndent(EvalBackupManifest{
-		SchemaVersion: evalBackupManifestVersion,
-		CreatedAt:     createdAt.Format(time.RFC3339),
-		Files:         report.Files,
-	}, "", "  ")
+// evalBackupSnapshotNames lists snapshot directory names oldest first. The
+// timestamp layout is fixed-width UTC, so name order is creation order.
+func evalBackupSnapshotNames(backupDir string) (string, []string, error) {
+	abs, err := filepath.Abs(backupDir)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: backup: encode manifest: %w", err)
+		return "", nil, fmt.Errorf("evaluation: backup: resolve directory: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(snapshotDir, constants.EvaluationBackupManifestFilename), manifest, constants.PermFilePrivate); err != nil {
-		return nil, fmt.Errorf("evaluation: backup: write manifest: %w", err)
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil, fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
+		}
+		return "", nil, fmt.Errorf("evaluation: backup: list %s: %w", abs, err)
 	}
-	return report, nil
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), constants.EvaluationBackupDirPrefix) {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	return abs, names, nil
 }
 
-// Restore verifies every file in a snapshot against its manifest, then writes
-// them into the runtime tree. Existing files with identical content are left
-// alone; differing ones fail the restore before any write unless overwrite is set.
+// snapshotSources pairs each manifest entry with the file holding its content.
+func snapshotSources(snapshotDir string, manifest *EvalBackupManifest) []evalBackupSource {
+	sources := make([]evalBackupSource, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		payload := filepath.Join(snapshotDir, filepath.FromSlash(file.Path))
+		if manifest.SchemaVersion == evalBackupManifestVersionObjects {
+			payload = evalBackupObjectPath(filepath.Dir(snapshotDir), file.SHA256)
+		}
+		sources = append(sources, evalBackupSource{file: file, payload: payload})
+	}
+	return sources
+}
+
+// Restore restores one snapshot into the runtime tree. Existing files with
+// identical content are left alone; differing ones fail the restore before any
+// write unless overwrite is set.
 func (b *EvalBackup) Restore(ctx context.Context, snapshotDir string, overwrite bool) (*EvalRestoreReport, error) {
 	snapshotDir, err := filepath.Abs(snapshotDir)
 	if err != nil {
@@ -278,61 +363,131 @@ func (b *EvalBackup) Restore(ctx context.Context, snapshotDir string, overwrite 
 	if err != nil {
 		return nil, err
 	}
-
-	payloads := make(map[string][]byte, len(manifest.Files))
-	for _, file := range manifest.Files {
-		data, err := os.ReadFile(filepath.Join(snapshotDir, filepath.FromSlash(file.Path)))
-		if err != nil {
-			return nil, fmt.Errorf("evaluation: restore: read %s: %w", file.Path, err)
-		}
-		if int64(len(data)) != file.Size || evalBackupDigest(data) != file.SHA256 {
-			return nil, fmt.Errorf("evaluation: restore: %s: %w", file.Path, constants.ErrEvaluationBackupIntegrity)
-		}
-		payloads[file.Path] = data
+	report, err := b.restoreSources(ctx, snapshotSources(snapshotDir, manifest), overwrite)
+	if err != nil {
+		return nil, err
 	}
+	report.SnapshotDir = snapshotDir
+	report.Snapshots = 1
+	return report, nil
+}
 
-	report := &EvalRestoreReport{SnapshotDir: snapshotDir}
-	var pending, conflicts []EvalBackupFile
-	for _, file := range manifest.Files {
-		same, exists, err := b.matchesExisting(ctx, file.Path, file.SHA256)
+// RestoreAll restores every file any complete snapshot in backupDir recorded,
+// taking each path from the newest snapshot that holds it. Evidence a later
+// snapshot no longer lists (a deleted run, say) is still recovered, and the
+// work is one pass over the merged set rather than one restore per snapshot.
+func (b *EvalBackup) RestoreAll(ctx context.Context, backupDir string, overwrite bool) (*EvalRestoreReport, error) {
+	snapshots, err := AllEvalBackupSnapshots(backupDir)
+	if err != nil {
+		return nil, err
+	}
+	merged := make(map[string]evalBackupSource)
+	for _, snapshotDir := range snapshots {
+		manifest, err := readEvalBackupManifest(snapshotDir)
+		if err != nil {
+			return nil, err
+		}
+		for _, source := range snapshotSources(snapshotDir, manifest) {
+			merged[source.file.Path] = source
+		}
+	}
+	sources := make([]evalBackupSource, 0, len(merged))
+	for _, source := range merged {
+		sources = append(sources, source)
+	}
+	sort.Slice(sources, func(i, j int) bool { return sources[i].file.Path < sources[j].file.Path })
+	report, err := b.restoreSources(ctx, sources, overwrite)
+	if err != nil {
+		return nil, err
+	}
+	report.SnapshotDir = filepath.Dir(snapshots[0])
+	report.Snapshots = len(snapshots)
+	return report, nil
+}
+
+// restoreSources writes the sources into the runtime tree. Files already in
+// place with the right content are skipped without reading the backup, and
+// content is read one file at a time, so memory stays near one file. Every
+// file that will be written is verified against its digest before the first
+// write, so a corrupt backup changes nothing.
+func (b *EvalBackup) restoreSources(ctx context.Context, sources []evalBackupSource, overwrite bool) (*EvalRestoreReport, error) {
+	report := &EvalRestoreReport{}
+	var pending []evalBackupSource
+	var conflicts []EvalBackupFile
+	for _, source := range sources {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		same, exists, err := b.matchesExisting(ctx, source.file)
 		if err != nil {
 			return nil, err
 		}
 		switch {
 		case exists && same:
-			report.Unchanged = append(report.Unchanged, file)
+			report.Unchanged = append(report.Unchanged, source.file)
 		case exists && !overwrite:
-			conflicts = append(conflicts, file)
+			conflicts = append(conflicts, source.file)
 		default:
-			pending = append(pending, file)
+			pending = append(pending, source)
 		}
 	}
 	if len(conflicts) > 0 {
 		return nil, evalBackupConflictError(conflicts)
 	}
-
-	for _, file := range pending {
-		if err := b.fileSvc.WriteFile(ctx, file.Path, payloads[file.Path], constants.PermFilePrivate); err != nil {
-			return nil, fmt.Errorf("evaluation: restore: write %s: %w", file.Path, err)
+	for _, source := range pending {
+		if _, err := readVerifiedEvalBackupPayload(source); err != nil {
+			return nil, err
 		}
-		report.Restored = append(report.Restored, file)
+	}
+	for _, source := range pending {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		data, err := readVerifiedEvalBackupPayload(source)
+		if err != nil {
+			return nil, err
+		}
+		if err := b.fileSvc.WriteFile(ctx, source.file.Path, data, constants.PermFilePrivate); err != nil {
+			return nil, fmt.Errorf("evaluation: restore: write %s: %w", source.file.Path, err)
+		}
+		report.Restored = append(report.Restored, source.file)
 	}
 	return report, nil
 }
 
-func (b *EvalBackup) matchesExisting(ctx context.Context, relPath, digest string) (same, exists bool, err error) {
-	exists, err = b.fileSvc.FileExists(ctx, relPath)
+func readVerifiedEvalBackupPayload(source evalBackupSource) ([]byte, error) {
+	data, err := os.ReadFile(source.payload)
 	if err != nil {
-		return false, false, fmt.Errorf("evaluation: restore: check %s: %w", relPath, err)
+		return nil, fmt.Errorf("evaluation: restore: read %s: %w", source.file.Path, err)
+	}
+	if int64(len(data)) != source.file.Size || evalBackupDigest(data) != source.file.SHA256 {
+		return nil, fmt.Errorf("evaluation: restore: %s: %w", source.file.Path, constants.ErrEvaluationBackupIntegrity)
+	}
+	return data, nil
+}
+
+// matchesExisting compares a runtime file with the backup entry, reading it
+// only when its size already matches.
+func (b *EvalBackup) matchesExisting(ctx context.Context, file EvalBackupFile) (same, exists bool, err error) {
+	exists, err = b.fileSvc.FileExists(ctx, file.Path)
+	if err != nil {
+		return false, false, fmt.Errorf("evaluation: restore: check %s: %w", file.Path, err)
 	}
 	if !exists {
 		return false, false, nil
 	}
-	current, err := b.fileSvc.ReadFile(ctx, relPath)
+	info, err := b.fileSvc.Stat(ctx, file.Path)
 	if err != nil {
-		return false, true, fmt.Errorf("evaluation: restore: read existing %s: %w", relPath, err)
+		return false, true, fmt.Errorf("evaluation: restore: stat existing %s: %w", file.Path, err)
 	}
-	return evalBackupDigest(current) == digest, true, nil
+	if info.Size() != file.Size {
+		return false, true, nil
+	}
+	current, err := b.fileSvc.ReadFile(ctx, file.Path)
+	if err != nil {
+		return false, true, fmt.Errorf("evaluation: restore: read existing %s: %w", file.Path, err)
+	}
+	return evalBackupDigest(current) == file.SHA256, true, nil
 }
 
 func evalBackupConflictError(conflicts []EvalBackupFile) error {
@@ -448,7 +603,7 @@ func readEvalBackupManifest(snapshotDir string) (*EvalBackupManifest, error) {
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		return nil, fmt.Errorf("evaluation: restore: decode manifest: %w: %w", constants.ErrEvaluationBackupManifestInvalid, err)
 	}
-	if manifest.SchemaVersion != evalBackupManifestVersion {
+	if manifest.SchemaVersion != evalBackupManifestVersionInline && manifest.SchemaVersion != evalBackupManifestVersionObjects {
 		return nil, fmt.Errorf("evaluation: restore: manifest schema %q: %w", manifest.SchemaVersion, constants.ErrEvaluationBackupManifestInvalid)
 	}
 	seen := make(map[string]struct{}, len(manifest.Files))
