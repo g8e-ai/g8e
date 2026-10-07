@@ -22,7 +22,6 @@ from app.llm.provider import LLMProvider
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
     AuditorClusterInfo,
-    CandidateCommand,
     TribunalAuditorCompletedPayload,
     TribunalAuditorFailedError,
     TribunalAuditorStartedPayload,
@@ -121,7 +120,6 @@ class TribunalAuditor:
         command_constraints_message: str,
         investigation_id: str,
         context: RequestContext,
-        tied_candidates: list[CandidateCommand] | None = None,
         whitelisting_enabled: bool = False,
         blacklisting_enabled: bool = False,
         model_role: Literal["primary", "assistant", "lite"] = "primary",

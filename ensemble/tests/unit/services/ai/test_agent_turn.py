@@ -434,7 +434,7 @@ class TestProcessProviderTurn:
 
         result_out = []
         chunks = [
-            chunk async for chunk in process_provider_turn(stream(), "test-model", result_out)
+            chunk async for chunk in process_provider_turn(stream(), result_out)
         ]
 
         assert len(chunks) == 2
@@ -456,7 +456,7 @@ class TestProcessProviderTurn:
 
         result_out = []
         chunks = [
-            chunk async for chunk in process_provider_turn(stream(), "test-model", result_out)
+            chunk async for chunk in process_provider_turn(stream(), result_out)
         ]
 
         assert len(chunks) == 3
@@ -477,7 +477,7 @@ class TestProcessProviderTurn:
 
         result_out = []
         chunks = [
-            chunk async for chunk in process_provider_turn(stream(), "test-model", result_out)
+            chunk async for chunk in process_provider_turn(stream(), result_out)
         ]
 
         assert len(chunks) == 2
@@ -496,7 +496,7 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        async for _ in process_provider_turn(stream(), "test-model", result_out):
+        async for _ in process_provider_turn(stream(), result_out):
             pass
 
         assert len(result_out[0].pending_tool_calls) == 2
@@ -520,7 +520,7 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        async for _ in process_provider_turn(stream(), "test-model", result_out):
+        async for _ in process_provider_turn(stream(), result_out):
             pass
 
         assert result_out[0].input_tokens == 15
@@ -549,7 +549,7 @@ class TestProcessProviderTurn:
             )
 
         result_out = []
-        async for _ in process_provider_turn(stream(), "test-model", result_out):
+        async for _ in process_provider_turn(stream(), result_out):
             pass
 
         result = result_out[0]
@@ -568,7 +568,7 @@ class TestProcessProviderTurn:
 
         result_out = []
         chunks = [
-            chunk async for chunk in process_provider_turn(stream(), "test-model", result_out)
+            chunk async for chunk in process_provider_turn(stream(), result_out)
         ]
 
         assert chunks[0].type == StreamChunkFromModelType.THINKING
@@ -586,7 +586,7 @@ class TestProcessProviderTurn:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out = []
-        async for _ in process_provider_turn(stream(), "test-model", result_out):
+        async for _ in process_provider_turn(stream(), result_out):
             pass
 
         assert len(result_out[0].model_response_parts) == 1
@@ -608,7 +608,7 @@ class TestProcessTurnWithGate:
 
         result_out: list[GatedTurnResult] = []
         chunks = [
-            chunk async for chunk in process_turn_with_gate(stream(), "test-model", result_out)
+            chunk async for chunk in process_turn_with_gate(stream(), result_out)
         ]
 
         assert len(result_out) == 1
@@ -639,7 +639,7 @@ class TestProcessTurnWithGate:
 
         result_out: list[GatedTurnResult] = []
         chunks = [
-            chunk async for chunk in process_turn_with_gate(stream(), "test-model", result_out)
+            chunk async for chunk in process_turn_with_gate(stream(), result_out)
         ]
 
         assert len(result_out) == 1
@@ -660,7 +660,7 @@ class TestProcessTurnWithGate:
 
         result_out: list[GatedTurnResult] = []
         chunks = [
-            chunk async for chunk in process_turn_with_gate(stream(), "test-model", result_out)
+            chunk async for chunk in process_turn_with_gate(stream(), result_out)
         ]
 
         assert len(result_out) == 1
@@ -680,7 +680,7 @@ class TestProcessTurnWithGate:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out: list[GatedTurnResult] = []
-        async for _ in process_turn_with_gate(stream(), "test-model", result_out):
+        async for _ in process_turn_with_gate(stream(), result_out):
             pass
 
         gated = result_out[0]
@@ -701,7 +701,7 @@ class TestProcessTurnWithGate:
             yield types.StreamChunkFromModel(finish_reason="stop")
 
         result_out: list[GatedTurnResult] = []
-        async for _ in process_turn_with_gate(stream(), "test-model", result_out):
+        async for _ in process_turn_with_gate(stream(), result_out):
             pass
 
         gated = result_out[0]
@@ -720,7 +720,7 @@ class TestConsolidateModelParts:
             types.Part(text="world "),
             types.Part(text="foo"),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 1
         assert result[0].text == "hello world foo"
@@ -732,7 +732,7 @@ class TestConsolidateModelParts:
             types.Part(text="thinking", thought=True),
             types.Part(text="more plain", thought=False),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 3
         assert result[0].text == "plain"
@@ -748,7 +748,7 @@ class TestConsolidateModelParts:
             types.Part(tool_call=tool_call),
             types.Part(text="more plain"),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 3
         assert result[1].tool_call == tool_call
@@ -761,14 +761,14 @@ class TestConsolidateModelParts:
             types.Part(thought_signature=sig),
             types.Part(text="more plain"),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 3
         assert result[1].thought_signature == sig
 
     def test_handles_empty_list(self):
         """Test empty parts list returns empty list."""
-        result = consolidate_model_parts([], "test-model")
+        result = consolidate_model_parts([])
         assert result == []
 
     def test_does_not_merge_non_adjacent_text(self):
@@ -779,7 +779,7 @@ class TestConsolidateModelParts:
             types.Part(tool_call=tool_call),
             types.Part(text="second"),
         ]
-        result = consolidate_model_parts(parts, "test-model")
+        result = consolidate_model_parts(parts)
 
         assert len(result) == 3
         assert result[0].text == "first"

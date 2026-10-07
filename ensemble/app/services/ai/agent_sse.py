@@ -63,7 +63,6 @@ from app.services.evaluation.tool_evidence import (
     record_tool_call_completed,
     record_tool_call_started,
 )
-from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.observe.payloads import (
     agent_state_sequence,
     build_agent_state_request,
@@ -129,7 +128,6 @@ def _make_state_pushers(event_service, inputs, investigation_id, run_display_nam
             run_id=investigation_id,
             display_name=run_display_name,
             status=status,
-            user_id=user_id,
             web_session_id=web_session_id,
             cli_session_id=cli_session_id,
         )
@@ -151,7 +149,6 @@ async def deliver_via_sse(
     state: AgentStreamState,
     event_service: EventServiceProtocol,
     on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
-    evaluation_trace_service: EvaluationTraceService | None = None,
 ) -> None:
     """
     Consume a StreamChunkFromModel async generator and deliver each event to
@@ -581,7 +578,7 @@ async def _handle_tool_result_chunk(
     return _turn
 
 
-async def _handle_stream_update_chunk(chunk, inputs, state, publish, thinking_started: bool) -> bool:
+async def _handle_stream_update_chunk(chunk, state, publish, thinking_started: bool) -> bool:
     """Handle text, thinking, retry, citation, and completion chunks."""
     if chunk.type == StreamChunkFromModelType.TEXT:
         state.response_text += chunk.data.content or ""
@@ -680,7 +677,7 @@ async def _consume_sse_stream(
             break  # Break instead of return to ensure post-loop code executes
         else:
             _thinking_started = await _handle_stream_update_chunk(
-                chunk, inputs, state, publish, _thinking_started
+                chunk, state, publish, _thinking_started
             )
 
     return error_occurred

@@ -35,7 +35,6 @@ from app.llm.provider import LLMProvider
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
     AuditorClusterInfo,
-    CandidateCommand,
     TribunalAuditorCompletedPayload,
     TribunalAuditorFailedError,
     TribunalAuditorFailedPayload,
@@ -522,7 +521,6 @@ async def run_auditor(
     mode: ConsensusAuditMode,
     vote_winner: str | None,
     vote_breakdown: VoteBreakdown,
-    tied_candidates: list[CandidateCommand] | None,
     operator_context: OperatorContext | None,
     emitter: TribunalEmitter,
     command_constraints_message: str,

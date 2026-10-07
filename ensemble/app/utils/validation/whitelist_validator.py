@@ -307,9 +307,12 @@ class CommandWhitelistValidator:
                         i += consumed_next
                     break
 
-            if not option_matched:
-                if not self._matches_validation_pattern(arg, validation_patterns) and not self._is_safe_value(arg):
-                    violations.append(f"Argument '{arg}' contains unsafe characters or format")
+            if (
+                not option_matched
+                and not self._matches_validation_pattern(arg, validation_patterns)
+                and not self._is_safe_value(arg)
+            ):
+                violations.append(f"Argument '{arg}' contains unsafe characters or format")
 
             i += 1
 

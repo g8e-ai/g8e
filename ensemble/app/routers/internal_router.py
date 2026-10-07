@@ -394,6 +394,7 @@ async def internal_chat(
     unless the request creates the case) and a seed failure is an HTTP error,
     not a model failure.
     """
+    del app_settings, settings_service
     resource_creation = request.resource_creation
     create_new_case = resource_creation.create_case if resource_creation else False
     create_new_investigation = bool(
@@ -680,6 +681,7 @@ async def internal_triage_skip(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
+    del request
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -747,6 +749,7 @@ async def internal_triage_timeout(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
+    del request
     logger.info(
         "[INTERNAL-HTTP] Triage timeout received",
         extra={
@@ -952,6 +955,7 @@ async def get_case(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Get a case by ID - internal cluster use only."""
+    del request, g8e_context
     case = await case_service.get_case(case_id)
     return CaseResponse(success=True, case=case)
 
@@ -999,6 +1003,7 @@ async def delete_case(
     - All investigations with this case_id
     - All memories with this case_id
     """
+    del request, g8e_context
     try:
         case = await case_service.get_case(case_id)
         case_user_id = case.user_id
@@ -1152,6 +1157,7 @@ async def generate_api_key(
     Authority: g8ee.
     SECURITY: Internal only - client component.
     """
+    del g8e_context
     try:
         api_key = api_key_service.generate_raw_key(prefix=request.prefix)
         return APIKeyGenerationResponse(success=True, api_key=api_key)
@@ -1173,6 +1179,7 @@ async def revoke_operator_certificate(
     Authority: g8ee.
     SECURITY: Internal only - client component.
     """
+    del g8e_context
     try:
         success = await certificate_service.revoke_certificate(
             serial=request.serial, reason=request.reason, operator_id=request.operator_id
@@ -1189,6 +1196,7 @@ async def claim_operator_slot(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Removed: slot claims are Gateway-owned during enrollment/reauth."""
+    del g8e_context
     logger.warning(
         "[INTERNAL-HTTP] Rejected legacy operator slot claim",
         extra={"operator_id": request.operator_id},
@@ -1328,6 +1336,7 @@ async def authenticate_operator(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Removed: operator authentication is Gateway-owned via enrollment/reauth."""
+    del request, g8e_context
     logger.warning("[INTERNAL-HTTP] Rejected legacy operator authenticate request")
     return OperatorAuthenticateResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
 
@@ -1341,6 +1350,7 @@ async def register_device_link_operator(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ) -> OperatorDeviceLinkRegisterResponse:
     """Removed: device-link operator bootstrap is Gateway-owned."""
+    del g8e_context
     logger.warning(
         "[INTERNAL-HTTP] Rejected legacy device-link operator registration",
         extra={"operator_id": request.operator_id},
@@ -1385,6 +1395,7 @@ async def refresh_operator_session(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Removed: operator session refresh is Gateway-owned."""
+    del g8e_context
     logger.warning(
         "[INTERNAL-HTTP] Rejected legacy operator session refresh",
         extra={"operator_session_id": request.operator_session_id[:12] + "..."},
@@ -1467,6 +1478,7 @@ async def get_investigation(
 
     SECURITY: Validates that the authenticated user owns the investigation.
     """
+    del request
     logger.info(
         "[INTERNAL-HTTP] Get investigation via RequestContext",
         extra={"user_id": g8e_context.user_id, "investigation_id": investigation_id},
@@ -1557,6 +1569,7 @@ async def get_llm_role_settings(
 
     API keys are reported only as set or unset.
     """
+    del request
     user_id = g8e_context.user_id
     if user_id is None:
         raise AuthenticationError("Authenticated user identity is required for model settings")

@@ -84,7 +84,6 @@ class FakeDBService:
         collection: str,
         document_id: str,
         data: dict[str, Any] | G8eBaseModel,
-        ttl: int | None = None,
     ) -> CacheOperationResult:
         return CacheOperationResult(success=True)
 
@@ -94,7 +93,6 @@ class FakeDBService:
         document_id: str,
         data: dict[str, Any] | G8eBaseModel,
         merge: bool = True,
-        ttl: int | None = None,
     ) -> CacheOperationResult:
         return CacheOperationResult(success=True)
 

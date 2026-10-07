@@ -64,7 +64,6 @@ async def test_auditor_repro_json_failure():
             mode=ConsensusAuditMode.UNANIMOUS,
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
-            tied_candidates=None,
             operator_context=MagicMock(),
             emitter=emitter,
             command_constraints_message="No constraints",

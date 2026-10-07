@@ -958,7 +958,6 @@ class TestAudit:
         )
 
         await service._audit(
-            operator_id="op-1",
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
             context=RequestContext.from_app_context(g8e_context),
@@ -993,7 +992,6 @@ class TestAudit:
         )
 
         await service._audit(
-            operator_id=None,
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
             context=RequestContext.from_app_context(g8e_context),
@@ -1028,7 +1026,6 @@ class TestAudit:
         )
 
         await service._audit(
-            operator_id=None,
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
             context=RequestContext.from_app_context(g8e_context),

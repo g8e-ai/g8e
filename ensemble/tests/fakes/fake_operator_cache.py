@@ -50,7 +50,6 @@ class FakeOperatorCache:
         self,
         field_filters: list[dict[str, object]] | None = None,
         limit: int = 1000,
-        bypass_cache: bool = False,
         *,
         user_id: str,
     ) -> list[OperatorDocument]:

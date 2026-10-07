@@ -207,7 +207,6 @@ class OperatorApprovalService:
     async def _audit(
         self,
         *,
-        operator_id: str | None,
         event_type: EventType,
         metadata: ConversationMessageMetadata,
         context: RequestContext,
@@ -358,7 +357,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=None,
                 event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
                 metadata=ApprovalMetadata(
                     execution_id=request.execution_id,
@@ -394,7 +392,6 @@ class OperatorApprovalService:
 
             if pending.feedback:
                 await self._audit(
-                    operator_id=None,
                     event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REJECTED,
                     metadata=ApprovalMetadata(
                         execution_id=request.execution_id,
@@ -413,7 +410,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=None,
                 event_type=(
                     EventType.AI_AGENT_CONTINUE_APPROVAL_GRANTED
                     if pending.approved
@@ -545,7 +541,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
                 metadata=ApprovalMetadata(
                     execution_id=execution_id,
@@ -582,7 +577,6 @@ class OperatorApprovalService:
                     "[APPROVAL] User provided feedback: %s", pending.reason or "User sent a message"
                 )
                 await self._audit(
-                    operator_id=operator_id,
                     event_type=EventType.OPERATOR_COMMAND_APPROVAL_REJECTED,
                     metadata=ApprovalMetadata(
                         execution_id=execution_id,
@@ -604,7 +598,6 @@ class OperatorApprovalService:
             logger.info("[APPROVAL] User response: approved=%s", pending.approved)
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_COMMAND_APPROVAL_GRANTED
                 if pending.approved
                 else EventType.OPERATOR_COMMAND_APPROVAL_REJECTED,
@@ -730,7 +723,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED,
                 metadata=FileEditMetadata(
                     execution_id=execution_id,
@@ -753,7 +745,6 @@ class OperatorApprovalService:
                     pending.reason or "User sent a message",
                 )
                 await self._audit(
-                    operator_id=operator_id,
                     event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_REJECTED,
                     metadata=FileEditMetadata(
                         execution_id=execution_id,
@@ -774,7 +765,6 @@ class OperatorApprovalService:
             logger.info("[FILE_EDIT_APPROVAL] User response: approved=%s", pending.approved)
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_GRANTED
                 if pending.approved
                 else EventType.OPERATOR_FILE_EDIT_APPROVAL_REJECTED,
@@ -906,7 +896,6 @@ class OperatorApprovalService:
                 )
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
                 metadata=ApprovalMetadata(
                     execution_id=execution_id,
@@ -942,7 +931,6 @@ class OperatorApprovalService:
             if pending.feedback:
                 logger.info("[INTENT_APPROVAL] User provided feedback")
                 await self._audit(
-                    operator_id=operator_id,
                     event_type=EventType.OPERATOR_INTENT_APPROVAL_REJECTED,
                     metadata=ApprovalMetadata(
                         execution_id=execution_id,
@@ -964,7 +952,6 @@ class OperatorApprovalService:
             logger.info("[INTENT_APPROVAL] User response: approved=%s", pending.approved)
 
             await self._audit(
-                operator_id=operator_id,
                 event_type=EventType.OPERATOR_INTENT_APPROVAL_GRANTED
                 if pending.approved
                 else EventType.OPERATOR_INTENT_APPROVAL_REJECTED,

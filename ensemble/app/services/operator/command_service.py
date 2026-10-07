@@ -227,7 +227,6 @@ class OperatorCommandService:
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None = None,
     ) -> CommandExecutionResult:
         """Orchestrate command execution: resolve -> validate -> approve -> fan-out dispatch.
 

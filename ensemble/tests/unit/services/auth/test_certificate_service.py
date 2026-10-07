@@ -155,7 +155,7 @@ async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     await service.initialize()
 
     res = await service.generate_operator_certificate(
-        operator_id="test-op", user_id="test-user", organization_id="test-org"
+        operator_id="test-op", user_id="test-user"
     )
 
     assert "cert" in res
@@ -185,7 +185,7 @@ async def test_generate_without_initialize_triggers_init(setup_ca_files, mock_da
     # Don't call initialize() explicitly
 
     res = await service.generate_operator_certificate(
-        operator_id="test-op", user_id="test-user", organization_id="test-org"
+        operator_id="test-op", user_id="test-user"
     )
     assert service.initialized is True
     assert "cert" in res
@@ -195,7 +195,7 @@ async def test_generate_without_initialize_triggers_init(setup_ca_files, mock_da
 async def test_generate_even_if_no_ca_cert(temp_pki_dir, mock_data_service):
     # If ca.crt is missing, it logs an error but doesn't prevent signing via API
     service = CertificateService(pki_dir=temp_pki_dir, data_service=mock_data_service)
-    res = await service.generate_operator_certificate("op", "user", "org")
+    res = await service.generate_operator_certificate("op", "user")
     assert "cert" in res
 
 

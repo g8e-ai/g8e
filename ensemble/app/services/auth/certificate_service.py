@@ -104,7 +104,7 @@ class CertificateService:
             # We let it proceed but some operations might fail if they expect a CA cert local copy
 
     async def generate_operator_certificate(
-        self, operator_id: str, user_id: str, organization_id: str
+        self, operator_id: str, user_id: str
     ) -> dict[str, str]:
         """Request a new per-operator client certificate from operator signing API."""
         if not self.initialized:

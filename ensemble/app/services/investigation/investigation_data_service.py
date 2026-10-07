@@ -367,7 +367,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         command: str,
         result: CommandInternalResult,
         operator_id: str,
-        operator_session_id: str,
         context: RequestContext,
     ) -> InvestigationModel:
         """Helper to record a command execution result."""
@@ -394,7 +393,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         self,
         investigation_id: str,
         execution_id: str,
-        operator_id: str,
         event_type: EventType,
         file_path: str,
         result: FileEditResult,

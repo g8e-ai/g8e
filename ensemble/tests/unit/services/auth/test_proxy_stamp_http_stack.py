@@ -28,7 +28,7 @@ BODY = b'{"message":"hi","context":{"user_id":"user-1","web_session_id":"web-1",
 
 
 @pytest.fixture
-def stack(mock_settings):
+def stack():
     key = make_key()
     service = AuthService(AsyncMock(), proxy_stamp_verifier=verifier(KeySource(key_response(key))))
     app = FastAPI()
@@ -39,7 +39,7 @@ def stack(mock_settings):
         return JSONResponse({"error": "unauthenticated"}, status_code=401)
 
     async def authenticated(request: Request) -> AuthenticatedUser:
-        return await service.authenticate_request(request, mock_settings)
+        return await service.authenticate_request(request)
 
     @app.post("/api/v1/chat/send")
     async def send(user: AuthenticatedUser = Depends(authenticated)):

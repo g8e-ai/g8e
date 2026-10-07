@@ -48,6 +48,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
+    del execution_id
     args = ExecutorCommandArgs.model_validate(tool_args)
     logger.info("[RUN_OPERATOR_COMMANDS] Executing command: %s", args.command)
     result = await svc.operator_command_service.execute_command(
@@ -55,7 +56,6 @@ async def handle(
         g8e_context=g8e_context,
         investigation=investigation,
         request_settings=request_settings,
-        execution_id=execution_id,
     )
     logger.info("[RUN_OPERATOR_COMMANDS] Result: %s", result)
     return result

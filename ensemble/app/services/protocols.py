@@ -231,9 +231,8 @@ class DocumentServiceProtocol(Protocol):
         collection: str,
         document_id: str,
         data: dict[str, Any] | G8eBaseModel,
-        ttl: int | None = None,
     ) -> CacheOperationResult:
-        """Create a new document in a collection with optional cache TTL."""
+        """Create a new document in a collection."""
         raise NotImplementedError
 
     async def update_document(
@@ -242,9 +241,8 @@ class DocumentServiceProtocol(Protocol):
         document_id: str,
         data: dict[str, Any] | G8eBaseModel,
         merge: bool = True,
-        ttl: int | None = None,
     ) -> CacheOperationResult:
-        """Update or replace an existing document with optional cache TTL."""
+        """Update or replace an existing document."""
         raise NotImplementedError
 
     async def delete_document(self, collection: str, document_id: str) -> CacheOperationResult:
@@ -348,7 +346,6 @@ class OperatorDataServiceProtocol(Protocol):
         self,
         field_filters: list[dict[str, object]] | None = None,
         limit: int = 1000,
-        bypass_cache: bool = False,
         *,
         user_id: str,
     ) -> list[OperatorDocument]:
@@ -449,7 +446,6 @@ class InvestigationDataServiceProtocol(Protocol):
         command: str,
         result: CommandInternalResult,
         operator_id: str,
-        operator_session_id: str,
         context: RequestContext,
     ) -> InvestigationModel:
         raise NotImplementedError
@@ -458,7 +454,6 @@ class InvestigationDataServiceProtocol(Protocol):
         self,
         investigation_id: str,
         execution_id: str,
-        operator_id: str,
         event_type: EventType,
         file_path: str,
         result: FileEditResult,

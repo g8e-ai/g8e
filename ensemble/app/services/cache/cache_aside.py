@@ -133,7 +133,6 @@ class CacheAsideService(DocumentServiceProtocol):
         collection: str,
         document_id: str,
         data: dict[str, Any] | G8eBaseModel,
-        ttl: int | None = None,
     ) -> CacheOperationResult:
         # Check if document exists first to ensure "Create" fails if it exists
         existing = await self.db.get_document(collection, document_id)
@@ -169,7 +168,6 @@ class CacheAsideService(DocumentServiceProtocol):
         document_id: str,
         data: dict[str, Any] | G8eBaseModel,
         merge: bool = True,
-        ttl: int | None = None,
     ) -> CacheOperationResult:
         result = await self.db.update_document(
             collection=collection, document_id=document_id, data=data, merge=merge
@@ -249,7 +247,6 @@ class CacheAsideService(DocumentServiceProtocol):
         self,
         collection: str,
         query_params: dict[str, Any],
-        ttl: int | None = CACHE_TTL_SHORT,
     ) -> list[dict[str, Any]] | None:
         if not self.read_enabled:
             return None
@@ -316,7 +313,7 @@ class CacheAsideService(DocumentServiceProtocol):
             "select_fields": select_fields or [],
         }
         if ttl is not None and self.read_enabled:
-            cached = await self.get_query_result(collection, query_params, ttl=ttl)
+            cached = await self.get_query_result(collection, query_params)
             if cached is not None:
                 return QueryResult(success=True, data=cached)
 

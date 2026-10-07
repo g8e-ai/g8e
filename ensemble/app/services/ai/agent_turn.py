@@ -208,7 +208,6 @@ def handle_text_chunk(
 
 async def process_provider_turn(
     stream_response: AsyncGenerator[types.StreamChunkFromModel],
-    model_name: str,
     result_out: list[TurnResult],
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """
@@ -345,7 +344,6 @@ class GatedTurnResult(BaseModel):
 
 async def process_turn_with_gate(
     stream_response: AsyncGenerator[types.StreamChunkFromModel],
-    model_name: str,
     result_out: list[GatedTurnResult],
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Consume one provider stream turn, applying the interrogation gate.
@@ -361,7 +359,7 @@ async def process_turn_with_gate(
     """
     inner_result_out: list[TurnResult] = []
 
-    async for chunk in process_provider_turn(stream_response, model_name, inner_result_out):
+    async for chunk in process_provider_turn(stream_response, inner_result_out):
         yield chunk
 
     turn_result = inner_result_out[0]
@@ -390,10 +388,7 @@ async def process_turn_with_gate(
     )
 
 
-def consolidate_model_parts(
-    parts: list[types.Part],
-    model_name: str,
-) -> list[types.Part]:
+def consolidate_model_parts(parts: list[types.Part]) -> list[types.Part]:
     """
     Consolidate model response parts for the tool calling loop.
 

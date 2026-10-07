@@ -28,7 +28,6 @@ from app.models.auth import AuthenticatedUser
 from app.models.http_context import G8eHttpContext
 
 if TYPE_CHECKING:
-    from app.models.settings import G8eeAppSettings
     from app.services.auth.proxy_stamp import ProxyStampVerifier
     from app.services.infra.internal_http_client import InternalHttpClient
 
@@ -50,7 +49,6 @@ class AuthService:
     async def authenticate_request(
         self,
         request: Request,
-        settings: G8eeAppSettings,
     ) -> AuthenticatedUser:
         """Authenticate via proxy headers (browser) or Bearer operator session (CLI/mTLS)."""
         proxy_user_id = request.headers.get(X_PROXY_USER_ID)
@@ -146,7 +144,6 @@ class AuthService:
         self,
         request: Request,
         user: AuthenticatedUser,
-        is_exempt_path: bool = False,
     ) -> G8eHttpContext:
         """Unified context validation: extracts from body and checks against auth user.
 

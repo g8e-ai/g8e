@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 """
-Unit tests for g8eEnsemble (agent.py).
+Unit tests for G8eEnsemble (agent.py).
 
 Tests:
 - Constructor initialization with required and optional dependencies
@@ -48,7 +48,7 @@ from app.models.agent import (
 )
 from app.models.grounding import GroundingMetadata
 from app.models.tool_results import SearchWebResult
-from app.services.ai.agent import g8eEnsemble
+from app.services.ai.agent import G8eEnsemble
 from app.services.ai.agent_tool_loop import ToolCallResponse
 from app.services.ai.grounding.grounding_service import GroundingService
 from tests.fakes.agent_helpers import (
@@ -73,7 +73,7 @@ pytestmark = pytest.mark.unit
 class Testg8eEnsembleConstructor:
     def test_constructor_with_required_dependencies(self):
         tool_executor = MagicMock()
-        agent = g8eEnsemble(tool_executor=tool_executor)
+        agent = G8eEnsemble(tool_executor=tool_executor)
 
         assert agent._tool_executor is tool_executor
         assert agent._grounding_service is not None
@@ -81,7 +81,7 @@ class Testg8eEnsembleConstructor:
     def test_constructor_with_optional_grounding_service(self):
         tool_executor = MagicMock()
         grounding_service = MagicMock()
-        agent = g8eEnsemble(
+        agent = G8eEnsemble(
             tool_executor=tool_executor,
             grounding_service=grounding_service,
         )
@@ -90,7 +90,7 @@ class Testg8eEnsembleConstructor:
 
     def test_constructor_creates_default_grounding_service_when_none(self):
         tool_executor = MagicMock()
-        agent = g8eEnsemble(
+        agent = G8eEnsemble(
             tool_executor=tool_executor,
             grounding_service=None,
         )

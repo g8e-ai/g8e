@@ -104,7 +104,6 @@ class TestBuildInvestigationRunStateRequest:
             run_id="inv-1",
             display_name="My Case",
             status="running",
-            user_id="user-1",
             web_session_id="web-1",
         )
         assert req is not None
@@ -118,7 +117,6 @@ class TestBuildInvestigationRunStateRequest:
             run_id="inv-1",
             display_name="My Case",
             status="running",
-            user_id="user-1",
         )
         assert req is None
 
@@ -142,7 +140,6 @@ class TestBuildInvestigationRunStateRequest:
             run_id="inv-1",
             display_name="My Case",
             status="running",
-            user_id="user-1",
             web_session_id="web-1",
         )
         assert req is not None

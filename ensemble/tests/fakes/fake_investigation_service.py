@@ -93,7 +93,6 @@ class FakeInvestigationService:
         command: str,
         result: CommandInternalResult,
         operator_id: str,
-        operator_session_id: str,
         context: RequestContext,
         actor: HistoryActor = HistoryActor.G8EO,
     ) -> InvestigationModel:
@@ -104,7 +103,6 @@ class FakeInvestigationService:
                 "command": command,
                 "result": result,
                 "operator_id": operator_id,
-                "operator_session_id": operator_session_id,
                 "actor": actor,
             }
         )
@@ -131,13 +129,11 @@ class FakeInvestigationService:
         self,
         investigation_id: str,
         execution_id: str,
-        operator_id: str,
         event_type: EventType,
         file_path: str,
         result: FileEditResult,
         operation: FileOperation,
         context: RequestContext,
-        operator_session_id: str,
     ) -> InvestigationModel:
         return MagicMock(spec=InvestigationModel)
 

@@ -552,21 +552,9 @@ class FakeProvider(LLMProvider):
             return fixed_response
         if {"status", "revised_command", "swap_to_cluster"}.issubset(prop_names):
             return json.dumps({"status": "ok", "revised_command": None, "swap_to_cluster": None})
-        if prop_names in ({"risk_level"}, {"risk_level", "model_call"}) or {
-            "risk_level",
-            "safe_to_proceed",
-        }.issubset(prop_names):
-            if "safe_to_proceed" not in prop_names:
-                return json.dumps({"risk_level": "LOW"})
-            return json.dumps(
-                {
-                    "risk_level": "LOW",
-                    "is_system_file": False,
-                    "safe_to_proceed": True,
-                    "blocking_issues": [],
-                    "approval_prompt": None,
-                }
-            )
+        risk_response = FakeProvider._risk_schema_response(prop_names)
+        if risk_response is not None:
+            return risk_response
         if {"error_category", "root_cause"}.issubset(prop_names):
             return json.dumps(
                 {
@@ -581,6 +569,22 @@ class FakeProvider(LLMProvider):
                 }
             )
         return None
+
+    @staticmethod
+    def _risk_schema_response(prop_names: set[str]) -> str | None:
+        if prop_names in ({"risk_level"}, {"risk_level", "model_call"}):
+            return json.dumps({"risk_level": "LOW"})
+        if not {"risk_level", "safe_to_proceed"}.issubset(prop_names):
+            return None
+        return json.dumps(
+            {
+                "risk_level": "LOW",
+                "is_system_file": False,
+                "safe_to_proceed": True,
+                "blocking_issues": [],
+                "approval_prompt": None,
+            }
+        )
 
     @staticmethod
     def _complexity_schema_response(prop_names: set[str]) -> str | None:

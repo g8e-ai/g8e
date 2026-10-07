@@ -14,7 +14,6 @@ from app.clients.blob_client import BlobClient
 from app.clients.kv_cache_client import KVCacheClient
 from app.constants import (
     G8EE_COMPONENT,
-    InternalAPIPaths,
 )
 from app.errors import (
     AuthenticationError,
@@ -374,10 +373,9 @@ async def get_g8ee_current_active_user(request: Request) -> AuthenticatedUser:
 
 async def require_authenticated_user(
     request: Request,
-    settings: G8eeAppSettings = Depends(get_g8ee_app_settings),
     auth_service: AuthService = Depends(get_g8ee_auth_service),
 ) -> AuthenticatedUser:
-    return await auth_service.authenticate_request(request, settings)
+    return await auth_service.authenticate_request(request)
 
 
 async def require_authenticated_context(
@@ -391,18 +389,7 @@ async def require_authenticated_context(
     2. Extracts and validates context from the request body.
     3. Returns a validated G8eHttpContext.
     """
-    # Check if this is an exempt path (e.g. operator auth relay)
-    is_exempt = request.url.path in [
-        InternalAPIPaths.G8EE_OPERATORS_AUTHENTICATE,
-        InternalAPIPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER,
-        InternalAPIPaths.G8EE_OPERATORS_VALIDATE_SESSION,
-        InternalAPIPaths.G8EE_OPERATORS_REFRESH_SESSION,
-        InternalAPIPaths.G8EE_OPERATORS_GATEWAY_SESSION_AUTH,
-        InternalAPIPaths.G8EE_AUTH_GENERATE_KEY,
-        InternalAPIPaths.G8EE_AUTH_REVOKE_CERT,
-    ]
-
-    return await auth_service.get_validated_context(request, user, is_exempt_path=is_exempt)
+    return await auth_service.get_validated_context(request, user)
 
 
 async def get_request_context(request: Request) -> RequestContext:

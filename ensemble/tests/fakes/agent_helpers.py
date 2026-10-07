@@ -23,7 +23,7 @@ from app.models.base import G8eBaseModel
 from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.settings import G8eeUserSettings, LLMSettings
-from app.services.ai.agent import g8eEnsemble
+from app.services.ai.agent import G8eEnsemble
 from app.services.ai.agent_turn import process_provider_turn
 from app.services.ai.request_builder import AIRequestBuilder
 from tests.fakes.factories import build_enriched_context, build_g8e_http_context
@@ -166,13 +166,13 @@ def make_agent_run_args(
 def make_g8e_agent(
     fn_handler=None,
     approval_service=None,
-) -> g8eEnsemble:
-    """Build a g8eEnsemble suitable for unit tests."""
+) -> G8eEnsemble:
+    """Build a G8eEnsemble suitable for unit tests."""
     if fn_handler is None:
         fn_handler = MagicMock()
         fn_handler._tool_declarations = {}
 
-    return g8eEnsemble(
+    return G8eEnsemble(
         tool_executor=fn_handler,
         approval_service=approval_service,
     )
@@ -229,7 +229,7 @@ class FakeMultiTurnStreamProvider:
         return _gen()
 
 
-def patch_stream_response(agent: g8eEnsemble, chunks: list[StreamChunkFromModel]) -> None:
+def patch_stream_response(agent: G8eEnsemble, chunks: list[StreamChunkFromModel]) -> None:
     """Replace agent.stream_response with an async generator that yields chunks."""
 
     async def _fake_stream(*args, **kwargs):
@@ -240,7 +240,7 @@ def patch_stream_response(agent: g8eEnsemble, chunks: list[StreamChunkFromModel]
 
 
 async def collect_stream_from_model_chunks(
-    agent: g8eEnsemble,
+    agent: G8eEnsemble,
     inputs: AgentInputs,
     event_service: Any = None,
     llm_provider: Any = None,
@@ -324,7 +324,6 @@ def make_event_service():
 
 async def run_process_provider_turn(
     provider_chunks: list,
-    model_name: str = "test-model",
 ) -> tuple[list[StreamChunkFromModel], list]:
     """Drive process_provider_turn with the given provider chunks."""
 
@@ -334,7 +333,7 @@ async def run_process_provider_turn(
 
     result_out: list[TurnResult] = []
     stream_chunks: list[StreamChunkFromModel] = [
-        chunk async for chunk in process_provider_turn(_gen(), model_name, result_out)
+        chunk async for chunk in process_provider_turn(_gen(), result_out)
     ]
 
     return stream_chunks, result_out[0].model_response_parts

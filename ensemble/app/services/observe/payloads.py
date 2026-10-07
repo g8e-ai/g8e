@@ -132,7 +132,6 @@ def build_investigation_run_state_request(
     run_id: str,
     display_name: str,
     status: str,
-    user_id: str,
     web_session_id: str | None = None,
     cli_session_id: str | None = None,
     started_at: UTCDatetime | None = None,

@@ -451,7 +451,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
     )
 
     # Run Round 1 voting
-    vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
+    vote_winner, vote_score, vote_breakdown, _ = await _run_voting_stage(
         candidates=candidates,
         request=request.request,
         emitter=emitter,
@@ -467,7 +467,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
             vote_winner,
             vote_score,
             vote_breakdown,
-            tied_candidates,
+            _,
             round_2_candidates,
             round_2_vote_breakdown,
         ) = await _run_peer_review_round(
@@ -539,7 +539,6 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         guidelines=request.guidelines,
         vote_winner=vote_winner,
         vote_breakdown=vote_breakdown,
-        tied_candidates=tied_candidates,
         operator_context=request.operator_context,
         auditor_enabled=settings.llm.llm_command_gen_auditor,
         command_constraints_message=command_constraints_message,

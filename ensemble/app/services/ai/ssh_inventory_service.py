@@ -110,9 +110,10 @@ def _load_cached(ssh_config_path: str, mtime: float) -> SshInventory:
 
     hosts = list(_parse_ssh_config(raw, config_dir=path.parent))
     logger.info(
-        "[SSH_INVENTORY] Parsed %d host blocks from %s",
+        "[SSH_INVENTORY] Parsed %d host blocks from %s (mtime=%s)",
         len(hosts),
         ssh_config_path,
+        mtime,
     )
     return SshInventory(source_path=ssh_config_path, hosts=hosts)
 

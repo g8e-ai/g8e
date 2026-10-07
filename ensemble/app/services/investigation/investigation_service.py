@@ -455,7 +455,6 @@ class InvestigationService:
             run_id=investigation.id,
             display_name=investigation.case_title or "",
             status=status,
-            user_id=investigation.user_id or "",
             web_session_id=investigation.web_session_id,
             cli_session_id=None,
         )

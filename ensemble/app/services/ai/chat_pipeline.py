@@ -1212,7 +1212,6 @@ class ChatPipelineService:
                 event_service=self.event_service,
                 llm_provider=llm_provider,
                 on_iteration_text=_persist_iteration_text,
-                evaluation_trace_service=self.evaluation_trace_service,
             )
             logger.info("[SSE-CHAT] Agent execution completed")
 

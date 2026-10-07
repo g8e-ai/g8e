@@ -275,7 +275,7 @@ def _make_internal_request(client_ip, path, headers=None, settings_token=None):
 
 
 class TestRequireAuthenticatedUser:
-    async def test_proxy_headers_return_authenticated_user(self, mock_request, mock_settings):
+    async def test_proxy_headers_return_authenticated_user(self, mock_request):
         mock_auth_service = MagicMock()
         mock_auth_service.authenticate_request = AsyncMock(
             return_value=build_authenticated_user(
@@ -287,27 +287,27 @@ class TestRequireAuthenticatedUser:
                 auth_method=AuthMethod.PROXY,
             )
         )
-        result = await require_authenticated_user(mock_request, mock_settings, mock_auth_service)
+        result = await require_authenticated_user(mock_request, mock_auth_service)
         assert result.uid == "user-abc"
         assert result.email == "user@example.com"
         assert result.organization_id == "org-xyz"
         assert result.auth_method == AuthMethod.PROXY
 
-    async def test_no_auth_raises_authentication_error(self, mock_request, mock_settings):
+    async def test_no_auth_raises_authentication_error(self, mock_request):
         mock_auth_service = MagicMock()
         mock_auth_service.authenticate_request = AsyncMock(
             side_effect=AuthenticationError("Authentication required")
         )
         with pytest.raises(AuthenticationError, match="Authentication required"):
-            await require_authenticated_user(mock_request, mock_settings, mock_auth_service)
+            await require_authenticated_user(mock_request, mock_auth_service)
 
-    async def test_authentication_error_http_status_is_401(self, mock_request, mock_settings):
+    async def test_authentication_error_http_status_is_401(self, mock_request):
         mock_auth_service = MagicMock()
         mock_auth_service.authenticate_request = AsyncMock(
             side_effect=AuthenticationError("Authentication required")
         )
         with pytest.raises(AuthenticationError) as exc_info:
-            await require_authenticated_user(mock_request, mock_settings, mock_auth_service)
+            await require_authenticated_user(mock_request, mock_auth_service)
         assert exc_info.value.get_http_status() == 401
 
 
@@ -328,9 +328,7 @@ class TestRequireAuthenticatedContext:
 
         result = await require_authenticated_context(mock_request, mock_user, mock_auth_service)
         assert result == mock_context
-        mock_auth_service.get_validated_context.assert_called_once_with(
-            mock_request, mock_user, is_exempt_path=False
-        )
+        mock_auth_service.get_validated_context.assert_called_once_with(mock_request, mock_user)
 
 
 class TestHealthCheckDependencies:
