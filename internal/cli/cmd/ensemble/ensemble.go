@@ -14,9 +14,10 @@ import (
 
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ensemble",
-		Short: "Manage the local g8ee ensemble service",
-		Long:  "Manage the local Python ensemble service started by make full. Uses the active virtual environment, repository .venv, or python3. Run from the repository root.",
+		Use:     "ensemble",
+		Aliases: []string{"ensembles"},
+		Short:   "Manage the local g8ee ensemble service",
+		Long:    "Manage the local Python ensemble service started by make full. Uses the active virtual environment, repository .venv, or python3. Run from the repository root.",
 	}
 	cmd.AddCommand(
 		hostLifecycleCmd("start", "Start g8ee with local Python"),

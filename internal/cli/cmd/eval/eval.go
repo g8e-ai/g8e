@@ -130,9 +130,10 @@ func Cmd() *cobra.Command {
 
 func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "eval",
-		Short: "Run and verify g8e evaluation programs",
-		Long:  `Platform evaluation programs and their supporting workflows.`,
+		Use:     "eval",
+		Aliases: []string{"evals"},
+		Short:   "Run and verify g8e evaluation programs",
+		Long:    `Platform evaluation programs and their supporting workflows.`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
 	cmd.AddCommand(

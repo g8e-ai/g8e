@@ -23,8 +23,9 @@ import (
 
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "report",
-		Short: "Generate CSV evidence reports from all persistent stores",
+		Use:     "report",
+		Aliases: []string{"reports"},
+		Short:   "Generate CSV evidence reports from all persistent stores",
 		Long: `Generate flat, deterministic CSV files from every g8e persistent store.
 Each file contains one record type with cryptographic proof fields.
 A verification pass independently re-validates receipt signatures,

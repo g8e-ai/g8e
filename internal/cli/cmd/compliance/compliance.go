@@ -33,8 +33,9 @@ import (
 
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "compliance",
-		Short: "Release compliance evidence and FedRAMP 20x KSI evaluation",
+		Use:     "compliance",
+		Aliases: []string{"compliances"},
+		Short:   "Release compliance evidence and FedRAMP 20x KSI evaluation",
 		Long: `Release compliance evidence, FedRAMP 20x Key Security Indicator (KSI)
 evaluation, historical snapshots, and COSAiS overlay inspection.
 

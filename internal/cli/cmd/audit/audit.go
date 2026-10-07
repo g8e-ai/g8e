@@ -30,9 +30,10 @@ import (
 
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "audit",
-		Short: "Run audit reports for compliance",
-		Long:  `Audit commands for compliance evidence, signed receipts, and event logs.`,
+		Use:     "audit",
+		Aliases: []string{"audits"},
+		Short:   "Run audit reports for compliance",
+		Long:    `Audit commands for compliance evidence, signed receipts, and event logs.`,
 	}
 
 	cmd.AddCommand(
