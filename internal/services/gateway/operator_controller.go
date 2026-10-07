@@ -10,9 +10,11 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -407,11 +409,21 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
+	heartbeatIntervalSeconds := int(constants.OperatorDefaultHeartbeatInterval / time.Second)
 	if len(req.RuntimeConfig) > 0 && string(req.RuntimeConfig) != "null" {
 		runtimeConfig, err := models.UnmarshalOperatorRuntimeConfig(req.RuntimeConfig)
 		if err != nil {
 			c.responder.Error(w, http.StatusBadRequest, "invalid runtime_config")
 			return
+		}
+		declared := time.Duration(runtimeConfig.GetHeartbeatIntervalMs()) * time.Millisecond
+		if declared > constants.OperatorHeartbeatMaxInterval {
+			c.responder.Error(w, http.StatusBadRequest, fmt.Sprintf("%s: %s exceeds %s",
+				constants.ErrOperatorHeartbeatIntervalInvalid, declared, constants.OperatorHeartbeatMaxInterval))
+			return
+		}
+		if declared > 0 {
+			heartbeatIntervalSeconds = int(declared / time.Second)
 		}
 		if err := c.reg.UpdateOperatorRuntimeConfig(op.Id, runtimeConfig); err != nil {
 			c.logger.Error("gateway: persist operator runtime config", "operator_id", op.Id, "error", err)
@@ -423,7 +435,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 	bootstrapConfig := operatorBootstrapConfig{
 		MaxConcurrentTasks:       25,
 		MaxMemoryMB:              2048,
-		HeartbeatIntervalSeconds: 30,
+		HeartbeatIntervalSeconds: heartbeatIntervalSeconds,
 		OperatorSessionID:        op.OperatorSessionId,
 		OperatorID:               op.Id,
 		UserID:                   op.UserId,

@@ -390,6 +390,10 @@ message OperatorRuntimeConfig {
   string provenance_operator_model_storage_root = 14;
   // Operator host GOOS recorded at startup (for example "linux" or "windows").
   string platform = 15;
+  // How often this Operator sends heartbeats, declared at session start. The
+  // Gateway derives the Operator's stale deadline from it. Zero means the
+  // Operator did not declare one and the Gateway default window applies.
+  uint32 heartbeat_interval_ms = 16;
 }
 
 // OperatorDocument is the canonical Operator record. The Gateway owns and

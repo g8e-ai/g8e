@@ -20,7 +20,8 @@ import (
 )
 
 // reconcileOperatorStaleness moves every remote Operator document that has been
-// silent for longer than constants.OperatorHeartbeatStaleAfter from active to
+// silent for longer than its constants.OperatorStaleAfter window (derived from
+// the heartbeat interval it declared at session start) from active to
 // stale, persisting the transition before the caller reads. It is a no-op for
 // every collection except operators. An empty id reconciles the whole
 // collection; a non-empty id reconciles that one document.
@@ -84,7 +85,7 @@ func (s *DocumentStoreService) reconcileOperatorStaleness(collection, id string)
 		if applied {
 			s.logger.Warn("Operator heartbeat stale; marked stale",
 				"operator_id", doc.ID,
-				"stale_after", constants.OperatorHeartbeatStaleAfter)
+				"stale_after", constants.OperatorStaleAfter(time.Duration(op.GetRuntimeConfig().GetHeartbeatIntervalMs())*time.Millisecond))
 			s.NotifyOperatorStatusChanged(OperatorStatusTransition{
 				OperatorID: doc.ID,
 				UserID:     op.GetUserId(),
@@ -105,7 +106,8 @@ func (s *DocumentStoreService) ReconcileOperatorStaleness() error {
 }
 
 // operatorHeartbeatStale reports whether doc is an active remote Operator whose
-// last sign of life is older than constants.OperatorHeartbeatStaleAfter. The
+// last sign of life is older than constants.OperatorStaleAfter for the
+// heartbeat interval the Operator declared at session start. The
 // last sign of life is the Gateway-stamped last_heartbeat_at, falling back to
 // claimed_at and then to the document's created_at for an Operator that has not
 // heartbeated yet. It also returns the parsed operator document so the caller can
@@ -126,5 +128,6 @@ func operatorHeartbeatStale(doc *models.Document, now time.Time) (bool, *operato
 	if lastHeartbeatAt := op.GetLastHeartbeatAt(); lastHeartbeatAt != nil {
 		lastSeen = lastHeartbeatAt.AsTime()
 	}
-	return now.Sub(lastSeen) > constants.OperatorHeartbeatStaleAfter, op, nil
+	declared := time.Duration(op.GetRuntimeConfig().GetHeartbeatIntervalMs()) * time.Millisecond
+	return now.Sub(lastSeen) > constants.OperatorStaleAfter(declared), op, nil
 }

@@ -938,3 +938,77 @@ func TestWithResolvedOperatorRole(t *testing.T) {
 		assert.Empty(t, op.OperatorRoles)
 	})
 }
+
+func reauthWithRuntimeConfig(t *testing.T, runtimeConfigJSON string) (*httptest.ResponseRecorder, *RegistrationService) {
+	t.Helper()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024, Posture: config.PostureDoctrine}}
+	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), nil, logger, userSvc, nil, nil, &cfg.Gateway)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: res})
+
+	operatorSessionID := "test-session-heartbeat"
+	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
+		Id: "op-heartbeat", OperatorSessionId: operatorSessionID, Status: string(constants.OperatorStatusActive),
+		UserId: "user-heartbeat", OrganizationId: "org-heartbeat",
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet("operators", "op-heartbeat", opBytes))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader(`{"runtime_config":`+runtimeConfigJSON+`}`))
+	req.Header.Set("Content-Type", "application/json")
+	opURI, err := protocol.NewWorkloadIdentity().OperatorSPIFFEURL("org-heartbeat", "op-heartbeat", operatorSessionID)
+	require.NoError(t, err)
+	req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: []*url.URL{opURI}}}}
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyOperatorSessionID, operatorSessionID))
+
+	w := httptest.NewRecorder()
+	controller.handleReauth(w, req)
+	return w, reg
+}
+
+func TestHandleReauth_StoresDeclaredHeartbeatInterval(t *testing.T) {
+	w, reg := reauthWithRuntimeConfig(t, `{"heartbeat_interval_ms":120000}`)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Config struct {
+			HeartbeatIntervalSeconds int `json:"heartbeat_interval_seconds"`
+		} `json:"config"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 120, resp.Config.HeartbeatIntervalSeconds)
+
+	operators, err := reg.ListUserOperators("user-heartbeat")
+	require.NoError(t, err)
+	require.Len(t, operators, 1)
+	assert.EqualValues(t, 120000, operators[0].RuntimeConfig.GetHeartbeatIntervalMs())
+}
+
+func TestHandleReauth_UndeclaredHeartbeatIntervalReportsDefault(t *testing.T) {
+	w, _ := reauthWithRuntimeConfig(t, `{"log_level":"info"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Config struct {
+			HeartbeatIntervalSeconds int `json:"heartbeat_interval_seconds"`
+		} `json:"config"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, int(constants.OperatorDefaultHeartbeatInterval.Seconds()), resp.Config.HeartbeatIntervalSeconds)
+}
+
+func TestHandleReauth_RejectsHeartbeatIntervalPastMaximum(t *testing.T) {
+	w, reg := reauthWithRuntimeConfig(t, `{"heartbeat_interval_ms":300001}`)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), constants.ErrOperatorHeartbeatIntervalInvalid.Error())
+
+	operators, err := reg.ListUserOperators("user-heartbeat")
+	require.NoError(t, err)
+	require.Len(t, operators, 1)
+	assert.Zero(t, operators[0].RuntimeConfig.GetHeartbeatIntervalMs(), "a rejected interval must not be stored")
+}

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -400,5 +401,26 @@ func TestStatusJSONOperatorRolesMatchesCentralVocabulary(t *testing.T) {
 	require.Len(t, category, len(roles))
 	for _, role := range roles {
 		require.Equal(t, string(role), category[string(role)].Value)
+	}
+}
+
+func TestOperatorStaleAfter(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval time.Duration
+		want     time.Duration
+	}{
+		{"nothing declared", 0, OperatorHeartbeatStaleAfter},
+		{"negative treated as undeclared", -time.Second, OperatorHeartbeatStaleAfter},
+		{"default interval keeps the floor", OperatorDefaultHeartbeatInterval, OperatorHeartbeatStaleAfter},
+		{"just under the floor multiple", 29 * time.Second, OperatorHeartbeatStaleAfter},
+		{"two missed beats", 90 * time.Second, 180 * time.Second},
+		{"maximum interval", OperatorHeartbeatMaxInterval, 2 * OperatorHeartbeatMaxInterval},
+		{"clamped past the maximum", time.Hour, 2 * OperatorHeartbeatMaxInterval},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, OperatorStaleAfter(tt.interval))
+		})
 	}
 }

@@ -24,6 +24,12 @@ import (
 // command results).
 const maxResponseBytes = 1 << 20
 
+// maxListResponseBytes bounds the operator registry listing, which grows with
+// fleet size (each Operator document carries its latest heartbeat) and with
+// retained stopped or stale registrations. A 500-Operator fleet alone exceeds
+// maxResponseBytes.
+const maxListResponseBytes = 64 << 20
+
 // defaultClientTimeout is the per-request timeout for standard E2E client
 // operations. Long-running operations (command dispatch) override this.
 const defaultClientTimeout = 30 * time.Second
@@ -74,18 +80,23 @@ func truncateBody(body []byte) string {
 // status code is not the expected value or if the response exceeds
 // maxResponseBytes.
 func doRequest(client *http.Client, req *http.Request, expectedStatus int) ([]byte, int, error) {
+	return doRequestLimit(client, req, expectedStatus, maxResponseBytes)
+}
+
+// doRequestLimit is doRequest with an explicit response size bound.
+func doRequestLimit(client *http.Client, req *http.Request, expectedStatus int, limit int64) ([]byte, int, error) {
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("read response: %w", err)
 	}
-	if len(body) > maxResponseBytes {
-		return nil, resp.StatusCode, fmt.Errorf("response exceeds %d bytes", maxResponseBytes)
+	if int64(len(body)) > limit {
+		return nil, resp.StatusCode, fmt.Errorf("response exceeds %d bytes", limit)
 	}
 	if resp.StatusCode != expectedStatus {
 		return body, resp.StatusCode, fmt.Errorf("status %d, expected %d: %s", resp.StatusCode, expectedStatus, truncateBody(body))

@@ -254,3 +254,14 @@ Tests that open localhost listeners, including `httptest.NewServer`, `httptest.N
 - [Release Process](release_process.md): native evaluation acceptance and release verification.
 - [Ensemble Testing](../ensemble/tests.md): pytest fixtures, fakes, and external credential gates.
 - [Console Architecture & Development](../architecture/console.md#test): Vitest, typecheck, ESLint, and embed checks.
+
+### Scale-test cohorts
+
+`TestOperatorFleet_HoldsUnderFanOut` accepts `G8E_E2E_FLEET_SESSIONS`, a
+comma-separated list of owner Operator session UUIDs. Its length must match
+`G8E_E2E_FLEET_SIZE`. With a cohort, registry health checks and governed CLI
+fan-out target exactly those remote sessions; the embedded Operator is excluded.
+Missing or duplicate sessions fail closed, and selected stopped/stale sessions
+remain subject to health assertions. Without a cohort the existing whole-registry
+scenario and `--all-active` dispatch remain in effect. A failed enrollment, soak,
+or fan-out stops subsequent stages. Reports label the target scope.

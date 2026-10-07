@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -64,6 +65,7 @@ type fleetSample struct {
 // no identifiers, keys, or tokens.
 type fleetReport struct {
 	Size        int                   `json:"size"`
+	TargetScope string                `json:"target_scope"`
 	EnrolledIn  float64               `json:"enrolled_wait_seconds"`
 	Samples     []fleetSample         `json:"samples"`
 	FanOut      []operator.RunSummary `json:"fan_out"`
@@ -86,11 +88,19 @@ type fleetRunOutput struct {
 func TestOperatorFleet_HoldsUnderFanOut(t *testing.T) {
 	size := requireFleetSize(t)
 	bin := requireFleetEnv(t, fleetBinEnv)
+	sessions, err := parseFleetSessions(os.Getenv(string(constants.EnvVar.E2EFleetSessions)))
+	require.NoError(t, err)
+	if len(sessions) > 0 {
+		require.Len(t, sessions, size, "cohort must contain exactly the requested fleet size")
+	}
 	soak := fleetDurationEnv(t, fleetSoakEnv, defaultFleetSoak)
 	concurrencies := fleetConcurrencies(t)
 	rounds := fleetIntEnv(t, fleetRoundsEnv, defaultFleetRounds)
 
-	report := fleetReport{Size: size}
+	report := fleetReport{Size: size, TargetScope: "all-active including embedded"}
+	if len(sessions) > 0 {
+		report.TargetScope = "explicit remote session cohort; embedded excluded"
+	}
 	t.Cleanup(func() { writeFleetReport(t, &report) })
 
 	t.Run("every Operator enrolls and heartbeats", func(t *testing.T) {
@@ -98,36 +108,48 @@ func TestOperatorFleet_HoldsUnderFanOut(t *testing.T) {
 		defer cancel()
 		started := time.Now()
 		require.Eventually(t, func() bool {
-			sample, err := sampleFleet(ctx, "enroll")
-			return err == nil && sample.Active == size && sample.NotActive == 0 && fleetHeartbeating(ctx, t)
+			sample, err := sampleFleet(ctx, "enroll", sessions)
+			if err != nil {
+				t.Logf("enrollment poll: %v", err)
+			}
+			return err == nil && sample.Active == size && sample.NotActive == 0 && fleetHeartbeating(ctx, t, sessions)
 		}, fleetEnrollmentWait, time.Second, "all %d remote Operators must be active and heartbeating", size)
 		report.EnrolledIn = time.Since(started).Seconds()
 	})
 
+	if t.Failed() {
+		t.FailNow()
+	}
 	t.Run("soak keeps every Operator active", func(t *testing.T) {
-		watchFleet(t, &report, "soak", size, soak)
+		watchFleet(t, &report, "soak", size, soak, sessions)
 	})
 
+	if t.Failed() {
+		t.FailNow()
+	}
 	for _, concurrency := range concurrencies {
 		for round := 1; round <= rounds; round++ {
 			t.Run(fmt.Sprintf("fan-out concurrency %d round %d", concurrency, round), func(t *testing.T) {
-				out := runFleetFanOut(t, bin, concurrency, size)
+				out := runFleetFanOut(t, bin, concurrency, size, sessions)
 				report.FanOut = append(report.FanOut, out.Summary)
 				t.Logf("fan-out concurrency=%d targets=%d ok=%d failed=%d wall=%.0fms p50=%.0fms p95=%.0fms p99=%.0fms max=%.0fms",
 					out.Summary.Concurrency, out.Summary.Targets, out.Summary.Succeeded, out.Summary.Failed,
 					out.Summary.WallMs, out.Summary.P50Ms, out.Summary.P95Ms, out.Summary.P99Ms, out.Summary.MaxMs)
 			})
+			if t.Failed() {
+				t.FailNow()
+			}
 		}
 	}
 
 	t.Run("fan-out leaves every Operator active", func(t *testing.T) {
-		watchFleet(t, &report, "settle", size, fleetSettleDuration)
+		watchFleet(t, &report, "settle", size, fleetSettleDuration, sessions)
 	})
 }
 
 // sampleFleet reads the registry once and summarises the remote Operators.
-func sampleFleet(ctx context.Context, phase string) (fleetSample, error) {
-	operators, err := remoteFleetOperators(ctx)
+func sampleFleet(ctx context.Context, phase string, sessions []string) (fleetSample, error) {
+	operators, err := remoteFleetOperators(ctx, sessions)
 	if err != nil {
 		return fleetSample{}, err
 	}
@@ -153,8 +175,9 @@ func sampleFleet(ctx context.Context, phase string) (fleetSample, error) {
 
 // remoteFleetOperators lists the owner's remote Operators. The embedded
 // Operator is excluded: it is the Gateway's own substrate, not part of the
-// fleet under test.
-func remoteFleetOperators(ctx context.Context) ([]*operatorv1.OperatorDocument, error) {
+// fleet under test. An explicit session cohort excludes historical and unrelated
+// registry entries without changing their lifecycle state.
+func remoteFleetOperators(ctx context.Context, sessions []string) ([]*operatorv1.OperatorDocument, error) {
 	listed, err := e2eClient.ListOperators(ctx)
 	if err != nil {
 		return nil, err
@@ -165,14 +188,14 @@ func remoteFleetOperators(ctx context.Context) ([]*operatorv1.OperatorDocument, 
 			remote = append(remote, op)
 		}
 	}
-	return remote, nil
+	return selectFleetOperators(remote, sessions)
 }
 
 // fleetHeartbeating reports whether every remote Operator has delivered at
 // least one heartbeat.
-func fleetHeartbeating(ctx context.Context, t *testing.T) bool {
+func fleetHeartbeating(ctx context.Context, t *testing.T, sessions []string) bool {
 	t.Helper()
-	operators, err := remoteFleetOperators(ctx)
+	operators, err := remoteFleetOperators(ctx, sessions)
 	if err != nil {
 		return false
 	}
@@ -187,12 +210,12 @@ func fleetHeartbeating(ctx context.Context, t *testing.T) bool {
 // watchFleet samples the registry for the given duration and fails if any
 // Operator leaves the active state or goes longer without a heartbeat than the
 // Gateway's staleness window.
-func watchFleet(t *testing.T, report *fleetReport, phase string, size int, duration time.Duration) {
+func watchFleet(t *testing.T, report *fleetReport, phase string, size int, duration time.Duration, sessions []string) {
 	t.Helper()
 	deadline := time.Now().Add(duration)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
-		sample, err := sampleFleet(ctx, phase)
+		sample, err := sampleFleet(ctx, phase, sessions)
 		cancel()
 		require.NoError(t, err, "operator list must succeed during %s", phase)
 		report.Samples = append(report.Samples, sample)
@@ -212,18 +235,25 @@ func watchFleet(t *testing.T, report *fleetReport, phase string, size int, durat
 // runFleetFanOut runs the shipped `g8e operator run --all-active` CLI against
 // the Gateway under test and decodes its typed JSON result. Using the real CLI
 // keeps the scenario on the same dispatch path operators use.
-func runFleetFanOut(t *testing.T, bin string, concurrency, size int) fleetRunOutput {
+func runFleetFanOut(t *testing.T, bin string, concurrency, size int, sessions []string) fleetRunOutput {
 	t.Helper()
 	root, err := resolveRuntimeRoot()
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), (fleetFanOutTimeoutSecs+30)*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "operator", "run", "--all-active",
+	args := []string{"operator", "run"}
+	if len(sessions) == 0 {
+		args = append(args, "--all-active")
+	} else {
+		args = append(args, sessions...)
+	}
+	args = append(args,
 		"--concurrency", strconv.Itoa(concurrency),
 		"--cmd", fleetFanOutCommand,
 		"--timeout", strconv.Itoa(fleetFanOutTimeoutSecs),
 		"--json")
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = root
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -233,6 +263,14 @@ func runFleetFanOut(t *testing.T, bin string, concurrency, size int) fleetRunOut
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &out), "decode operator run --json output")
 	assert.Equal(t, concurrency, out.Summary.Concurrency, "run must use the requested concurrency")
 	assert.GreaterOrEqual(t, out.Summary.Targets, size, "fan-out must reach every fleet Operator (the embedded Operator may add one)")
+	if len(sessions) > 0 {
+		assert.Equal(t, size, out.Summary.Targets)
+		actual := make([]string, 0, len(out.Results))
+		for _, result := range out.Results {
+			actual = append(actual, result.OperatorSessionID)
+		}
+		assert.ElementsMatch(t, sessions, actual, "dispatch must reach exactly the selected cohort")
+	}
 	assert.Zero(t, out.Summary.Failed, "every dispatch must succeed")
 	for _, result := range out.Results {
 		assert.True(t, result.Success, "dispatch to %s failed: %s", result.OperatorID, result.Error)
@@ -311,4 +349,50 @@ func fleetConcurrencies(t *testing.T) []int {
 		levels = append(levels, level)
 	}
 	return levels
+}
+
+// parseFleetSessions rejects ambiguous or malformed target selections before dispatch.
+func parseFleetSessions(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var sessions []string
+	seen := make(map[string]bool)
+	for _, part := range strings.Split(raw, ",") {
+		session := strings.TrimSpace(part)
+		if _, err := uuid.Parse(session); err != nil {
+			return nil, fmt.Errorf("invalid fleet session %q: %w", session, err)
+		}
+		if seen[session] {
+			return nil, fmt.Errorf("duplicate fleet session %q", session)
+		}
+		seen[session] = true
+		sessions = append(sessions, session)
+	}
+	return sessions, nil
+}
+
+// selectFleetOperators fails closed if a requested session is absent or duplicated.
+func selectFleetOperators(operators []*operatorv1.OperatorDocument, sessions []string) ([]*operatorv1.OperatorDocument, error) {
+	if len(sessions) == 0 {
+		return operators, nil
+	}
+	var selected []*operatorv1.OperatorDocument
+	for _, session := range sessions {
+		var match *operatorv1.OperatorDocument
+		for _, op := range operators {
+			if op.OperatorSessionId != session {
+				continue
+			}
+			if match != nil {
+				return nil, fmt.Errorf("multiple operators for fleet session %q", session)
+			}
+			match = op
+		}
+		if match == nil {
+			return nil, fmt.Errorf("missing fleet session %q", session)
+		}
+		selected = append(selected, match)
+	}
+	return selected, nil
 }

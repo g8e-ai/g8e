@@ -39,6 +39,7 @@
     "account": "user@example.com",
     "cloud_mode": false,
     "cloud_provider": "aws",
+    "heartbeat_interval_ms": 30000,
     "http_port": 8080,
     "inference_enabled": true,
     "inference_ollama_endpoint": "http://localhost:11434",

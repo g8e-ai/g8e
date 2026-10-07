@@ -733,12 +733,13 @@ func Load(opts LoadOptions) (*Config, error) {
 	return cfg, nil
 }
 
-// heartbeatIntervalOrDefault returns d if positive, otherwise the 30-second default.
+// heartbeatIntervalOrDefault returns d if positive, otherwise
+// constants.OperatorDefaultHeartbeatInterval.
 func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 	if d > 0 {
 		return d
 	}
-	return 30 * time.Second
+	return constants.OperatorDefaultHeartbeatInterval
 }
 
 // newInferenceConfig builds an InferenceConfig from LoadOptions, applying

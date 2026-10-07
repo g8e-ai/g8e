@@ -468,6 +468,7 @@ func TestOperatorDocumentGoldenFixture(t *testing.T) {
 		ProvenanceOperatorEnabled:          true,
 		ProvenanceOperatorModelStorageRoot: "/models",
 		Platform:                           "linux",
+		HeartbeatIntervalMs:                30000,
 	}
 
 	doc := &operatorv1.OperatorDocument{

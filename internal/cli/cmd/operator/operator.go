@@ -427,7 +427,7 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&executionVault, "execution-vault", "s", true, "Enable execution vault (data stays in working directory)")
 	cmd.Flags().BoolVarP(&noGit, "no-git", "G", false, "Disable Git integration")
 	cmd.Flags().StringVarP(&logLevel, "log", "l", "info", "Log level: info, error, debug")
-	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat interval in seconds (0-30; the Gateway marks an Operator stale after 60 seconds without a heartbeat)")
+	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat send interval in seconds (0-300; 0 selects 30; declared to the Gateway at session start, which marks the Operator stale after twice this interval, minimum 60 seconds)")
 	cmd.Flags().IntVar(&gatewayHTTPPort, "gateway-http-port", 0, "Gateway HTTP discovery port to dial (default: platform default)")
 	cmd.Flags().IntVar(&gatewayHTTPSPort, "gateway-https-port", 0, "Gateway HTTPS/mTLS port to dial (default: platform default)")
 	cmd.Flags().StringVar(&latticeEndpoint, "lattice-endpoint", "", "Lattice gRPC endpoint URL")
@@ -452,17 +452,15 @@ func operatorStartCmd() *cobra.Command {
 	return cmd
 }
 
-// validateHeartbeatInterval rejects heartbeat intervals the Gateway would read
-// as silence. The Gateway marks an Operator stale after
-// constants.OperatorHeartbeatStaleAfter without a heartbeat, so the interval
-// may be at most half of that to tolerate one missed beat. Zero selects the
-// default.
+// validateHeartbeatInterval rejects heartbeat intervals the Gateway would
+// refuse at session start. The Operator declares its interval and the Gateway
+// derives the stale deadline from it, up to
+// constants.OperatorHeartbeatMaxInterval. Zero selects the default.
 func validateHeartbeatInterval(seconds int) error {
 	interval := time.Duration(seconds) * time.Second
-	maxInterval := constants.OperatorHeartbeatStaleAfter / 2
-	if interval < 0 || interval > maxInterval {
-		return fmt.Errorf("%w: %s is outside 0 (default) to %s; the Gateway marks an Operator stale after %s without a heartbeat",
-			constants.ErrOperatorHeartbeatIntervalInvalid, interval, maxInterval, constants.OperatorHeartbeatStaleAfter)
+	if interval < 0 || interval > constants.OperatorHeartbeatMaxInterval {
+		return fmt.Errorf("%w: %s is outside 0 (default) to %s",
+			constants.ErrOperatorHeartbeatIntervalInvalid, interval, constants.OperatorHeartbeatMaxInterval)
 	}
 	return nil
 }

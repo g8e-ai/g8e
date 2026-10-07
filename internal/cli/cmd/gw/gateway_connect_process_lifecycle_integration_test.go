@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -193,9 +194,9 @@ func TestConnectRestartGateway_ProfileWriteFailureRollsBackToPreviousConfig(t *t
 // TestConnectStoppedGateway_PersistsResolvedPorts verifies that
 // connectStoppedGateway persists the resolved ports (not the requested ports)
 // in the launch profile after StartOperator succeeds. The test selects an
-// isolated port pair and binds the requested HTTP port to force StartOperator
-// to shift to the next available port, then calls gw connect on a stopped
-// gateway. After the command completes (it may fail at trust/verify since the
+// isolated resolved port pair and binds the requested HTTP port to force
+// StartOperator to shift to the next available port, then calls gw connect on
+// a stopped gateway. After the command completes (it may fail at trust/verify since the
 // subprocess only serves HTTP health checks, not HTTPS), the test reads the
 // persisted launch profile and asserts the HTTP and HTTPS ports differ from the
 // requested ports.
@@ -209,10 +210,30 @@ func TestConnectStoppedGateway_PersistsResolvedPorts(t *testing.T) {
 	t.Cleanup(func() { _ = ln.Close() })
 	requestedHTTPPort := ln.Addr().(*net.TCPAddr).Port
 
-	httpsProbe, err := net.Listen("tcp", "127.0.0.1:0")
+	// Reserve the first available HTTP candidate while selecting the HTTPS
+	// port. The HTTPS availability check in StartOperator uses the shifted
+	// port, so probing the requested HTTPS port would leave that unchecked.
+	var httpProbe net.Listener
+	var httpOffset int
+	for httpOffset = 1; httpOffset < platform.MaxPortAttempts; httpOffset++ {
+		candidate := requestedHTTPPort + httpOffset
+		if _, reserved := constants.GatewayReservedLoopbackPorts[candidate]; reserved {
+			continue
+		}
+		httpProbe, err = net.Listen("tcp", fmt.Sprintf(":%d", candidate))
+		if err == nil {
+			break
+		}
+	}
+	require.NotNil(t, httpProbe, "no available HTTP candidate after port %d: %v", requestedHTTPPort, err)
+	t.Cleanup(func() { _ = httpProbe.Close() })
+	resolvedHTTPPort := httpProbe.Addr().(*net.TCPAddr).Port
+
+	httpsProbe, err := net.Listen("tcp", ":0")
 	require.NoError(t, err)
-	requestedHTTPSPort := httpsProbe.Addr().(*net.TCPAddr).Port
-	require.NoError(t, httpsProbe.Close())
+	t.Cleanup(func() { _ = httpsProbe.Close() })
+	resolvedHTTPSPort := httpsProbe.Addr().(*net.TCPAddr).Port
+	requestedHTTPSPort := resolvedHTTPSPort - httpOffset
 
 	baseCfg := defaultServeConfig()
 	baseCfg.HTTPPort = requestedHTTPPort
@@ -240,24 +261,33 @@ func TestConnectStoppedGateway_PersistsResolvedPorts(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
+	// Release the resolved ports immediately before startup, keeping the
+	// requested HTTP port occupied to force the offset.
+	require.NoError(t, httpProbe.Close())
+	require.NoError(t, httpsProbe.Close())
 	err = cmd.RunE(cmd, []string{"https://your-app.lovable.app"})
 	// The command may fail at trust/verify because the subprocess doesn't
 	// serve HTTPS. That's expected — the profile is already persisted.
 	require.Error(t, err)
+	require.NotErrorIs(t, err, constants.ErrProcessStartFailed, "Gateway must start before checking the profile: %s", buf.String())
+	pm, pmErr := platform.NewProcessManager(fileSvc)
+	require.NoError(t, pmErr)
+	running, pid, statusErr := pm.OperatorStatus()
+	require.NoError(t, statusErr)
+	require.True(t, running, "Gateway must still be running after trust/verify failure")
+	require.NotZero(t, pid)
 
 	// Read the persisted launch profile and assert the ports were resolved
 	// after the requested HTTP port collision.
 	profile, readErr := serve.ReadLaunchProfile(fileSvc)
 	require.NoError(t, readErr, "launch profile should be persisted after successful start")
 
-	assert.NotEqual(t, requestedHTTPPort, profile.Config.HTTPPort,
+	assert.Equal(t, resolvedHTTPPort, profile.Config.HTTPPort,
 		"HTTP port should be shifted from requested port %d", requestedHTTPPort)
-	assert.NotEqual(t, requestedHTTPSPort, profile.Config.HTTPSPort,
+	assert.Equal(t, resolvedHTTPSPort, profile.Config.HTTPSPort,
 		"HTTPS port should be shifted from requested port %d", requestedHTTPSPort)
 
 	// The offset between HTTP and HTTPS should be preserved.
-	httpOffset := profile.Config.HTTPPort - requestedHTTPPort
-	expectedHTTPS := requestedHTTPSPort + httpOffset
-	assert.Equal(t, expectedHTTPS, profile.Config.HTTPSPort,
+	assert.Equal(t, profile.Config.HTTPPort-requestedHTTPPort, profile.Config.HTTPSPort-requestedHTTPSPort,
 		"HTTPS port should maintain the same offset from the requested port as HTTP port")
 }

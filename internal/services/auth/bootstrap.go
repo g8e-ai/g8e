@@ -180,6 +180,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		ProvenanceOperatorEnabled:          bs.config.ProvenanceOperator.Enabled,
 		ProvenanceOperatorModelStorageRoot: bs.config.ProvenanceOperator.ModelStorageRoot,
 		Platform:                           runtime.GOOS,
+		HeartbeatIntervalMs:                uint32(bs.config.HeartbeatInterval.Milliseconds()),
 	}
 
 	runtimeConfigBytes, err := models.MarshalOperatorRuntimeConfig(runtimeConfig)

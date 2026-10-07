@@ -2148,6 +2148,7 @@ OperatorDocument.runtime_config.
 | provenance_operator_enabled | [bool](#bool) |  | True when started with --provenance-operator-enabled. |
 | provenance_operator_model_storage_root | [string](#string) |  | Root directory containing content-addressed model weight blobs. |
 | platform | [string](#string) |  | Operator host GOOS recorded at startup (for example &#34;linux&#34; or &#34;windows&#34;). |
+| heartbeat_interval_ms | [uint32](#uint32) |  | How often this Operator sends heartbeats, declared at session start. The Gateway derives the Operator&#39;s stale deadline from it. Zero means the Operator did not declare one and the Gateway default window applies. |
 
 
 

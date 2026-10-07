@@ -54,11 +54,15 @@ if [[ -z "${G8E_BIN:-}" ]]; then
 fi
 G8E_BIN="$(readlink -f "$G8E_BIN")"
 SAMPLER_PID=""
+FLEET_SAMPLER_PID=""
 
 cleanup() {
     local status=$?
     if [[ -n "$SAMPLER_PID" ]]; then
         kill "$SAMPLER_PID" 2>/dev/null || true
+    fi
+    if [[ -n "$FLEET_SAMPLER_PID" ]]; then
+        kill "$FLEET_SAMPLER_PID" 2>/dev/null || true
     fi
     if [[ $status -ne 0 ]]; then
         echo "operator-fleet-smoke FAILED (status $status); logs under $ROOT" >&2
@@ -99,6 +103,8 @@ if ! ss -Hltnp "sport = :8443" | grep -q "pid=$GATEWAY_PID,"; then
 fi
 bash "$REPO/scripts/ci/sample-gateway.sh" "$GATEWAY_PID" "$RUN/.g8e/data" "$OUT/gateway-resources.csv" 10 &
 SAMPLER_PID=$!
+bash "$REPO/scripts/ci/sample-fleet.sh" "$FLEET" "$OUT/fleet-resources.csv" 30 &
+FLEET_SAMPLER_PID=$!
 
 echo "== Deploy $FLEET_SIZE Operators"
 deploy_started=$SECONDS

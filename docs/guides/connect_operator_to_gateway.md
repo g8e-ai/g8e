@@ -155,7 +155,7 @@ Once these writes succeed, the process removes the pending state and then authen
 cmd:<operator-id>:<operator-session-id>
 ```
 
-A successful connection prints `Channel established - Ready to receive` in the logs. The Operator sends an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds and cannot exceed 30 seconds. The Gateway marks an Operator `stale` after 60 seconds without a heartbeat.
+A successful connection prints `Channel established - Ready to receive` in the logs. The Operator sends an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds and may be set up to 300 seconds with `--heartbeat-interval`. The Operator declares the interval at session start and the Gateway marks it `stale` after twice that interval, never less than 60 seconds.
 
 ---
 
@@ -322,7 +322,7 @@ From an enrolled CLI identity, list Operators associated with your user:
 ./g8e operator list --endpoint <gateway-host>
 ```
 
-This displays each Operator's ID, type (e.g., data, ensemble), hostname, session ID, and status. A status of `stale` means the Gateway has not received a heartbeat from that Operator for more than 60 seconds; it returns to `active` on the next heartbeat. A stopped or crashed Operator process therefore leaves `active` within about a minute without any manual cleanup. Use `g8e operator show <operator-id-or-session-id>` to display the last heartbeat time, the latest heartbeat snapshot, and performance metrics. Check the Operator process log for the `Channel established - Ready to receive` message as confirmation that it established its pub/sub channel subscription.
+This displays each Operator's ID, type (e.g., data, ensemble), hostname, session ID, and status. A status of `stale` means the Gateway has not received a heartbeat from that Operator for more than twice its declared interval (at least 60 seconds); it returns to `active` on the next heartbeat. A stopped or crashed Operator process therefore leaves `active` within about a minute without any manual cleanup. Use `g8e operator show <operator-id-or-session-id>` to display the last heartbeat time, the latest heartbeat snapshot, and performance metrics. Check the Operator process log for the `Channel established - Ready to receive` message as confirmation that it established its pub/sub channel subscription.
 
 ### Bind the CLI to Operators and Run Commands
 

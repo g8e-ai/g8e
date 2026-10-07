@@ -12,10 +12,38 @@ import (
 	"time"
 )
 
-// OperatorHeartbeatStaleAfter is how long a remote Operator may go without a
-// heartbeat before the Gateway marks its document stale. Operators heartbeat
-// every 30 seconds by default, so this tolerates one missed beat plus jitter.
+// OperatorHeartbeatStaleAfter is the shortest window a remote Operator may go
+// without a heartbeat before the Gateway marks its document stale, and the
+// window for an Operator that declared no heartbeat interval. Operators
+// heartbeat every 30 seconds by default, so this tolerates one missed beat plus
+// jitter.
 const OperatorHeartbeatStaleAfter = 60 * time.Second
+
+// OperatorDefaultHeartbeatInterval is how often an Operator sends heartbeats
+// when it declares no interval of its own.
+const OperatorDefaultHeartbeatInterval = 30 * time.Second
+
+// OperatorHeartbeatMaxInterval is the longest heartbeat interval an Operator
+// may declare at session start.
+const OperatorHeartbeatMaxInterval = 5 * time.Minute
+
+// OperatorHeartbeatStaleMultiplier is how many declared heartbeat intervals an
+// Operator may stay silent before the Gateway marks it stale.
+const OperatorHeartbeatStaleMultiplier = 2
+
+// OperatorStaleAfter returns how long an Operator that declared the given
+// heartbeat interval may stay silent before it is marked stale: the declared
+// interval times OperatorHeartbeatStaleMultiplier, never less than
+// OperatorHeartbeatStaleAfter. A zero or negative interval (nothing declared)
+// yields OperatorHeartbeatStaleAfter. The interval is clamped to
+// OperatorHeartbeatMaxInterval so no Operator can defer staleness past
+// OperatorHeartbeatStaleMultiplier times that maximum.
+func OperatorStaleAfter(declaredInterval time.Duration) time.Duration {
+	if declaredInterval > OperatorHeartbeatMaxInterval {
+		declaredInterval = OperatorHeartbeatMaxInterval
+	}
+	return max(OperatorHeartbeatStaleAfter, declaredInterval*OperatorHeartbeatStaleMultiplier)
+}
 
 // OperatorStalenessSweepInterval is how often the Gateway sweeps the Operator
 // registry for silent Operators so the stale transition is pushed to the

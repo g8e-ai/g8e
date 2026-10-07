@@ -102,7 +102,7 @@ Only the **producer** (the human or intent producer who owns the session) can bi
 
 ### 4. Heartbeats
 
-Every remote Operator emits heartbeat telemetry every **30 seconds** (default; `--heartbeat-interval` accepts 0-30 seconds so the 60-second stale window always spans at least two beats).
+Every remote Operator emits heartbeat telemetry every **30 seconds** (default; `--heartbeat-interval` accepts 0-300 seconds, and the Operator declares the interval to the Gateway at session start).
 
 - **Heartbeat interval**: `heartbeatIntervalOrDefault` defaults to 30s (`internal/config/config.go`).
 - **Heartbeat scheduler**: `HeartbeatService.StartScheduler` runs a periodic ticker (`internal/services/pubsub/heartbeat_service.go`).
@@ -116,7 +116,7 @@ Every remote Operator emits heartbeat telemetry every **30 seconds** (default; `
 
 ### 5. Stale Detection
 
-A remote Operator in `active` status with no heartbeat for more than **60 seconds** (2 × 30s default interval, `constants.OperatorHeartbeatStaleAfter`) is moved to `stale`.
+A remote Operator in `active` status with no heartbeat for longer than twice its declared heartbeat interval, and never less than **60 seconds** (`constants.OperatorStaleAfter`; `constants.OperatorHeartbeatStaleAfter` is the floor and the window for an Operator that declared nothing), is moved to `stale`.
 
 - **Mechanism**: The Gateway document store evaluates staleness before every read of the `operators` collection (`DocGet`, `DocQuery`, `DocList`, `GetField`) and persists the transition with a conditional update (`internal/services/gateway/operator_staleness.go`). No reader can observe a silent Operator as `active`. If reconciliation fails, the read fails closed. A Gateway sweep runs the same reconciliation every 15 seconds so the transition does not depend on a reader.
 - **Last sign of life**: The Gateway-stamped `last_heartbeat_at`, falling back to `claimed_at` and then `created_at` for an Operator that has not heartbeated yet. The Operator never supplies it. The embedded Operator is exempt.

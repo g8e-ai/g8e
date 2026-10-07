@@ -24,6 +24,7 @@ var EnvVar = struct {
 	VaultDir              EnvVarKey
 	VaultKey              EnvVarKey
 	OperatorSessionID     EnvVarKey
+	E2EFleetSessions      EnvVarKey
 	PasskeyRpID           EnvVarKey
 	PasskeyRpName         EnvVarKey
 	PasskeyRpOrigins      EnvVarKey
@@ -64,6 +65,7 @@ var EnvVar = struct {
 	VaultDir:              EnvVarKey("G8E_VAULT_DIR"),
 	VaultKey:              EnvVarKey("G8E_VAULT_KEY"),
 	OperatorSessionID:     EnvVarKey("G8E_OPERATOR_SESSION_ID"),
+	E2EFleetSessions:      EnvVarKey("G8E_E2E_FLEET_SESSIONS"),
 	PasskeyRpID:           EnvVarKey("G8E_PASSKEY_RP_ID"),
 	PasskeyRpName:         EnvVarKey("G8E_PASSKEY_RP_NAME"),
 	PasskeyRpOrigins:      EnvVarKey("G8E_PASSKEY_RP_ORIGINS"),

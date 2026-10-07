@@ -17,22 +17,22 @@ import (
 )
 
 func TestValidateHeartbeatInterval(t *testing.T) {
-	maxSeconds := int(constants.OperatorHeartbeatStaleAfter.Seconds()) / 2
+	maxSeconds := int(constants.OperatorHeartbeatMaxInterval.Seconds())
 
-	for _, seconds := range []int{0, 1, 15, maxSeconds} {
+	for _, seconds := range []int{0, 1, 15, 30, 60, 120, maxSeconds} {
 		assert.NoError(t, validateHeartbeatInterval(seconds), "%d seconds must be accepted", seconds)
 	}
 
-	for _, seconds := range []int{-1, maxSeconds + 1, 60, 300} {
+	for _, seconds := range []int{-1, maxSeconds + 1, 3600} {
 		err := validateHeartbeatInterval(seconds)
 		require.Error(t, err, "%d seconds must be rejected", seconds)
 		assert.ErrorIs(t, err, constants.ErrOperatorHeartbeatIntervalInvalid)
 	}
 }
 
-func TestOperatorStartCmd_RejectsHeartbeatIntervalPastStaleWindow(t *testing.T) {
+func TestOperatorStartCmd_RejectsHeartbeatIntervalPastMaximum(t *testing.T) {
 	cmd := operatorStartCmd()
-	require.NoError(t, cmd.Flags().Set("heartbeat-interval", "60"))
+	require.NoError(t, cmd.Flags().Set("heartbeat-interval", "301"))
 
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)

@@ -3608,9 +3608,13 @@ type OperatorRuntimeConfig struct {
 	// Root directory containing content-addressed model weight blobs.
 	ProvenanceOperatorModelStorageRoot string `protobuf:"bytes,14,opt,name=provenance_operator_model_storage_root,json=provenanceOperatorModelStorageRoot,proto3" json:"provenance_operator_model_storage_root,omitempty"`
 	// Operator host GOOS recorded at startup (for example "linux" or "windows").
-	Platform      string `protobuf:"bytes,15,opt,name=platform,proto3" json:"platform,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Platform string `protobuf:"bytes,15,opt,name=platform,proto3" json:"platform,omitempty"`
+	// How often this Operator sends heartbeats, declared at session start. The
+	// Gateway derives the Operator's stale deadline from it. Zero means the
+	// Operator did not declare one and the Gateway default window applies.
+	HeartbeatIntervalMs uint32 `protobuf:"varint,16,opt,name=heartbeat_interval_ms,json=heartbeatIntervalMs,proto3" json:"heartbeat_interval_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *OperatorRuntimeConfig) Reset() {
@@ -3746,6 +3750,13 @@ func (x *OperatorRuntimeConfig) GetPlatform() string {
 		return x.Platform
 	}
 	return ""
+}
+
+func (x *OperatorRuntimeConfig) GetHeartbeatIntervalMs() uint32 {
+	if x != nil {
+		return x.HeartbeatIntervalMs
+	}
+	return 0
 }
 
 // OperatorDocument is the canonical Operator record. The Gateway owns and
@@ -12217,7 +12228,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1f\n" +
 	"\voperator_id\x18\x02 \x01(\tR\n" +
 	"operatorId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\x95\x05\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xc9\x05\n" +
 	"\x15OperatorRuntimeConfig\x12\x1d\n" +
 	"\n" +
 	"cloud_mode\x18\x01 \x01(\bR\tcloudMode\x12%\n" +
@@ -12235,7 +12246,8 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\"provider_boundary_observer_enabled\x18\f \x01(\bR\x1fproviderBoundaryObserverEnabled\x12>\n" +
 	"\x1bprovenance_operator_enabled\x18\r \x01(\bR\x19provenanceOperatorEnabled\x12R\n" +
 	"&provenance_operator_model_storage_root\x18\x0e \x01(\tR\"provenanceOperatorModelStorageRoot\x12\x1a\n" +
-	"\bplatform\x18\x0f \x01(\tR\bplatform\"\x8c\v\n" +
+	"\bplatform\x18\x0f \x01(\tR\bplatform\x122\n" +
+	"\x15heartbeat_interval_ms\x18\x10 \x01(\rR\x13heartbeatIntervalMs\"\x8c\v\n" +
 	"\x10OperatorDocument\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12'\n" +

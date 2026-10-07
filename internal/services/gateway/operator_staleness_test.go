@@ -212,3 +212,32 @@ func TestOperatorStaleness_ReconcileFailureFailsTheRead(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOperatorStalenessReconcile)
 }
+
+func TestOperatorStaleness_UsesDeclaredHeartbeatInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		declared time.Duration
+		silent   time.Duration
+		want     constants.OperatorStatus
+	}{
+		{"undeclared, past default window", 0, 90 * time.Second, constants.OperatorStatusStale},
+		{"declared 2m, silent 3m is within two intervals", 2 * time.Minute, 3 * time.Minute, constants.OperatorStatusActive},
+		{"declared 2m, silent 5m is past two intervals", 2 * time.Minute, 5 * time.Minute, constants.OperatorStatusStale},
+		{"declared 5m, silent 9m is within two intervals", constants.OperatorHeartbeatMaxInterval, 9 * time.Minute, constants.OperatorStatusActive},
+		{"declared 10s keeps the 60s floor", 10 * time.Second, 50 * time.Second, constants.OperatorStatusActive},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := newDocumentStoreService(t)
+			op := remoteOperator(constants.OperatorStatusActive)
+			op.RuntimeConfig = &operatorv1.OperatorRuntimeConfig{HeartbeatIntervalMs: uint32(tt.declared.Milliseconds())}
+			op.LastHeartbeatAt = timeAgo(tt.silent)
+			putOperator(t, svc, "op-1", op, time.Hour)
+
+			_, err := svc.DocGet(operatorsCollection, "op-1")
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want, persistedOperatorStatus(t, svc, "op-1"))
+		})
+	}
+}

@@ -694,7 +694,7 @@ class SetTargetContextResult(_message.Message):
     def __init__(self, success: _Optional[bool] = ..., operator_id: _Optional[str] = ..., error: _Optional[str] = ...) -> None: ...
 
 class OperatorRuntimeConfig(_message.Message):
-    __slots__ = ("cloud_mode", "cloud_provider", "local_storage_enabled", "no_git", "log_level", "http_port", "roles", "local_dir", "account", "inference_enabled", "inference_ollama_endpoint", "provider_boundary_observer_enabled", "provenance_operator_enabled", "provenance_operator_model_storage_root", "platform")
+    __slots__ = ("cloud_mode", "cloud_provider", "local_storage_enabled", "no_git", "log_level", "http_port", "roles", "local_dir", "account", "inference_enabled", "inference_ollama_endpoint", "provider_boundary_observer_enabled", "provenance_operator_enabled", "provenance_operator_model_storage_root", "platform", "heartbeat_interval_ms")
     CLOUD_MODE_FIELD_NUMBER: _ClassVar[int]
     CLOUD_PROVIDER_FIELD_NUMBER: _ClassVar[int]
     LOCAL_STORAGE_ENABLED_FIELD_NUMBER: _ClassVar[int]
@@ -710,6 +710,7 @@ class OperatorRuntimeConfig(_message.Message):
     PROVENANCE_OPERATOR_ENABLED_FIELD_NUMBER: _ClassVar[int]
     PROVENANCE_OPERATOR_MODEL_STORAGE_ROOT_FIELD_NUMBER: _ClassVar[int]
     PLATFORM_FIELD_NUMBER: _ClassVar[int]
+    HEARTBEAT_INTERVAL_MS_FIELD_NUMBER: _ClassVar[int]
     cloud_mode: bool
     cloud_provider: str
     local_storage_enabled: bool
@@ -725,7 +726,8 @@ class OperatorRuntimeConfig(_message.Message):
     provenance_operator_enabled: bool
     provenance_operator_model_storage_root: str
     platform: str
-    def __init__(self, cloud_mode: _Optional[bool] = ..., cloud_provider: _Optional[str] = ..., local_storage_enabled: _Optional[bool] = ..., no_git: _Optional[bool] = ..., log_level: _Optional[str] = ..., http_port: _Optional[int] = ..., roles: _Optional[_Iterable[str]] = ..., local_dir: _Optional[str] = ..., account: _Optional[str] = ..., inference_enabled: _Optional[bool] = ..., inference_ollama_endpoint: _Optional[str] = ..., provider_boundary_observer_enabled: _Optional[bool] = ..., provenance_operator_enabled: _Optional[bool] = ..., provenance_operator_model_storage_root: _Optional[str] = ..., platform: _Optional[str] = ...) -> None: ...
+    heartbeat_interval_ms: int
+    def __init__(self, cloud_mode: _Optional[bool] = ..., cloud_provider: _Optional[str] = ..., local_storage_enabled: _Optional[bool] = ..., no_git: _Optional[bool] = ..., log_level: _Optional[str] = ..., http_port: _Optional[int] = ..., roles: _Optional[_Iterable[str]] = ..., local_dir: _Optional[str] = ..., account: _Optional[str] = ..., inference_enabled: _Optional[bool] = ..., inference_ollama_endpoint: _Optional[str] = ..., provider_boundary_observer_enabled: _Optional[bool] = ..., provenance_operator_enabled: _Optional[bool] = ..., provenance_operator_model_storage_root: _Optional[str] = ..., platform: _Optional[str] = ..., heartbeat_interval_ms: _Optional[int] = ...) -> None: ...
 
 class OperatorDocument(_message.Message):
     __slots__ = ("id", "user_id", "organization_id", "component", "name", "status", "operator_session_id", "bound_web_session_id", "operator_cert", "operator_cert_serial", "slot_number", "is_slot", "claimed", "operator_type", "system_fingerprint", "created_at", "updated_at", "started_at", "claimed_at", "last_heartbeat_at", "operator_roles", "local_dir", "account", "port", "stop_reason", "latest_heartbeat_snapshot", "current_hostname", "runtime_config", "consumed_by_operator_id", "operator_cert_chain", "termination_reason")

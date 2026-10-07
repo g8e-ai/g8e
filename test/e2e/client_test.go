@@ -156,7 +156,7 @@ func (c *E2EClient) ListOperators(ctx context.Context) (models.OperatorSlotRespo
 	if err != nil {
 		return models.OperatorSlotResponse{}, err
 	}
-	body, _, err := doRequest(c.mtlsClient, req, http.StatusOK)
+	body, _, err := doRequestLimit(c.mtlsClient, req, http.StatusOK, maxListResponseBytes)
 	if err != nil {
 		return models.OperatorSlotResponse{}, fmt.Errorf("list operators: %w", err)
 	}
