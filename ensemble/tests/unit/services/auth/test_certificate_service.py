@@ -78,7 +78,7 @@ def mock_data_service():
 
     # Mock the internal HTTP client structure used in generate_operator_certificate
     mock_db_client = AsyncMock()
-    mock_db_client._request_json.return_value = {
+    mock_db_client.request_json.return_value = {
         "success": True,
         "certificate_pem": "-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----",
         "serial": "MOCK-SERIAL-ABC123DEF",
@@ -170,8 +170,8 @@ async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     assert "-----BEGIN PRIVATE KEY-----" in res["key"]
 
     # Verify the signing request was made
-    mock_data_service.cache.db.client._request_json.assert_called_once()
-    call_args = mock_data_service.cache.db.client._request_json.call_args
+    mock_data_service.cache.db.client.request_json.assert_called_once()
+    call_args = mock_data_service.cache.db.client.request_json.call_args
     assert call_args[0][0] == "POST"
     assert call_args[0][1] == "/.well-known/g8e/pki/sign-csr"
     payload = call_args[1]["json"]

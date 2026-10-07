@@ -211,26 +211,26 @@ class TestMatchesSafeOption:
     """_matches_safe_option handles exact flags and parameterized patterns."""
 
     def test_exact_flag_match(self, validator):
-        assert validator._matches_safe_option("-4", ["-4"], "-4") is True
+        assert validator._matches_safe_option("-4", "-4") is True
 
     def test_exact_flag_no_match(self, validator):
-        assert validator._matches_safe_option("-6", ["-6"], "-4") is False
+        assert validator._matches_safe_option("-6", "-4") is False
 
     def test_space_separated_param_match(self, validator):
-        assert validator._matches_safe_option("-c", ["-c", "4"], "-c <count>") is True
+        assert validator._matches_safe_option("-c", "-c <count>") is True
 
     def test_space_separated_param_no_match(self, validator):
-        assert validator._matches_safe_option("-W", ["-W", "5"], "-c <count>") is False
+        assert validator._matches_safe_option("-W", "-c <count>") is False
 
     def test_equals_param_match(self, validator):
         assert (
-            validator._matches_safe_option("--color=auto", ["--color=auto"], "--color=<mode>")
+            validator._matches_safe_option("--color=auto", "--color=<mode>")
             is True
         )
 
     def test_equals_param_no_match(self, validator):
         assert (
-            validator._matches_safe_option("--other=auto", ["--other=auto"], "--color=<mode>")
+            validator._matches_safe_option("--other=auto", "--color=<mode>")
             is False
         )
 
@@ -456,7 +456,7 @@ class TestConvenienceFunctions:
     def test_validate_command_against_whitelist_delegates(self, monkeypatch, whitelist_path):
 
         fresh = CommandWhitelistValidator(whitelist_path=whitelist_path)
-        monkeypatch.setattr(wv_module, "_validator_instance", fresh)
+        monkeypatch.setattr(wv_module._validator_state, "instance", fresh)
         result = validate_command_against_whitelist("")
         assert result.is_valid is False
 

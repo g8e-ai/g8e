@@ -104,8 +104,8 @@ def mock_tool_executor():
     )
     executor._user_settings = mock_user_settings
 
-    executor._whitelist_validator = get_whitelist_validator()
-    executor._blacklist_validator = get_blacklist_validator()
+    executor.whitelist_validator = get_whitelist_validator()
+    executor.blacklist_validator = get_blacklist_validator()
 
     executor.reputation_data_service = MagicMock()
     executor.ai_response_analyzer = None

@@ -223,7 +223,7 @@ def build_request_context(
 
 
 def build_g8e_http_context(
-    web_session_id: str = "test-web-session",
+    web_session_id: str | None = "test-web-session",
     user_id: str = "test-user-id",
     case_id: str | None = None,
     investigation_id: str | None = None,

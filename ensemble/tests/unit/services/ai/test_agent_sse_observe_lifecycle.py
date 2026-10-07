@@ -255,7 +255,7 @@ async def test_targetless_flow_skips_projections():
     inputs, state = make_agent_run_args(
         case_id="case-obs-6",
         investigation_id="inv-obs-6",
-        web_session_id="web-obs-6",
+        web_session_id=None,
         user_id="user-obs-6",
         active_agent=ReasoningAgent.SAGE,
     )

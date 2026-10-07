@@ -59,6 +59,8 @@ and correctness checks.
 
 ## Findings after the configuration change
 
+**Current status:** the backlog below is fully remediated. `ruff check ensemble/app ensemble/tests` reports no findings and `pyright --project ensemble/pyrightconfig.json` reports 0 errors and 0 warnings. The tables record the original audit and are kept as history.
+
 Pyright analyzed **578 files** and reported **2496 errors and 4 warnings**. Ruff reported **1833 findings** (854 in application code, 979 in tests). These are diagnostic counts, not counts of independent runtime defects; unresolved dynamic API typing can cause multiple downstream findings.
 
 | Pyright diagnostic | Count |
@@ -120,9 +122,11 @@ Most frequent Ruff findings:
    and unused code. Imports and mechanical style changes can follow, with review
    for import side effects and circular dependencies.
 
-The gate deliberately fails on the backlog. No baseline file, warning downgrade,
-or new blanket suppression was added to make existing findings pass. This change
-restores the configuration and records the debt; it does not repair every finding.
+The backlog was repaired in place. No baseline file, warning downgrade, or new
+blanket suppression was added to make existing findings pass. Unused parameters
+were removed with their callers and interface declarations; handler signatures
+that are fixed by a framework or registry (FastAPI route handlers, native tool
+handlers) discard the unused argument with `del`.
 
 ## Reproduce and validation
 

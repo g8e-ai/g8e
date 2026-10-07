@@ -80,7 +80,7 @@ def make_agent_inputs(
 
     if g8e_context is None:
         g8e_context = build_g8e_http_context(
-            web_session_id=web_session_id or "web-test-001",
+            web_session_id=web_session_id,
             user_id=user_id,
         )
 
