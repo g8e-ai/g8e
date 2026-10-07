@@ -168,6 +168,7 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | `test` | `testcmd` | `internal/cli/cmd/test/` | | Unit, integration, e2e, e2e-docker, coverage, lint, chaos, summary, and `public-loop`. |
 | `docker` | `docker` | `internal/cli/cmd/docker/` | | Unified Compose stack lifecycle. |
 | `ensemble` | `ensemble` | `internal/cli/cmd/ensemble/` | | Local host Python g8ee service lifecycle (start, stop, restart, status, logs, and reset-identity). |
+| `inference` | `inference` | `internal/cli/cmd/inference/` | | `show` and `set` for the signed-in user's primary, assistant, lite, and eval judge models, through the Gateway's ensemble settings proxy (`/api/v1/settings/llm`). These are user settings, not Gateway platform settings. |
 | `audit` | `audit` | `internal/cli/cmd/audit/` | | Receipt, event, summary, export, report, and verify queries against a running Gateway. |
 | `report` | `report` | `internal/cli/cmd/report/` | | Deterministic CSV evidence generation and offline verification. |
 | `public` | `public` | `internal/cli/cmd/public/` | | Public spectator feed. `restore` is constructed in the eval package (INV-PKG-02). |

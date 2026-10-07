@@ -285,21 +285,24 @@ func TestBuildGatewayHTTPBaseURL(t *testing.T) {
 	tests := []struct {
 		name     string
 		endpoint string
+		httpPort int
 		expected string
 	}{
-		{"empty endpoint", "", ""},
-		{"hostname only", "localhost", "http://localhost:8080"},
-		{"hostname with port", "localhost:8081", "http://localhost:8081"},
-		{"ip with port", "127.0.0.1:8443", "http://127.0.0.1:8443"},
-		{"http scheme with port", "http://localhost:8081", "http://localhost:8081"},
-		{"https scheme no port", "https://gateway.local", "https://gateway.local"},
-		{"trailing slash removed", "http://localhost:8081/", "http://localhost:8081"},
-		{"whitespace trimmed", "  localhost:8081  ", "http://localhost:8081"},
+		{"empty endpoint", "", 0, ""},
+		{"hostname only", "localhost", 0, "http://localhost:8080"},
+		{"hostname with port", "localhost:8081", 0, "http://localhost:8081"},
+		{"ip with port", "127.0.0.1:8443", 0, "http://127.0.0.1:8443"},
+		{"http scheme with port", "http://localhost:8081", 0, "http://localhost:8081"},
+		{"https scheme no port", "https://gateway.local", 0, "https://gateway.local"},
+		{"trailing slash removed", "http://localhost:8081/", 0, "http://localhost:8081"},
+		{"whitespace trimmed", "  localhost:8081  ", 0, "http://localhost:8081"},
+		{"configured port for bare host", "gateway.local", 9080, "http://gateway.local:9080"},
+		{"explicit endpoint port wins over configured port", "gateway.local:8081", 9080, "http://gateway.local:8081"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, buildGatewayHTTPBaseURL(tt.endpoint))
+			assert.Equal(t, tt.expected, buildGatewayHTTPBaseURL(tt.endpoint, tt.httpPort))
 		})
 	}
 }
@@ -486,11 +489,14 @@ func TestBuildOperatorLoadOptions_EnvVarsPropagated(t *testing.T) {
 	assert.Equal(t, "America/Los_Angeles", loadOpts.TZ)
 }
 
-func TestBuildOperatorLoadOptions_PortAlwaysZero(t *testing.T) {
-	opts := ServeOperatorOptions{}
-	loadOpts := buildOperatorLoadOptions(opts, "10.0.0.1", "/work")
-	assert.Equal(t, 0, loadOpts.HTTPPort, "HTTPPort should always be 0 for operator mode")
-	assert.Equal(t, 0, loadOpts.HTTPSPort, "HTTPSPort should always be 0 for operator mode")
+func TestBuildOperatorLoadOptions_GatewayPortsDefaultToZeroAndPassThroughWhenSet(t *testing.T) {
+	loadOpts := buildOperatorLoadOptions(ServeOperatorOptions{}, "10.0.0.1", "/work")
+	assert.Equal(t, 0, loadOpts.HTTPPort)
+	assert.Equal(t, 0, loadOpts.HTTPSPort)
+
+	loadOpts = buildOperatorLoadOptions(ServeOperatorOptions{HTTPPort: 9080, HTTPSPort: 9443}, "10.0.0.1", "/work")
+	assert.Equal(t, 9080, loadOpts.HTTPPort)
+	assert.Equal(t, 9443, loadOpts.HTTPSPort)
 }
 
 func TestBuildOperatorLoadOptions_PostureAlwaysEmpty(t *testing.T) {

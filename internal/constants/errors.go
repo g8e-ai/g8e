@@ -871,6 +871,8 @@ var (
 	ErrDocumentStoreParseUpdatedAt      = errors.New("failed to parse updated_at timestamp")
 	ErrOperatorStalenessReconcile       = errors.New("failed to reconcile operator heartbeat staleness")
 	ErrOperatorHeartbeatIntervalInvalid = errors.New("invalid operator heartbeat interval")
+	ErrLLMRoleSelectionInvalid          = errors.New("invalid model role selection")
+	ErrOperatorGatewayPortInvalid       = errors.New("operator gateway port must be between 0 (default) and 65535")
 	ErrOperatorStatusEventUnsupported   = errors.New("operator status has no status.updated event")
 	ErrOperatorStatusObserverNil        = errors.New("operator status observer binding cannot be nil")
 	ErrOperatorStatusObserverBound      = errors.New("operator status observer already bound")

@@ -62,8 +62,9 @@ const (
 // remote shell expands it.
 var (
 	operatorDeployRemoteDirPattern = regexp.MustCompile(`^(~|~?/?[A-Za-z0-9_.-]+)(/[A-Za-z0-9_.-]+)*/?$`)
-	// Worker configuration adds the standard HTTP and HTTPS ports itself, so
-	// this value must be a host/IP without a scheme or explicit port.
+	// Worker ports travel separately as --gateway-http-port and
+	// --gateway-https-port, so this value must be a host/IP without a scheme
+	// or explicit port.
 	operatorDeployEndpointPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 	operatorDeployRequestIDPattern    = regexp.MustCompile(`auth enroll approve ([0-9a-f-]{36})`)
@@ -683,6 +684,7 @@ var operatorDeployForwardFlags = []string{
 	"roles", "inference-enabled", "inference-ollama-endpoint", "inference-keep-alive",
 	"provider-boundary-observer-enabled", "provider-boundary-observer-id",
 	"provenance-operator-enabled", "provenance-operator-id", "model-storage-root",
+	"gateway-http-port", "gateway-https-port",
 	"heartbeat-interval", "no-git", "execution-vault", "log", "trust-bundle",
 }
 
@@ -697,6 +699,12 @@ func operatorDeployStartArgs(cmd *cobra.Command) ([]string, error) {
 	heartbeat, _ := cmd.Flags().GetInt("heartbeat-interval")
 	if err := validateHeartbeatInterval(heartbeat); err != nil {
 		return nil, err
+	}
+	for _, name := range []string{"gateway-http-port", "gateway-https-port"} {
+		value, _ := cmd.Flags().GetInt(name)
+		if err := validateGatewayPort(name, value); err != nil {
+			return nil, err
+		}
 	}
 	return args, nil
 }

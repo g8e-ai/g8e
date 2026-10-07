@@ -11,6 +11,7 @@ from app.constants.config import LLMProvider
 from app.errors import ValidationError
 from app.models.http_context import RequestContext
 from app.models.internal_api import (
+    EvalJudgeUpdate,
     LLMProviderUpdate,
     LLMRoleSettingsUpdateRequest,
     LLMRoleUpdate,
@@ -294,3 +295,57 @@ class TestSettingsServiceLLMRoles:
         assert settings.llm.primary_model == "gemma4:e4b"
         assert settings.llm.resolved_assistant_model == "qwen3:4b"
         assert settings.llm.resolve("lite")[0] == "ollama"
+
+
+class TestEvalJudgeModel:
+    def _service(self):
+        stored: dict = {}
+
+        async def update_document(collection, document_id, data, merge):
+            stored[document_id] = data
+
+        cache = MagicMock()
+        cache.update_document = AsyncMock(side_effect=update_document)
+        cache.invalidate_document = AsyncMock(return_value=True)
+        cache.get_document_with_cache = AsyncMock(
+            side_effect=lambda *_args, document_id, **_kwargs: stored.get(document_id)
+        )
+        return SettingsService(cache_aside_service=cache)
+
+    def test_request_with_only_a_judge_model_is_a_valid_update(self):
+        request = _request(eval_judge=EvalJudgeUpdate(model="qwen3:1.7b"))
+        assert request.eval_judge is not None
+
+    def test_request_with_nothing_to_update_is_rejected(self):
+        with pytest.raises(ValueError, match="eval judge"):
+            _request()
+
+    async def test_judge_model_persists_is_reported_and_clears(self):
+        service = self._service()
+        await service.update_user_settings("user_1", G8eeUserSettings(llm=LLMSettings()))
+
+        view = await service.update_llm_role_settings(
+            "user_1", _request(eval_judge=EvalJudgeUpdate(model="  qwen3:1.7b "))
+        )
+        assert view.eval_judge_model == "qwen3:1.7b"
+        saved = await service.get_user_settings("user_1")
+        assert saved.eval_judge.model == "qwen3:1.7b"
+        assert (await service.get_llm_role_settings("user_1")).eval_judge_model == "qwen3:1.7b"
+
+        view = await service.update_llm_role_settings(
+            "user_1", _request(eval_judge=EvalJudgeUpdate(model=""))
+        )
+        assert view.eval_judge_model is None
+        assert (await service.get_user_settings("user_1")).eval_judge.model is None
+
+    async def test_role_update_leaves_the_judge_model_alone(self):
+        service = self._service()
+        await service.update_user_settings("user_1", G8eeUserSettings(llm=LLMSettings()))
+        await service.update_llm_role_settings(
+            "user_1", _request(eval_judge=EvalJudgeUpdate(model="qwen3:1.7b"))
+        )
+        view = await service.update_llm_role_settings(
+            "user_1",
+            _request(primary=LLMRoleUpdate(provider=LLMProvider.OLLAMA, model="gemma4:e4b")),
+        )
+        assert view.eval_judge_model == "qwen3:1.7b"

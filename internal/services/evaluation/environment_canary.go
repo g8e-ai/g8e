@@ -265,7 +265,7 @@ func checkSemanticJudgeAvailable(trace EvaluationTrace) (string, error) {
 	}
 	for _, grade := range grades {
 		if grade.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE {
-			return "", fmt.Errorf("semantic judge unavailable: %s; check the eval judge model (or Lite model) in the console settings and that it is served on the Inference Operator's Lite binding", grade.GetDetail())
+			return "", fmt.Errorf("semantic judge unavailable: %s; set it with `g8e inference set --judge <model>` (or `--lite`), and check that it is served on the Inference Operator's Lite binding", grade.GetDetail())
 		}
 	}
 	return fmt.Sprintf("semantic judge ran and returned %d grade (the verdict is not inspected)", len(grades)), nil

@@ -121,12 +121,19 @@ class LLMRoleSettingsResponse(G8eBaseModel):
     primary: LLMRoleView
     assistant: LLMRoleView
     lite: LLMRoleView
+    eval_judge_model: str | None = None
 
 
 class LLMRoleUpdate(G8eBaseModel):
     """One role's provider and model selection."""
 
     provider: LLMProvider | None = None
+    model: str | None = None
+
+
+class EvalJudgeUpdate(G8eBaseModel):
+    """The evaluation judge model. An empty model clears it so the Lite chain applies."""
+
     model: str | None = None
 
 
@@ -145,13 +152,18 @@ class LLMRoleSettingsUpdateRequest(G8eBaseModel):
     primary: LLMRoleUpdate | None = None
     assistant: LLMRoleUpdate | None = None
     lite: LLMRoleUpdate | None = None
+    eval_judge: EvalJudgeUpdate | None = None
     providers: list[LLMProviderUpdate] | None = None
 
     @model_validator(mode="after")
     def validate_update_scope(self):
         role_updates = (self.primary, self.assistant, self.lite)
-        if not any(update is not None for update in role_updates) and self.providers is None:
-            raise ValueError("Provide provider connections or role selections")
+        if (
+            not any(update is not None for update in role_updates)
+            and self.eval_judge is None
+            and self.providers is None
+        ):
+            raise ValueError("Provide provider connections, role selections or an eval judge model")
         return self
 
 

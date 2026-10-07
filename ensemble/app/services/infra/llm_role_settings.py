@@ -118,12 +118,13 @@ def role_view(llm: LLMSettings, role: LLMRole) -> LLMRoleView:
     )
 
 
-def settings_view(llm: LLMSettings) -> LLMRoleSettingsResponse:
+def settings_view(llm: LLMSettings, eval_judge_model: str | None = None) -> LLMRoleSettingsResponse:
     return LLMRoleSettingsResponse(
         providers=provider_options(llm),
         primary=role_view(llm, "primary"),
         assistant=role_view(llm, "assistant"),
         lite=role_view(llm, "lite"),
+        eval_judge_model=eval_judge_model,
     )
 
 

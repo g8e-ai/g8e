@@ -316,6 +316,42 @@ func TestOperatorDeploySeparatesOwnerAndWorkerEndpoints(t *testing.T) {
 	assert.Contains(t, ownerURL, "localhost")
 }
 
+func TestOperatorDeployForwardsGatewayPortsToTheWorker(t *testing.T) {
+	useFakeSSH(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\n"+fakeWorkerAlreadyEnrolled[10:])
+	root := filepath.Join(t.TempDir(), "fleet")
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+	cmd := operatorDeployCmdWithConfig(
+		func(string) (*config.Config, error) { return cfg, nil },
+		func(fs.RuntimeFileService, *config.Config) (authcmd.APIClient, error) {
+			return &cmdtest.MockAPIClient{}, nil
+		},
+		cmdtest.FileSvcFactoryFor(fileSvc),
+	)
+	cmd.Flags().StringP("endpoint", "e", "", "")
+	cmd.SetArgs([]string{"--hosts", "host", "--dest-dir", root, "--background", "--endpoint", "gateway", "--gateway-http-port", "9080", "--gateway-https-port", "9443"})
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_ = cmd.ExecuteContext(ctx)
+	var data []byte
+	require.Eventually(t, func() bool {
+		var err error
+		data, err = os.ReadFile(filepath.Join(root, "args.txt"))
+		return err == nil && len(data) > 0
+	}, 5*time.Second, 20*time.Millisecond)
+	assert.Contains(t, string(data), "--gateway-http-port=9080\n")
+	assert.Contains(t, string(data), "--gateway-https-port=9443\n")
+}
+
+func TestOperatorDeployRejectsGatewayPortsOutOfRange(t *testing.T) {
+	for _, flag := range []string{"--gateway-http-port", "--gateway-https-port"} {
+		for _, port := range []string{"-1", "65536"} {
+			_, err := runOperatorDeploy(t, &cmdtest.MockAPIClient{}, "--hosts", "host", "--background", "--endpoint", "gateway", flag, port)
+			require.ErrorIs(t, err, constants.ErrOperatorGatewayPortInvalid, flag+" "+port)
+		}
+	}
+}
+
 func TestOperatorDeployRejectsInvalidWorkerEndpoints(t *testing.T) {
 	for _, endpoint := range []string{"http://gateway", "gateway:8080", "", "gateway name"} {
 		args := []string{"--hosts", "host", "--background", "--operator-endpoint", endpoint}

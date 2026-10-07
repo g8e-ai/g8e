@@ -23,6 +23,7 @@ import (
 	ensemblecmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/ensemble"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/eval"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gw"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/inference"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/mcp"
 	operatorcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/operator"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/public"
@@ -115,6 +116,7 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 		version.Cmd(),
 		compliancecmd.Cmd(),
 		eval.Cmd(),
+		inference.Cmd(),
 	)
 
 	return rootCmd

@@ -335,6 +335,8 @@ func operatorStartCmd() *cobra.Command {
 	var noGit bool
 	var logLevel string
 	var heartbeatInterval int
+	var gatewayHTTPPort int
+	var gatewayHTTPSPort int
 	var latticeEndpoint string
 	var latticeClientID string
 	var latticeClientSecret string
@@ -359,11 +361,19 @@ func operatorStartCmd() *cobra.Command {
 			if err := validateHeartbeatInterval(heartbeatInterval); err != nil {
 				return err
 			}
+			if err := validateGatewayPort("gateway-http-port", gatewayHTTPPort); err != nil {
+				return err
+			}
+			if err := validateGatewayPort("gateway-https-port", gatewayHTTPSPort); err != nil {
+				return err
+			}
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			opts := serve.ServeOperatorOptions{
 				OperatorRoles:                   roles,
 				LogLevel:                        logLevel,
 				Endpoint:                        endpoint,
+				HTTPPort:                        gatewayHTTPPort,
+				HTTPSPort:                       gatewayHTTPSPort,
 				TrustBundlePath:                 trustBundle,
 				PrivateKey:                      key,
 				ClientCert:                      clientCert,
@@ -418,6 +428,8 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&noGit, "no-git", "G", false, "Disable Git integration")
 	cmd.Flags().StringVarP(&logLevel, "log", "l", "info", "Log level: info, error, debug")
 	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat interval in seconds (0-30; the Gateway marks an Operator stale after 60 seconds without a heartbeat)")
+	cmd.Flags().IntVar(&gatewayHTTPPort, "gateway-http-port", 0, "Gateway HTTP discovery port to dial (default: platform default)")
+	cmd.Flags().IntVar(&gatewayHTTPSPort, "gateway-https-port", 0, "Gateway HTTPS/mTLS port to dial (default: platform default)")
 	cmd.Flags().StringVar(&latticeEndpoint, "lattice-endpoint", "", "Lattice gRPC endpoint URL")
 	cmd.Flags().StringVar(&latticeClientID, "lattice-client-id", "", "OAuth2 client ID")
 	cmd.Flags().StringVar(&latticeClientSecret, "lattice-client-secret", "", "OAuth2 client secret")
@@ -451,6 +463,13 @@ func validateHeartbeatInterval(seconds int) error {
 	if interval < 0 || interval > maxInterval {
 		return fmt.Errorf("%w: %s is outside 0 (default) to %s; the Gateway marks an Operator stale after %s without a heartbeat",
 			constants.ErrOperatorHeartbeatIntervalInvalid, interval, maxInterval, constants.OperatorHeartbeatStaleAfter)
+	}
+	return nil
+}
+
+func validateGatewayPort(flag string, port int) error {
+	if port < 0 || port > 65535 {
+		return fmt.Errorf("--%s %d: %w", flag, port, constants.ErrOperatorGatewayPortInvalid)
 	}
 	return nil
 }

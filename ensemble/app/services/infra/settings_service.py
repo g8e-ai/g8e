@@ -282,7 +282,7 @@ class SettingsService:
     async def get_llm_role_settings(self, user_id: str) -> LLMRoleSettingsResponse:
         """Return the caller's provider connections and per-role selections with keys masked."""
         user_settings = await self.get_user_settings(user_id)
-        return settings_view(user_settings.llm)
+        return settings_view(user_settings.llm, user_settings.eval_judge.model)
 
     async def update_llm_role_settings(
         self, user_id: str, request: LLMRoleSettingsUpdateRequest
@@ -293,6 +293,8 @@ class SettingsService:
             apply_provider_updates(user_settings.llm, request.providers)
         if any((request.primary, request.assistant, request.lite)):
             apply_role_updates(user_settings.llm, request)
+        if request.eval_judge is not None:
+            user_settings.eval_judge.model = (request.eval_judge.model or "").strip() or None
         await self.update_user_settings(user_id, user_settings)
         self._logger.info(
             "[SettingsService] Updated inference settings for user %s (primary=%s/%s)",
@@ -300,7 +302,7 @@ class SettingsService:
             user_settings.llm.primary_provider,
             user_settings.llm.primary_model,
         )
-        return settings_view(user_settings.llm)
+        return settings_view(user_settings.llm, user_settings.eval_judge.model)
 
     def _build_search_settings(
         self, settings: G8eeAppSettings | G8eeUserSettings

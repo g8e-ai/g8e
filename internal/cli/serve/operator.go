@@ -41,9 +41,13 @@ import (
 
 // ServeOperatorOptions holds the configuration for running the operator in standalone mode.
 type ServeOperatorOptions struct {
-	OperatorRoles     constants.OperatorRoles
-	LogLevel          string
-	Endpoint          string
+	OperatorRoles constants.OperatorRoles
+	LogLevel      string
+	Endpoint      string
+	// HTTPPort and HTTPSPort override the Gateway discovery and mTLS ports the
+	// Operator dials; zero selects the platform defaults.
+	HTTPPort          int
+	HTTPSPort         int
 	TrustBundlePath   string
 	PrivateKey        string
 	ClientCert        string
@@ -88,9 +92,10 @@ func resolveOperatorEndpoint(endpoint string) string {
 
 // buildGatewayHTTPBaseURL constructs a plain-HTTP gateway base URL from an
 // endpoint flag value. If the endpoint already has a scheme, it is preserved.
-// If it has a port, that port is used; otherwise the operator HTTP default
-// port is appended. The returned string has no trailing slash.
-func buildGatewayHTTPBaseURL(endpoint string) string {
+// If it has a port, that port is used; otherwise httpPort (or the operator HTTP
+// default when httpPort is zero) is appended. The returned string has no
+// trailing slash.
+func buildGatewayHTTPBaseURL(endpoint string, httpPort int) string {
 	endpoint = strings.TrimSpace(endpoint)
 	if endpoint == "" {
 		return ""
@@ -104,7 +109,10 @@ func buildGatewayHTTPBaseURL(endpoint string) string {
 		return "http://" + endpoint
 	}
 
-	return fmt.Sprintf("http://%s:%d", endpoint, constants.Ports.OperatorHttp)
+	if httpPort == 0 {
+		httpPort = constants.Ports.OperatorHttp
+	}
+	return fmt.Sprintf("http://%s:%d", endpoint, httpPort)
 }
 
 // resolveWorkingDir returns workingDir if set, otherwise falls back to launchDir.
@@ -240,8 +248,8 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 	return config.LoadOptions{
 		OperatorRoles:         opts.OperatorRoles,
 		OperatorEndpoint:      operatorEndpoint,
-		HTTPPort:              0,
-		HTTPSPort:             0,
+		HTTPPort:              opts.HTTPPort,
+		HTTPSPort:             opts.HTTPSPort,
 		CloudMode:             opts.CloudMode,
 		CloudProvider:         opts.CloudProvider,
 		ExecutionVaultEnabled: opts.ExecutionVault,
@@ -311,7 +319,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	trustLoaded := LoadTrustBundle(context.Background(), logger, opts.TrustBundlePath, fileSvc, trustStore)
 	if !trustLoaded {
 		if opts.Endpoint != "" {
-			baseURL := buildGatewayHTTPBaseURL(opts.Endpoint)
+			baseURL := buildGatewayHTTPBaseURL(opts.Endpoint, opts.HTTPPort)
 			trustURL := baseURL + constants.WellKnownPKICABundle
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
 			pemData, err := certs.FetchTrustBundle(context.Background(), trustURL, "")
@@ -361,7 +369,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			}
 		}
 		logger.Info("No installed operator credentials found; starting platform enrollment", "endpoint", opts.Endpoint)
-		gatewayHTTPURL := buildGatewayHTTPBaseURL(opts.Endpoint)
+		gatewayHTTPURL := buildGatewayHTTPBaseURL(opts.Endpoint, opts.HTTPPort)
 		hostname, err := os.Hostname()
 		if err != nil {
 			logger.Error("Failed to resolve hostname for enrollment", string(constants.ConnectionStateError), err)
