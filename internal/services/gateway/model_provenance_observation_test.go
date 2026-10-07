@@ -71,10 +71,10 @@ func TestModelProvenanceObservationCoordinator_EnsureOperator_SubscribesToProven
 		&DispatchService{},
 		&stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                "prov-1",
-				OperatorSessionID: "sess-prov-1",
-				Status:            constants.OperatorStatusActive,
-				OperatorType:      constants.OperatorTypeRemote,
+				Id:                "prov-1",
+				OperatorSessionId: "sess-prov-1",
+				Status: string(constants.OperatorStatusActive),
+				OperatorType: string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
@@ -99,10 +99,10 @@ func TestModelProvenanceObservationCoordinator_PreflightCommandDelivery_FailsWit
 		&DispatchService{pubsub: pubsubHandler},
 		&stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                "prov-1",
-				OperatorSessionID: "sess-prov-1",
-				Status:            constants.OperatorStatusActive,
-				OperatorType:      constants.OperatorTypeRemote,
+				Id:                "prov-1",
+				OperatorSessionId: "sess-prov-1",
+				Status: string(constants.OperatorStatusActive),
+				OperatorType: string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
@@ -127,10 +127,10 @@ func TestModelProvenanceObservationCoordinator_IngestPersistsAttestationWindow(t
 		&DispatchService{},
 		&stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                "prov-1",
-				OperatorSessionID: "sess-prov-1",
-				Status:            constants.OperatorStatusActive,
-				OperatorType:      constants.OperatorTypeRemote,
+				Id:                "prov-1",
+				OperatorSessionId: "sess-prov-1",
+				Status: string(constants.OperatorStatusActive),
+				OperatorType: string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
@@ -164,8 +164,8 @@ func TestModelProvenanceObservationCoordinator_NotifyAttemptBegin_FailsWithoutCm
 	windowStore, err := model_provenance.NewWindowStore(fileSvc)
 	require.NoError(t, err)
 	op := &operatorv1.OperatorDocument{
-		ID:                "prov-1",
-		OperatorSessionID: "sess-prov-1",
+		Id:                "prov-1",
+		OperatorSessionId: "sess-prov-1",
 	}
 	dispatchSvc, pubsubHandler := newTestDispatchService(t, "root-abc", op)
 
@@ -173,10 +173,10 @@ func TestModelProvenanceObservationCoordinator_NotifyAttemptBegin_FailsWithoutCm
 		dispatchSvc,
 		&stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                op.ID,
-				OperatorSessionID: op.OperatorSessionID,
-				Status:            constants.OperatorStatusActive,
-				OperatorType:      constants.OperatorTypeRemote,
+				Id:                op.Id,
+				OperatorSessionId: op.OperatorSessionId,
+				Status: string(constants.OperatorStatusActive),
+				OperatorType: string(constants.OperatorTypeRemote),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
@@ -214,12 +214,12 @@ func TestModelProvenanceObservationCoordinator_PreflightStorageAttestation(t *te
 				logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 				store, err := model_provenance.NewWindowStore(storagetest.NewTestFileSvc(t, t.TempDir()))
 				require.NoError(t, err)
-				op := operatorv1.OperatorDocument{ID: "prov-1", OperatorSessionID: "sess-prov-1", Status: constants.OperatorStatusActive,
-					OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}}
-				dispatch, broker := newTestDispatchService(t, "root-abc", &op)
+				op := &operatorv1.OperatorDocument{Id: "prov-1", OperatorSessionId: "sess-prov-1", Status: string(constants.OperatorStatusActive),
+					OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}}
+				dispatch, broker := newTestDispatchService(t, "root-abc", op)
 				coordinator := NewModelProvenanceObservationCoordinator(dispatch, &stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{op}}, broker, eventOnlyProvenanceStore{store}, logger)
 				defer coordinator.Stop()
-				cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
+				cmdChannel := pubsub.CmdChannel(op.Id, op.OperatorSessionId)
 				subscriber := &wsSubscriber{buf: newDropOldestBuf(4), done: make(chan struct{})}
 				broker.subscribe(cmdChannel, subscriber)
 				defer broker.unsubscribe(cmdChannel, subscriber)
@@ -230,7 +230,7 @@ func TestModelProvenanceObservationCoordinator_PreflightStorageAttestation(t *te
 				ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 				defer cancel()
 				commands := 0
-				unregister := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+				unregister := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, data []byte) {
 					commands++
 					env := &commonv1.GovernanceEnvelope{}
 					require.NoError(t, protojson.Unmarshal(data, env))
@@ -244,7 +244,7 @@ func TestModelProvenanceObservationCoordinator_PreflightStorageAttestation(t *te
 						}
 						payload, err := proto.Marshal(&operatorv1.ActionReceipt{TransactionId: txID, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, ResultSummary: "manifest missing"})
 						require.NoError(t, err)
-						wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.Receipt.Recorded), OperatorId: op.ID, OperatorSessionId: op.OperatorSessionID, Payload: payload})
+						wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.Receipt.Recorded), OperatorId: op.Id, OperatorSessionId: op.OperatorSessionId, Payload: payload})
 						require.NoError(t, err)
 						// Simulate broker fan-out after receipt signature verification.
 						if scenario == "delayed finalize failure" {
@@ -252,26 +252,26 @@ func TestModelProvenanceObservationCoordinator_PreflightStorageAttestation(t *te
 								select {
 								case <-ctx.Done():
 								case <-time.After(10 * time.Millisecond):
-									broker.Publish(pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID), wire)
+									broker.Publish(pubsub.ReceiptsChannel(op.Id, op.OperatorSessionId), wire)
 								}
 							}()
 						} else {
-							broker.Publish(pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID), wire)
+							broker.Publish(pubsub.ReceiptsChannel(op.Id, op.OperatorSessionId), wire)
 						}
 					}
 					if !finalize && scenario != "begin failure" && scenario != "silent operator" {
 						payload, err := proto.Marshal(&operatorv1.ActionReceipt{TransactionId: env.Id, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED})
 						require.NoError(t, err)
-						wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.Receipt.Recorded), OperatorId: op.ID, OperatorSessionId: op.OperatorSessionID, Payload: payload})
+						wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.Receipt.Recorded), OperatorId: op.Id, OperatorSessionId: op.OperatorSessionId, Payload: payload})
 						require.NoError(t, err)
-						broker.Publish(pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID), wire)
+						broker.Publish(pubsub.ReceiptsChannel(op.Id, op.OperatorSessionId), wire)
 					}
 					if finalize && scenario == "success with unrelated failure" {
 						payload, err := proto.Marshal(&evalv1.ModelProvenanceObservationCompleted{Window: testModelProvenanceWindow(t, command.ProviderAttemptId)})
 						require.NoError(t, err)
 						wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: string(constants.Event.Operator.ModelProvenanceObservation.Completed), Payload: payload})
 						require.NoError(t, err)
-						broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+						broker.Publish(pubsub.ResultsChannel(op.Id, op.OperatorSessionId), wire)
 					}
 					if finalize && scenario == "cancellation" {
 						cancel()
@@ -301,7 +301,7 @@ func TestModelProvenanceObservationCoordinator_PreflightStorageAttestation(t *te
 					require.Equal(t, 2, commands)
 				}
 				broker.handlersMu.RLock()
-				remaining := len(broker.handlers[pubsub.ReceiptsChannel(op.ID, op.OperatorSessionID)])
+				remaining := len(broker.handlers[pubsub.ReceiptsChannel(op.Id, op.OperatorSessionId)])
 				broker.handlersMu.RUnlock()
 				require.Zero(t, remaining, "preflight receipt subscription must be cleaned up")
 			})

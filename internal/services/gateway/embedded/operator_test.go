@@ -147,12 +147,9 @@ func loadOperator(t *testing.T, store *memStore) *operatorv1.OperatorDocument {
 	doc, err := store.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	require.NoError(t, err)
 	require.NotNil(t, doc)
-	b, err := json.Marshal(doc.Data)
+	op, err := models.OperatorDocumentFromStore(doc)
 	require.NoError(t, err)
-	var op *operatorv1.OperatorDocument
-	require.NoError(t, json.Unmarshal(b, &op))
-	op.ID = doc.ID
-	return &op
+	return op
 }
 
 func TestRegisterPending_Idempotent(t *testing.T) {
@@ -162,14 +159,14 @@ func TestRegisterPending_Idempotent(t *testing.T) {
 	require.NoError(t, svc.RegisterPending())
 
 	op := loadOperator(t, store)
-	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.ID)
+	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.Id)
 	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
 	assert.Equal(t, constants.ComponentNameG8EO, op.Component)
 	assert.Equal(t, constants.OperatorStatusAvailable, op.Status)
 	assert.False(t, op.Claimed)
 	assert.False(t, op.IsSlot)
-	assert.Empty(t, op.UserID)
-	assert.Empty(t, op.OperatorSessionID)
+	assert.Empty(t, op.UserId)
+	assert.Empty(t, op.OperatorSessionId)
 	assert.Equal(t, 1, store.count(marshaler.CollectionName(constants.CollectionOperators)))
 
 	require.NoError(t, svc.RegisterPending())
@@ -181,8 +178,8 @@ func TestRegisterPending_Idempotent(t *testing.T) {
 	require.NoError(t, svc.RegisterPending())
 	claimed := loadOperator(t, store)
 	assert.True(t, claimed.Claimed)
-	assert.Equal(t, "user-claim", claimed.UserID)
-	assert.Equal(t, sessionID, claimed.OperatorSessionID)
+	assert.Equal(t, "user-claim", claimed.UserId)
+	assert.Equal(t, sessionID, claimed.OperatorSessionId)
 	assert.Equal(t, "fp", claimed.SystemFingerprint)
 }
 
@@ -226,8 +223,8 @@ func TestClaim_MissingPendingDoc_ClaimsAnyway(t *testing.T) {
 
 	op := loadOperator(t, store)
 	assert.True(t, op.Claimed)
-	assert.Equal(t, "user-heal", op.UserID)
-	assert.Equal(t, sessionID, op.OperatorSessionID)
+	assert.Equal(t, "user-heal", op.UserId)
+	assert.Equal(t, sessionID, op.OperatorSessionId)
 	assert.Equal(t, "fp-heal", op.SystemFingerprint)
 	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
 	assert.Equal(t, constants.OperatorStatusActive, op.Status)

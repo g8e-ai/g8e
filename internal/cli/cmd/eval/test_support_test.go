@@ -141,21 +141,21 @@ func (f *fakeBindClient) Bind(_ context.Context, _ fs.RuntimeFileService, operat
 func campaignOrchestrateOperators() []*operatorv1.OperatorDocument {
 	return []*operatorv1.OperatorDocument{
 		{
-			ID:                "infer-op",
-			OperatorSessionID: "infer-session",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "infer-op",
+			OperatorSessionId: "infer-session",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 				InferenceEnabled:        true,
 				InferenceOllamaEndpoint: "http://provider.example:11434",
 			},
 		},
 		{
-			ID:                "data-op",
-			OperatorSessionID: "data-session",
+			Id:                "data-op",
+			OperatorSessionId: "data-session",
 			CurrentHostname:   constants.DataOperatorHostname,
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false},
 		},
 	}

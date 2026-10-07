@@ -109,23 +109,23 @@ func testQwenVariant() *evalv1.ModelVariant {
 func testRunOperators() []*operatorv1.OperatorDocument {
 	return []*operatorv1.OperatorDocument{
 		{
-			ID:                "infer-op",
-			OperatorSessionID: testInferenceSession,
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "infer-op",
+			OperatorSessionId: testInferenceSession,
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 				InferenceEnabled:        true,
 				InferenceOllamaEndpoint: "http://provider.example:11434",
 			},
 		},
 		{
-			ID:                "data-op",
-			OperatorSessionID: testDataSession,
+			Id:                "data-op",
+			OperatorSessionId: testDataSession,
 			CurrentHostname:   constants.DataOperatorHostname,
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false},
-			LatestHeartbeat:   testDataOperatorHeartbeat(testDataOperatorWorkingDirectory),
+			LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{Environment: &operatorv1.EnvironmentDetails{Pwd: testDataOperatorWorkingDirectory}},
 		},
 	}
 }

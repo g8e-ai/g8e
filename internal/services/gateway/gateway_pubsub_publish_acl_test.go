@@ -334,13 +334,13 @@ func TestHandlePublish_AppCommandPublishRejectedAtACL(t *testing.T) {
 
 func TestHandlePublish_OperatorPublishToCmdRejected(t *testing.T) {
 	op := &operatorv1.OperatorDocument{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
+		Id:                "op-001",
+		OperatorSessionId: "sess-001",
 	}
 	broker := newTestBroker(t)
 	handler := newOperatorSessionHandler(broker, "op-001")
 
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
+	cmdChannel := pubsub.CmdChannel(op.Id, op.OperatorSessionId)
 
 	// Register a handler to verify nothing is fanned out.
 	var called bool
@@ -438,7 +438,7 @@ func TestSetCommandRelayDeps(t *testing.T) {
 	assert.Nil(t, broker.doctrine, "doctrine must be nil before SetCommandRelayDeps")
 
 	provider := &stubStateRootProvider{root: "root-1"}
-	validator := &stubOperatorSessionValidator{op: &operatorv1.OperatorDocument{ID: "op-1"}}
+	validator := &stubOperatorSessionValidator{op: &operatorv1.OperatorDocument{Id: "op-1"}}
 	doctrine := governance.NewL1Doctrine()
 	broker.SetCommandRelayDeps(provider, validator, "doctrine", doctrine)
 

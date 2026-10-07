@@ -36,10 +36,10 @@ func markFirstAssignmentRunning(t *testing.T, env *runEnv) {
 
 func TestResolveCampaignOllamaEndpoint_UsesExactOperatorRuntimeConfig(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{{
-		ID:                "inference-1",
-		OperatorSessionID: "inference-session",
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
+		Id:                "inference-1",
+		OperatorSessionId: "inference-session",
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
 		RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 			InferenceEnabled:        true,
 			InferenceOllamaEndpoint: "http://provider.example:11434",

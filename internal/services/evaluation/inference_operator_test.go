@@ -16,13 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestSelectInferenceOperator_RequiresInferenceCapableSession(t *testing.T) {
 	t.Parallel()
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "inf-1", OperatorSessionID: "sess-inf-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
-		{ID: "data-1", OperatorSessionID: "sess-data-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false}},
+		{Id: "inf-1", OperatorSessionId: "sess-inf-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
+		{Id: "data-1", OperatorSessionId: "sess-data-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false}},
 	}
 	selected, err := SelectInferenceOperator(operators, "sess-inf-1")
 	require.NoError(t, err)
@@ -36,10 +37,10 @@ func TestGovernedInferenceOllamaEndpoint_UsesExactOperatorRuntimeConfig(t *testi
 	t.Parallel()
 	operators := []*operatorv1.OperatorDocument{
 		{
-			ID:                "inf-1",
-			OperatorSessionID: "sess-inf-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "inf-1",
+			OperatorSessionId: "sess-inf-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 				InferenceEnabled:        true,
 				InferenceOllamaEndpoint: "http://192.168.1.2:11434",
@@ -55,10 +56,10 @@ func TestGovernedInferenceOllamaEndpoint_RejectsMissingOperatorEndpoint(t *testi
 	t.Parallel()
 	operators := []*operatorv1.OperatorDocument{
 		{
-			ID:                "inf-1",
-			OperatorSessionID: "sess-inf-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "inf-1",
+			OperatorSessionId: "sess-inf-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 		},
 	}
@@ -69,8 +70,8 @@ func TestGovernedInferenceOllamaEndpoint_RejectsMissingOperatorEndpoint(t *testi
 func TestSelectInferenceOperator_FailsClosedOnAmbiguity(t *testing.T) {
 	t.Parallel()
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "inf-1", OperatorSessionID: "sess-inf-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
-		{ID: "inf-2", OperatorSessionID: "sess-inf-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
+		{Id: "inf-1", OperatorSessionId: "sess-inf-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
+		{Id: "inf-2", OperatorSessionId: "sess-inf-2", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
 	}
 	_, err := SelectInferenceOperator(operators, "")
 	require.ErrorIs(t, err, constants.ErrInferenceOperatorAmbiguous)
@@ -80,18 +81,18 @@ func TestSelectInferenceOperatorForHardware(t *testing.T) {
 	t.Parallel()
 	operators := []*operatorv1.OperatorDocument{
 		{
-			ID:                "inf-host1",
-			OperatorSessionID: "sess-inf-host1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "inf-host1",
+			OperatorSessionId: "sess-inf-host1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			SystemFingerprint: "fp-host1",
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 		},
 		{
-			ID:                "inf-host2",
-			OperatorSessionID: "sess-inf-host2",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "inf-host2",
+			OperatorSessionId: "sess-inf-host2",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			SystemFingerprint: "fp-host2",
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 		},
@@ -112,26 +113,26 @@ func TestSelectInferenceOperatorForHardware(t *testing.T) {
 func TestSelectInferenceOperator_BlendedDeploymentTypes(t *testing.T) {
 	for _, kind := range []constants.OperatorType{constants.OperatorTypeRemote, constants.OperatorTypeEmbedded} {
 		t.Run(string(kind), func(t *testing.T) {
-			op := operatorv1.OperatorDocument{
-				ID: "blend", OperatorSessionID: "blend-session", Status: constants.OperatorStatusActive,
-				OperatorType: kind, SystemFingerprint: "blend-hardware",
+			op := &operatorv1.OperatorDocument{
+				Id: "blend", OperatorSessionId: "blend-session", Status: string(constants.OperatorStatusActive),
+				OperatorType: string(kind), SystemFingerprint: "blend-hardware",
 				RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
-					Roles:                   constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference, constants.OperatorRoleProvenance, constants.OperatorRoleObserver},
+					Roles:                   models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference, constants.OperatorRoleProvenance, constants.OperatorRoleObserver}),
 					InferenceOllamaEndpoint: "http://127.0.0.1:11434",
 				},
 			}
 			operators := []*operatorv1.OperatorDocument{op}
-			selected, err := SelectInferenceOperatorForHardware(operators, op.OperatorSessionID, op.SystemFingerprint)
+			selected, err := SelectInferenceOperatorForHardware(operators, op.OperatorSessionId, op.SystemFingerprint)
 			require.NoError(t, err)
-			assert.Equal(t, op.OperatorSessionID, selected.OperatorSessionID)
-			endpoint, err := GovernedInferenceOllamaEndpoint(operators, op.OperatorSessionID)
+			assert.Equal(t, op.OperatorSessionId, selected.OperatorSessionID)
+			endpoint, err := GovernedInferenceOllamaEndpoint(operators, op.OperatorSessionId)
 			require.NoError(t, err)
 			assert.Equal(t, op.RuntimeConfig.InferenceOllamaEndpoint, endpoint)
-			_, err = SelectInferenceOperatorForHardware(operators, op.OperatorSessionID, "other-hardware")
+			_, err = SelectInferenceOperatorForHardware(operators, op.OperatorSessionId, "other-hardware")
 			require.ErrorIs(t, err, constants.ErrInferenceOperatorNotCapable)
-			_, err = SelectInferenceOperator(append(operators, operatorv1.OperatorDocument{
-				ID: "other", OperatorSessionID: "other-session", Status: constants.OperatorStatusActive,
-				OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
+			_, err = SelectInferenceOperator(append(operators, &operatorv1.OperatorDocument{
+				Id: "other", OperatorSessionId: "other-session", Status: string(constants.OperatorStatusActive),
+				OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 			}), "")
 			require.ErrorIs(t, err, constants.ErrInferenceOperatorAmbiguous)
 		})
@@ -139,13 +140,13 @@ func TestSelectInferenceOperator_BlendedDeploymentTypes(t *testing.T) {
 }
 
 func TestActiveInferenceOperators_RejectsUnavailableOrIncapableSessions(t *testing.T) {
-	capable := &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleInference}}
+	capable := &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleInference})}
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "offline", OperatorSessionID: "offline", Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: capable},
-		{ID: "unknown-type", OperatorSessionID: "unknown", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorType("unknown"), RuntimeConfig: capable},
-		{ID: "missing-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: capable},
-		{ID: "missing-config", OperatorSessionID: "missing-config", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}},
-		{ID: "data", OperatorSessionID: "data", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData}}},
+		{Id: "offline", OperatorSessionId: "offline", Status: string(constants.OperatorStatusOffline), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: capable},
+		{Id: "unknown-type", OperatorSessionId: "unknown", Status: string(constants.OperatorStatusActive), OperatorType: "unknown", RuntimeConfig: capable},
+		{Id: "missing-session", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: capable},
+		{Id: "missing-config", OperatorSessionId: "missing-config", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded), OperatorRoles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleInference})},
+		{Id: "data", OperatorSessionId: "data", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleData})}},
 	}
 	assert.Empty(t, ActiveInferenceOperators(operators))
 }

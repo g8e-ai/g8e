@@ -20,9 +20,9 @@ import (
 )
 
 func TestCheckStoppable(t *testing.T) {
-	assert.NoError(t, CheckStoppable(operatorv1.OperatorDocument{OperatorType: constants.OperatorTypeRemote}))
-	assert.ErrorIs(t, CheckStoppable(operatorv1.OperatorDocument{OperatorType: constants.OperatorTypeEmbedded}), constants.ErrOperatorStopEmbedded)
-	assert.ErrorIs(t, CheckStoppable(operatorv1.OperatorDocument{}), constants.ErrOperatorStopNotRemote)
+	assert.NoError(t, CheckStoppable(&operatorv1.OperatorDocument{OperatorType: string(constants.OperatorTypeRemote)}))
+	assert.ErrorIs(t, CheckStoppable(&operatorv1.OperatorDocument{OperatorType: string(constants.OperatorTypeEmbedded)}), constants.ErrOperatorStopEmbedded)
+	assert.ErrorIs(t, CheckStoppable(&operatorv1.OperatorDocument{}), constants.ErrOperatorStopNotRemote)
 }
 
 func TestNewStopRequest_TrimsReason(t *testing.T) {

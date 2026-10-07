@@ -92,8 +92,8 @@ func TestParseOperatorHeartbeatView_RejectsLegacyPythonShape(t *testing.T) {
 
 func TestFindOperatorByIDOrSession(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "op-1", OperatorSessionID: "session-1"},
-		{ID: "op-2", OperatorSessionID: "session-2"},
+		{Id: "op-1", OperatorSessionId: "session-1"},
+		{Id: "op-2", OperatorSessionId: "session-2"},
 	}
 
 	assert.NotNil(t, findOperatorByIDOrSession(operators, "op-2"))
@@ -108,7 +108,7 @@ func TestOperatorShowCmdWithConfig_NotFound(t *testing.T) {
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{
-			{ID: "op-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive},
+			{Id: "op-1", OperatorSessionId: "session-1", Status: string(constants.OperatorStatusActive)},
 		},
 	}
 	respJSON, _ := json.Marshal(slotResp)

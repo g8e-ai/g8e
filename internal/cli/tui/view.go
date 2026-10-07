@@ -366,6 +366,9 @@ func operatorHostname(op *operatorv1.OperatorDocument) string {
 	if op.CurrentHostname != "" {
 		return op.CurrentHostname
 	}
+	if op.GetName() != "" {
+		return op.GetName()
+	}
 	return "-"
 }
 

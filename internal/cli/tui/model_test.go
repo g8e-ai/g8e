@@ -374,12 +374,12 @@ func TestApproveFlow(t *testing.T) {
 func TestApplyOperatorsMsg(t *testing.T) {
 	m := NewModel(Options{})
 	m = m.applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
-		{ID: "op-1", Status: constants.OperatorStatusActive},
-		{ID: "op-2", Status: constants.OperatorStatusOffline},
-		{ID: "slot", IsSlot: true, Status: constants.OperatorStatusAvailable},
+		{Id: "op-1", Status: string(constants.OperatorStatusActive)},
+		{Id: "op-2", Status: string(constants.OperatorStatusOffline)},
+		{Id: "slot", IsSlot: true, Status: string(constants.OperatorStatusAvailable)},
 	}})
 	require.Len(t, m.operators, 1, "only connected Operators are listed, as in 'g8e gw status'")
-	assert.Equal(t, "op-1", m.operators[0].ID)
+	assert.Equal(t, "op-1", m.operators[0].Id)
 	assert.Equal(t, 3, m.operatorsTotal)
 	assert.True(t, m.operatorsLoaded)
 

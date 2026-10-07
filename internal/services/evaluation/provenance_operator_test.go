@@ -21,10 +21,10 @@ import (
 func TestSelectProvenanceOperator(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
 		{
-			ID:                "prov-1",
-			OperatorSessionID: "sess-prov-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "prov-1",
+			OperatorSessionId: "sess-prov-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		},
 	}
@@ -41,17 +41,17 @@ func TestSelectProvenanceOperator_NotFound(t *testing.T) {
 func TestSelectProvenanceOperator_Ambiguous(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
 		{
-			ID:                "prov-1",
-			OperatorSessionID: "sess-prov-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "prov-1",
+			OperatorSessionId: "sess-prov-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		},
 		{
-			ID:                "prov-2",
-			OperatorSessionID: "sess-prov-2",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "prov-2",
+			OperatorSessionId: "sess-prov-2",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		},
 	}

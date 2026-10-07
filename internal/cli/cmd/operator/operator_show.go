@@ -103,7 +103,10 @@ func operatorHostnameValue(op *operatorv1.OperatorDocument) string {
 	if view != nil && view.SystemIdentity.Hostname != "" {
 		return view.SystemIdentity.Hostname
 	}
-	return op.CurrentHostname
+	if op.CurrentHostname != "" {
+		return op.CurrentHostname
+	}
+	return op.GetName()
 }
 
 func operatorHostnameDisplay(op *operatorv1.OperatorDocument) string {
@@ -169,6 +172,7 @@ func operatorShowPayload(op *operatorv1.OperatorDocument) operatorShowOutput {
 		Component:         constants.ComponentName(op.Component),
 		CreatedAt:         createdAt,
 		UpdatedAt:         updatedAt,
+		Name:              op.GetName(),
 		SystemFingerprint: op.SystemFingerprint,
 		LastHeartbeatAt:   lastHeartbeatAt,
 		RuntimeConfig:     op.RuntimeConfig,
@@ -225,6 +229,9 @@ func printOperatorShow(cmd *cobra.Command, op *operatorv1.OperatorDocument) {
 	cmd.Printf("Type:      %s\n", op.OperatorType)
 	cmd.Printf("Roles:     %s\n", operatorcapability.GetOperatorRoles(op))
 	cmd.Printf("Status:    %s\n", op.Status)
+	if op.GetName() != "" {
+		cmd.Printf("Name:      %s\n", op.GetName())
+	}
 	if op.SystemFingerprint != "" {
 		cmd.Printf("Fingerprint: %s\n", op.SystemFingerprint)
 	}

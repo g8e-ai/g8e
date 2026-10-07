@@ -8,81 +8,80 @@
 package operatorcapability
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func TestIsDataOperator_ExcludesOtherRoles(t *testing.T) {
 	t.Parallel()
 
-	data := operatorv1.OperatorDocument{
-		ID:                "data-1",
-		OperatorSessionID: "sess-data-1",
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
+	data := &operatorv1.OperatorDocument{
+		Id:                "data-1",
+		OperatorSessionId: "sess-data-1",
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
 	}
 	assert.True(t, IsDataOperator(data))
 
 	cases := []*operatorv1.OperatorDocument{
 		{
-			ID:                "infer-1",
-			OperatorSessionID: "sess-infer-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "infer-1",
+			OperatorSessionId: "sess-infer-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 		},
 		{
-			ID:                "observer-1",
-			OperatorSessionID: "sess-observer-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "observer-1",
+			OperatorSessionId: "sess-observer-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		},
 		{
-			ID:                "prov-1",
-			OperatorSessionID: "sess-prov-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "prov-1",
+			OperatorSessionId: "sess-prov-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		},
 		{
-			ID:                "role-1",
-			OperatorSessionID: "sess-role-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
-			OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleObserver},
+			Id:                "role-1",
+			OperatorSessionId: "sess-role-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
+			OperatorRoles:     models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleObserver}),
 		},
 		{
-			ID:                "offline-1",
-			OperatorSessionID: "sess-offline-1",
-			Status:            constants.OperatorStatusOffline,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "offline-1",
+			OperatorSessionId: "sess-offline-1",
+			Status:            string(constants.OperatorStatusOffline),
+			OperatorType:      string(constants.OperatorTypeRemote),
 		},
 		{
-			ID:                "embedded-1",
-			OperatorSessionID: "sess-embedded-1",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeEmbedded,
+			Id:                "embedded-1",
+			OperatorSessionId: "sess-embedded-1",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeEmbedded),
 		},
 	}
 	for _, op := range cases {
-		assert.False(t, IsDataOperator(op), op.ID)
+		assert.False(t, IsDataOperator(op), op.Id)
 	}
 }
 
 func stackDataOperatorDoc(id, sessionID, hostname string) *operatorv1.OperatorDocument {
-	return operatorv1.OperatorDocument{
-		ID:                id,
-		OperatorSessionID: sessionID,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
+	return &operatorv1.OperatorDocument{
+		Id:                id,
+		OperatorSessionId: sessionID,
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
 		CurrentHostname:   hostname,
 	}
 }
@@ -139,21 +138,32 @@ func TestSelectDataOperator_AmbiguousWhenTwoStackDataOperatorsAreActive(t *testi
 func TestIsStackDataOperator_RequiresDataOperatorHostname(t *testing.T) {
 	t.Parallel()
 
-	stack := operatorv1.OperatorDocument{
-		ID:                "data-1",
-		OperatorSessionID: "sess-data-1",
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
+	stack := &operatorv1.OperatorDocument{
+		Id:                "data-1",
+		OperatorSessionId: "sess-data-1",
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
 		CurrentHostname:   constants.DataOperatorHostname,
 	}
 	assert.True(t, IsStackDataOperator(stack))
 
-	other := stack
-	other.CurrentHostname = "loadtest-host"
+	other := &operatorv1.OperatorDocument{
+		Id:                stack.Id,
+		OperatorSessionId: stack.OperatorSessionId,
+		Status:            stack.Status,
+		OperatorType:      stack.OperatorType,
+		CurrentHostname:   "loadtest-host",
+	}
 	assert.False(t, IsStackDataOperator(other))
 
-	inference := stack
-	inference.RuntimeConfig = &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}
+	inference := &operatorv1.OperatorDocument{
+		Id:                stack.Id,
+		OperatorSessionId: stack.OperatorSessionId,
+		Status:            stack.Status,
+		OperatorType:      stack.OperatorType,
+		CurrentHostname:   stack.CurrentHostname,
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
+	}
 	assert.False(t, IsStackDataOperator(inference))
 }
 
@@ -163,10 +173,8 @@ func TestExtractWorkingDirectory_FromEnvironmentDetails(t *testing.T) {
 	hr := &operatorv1.HeartbeatResult{
 		Environment: &operatorv1.EnvironmentDetails{Pwd: "/home/deploy"},
 	}
-	hb, err := protojson.Marshal(hr)
-	require.NoError(t, err)
 
-	pwd := extractWorkingDirectory(hb)
+	pwd := extractWorkingDirectory(hr)
 	assert.Equal(t, "/home/deploy", pwd)
 }
 
@@ -176,10 +184,8 @@ func TestExtractWorkingDirectory_FallbackToSystemIdentity(t *testing.T) {
 	hr := &operatorv1.HeartbeatResult{
 		SystemIdentity: &operatorv1.SystemIdentity{Pwd: "/root"},
 	}
-	hb, err := protojson.Marshal(hr)
-	require.NoError(t, err)
 
-	pwd := extractWorkingDirectory(hb)
+	pwd := extractWorkingDirectory(hr)
 	assert.Equal(t, "/root", pwd)
 }
 
@@ -190,10 +196,8 @@ func TestExtractWorkingDirectory_EnvironmentTakesPrecedence(t *testing.T) {
 		Environment:    &operatorv1.EnvironmentDetails{Pwd: "/home/deploy"},
 		SystemIdentity: &operatorv1.SystemIdentity{Pwd: "/root"},
 	}
-	hb, err := protojson.Marshal(hr)
-	require.NoError(t, err)
 
-	pwd := extractWorkingDirectory(hb)
+	pwd := extractWorkingDirectory(hr)
 	assert.Equal(t, "/home/deploy", pwd)
 }
 
@@ -201,15 +205,12 @@ func TestExtractWorkingDirectory_EmptyHeartbeat(t *testing.T) {
 	t.Parallel()
 	pwd := extractWorkingDirectory(nil)
 	assert.Empty(t, pwd)
-
-	pwd = extractWorkingDirectory([]byte{})
-	assert.Empty(t, pwd)
 }
 
 func TestExtractWorkingDirectory_InvalidJSON(t *testing.T) {
 	t.Parallel()
-	pwd := extractWorkingDirectory([]byte("not json"))
-	assert.Empty(t, pwd)
+	// This test is no longer applicable since extractWorkingDirectory now takes a proto message
+	// rather than JSON bytes, so there's no JSON parsing to fail on
 }
 
 func TestExtractWorkingDirectory_NoPwdInHeartbeat(t *testing.T) {
@@ -218,30 +219,24 @@ func TestExtractWorkingDirectory_NoPwdInHeartbeat(t *testing.T) {
 	hr := &operatorv1.HeartbeatResult{
 		SystemIdentity: &operatorv1.SystemIdentity{Hostname: "test"},
 	}
-	hb, err := protojson.Marshal(hr)
-	require.NoError(t, err)
 
-	pwd := extractWorkingDirectory(hb)
+	pwd := extractWorkingDirectory(hr)
 	assert.Empty(t, pwd)
 }
 
 func TestActiveDataOperators_IncludesWorkingDirectory(t *testing.T) {
 	t.Parallel()
 
-	hr := &operatorv1.HeartbeatResult{
-		Environment: &operatorv1.EnvironmentDetails{Pwd: "/home/deploy"},
-	}
-	hb, err := protojson.Marshal(hr)
-	require.NoError(t, err)
-
 	operators := []*operatorv1.OperatorDocument{
 		{
-			ID:                "stack",
-			OperatorSessionID: "sess-stack",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "stack",
+			OperatorSessionId: "sess-stack",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			CurrentHostname:   constants.DataOperatorHostname,
-			LatestHeartbeat:   json.RawMessage(hb),
+			LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{
+				Environment: &operatorv1.EnvironmentDetails{Pwd: "/home/deploy"},
+			},
 		},
 	}
 
@@ -256,12 +251,12 @@ func TestActiveDataOperators_EmptyHeartbeatLeavesWorkingDirectoryEmpty(t *testin
 
 	operators := []*operatorv1.OperatorDocument{
 		{
-			ID:                "stack",
-			OperatorSessionID: "sess-stack",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
+			Id:                "stack",
+			OperatorSessionId: "sess-stack",
+			Status:            string(constants.OperatorStatusActive),
+			OperatorType:      string(constants.OperatorTypeRemote),
 			CurrentHostname:   constants.DataOperatorHostname,
-			LatestHeartbeat:   nil,
+			LatestHeartbeatSnapshot: nil,
 		},
 	}
 
@@ -271,18 +266,18 @@ func TestActiveDataOperators_EmptyHeartbeatLeavesWorkingDirectoryEmpty(t *testin
 }
 
 func tierOp(id string, kind constants.OperatorType, hostname string, roles ...constants.OperatorRole) *operatorv1.OperatorDocument {
-	return operatorv1.OperatorDocument{
-		ID:                id,
-		OperatorSessionID: "sess-" + id,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      kind,
+	return &operatorv1.OperatorDocument{
+		Id:                id,
+		OperatorSessionId: "sess-" + id,
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(kind),
 		CurrentHostname:   hostname,
-		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{Roles: roles},
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(roles)},
 	}
 }
 
 func TestEmbeddedOnlyImpliesDataAndWitnessCommands(t *testing.T) {
-	cfg := &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleEmbedded}}
+	cfg := &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleEmbedded})}
 	require.Equal(t, constants.OperatorRoles{constants.OperatorRoleEmbedded, constants.OperatorRoleData}, ResolveOperatorRoles(cfg))
 	require.NoError(t, ValidateWitnessCommand(cfg, "pwd"))
 	op := tierOp("embedded-operator", constants.OperatorTypeEmbedded, "", constants.OperatorRoleEmbedded)

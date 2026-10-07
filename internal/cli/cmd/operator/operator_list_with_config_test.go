@@ -143,8 +143,8 @@ func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{
-			{ID: "op-001", OperatorSessionID: "session-001", OperatorType: "embedded", Status: "active"},
-			{ID: "op-002", OperatorSessionID: "session-002", OperatorType: "remote", Status: "standby"},
+			{Id: "op-001", OperatorSessionId: "session-001", OperatorType: "embedded", Status: "active"},
+			{Id: "op-002", OperatorSessionId: "session-002", OperatorType: "remote", Status: "standby"},
 		},
 	}
 	respJSON, _ := json.Marshal(slotResp)
@@ -178,17 +178,17 @@ func TestOperatorListCmdWithConfig_JSONOutputIncludesRuntimeFlags(t *testing.T) 
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{
 			{
-				ID:                "data-op",
-				OperatorSessionID: "data-session",
-				OperatorType:      constants.OperatorTypeRemote,
-				Status:            constants.OperatorStatusActive,
+				Id:                "data-op",
+				OperatorSessionId: "data-session",
+				OperatorType:      string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
 				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false},
 			},
 			{
-				ID:                "infer-op",
-				OperatorSessionID: "infer-session",
-				OperatorType:      constants.OperatorTypeRemote,
-				Status:            constants.OperatorStatusActive,
+				Id:                "infer-op",
+				OperatorSessionId: "infer-session",
+				OperatorType:      string(constants.OperatorTypeRemote),
+				Status:            string(constants.OperatorStatusActive),
 				RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 					InferenceEnabled:                true,
 					ProviderBoundaryObserverEnabled: false,

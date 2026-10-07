@@ -20,7 +20,7 @@ import (
 
 func TestSelectProvenanceOperator(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "prov-1", OperatorSessionID: "sess-prov-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
+		{Id: "prov-1", OperatorSessionId: "sess-prov-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
 	}
 	selected, err := SelectProvenanceOperator(operators, "")
 	assert.NoError(t, err)
@@ -31,12 +31,12 @@ func TestActiveProvenanceOperatorsFiltersAndProjectsOperators(t *testing.T) {
 	t.Parallel()
 
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "inactive", OperatorSessionID: "sess-inactive", Status: constants.OperatorStatusAvailable, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
-		{ID: "local", OperatorSessionID: "sess-local", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
-		{ID: "disabled", OperatorSessionID: "sess-disabled", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: false}},
-		{ID: "missing-config", OperatorSessionID: "sess-missing-config", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
-		{ID: "missing-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
-		{ID: "provenance-1", OperatorSessionID: "sess-provenance-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true, ProvenanceOperatorModelStorageRoot: "/models", Platform: "linux"}},
+		{Id: "inactive", OperatorSessionId: "sess-inactive", Status: string(constants.OperatorStatusAvailable), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
+		{Id: "local", OperatorSessionId: "sess-local", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
+		{Id: "disabled", OperatorSessionId: "sess-disabled", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: false}},
+		{Id: "missing-config", OperatorSessionId: "sess-missing-config", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
+		{Id: "missing-session", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
+		{Id: "provenance-1", OperatorSessionId: "sess-provenance-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true, ProvenanceOperatorModelStorageRoot: "/models", Platform: "linux"}},
 	}
 
 	matches := ActiveProvenanceOperators(operators)
@@ -48,7 +48,7 @@ func TestSelectProvenanceOperatorBySessionRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 
 	operators := []*operatorv1.OperatorDocument{{
-		ID: "prov-1", OperatorSessionID: "sess-prov-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
+		Id: "prov-1", OperatorSessionId: "sess-prov-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote),
 		RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 	}}
 	selected, err := SelectProvenanceOperator(operators, "sess-prov-1")
@@ -66,8 +66,8 @@ func TestSelectProvenanceOperator_NotFound(t *testing.T) {
 
 func TestSelectProvenanceOperator_Ambiguous(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "prov-1", OperatorSessionID: "sess-prov-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
-		{ID: "prov-2", OperatorSessionID: "sess-prov-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
+		{Id: "prov-1", OperatorSessionId: "sess-prov-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
+		{Id: "prov-2", OperatorSessionId: "sess-prov-2", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}},
 	}
 	_, err := SelectProvenanceOperator(operators, "")
 	assert.ErrorIs(t, err, constants.ErrProvenanceOperatorAmbiguous)

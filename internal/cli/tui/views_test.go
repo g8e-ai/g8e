@@ -9,7 +9,6 @@ package tui
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -100,8 +99,8 @@ func TestApprovalsViewKeys(t *testing.T) {
 
 func TestOperatorsViewKeys(t *testing.T) {
 	m := NewModel(Options{Identity: Identity{OperatorID: "op-2"}}).applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
-		{ID: "op-1", CurrentHostname: "alpha", Status: constants.OperatorStatusActive},
-		{ID: "op-2", CurrentHostname: "bravo", Status: constants.OperatorStatusActive},
+		{Id: "op-1", CurrentHostname: "alpha", Status: string(constants.OperatorStatusActive)},
+		{Id: "op-2", CurrentHostname: "bravo", Status: string(constants.OperatorStatusActive)},
 	}})
 	m, _ = press(t, m, runeKey('3'))
 	m, _ = press(t, m, runeKey('j'))
@@ -115,18 +114,12 @@ func TestOperatorsViewKeys(t *testing.T) {
 func TestOperatorDetailsView(t *testing.T) {
 	m := NewModel(Options{}).applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
 		{
-			ID:                "op-detail",
-			OperatorSessionID: "session-detail",
-			OperatorType:      constants.OperatorTypeRemote,
-			Status:            constants.OperatorStatusActive,
+			Id:                "op-detail",
+			OperatorSessionId: "session-detail",
+			OperatorType:      string(constants.OperatorTypeRemote),
+			Status:            string(constants.OperatorStatusActive),
 			CurrentHostname:   "cached-host",
-			LatestHeartbeat: json.RawMessage(`{
-				"timestamp":"2026-09-18T12:00:00Z",
-				"status":"automatic",
-				"system_identity":{"hostname":"heartbeat-host","os":"linux","architecture":"amd64","cpu_count":8},
-				"performance_metrics":{"cpu_percent":12.5},
-				"version_info":{"operator_version":"v2.3.2"}
-			}`),
+			LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{},
 		},
 	}})
 	m, _ = press(t, m, runeKey('3'))
@@ -211,7 +204,7 @@ func TestGatewayStatusView(t *testing.T) {
 			StateMerkleRoot: "root-123456789",
 		}}).
 		applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
-			{ID: "op-1", CurrentHostname: "worker-1", Status: constants.OperatorStatusActive},
+			{Id: "op-1", CurrentHostname: "worker-1", Status: string(constants.OperatorStatusActive)},
 		}}).
 		applyEnrollmentsMsg(enrollmentsFixture())
 	m, cmd := press(t, m, runeKey('7'))
@@ -435,8 +428,8 @@ func TestOperatorStop(t *testing.T) {
 		t.Helper()
 		session := &testSession{}
 		m := NewModel(Options{Session: session}).applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
-			{ID: "op-embedded", CurrentHostname: "gateway", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorSessionID: "sess-embedded"},
-			{ID: "op-remote", CurrentHostname: "web-01", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "sess-remote"},
+			{Id: "op-embedded", CurrentHostname: "gateway", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded), OperatorSessionId: "sess-embedded"},
+			{Id: "op-remote", CurrentHostname: "web-01", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), OperatorSessionId: "sess-remote"},
 		}})
 		m, _ = press(t, m, runeKey('3'))
 		return m, session
@@ -527,7 +520,7 @@ func TestOperatorBindAndUnbindRotateSession(t *testing.T) {
 			return rebuiltSession, nil
 		},
 	}).applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
-		{ID: "op-remote", OperatorSessionID: "sess-remote", CurrentHostname: "web-01", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
+		{Id: "op-remote", OperatorSessionId: "sess-remote", CurrentHostname: "web-01", OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive)},
 	}})
 	m, _ = press(t, m, runeKey('3'))
 	m, _ = press(t, m, runeKey('b'))
@@ -569,7 +562,7 @@ func TestOperatorBindAndUnbindRotateSession(t *testing.T) {
 func TestViews_FitTerminalExactly(t *testing.T) {
 	base := NewModel(Options{Session: &testSession{}, Version: "v2.3.1", Identity: Identity{UserID: strings.Repeat("u", 36), CLISessionID: "session", OperatorID: "op-1"}}).
 		applyPendingApprovalsMsg(pendingTxs(strings.Repeat("a", 64), "tx-2")).
-		applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{{ID: "op-1", CurrentHostname: strings.Repeat("h", 80), Status: constants.OperatorStatusActive, LocalDir: strings.Repeat("/d", 60)}}}).
+		applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{{Id: "op-1", CurrentHostname: strings.Repeat("h", 80), Status: string(constants.OperatorStatusActive), LocalDir: strings.Repeat("/d", 60)}}}).
 		applyEnrollmentsMsg(enrollmentsFixture())
 
 	confirming := base

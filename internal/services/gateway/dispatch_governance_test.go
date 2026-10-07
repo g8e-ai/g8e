@@ -199,7 +199,7 @@ func TestBuildGovernanceEnvelope_RatifyAllowsReadOnly(t *testing.T) {
 // rejected before deliberation because the path cannot mint L3 proofs.
 func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 
 	cases := []struct {
 		name            string
@@ -253,8 +253,8 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 
 			// Register an operator handler that publishes a result so the
 			// dispatch completes (or fails before publish depending on posture).
-			cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-			resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
+			cmdChannel := pubsub.CmdChannel(op.Id, op.OperatorSessionId)
+			resultsChannel := pubsub.ResultsChannel(op.Id, op.OperatorSessionId)
 			unreg := broker.RegisterHandler(cmdChannel, func(_ string, data []byte) {
 				cmdEnv := &commonv1.GovernanceEnvelope{}
 				if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
@@ -269,7 +269,7 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 			defer unreg()
 
 			_, err := svc.Dispatch(context.Background(), DispatchRequest{
-				TargetOperatorSessionID: op.OperatorSessionID,
+				TargetOperatorSessionID: op.OperatorSessionId,
 				EventType:               string(tc.event),
 				Payload:                 tc.payload(t),
 				RequestorUserID:         "user-001",
@@ -292,7 +292,7 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 // fails closed rather than publishing an unsigned envelope.
 func TestDispatchService_L2DeliberationFailureFailsClosed(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	broker := NewGatewayWebSocketHandler(logger)
 	svc := NewDispatchService(
 		logger, broker,
@@ -306,13 +306,13 @@ func TestDispatchService_L2DeliberationFailureFailsClosed(t *testing.T) {
 	)
 
 	published := false
-	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) {
 		published = true
 	})
 	defer unreg()
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
-		TargetOperatorSessionID: op.OperatorSessionID,
+		TargetOperatorSessionID: op.OperatorSessionId,
 		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayload(t),
 		RequestorUserID:         "user-001",

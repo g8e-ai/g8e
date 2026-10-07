@@ -72,10 +72,10 @@ func (s *stubInferenceOperatorLister) ListUserOperators(_ string) ([]*operatorv1
 }
 
 func inferenceCapableOperator(_ string) *operatorv1.OperatorDocument {
-	return operatorv1.OperatorDocument{
-		ID:                "op-inf-001",
-		OperatorSessionID: "sess-inf-1",
-		Status:            constants.OperatorStatusActive,
+	return &operatorv1.OperatorDocument{
+		Id:                "op-inf-001",
+		OperatorSessionId: "sess-inf-1",
+		Status:            string(constants.OperatorStatusActive),
 		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 	}
 }

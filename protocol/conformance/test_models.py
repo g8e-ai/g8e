@@ -97,7 +97,6 @@ class TestModelSchemaIntegrity:
         "local_os_user.json",
         "login_audit.json",
         "memory.json",
-        "operator_document.json",
         "operator_session.json",
         "operator_usage.json",
         "organization.json",

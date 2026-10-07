@@ -8,7 +8,6 @@
 package models
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
@@ -17,84 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// ---------------------------------------------------------------------------
-// OperatorDocument JSON marshaling
-// ---------------------------------------------------------------------------
-
-func TestOperatorDocumentMarshalJSON_OmitsUnsetOperatorType(t *testing.T) {
-	t.Parallel()
-
-	doc := OperatorDocument{
-		ID:        "op-1",
-		UserID:    "user-1",
-		Component: constants.ComponentNameG8EO,
-		Status:    constants.OperatorStatusActive,
-	}
-
-	data, err := json.Marshal(&doc)
-	require.NoError(t, err)
-
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(data, &decoded))
-
-	// All writers must set operator_type explicitly; an unset type is
-	// omitted rather than silently defaulted.
-	_, ok := decoded["operator_type"]
-	assert.False(t, ok)
-}
-
-func TestOperatorDocumentMarshalJSON_PreservesExplicitOperatorType(t *testing.T) {
-	t.Parallel()
-
-	for _, opType := range []constants.OperatorType{constants.OperatorTypeEmbedded, constants.OperatorTypeRemote} {
-		doc := OperatorDocument{
-			ID:           "op-2",
-			UserID:       "user-2",
-			Component:    constants.ComponentNameG8EO,
-			Status:       constants.OperatorStatusActive,
-			OperatorType: opType,
-		}
-
-		data, err := json.Marshal(&doc)
-		require.NoError(t, err)
-
-		var decoded map[string]any
-		require.NoError(t, json.Unmarshal(data, &decoded))
-
-		assert.Equal(t, string(opType), decoded["operator_type"])
-	}
-}
-
-func TestOperatorDocumentMarshalJSON_RoundTrip(t *testing.T) {
-	t.Parallel()
-
-	doc := OperatorDocument{
-		ID:           "op-4",
-		UserID:       "user-4",
-		Component:    constants.ComponentNameG8EO,
-		Name:         "test-operator",
-		Status:       constants.OperatorStatusActive,
-		OperatorType: constants.OperatorTypeRemote,
-		IsSlot:       true,
-		Claimed:      false,
-	}
-
-	data, err := json.Marshal(&doc)
-	require.NoError(t, err)
-
-	var decoded OperatorDocument
-	require.NoError(t, json.Unmarshal(data, &decoded))
-
-	assert.Equal(t, doc.ID, decoded.ID)
-	assert.Equal(t, doc.UserID, decoded.UserID)
-	assert.Equal(t, doc.Component, decoded.Component)
-	assert.Equal(t, doc.Name, decoded.Name)
-	assert.Equal(t, doc.Status, decoded.Status)
-	assert.Equal(t, doc.OperatorType, decoded.OperatorType)
-	assert.Equal(t, doc.IsSlot, decoded.IsSlot)
-	assert.Equal(t, doc.Claimed, decoded.Claimed)
-}
 
 // ---------------------------------------------------------------------------
 // User.WebAuthnID

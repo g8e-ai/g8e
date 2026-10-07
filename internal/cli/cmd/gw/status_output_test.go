@@ -62,9 +62,9 @@ func TestGatewayStatusDistinguishesUnknownAndEmptyRegistry(t *testing.T) {
 func TestGatewayStatusOnlyShowsConnectedOperators(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
-		{OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}, CurrentHostname: "gpu-host", Status: constants.OperatorStatusActive},
-		{CurrentHostname: "stopped-host", Status: constants.OperatorStatusStopped},
-		{CurrentHostname: "unclaimed-host", Status: constants.OperatorStatusActive, IsSlot: true},
+		{OperatorRoles: []string{string(constants.OperatorRoleInference)}, CurrentHostname: "gpu-host", Status: string(constants.OperatorStatusActive)},
+		{CurrentHostname: "stopped-host", Status: string(constants.OperatorStatusStopped)},
+		{CurrentHostname: "unclaimed-host", Status: string(constants.OperatorStatusActive), IsSlot: true},
 	}})
 	require.NoError(t, err)
 	mock := &statusMockClient{responses: map[string][]byte{"/api/v1/health": []byte(`{"status":"ok"}`), constants.APIPaths.Operators: body}}
@@ -157,7 +157,7 @@ func TestStatusDoesNotDuplicateEnrolledEmbeddedOperator(t *testing.T) {
 	require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(constants.PidDirname, constants.OperatorPIDFilename), []byte(strconv.Itoa(os.Getpid())), constants.PermFilePrivate))
 	require.NoError(t, serve.WriteLaunchProfile(fileSvc, serve.GatewayConfig{OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}, Posture: "doctrine", LogLevel: constants.LogLevelInfo}))
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
-		{ID: string(constants.DocIDEmbeddedOperator), OperatorType: constants.OperatorTypeEmbedded, Status: constants.OperatorStatusActive, OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}},
+		{Id: string(constants.DocIDEmbeddedOperator), OperatorType: string(constants.OperatorTypeEmbedded), Status: string(constants.OperatorStatusActive), OperatorRoles: []string{string(constants.OperatorRoleInference)}},
 	}})
 	require.NoError(t, err)
 	mock := &statusMockClient{responses: map[string][]byte{constants.APIPaths.Operators: body}}
@@ -261,28 +261,28 @@ func TestGatewayStatusListsEveryOperatorWithTypeCapabilitiesAndStartValues(t *te
 	}))
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
 		{
-			ID: "op-prov", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive, CurrentHostname: "store-host",
+			Id: "op-prov", OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive), CurrentHostname: "store-host",
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
-				Roles: constants.OperatorRoles{constants.OperatorRoleProvenance}, ProvenanceOperatorEnabled: true,
-				ProvenanceOperatorModelStorageRoot: "/srv/models", LocalDir: "/srv/g8e/provenance", HTTPPort: 8080,
+				Roles: []string{string(constants.OperatorRoleProvenance)}, ProvenanceOperatorEnabled: true,
+				ProvenanceOperatorModelStorageRoot: "/srv/models", LocalDir: "/srv/g8e/provenance", HttpPort: 8080,
 				// Reported by every Operator, but only meaningful with the inference role.
 				InferenceOllamaEndpoint: "http://ignored:11434",
 			},
 		},
 		{
-			ID: "op-inf", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusStale, CurrentHostname: "gpu-host",
+			Id: "op-inf", OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusStale), CurrentHostname: "gpu-host",
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
-				Roles: constants.OperatorRoles{constants.OperatorRoleInference}, InferenceEnabled: true,
-				InferenceOllamaEndpoint: "http://gpu-host:11434", LocalDir: "/srv/g8e/inference", HTTPPort: 8080,
+				Roles: []string{string(constants.OperatorRoleInference)}, InferenceEnabled: true,
+				InferenceOllamaEndpoint: "http://gpu-host:11434", LocalDir: "/srv/g8e/inference", HttpPort: 8080,
 				LogLevel: "debug", NoGit: true,
 			},
 		},
 		{
-			ID: string(constants.DocIDEmbeddedOperator), OperatorType: constants.OperatorTypeEmbedded, Status: constants.OperatorStatusActive,
+			Id: string(constants.DocIDEmbeddedOperator), OperatorType: string(constants.OperatorTypeEmbedded), Status: string(constants.OperatorStatusActive),
 			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
-				Roles: constants.OperatorRoles{constants.OperatorRoleInference, constants.OperatorRoleProvenance}, InferenceEnabled: true,
+				Roles: []string{string(constants.OperatorRoleInference), string(constants.OperatorRoleProvenance)}, InferenceEnabled: true,
 				InferenceOllamaEndpoint: "http://192.168.1.2:11434", ProvenanceOperatorEnabled: true,
-				ProvenanceOperatorModelStorageRoot: "/mnt/models", LocalDir: "/home/me/g8e", HTTPPort: 8081,
+				ProvenanceOperatorModelStorageRoot: "/mnt/models", LocalDir: "/home/me/g8e", HttpPort: 8081,
 			},
 		},
 	}})

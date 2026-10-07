@@ -20,8 +20,8 @@ import (
 
 func TestSelectProviderBoundaryObserver(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "data-1", OperatorSessionID: "sess-data-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
+		{Id: "obs-1", OperatorSessionId: "sess-obs-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "data-1", OperatorSessionId: "sess-data-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
 	}
 	selected, err := SelectProviderBoundaryObserver(operators, "")
 	require.NoError(t, err)
@@ -35,8 +35,8 @@ func TestSelectProviderBoundaryObserver_NotFound(t *testing.T) {
 
 func TestSelectProviderBoundaryObserver_Ambiguous(t *testing.T) {
 	operators := []*operatorv1.OperatorDocument{
-		{ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "obs-2", OperatorSessionID: "sess-obs-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "obs-1", OperatorSessionId: "sess-obs-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{Id: "obs-2", OperatorSessionId: "sess-obs-2", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
 	}
 	_, err := SelectProviderBoundaryObserver(operators, "")
 	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverAmbiguous)

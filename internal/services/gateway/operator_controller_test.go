@@ -64,7 +64,7 @@ func seedStopOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessi
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
-	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
+	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		ID:                operatorID,
 		UserID:            userID,
 		OrganizationID:    "stop-org",
@@ -749,7 +749,7 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
-	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
+	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		ID: operatorID, UserID: userID, OperatorSessionID: operatorSessionID,
 		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	})
@@ -869,7 +869,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
-	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
+	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		ID: operatorID, UserID: userID, OperatorSessionID: operatorSessionID,
 		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	})

@@ -207,16 +207,16 @@ func newTestDispatchService(t *testing.T, _ string, op *operatorv1.OperatorDocum
 
 func TestDispatchService_Dispatch_Success(t *testing.T) {
 	op := &operatorv1.OperatorDocument{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
+		Id:                "op-001",
+		OperatorSessionId: "sess-001",
 	}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	// Simulate the operator: register a handler on the cmd channel that
 	// unmarshals the command, builds a result envelope with the same Id,
 	// and publishes it on the results channel.
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-	resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
+	cmdChannel := pubsub.CmdChannel(op.Id, op.OperatorSessionId)
+	resultsChannel := pubsub.ResultsChannel(op.Id, op.OperatorSessionId)
 
 	unregisterOperator := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
 		cmdEnv := &commonv1.GovernanceEnvelope{}
@@ -226,8 +226,8 @@ func TestDispatchService_Dispatch_Success(t *testing.T) {
 		}
 		// Verify the command envelope is well-formed.
 		assert.Equal(t, "root-abc", cmdEnv.StateMerkleRoot, "envelope must carry gateway state root")
-		assert.Equal(t, op.ID, cmdEnv.OperatorId, "envelope must target the correct operator")
-		assert.Equal(t, op.OperatorSessionID, cmdEnv.OperatorSessionId, "envelope must target the correct session")
+		assert.Equal(t, op.Id, cmdEnv.OperatorId, "envelope must target the correct operator")
+		assert.Equal(t, op.OperatorSessionId, cmdEnv.OperatorSessionId, "envelope must target the correct session")
 		assert.NotEmpty(t, cmdEnv.Nonce, "envelope must have a nonce")
 		assert.NotEmpty(t, cmdEnv.Id, "envelope must have an Id (transaction hash)")
 		assert.Equal(t, cmdEnv.Id, cmdEnv.TransactionHash, "Id must equal TransactionHash")
@@ -270,7 +270,7 @@ func TestDispatchService_Dispatch_InvalidOperatorSession(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 	svc := NewDispatchService(
@@ -295,7 +295,7 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_ZeroDeliveryFailsClosed(t *testing.T) {
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	svc, _ := newTestDispatchService(t, "root-abc", op)
 
 	// No operator handler registered — the publish delivers to zero
@@ -310,12 +310,12 @@ func TestDispatchService_Dispatch_ZeroDeliveryFailsClosed(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	// Operator handler is registered (so delivery succeeds) but never
 	// publishes a result.
-	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) {})
 	defer unreg()
 
 	// Use a context with a short timeout so the test doesn't wait 30s.
@@ -332,10 +332,10 @@ func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_RequestTimeoutOverridesDefault(t *testing.T) {
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
-	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) {})
 	defer unreg()
 
 	start := time.Now()
@@ -351,10 +351,10 @@ func TestDispatchService_Dispatch_RequestTimeoutOverridesDefault(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
-	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) {})
 	defer unreg()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -377,15 +377,15 @@ func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testing.T) {
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
-	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, data []byte) {
 		cmdEnv := &commonv1.GovernanceEnvelope{}
 		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
 			return
 		}
-		resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
+		resultsChannel := pubsub.ResultsChannel(op.Id, op.OperatorSessionId)
 		for i := 0; i < InferenceProgressResultBuffer+1; i++ {
 			progress, err := proto.Marshal(&operatorv1.InferenceProgressEvent{
 				ProviderAttemptId: "attempt-1",
@@ -412,7 +412,7 @@ func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testin
 	defer unreg()
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
-		TargetOperatorSessionID: op.OperatorSessionID,
+		TargetOperatorSessionID: op.OperatorSessionId,
 		EventType:               string(constants.Event.Operator.Inference.Requested),
 		Payload:                 inferencePayload(t),
 		Timeout:                 2 * time.Second,
@@ -428,12 +428,12 @@ func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testin
 func resultHandlerCount(b *GatewayWebSocketHandler, op *operatorv1.OperatorDocument) int {
 	b.handlersMu.RLock()
 	defer b.handlersMu.RUnlock()
-	return len(b.handlers[pubsub.ResultsChannel(op.ID, op.OperatorSessionID)])
+	return len(b.handlers[pubsub.ResultsChannel(op.Id, op.OperatorSessionId)])
 }
 
 func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) {
 	newOp := func() *operatorv1.OperatorDocument {
-		return &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+		return &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	}
 
 	publishResult := func(broker *GatewayWebSocketHandler, op *operatorv1.OperatorDocument) func(string, []byte) {
@@ -447,18 +447,18 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 			if err != nil {
 				return
 			}
-			broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+			broker.Publish(pubsub.ResultsChannel(op.Id, op.OperatorSessionId), wire)
 		}
 	}
 
 	t.Run("after success", func(t *testing.T) {
 		op := newOp()
 		svc, broker := newTestDispatchService(t, "root-abc", op)
-		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), publishResult(broker, op))
+		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), publishResult(broker, op))
 		defer unreg()
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
-			TargetOperatorSessionID: op.OperatorSessionID,
+			TargetOperatorSessionID: op.OperatorSessionId,
 			EventType:               string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
@@ -469,11 +469,11 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 	t.Run("after timeout", func(t *testing.T) {
 		op := newOp()
 		svc, broker := newTestDispatchService(t, "root-abc", op)
-		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) {})
 		defer unreg()
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
-			TargetOperatorSessionID: op.OperatorSessionID,
+			TargetOperatorSessionID: op.OperatorSessionId,
 			EventType:               string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 			Timeout:                 50 * time.Millisecond,
@@ -485,7 +485,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 	t.Run("after caller cancellation", func(t *testing.T) {
 		op := newOp()
 		svc, broker := newTestDispatchService(t, "root-abc", op)
-		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) {})
 		defer unreg()
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -494,7 +494,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 			cancel()
 		}()
 		_, err := svc.Dispatch(ctx, DispatchRequest{
-			TargetOperatorSessionID: op.OperatorSessionID,
+			TargetOperatorSessionID: op.OperatorSessionId,
 			EventType:               string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
@@ -507,7 +507,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 		svc, broker := newTestDispatchService(t, "root-abc", op)
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
-			TargetOperatorSessionID: op.OperatorSessionID,
+			TargetOperatorSessionID: op.OperatorSessionId,
 			EventType:               string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
@@ -517,11 +517,11 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 }
 
 func TestDispatchService_Dispatch_LateResultDiscarded(t *testing.T) {
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	var cmdEnvID string
-	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, data []byte) {
 		cmdEnv := &commonv1.GovernanceEnvelope{}
 		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err == nil {
 			cmdEnvID = cmdEnv.Id
@@ -530,7 +530,7 @@ func TestDispatchService_Dispatch_LateResultDiscarded(t *testing.T) {
 	defer unreg()
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
-		TargetOperatorSessionID: op.OperatorSessionID,
+		TargetOperatorSessionID: op.OperatorSessionId,
 		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 50 * time.Millisecond,
@@ -543,15 +543,15 @@ func TestDispatchService_Dispatch_LateResultDiscarded(t *testing.T) {
 	resultEnv := &commonv1.GovernanceEnvelope{Id: cmdEnvID}
 	wire, merr := protojson.Marshal(resultEnv)
 	require.NoError(t, merr)
-	broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+	broker.Publish(pubsub.ResultsChannel(op.Id, op.OperatorSessionId), wire)
 	assert.Equal(t, 0, resultHandlerCount(broker, op))
 }
 
 func TestDispatchService_Dispatch_DuplicateResultDropped(t *testing.T) {
-	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
-	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, data []byte) {
 		cmdEnv := &commonv1.GovernanceEnvelope{}
 		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
 			return
@@ -565,13 +565,13 @@ func TestDispatchService_Dispatch_DuplicateResultDropped(t *testing.T) {
 			if err != nil {
 				return
 			}
-			broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+			broker.Publish(pubsub.ResultsChannel(op.Id, op.OperatorSessionId), wire)
 		}
 	})
 	defer unreg()
 
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
-		TargetOperatorSessionID: op.OperatorSessionID,
+		TargetOperatorSessionID: op.OperatorSessionId,
 		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 5 * time.Second,
@@ -636,8 +636,8 @@ func TestDispatchController_HandleDispatch_ValidationFails(t *testing.T) {
 
 func TestDispatchController_HandleDispatch_WitnessCommandRejectedAsUnprocessableEntity(t *testing.T) {
 	observer := &operatorv1.OperatorDocument{
-		ID:                "observer-op",
-		OperatorSessionID: "observer-session",
+		Id:                "observer-op",
+		OperatorSessionId: "observer-session",
 		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 	}
 	dispatchSvc, _ := newTestDispatchService(t, "root-abc", observer)
@@ -654,7 +654,7 @@ func TestDispatchController_HandleDispatch_WitnessCommandRejectedAsUnprocessable
 	})
 	require.NoError(t, err)
 	body, err := json.Marshal(OperatorCommandRequest{
-		TargetOperatorSessionID: observer.OperatorSessionID,
+		TargetOperatorSessionID: observer.OperatorSessionId,
 		EventType:               string(constants.Event.Operator.Command.Requested),
 		Payload:                 payload,
 	})
@@ -703,13 +703,13 @@ func TestOperatorCommandResultHelpers(t *testing.T) {
 
 func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.T) {
 	op := &operatorv1.OperatorDocument{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
+		Id:                "op-001",
+		OperatorSessionId: "sess-001",
 	}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-	resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
+	cmdChannel := pubsub.CmdChannel(op.Id, op.OperatorSessionId)
+	resultsChannel := pubsub.ResultsChannel(op.Id, op.OperatorSessionId)
 
 	unregisterOperator := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
 		cmdEnv := &commonv1.GovernanceEnvelope{}

@@ -119,12 +119,12 @@ func TestBoundOperators_FiltersToWebSession(t *testing.T) {
 	c := &EnsembleBrowserProxyController{
 		logger: slog.Default(),
 		operators: fakeOperatorLister{ops: []*operatorv1.OperatorDocument{
-			{ID: "op-1", OperatorSessionID: "os-1", BoundWebSessionID: "web-1", Status: constants.OperatorStatusBound},
-			{ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "os-embedded", BoundWebSessionID: "web-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded},
-			{ID: "op-remote", OperatorSessionID: "os-remote", BoundWebSessionID: "web-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
-			{ID: "op-2", OperatorSessionID: "os-2", BoundWebSessionID: "web-other", Status: constants.OperatorStatusBound},
-			{ID: "op-3", OperatorSessionID: "os-3", Status: constants.OperatorStatusActive},
-			{ID: "op-stopped", OperatorSessionID: "os-stopped", BoundWebSessionID: "web-1", Status: constants.OperatorStatusStopped},
+			{Id: "op-1", OperatorSessionId: "os-1", BoundWebSessionId: "web-1", Status: string(constants.OperatorStatusBound)},
+			{Id: string(constants.DocIDEmbeddedOperator), OperatorSessionId: "os-embedded", BoundWebSessionId: "web-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeEmbedded)},
+			{Id: "op-remote", OperatorSessionId: "os-remote", BoundWebSessionId: "web-1", Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote)},
+			{Id: "op-2", OperatorSessionId: "os-2", BoundWebSessionId: "web-other", Status: string(constants.OperatorStatusBound)},
+			{Id: "op-3", OperatorSessionId: "os-3", Status: string(constants.OperatorStatusActive)},
+			{Id: "op-stopped", OperatorSessionId: "os-stopped", BoundWebSessionId: "web-1", Status: string(constants.OperatorStatusStopped)},
 		}},
 	}
 

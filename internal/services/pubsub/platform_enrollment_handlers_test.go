@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -1193,18 +1191,16 @@ func TestHandleIssue_OperatorSignsBothCSRsAndPersistsOwnedOperator(t *testing.T)
 	opColl := marshaler.CollectionName(constants.CollectionOperators)
 	doc := env.store.docs[opColl][operatorID]
 	require.NotNil(t, doc)
-	raw, err := json.Marshal(doc.Data)
+	opDoc, err := models.OperatorDocumentFromStore(doc)
 	require.NoError(t, err)
-	var opDoc *operatorv1.OperatorDocument
-	require.NoError(t, json.Unmarshal(raw, &opDoc))
-	assert.Equal(t, enrollTestOwnerID, opDoc.UserID)
-	assert.Equal(t, enrollTestOrgID, opDoc.OrganizationID)
+	assert.Equal(t, enrollTestOwnerID, opDoc.UserId)
+	assert.Equal(t, enrollTestOrgID, opDoc.OrganizationId)
 	assert.Equal(t, "host-a", opDoc.Name)
 	assert.Equal(t, "fp-host-a", opDoc.SystemFingerprint)
-	assert.Equal(t, constants.OperatorStatusActive, opDoc.Status)
-	assert.Equal(t, constants.OperatorTypeRemote, opDoc.OperatorType)
-	assert.Equal(t, constants.ComponentNameG8EO, opDoc.Component)
-	assert.Equal(t, opSign.SessionID, opDoc.OperatorSessionID)
+	assert.Equal(t, string(constants.OperatorStatusActive), opDoc.Status)
+	assert.Equal(t, string(constants.OperatorTypeRemote), opDoc.OperatorType)
+	assert.Equal(t, string(constants.ComponentNameG8EO), opDoc.Component)
+	assert.Equal(t, opSign.SessionID, opDoc.OperatorSessionId)
 	assert.True(t, opDoc.Claimed)
 	assert.False(t, opDoc.IsSlot)
 	require.NotNil(t, opDoc.ClaimedAt)

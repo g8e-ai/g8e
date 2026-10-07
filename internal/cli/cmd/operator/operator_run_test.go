@@ -37,8 +37,8 @@ func TestOperatorRunCmdWithConfig_Success(t *testing.T) {
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{
-			{ID: "op-a", OperatorSessionID: sessionA, OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
-			{ID: "op-b", OperatorSessionID: sessionB, OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
+			{Id: "op-a", OperatorSessionId: sessionA, OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive)},
+			{Id: "op-b", OperatorSessionId: sessionB, OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive)},
 		},
 	})
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestOperatorStopCmdWithConfig_SendsTargetedShutdown(t *testing.T) {
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{{
-			ID: "op-a", OperatorSessionID: sessionID, OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive,
+			Id: "op-a", OperatorSessionId: sessionID, OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive),
 		}},
 	})
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestOperatorStopCmdWithConfig_RejectsEmbeddedOperator(t *testing.T) {
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{{
-			ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "embedded-session", OperatorType: constants.OperatorTypeEmbedded, Status: constants.OperatorStatusActive,
+			Id: string(constants.DocIDEmbeddedOperator), OperatorSessionId: "embedded-session", OperatorType: string(constants.OperatorTypeEmbedded), Status: string(constants.OperatorStatusActive),
 		}},
 	})
 	require.NoError(t, err)

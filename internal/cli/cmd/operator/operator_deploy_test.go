@@ -155,9 +155,9 @@ func TestOperatorDeployApprovesEachOperatorAndReportsSessions(t *testing.T) {
 
 	sessions := make([]*operatorv1.OperatorDocument, len(dirs))
 	for i, dir := range dirs {
-		sessions[i] = operatorv1.OperatorDocument{
-			OperatorSessionID: deployedDirID(dir) + "-111",
-			Status:            constants.OperatorStatusActive,
+		sessions[i] = &operatorv1.OperatorDocument{
+			OperatorSessionId: deployedDirID(dir) + "-111",
+			Status:            string(constants.OperatorStatusActive),
 		}
 	}
 	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: sessions})
@@ -186,7 +186,7 @@ func TestOperatorDeployDoesNotWaitForARequestFromAnAlreadyEnrolledOperator(t *te
 	remoteDir := filepath.Join(t.TempDir(), "fleet")
 
 	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
-		{OperatorSessionID: deployedDirID(remoteDir) + "-111", Status: constants.OperatorStatusActive},
+		{OperatorSessionId: deployedDirID(remoteDir) + "-111", Status: string(constants.OperatorStatusActive)},
 	}})
 	require.NoError(t, err)
 	client := &cmdtest.MockAPIClient{GetResp: listBody}
@@ -343,7 +343,7 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 	sessions := make([]*operatorv1.OperatorDocument, len(dirs))
 	expected := make(map[string]bool, len(dirs))
 	for i, dir := range dirs {
-		sessions[i] = operatorv1.OperatorDocument{OperatorSessionID: deployedDirID(dir) + "-111", Status: constants.OperatorStatusActive}
+		sessions[i] = &operatorv1.OperatorDocument{OperatorSessionId: deployedDirID(dir) + "-111", Status: string(constants.OperatorStatusActive)}
 		expected[deployedDirID(dir)+"-000"] = true
 	}
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: sessions})
@@ -360,6 +360,6 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 	}
 	assert.Empty(t, expected)
 	for _, op := range sessions {
-		assert.Contains(t, out, op.OperatorSessionID)
+		assert.Contains(t, out, op.OperatorSessionId)
 	}
 }

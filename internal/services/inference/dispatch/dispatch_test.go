@@ -57,10 +57,10 @@ type discardWriter struct{}
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 func capableOp(sessionID string) *operatorv1.OperatorDocument {
-	return operatorv1.OperatorDocument{
-		ID:                "op-" + sessionID,
-		OperatorSessionID: sessionID,
-		Status:            constants.OperatorStatusActive,
+	return &operatorv1.OperatorDocument{
+		Id:                "op-" + sessionID,
+		OperatorSessionId: sessionID,
+		Status:            string(constants.OperatorStatusActive),
 		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 	}
 }
@@ -175,7 +175,7 @@ func TestValidateCampaignModelRegistry_FailsClosedOnInvalidAuthority(t *testing.
 func TestDispatchInference_ZeroCapableOperatorsFailsClosed(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
 	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
-		{ID: "op-plain", OperatorSessionID: "sess-plain"},
+		{Id: "op-plain", OperatorSessionId: "sess-plain"},
 	}}, testLogger())
 
 	_, err := svc.DispatchInference(context.Background(), baseRequest())
@@ -187,7 +187,7 @@ func TestDispatchInference_ZeroCapableOperatorsFailsClosed(t *testing.T) {
 func TestDispatchInference_SingleCapableOperatorSelected(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
 	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
-		{ID: "op-plain", OperatorSessionID: "sess-plain"},
+		{Id: "op-plain", OperatorSessionId: "sess-plain"},
 		capableOp("sess-inf"),
 	}}, testLogger())
 
@@ -244,7 +244,7 @@ func TestDispatchInference_ExplicitTargetNotOwnedByRequestor(t *testing.T) {
 func TestDispatchInference_ExplicitTargetNotCapable(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
 	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
-		{ID: "op-plain", OperatorSessionID: "sess-plain", Status: constants.OperatorStatusActive},
+		{Id: "op-plain", OperatorSessionId: "sess-plain", Status: string(constants.OperatorStatusActive)},
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -266,7 +266,7 @@ func TestDispatchInference_NonActiveOperatorNotSelectable(t *testing.T) {
 		t.Run(string(status), func(t *testing.T) {
 			dispatcher := &stubCommandDispatcher{}
 			inactive := capableOp("sess-dead")
-			inactive.Status = status
+			inactive.Status = string(status)
 			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 				inactive,
 			}}, testLogger())

@@ -21,9 +21,9 @@ import (
 )
 
 func stackDataOperator(id, sessionID string) *operatorv1.OperatorDocument {
-	return operatorv1.OperatorDocument{
-		ID: id, OperatorSessionID: sessionID, CurrentHostname: constants.DataOperatorHostname,
-		Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
+	return &operatorv1.OperatorDocument{
+		Id: id, OperatorSessionId: sessionID, CurrentHostname: constants.DataOperatorHostname,
+		Status: string(constants.OperatorStatusActive), OperatorType: string(constants.OperatorTypeRemote),
 	}
 }
 

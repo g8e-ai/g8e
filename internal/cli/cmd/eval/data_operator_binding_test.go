@@ -26,11 +26,11 @@ import (
 )
 
 func activeOperatorSessionDoc(id, sessionID string) *operatorv1.OperatorDocument {
-	return operatorv1.OperatorDocument{
-		ID:                id,
-		OperatorSessionID: sessionID,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
+	return &operatorv1.OperatorDocument{
+		Id:                id,
+		OperatorSessionId: sessionID,
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
 	}
 }
 

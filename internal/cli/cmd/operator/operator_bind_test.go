@@ -67,10 +67,10 @@ func TestOperatorBindCmdWithConfig_Success(t *testing.T) {
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{{
-			ID:                "op-data",
-			OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
-			OperatorType:      constants.OperatorTypeRemote,
-			Status:            constants.OperatorStatusActive,
+			Id:                "op-data",
+			OperatorSessionId: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
+			OperatorType:      string(constants.OperatorTypeRemote),
+			Status:            string(constants.OperatorStatusActive),
 		}},
 	})
 	require.NoError(t, err)
@@ -108,9 +108,9 @@ func TestOperatorBindCmdWithConfig_Success(t *testing.T) {
 
 func multiBindOperators() []*operatorv1.OperatorDocument {
 	return []*operatorv1.OperatorDocument{
-		{ID: "op-a", OperatorSessionID: "sess-a", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
-		{ID: "op-b", OperatorSessionID: "sess-b", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
-		{ID: "op-c", OperatorSessionID: "sess-c", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
+		{Id: "op-a", OperatorSessionId: "sess-a", OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive)},
+		{Id: "op-b", OperatorSessionId: "sess-b", OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive)},
+		{Id: "op-c", OperatorSessionId: "sess-c", OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive)},
 	}
 }
 
@@ -250,9 +250,9 @@ func TestOperatorBindCmdWithConfig_BindError(t *testing.T) {
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{{
-			ID:                "op-data",
-			OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
-			Status:            constants.OperatorStatusActive,
+			Id:                "op-data",
+			OperatorSessionId: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
+			Status:            string(constants.OperatorStatusActive),
 		}},
 	})
 	require.NoError(t, err)
@@ -279,10 +279,10 @@ func TestOperatorBindCmdWithConfig_ListBoundOperator(t *testing.T) {
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
 		Operators: []*operatorv1.OperatorDocument{{
-			ID:                "op-data",
-			OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
-			OperatorType:      constants.OperatorTypeRemote,
-			Status:            constants.OperatorStatusActive,
+			Id:                "op-data",
+			OperatorSessionId: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
+			OperatorType:      string(constants.OperatorTypeRemote),
+			Status:            string(constants.OperatorStatusActive),
 		}},
 	})
 	require.NoError(t, err)

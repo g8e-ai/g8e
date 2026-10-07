@@ -721,6 +721,9 @@ func operatorHostnameDisplay(op *operatorv1.OperatorDocument) string {
 	if constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
 		return "local"
 	}
+	if op.GetName() != "" {
+		return op.GetName()
+	}
 	return "-"
 }
 

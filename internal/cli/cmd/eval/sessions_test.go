@@ -19,11 +19,11 @@ import (
 )
 
 func remoteOperator(id, session string, cfg *operatorv1.OperatorRuntimeConfig) *operatorv1.OperatorDocument {
-	return operatorv1.OperatorDocument{
-		ID:                id,
-		OperatorSessionID: session,
-		Status:            constants.OperatorStatusActive,
-		OperatorType:      constants.OperatorTypeRemote,
+	return &operatorv1.OperatorDocument{
+		Id:                id,
+		OperatorSessionId: session,
+		Status:            string(constants.OperatorStatusActive),
+		OperatorType:      string(constants.OperatorTypeRemote),
 		RuntimeConfig:     cfg,
 	}
 }
@@ -57,7 +57,7 @@ func TestResolveOperatorSessionsFrom(t *testing.T) {
 	observer := remoteOperator("obs", "obs-1", &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true})
 	observer.CurrentHostname = constants.DataOperatorHostname
 	inactive := inferenceOperatorFixture("i1", "infer-1")
-	inactive.Status = constants.OperatorStatusOffline
+	inactive.Status = string(constants.OperatorStatusOffline)
 
 	tests := []struct {
 		name      string

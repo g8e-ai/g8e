@@ -13,12 +13,13 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBlendedOperatorKeepsEveryCapability(t *testing.T) {
-	cfg := &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData}, InferenceEnabled: true, ProvenanceOperatorEnabled: true, ProviderBoundaryObserverEnabled: true}
-	op := operatorv1.OperatorDocument{ID: "blend", OperatorSessionID: "session", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive, RuntimeConfig: cfg}
+	cfg := &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleData}), InferenceEnabled: true, ProvenanceOperatorEnabled: true, ProviderBoundaryObserverEnabled: true}
+	op := &operatorv1.OperatorDocument{Id: "blend", OperatorSessionId: "session", OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive), RuntimeConfig: cfg}
 	for _, role := range []constants.OperatorRole{constants.OperatorRoleData, constants.OperatorRoleInference, constants.OperatorRoleProvenance, constants.OperatorRoleObserver} {
 		require.NoError(t, ValidateOperatorRoleCapabilities(op, role))
 	}
@@ -36,12 +37,12 @@ func TestEveryOperatorRoleCombinationPreservesMembership(t *testing.T) {
 			}
 		}
 		t.Run(roles.String(), func(t *testing.T) {
-			cfg := &operatorv1.OperatorRuntimeConfig{Roles: roles}
+			cfg := &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(roles)}
 			kind := constants.OperatorTypeRemote
 			if roles.Has(constants.OperatorRoleEmbedded) {
 				kind = constants.OperatorTypeEmbedded
 			}
-			op := operatorv1.OperatorDocument{ID: "blend", OperatorSessionID: "session", OperatorType: kind, Status: constants.OperatorStatusActive, RuntimeConfig: cfg}
+			op := &operatorv1.OperatorDocument{Id: "blend", OperatorSessionId: "session", OperatorType: string(kind), Status: string(constants.OperatorStatusActive), RuntimeConfig: cfg}
 			effective := roles.Effective()
 			require.Equal(t, effective, GetOperatorRoles(op))
 			for _, role := range all {

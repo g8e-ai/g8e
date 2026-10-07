@@ -257,7 +257,7 @@ func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.
 	dataSessionID := "op-refresh-data"
 	now := time.Now().UTC()
 
-	provenanceBytes, err := json.Marshal(&operatorv1.OperatorDocument{
+	provenanceBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		ID:                "op-id-provenance",
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,
@@ -272,7 +272,7 @@ func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.
 		marshaler.CollectionName(constants.CollectionOperators), "op-id-provenance", provenanceBytes,
 	))
 
-	dataBytes, err := json.Marshal(&operatorv1.OperatorDocument{
+	dataBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		ID:                "op-id-data",
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,
@@ -308,7 +308,7 @@ func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testi
 	))
 
 	now := time.Now().UTC()
-	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
+	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		ID:                "op-id-registry-active",
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,
@@ -406,7 +406,7 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 	// local binding — but the old CLI session predates the binding work
 	// and carries no operator_session_id.
 	now := time.Now().UTC()
-	embeddedBytes, err := json.Marshal(&operatorv1.OperatorDocument{
+	embeddedBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		ID:                string(constants.DocIDEmbeddedOperator),
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,
@@ -417,7 +417,7 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator), embeddedBytes))
-	staleRemoteBytes, err := json.Marshal(&operatorv1.OperatorDocument{
+	staleRemoteBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		ID:                "stale-remote-operator",
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,

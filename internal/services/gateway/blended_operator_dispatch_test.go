@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -31,26 +32,26 @@ func (f embeddedEnvelopeProcessorFunc) ProcessEnvelope(ctx context.Context, wire
 func TestEmbeddedDispatchUsesGovernanceProcessorAndCorrelatesResult(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	broker := NewGatewayWebSocketHandler(logger)
-	op := &operatorv1.OperatorDocument{ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "embedded-session", OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleObserver}}}
+	op := &operatorv1.OperatorDocument{Id: string(constants.DocIDEmbeddedOperator), OperatorSessionId: "embedded-session", OperatorType: string(constants.OperatorTypeEmbedded), RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleObserver})}}
 	called := false
 	processor := embeddedEnvelopeProcessorFunc(func(ctx context.Context, wire []byte) (*operatorv1.ActionReceipt, error) {
 		called = true
 		env := &commonv1.GovernanceEnvelope{}
 		require.NoError(t, protojson.Unmarshal(wire, env))
-		require.Equal(t, op.ID, env.OperatorId)
-		require.Equal(t, op.OperatorSessionID, env.OperatorSessionId)
+		require.Equal(t, op.Id, env.OperatorId)
+		require.Equal(t, op.OperatorSessionId, env.OperatorSessionId)
 		result, err := proto.Marshal(&operatorv1.CommandResult{Stdout: "hello"})
 		require.NoError(t, err)
 		completion := &commonv1.GovernanceEnvelope{Id: env.Id, EventType: string(constants.Event.Operator.Command.Completed), ActionType: string(constants.ActionTypeExecuteBash), Payload: result}
 		payload, err := protojson.Marshal(completion)
 		require.NoError(t, err)
-		broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), payload)
+		broker.Publish(pubsub.ResultsChannel(op.Id, op.OperatorSessionId), payload)
 		return &operatorv1.ActionReceipt{}, nil
 	})
 	svc := NewDispatchService(logger, broker, &stubStateRootProvider{root: "root"}, &stubOperatorSessionValidator{op: op}, string(constants.PostureDoctrine), governance.NewL1Doctrine(), nil, nil, processor)
 	payload, err := proto.Marshal(&operatorv1.CommandRequested{Command: "echo hello", ExecutionId: "execution"})
 	require.NoError(t, err)
-	result, err := svc.Dispatch(t.Context(), DispatchRequest{TargetOperatorSessionID: op.OperatorSessionID, RequestorUserID: "user", EventType: string(constants.Event.Operator.Command.Requested), Payload: payload})
+	result, err := svc.Dispatch(t.Context(), DispatchRequest{TargetOperatorSessionID: op.OperatorSessionId, RequestorUserID: "user", EventType: string(constants.Event.Operator.Command.Requested), Payload: payload})
 	require.NoError(t, err)
 	require.True(t, called)
 	require.NotNil(t, result)

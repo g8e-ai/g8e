@@ -63,7 +63,7 @@ func seedOperatorForDispatch(t *testing.T, infra *TestInfrastructure) (operatorI
 	userID = "user-dispatch-int"
 
 	userDoc := &models.User{
-		ID:     userID,
+		Id:     userID,
 		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
@@ -71,11 +71,11 @@ func seedOperatorForDispatch(t *testing.T, infra *TestInfrastructure) (operatorI
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	opDoc := &operatorv1.OperatorDocument{
-		ID:                operatorID,
-		UserID:            userID,
+		Id:                operatorID,
+		UserId:            userID,
 		OrganizationID:    "org-dispatch-int",
 		Status:            constants.OperatorStatusActive,
-		OperatorSessionID: operatorSessionID,
+		OperatorSessionId: operatorSessionID,
 		CreatedAt:         time.Now().UTC(),
 		UpdatedAt:         time.Now().UTC(),
 	}
@@ -94,8 +94,8 @@ func seedCLISessionForDispatch(t *testing.T, infra *TestInfrastructure, userID s
 	cliSessionID = "cli-dispatch-int"
 
 	cliDoc := &models.CLISession{
-		ID:        cliSessionID,
-		UserID:    userID,
+		Id:        cliSessionID,
+		UserId:    userID,
 		ExpiresAt: time.Now().Add(1 * time.Hour),
 		IsActive:  true,
 	}
@@ -236,7 +236,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(publicKey)
-	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{ID: keyID, PublicKey: keyID, AddedAt: time.Now().UTC(), Enabled: true}))
+	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{Id: keyID, PublicKey: keyID, AddedAt: time.Now().UTC(), Enabled: true}))
 	client := pubsub.NewInProcessPubSubClient(infra.Pubsub, infra.Logger)
 	results, err := pubsub.NewPubSubResultsService(&remoteCfg, infra.Logger, client)
 	require.NoError(t, err)
@@ -445,12 +445,12 @@ func boundaryInferenceResultText(t *testing.T, result *operatorv1.InferenceResul
 func seedInferenceOperator(t *testing.T, infra *TestInfrastructure, userID, operatorID, sessionID string, capable bool) {
 	t.Helper()
 	op := &operatorv1.OperatorDocument{
-		ID:                operatorID,
-		UserID:            userID,
+		Id:                operatorID,
+		UserId:            userID,
 		OrganizationID:    "org-inference-boundary",
 		Status:            constants.OperatorStatusActive,
 		OperatorType:      constants.OperatorTypeRemote,
-		OperatorSessionID: sessionID,
+		OperatorSessionId: sessionID,
 		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: capable},
 		CreatedAt:         time.Now().UTC(),
 		UpdatedAt:         time.Now().UTC(),
@@ -497,7 +497,7 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(pubKey)
 	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{
-		ID:        keyID,
+		Id:        keyID,
 		PublicKey: keyID,
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
@@ -557,7 +557,7 @@ func startFileEditOperator(t *testing.T, infra *TestInfrastructure, operatorID, 
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(pubKey)
 	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{
-		ID:        keyID,
+		Id:        keyID,
 		PublicKey: keyID,
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
@@ -730,7 +730,7 @@ func TestDispatch_FileMutationExecutesOnceAndReplayProducesSignedRejection(t *te
 	require.NotNil(t, persisted)
 	require.NotNil(t, persisted.ActionReceipt)
 	assert.Equal(t, operatorID, persisted.OperatorID)
-	assert.Equal(t, sessionID, persisted.OperatorSessionID)
+	assert.Equal(t, sessionID, persisted.OperatorSessionId)
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persisted.ActionReceipt.Status)
 	commitments, err := infra.AuditStore.CommitmentLedger().ListCommitments()
 	require.NoError(t, err)
@@ -1116,14 +1116,14 @@ func TestInferenceDispatch_CallerCancellationRemovesHandlerWhileRemoteExecutionC
 	case <-time.After(time.Second):
 		t.Fatal("dispatch did not return after caller cancellation")
 	}
-	assert.Zero(t, resultHandlerCount(infra.Pubsub, &operatorv1.OperatorDocument{ID: operatorID, OperatorSessionID: sessionID}))
+	assert.Zero(t, resultHandlerCount(infra.Pubsub, &operatorv1.OperatorDocument{Id: operatorID, OperatorSessionId: sessionID}))
 
 	close(release)
 	require.Eventually(t, func() bool {
 		receipt, err := infra.AuditStore.GetActionReceipt(transactionID)
 		return err == nil && receipt != nil && receipt.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	}, time.Second, 10*time.Millisecond)
-	assert.Zero(t, resultHandlerCount(infra.Pubsub, &operatorv1.OperatorDocument{ID: operatorID, OperatorSessionID: sessionID}))
+	assert.Zero(t, resultHandlerCount(infra.Pubsub, &operatorv1.OperatorDocument{Id: operatorID, OperatorSessionId: sessionID}))
 	calls, _ := backend.snapshot()
 	assert.Equal(t, 1, calls)
 }
