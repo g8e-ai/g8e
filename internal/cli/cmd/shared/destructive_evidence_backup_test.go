@@ -66,7 +66,8 @@ func (f *evidenceFixture) snapshotDirs(t *testing.T) []string {
 	require.NoError(t, err)
 	var dirs []string
 	for _, entry := range entries {
-		if entry.IsDir() {
+		// The shared objects/ store sits beside the snapshots; it is not one.
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), constants.EvaluationBackupDirPrefix) {
 			dirs = append(dirs, entry.Name())
 		}
 	}

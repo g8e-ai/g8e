@@ -14,10 +14,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -346,7 +348,13 @@ func TestGatewayCleanCmd_OffersBackupBeforeArchiving(t *testing.T) {
 			snapshots, _ := filepath.Glob(filepath.Join(backupDir, constants.EvaluationBackupDirPrefix+"*"))
 			if tc.wantBackup {
 				require.Len(t, snapshots, 1)
-				assert.FileExists(t, filepath.Join(snapshots[0], filepath.FromSlash(evidence)))
+				// Restore into a fresh runtime so the check holds for any snapshot layout.
+				fresh, _ := cmdtest.NewCmdTestEnv(t)
+				_, err := evaluation.NewEvalBackup(fresh, time.Now).Restore(context.Background(), snapshots[0], false)
+				require.NoError(t, err)
+				restored, err := fresh.ReadFile(context.Background(), evidence)
+				require.NoError(t, err)
+				assert.JSONEq(t, `{"ok":true}`, string(restored))
 			} else {
 				assert.Empty(t, snapshots)
 			}

@@ -49,7 +49,7 @@ type mockResultsPublisher struct {
 	heartbeats             []proto.Message
 	fsListResults          []proto.Message
 
-	inferenceCompletions  []*operatorv1.InferenceCompletion
+	inferenceCompletions   []*operatorv1.InferenceCompletion
 	inferenceCompletionErr error
 }
 

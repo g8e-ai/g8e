@@ -735,7 +735,7 @@ Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, 
 
 `./g8e docker clean`, `docker reset`, and `docker init --clean` confirm before wiping volumes and offer to back up host evaluation evidence first. Pass `--yes` to skip the confirmation and `--skip-backup` to skip the backup. Raw `docker compose down -v` and `make docker-clean` have neither safeguard. Docker volumes are deleted outright; only host `.g8e/` wipes (`g8e gw clean`/`gw reset`) are renamed aside to `.g8e-<MMDDHHMM>` instead.
 
-Eval runs back up their evidence to `eval/backups/` automatically when they finish. Before a destructive wipe, take a fresh copy outside `.g8e/` with `./g8e eval backup` (or `--output-dir <dir>`), and put it back with `./g8e eval restore` (newest snapshot in `eval/backups/`, or pass `<dir>/eval-backup-<timestamp>`). See [Evaluation Programs](../architecture/evals.md#evidence-and-verification). This covers host evidence only, not the Gateway volume.
+Eval runs back up their evidence to `eval/backups/` automatically when they finish. Before a destructive wipe, take a fresh copy outside `.g8e/` with `./g8e eval backup` (or `--output-dir <dir>`), and put it back with `./g8e eval restore` (every snapshot in `eval/backups/` merged with the newest copy of each file winning, or pass `<dir>/eval-backup-<timestamp>` for just that one). See [Evaluation Programs](../architecture/evals.md#evidence-and-verification). This covers host evidence only, not the Gateway volume.
 
 ## Health checks and resources
 

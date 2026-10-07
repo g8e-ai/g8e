@@ -89,6 +89,57 @@ func TestBackupRestore_DefaultsToProjectEvalBackups(t *testing.T) {
 	assert.Len(t, restored.Restored, created.FileCount)
 }
 
+// The newest snapshot is not a complete restore: evidence deleted or archived
+// since an older snapshot is only in that older one.
+func TestRestore_DefaultMergesEverySnapshotIncludingEvidenceOnlyAnOlderOneHolds(t *testing.T) {
+	env := setupRunEnv(t)
+	fileSvc := env.fileSvc(t)
+	ctx := context.Background()
+
+	env.prepareRun(t, "eval-a", "run-a-1")
+	var first evalBackupJSON
+	require.NoError(t, env.runJSON(t, &first, "backup"))
+
+	env.prepareRun(t, "eval-b", "run-b-1")
+	require.NoError(t, fileSvc.RemoveAll(ctx, path.Join(constants.EvaluationDataPath, constants.EvaluationCampaignsDirname, "eval-a")))
+	require.NoError(t, fileSvc.RemoveAll(ctx, path.Join(constants.EvaluationDataPath, constants.EvaluationRunsDirname, "run-a-1")))
+	var second evalBackupJSON
+	require.NoError(t, env.runJSON(t, &second, "backup"))
+	require.NotEqual(t, first.SnapshotDir, second.SnapshotDir)
+
+	inSecond := map[string]bool{}
+	for _, file := range second.Files {
+		inSecond[file.Path] = true
+	}
+	var onlyInFirst []string
+	for _, file := range first.Files {
+		if !inSecond[file.Path] {
+			onlyInFirst = append(onlyInFirst, file.Path)
+		}
+	}
+	require.NotEmpty(t, onlyInFirst, "the fixture must leave evidence only the older snapshot holds")
+
+	require.NoError(t, fileSvc.RemoveAll(ctx, constants.EvaluationDataPath))
+	require.NoError(t, fileSvc.RemoveAll(ctx, constants.EvaluationDirname))
+
+	var restored evalRestoreJSON
+	require.NoError(t, env.runJSON(t, &restored, "restore"))
+
+	assert.Equal(t, 2, restored.SnapshotCount)
+	got := map[string]bool{}
+	for _, file := range restored.Restored {
+		got[file.Path] = true
+	}
+	for _, rel := range onlyInFirst {
+		assert.True(t, got[rel], "%s exists only in the older snapshot and must be restored", rel)
+		_, err := fileSvc.ReadFile(ctx, rel)
+		assert.NoError(t, err, rel)
+	}
+	for _, file := range second.Files {
+		assert.True(t, got[file.Path], "%s is in the newest snapshot and must be restored", file.Path)
+	}
+}
+
 func TestRestore_WithoutSnapshotAndNoDefaultBackupsFails(t *testing.T) {
 	env := setupRunEnv(t)
 

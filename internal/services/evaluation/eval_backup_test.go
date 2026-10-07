@@ -400,6 +400,37 @@ func TestEvalBackup_CreateIfChangedKeepsSnapshotWhenEvidenceChanged(t *testing.T
 	assert.FileExists(t, filepath.Join(report.SnapshotDir, constants.EvaluationBackupManifestFilename))
 }
 
+// A directory of full-copy snapshots from before the object store must not make
+// every automatic backup look changed: the comparison reads the manifest's file
+// list, which both layouts share.
+func TestEvalBackup_CreateIfChangedTreatsMatchingLegacySnapshotAsUnchanged(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	legacyDir := writeLegacySnapshot(t, f.outRoot, "eval-backup-20260101T000000Z", map[string]string{
+		backupRunReportPath: `{"run":1}`,
+		backupCampaignPath:  `{"campaign":1}`,
+		backupInventoryPath: `{"variants":[]}`,
+		backupQueueLogPath:  "queued\n",
+	})
+
+	report, err := f.backup.CreateIfChanged(context.Background(), f.outRoot)
+
+	require.NoError(t, err)
+	assert.True(t, report.Unchanged)
+	assert.Equal(t, legacyDir, report.SnapshotDir)
+	snapshots, err := AllEvalBackupSnapshots(f.outRoot)
+	require.NoError(t, err)
+	assert.Equal(t, []string{legacyDir}, snapshots, "a matching legacy snapshot must not gain a successor")
+
+	f.write(t, backupRunReportPath, `{"run":2}`)
+
+	changed, err := f.backup.CreateIfChanged(context.Background(), f.outRoot)
+
+	require.NoError(t, err)
+	assert.False(t, changed.Unchanged)
+	assert.NotEqual(t, legacyDir, changed.SnapshotDir)
+	assert.FileExists(t, filepath.Join(legacyDir, constants.EvaluationBackupManifestFilename), "the legacy snapshot must survive")
+}
+
 func TestEvalBackup_CreateIfChangedCreatesFirstSnapshot(t *testing.T) {
 	f := newEvalBackupFixture(t)
 
