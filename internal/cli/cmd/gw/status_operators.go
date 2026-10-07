@@ -86,12 +86,12 @@ type operatorInventory struct {
 
 func operatorStatusFromDocument(op *operatorv1.OperatorDocument) operatorStatus {
 	row := operatorStatus{
-		ID:       op.ID,
-		Type:     operatorTypeDisplay(op.OperatorType),
+		ID:       op.Id,
+		Type:     operatorTypeDisplay(constants.OperatorType(op.OperatorType)),
 		Status:   string(op.Status),
 		Host:     operatorHostnameDisplay(op),
 		Dir:      op.LocalDir,
-		Port:     op.Port,
+		Port:     int(op.Port),
 		Roles:    operatorcapability.GetOperatorRoles(op),
 		reported: map[string]string{},
 	}
@@ -103,7 +103,7 @@ func operatorStatusFromDocument(op *operatorv1.OperatorDocument) operatorStatus 
 		row.Dir = rc.LocalDir
 	}
 	if row.Port == 0 {
-		row.Port = rc.HTTPPort
+		row.Port = int(rc.HttpPort)
 	}
 	row.reportCustom(rc.LogLevel, rc.CloudMode, rc.CloudProvider, rc.NoGit)
 	row.reported[flagInferenceEndpoint] = rc.InferenceOllamaEndpoint
@@ -212,7 +212,7 @@ func collectOperatorInventory(client authcmd.APIClient, fileSvc fs.RuntimeFileSe
 					continue
 				}
 				row := operatorStatusFromDocument(op)
-				if op.OperatorType == constants.OperatorTypeEmbedded {
+				if constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
 					hasEmbedded = true
 					if profileErr == nil {
 						row.fillFromProfile(profile.Config)

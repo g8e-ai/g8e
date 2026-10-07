@@ -285,14 +285,13 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 				entries := make([]operatorListEntry, 0, len(operators))
 				for _, op := range operators {
 					entry := operatorListEntry{
-						OperatorID:        op.ID,
-						OperatorSessionID: op.OperatorSessionID,
-						OperatorType:      op.OperatorType,
+						OperatorID:        op.Id,
+						OperatorSessionID: op.OperatorSessionId,
+						OperatorType:      constants.OperatorType(op.OperatorType),
 						OperatorRoles:     operatorcapability.GetOperatorRoles(op),
-						Status:            op.Status,
-						Component:         op.Component,
+						Status:            constants.OperatorStatus(op.Status),
+						Component:         constants.ComponentName(op.Component),
 						Hostname:          operatorHostnameValue(op),
-						Name:              op.Name,
 					}
 					if op.RuntimeConfig != nil {
 						entry.InferenceEnabled = boolPointer(op.RuntimeConfig.InferenceEnabled)
@@ -311,7 +310,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 			cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", "ID", "Type", "Hostname", "Session ID", "Status")
 			cmd.Println(strings.Repeat("-", 140))
 			for _, op := range operators {
-				cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", op.ID, op.OperatorType, operatorHostnameDisplay(op), op.OperatorSessionID, op.Status)
+				cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", op.Id, op.OperatorType, operatorHostnameDisplay(op), op.OperatorSessionId, op.Status)
 			}
 
 			return nil
@@ -385,7 +384,7 @@ func operatorStartCmd() *cobra.Command {
 				return serve.RunGateway(serve.GatewayConfig{
 					WorkingDir: workingDir,
 					OperatorRoles: operatorcapability.ResolveOperatorRoles(&operatorv1.OperatorRuntimeConfig{
-						Roles:                           roles,
+						Roles:                           models.OperatorRolesToProto(roles),
 						InferenceEnabled:                inferenceEnabled,
 						ProvenanceOperatorEnabled:       provenanceOperatorEnabled,
 						ProviderBoundaryObserverEnabled: providerBoundaryObserverEnabled,

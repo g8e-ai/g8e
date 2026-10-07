@@ -718,11 +718,8 @@ func operatorHostnameDisplay(op *operatorv1.OperatorDocument) string {
 	if op.CurrentHostname != "" {
 		return op.CurrentHostname
 	}
-	if op.OperatorType == constants.OperatorTypeEmbedded {
+	if constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
 		return "local"
-	}
-	if op.Name != "" {
-		return op.Name
 	}
 	return "-"
 }

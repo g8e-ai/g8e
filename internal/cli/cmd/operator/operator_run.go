@@ -214,20 +214,20 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 				}
 				var target *operatorv1.OperatorDocument
 				for i := range operators {
-					if operators[i].OperatorSessionID == sessionID {
-						target = &operators[i]
+					if operators[i].OperatorSessionId == sessionID {
+						target = operators[i]
 						break
 					}
 				}
 				if target == nil {
 					return fmt.Errorf("operator stop: no operator found with session id %s for the authenticated user", sessionID)
 				}
-				if err := operator.CheckStoppable(*target); err != nil {
+				if err := operator.CheckStoppable(target); err != nil {
 					return err
 				}
 				var matched []localOperatorProcess
 				for _, p := range locals {
-					if p.matches(*target) {
+					if p.matches(target) {
 						matched = append(matched, p)
 					}
 				}
@@ -266,12 +266,12 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 				if err == nil {
 					var targets []*operatorv1.OperatorDocument
 					for _, op := range operators {
-						if op.OperatorType == constants.OperatorTypeRemote && p.matches(op) {
+						if constants.OperatorType(op.OperatorType) == constants.OperatorTypeRemote && p.matches(op) {
 							targets = append(targets, op)
 						}
 					}
 					if len(targets) == 1 {
-						response, err = requestOperatorStop(client, targets[0].OperatorSessionID, reason)
+						response, err = requestOperatorStop(client, targets[0].OperatorSessionId, reason)
 					} else {
 						err = fmt.Errorf("no unique gateway session for local PID %d", p.pid)
 					}
@@ -343,8 +343,8 @@ type operatorRunTarget struct {
 func resolveOperatorRunTargets(operators []*operatorv1.OperatorDocument, sessionIDs []string) ([]operatorRunTarget, error) {
 	bySession := make(map[string]*operatorv1.OperatorDocument, len(operators))
 	for _, op := range operators {
-		if op.OperatorSessionID != "" {
-			bySession[op.OperatorSessionID] = op
+		if op.OperatorSessionId != "" {
+			bySession[op.OperatorSessionId] = op
 		}
 	}
 
@@ -354,12 +354,12 @@ func resolveOperatorRunTargets(operators []*operatorv1.OperatorDocument, session
 		if !ok {
 			return nil, fmt.Errorf("operator run: no operator found with session id %s for the authenticated user", sessionID)
 		}
-		if op.Status != constants.OperatorStatusActive {
+		if constants.OperatorStatus(op.Status) != constants.OperatorStatusActive {
 			return nil, fmt.Errorf("operator run: operator session %s is not active (status=%s)", sessionID, op.Status)
 		}
 		targets = append(targets, operatorRunTarget{
-			OperatorID:        op.ID,
-			OperatorSessionID: op.OperatorSessionID,
+			OperatorID:        op.Id,
+			OperatorSessionID: op.OperatorSessionId,
 		})
 	}
 	return targets, nil

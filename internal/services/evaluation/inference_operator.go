@@ -36,9 +36,9 @@ func ActiveInferenceOperators(operators []*operatorv1.OperatorDocument) []Infere
 			continue
 		}
 		matches = append(matches, InferenceOperatorStatus{
-			OperatorID:        op.ID,
-			OperatorSessionID: op.OperatorSessionID,
-			Status:            string(op.Status),
+			OperatorID:        op.GetId(),
+			OperatorSessionID: op.GetOperatorSessionId(),
+			Status:            op.GetStatus(),
 			InferenceEnabled:  true,
 			OllamaEndpoint:    inferenceOperatorOllamaEndpoint(op),
 		})
@@ -68,7 +68,7 @@ func SelectInferenceOperatorForHardware(
 				continue
 			}
 			for _, match := range matches {
-				if match.OperatorSessionID == op.OperatorSessionID {
+				if match.OperatorSessionID == op.GetOperatorSessionId() {
 					filtered = append(filtered, match)
 					break
 				}

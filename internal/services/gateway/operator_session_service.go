@@ -186,29 +186,25 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 	}
 	var fallback, embeddedFallback *operatorv1.OperatorDocument
 	for _, doc := range docs {
-		dataBytes, err := json.Marshal(doc.Data)
+		operator, err := models.OperatorDocumentFromStore(doc)
 		if err != nil {
-			return nil, fmt.Errorf("marshal operator document: %w", err)
-		}
-		var operator *operatorv1.OperatorDocument
-		if err := json.Unmarshal(dataBytes, &operator); err != nil {
 			return nil, fmt.Errorf("unmarshal operator document: %w", err)
 		}
 		if operatorcapability.IsStackDataOperator(operator) {
 			return dataOperatorSession(operator), nil
 		}
 		if fallback == nil && operatorcapability.IsDedicatedDataOperator(operator) {
-			fallback = &operator
+			fallback = operator
 		}
 		if embeddedFallback == nil && operatorcapability.IsDataOperator(operator) {
-			embeddedFallback = &operator
+			embeddedFallback = operator
 		}
 	}
 	if fallback != nil {
-		return dataOperatorSession(*fallback), nil
+		return dataOperatorSession(fallback), nil
 	}
 	if embeddedFallback != nil {
-		return dataOperatorSession(*embeddedFallback), nil
+		return dataOperatorSession(embeddedFallback), nil
 	}
 	return nil, nil
 }

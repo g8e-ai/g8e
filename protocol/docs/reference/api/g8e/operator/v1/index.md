@@ -2114,6 +2114,8 @@ persists it; every other component reads it through this contract.
 | current_hostname | [string](#string) |  |  |
 | runtime_config | [OperatorRuntimeConfig](#g8e-operator-v1-OperatorRuntimeConfig) |  |  |
 | consumed_by_operator_id | [string](#string) |  |  |
+| operator_cert_chain | [string](#string) |  | Chain of operator certificates for zero-trust verification. |
+| termination_reason | [string](#string) |  | Reason for operator termination (e.g., &#34;user_requested&#34;, &#34;max_duration_exceeded&#34;). |
 
 
 

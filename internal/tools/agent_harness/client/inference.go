@@ -63,7 +63,7 @@ func (c *Client) DiscoverInferenceOperator(ctx context.Context, operatorSessionI
 		if op.RuntimeConfig == nil || !operatorcapability.HasActiveRole(op, constants.OperatorRoleInference) {
 			continue
 		}
-		if operatorSessionID != "" && op.OperatorSessionID != operatorSessionID {
+		if operatorSessionID != "" && op.GetOperatorSessionId() != operatorSessionID {
 			continue
 		}
 		matches = append(matches, op)
@@ -76,7 +76,7 @@ func (c *Client) DiscoverInferenceOperator(ctx context.Context, operatorSessionI
 		return nil, body, constants.ErrInferenceOperatorNotFound
 	case 1:
 		selected := matches[0]
-		return &selected, body, nil
+		return selected, body, nil
 	default:
 		return nil, body, constants.ErrInferenceOperatorAmbiguous
 	}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
@@ -38,8 +39,8 @@ func (m Model) renderOperatorsView(width, height int) string {
 	start, end := windowFor(len(m.operators), m.operatorsSelected, rows)
 	for i := start; i < end; i++ {
 		op := m.operators[i]
-		row := fmt.Sprintf("%s %s %s", operatorHostname(op), operatorcapability.GetOperatorRoles(op), shortHash(op.ID))
-		if op.ID == m.identity.OperatorID {
+		row := fmt.Sprintf("%s %s %s", operatorHostname(op), operatorcapability.GetOperatorRoles(op), shortHash(op.Id))
+		if op.Id == m.identity.OperatorID {
 			row += " [bound]"
 		}
 		list = append(list, selectableRow(i == m.operatorsSelected, row))
@@ -49,19 +50,19 @@ func (m Model) renderOperatorsView(width, height int) string {
 	if m.operatorsSelected < len(m.operators) {
 		op := m.operators[m.operatorsSelected]
 		bound := "no"
-		if op.ID == m.identity.OperatorID {
+		if op.Id == m.identity.OperatorID {
 			bound = "yes (this CLI session)"
 		}
 		detail = append(detail,
-			detailRow("ID", op.ID),
+			detailRow("ID", op.Id),
 			detailRow("Hostname", operatorHostname(op)),
 			detailRow("Roles", operatorcapability.GetOperatorRoles(op).String()),
 			detailRow("Status", string(op.Status)),
 			detailRow("Type", string(op.OperatorType)),
-			detailRow("Session", op.OperatorSessionID),
+			detailRow("Session", op.OperatorSessionId),
 			detailRow("Bound", bound),
-			detailRow("Started", formatOptionalTime(op.StartedAt)),
-			detailRow("Heartbeat", formatHeartbeat(op.LastHeartbeatAt)),
+			detailRow("Started", formatOptionalProtoTime(op.StartedAt)),
+			detailRow("Heartbeat", formatProtoHeartbeat(op.LastHeartbeatAt)),
 			detailRow("Fingerprint", shortHash(op.SystemFingerprint)),
 		)
 		if op.LocalDir != "" {
@@ -91,4 +92,28 @@ func formatHeartbeat(t *time.Time) string {
 		return ""
 	}
 	return fmt.Sprintf("%s (%s ago)", t.Format("15:04:05"), timeNow().Sub(*t).Truncate(time.Second))
+}
+
+// formatOptionalProtoTime renders an optional proto timestamp, or "".
+func formatOptionalProtoTime(t *timestamppb.Timestamp) string {
+	if t == nil {
+		return ""
+	}
+	tm := t.AsTime()
+	if tm.IsZero() {
+		return ""
+	}
+	return tm.Format(detailTimeFormat)
+}
+
+// formatProtoHeartbeat renders the last heartbeat time and its age from a proto timestamp.
+func formatProtoHeartbeat(t *timestamppb.Timestamp) string {
+	if t == nil {
+		return ""
+	}
+	tm := t.AsTime()
+	if tm.IsZero() {
+		return ""
+	}
+	return fmt.Sprintf("%s (%s ago)", tm.Format("15:04:05"), timeNow().Sub(tm).Truncate(time.Second))
 }

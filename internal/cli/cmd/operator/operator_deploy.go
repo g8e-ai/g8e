@@ -412,8 +412,8 @@ func awaitOperatorsOnline(ctx context.Context, client authcmd.APIClient, userID 
 		}
 		active := make(map[string]struct{}, len(operators))
 		for _, op := range operators {
-			if op.Status == constants.OperatorStatusActive {
-				active[op.OperatorSessionID] = struct{}{}
+			if constants.OperatorStatus(op.Status) == constants.OperatorStatusActive {
+				active[op.OperatorSessionId] = struct{}{}
 			}
 		}
 		for _, op := range ops {

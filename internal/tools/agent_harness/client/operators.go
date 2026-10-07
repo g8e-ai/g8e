@@ -55,8 +55,8 @@ func (c *Client) DiscoverRemoteOperator(ctx context.Context) (*operatorv1.Operat
 		return nil, body, fmt.Errorf("%w: %w", sentinel, err)
 	}
 	for i := range response.Operators {
-		if response.Operators[i].OperatorSessionID == selected.OperatorSessionID {
-			return &response.Operators[i], body, nil
+		if response.Operators[i].GetOperatorSessionId() == selected.OperatorSessionID {
+			return response.Operators[i], body, nil
 		}
 	}
 	return nil, body, fmt.Errorf("%w: selected %s session is missing from the operator list", constants.ErrEvaluationTargetUnavailable, constants.DataOperatorHostname)

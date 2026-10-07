@@ -111,7 +111,7 @@ func (s *Service) RegisterPending() error {
 }
 
 func persistDocument(docs Store, op *operatorv1.OperatorDocument) error {
-	b, err := json.Marshal(op)
+	b, err := models.MarshalOperatorDocument(op)
 	if err != nil {
 		return fmt.Errorf("gateway: embedded operator: marshal document: %w", err)
 	}
@@ -172,15 +172,10 @@ func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operat
 		}
 	}
 
-	var op *operatorv1.OperatorDocument
-	b, err := json.Marshal(doc.Data)
+	op, err := models.OperatorDocumentFromStore(doc)
 	if err != nil {
-		return "", "", fmt.Errorf("gateway: embedded operator: marshal document data: %w", err)
+		return "", "", fmt.Errorf("gateway: embedded operator: load document: %w", err)
 	}
-	if err := json.Unmarshal(b, &op); err != nil {
-		return "", "", fmt.Errorf("gateway: embedded operator: unmarshal document: %w", err)
-	}
-	op.Id = doc.ID
 
 	if op.Claimed {
 		if op.UserId == userID {

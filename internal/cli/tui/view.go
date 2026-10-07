@@ -335,8 +335,8 @@ func (m Model) renderOperators(width int) string {
 	start, end := listWindow(len(m.operators), m.operatorsSelected)
 	for i := start; i < end; i++ {
 		op := m.operators[i]
-		row := fmt.Sprintf("%s %s %s %s", operatorHostname(op), operatorcapability.GetOperatorRoles(op), op.Status, shortHash(op.ID))
-		if op.ID == m.identity.OperatorID {
+		row := fmt.Sprintf("%s %s %s %s", operatorHostname(op), operatorcapability.GetOperatorRoles(op), op.Status, shortHash(op.Id))
+		if op.Id == m.identity.OperatorID {
 			row += " [bound]"
 		}
 		lines = append(lines, m.listRow(paneOperators, i == m.operatorsSelected, row))
@@ -360,14 +360,11 @@ func listWindow(n, selected int) (int, int) {
 
 // operatorHostname names an Operator for display, as 'g8e gw status' does.
 func operatorHostname(op *operatorv1.OperatorDocument) string {
-	if view := clioperator.ParseHeartbeatView(op.LatestHeartbeat); view != nil && view.SystemIdentity.Hostname != "" {
+	if view := clioperator.HeartbeatViewFromResult(op.LatestHeartbeatSnapshot); view != nil && view.SystemIdentity.Hostname != "" {
 		return view.SystemIdentity.Hostname
 	}
 	if op.CurrentHostname != "" {
 		return op.CurrentHostname
-	}
-	if op.Name != "" {
-		return op.Name
 	}
 	return "-"
 }

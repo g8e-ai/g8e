@@ -38,20 +38,20 @@ func (m Model) renderOperatorDetailsView(width, height int) string {
 // operatorDetailsLines mirrors the data shown by 'g8e operator show': the
 // identity and runtime fields followed by the normalized heartbeat sections.
 func operatorDetailsLines(op *operatorv1.OperatorDocument, identity Identity) []string {
-	bound := op.BoundWebSessionID
-	if op.ID == identity.OperatorID {
+	bound := op.BoundWebSessionId
+	if op.Id == identity.OperatorID {
 		bound = "yes (this CLI session)"
 	}
 	lines := []string{paneHeaderStyle.Render("OPERATOR DETAILS"), "",
-		detailRow("ID", op.ID),
+		detailRow("ID", op.Id),
 		detailRow("Hostname", operatorHostname(op)),
 		detailRow("Roles", operatorcapability.GetOperatorRoles(op).String()),
 		detailRow("Status", string(op.Status)),
 		detailRow("Type", string(op.OperatorType)),
-		detailRow("Session", op.OperatorSessionID),
+		detailRow("Session", op.OperatorSessionId),
 		detailRow("Bound", bound),
-		detailRow("Started", formatOptionalTime(op.StartedAt)),
-		detailRow("Heartbeat", formatHeartbeat(op.LastHeartbeatAt)),
+		detailRow("Started", formatOptionalProtoTime(op.StartedAt)),
+		detailRow("Heartbeat", formatProtoHeartbeat(op.LastHeartbeatAt)),
 		detailRow("Fingerprint", op.SystemFingerprint),
 	}
 	if op.LocalDir != "" {
@@ -66,7 +66,7 @@ func operatorDetailsLines(op *operatorv1.OperatorDocument, identity Identity) []
 		)
 	}
 
-	view := operator.ParseHeartbeatView(op.LatestHeartbeat)
+	view := operator.HeartbeatViewFromResult(op.LatestHeartbeatSnapshot)
 	if view == nil {
 		return append(lines, "", paneHeaderStyle.Render("HEARTBEAT"), "", detailStyle.Render("(no heartbeat snapshot available)"))
 	}

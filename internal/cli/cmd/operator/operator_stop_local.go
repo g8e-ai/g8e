@@ -31,7 +31,7 @@ type localOperatorProcess struct {
 
 func (p localOperatorProcess) matches(op *operatorv1.OperatorDocument) bool {
 	if p.sessionID != "" {
-		return p.sessionID == op.OperatorSessionID
+		return p.sessionID == op.OperatorSessionId
 	}
 	hostname, err := os.Hostname()
 	return err == nil && operatorHostnameValue(op) == hostname && op.LocalDir != "" && filepath.IsAbs(op.LocalDir) && filepath.Clean(op.LocalDir) == p.dir

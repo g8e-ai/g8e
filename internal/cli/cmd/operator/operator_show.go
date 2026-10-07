@@ -79,10 +79,10 @@ session ID (from the Session ID column in './g8e operator list').`,
 			}
 
 			if output.JSONEnabled(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), operatorShowPayload(*target))
+				return output.WriteJSON(cmd.OutOrStdout(), operatorShowPayload(target))
 			}
 
-			printOperatorShow(cmd, *target)
+			printOperatorShow(cmd, target)
 			return nil
 		},
 	}
@@ -91,15 +91,15 @@ session ID (from the Session ID column in './g8e operator list').`,
 
 func findOperatorByIDOrSession(operators []*operatorv1.OperatorDocument, idOrSession string) *operatorv1.OperatorDocument {
 	for i := range operators {
-		if operators[i].ID == idOrSession || operators[i].OperatorSessionID == idOrSession {
-			return &operators[i]
+		if operators[i].Id == idOrSession || operators[i].OperatorSessionId == idOrSession {
+			return operators[i]
 		}
 	}
 	return nil
 }
 
 func operatorHostnameValue(op *operatorv1.OperatorDocument) string {
-	view := clioperator.ParseHeartbeatView(op.LatestHeartbeat)
+	view := clioperator.HeartbeatViewFromResult(op.LatestHeartbeatSnapshot)
 	if view != nil && view.SystemIdentity.Hostname != "" {
 		return view.SystemIdentity.Hostname
 	}
@@ -147,21 +147,33 @@ type operatorHeartbeatOutput struct {
 }
 
 func operatorShowPayload(op *operatorv1.OperatorDocument) operatorShowOutput {
+	var createdAt, updatedAt time.Time
+	if op.CreatedAt != nil {
+		createdAt = op.CreatedAt.AsTime()
+	}
+	if op.UpdatedAt != nil {
+		updatedAt = op.UpdatedAt.AsTime()
+	}
+	var lastHeartbeatAt *time.Time
+	if op.LastHeartbeatAt != nil {
+		t := op.LastHeartbeatAt.AsTime()
+		lastHeartbeatAt = &t
+	}
+
 	payload := operatorShowOutput{
-		OperatorID:        op.ID,
-		OperatorSessionID: op.OperatorSessionID,
-		OperatorType:      op.OperatorType,
+		OperatorID:        op.Id,
+		OperatorSessionID: op.OperatorSessionId,
+		OperatorType:      constants.OperatorType(op.OperatorType),
 		OperatorRoles:     operatorcapability.GetOperatorRoles(op),
-		Status:            op.Status,
-		Component:         op.Component,
-		CreatedAt:         op.CreatedAt,
-		UpdatedAt:         op.UpdatedAt,
-		Name:              op.Name,
+		Status:            constants.OperatorStatus(op.Status),
+		Component:         constants.ComponentName(op.Component),
+		CreatedAt:         createdAt,
+		UpdatedAt:         updatedAt,
 		SystemFingerprint: op.SystemFingerprint,
-		LastHeartbeatAt:   op.LastHeartbeatAt,
+		LastHeartbeatAt:   lastHeartbeatAt,
 		RuntimeConfig:     op.RuntimeConfig,
 	}
-	if view := clioperator.ParseHeartbeatView(op.LatestHeartbeat); view != nil {
+	if view := clioperator.HeartbeatViewFromResult(op.LatestHeartbeatSnapshot); view != nil {
 		payload.Heartbeat = heartbeatViewOutput(view)
 	}
 	return payload
@@ -206,22 +218,21 @@ func heartbeatViewOutput(view *clioperator.HeartbeatView) *operatorHeartbeatOutp
 }
 
 func printOperatorShow(cmd *cobra.Command, op *operatorv1.OperatorDocument) {
-	view := clioperator.ParseHeartbeatView(op.LatestHeartbeat)
+	view := clioperator.HeartbeatViewFromResult(op.LatestHeartbeatSnapshot)
 
-	cmd.Printf("Operator:  %s\n", op.ID)
-	cmd.Printf("Session:   %s\n", op.OperatorSessionID)
+	cmd.Printf("Operator:  %s\n", op.Id)
+	cmd.Printf("Session:   %s\n", op.OperatorSessionId)
 	cmd.Printf("Type:      %s\n", op.OperatorType)
 	cmd.Printf("Roles:     %s\n", operatorcapability.GetOperatorRoles(op))
 	cmd.Printf("Status:    %s\n", op.Status)
-	if op.Name != "" {
-		cmd.Printf("Name:      %s\n", op.Name)
-	}
 	if op.SystemFingerprint != "" {
 		cmd.Printf("Fingerprint: %s\n", op.SystemFingerprint)
 	}
-	cmd.Printf("Updated:   %s\n", op.UpdatedAt.UTC().Format("2006-01-02 15:04:05 UTC"))
+	if op.UpdatedAt != nil {
+		cmd.Printf("Updated:   %s\n", op.UpdatedAt.AsTime().UTC().Format("2006-01-02 15:04:05 UTC"))
+	}
 	if op.LastHeartbeatAt != nil {
-		cmd.Printf("Last heartbeat: %s\n", op.LastHeartbeatAt.UTC().Format("2006-01-02 15:04:05 UTC"))
+		cmd.Printf("Last heartbeat: %s\n", op.LastHeartbeatAt.AsTime().UTC().Format("2006-01-02 15:04:05 UTC"))
 	}
 
 	if op.RuntimeConfig != nil {

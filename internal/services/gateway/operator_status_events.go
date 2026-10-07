@@ -57,15 +57,11 @@ func (s *DocumentStoreService) OperatorStatusTransition(operatorID string, statu
 	if doc == nil {
 		return OperatorStatusTransition{}, fmt.Errorf("%w: operator %s", constants.ErrNotFound, operatorID)
 	}
-	wire, err := json.Marshal(doc.ForWire())
+	op, err := models.OperatorDocumentFromStore(doc)
 	if err != nil {
-		return OperatorStatusTransition{}, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
-	}
-	var op operatorHeartbeatLiveness
-	if err := json.Unmarshal(wire, &op); err != nil {
 		return OperatorStatusTransition{}, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
-	return OperatorStatusTransition{OperatorID: operatorID, UserID: op.UserID, Name: op.Name, Status: status}, nil
+	return OperatorStatusTransition{OperatorID: operatorID, UserID: op.GetUserId(), Name: op.GetName(), Status: status}, nil
 }
 
 // OperatorStatusObserver is told about each persisted Operator status

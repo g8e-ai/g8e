@@ -511,16 +511,12 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 		if err != nil || op == nil {
 			return false
 		}
-		var opDoc *operatorv1.OperatorDocument
-		opBytes, err := json.Marshal(op.ForWire())
+		opDoc, err := models.OperatorDocumentFromStore(op)
 		if err != nil {
 			return false
 		}
-		if err := json.Unmarshal(opBytes, &opDoc); err != nil {
-			return false
-		}
-		t.Logf("Operator doc: ID=%s, SessionID=%s, Status=%s, OrgID=%s", opDoc.ID, opDoc.OperatorSessionID, opDoc.Status, opDoc.OrganizationID)
-		return opDoc.OperatorSessionID == regResp.OperatorSessionID && opDoc.Status == constants.OperatorStatusActive
+		t.Logf("Operator doc: ID=%s, SessionID=%s, Status=%s, OrgID=%s", opDoc.GetId(), opDoc.GetOperatorSessionId(), opDoc.GetStatus(), opDoc.GetOrganizationId())
+		return opDoc.GetOperatorSessionId() == regResp.OperatorSessionID && opDoc.GetStatus() == string(constants.OperatorStatusActive)
 	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
 
 	cliPrivBytes, err := x509.MarshalECPrivateKey(cliPriv)

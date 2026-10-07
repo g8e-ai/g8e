@@ -70,10 +70,10 @@ func (l *CommandLane) ResolveTarget(ctx context.Context) (Target, error) {
 	if err != nil {
 		return Target{}, err
 	}
-	if operator == nil || operator.ID == "" || !operatorcapability.IsDataOperator(*operator) {
+	if operator == nil || operator.GetId() == "" || !operatorcapability.IsDataOperator(operator) {
 		return Target{}, fmt.Errorf("%w: selected operator is not an active Data session", constants.ErrEvaluationTargetUnavailable)
 	}
-	return Target{OperatorID: operator.ID, SessionID: operator.OperatorSessionID}, nil
+	return Target{OperatorID: operator.GetId(), SessionID: operator.GetOperatorSessionId()}, nil
 }
 
 func (l *CommandLane) Posture(ctx context.Context) (evalv1.EvaluationGovernancePosture, error) {

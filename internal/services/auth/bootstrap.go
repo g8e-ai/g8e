@@ -153,7 +153,7 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 
 // operatorAuthRequest is the request body for POST /api/v1/operators/reauth.
 type operatorAuthRequest struct {
-	RuntimeConfig *operatorv1.OperatorRuntimeConfig `json:"runtime_config"`
+	RuntimeConfig json.RawMessage `json:"runtime_config"`
 }
 
 // requestHTTPAuth authenticates via POST /api/v1/operators/reauth with exponential backoff.
@@ -182,8 +182,13 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		Platform:                           runtime.GOOS,
 	}
 
+	runtimeConfigBytes, err := models.MarshalOperatorRuntimeConfig(runtimeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapRequestMarshal, err)
+	}
+
 	reqBody := operatorAuthRequest{
-		RuntimeConfig: runtimeConfig,
+		RuntimeConfig: runtimeConfigBytes,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

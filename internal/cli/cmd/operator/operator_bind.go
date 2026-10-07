@@ -251,15 +251,12 @@ func printOperatorBindTargets(cmd *cobra.Command, targets []*operatorv1.Operator
 		target := targets[0]
 		cmd.Printf("Operator bind target\n")
 		cmd.Println(strings.Repeat("=", 72))
-		cmd.Printf("  Operator ID:         %s\n", target.ID)
-		cmd.Printf("  Operator session ID: %s\n", target.OperatorSessionID)
+		cmd.Printf("  Operator ID:         %s\n", target.Id)
+		cmd.Printf("  Operator session ID: %s\n", target.OperatorSessionId)
 		cmd.Printf("  Type:                %s\n", target.OperatorType)
 		cmd.Printf("  Status:              %s\n", target.Status)
-		if target.Name != "" {
-			cmd.Printf("  Name:                %s\n", target.Name)
-		}
 		cmd.Printf("  Current CLI session: %s\n", creds.CLISessionID)
-		if creds.OperatorSessionID == target.OperatorSessionID {
+		if creds.OperatorSessionID == target.OperatorSessionId {
 			cmd.Printf("  Current binding:     already bound to this operator session\n")
 		} else if creds.OperatorSessionID != "" {
 			cmd.Printf("  Current binding:     %s\n", creds.OperatorSessionID)
@@ -269,13 +266,13 @@ func printOperatorBindTargets(cmd *cobra.Command, targets []*operatorv1.Operator
 
 	cmd.Printf("Operator bind targets (%d)\n", len(targets))
 	cmd.Println(strings.Repeat("=", 72))
-	cmd.Printf("  Primary (first):     %s\n", targets[0].OperatorSessionID)
+	cmd.Printf("  Primary (first):     %s\n", targets[0].OperatorSessionId)
 	cmd.Printf("  Current CLI session: %s\n", creds.CLISessionID)
 	if len(targets) > operatorBindDetailLimit {
 		return
 	}
 	for _, target := range targets {
-		cmd.Printf("  %-36s  %-12s  %s\n", target.OperatorSessionID, target.OperatorType, target.Status)
+		cmd.Printf("  %-36s  %-12s  %s\n", target.OperatorSessionId, target.OperatorType, target.Status)
 	}
 }
 
@@ -329,12 +326,12 @@ func runOperatorBindList(
 
 		for _, sessionID := range boundSessionIDs {
 			if target := findOperatorBySessionID(slotResp.Operators, sessionID); target != nil {
-				operators = append(operators, *target)
+				operators = append(operators, target)
 				continue
 			}
-			unknown := operatorv1.OperatorDocument{OperatorSessionID: sessionID, Status: "unknown"}
+			unknown := &operatorv1.OperatorDocument{OperatorSessionId: sessionID, Status: "unknown"}
 			if sessionID == sessionInfo.OperatorSessionID {
-				unknown.ID = sessionInfo.OperatorID
+				unknown.Id = sessionInfo.OperatorID
 			}
 			operators = append(operators, unknown)
 		}
@@ -345,13 +342,12 @@ func runOperatorBindList(
 		for _, op := range operators {
 			entries = append(entries, operatorBindingEntry{
 				CLISessionID:      sessionInfo.CLISessionID,
-				OperatorID:        op.ID,
-				OperatorSessionID: op.OperatorSessionID,
-				OperatorType:      op.OperatorType,
+				OperatorID:        op.Id,
+				OperatorSessionID: op.OperatorSessionId,
+				OperatorType:      constants.OperatorType(op.OperatorType),
 				OperatorRoles:     operatorcapability.GetOperatorRoles(op),
-				Status:            op.Status,
+				Status:            constants.OperatorStatus(op.Status),
 				Hostname:          operatorHostnameValue(op),
-				Name:              op.Name,
 			})
 		}
 		return output.WriteJSON(cmd.OutOrStdout(), operatorBindListOutput{
@@ -374,7 +370,7 @@ func runOperatorBindList(
 	cmd.Println(strings.Repeat("-", 120))
 	cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", "ID", "Type", "Hostname", "Session ID", "Status")
 	for _, op := range operators {
-		cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", op.ID, op.OperatorType, operatorHostnameDisplay(op), op.OperatorSessionID, op.Status)
+		cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", op.Id, op.OperatorType, operatorHostnameDisplay(op), op.OperatorSessionId, op.Status)
 	}
 	return nil
 }
@@ -458,8 +454,8 @@ func runOperatorBindUnbind(
 
 func findOperatorBySessionID(operators []*operatorv1.OperatorDocument, operatorSessionID string) *operatorv1.OperatorDocument {
 	for i := range operators {
-		if operators[i].OperatorSessionID == operatorSessionID {
-			return &operators[i]
+		if operators[i].OperatorSessionId == operatorSessionID {
+			return operators[i]
 		}
 	}
 	return nil

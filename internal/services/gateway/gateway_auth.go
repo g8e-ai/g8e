@@ -507,13 +507,8 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operat
 	}
 
 	// Convert Document to OperatorDocument
-	b, err := json.Marshal(docs[0].ForWire())
+	op, err := models.OperatorDocumentFromStore(docs[0])
 	if err != nil {
-		return nil, fmt.Errorf("gateway: auth: marshal operator document: %w: %w", err, constants.ErrRequestMarshalFailed)
-	}
-
-	var op *operatorv1.OperatorDocument
-	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, fmt.Errorf("gateway: auth: unmarshal operator document: %w: %w", err, constants.ErrResponseParseFailed)
 	}
 
@@ -534,7 +529,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operat
 		return nil, err
 	}
 
-	return &op, nil
+	return op, nil
 }
 
 func (s *AuthService) ValidateOperatorCLISessionBinding(operatorSessionID, cliSessionID, userID string) (*operatorv1.OperatorDocument, error) {
@@ -879,7 +874,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				}
 				return true
 			}
-			if (headerOpID != "" && headerOpID != op.Id) || (targetSessionID != cliSession.OperatorSessionID && op.UserId != cliSession.UserId) {
+			if (headerOpID != "" && headerOpID != op.Id) || (targetSessionID != cliSession.OperatorSessionID && op.UserId != cliSession.UserID) {
 				s.logger.Warn("gateway: auth: operator headers mismatch persisted CLI session binding",
 					"path", r.URL.Path,
 					"cli_session_id", cliSessionID,

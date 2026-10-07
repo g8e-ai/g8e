@@ -18,6 +18,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -86,11 +87,11 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]*operatorv1.Op
 	}
 	slots := make([]*operatorv1.OperatorDocument, 0, len(docs))
 	for _, doc := range docs {
-		slot, err := s.toOperatorDoc(doc)
+		slot, err := models.OperatorDocumentFromStore(doc)
 		if err != nil {
 			continue
 		}
-		slots = append(slots, *slot)
+		slots = append(slots, slot)
 	}
 	return slots, nil
 }
@@ -107,7 +108,7 @@ func (s *RegistrationService) GetOperator(operatorID string) (*operatorv1.Operat
 	if err != nil {
 		return nil, err
 	}
-	return s.toOperatorDoc(doc)
+	return models.OperatorDocumentFromStore(doc)
 }
 
 func (s *RegistrationService) ListUserOperators(userID string) ([]*operatorv1.OperatorDocument, error) {
@@ -123,11 +124,11 @@ func (s *RegistrationService) ListUserOperators(userID string) ([]*operatorv1.Op
 	}
 	operators := make([]*operatorv1.OperatorDocument, 0, len(docs))
 	for _, doc := range docs {
-		op, err := s.toOperatorDoc(doc)
+		op, err := models.OperatorDocumentFromStore(doc)
 		if err != nil {
 			continue
 		}
-		operators = append(operators, *op)
+		operators = append(operators, op)
 	}
 	return operators, nil
 }
@@ -143,15 +144,19 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 		return constants.ErrMissingRequiredField
 	}
 	type configUpdatePayload struct {
-		RuntimeConfig *operatorv1.OperatorRuntimeConfig `json:"runtime_config"`
-		OperatorRoles constants.OperatorRoles           `json:"operator_roles,omitempty"`
-		LocalDir      string                            `json:"local_dir,omitempty"`
-		Account       string                            `json:"account,omitempty"`
-		Port          int                               `json:"port,omitempty"`
-		UpdatedAt     time.Time                         `json:"updated_at"`
+		RuntimeConfig json.RawMessage       `json:"runtime_config"`
+		OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
+		LocalDir      string                `json:"local_dir,omitempty"`
+		Account       string                `json:"account,omitempty"`
+		Port          int32                 `json:"port,omitempty"`
+		UpdatedAt     time.Time             `json:"updated_at"`
+	}
+	runtimeConfigBytes, err := models.MarshalOperatorRuntimeConfig(runtimeConfig)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 	payload := configUpdatePayload{
-		RuntimeConfig: runtimeConfig,
+		RuntimeConfig: runtimeConfigBytes,
 		OperatorRoles: operatorcapability.ResolveOperatorRoles(runtimeConfig),
 		LocalDir:      runtimeConfig.LocalDir,
 		Account:       runtimeConfig.Account,
@@ -176,7 +181,7 @@ func (s *RegistrationService) MarkOperatorStopped(operatorID, userID, reason str
 	if err != nil || doc == nil {
 		return fmt.Errorf("%w: %w", constants.ErrRegistrationOperatorNotFound, err)
 	}
-	op, err := s.toOperatorDoc(doc)
+	op, err := models.OperatorDocumentFromStore(doc)
 	if err != nil {
 		return err
 	}
@@ -219,7 +224,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return constants.ErrRegistrationOperatorNotFound
 	}
 
-	op, err := s.toOperatorDoc(doc)
+	op, err := models.OperatorDocumentFromStore(doc)
 	if err != nil {
 		return err
 	}
@@ -308,7 +313,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	}
 	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
-		operator, _ = s.toOperatorDoc(docs[0])
+		operator, _ = models.OperatorDocumentFromStore(docs[0])
 	}
 
 	if operator == nil {
@@ -318,7 +323,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 		}
 		docs, err = s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 		if err == nil && len(docs) > 0 {
-			operator, _ = s.toOperatorDoc(docs[0])
+			operator, _ = models.OperatorDocumentFromStore(docs[0])
 		}
 	}
 
@@ -516,18 +521,6 @@ func (s *RegistrationService) completeRegistration(operator *operatorv1.Operator
 	}, nil
 }
 
-func (s *RegistrationService) toOperatorDoc(doc *models.Document) (*operatorv1.OperatorDocument, error) {
-	b, err := json.Marshal(doc.ForWire())
-	if err != nil {
-		return nil, err
-	}
-	var op *operatorv1.OperatorDocument
-	if err := json.Unmarshal(b, &op); err != nil {
-		return nil, err
-	}
-	return &op, nil
-}
-
 func (s *RegistrationService) createSlot(userID, orgID string) (*operatorv1.OperatorDocument, error) {
 	id, err := uuid.NewString()
 	if err != nil {
@@ -547,21 +540,22 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*operatorv1.Oper
 		slotNumber = len(docs) + 1
 	}
 
+	now := time.Now().UTC()
 	op := &operatorv1.OperatorDocument{
 		Id:             id,
 		UserId:         userID,
 		OrganizationId: orgID,
-		Component:      constants.ComponentName(marshaler.Status(constants.ComponentNameG8EO)),
+		Component:      string(constants.ComponentNameG8EO),
 		Name:           fmt.Sprintf("operator-%d", slotNumber),
 		Status:         string(constants.OperatorStatusOffline),
-		SlotNumber:     slotNumber,
+		SlotNumber:     int32(slotNumber),
 		IsSlot:         true,
 		OperatorType:   string(constants.OperatorTypeRemote),
-		CreatedAt:      time.Now().UTC(),
-		UpdatedAt:      time.Now().UTC(),
+		CreatedAt:      timestamppb.New(now),
+		UpdatedAt:      timestamppb.New(now),
 	}
 
-	b, err := json.Marshal(op)
+	b, err := models.MarshalOperatorDocument(op)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
@@ -600,13 +594,13 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 			lastErr = constants.ErrRegistrationOperatorNotFound
 			continue
 		}
-		op, err := s.toOperatorDoc(doc)
+		op, err := models.OperatorDocumentFromStore(doc)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
 			continue
 		}
-		if op.UserId != req.UserId {
+		if op.UserId != req.UserID {
 			failed = append(failed, opID)
 			lastErr = constants.ErrRegistrationOperatorNotBelongToUser
 			continue
@@ -762,7 +756,7 @@ func (s *RegistrationService) BindEmbeddedOperatorToWebSession(userID, webSessio
 	if doc == nil {
 		return false, nil
 	}
-	op, err := s.toOperatorDoc(doc)
+	op, err := models.OperatorDocumentFromStore(doc)
 	if err != nil {
 		return false, fmt.Errorf("decode embedded operator: %w", err)
 	}
@@ -809,13 +803,13 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			lastErr = constants.ErrRegistrationOperatorNotFound
 			continue
 		}
-		op, err := s.toOperatorDoc(doc)
+		op, err := models.OperatorDocumentFromStore(doc)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
 			continue
 		}
-		if op.UserId != req.UserId {
+		if op.UserId != req.UserID {
 			failed = append(failed, opID)
 			lastErr = constants.ErrRegistrationOperatorNotBelongToUser
 			continue
@@ -1000,11 +994,11 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 	if doc == nil {
 		return nil, constants.ErrRegistrationOperatorNotFound
 	}
-	op, err := s.toOperatorDoc(doc)
+	op, err := models.OperatorDocumentFromStore(doc)
 	if err != nil {
 		return nil, err
 	}
-	if op.UserId != req.UserId {
+	if op.UserId != req.UserID {
 		return nil, constants.ErrRegistrationOperatorNotBelongToUser
 	}
 

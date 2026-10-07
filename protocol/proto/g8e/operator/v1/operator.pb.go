@@ -3781,8 +3781,12 @@ type OperatorDocument struct {
 	CurrentHostname         string                 `protobuf:"bytes,30,opt,name=current_hostname,json=currentHostname,proto3" json:"current_hostname,omitempty"`
 	RuntimeConfig           *OperatorRuntimeConfig `protobuf:"bytes,31,opt,name=runtime_config,json=runtimeConfig,proto3" json:"runtime_config,omitempty"`
 	ConsumedByOperatorId    string                 `protobuf:"bytes,32,opt,name=consumed_by_operator_id,json=consumedByOperatorId,proto3" json:"consumed_by_operator_id,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// Chain of operator certificates for zero-trust verification.
+	OperatorCertChain string `protobuf:"bytes,33,opt,name=operator_cert_chain,json=operatorCertChain,proto3" json:"operator_cert_chain,omitempty"`
+	// Reason for operator termination (e.g., "user_requested", "max_duration_exceeded").
+	TerminationReason string `protobuf:"bytes,34,opt,name=termination_reason,json=terminationReason,proto3" json:"termination_reason,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *OperatorDocument) Reset() {
@@ -4014,6 +4018,20 @@ func (x *OperatorDocument) GetRuntimeConfig() *OperatorRuntimeConfig {
 func (x *OperatorDocument) GetConsumedByOperatorId() string {
 	if x != nil {
 		return x.ConsumedByOperatorId
+	}
+	return ""
+}
+
+func (x *OperatorDocument) GetOperatorCertChain() string {
+	if x != nil {
+		return x.OperatorCertChain
+	}
+	return ""
+}
+
+func (x *OperatorDocument) GetTerminationReason() string {
+	if x != nil {
+		return x.TerminationReason
 	}
 	return ""
 }
@@ -12209,8 +12227,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\"provider_boundary_observer_enabled\x18\f \x01(\bR\x1fproviderBoundaryObserverEnabled\x12>\n" +
 	"\x1bprovenance_operator_enabled\x18\r \x01(\bR\x19provenanceOperatorEnabled\x12R\n" +
 	"&provenance_operator_model_storage_root\x18\x0e \x01(\tR\"provenanceOperatorModelStorageRoot\x12\x1a\n" +
-	"\bplatform\x18\x0f \x01(\tR\bplatform\"\xad\n" +
-	"\n" +
+	"\bplatform\x18\x0f \x01(\tR\bplatform\"\x8c\v\n" +
 	"\x10OperatorDocument\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12'\n" +
@@ -12247,7 +12264,9 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x19latest_heartbeat_snapshot\x18\x1d \x01(\v2 .g8e.operator.v1.HeartbeatResultR\x17latestHeartbeatSnapshot\x12)\n" +
 	"\x10current_hostname\x18\x1e \x01(\tR\x0fcurrentHostname\x12M\n" +
 	"\x0eruntime_config\x18\x1f \x01(\v2&.g8e.operator.v1.OperatorRuntimeConfigR\rruntimeConfig\x125\n" +
-	"\x17consumed_by_operator_id\x18  \x01(\tR\x14consumedByOperatorIdJ\x04\b\x0f\x10\x10J\x04\b\x11\x10\x12J\x04\b\x12\x10\x13R\rcloud_subtypeR\x12created_at_unix_msR\x12updated_at_unix_ms\"+\n" +
+	"\x17consumed_by_operator_id\x18  \x01(\tR\x14consumedByOperatorId\x12.\n" +
+	"\x13operator_cert_chain\x18! \x01(\tR\x11operatorCertChain\x12-\n" +
+	"\x12termination_reason\x18\" \x01(\tR\x11terminationReasonJ\x04\b\x0f\x10\x10J\x04\b\x11\x10\x12J\x04\b\x12\x10\x13R\rcloud_subtypeR\x12created_at_unix_msR\x12updated_at_unix_ms\"+\n" +
 	"\x11ShutdownRequested\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"~\n" +
 	"\x13EvalAnswerRequested\x12\x1b\n" +

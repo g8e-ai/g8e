@@ -728,7 +728,7 @@ class OperatorRuntimeConfig(_message.Message):
     def __init__(self, cloud_mode: _Optional[bool] = ..., cloud_provider: _Optional[str] = ..., local_storage_enabled: _Optional[bool] = ..., no_git: _Optional[bool] = ..., log_level: _Optional[str] = ..., http_port: _Optional[int] = ..., roles: _Optional[_Iterable[str]] = ..., local_dir: _Optional[str] = ..., account: _Optional[str] = ..., inference_enabled: _Optional[bool] = ..., inference_ollama_endpoint: _Optional[str] = ..., provider_boundary_observer_enabled: _Optional[bool] = ..., provenance_operator_enabled: _Optional[bool] = ..., provenance_operator_model_storage_root: _Optional[str] = ..., platform: _Optional[str] = ...) -> None: ...
 
 class OperatorDocument(_message.Message):
-    __slots__ = ("id", "user_id", "organization_id", "component", "name", "status", "operator_session_id", "bound_web_session_id", "operator_cert", "operator_cert_serial", "slot_number", "is_slot", "claimed", "operator_type", "system_fingerprint", "created_at", "updated_at", "started_at", "claimed_at", "last_heartbeat_at", "operator_roles", "local_dir", "account", "port", "stop_reason", "latest_heartbeat_snapshot", "current_hostname", "runtime_config", "consumed_by_operator_id")
+    __slots__ = ("id", "user_id", "organization_id", "component", "name", "status", "operator_session_id", "bound_web_session_id", "operator_cert", "operator_cert_serial", "slot_number", "is_slot", "claimed", "operator_type", "system_fingerprint", "created_at", "updated_at", "started_at", "claimed_at", "last_heartbeat_at", "operator_roles", "local_dir", "account", "port", "stop_reason", "latest_heartbeat_snapshot", "current_hostname", "runtime_config", "consumed_by_operator_id", "operator_cert_chain", "termination_reason")
     ID_FIELD_NUMBER: _ClassVar[int]
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     ORGANIZATION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -758,6 +758,8 @@ class OperatorDocument(_message.Message):
     CURRENT_HOSTNAME_FIELD_NUMBER: _ClassVar[int]
     RUNTIME_CONFIG_FIELD_NUMBER: _ClassVar[int]
     CONSUMED_BY_OPERATOR_ID_FIELD_NUMBER: _ClassVar[int]
+    OPERATOR_CERT_CHAIN_FIELD_NUMBER: _ClassVar[int]
+    TERMINATION_REASON_FIELD_NUMBER: _ClassVar[int]
     id: str
     user_id: str
     organization_id: str
@@ -787,7 +789,9 @@ class OperatorDocument(_message.Message):
     current_hostname: str
     runtime_config: OperatorRuntimeConfig
     consumed_by_operator_id: str
-    def __init__(self, id: _Optional[str] = ..., user_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., component: _Optional[str] = ..., name: _Optional[str] = ..., status: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., bound_web_session_id: _Optional[str] = ..., operator_cert: _Optional[str] = ..., operator_cert_serial: _Optional[str] = ..., slot_number: _Optional[int] = ..., is_slot: _Optional[bool] = ..., claimed: _Optional[bool] = ..., operator_type: _Optional[str] = ..., system_fingerprint: _Optional[str] = ..., created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., updated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., started_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., claimed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., last_heartbeat_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., operator_roles: _Optional[_Iterable[str]] = ..., local_dir: _Optional[str] = ..., account: _Optional[str] = ..., port: _Optional[int] = ..., stop_reason: _Optional[str] = ..., latest_heartbeat_snapshot: _Optional[_Union[HeartbeatResult, _Mapping]] = ..., current_hostname: _Optional[str] = ..., runtime_config: _Optional[_Union[OperatorRuntimeConfig, _Mapping]] = ..., consumed_by_operator_id: _Optional[str] = ...) -> None: ...
+    operator_cert_chain: str
+    termination_reason: str
+    def __init__(self, id: _Optional[str] = ..., user_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., component: _Optional[str] = ..., name: _Optional[str] = ..., status: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., bound_web_session_id: _Optional[str] = ..., operator_cert: _Optional[str] = ..., operator_cert_serial: _Optional[str] = ..., slot_number: _Optional[int] = ..., is_slot: _Optional[bool] = ..., claimed: _Optional[bool] = ..., operator_type: _Optional[str] = ..., system_fingerprint: _Optional[str] = ..., created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., updated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., started_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., claimed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., last_heartbeat_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., operator_roles: _Optional[_Iterable[str]] = ..., local_dir: _Optional[str] = ..., account: _Optional[str] = ..., port: _Optional[int] = ..., stop_reason: _Optional[str] = ..., latest_heartbeat_snapshot: _Optional[_Union[HeartbeatResult, _Mapping]] = ..., current_hostname: _Optional[str] = ..., runtime_config: _Optional[_Union[OperatorRuntimeConfig, _Mapping]] = ..., consumed_by_operator_id: _Optional[str] = ..., operator_cert_chain: _Optional[str] = ..., termination_reason: _Optional[str] = ...) -> None: ...
 
 class ShutdownRequested(_message.Message):
     __slots__ = ("reason",)

@@ -234,13 +234,13 @@ func (c *Client) DiscoverOperator(ctx context.Context) (string, string, error) {
 	}
 	var matches []*operatorv1.OperatorDocument
 	for _, op := range operators {
-		if op.ID == "" || op.OperatorSessionID == "" || op.Status != constants.OperatorStatusActive {
+		if op.GetId() == "" || op.GetOperatorSessionId() == "" || op.GetStatus() != string(constants.OperatorStatusActive) {
 			continue
 		}
-		if c.cfg.OperatorID != "" && op.ID != c.cfg.OperatorID {
+		if c.cfg.OperatorID != "" && op.GetId() != c.cfg.OperatorID {
 			continue
 		}
-		if c.cfg.OperatorSessionID != "" && op.OperatorSessionID != c.cfg.OperatorSessionID {
+		if c.cfg.OperatorSessionID != "" && op.GetOperatorSessionId() != c.cfg.OperatorSessionID {
 			continue
 		}
 		if c.cfg.OperatorID == "" && c.cfg.OperatorSessionID == "" && !operatorcapability.IsDataOperator(op) {
@@ -255,7 +255,7 @@ func (c *Client) DiscoverOperator(ctx context.Context) (string, string, error) {
 	case 0:
 		return "", "", fmt.Errorf("%w: operator id=%q session=%q", constants.ErrEvaluationTargetUnavailable, c.cfg.OperatorID, c.cfg.OperatorSessionID)
 	case 1:
-		return matches[0].ID, matches[0].OperatorSessionID, nil
+		return matches[0].GetId(), matches[0].GetOperatorSessionId(), nil
 	default:
 		return "", "", fmt.Errorf("%w: %d active operators; specify --operator-id or --operator-session", constants.ErrEvaluationTargetAmbiguous, len(matches))
 	}

@@ -143,7 +143,7 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 		return
 	}
 	for i := range operators {
-		withResolvedOperatorRoles(&operators[i])
+		withResolvedOperatorRoles(operators[i])
 	}
 	c.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: operators})
 }
@@ -155,7 +155,7 @@ func withResolvedOperatorRoles(op *operatorv1.OperatorDocument) {
 	if op.IsSlot && !op.Claimed {
 		return
 	}
-	op.OperatorRoles = operatorcapability.GetOperatorRoles(*op)
+	op.OperatorRoles = models.OperatorRolesToProto(operatorcapability.GetOperatorRoles(op))
 }
 
 func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.Request) {
@@ -399,7 +399,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var req struct {
-		RuntimeConfig *operatorv1.OperatorRuntimeConfig `json:"runtime_config"`
+		RuntimeConfig json.RawMessage `json:"runtime_config"`
 	}
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &req); err != nil {
@@ -407,8 +407,13 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	if req.RuntimeConfig != nil {
-		if err := c.reg.UpdateOperatorRuntimeConfig(op.Id, req.RuntimeConfig); err != nil {
+	if len(req.RuntimeConfig) > 0 && string(req.RuntimeConfig) != "null" {
+		runtimeConfig, err := models.UnmarshalOperatorRuntimeConfig(req.RuntimeConfig)
+		if err != nil {
+			c.responder.Error(w, http.StatusBadRequest, "invalid runtime_config")
+			return
+		}
+		if err := c.reg.UpdateOperatorRuntimeConfig(op.Id, runtimeConfig); err != nil {
 			c.logger.Error("gateway: persist operator runtime config", "operator_id", op.Id, "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 			return

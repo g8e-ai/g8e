@@ -73,10 +73,10 @@ func (m Model) confirmOperatorStop() Model {
 		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Not connected to a Gateway"})
 	}
 	gw := m.gw
-	sessionID := op.OperatorSessionID
+	sessionID := op.OperatorSessionId
 	m.confirm = &confirmation{
 		prompt: fmt.Sprintf("Stop Operator %s (%s, session %s)? It receives a governed shutdown request and disconnects.",
-			operatorHostname(op), shortHash(op.ID), shortHash(sessionID)),
+			operatorHostname(op), shortHash(op.Id), shortHash(sessionID)),
 		run: func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 			defer cancel()
@@ -92,14 +92,14 @@ func (m Model) confirmOperatorBind() Model {
 		return m.applyLedgerMsg(LedgerMsg{Level: LevelInfo, Message: "Select an Operator first"})
 	}
 	op := m.operators[m.operatorsSelected]
-	if op.OperatorSessionID == "" {
+	if op.OperatorSessionId == "" {
 		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Selected Operator has no session ID"})
 	}
 	if m.gw == nil {
 		return m.applyLedgerMsg(LedgerMsg{Level: LevelWarn, Message: "Not connected to a Gateway"})
 	}
 	gw := m.gw
-	sessionID := op.OperatorSessionID
+	sessionID := op.OperatorSessionId
 	m.confirm = &confirmation{
 		prompt: fmt.Sprintf("Bind this CLI session to Operator %s (session %s)? The Gateway issues a replacement CLI session.", operatorHostname(op), shortHash(sessionID)),
 		run: func() tea.Msg {

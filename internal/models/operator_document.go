@@ -47,6 +47,46 @@ func UnmarshalOperatorDocument(data []byte) (*operatorv1.OperatorDocument, error
 	return doc, nil
 }
 
+// OperatorDocumentFromStore decodes a document-store row into an OperatorDocument.
+func OperatorDocumentFromStore(doc *Document) (*operatorv1.OperatorDocument, error) {
+	raw, err := json.Marshal(doc.ForWire())
+	if err != nil {
+		return nil, fmt.Errorf("encode stored operator document: %w", err)
+	}
+	return UnmarshalOperatorDocument(raw)
+}
+
+// OperatorDocumentsFromStore decodes document-store rows into OperatorDocuments.
+func OperatorDocumentsFromStore(docs []*Document) ([]*operatorv1.OperatorDocument, error) {
+	out := make([]*operatorv1.OperatorDocument, 0, len(docs))
+	for _, doc := range docs {
+		op, err := OperatorDocumentFromStore(doc)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, op)
+	}
+	return out, nil
+}
+
+// MarshalOperatorRuntimeConfig encodes an OperatorRuntimeConfig in canonical JSON.
+func MarshalOperatorRuntimeConfig(cfg *operatorv1.OperatorRuntimeConfig) ([]byte, error) {
+	return operatorDocumentMarshal.Marshal(cfg)
+}
+
+// UnmarshalOperatorRuntimeConfig decodes canonical JSON into an
+// OperatorRuntimeConfig and validates its roles.
+func UnmarshalOperatorRuntimeConfig(data []byte) (*operatorv1.OperatorRuntimeConfig, error) {
+	cfg := &operatorv1.OperatorRuntimeConfig{}
+	if err := operatorDocumentUnmarshal.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("decode operator runtime config: %w", err)
+	}
+	if err := OperatorRolesFromProto(cfg.GetRoles()).Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
 // OperatorRolesFromProto converts the proto role strings to the typed set.
 func OperatorRolesFromProto(roles []string) constants.OperatorRoles {
 	out := make(constants.OperatorRoles, 0, len(roles))

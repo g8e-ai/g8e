@@ -516,11 +516,11 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 			OperatorType:      string(constants.OperatorTypeRemote),
 			SystemFingerprint: req.SystemFingerprint,
 			Claimed:           true,
-			ClaimedAt:         &now,
+			ClaimedAt:         timestamppb.New(now),
 			CreatedAt:         timestamppb.New(now),
 			UpdatedAt:         timestamppb.New(now),
 		}
-		opBytes, err := json.Marshal(operator)
+		opBytes, err := models.MarshalOperatorDocument(operator)
 		if err != nil {
 			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("marshal operator document: %w", err)
 		}

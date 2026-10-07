@@ -12,21 +12,13 @@ import (
 	"fmt"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-// operatorHeartbeatLiveness is the subset of an Operator document the
-// staleness check reads.
-type operatorHeartbeatLiveness struct {
-	UserID          string                   `json:"user_id"`
-	Name            string                   `json:"name"`
-	Status          constants.OperatorStatus `json:"status"`
-	OperatorType    constants.OperatorType   `json:"operator_type"`
-	ClaimedAt       *time.Time               `json:"claimed_at"`
-	LastHeartbeatAt *time.Time               `json:"last_heartbeat_at"`
-}
 
 // reconcileOperatorStaleness moves every remote Operator document that has been
 // silent for longer than constants.OperatorHeartbeatStaleAfter from active to
@@ -96,8 +88,8 @@ func (s *DocumentStoreService) reconcileOperatorStaleness(collection, id string)
 				"stale_after", constants.OperatorHeartbeatStaleAfter)
 			s.NotifyOperatorStatusChanged(OperatorStatusTransition{
 				OperatorID: doc.ID,
-				UserID:     op.UserID,
-				Name:       op.Name,
+				UserID:     op.GetUserId(),
+				Name:       op.GetName(),
 				Status:     constants.OperatorStatusStale,
 			})
 		}
@@ -117,27 +109,23 @@ func (s *DocumentStoreService) ReconcileOperatorStaleness() error {
 // last sign of life is older than constants.OperatorHeartbeatStaleAfter. The
 // last sign of life is the Gateway-stamped last_heartbeat_at, falling back to
 // claimed_at and then to the document's created_at for an Operator that has not
-// heartbeated yet. It also returns the parsed liveness fields so the caller can
+// heartbeated yet. It also returns the parsed operator document so the caller can
 // report the transition without re-reading the document.
-func operatorHeartbeatStale(doc *models.Document, now time.Time) (bool, operatorHeartbeatLiveness, error) {
-	wire, err := json.Marshal(doc.ForWire())
+func operatorHeartbeatStale(doc *models.Document, now time.Time) (bool, *operatorv1.OperatorDocument, error) {
+	op, err := models.OperatorDocumentFromStore(doc)
 	if err != nil {
-		return false, operatorHeartbeatLiveness{}, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
+		return false, nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
-	var op operatorHeartbeatLiveness
-	if err := json.Unmarshal(wire, &op); err != nil {
-		return false, operatorHeartbeatLiveness{}, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
-	}
-	if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+	if constants.OperatorStatus(op.GetStatus()) != constants.OperatorStatusActive || constants.OperatorType(op.GetOperatorType()) != constants.OperatorTypeRemote {
 		return false, op, nil
 	}
 
 	lastSeen := doc.CreatedAt
-	if op.ClaimedAt != nil {
-		lastSeen = *op.ClaimedAt
+	if claimedAt := op.GetClaimedAt(); claimedAt != nil {
+		lastSeen = claimedAt.AsTime()
 	}
-	if op.LastHeartbeatAt != nil {
-		lastSeen = *op.LastHeartbeatAt
+	if lastHeartbeatAt := op.GetLastHeartbeatAt(); lastHeartbeatAt != nil {
+		lastSeen = lastHeartbeatAt.AsTime()
 	}
 	return now.Sub(lastSeen) > constants.OperatorHeartbeatStaleAfter, op, nil
 }

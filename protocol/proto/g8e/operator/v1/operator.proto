@@ -431,6 +431,10 @@ message OperatorDocument {
   string current_hostname = 30;
   OperatorRuntimeConfig runtime_config = 31;
   string consumed_by_operator_id = 32;
+  // Chain of operator certificates for zero-trust verification.
+  string operator_cert_chain = 33;
+  // Reason for operator termination (e.g., "user_requested", "max_duration_exceeded").
+  string termination_reason = 34;
 }
 
 message ShutdownRequested {
