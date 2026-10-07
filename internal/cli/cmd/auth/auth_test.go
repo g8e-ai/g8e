@@ -8,13 +8,11 @@
 package authcmd
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
-	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,28 +62,10 @@ func TestEnrollCmd_Parent(t *testing.T) {
 	assert.False(t, names["gui"], "enroll parent must NOT register the removed gui subcommand")
 }
 
-func TestLogoutCmd(t *testing.T) {
-	t.Run("logout command has correct use", func(t *testing.T) {
-		cmd := logoutCmd()
-		assert.Equal(t, "logout", cmd.Use)
-		assert.Contains(t, cmd.Short, "Clear")
-		assert.Contains(t, cmd.Short, "credentials")
-	})
-
-	t.Run("logout succeeds with no active session", func(t *testing.T) {
-		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
-		cmd := logoutCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, cmdtest.FileSvcFactoryFor(fileSvc))
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetContext(context.Background())
-
-		err := cmd.RunE(cmd, []string{})
-		require.NoError(t, err)
-		assert.Contains(t, buf.String(), "No active session found")
-	})
-
-	t.Run("logout succeeds when no session exists", func(t *testing.T) {
+// TestDeleteCredentials covers the credential-store helper the logout command
+// clears local state with; the command itself is tested in logout_test.go.
+func TestDeleteCredentials(t *testing.T) {
+	t.Run("delete succeeds when no session exists", func(t *testing.T) {
 		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 		creds, err := auth.LoadCredentials(fileSvc, cfg)
@@ -100,7 +80,7 @@ func TestLogoutCmd(t *testing.T) {
 		assert.False(t, exists)
 	})
 
-	t.Run("logout deletes credentials when session exists", func(t *testing.T) {
+	t.Run("delete removes credentials when session exists", func(t *testing.T) {
 		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 		creds := &auth.Credentials{

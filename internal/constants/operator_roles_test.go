@@ -29,3 +29,9 @@ func TestOperatorRolesValidateNormalizeAndRejectUnknownValues(t *testing.T) {
 	require.Equal(t, "data,observer", decoded.String())
 	require.ErrorIs(t, json.Unmarshal([]byte(`["cloud"]`), &decoded), ErrOperatorRoleInvalid)
 }
+
+func TestOperatorRolesEffectiveEmbeddedImpliesData(t *testing.T) {
+	require.Equal(t, OperatorRoles{OperatorRoleEmbedded, OperatorRoleData}, OperatorRoles{OperatorRoleEmbedded}.Effective())
+	require.Equal(t, OperatorRoles{OperatorRoleEmbedded, OperatorRoleData, OperatorRoleInference}, OperatorRoles{OperatorRoleInference, OperatorRoleEmbedded, OperatorRoleData}.Effective())
+	require.Equal(t, OperatorRoles{OperatorRoleInference}, OperatorRoles{OperatorRoleInference}.Effective())
+}

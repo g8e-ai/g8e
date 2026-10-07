@@ -183,7 +183,7 @@ class OperatorDocument(G8eIdentifiableModel):
         """Return every enabled role, mirroring the Gateway's GetOperatorRoles.
 
         Runtime configuration decides when present; stored role metadata applies
-        only without it. An Operator with neither is a Data Operator.
+        only without it. An Operator with neither is a Data Operator. Embedded always implies Data.
         """
         config = self.runtime_config
         if config is not None:
@@ -200,6 +200,8 @@ class OperatorDocument(G8eIdentifiableModel):
             roles = set(self.operator_roles) or {OperatorRole.DATA}
         if self.operator_type is OperatorType.EMBEDDED:
             roles.add(OperatorRole.EMBEDDED)
+        if OperatorRole.EMBEDDED in roles:
+            roles.add(OperatorRole.DATA)
         return frozenset(roles)
 
     def has_active_role(self, role: OperatorRole) -> bool:

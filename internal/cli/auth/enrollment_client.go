@@ -517,7 +517,9 @@ type CLISessionRefresh struct {
 //
 // Returns nil when the session is healthy (HTTP 200). Returns
 // constants.ErrCLISessionExpired or constants.ErrCLISessionInvalid when
-// the gateway rejects the session with 401. Returns a wrapped
+// the gateway rejects the session with 401, or constants.ErrMTLSCertRevoked
+// when it rejects the certificate itself (for example after 'g8e logout' on
+// another machine). Returns a wrapped
 // constants.ErrHTTPRequestExecuteFailed on network failure.
 func (c *EnrollmentClient) ProbeCLISession(ctx context.Context, fileSvc fs.RuntimeFileService) error {
 	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
@@ -552,6 +554,11 @@ func (c *EnrollmentClient) ProbeCLISession(ctx context.Context, fileSvc fs.Runti
 			return fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, readErr)
 		}
 		body := string(respBytes)
+		// A revoked certificate cannot refresh, so it must not be reported as
+		// an invalid session (whose remedy is 'auth refresh').
+		if strings.Contains(body, constants.ErrMTLSCertRevoked.Error()) {
+			return constants.ErrMTLSCertRevoked
+		}
 		if strings.Contains(body, constants.ErrCLISessionExpired.Error()) {
 			return constants.ErrCLISessionExpired
 		}

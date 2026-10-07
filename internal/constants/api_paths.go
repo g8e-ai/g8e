@@ -113,6 +113,7 @@ var APIPaths = struct {
 	AuthCLIRefresh                           string `json:"auth_cli_refresh"`
 	AuthCLIBind                              string `json:"auth_cli_bind"`
 	AuthCLIUnbind                            string `json:"auth_cli_unbind"`
+	AuthCLILogout                            string `json:"auth_cli_logout"`
 	AuthCLISession                           string `json:"auth_cli_session"`
 	AuthPasskeys                             string `json:"auth_passkeys"`
 	AuthPasskeysByID                         string `json:"auth_passkeys_by_id"`
@@ -302,6 +303,7 @@ var APIPaths = struct {
 	AuthCLIRefresh:                           "/api/v1/auth/cli/refresh",
 	AuthCLIBind:                              "/api/v1/auth/cli/bind",
 	AuthCLIUnbind:                            "/api/v1/auth/cli/unbind",
+	AuthCLILogout:                            "/api/v1/auth/cli/logout",
 	AuthCLISession:                           "/api/v1/auth/cli/session",
 	AuthPasskeys:                             "/api/v1/auth/passkeys",
 	AuthPasskeysByID:                         "/api/v1/auth/passkeys/",

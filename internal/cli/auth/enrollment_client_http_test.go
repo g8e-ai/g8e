@@ -210,6 +210,10 @@ func TestEnrollmentClient_MTLSOperations_FailClosedWithoutLocalIdentity(t *testi
 			_, err := c.Unbind(t.Context(), f)
 			return err
 		},
+		"Logout": func(c *EnrollmentClient, f fs.RuntimeFileService) error {
+			_, err := c.Logout(t.Context(), f, constants.LogoutScopeAll)
+			return err
+		},
 		"SessionInfo": func(c *EnrollmentClient, f fs.RuntimeFileService) error {
 			_, err := c.SessionInfo(t.Context(), f)
 			return err

@@ -780,6 +780,28 @@ type CLIUnbindResponse struct {
 	AlreadyUnbound bool   `json:"already_unbound,omitempty"`
 }
 
+// CLILogoutRequest is the wire request for POST /api/v1/auth/cli/logout.
+// This is an mTLS-protected endpoint; the user is derived from the
+// authenticated certificate context, never from the body. An empty Scope
+// means constants.LogoutScopeAll.
+type CLILogoutRequest struct {
+	Scope constants.LogoutScope `json:"scope,omitempty"`
+}
+
+// CLILogoutResponse is the wire response for POST /api/v1/auth/cli/logout.
+// The counts report live sessions that were terminated; UnboundOperatorSessionIDs
+// lists each distinct operator session that was unbound from a web or CLI
+// session (sorted).
+type CLILogoutResponse struct {
+	Success                   bool                  `json:"success"`
+	UserID                    string                `json:"user_id"`
+	Scope                     constants.LogoutScope `json:"scope"`
+	WebSessionsTerminated     int                   `json:"web_sessions_terminated"`
+	CLISessionsTerminated     int                   `json:"cli_sessions_terminated"`
+	CLICertificatesRevoked    int                   `json:"cli_certificates_revoked"`
+	UnboundOperatorSessionIDs []string              `json:"unbound_operator_session_ids"`
+}
+
 // CLISessionInfoResponse is the wire response for
 // GET /api/v1/auth/cli/session. It reports the authenticated CLI session's
 // persisted identity binding verbatim: the operator session the session was

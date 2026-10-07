@@ -462,7 +462,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	if len(roles) == 0 {
 		roles = constants.OperatorRoles{constants.OperatorRoleData}
 	}
-	roles = append(append(constants.OperatorRoles{}, roles...), constants.OperatorRoleEmbedded).Canonical()
+	roles = append(append(constants.OperatorRoles{}, roles...), constants.OperatorRoleEmbedded).Effective()
 
 	// Initialize paths relative to current working directory
 	projectRoot := opts.WorkDir
@@ -850,5 +850,5 @@ func (cfg *Config) EffectiveOperatorRoles() constants.OperatorRoles {
 	if len(roles) == 0 {
 		roles = append(roles, constants.OperatorRoleData)
 	}
-	return roles.Canonical()
+	return roles.Effective()
 }

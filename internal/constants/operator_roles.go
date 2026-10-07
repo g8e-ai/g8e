@@ -42,6 +42,17 @@ func (r OperatorRoles) Canonical() OperatorRoles {
 	return result
 }
 
+// Effective returns the capabilities a runtime actually carries, in canonical
+// order. Embedded is the Gateway's own Data operator, so it always includes
+// Data; every other capability composes independently.
+func (r OperatorRoles) Effective() OperatorRoles {
+	roles := append(OperatorRoles{}, r...)
+	if roles.Has(OperatorRoleEmbedded) {
+		roles = append(roles, OperatorRoleData)
+	}
+	return roles.Canonical()
+}
+
 func (r OperatorRoles) String() string {
 	parts := make([]string, 0, len(r))
 	for _, role := range r.Canonical() {

@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -88,4 +89,48 @@ func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.Web
 	}
 
 	return &webSession, nil
+}
+
+// TerminateUserWebSessions deletes every web session document owned by
+// userID, expired or not, and returns how many of them were still live. A
+// deleted document can no longer authenticate a browser, which is what the
+// single-session logout endpoint does for its own cookie.
+func (s *WebSessionService) TerminateUserWebSessions(userID string) (int, error) {
+	if userID == "" {
+		return 0, fmt.Errorf("gateway: terminate user web sessions: %w", constants.ErrRegistrationUserIDRequired)
+	}
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionWebSessions), []models.DocFilter{
+		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
+	}, "", 0)
+	if err != nil {
+		return 0, fmt.Errorf("gateway: terminate user web sessions: query: %w", err)
+	}
+
+	nowMs := time.Now().UnixMilli()
+	live := 0
+	var errs []error
+	for _, doc := range docs {
+		wire, err := json.Marshal(doc.ForWire())
+		if err != nil {
+			errs = append(errs, fmt.Errorf("marshal web session %s: %w", doc.ID, err))
+			continue
+		}
+		var session models.WebSession
+		if err := json.Unmarshal(wire, &session); err != nil {
+			errs = append(errs, fmt.Errorf("decode web session %s: %w", doc.ID, err))
+			continue
+		}
+		deleted, err := s.db.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionWebSessions), doc.ID)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("delete web session %s: %w", doc.ID, err))
+			continue
+		}
+		if deleted && nowMs <= session.ExpiresAtUnixMs {
+			live++
+		}
+	}
+	if len(errs) > 0 {
+		return live, fmt.Errorf("gateway: terminate user web sessions: %w", errors.Join(errs...))
+	}
+	return live, nil
 }

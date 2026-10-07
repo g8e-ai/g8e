@@ -34,7 +34,7 @@ func TestRootCommandStructure(t *testing.T) {
 
 func TestCommandRegistration(t *testing.T) {
 	root := NewRootCmd("test", serve.VersionInfo{})
-	for _, name := range []string{"gw", "auth", "mcp", "operator", "vault", "test", "docker", "audit", "report", "public", "swagger", "tui", "version", "compliance", "eval"} {
+	for _, name := range []string{"gw", "login", "logout", "auth", "mcp", "operator", "vault", "test", "docker", "audit", "report", "public", "swagger", "tui", "version", "compliance", "eval"} {
 		assert.NotNil(t, commandNamed(root, name), "root should register %s", name)
 	}
 }
@@ -54,9 +54,32 @@ func TestAuthCommandSubcommands(t *testing.T) {
 	cmd := commandNamed(root, "auth")
 	require.NotNil(t, cmd)
 
-	for _, subcmd := range []string{"enroll", "logout", "approve", "approve-recovery", "refresh", "context"} {
+	for _, subcmd := range []string{"enroll", "approve", "approve-recovery", "refresh", "context"} {
 		assert.NotNil(t, commandNamed(cmd, subcmd), "auth command should have %s subcommand", subcmd)
 	}
+}
+
+func TestLoginAndLogoutAreTopLevelCommands(t *testing.T) {
+	root := NewRootCmd("test", serve.VersionInfo{})
+
+	login := commandNamed(root, "login")
+	require.NotNil(t, login)
+	for _, subcmd := range []string{"web", "cli"} {
+		assert.NotNil(t, commandNamed(login, subcmd), "login should have %s subcommand", subcmd)
+	}
+	headless, _, err := root.Find([]string{"login", "headless"})
+	require.NoError(t, err)
+	assert.Equal(t, "cli", headless.Name(), "login headless must resolve to login cli")
+
+	logout := commandNamed(root, "logout")
+	require.NotNil(t, logout)
+	for _, subcmd := range []string{"web", "cli"} {
+		assert.NotNil(t, commandNamed(logout, subcmd), "logout should have %s subcommand", subcmd)
+	}
+
+	auth := commandNamed(root, "auth")
+	require.NotNil(t, auth)
+	assert.Nil(t, commandNamed(auth, "logout"), "the local-only 'auth logout' is superseded by the top-level logout")
 }
 
 func TestDataCommandSubcommands(t *testing.T) {

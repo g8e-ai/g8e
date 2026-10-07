@@ -10,8 +10,10 @@ package gateway
 import (
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -916,6 +918,65 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 		res.Error = lastErr.Error()
 	}
 	return res, nil
+}
+
+// UnbindUserWebOperators unbinds every operator of userID that is bound to a
+// web session, whichever web session it is bound to. It delegates to
+// UnbindOperators per web session so the KV bindings, the bound-sessions
+// document and the operator document are all cleared by the one existing
+// implementation. It returns the operator session IDs it unbound (sorted). An
+// operator UnbindOperators did not confirm unbound is an error, because that
+// method skips an operator whose bookkeeping fails without reporting it.
+func (s *RegistrationService) UnbindUserWebOperators(userID string) ([]string, error) {
+	operators, err := s.ListUserOperators(userID)
+	if err != nil {
+		return nil, fmt.Errorf("unbind user web operators: list operators: %w", err)
+	}
+
+	byWebSession := map[string][]models.OperatorDocumentGo{}
+	for _, op := range operators {
+		if op.BoundWebSessionID != "" {
+			byWebSession[op.BoundWebSessionID] = append(byWebSession[op.BoundWebSessionID], op)
+		}
+	}
+
+	var unboundSessionIDs []string
+	var errs []error
+	for webSessionID, group := range byWebSession {
+		operatorIDs := make([]string, 0, len(group))
+		sessionIDByOperator := make(map[string]string, len(group))
+		for _, op := range group {
+			operatorIDs = append(operatorIDs, op.ID)
+			sessionIDByOperator[op.ID] = op.OperatorSessionID
+		}
+		res, err := s.UnbindOperators(models.UnbindOperatorsRequest{
+			OperatorIDs:  operatorIDs,
+			UserID:       userID,
+			WebSessionID: webSessionID,
+		})
+		if err != nil {
+			errs = append(errs, fmt.Errorf("web session %s: %w", safeTruncateID(webSessionID), err))
+			continue
+		}
+		confirmed := make(map[string]struct{}, len(res.UnboundOperatorIDs))
+		for _, id := range res.UnboundOperatorIDs {
+			confirmed[id] = struct{}{}
+			if sessionID := sessionIDByOperator[id]; sessionID != "" {
+				unboundSessionIDs = append(unboundSessionIDs, sessionID)
+			}
+		}
+		for _, id := range operatorIDs {
+			if _, ok := confirmed[id]; !ok {
+				errs = append(errs, fmt.Errorf("%w: operator %s, web session %s", constants.ErrRegistrationFailedToUnbindOperator, id, safeTruncateID(webSessionID)))
+			}
+		}
+	}
+
+	sort.Strings(unboundSessionIDs)
+	if len(errs) > 0 {
+		return unboundSessionIDs, fmt.Errorf("unbind user web operators: %w", errors.Join(errs...))
+	}
+	return unboundSessionIDs, nil
 }
 
 // SetTargetContext sets the active target Operator for a web session.

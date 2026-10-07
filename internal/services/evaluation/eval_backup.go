@@ -185,16 +185,32 @@ func evalBackupSameFiles(a, b []EvalBackupFile) bool {
 // backupDir. A snapshot without a valid manifest is an interrupted backup and
 // is skipped. It returns ErrEvaluationBackupNone when there is no such snapshot.
 func LatestEvalBackupSnapshot(backupDir string) (string, error) {
+	snapshots, err := AllEvalBackupSnapshots(backupDir)
+	if err != nil {
+		return "", err
+	}
+	if len(snapshots) == 0 {
+		abs, _ := filepath.Abs(backupDir)
+		return "", fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
+	}
+	return snapshots[0], nil
+}
+
+// AllEvalBackupSnapshots returns all complete snapshot directories in backupDir,
+// sorted oldest first (creation order). A snapshot without a valid manifest is
+// an interrupted backup and is skipped. It returns ErrEvaluationBackupNone when
+// there are no such snapshots.
+func AllEvalBackupSnapshots(backupDir string) ([]string, error) {
 	abs, err := filepath.Abs(backupDir)
 	if err != nil {
-		return "", fmt.Errorf("evaluation: backup: resolve directory: %w", err)
+		return nil, fmt.Errorf("evaluation: backup: resolve directory: %w", err)
 	}
 	entries, err := os.ReadDir(abs)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
+			return nil, fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
 		}
-		return "", fmt.Errorf("evaluation: backup: list %s: %w", abs, err)
+		return nil, fmt.Errorf("evaluation: backup: list %s: %w", abs, err)
 	}
 	var names []string
 	for _, entry := range entries {
@@ -203,14 +219,19 @@ func LatestEvalBackupSnapshot(backupDir string) (string, error) {
 		}
 	}
 	// The timestamp layout is fixed-width UTC, so name order is creation order.
-	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+	// Sort ascending to get oldest first, then collect valid snapshots.
+	sort.Strings(names)
+	var snapshots []string
 	for _, name := range names {
 		dir := filepath.Join(abs, name)
 		if _, err := readEvalBackupManifest(dir); err == nil {
-			return dir, nil
+			snapshots = append(snapshots, dir)
 		}
 	}
-	return "", fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
+	if len(snapshots) == 0 {
+		return nil, fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
+	}
+	return snapshots, nil
 }
 
 func (b *EvalBackup) writeSnapshot(ctx context.Context, snapshotDir string, createdAt time.Time, relPaths []string) (*EvalBackupReport, error) {

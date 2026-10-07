@@ -2093,6 +2093,31 @@ func TestEnroll_ReusedIdentity_InvalidSession_PrintsActionableMessageAndExits(t 
 	assert.Equal(t, 0, passkey.calls, "passkey ceremony should NOT run on invalid session")
 }
 
+// TestEnroll_ReusedIdentity_RevokedCertificate_PointsAtLocalLogoutNotRefresh
+// verifies that a revoked certificate (for example after 'g8e logout' on
+// another machine) is not sent down the 'auth refresh' path, which cannot
+// succeed with a revoked certificate: the coordinator names 'logout
+// --local-only' and 'login' instead and does not reuse the identity.
+func TestEnroll_ReusedIdentity_RevokedCertificate_PointsAtLocalLogoutNotRefresh(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	gw.probeErr = constants.ErrMTLSCertRevoked
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, constants.ErrMTLSCertRevoked)
+	assert.NotErrorIs(t, err, constants.ErrCLISessionRefreshRequired)
+	assert.False(t, recorder.contains("Reusing existing CLI identity"))
+	assert.True(t, recorder.contains("logout --local-only"), "should name the local logout remedy")
+	assert.False(t, recorder.contains("auth refresh"), "must not suggest refresh for a revoked certificate")
+	assert.Equal(t, 0, passkey.calls, "passkey ceremony should NOT run on a revoked certificate")
+}
+
 // TestEnroll_ReusedIdentity_ProbeNetworkError_WarnsAndProceeds verifies
 // that when the session probe fails with a network error (not an expired/
 // invalid session), the coordinator prints a warning and proceeds with

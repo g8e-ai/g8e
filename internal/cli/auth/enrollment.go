@@ -446,6 +446,14 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 			if discoveryReachable {
 				probeErr := c.gateway.ProbeCLISession(ctx, c.fileSvc)
 				if probeErr != nil {
+					if errors.Is(probeErr, constants.ErrMTLSCertRevoked) {
+						// Refresh cannot help: the certificate itself is
+						// revoked. The stale local identity has to be
+						// discarded before a fresh login can enroll.
+						c.out("The local CLI certificate was revoked (for example by 'g8e logout' on another machine).")
+						c.out("Run './g8e logout --local-only' to discard the stale local credentials, then './g8e login' to enroll again.")
+						return nil, fmt.Errorf("local CLI certificate revoked: %w", probeErr)
+					}
 					if errors.Is(probeErr, constants.ErrCLISessionExpired) || errors.Is(probeErr, constants.ErrCLISessionInvalid) {
 						c.out("CLI session %s is %s.", local.Credentials.CLISessionID, probeErr)
 						c.out("Run './g8e auth refresh' to obtain a new session using the still-valid certificate.")

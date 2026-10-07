@@ -155,7 +155,7 @@ func TestLogoutCmdWithConfig_RemovesLocalCredentials(t *testing.T) {
 	require.NoError(t, fileSvc.WriteFile(context.Background(), cmdtest.MustRel(t, fileSvc, cfg.CLICertFile()), []byte("cli-cert"), constants.PermFilePrivate))
 	require.NoError(t, fileSvc.WriteFile(context.Background(), cmdtest.MustRel(t, fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
 
-	cmd := logoutCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, cmdtest.FileSvcFactoryFor(fileSvc))
+	cmd := logoutCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, cmdtest.FileSvcFactoryFor(fileSvc), fakeLogoutFactory(&fakeLogoutClient{result: successfulLogoutResult()}))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -163,7 +163,7 @@ func TestLogoutCmdWithConfig_RemovesLocalCredentials(t *testing.T) {
 	cmd.SetContext(ctx)
 
 	require.NoError(t, cmd.RunE(cmd, nil))
-	assert.Contains(t, buf.String(), "Logged out successfully")
+	assert.Contains(t, buf.String(), "Logged out of all web and CLI sessions")
 
 	exists, err := fileSvc.FileExists(context.Background(), cmdtest.MustRel(t, fileSvc, cfg.CredentialsFile()))
 	require.NoError(t, err)
@@ -469,14 +469,14 @@ func TestLogoutCmd_OSRootCARetained(t *testing.T) {
 	require.NoError(t, fileSvc.WriteFile(context.Background(), cmdtest.MustRel(t, fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
 	require.NoError(t, fileSvc.WriteFile(context.Background(), cmdtest.MustRel(t, fileSvc, cfg.ResolvedTrustBundlePath()), []byte("root-ca-pem"), constants.PermFilePrivate))
 
-	cmd := logoutCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, cmdtest.FileSvcFactoryFor(fileSvc))
+	cmd := logoutCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, cmdtest.FileSvcFactoryFor(fileSvc), fakeLogoutFactory(&fakeLogoutClient{result: successfulLogoutResult()}))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	cmd.SetContext(context.Background())
 
 	require.NoError(t, cmd.RunE(cmd, nil))
-	assert.Contains(t, buf.String(), "Logged out successfully")
+	assert.Contains(t, buf.String(), "Logged out of all web and CLI sessions")
 
 	// Local CLI credential material is gone.
 	for _, p := range []string{cfg.CredentialsFile(), cfg.CLICertFile(), cfg.CLIKeyFile()} {

@@ -153,6 +153,68 @@ func (s *CLISessionService) DeactivateCLISession(sessionID string) error {
 	return nil
 }
 
+// cliSessionTerminationUpdate deactivates a CLI session and clears its
+// operator binding in one write. The binding fields carry no omitempty so the
+// cleared values are persisted instead of being dropped from the update.
+type cliSessionTerminationUpdate struct {
+	IsActive                bool     `json:"is_active"`
+	OperatorSessionID       string   `json:"operator_session_id"`
+	BoundOperatorSessionIDs []string `json:"bound_operator_session_ids"`
+}
+
+// ListUserCLISessions returns every CLI session document owned by userID,
+// active or not. Callers decide which states matter: logout needs the active
+// sessions to terminate and every certificate serial ever issued to the user.
+func (s *CLISessionService) ListUserCLISessions(userID string) ([]*models.CLISession, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("list user CLI sessions: %w", constants.ErrRegistrationUserIDRequired)
+	}
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionCLISessions), []models.DocFilter{
+		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
+	}, "", 0)
+	if err != nil {
+		return nil, fmt.Errorf("list user CLI sessions: %w", err)
+	}
+	sessions := make([]*models.CLISession, 0, len(docs))
+	for _, doc := range docs {
+		session, err := decodeCLISession(doc)
+		if err != nil {
+			return nil, fmt.Errorf("list user CLI sessions: decode %s: %w", safeTruncateID(doc.ID), err)
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, nil
+}
+
+// TerminateCLISession atomically deactivates an active CLI session and clears
+// its operator binding (OperatorSessionID and BoundOperatorSessionIDs) in the
+// same conditional write. It reports whether this call terminated the
+// session: false with a nil error means a concurrent caller deactivated or
+// replaced it first. The caller owns PKI revocation of the session's
+// certificate; this method only mutates CLI-session state.
+func (s *CLISessionService) TerminateCLISession(sessionID string) (bool, error) {
+	if sessionID == "" {
+		return false, fmt.Errorf("terminate CLI session: %w", constants.ErrCLISessionInvalid)
+	}
+	update, err := json.Marshal(cliSessionTerminationUpdate{BoundOperatorSessionIDs: []string{}})
+	if err != nil {
+		return false, fmt.Errorf("terminate CLI session: marshal update: %w", err)
+	}
+	applied, err := s.db.DocConditionalUpdate(
+		marshaler.CollectionName(constants.CollectionCLISessions),
+		sessionID,
+		update,
+		"is_active", true,
+	)
+	if err != nil {
+		return false, fmt.Errorf("terminate CLI session: conditional update: %w", err)
+	}
+	if applied {
+		s.logger.Info("CLI session terminated", "cli_session_id_prefix", safeTruncateID(sessionID))
+	}
+	return applied, nil
+}
+
 // ReplaceCLISession transactionally replaces an active CLI session with a new
 // one bound to the supplied identity fields. It is the single session-
 // replacement path used by both CLI rotation (5d) and recovery completion

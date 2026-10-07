@@ -43,12 +43,13 @@ func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authentication and session management",
-		Long:  `Manage mTLS enrollment and CLI/web/operator sessions via CSR-based authentication.`,
+		Long: `Manage mTLS enrollment and CLI/web/operator sessions via CSR-based authentication.
+
+Use 'g8e login' and 'g8e logout' to sign in and out.`,
 	}
 
 	cmd.AddCommand(
 		enrollCmd(),
-		logoutCmd(),
 		approveCmd(),
 		approveRecoveryCmd(),
 		refreshCmd(),
@@ -183,49 +184,16 @@ use ` + "`auth enroll operator`" + ` instead.
 
 The Gateway must already be running (use './g8e gw start' first).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := configLoader("")
-			if err != nil {
-				return err
-			}
-
-			if err := checkOperatorRunning(cfg); err != nil {
-				return err
-			}
-
-			fileSvc, err := fileSvcFactory("", slog.Default())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-			}
-
-			coordinator, err := EnrollerFactory(func(format string, args ...any) {
-				cmd.Printf(format+"\n", args...)
-			}, fileSvc, cfg)
-			if err != nil {
-				return err
-			}
-			result, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
+			return runUserEnrollment(cmd, userEnrollmentDeps{
+				configLoader:         configLoader,
+				fileSvcFactory:       fileSvcFactory,
+				checkOperatorRunning: checkOperatorRunning,
+				enrollerFactory:      EnrollerFactory,
+			}, auth.EnrollmentOptions{
 				NoSystemTrust: noSystemTrust || headless,
 				RotateCLI:     rotateCLI,
 				Headless:      headless,
 			})
-			if err != nil {
-				return err
-			}
-
-			// Progress lines for the user-visible identity. The coordinator
-			// already prints intermediate progress via OutputFunc; these are
-			// the final summary lines so the user sees the bound identity.
-			if result.Reused {
-				cmd.Printf("Reusing existing CLI identity (no new certificate issued).\n")
-			} else {
-				cmd.Printf("\nCLI session %s complete\n", result.Source)
-			}
-			cmd.Printf("User ID: %s\n", result.UserID)
-			cmd.Printf("CLI Session ID: %s\n", result.CLISessionID)
-			if result.SystemTrustInstalled {
-				cmd.Println("System trust: installed gateway root CA.")
-			}
-			return nil
 		},
 	}
 
@@ -238,51 +206,56 @@ The Gateway must already be running (use './g8e gw start' first).`,
 	return cmd
 }
 
-func logoutCmd() *cobra.Command {
-	return logoutCmdWithConfig(shared.LoadConfig, shared.NewFileSvc)
+// userEnrollmentDeps groups the injectable collaborators shared by
+// 'auth enroll user' and 'login'.
+type userEnrollmentDeps struct {
+	configLoader         func(string) (*config.Config, error)
+	fileSvcFactory       func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	checkOperatorRunning func(*config.Config) error
+	enrollerFactory      EnrollerFactory
 }
 
-func logoutCmdWithConfig(
-	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
-) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "logout",
-		Short: "Clear local Operator session and credentials",
-		Long: `Clear the local Operator session by deleting stored credentials from disk. This does not revoke the session on the gateway side — it only removes the local credential files so the CLI can no longer authenticate.
-
-The shared OS root CA (runtime trust bundle) is NOT removed. System trust is
-shared and may be used by another runtime or gateway; logout only clears the
-local CLI credential material (credentials JSON, CLI cert, CLI key).`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := configLoader("")
-			if err != nil {
-				return err
-			}
-
-			fileSvc, err := fileSvcFactory("", slog.Default())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-			}
-
-			store := auth.NewCredentialStore(fileSvc, cfg)
-			creds, err := store.LoadCredentials(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-			}
-
-			if creds == nil {
-				cmd.Println("No active session found")
-				return nil
-			}
-
-			if err := store.Clear(cmd.Context()); err != nil {
-				return err
-			}
-
-			cmd.Println("Logged out successfully")
-			return nil
-		},
+// runUserEnrollment drives the EnrollmentCoordinator for a local CLI user and
+// prints the bound identity. It is the single implementation behind
+// 'auth enroll user' and every 'login' form, which differ only in opts.
+func runUserEnrollment(cmd *cobra.Command, deps userEnrollmentDeps, opts auth.EnrollmentOptions) error {
+	cfg, err := deps.configLoader("")
+	if err != nil {
+		return err
 	}
-	return cmd
+
+	if err := deps.checkOperatorRunning(cfg); err != nil {
+		return err
+	}
+
+	fileSvc, err := deps.fileSvcFactory("", slog.Default())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+	}
+
+	coordinator, err := deps.enrollerFactory(func(format string, args ...any) {
+		cmd.Printf(format+"\n", args...)
+	}, fileSvc, cfg)
+	if err != nil {
+		return err
+	}
+	result, err := coordinator.Enroll(cmd.Context(), opts)
+	if err != nil {
+		return err
+	}
+
+	// Progress lines for the user-visible identity. The coordinator
+	// already prints intermediate progress via OutputFunc; these are
+	// the final summary lines so the user sees the bound identity.
+	if result.Reused {
+		cmd.Printf("Reusing existing CLI identity (no new certificate issued).\n")
+	} else {
+		cmd.Printf("\nCLI session %s complete\n", result.Source)
+	}
+	cmd.Printf("User ID: %s\n", result.UserID)
+	cmd.Printf("CLI Session ID: %s\n", result.CLISessionID)
+	if result.SystemTrustInstalled {
+		cmd.Println("System trust: installed gateway root CA.")
+	}
+	return nil
 }

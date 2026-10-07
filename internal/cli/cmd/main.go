@@ -98,6 +98,8 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 
 	rootCmd.AddCommand(
 		gw.Cmd(),
+		authcmd.LoginCmd(),
+		authcmd.LogoutCmd(),
 		authcmd.Cmd(),
 		mcp.Cmd(),
 		operatorcmd.Cmd(),

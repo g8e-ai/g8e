@@ -581,6 +581,7 @@ var (
 	ErrCLIRotationFailed            = errors.New("CLI rotation failed")
 	ErrCLIRotationCSRRequired       = errors.New("cli_csr_pem is required for rotation")
 	ErrCLISessionNotFound           = errors.New("CLI session not found")
+	ErrLogoutScopeInvalid           = errors.New("invalid logout scope; use all, web, or cli")
 	ErrCLISessionAlreadyDeactivated = errors.New("CLI session already deactivated")
 	ErrCLIRefreshFailed             = errors.New("CLI session refresh failed")
 	ErrCLIRefreshCertExpired        = errors.New("CLI certificate expired; use recovery flow instead of refresh")
@@ -1012,6 +1013,7 @@ var (
 	ErrRegistrationFailedToUnmarshalBoundSessions  = errors.New("failed to unmarshal bound sessions document")
 	ErrRegistrationFailedToUpdateBoundSessions     = errors.New("failed to update bound sessions document")
 	ErrRegistrationFailedToBindOperator            = errors.New("failed to bind Operator for target context")
+	ErrRegistrationFailedToUnbindOperator          = errors.New("failed to unbind Operator from web session")
 
 	// Script template errors
 	ErrScriptTemplateNotInitialized = errors.New("script template not initialized - call Init() first")

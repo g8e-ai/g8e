@@ -90,6 +90,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthCLIRefresh, h.cliRefreshController.handleRefresh)
 	mux.HandleFunc(constants.APIPaths.AuthCLIBind, h.cliRefreshController.handleBind)
 	mux.HandleFunc(constants.APIPaths.AuthCLIUnbind, h.cliRefreshController.handleUnbind)
+	mux.HandleFunc(constants.APIPaths.AuthCLILogout, h.cliRefreshController.handleLogout)
 
 	// CLI session info — mTLS-protected; reports the authenticated
 	// session's persisted operator binding so the CLI can resync local

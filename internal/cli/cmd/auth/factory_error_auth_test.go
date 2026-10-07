@@ -110,7 +110,7 @@ func TestPendingPlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T
 func TestLogoutCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := cmdtest.NewCmdTestEnv(t)
 
-	cmd := logoutCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FailingFileSvcFactory(errFactory))
+	cmd := logoutCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FailingFileSvcFactory(errFactory), fakeLogoutFactory(&fakeLogoutClient{}))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

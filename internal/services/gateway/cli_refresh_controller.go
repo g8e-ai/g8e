@@ -31,6 +31,7 @@ type CLIRefreshControllerDeps struct {
 	Reg                *RegistrationService
 	Auth               *AuthService
 	UserSvc            *UserService
+	LogoutSvc          *SessionLogoutService
 	Responder          *response.Writer
 }
 
@@ -57,6 +58,7 @@ type CLIRefreshController struct {
 	reg                *RegistrationService
 	auth               *AuthService
 	userSvc            *UserService
+	logoutSvc          *SessionLogoutService
 	responder          *response.Writer
 }
 
@@ -69,6 +71,7 @@ func newCLIRefreshController(deps CLIRefreshControllerDeps) *CLIRefreshControlle
 		reg:                deps.Reg,
 		auth:               deps.Auth,
 		userSvc:            deps.UserSvc,
+		logoutSvc:          deps.LogoutSvc,
 		responder:          deps.Responder,
 	}
 }
@@ -278,8 +281,8 @@ func (c *CLIRefreshController) registryOperatorBinding(userID string) (sessionID
 		return "", "", false, err
 	}
 	// The stack's data-operator is the preferred primary binding; any other
-	// data Operator is the fallback.
-	for _, isCandidate := range []func(models.OperatorDocumentGo) bool{operatorcapability.IsStackDataOperator, operatorcapability.IsDataOperator} {
+	// dedicated data Operator is the fallback, then the Gateway's embedded one.
+	for _, isCandidate := range []func(models.OperatorDocumentGo) bool{operatorcapability.IsStackDataOperator, operatorcapability.IsDedicatedDataOperator} {
 		for _, op := range operators {
 			if !isCandidate(op) {
 				continue

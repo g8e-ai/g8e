@@ -248,6 +248,9 @@ func (c *Client) DiscoverOperator(ctx context.Context) (string, string, error) {
 		}
 		matches = append(matches, op)
 	}
+	if c.cfg.OperatorID == "" && c.cfg.OperatorSessionID == "" {
+		matches = operatorcapability.PreferDedicatedDataOperators(matches)
+	}
 	switch len(matches) {
 	case 0:
 		return "", "", fmt.Errorf("%w: operator id=%q session=%q", constants.ErrEvaluationTargetUnavailable, c.cfg.OperatorID, c.cfg.OperatorSessionID)

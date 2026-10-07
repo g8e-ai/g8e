@@ -802,7 +802,14 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Reg:                ls.reg,
 			Auth:               ls.auth,
 			UserSvc:            userSvc,
-			Responder:          ls.responder,
+			LogoutSvc: NewSessionLogoutService(SessionLogoutServiceDeps{
+				Logger:      logger,
+				CLISessions: cliSessionSvc,
+				WebSessions: ls.webSessionSvc,
+				Reg:         ls.reg,
+				PKI:         pki,
+			}),
+			Responder: ls.responder,
 		},
 		CLISessionControllerDeps: CLISessionControllerDeps{
 			Logger:    logger,

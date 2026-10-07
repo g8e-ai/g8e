@@ -41,18 +41,19 @@ func TestEveryOperatorRoleCombinationPreservesMembership(t *testing.T) {
 				kind = constants.OperatorTypeEmbedded
 			}
 			op := models.OperatorDocumentGo{ID: "blend", OperatorSessionID: "session", OperatorType: kind, Status: constants.OperatorStatusActive, RuntimeConfig: cfg}
-			require.Equal(t, roles, GetOperatorRoles(op))
+			effective := roles.Effective()
+			require.Equal(t, effective, GetOperatorRoles(op))
 			for _, role := range all {
 				err := ValidateOperatorRoleCapabilities(op, role)
-				if roles.Has(role) {
+				if effective.Has(role) {
 					require.NoError(t, err)
 				} else {
 					require.ErrorIs(t, err, constants.ErrWitnessCommandNotCapable)
 				}
 			}
-			require.Equal(t, roles.Has(constants.OperatorRoleData), IsDataOperator(op))
+			require.Equal(t, effective.Has(constants.OperatorRoleData), IsDataOperator(op))
 			err := ValidateWitnessCommand(cfg, "pwd")
-			if roles.Has(constants.OperatorRoleData) || roles.Has(constants.OperatorRoleInference) {
+			if effective.Has(constants.OperatorRoleData) || effective.Has(constants.OperatorRoleInference) {
 				require.NoError(t, err)
 			} else {
 				require.ErrorIs(t, err, constants.ErrWitnessCommandNotCapable)

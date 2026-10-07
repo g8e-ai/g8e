@@ -34,7 +34,7 @@ func TestStartupEnablesEveryRequestedOperatorRoleCombination(t *testing.T) {
 				cfg, err = config.Load(config.LoadOptions{OperatorRoles: roles, OperatorEndpoint: constants.DefaultEndpoint, WorkDir: testutil.TempDir(t)})
 			}
 			require.NoError(t, err)
-			require.Equal(t, roles, cfg.EffectiveOperatorRoles())
+			require.Equal(t, roles.Effective(), cfg.EffectiveOperatorRoles())
 			require.Equal(t, roles.Has(constants.OperatorRoleInference), cfg.Inference.Enabled)
 			require.Equal(t, roles.Has(constants.OperatorRoleProvenance), cfg.ProvenanceOperator.Enabled)
 			require.Equal(t, roles.Has(constants.OperatorRoleObserver), cfg.ProviderBoundaryObserver.Enabled)

@@ -16,7 +16,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-// ResolveOperatorRoles returns every enabled role. Ordinary operators default to Data.
+// ResolveOperatorRoles returns every enabled role. Ordinary operators default to
+// Data, and Embedded always includes Data.
 func ResolveOperatorRoles(cfg *models.RuntimeConfig) constants.OperatorRoles {
 	if cfg == nil {
 		return constants.OperatorRoles{constants.OperatorRoleData}
@@ -34,7 +35,7 @@ func ResolveOperatorRoles(cfg *models.RuntimeConfig) constants.OperatorRoles {
 	if len(roles) == 0 {
 		roles = append(roles, constants.OperatorRoleData)
 	}
-	return roles.Canonical()
+	return roles.Effective()
 }
 
 // GetOperatorRoles resolves runtime capabilities; stored role metadata is used only without runtime configuration.
@@ -48,7 +49,7 @@ func GetOperatorRoles(op models.OperatorDocumentGo) constants.OperatorRoles {
 		roles = constants.OperatorRoles{constants.OperatorRoleData}
 	}
 	if op.OperatorType == constants.OperatorTypeEmbedded {
-		roles = append(roles, constants.OperatorRoleEmbedded).Canonical()
+		roles = append(roles, constants.OperatorRoleEmbedded).Effective()
 	}
 	return roles
 }

@@ -270,3 +270,44 @@ func TestActiveDataOperators_EmptyHeartbeatLeavesWorkingDirectoryEmpty(t *testin
 	require.Len(t, statuses, 1)
 	assert.Empty(t, statuses[0].WorkingDirectory)
 }
+
+func tierOp(id string, kind constants.OperatorType, hostname string, roles ...constants.OperatorRole) models.OperatorDocumentGo {
+	return models.OperatorDocumentGo{
+		ID:                id,
+		OperatorSessionID: "sess-" + id,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      kind,
+		CurrentHostname:   hostname,
+		RuntimeConfig:     &models.RuntimeConfig{Roles: roles},
+	}
+}
+
+func TestEmbeddedOnlyImpliesDataAndWitnessCommands(t *testing.T) {
+	cfg := &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleEmbedded}}
+	require.Equal(t, constants.OperatorRoles{constants.OperatorRoleEmbedded, constants.OperatorRoleData}, ResolveOperatorRoles(cfg))
+	require.NoError(t, ValidateWitnessCommand(cfg, "pwd"))
+	op := tierOp("embedded-operator", constants.OperatorTypeEmbedded, "", constants.OperatorRoleEmbedded)
+	require.True(t, IsDataOperator(op))
+	require.False(t, IsDedicatedDataOperator(op))
+}
+
+func TestDataOperatorTiering(t *testing.T) {
+	embedded := tierOp("embedded-operator", constants.OperatorTypeEmbedded, "", constants.OperatorRoleEmbedded)
+	remote := tierOp("data", constants.OperatorTypeRemote, "host", constants.OperatorRoleData)
+	stack := tierOp("stack", constants.OperatorTypeRemote, constants.DataOperatorHostname, constants.OperatorRoleData)
+
+	sel, err := SelectDataOperator([]models.OperatorDocumentGo{embedded, remote})
+	require.NoError(t, err)
+	require.Equal(t, "data", sel.OperatorID)
+
+	sel, err = SelectDataOperator([]models.OperatorDocumentGo{embedded})
+	require.NoError(t, err)
+	require.Equal(t, "embedded-operator", sel.OperatorID)
+
+	sel, err = SelectDataOperator([]models.OperatorDocumentGo{embedded, remote, stack})
+	require.NoError(t, err)
+	require.Equal(t, "stack", sel.OperatorID)
+
+	require.Equal(t, []models.OperatorDocumentGo{remote}, PreferDedicatedDataOperators([]models.OperatorDocumentGo{embedded, remote}))
+	require.Equal(t, []models.OperatorDocumentGo{embedded}, PreferDedicatedDataOperators([]models.OperatorDocumentGo{embedded}))
+}

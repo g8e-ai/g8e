@@ -794,6 +794,73 @@ func TestEnrollmentClient_Unbind(t *testing.T) {
 	}
 }
 
+func TestEnrollmentClient_Logout(t *testing.T) {
+	t.Run("sends the scope and reports what the gateway ended", func(t *testing.T) {
+		for _, scope := range []constants.LogoutScope{constants.LogoutScopeAll, constants.LogoutScopeWeb, constants.LogoutScopeCLI} {
+			t.Run(string(scope), func(t *testing.T) {
+				gw := newMTLSGateway(t, func(w http.ResponseWriter, _ *http.Request) {
+					writeJSONResponse(t, w, http.StatusOK, models.CLILogoutResponse{
+						Success:                   true,
+						UserID:                    "user-1",
+						Scope:                     scope,
+						WebSessionsTerminated:     2,
+						CLISessionsTerminated:     3,
+						CLICertificatesRevoked:    1,
+						UnboundOperatorSessionIDs: []string{"op-1", "op-2"},
+					})
+				})
+
+				got, err := gw.client.Logout(t.Context(), gw.fileSvc, scope)
+
+				require.NoError(t, err)
+				assert.Equal(t, CLISessionLogout{
+					UserID:                    "user-1",
+					Scope:                     scope,
+					WebSessionsTerminated:     2,
+					CLISessionsTerminated:     3,
+					CLICertificatesRevoked:    1,
+					UnboundOperatorSessionIDs: []string{"op-1", "op-2"},
+				}, got)
+				req := gw.lastRequest(t)
+				assert.Equal(t, constants.APIPaths.AuthCLILogout, req.Path)
+				assert.Equal(t, http.MethodPost, req.Method)
+				assert.Equal(t, "cli-sess-1", req.CLISession)
+				var sent models.CLILogoutRequest
+				require.NoError(t, json.Unmarshal(req.Body, &sent))
+				assert.Equal(t, scope, sent.Scope)
+			})
+		}
+	})
+
+	failures := []struct {
+		name    string
+		resp    any
+		status  int
+		wantErr error
+	}{
+		{"gateway error", nil, http.StatusInternalServerError, constants.ErrHTTPStatusError},
+		{"gateway reports failure", models.CLILogoutResponse{Success: false}, http.StatusOK, constants.ErrCLIRefreshFailed},
+		{"missing user id", models.CLILogoutResponse{Success: true, Scope: constants.LogoutScopeAll}, http.StatusOK, constants.ErrMissingRequiredField},
+		{"unknown scope echoed", models.CLILogoutResponse{Success: true, UserID: "u", Scope: "everything"}, http.StatusOK, constants.ErrLogoutScopeInvalid},
+	}
+	for _, tt := range failures {
+		t.Run(tt.name, func(t *testing.T) {
+			gw := newMTLSGateway(t, func(w http.ResponseWriter, _ *http.Request) {
+				if tt.resp == nil {
+					w.WriteHeader(tt.status)
+					return
+				}
+				writeJSONResponse(t, w, tt.status, tt.resp)
+			})
+
+			got, err := gw.client.Logout(t.Context(), gw.fileSvc, constants.LogoutScopeAll)
+
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, CLISessionLogout{}, got)
+		})
+	}
+}
+
 func TestEnrollmentClient_SessionInfo(t *testing.T) {
 	t.Run("returns the persisted identity binding", func(t *testing.T) {
 		gw := newMTLSGateway(t, func(w http.ResponseWriter, _ *http.Request) {
@@ -886,6 +953,7 @@ func TestEnrollmentClient_ProbeCLISession(t *testing.T) {
 	}{
 		{"expired session", http.StatusUnauthorized, constants.ErrCLISessionExpired.Error(), constants.ErrCLISessionExpired},
 		{"invalidated session", http.StatusUnauthorized, constants.ErrCLISessionInvalid.Error(), constants.ErrCLISessionInvalid},
+		{"revoked certificate is not an invalid session", http.StatusUnauthorized, constants.ErrMTLSCertRevoked.Error(), constants.ErrMTLSCertRevoked},
 		{"unauthorized for an unrecognised reason is treated as invalid", http.StatusUnauthorized, "nope", constants.ErrCLISessionInvalid},
 		{"unexpected status", http.StatusInternalServerError, "", constants.ErrHTTPStatusError},
 	}

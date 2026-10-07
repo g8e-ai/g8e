@@ -67,7 +67,8 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | --- | --- |
 | INV-TROUBLE-AUTH-01 | The canonical trust bundle path is `.g8e/pki/trust/g8eg-ca-bundle.pem`. Tests and tools MUST NOT use deprecated bundle paths or mutate host PKI to fix test failures. |
 | INV-TROUBLE-AUTH-02 | CLI sessions and certificates expire in 7 days; web sessions expire in 24 hours. When a CLI certificate is valid but session expired, run `g8e auth refresh` rather than re-enrolling. |
-| INV-TROUBLE-AUTH-03 | Headless enrollment (`g8e auth enroll user --headless`) skips OS trust and passkey ceremony, producing an mTLS-capable CLI identity that does not support web Console sessions. |
+| INV-TROUBLE-AUTH-03 | Headless enrollment (`g8e login cli`, alias `g8e login headless`, or `g8e auth enroll user --headless`) skips OS trust and passkey ceremony, producing an mTLS-capable CLI identity that does not support web Console sessions. |
+| INV-TROUBLE-AUTH-04 | `g8e logout` ends every web and CLI session of the user on every machine and revokes their CLI certificates. A machine that was logged in elsewhere reports its certificate revoked, and `g8e auth refresh` cannot recover it. Run `g8e logout --local-only` to discard the stale local credentials, then `g8e login`. |
 
 ## Owned surfaces
 
@@ -135,8 +136,12 @@ make proto-generate
 # Force certificate rotation before expiry
 ./g8e auth enroll user --rotate-cli
 
-# Headless enrollment on a remote or non-browser server
-./g8e auth enroll user --headless
+# Headless login on a remote or non-browser server
+./g8e login cli
+
+# Local credentials are stale because the certificate was revoked elsewhere
+./g8e logout --local-only
+./g8e login
 ```
 
 ## Anti-patterns
@@ -145,6 +150,7 @@ make proto-generate
 - Running `gw reset` or `gw clean` to fix transient errors when state must be retained (INV-TROUBLE-GW-03).
 - Mutating OS trust or developer PKI state to bypass test failures (INV-TROUBLE-AUTH-01).
 - Re-enrolling and wiping valid certificates when a simple `auth refresh` suffices (INV-TROUBLE-AUTH-02).
+- Running `auth refresh` against a revoked certificate instead of clearing local credentials and logging in again (INV-TROUBLE-AUTH-04).
 
 ## Links out
 

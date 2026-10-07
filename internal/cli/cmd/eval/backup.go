@@ -67,6 +67,13 @@ type evalRestoreJSON struct {
 	Unchanged   []evaluation.EvalBackupFile `json:"unchanged"`
 }
 
+type evalRestoreAllJSON struct {
+	SnapshotDirs []string                              `json:"snapshot_dirs"`
+	Reports      []evalRestoreJSON                     `json:"reports"`
+	TotalRestored int64                                `json:"total_restored"`
+	TotalUnchanged int64                               `json:"total_unchanged"`
+}
+
 func backupEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var outputDir string
 	cmd := &cobra.Command{
@@ -115,14 +122,15 @@ func restoreEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var overwrite bool
 	cmd := &cobra.Command{
 		Use:   "restore [snapshot-dir]",
-		Short: "Restore evaluation evidence from a backup snapshot",
-		Long: `Verify every file in a snapshot created by 'g8e eval backup' against its
-manifest, then write them back into .g8e/. Files already present with identical
+		Short: "Restore evaluation evidence from backup snapshot(s)",
+		Long: `Verify every file in snapshot(s) created by 'g8e eval backup' against their
+manifests, then write them back into .g8e/. Files already present with identical
 content are skipped. If any existing file differs, nothing is written unless
 --overwrite is passed.
 
-Without <snapshot-dir>, the newest complete snapshot in eval/backups under the
-project root is restored.
+Without <snapshot-dir>, all complete snapshots in eval/backups under the
+project root are restored in creation order (oldest first). Pass a specific
+<snapshot-dir> to restore only that snapshot.
 
 Restoring puts host evidence back; it does not rebuild the Gateway mirror. After
 re-enrolling a fresh stack, run 'g8e public restore --queue'.`,
@@ -132,24 +140,52 @@ re-enrolling a fresh stack, run 'g8e public restore --queue'.`,
 			if err != nil {
 				return err
 			}
-			var snapshotDir string
+			var snapshotDirs []string
 			if len(args) == 1 {
-				snapshotDir = args[0]
-			} else if snapshotDir, err = evaluation.LatestEvalBackupSnapshot(defaultEvalBackupDir(cfg)); err != nil {
+				snapshotDirs = []string{args[0]}
+			} else if snapshotDirs, err = evaluation.AllEvalBackupSnapshots(defaultEvalBackupDir(cfg)); err != nil {
 				return fmt.Errorf("evaluation: restore: %w", err)
 			}
-			report, err := evaluation.NewEvalBackup(fileSvc, deps.now).Restore(cmd.Context(), snapshotDir, overwrite)
-			if err != nil {
-				return fmt.Errorf("evaluation: restore: %w", err)
-			}
-			if output.JSONEnabled(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), evalRestoreJSON{
+
+			backup := evaluation.NewEvalBackup(fileSvc, deps.now)
+			var allReports []evalRestoreJSON
+			var totalRestored, totalUnchanged int64
+
+			for _, snapshotDir := range snapshotDirs {
+				report, err := backup.Restore(cmd.Context(), snapshotDir, overwrite)
+				if err != nil {
+					return fmt.Errorf("evaluation: restore: %w", err)
+				}
+				allReports = append(allReports, evalRestoreJSON{
 					SnapshotDir: report.SnapshotDir,
 					Restored:    nonNilBackupFiles(report.Restored),
 					Unchanged:   nonNilBackupFiles(report.Unchanged),
 				})
+				totalRestored += int64(len(report.Restored))
+				totalUnchanged += int64(len(report.Unchanged))
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Restored %d file(s) from %s (%d already identical)\n", len(report.Restored), report.SnapshotDir, len(report.Unchanged))
+
+			if output.JSONEnabled(cmd) {
+				if len(allReports) == 1 {
+					return output.WriteJSON(cmd.OutOrStdout(), allReports[0])
+				}
+				return output.WriteJSON(cmd.OutOrStdout(), evalRestoreAllJSON{
+					SnapshotDirs:   snapshotDirs,
+					Reports:        allReports,
+					TotalRestored:  totalRestored,
+					TotalUnchanged: totalUnchanged,
+				})
+			}
+
+			if len(allReports) == 1 {
+				r := allReports[0]
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Restored %d file(s) from %s (%d already identical)\n", len(r.Restored), r.SnapshotDir, len(r.Unchanged))
+			} else {
+				for _, r := range allReports {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Restored %d file(s) from %s (%d already identical)\n", len(r.Restored), r.SnapshotDir, len(r.Unchanged))
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "\nTotal: %d restored, %d already identical\n", totalRestored, totalUnchanged)
+			}
 			return err
 		},
 	}

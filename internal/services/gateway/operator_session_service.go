@@ -182,7 +182,7 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 	if err != nil {
 		return nil, fmt.Errorf("query active operators for user %s: %w", userID, err)
 	}
-	var fallback *models.OperatorDocumentGo
+	var fallback, embeddedFallback *models.OperatorDocumentGo
 	for _, doc := range docs {
 		dataBytes, err := json.Marshal(doc.Data)
 		if err != nil {
@@ -195,12 +195,18 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 		if operatorcapability.IsStackDataOperator(operator) {
 			return dataOperatorSession(operator), nil
 		}
-		if fallback == nil && operatorcapability.IsDataOperator(operator) {
+		if fallback == nil && operatorcapability.IsDedicatedDataOperator(operator) {
 			fallback = &operator
+		}
+		if embeddedFallback == nil && operatorcapability.IsDataOperator(operator) {
+			embeddedFallback = &operator
 		}
 	}
 	if fallback != nil {
 		return dataOperatorSession(*fallback), nil
+	}
+	if embeddedFallback != nil {
+		return dataOperatorSession(*embeddedFallback), nil
 	}
 	return nil, nil
 }

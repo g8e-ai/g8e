@@ -117,6 +117,13 @@ def test_resolved_roles_marks_embedded_type():
     assert doc.resolved_roles() == {OperatorRole.EMBEDDED, OperatorRole.DATA}
 
 
+def test_resolved_roles_embedded_implies_data():
+    doc = _operator(operator_type=OperatorType.EMBEDDED, runtime_config={"roles": ["embedded"]})
+    assert doc.resolved_roles() == {OperatorRole.EMBEDDED, OperatorRole.DATA}
+    doc = _operator(operator_type=OperatorType.EMBEDDED, runtime_config={"roles": ["embedded", "inference"]})
+    assert doc.resolved_roles() == {OperatorRole.EMBEDDED, OperatorRole.DATA, OperatorRole.INFERENCE}
+
+
 @pytest.mark.parametrize(
     ("fields", "expected"),
     [

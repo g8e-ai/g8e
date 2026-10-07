@@ -282,7 +282,7 @@ make ensemble-env # one-time runtime setup
 make gw
 ```
 
-`make gw` starts only the Gateway, in a single process, with `--roles provenance,observer,inference,data` on its embedded Operator. There are no separate Operator processes, working directories, or enrollments, and g8ee is not started. It reads `G8E_HOSTNAME` and `G8E_OLLAMA_ENDPOINT` from `.env` the same way `make full` does, except that an unset Ollama endpoint keeps the Gateway's default (`http://127.0.0.1:11434`) instead of failing. The provenance model store is detected from host storage. Override it, or preview the command, with:
+The embedded Operator always includes Data, so chat and governed commands work against `embedded-operator` even when `--roles embedded` is the only role. When a dedicated Data Operator is also connected (for example under `make full`), eval and discovery prefer it over the embedded one. `make gw` starts only the Gateway, in a single process, with `--roles provenance,observer,inference,data` on its embedded Operator. There are no separate Operator processes, working directories, or enrollments, and g8ee is not started. It reads `G8E_HOSTNAME` and `G8E_OLLAMA_ENDPOINT` from `.env` the same way `make full` does, except that an unset Ollama endpoint keeps the Gateway's default (`http://127.0.0.1:11434`) instead of failing. The provenance model store is detected from host storage. Override it, or preview the command, with:
 
 ```bash
 make gw GW_ARGS='--model-storage-root /srv/ollama/models'

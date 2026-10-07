@@ -71,6 +71,7 @@ The Gateway-to-g8ee browser-proxy link uses plain HTTP by default. Its signed st
 | INV-AUTH-ROUTE-02 | Public routes (health checks, trust discovery, landing page, public deploy scripts, bootstrap initiation, token-scoped recovery/enrollment request and status endpoints, and console SPA) are exposed on plain HTTP without requiring authentication. |
 | INV-AUTH-ROUTE-03 | Unknown HTTPS routes require mTLS authentication by default; an unclassified route does not become public. |
 | INV-AUTH-ROUTE-04 | Dual-auth routes (platform enrollment owner review and decisions, SSE consumer streams, operator management and detail, audit read routes, ensemble chat and operator proxy, and Swagger documentation) try mTLS first and otherwise validate the browser-session cookie. mTLS is preferred when a client certificate is present. |
+| INV-AUTH-ROUTE-05 | CLI refresh (`/api/v1/auth/cli/refresh`) and CLI logout (`/api/v1/auth/cli/logout`) are the only routes admitted on a verified CLI certificate alone, whatever state its CLI session is in. Every other CLI route fails closed on an expired, missing, or inactive session. Logout grants nothing refresh does not: any holder of an unrevoked certificate can already refresh and then log out. |
 
 ### Session and certificate lifecycle (`INV-AUTH-SESSION`)
 
@@ -80,6 +81,9 @@ The Gateway-to-g8ee browser-proxy link uses plain HTTP by default. Its signed st
 | INV-AUTH-SESSION-02 | Reusing a CLI certificate is idempotent when the local certificate matches the gateway root, has an active session server-side, and is not expiring within 24 hours. No new certificate is issued. |
 | INV-AUTH-SESSION-03 | Certificate rotation issues exactly one replacement certificate and revokes the prior one. Rotation occurs automatically within 24 hours of expiry and can be forced with `--rotate-cli`. |
 | INV-AUTH-SESSION-04 | Session refresh (`g8e auth refresh`) uses the still-valid certificate as proof of identity to mint a replacement server-side session. It is the recovery path when the certificate is valid but the session is expired or missing. |
+| INV-AUTH-SESSION-05 | `g8e logout` terminates every web and CLI session of the authenticated user, on every machine, and unbinds every operator bound to those sessions. Scope `all` is the default; `web` and `cli` narrow it. Operator sessions are unbound, never terminated. Other users' sessions, bindings, and certificates are untouched. |
+| INV-AUTH-SESSION-06 | A CLI logout revokes the certificate of every CLI session the user held (and the certificate that authenticated the request), because refresh re-issues a session for any unrevoked certificate regardless of the old session's state: deactivating sessions alone is not a logout. Revocation is the last step so a failure leaves the caller able to retry, and it skips serials already revoked so an earlier revocation keeps its reason and time. |
+| INV-AUTH-SESSION-07 | The CLI deletes its local credentials only after the Gateway confirms a CLI-scope logout; an unreachable Gateway changes nothing. `--local-only` is the single path that skips the Gateway: it deletes local credentials and does not end any server-side session, operator binding, or certificate. |
 
 ### Operator binding (`INV-AUTH-OP-BIND`)
 
@@ -103,7 +107,8 @@ The Gateway-to-g8ee browser-proxy link uses plain HTTP by default. Its signed st
 
 | Claim | Path | Verify |
 | --- | --- | --- |
-| CLI auth commands | `internal/cli/cmd/auth/` | `./g8e auth --help` and subcommands |
+| CLI auth commands | `internal/cli/cmd/auth/` | `./g8e login --help`, `./g8e logout --help`, `./g8e auth --help` and subcommands |
+| Session logout | `internal/services/gateway/session_logout_service.go`, `cli_logout_controller.go`, `internal/cli/auth/logout.go` | `./g8e test integration --pkg ./internal/services/gateway --run SessionLogout` |
 | Operator bind commands | `internal/cli/cmd/operator/operator_bind.go` | `./g8e operator bind --help` |
 | Gateway auth middleware | `internal/services/gateway/gateway_auth.go` and route registry | Route classification, web-session cookie validation, and admission logic |
 | CLI enrollment state machine | `internal/cli/auth/enrollment.go`, `internal/cli/auth/` | Decision matrix, credential store, and session binding |
@@ -122,7 +127,7 @@ The Gateway-to-g8ee browser-proxy link uses plain HTTP by default. Its signed st
 The Gateway's unified auth middleware classifies routes and enforces authentication at admission time:
 
 - **Public routes (`RouteAuthNone`)** require no credential. The plain HTTP listener serves public routes and redirects other paths to HTTPS. Public surfaces include health checks (`/api/v1/health`), landing page (`/`), state discovery (`/api/v1/state`), PKI bootstrap (`/.well-known/pki/`, `/.well-known/bin/`), deploy scripts (`/install.sh`, `/install.ps1`), device enrollment initiation (`/api/pki/device-enroll`), first-user bootstrap (`/api/v1/auth/bootstrap`, `/api/v1/auth/bootstrap/status`), logout (`/api/v1/auth/logout`), token-scoped CLI recovery request/status/complete (`/api/v1/auth/cli/recovery/*`), token-scoped platform enrollment request/status/complete (`/api/v1/auth/platform/*`), console SPA (`/console/`), and console/enrollment passkey endpoints.
-- **mTLS-only routes (`RouteAuthMTLS`)** require a verified client certificate. The TLS listener requests but does not require a client certificate during handshake so browser clients can reach public and browser-session routes; application middleware enforces the actual requirement. mTLS routes include public feed verification, privileged PKI CSR signing (`/api/pki/csr/sign`), producer endpoints (`/api/v1/observe/producer/*`), operator internal controls (`/api/v1/operators/validate`, `/target`, `/reauth`, `/commands`, `/stop`, `/sessions/`), gateway proxy signing key (`/api/v1/gateway/proxy-signing-key`), CLI rotation (`/api/v1/auth/cli/rotate`), CLI session refresh (`/api/v1/auth/cli/refresh`), CLI bind/unbind (`/api/v1/auth/cli/bind`, `/unbind`), CLI session info (`/api/v1/auth/cli/session`), and CLI recovery approval via mTLS (`/api/v1/auth/cli/recovery/approve-cli`).
+- **mTLS-only routes (`RouteAuthMTLS`)** require a verified client certificate. The TLS listener requests but does not require a client certificate during handshake so browser clients can reach public and browser-session routes; application middleware enforces the actual requirement. mTLS routes include public feed verification, privileged PKI CSR signing (`/api/pki/csr/sign`), producer endpoints (`/api/v1/observe/producer/*`), operator internal controls (`/api/v1/operators/validate`, `/target`, `/reauth`, `/commands`, `/stop`, `/sessions/`), gateway proxy signing key (`/api/v1/gateway/proxy-signing-key`), CLI rotation (`/api/v1/auth/cli/rotate`), CLI session refresh (`/api/v1/auth/cli/refresh`), CLI bind/unbind (`/api/v1/auth/cli/bind`, `/unbind`), CLI logout (`/api/v1/auth/cli/logout`), CLI session info (`/api/v1/auth/cli/session`), and CLI recovery approval via mTLS (`/api/v1/auth/cli/recovery/approve-cli`).
 - **Browser-session routes (`RouteAuthWebSession`)** validate the `g8e_web_session_cookie` against the persisted web-session record. The user ID comes from the record and the web session ID is the cookie value that keyed the lookup (INV-AUTH-ID-06). Web-session routes include user profiles (`/api/v1/users/`), session introspection (`/api/v1/auth/sessions/`), browser transaction approvals (`/api/v1/approvals/`), browser passkey management (`/api/v1/auth/passkeys/`), observability views (`/api/v1/observe/`), ensemble settings (`/api/v1/settings/`), ensemble cases (`/api/v1/cases/`), investigations (`/api/v1/investigations`), and browser CLI recovery approval (`/api/v1/auth/cli/recovery/approve`).
 - **Dual-auth routes (`RouteAuthDual`)** try mTLS first and otherwise validate the browser-session cookie. mTLS is preferred when a certificate is present. Dual-auth surfaces include SSE streams (`/api/v1/sse/stream`, `/api/v1/sse/events`), operator list and binding (`/api/v1/operators`, `/bind`, `/unbind`, `/{id}/`), owner audit logs (`/api/v1/audit/events`, `/summary`, `/verify`), ensemble chat and operator proxy (`/api/v1/chat/`, `/api/v1/ensemble/operators/`), platform enrollment owner surfaces (`/api/v1/auth/platform/pending`, `/enrolled`, `/decision`, `/revoke`), and OpenAPI documentation (`/docs/swagger.json`).
 - **Unknown HTTPS routes** default to mTLS authentication as a fail-closed default.
@@ -149,7 +154,9 @@ Flags for `g8e auth enroll user`:
 - `--no-system-trust`: Skip OS trust installation when an administrator has pre-installed the gateway root CA. Passkey registration still runs.
 - `--rotate-cli`: Force mTLS certificate rotation even when the local identity is complete and not expiring within 24 hours.
 
-Before declaring reuse, the coordinator probes the gateway to verify that the CLI session remains active server-side. If the certificate is valid but the session is expired or invalid, the coordinator reports that `g8e auth refresh` is required.
+`g8e login` is the first-class entry to this same state machine (`internal/cli/cmd/auth/login.go` shares one runner with `auth enroll user`). Bare `g8e login` and `g8e login web` are browser logins and are never headless. `g8e login cli` (alias `headless`) is the headless form, equivalent to `auth enroll user --headless`. See `./g8e login --help` for flags.
+
+Before declaring reuse, the coordinator probes the gateway to verify that the CLI session remains active server-side. If the certificate is valid but the session is expired or invalid, the coordinator reports that `g8e auth refresh` is required. If the Gateway reports the certificate itself revoked (for example after `g8e logout` on another machine), refresh cannot help: the coordinator directs the user to `g8e logout --local-only` and then `g8e login`.
 
 ### CLI recovery and refresh
 
@@ -157,7 +164,9 @@ CLI recovery requests expire after 10 minutes. Approval comes from an authentica
 
 Run `g8e auth refresh` when the CLI certificate is still valid but its server-side session is expired or missing. The gateway derives the user and prior session from the verified certificate, verifies that the user remains active, and issues a replacement session. Refresh preserves the prior session's operator binding (or inherits an active stack data-operator, data-operator, or embedded operator). If no active operator session exists, refresh returns a conflict error prompting re-enrollment. An expired certificate cannot authenticate to refresh; run `g8e auth enroll user` and complete recovery instead.
 
-Run `g8e auth logout` to delete stored CLI credentials (`credentials.json`, CLI certificate, and private key) from disk. Logout does not revoke the gateway-side session or certificate and does not remove the shared gateway root CA from the OS trust store.
+Run `g8e logout` to log the user out everywhere. The CLI calls `POST /api/v1/auth/cli/logout` over mTLS; the Gateway unbinds every operator bound to the user's web or CLI sessions, deletes every web session, deactivates every CLI session (clearing its operator binding), and revokes the CLI certificates behind them (INV-AUTH-SESSION-05, INV-AUTH-SESSION-06). The request is admitted on the certificate alone, so a user whose CLI session already expired can still log out (INV-AUTH-ROUTE-05). `g8e logout web` ends only web sessions and keeps the CLI session and local credentials. `g8e logout cli` ends only CLI sessions and revokes their certificates. For CLI scopes the CLI then deletes the local credentials (`credentials.json`, CLI certificate, and private key); the shared gateway root CA stays in the OS trust store. See `./g8e logout --help` for flags.
+
+Because certificates are revoked, any other machine that held a CLI identity for the user can no longer authenticate. On such a machine, run `g8e logout --local-only` to discard the stale local credentials, then `g8e login`, which uses the recovery flow on an initialized gateway (approved with an existing passkey in the Console, or from an enrolled CLI for a headless login). A user with no passkey and no other enrolled CLI has no approver for that recovery, so a headless-only user should not run `g8e logout` or `g8e logout cli` while it is their only identity.
 
 Run `g8e auth context` to display the local CLI authentication context as JSON. If the local context lacks an operator session ID, it queries `GET /api/v1/auth/cli/session` over mTLS to resolve the server-side binding.
 
@@ -176,7 +185,7 @@ The browser flow is:
 2. On later visits, enter the user identity and complete a WebAuthn assertion.
 3. The gateway creates a 24-hour browser session (`WebSessionTTL`) and sets the HTTP-only `g8e_web_session_cookie`.
 4. Use the authenticated Console to review approvals, manage passkeys, inspect sessions, and review platform enrollment requests.
-5. Log out through the Console or `/api/v1/auth/logout` to delete the browser session and clear the cookie.
+5. Log out through the Console or `/api/v1/auth/logout` to delete the current browser session and clear the cookie. `g8e logout` and `g8e logout web` delete every browser session of the user instead.
 
 A browser session authorizes browser-session and dual-auth routes. It does not substitute for a workload certificate on mTLS-only execution, producer, or administrative routes.
 
@@ -195,6 +204,8 @@ Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbi
 Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details and the last heartbeat time before binding. An Operator with no heartbeat for more than 60 seconds is listed as `stale` and cannot be targeted until its next heartbeat restores it (see [Liveness and Staleness](./operator.md#liveness-and-staleness)).
 
 Re-binding to the identical ordered list of operator sessions is idempotent and does not rotate the CLI session.
+
+`g8e logout` unbinds operators from every web and CLI session of the user. For web sessions it clears the KV bindings, the bound-sessions document, and the operator document's `bound_web_session_id` through the same `UnbindOperators` path the Console uses. For CLI sessions it clears `operator_session_id` and `bound_operator_session_ids` in the write that deactivates the session. The operator sessions stay active.
 
 ### Gateway browser proxy to g8ee
 
@@ -272,6 +283,7 @@ L1, L4, and L5 apply universally. L2 Consensus and L3 Notary are enforced or aud
 | `/api/v1/auth/cli/refresh` | POST | Refresh expired CLI session using valid cert | `RouteAuthMTLS` |
 | `/api/v1/auth/cli/bind` | POST | Bind CLI session to operator session(s) | `RouteAuthMTLS` |
 | `/api/v1/auth/cli/unbind` | POST | Clear CLI session operator binding | `RouteAuthMTLS` |
+| `/api/v1/auth/cli/logout` | POST | End the user's web and/or CLI sessions, unbind their operators, revoke CLI certificates | `RouteAuthMTLS` (certificate-only admission) |
 | `/api/v1/auth/cli/session` | GET | Retrieve CLI session and operator binding | `RouteAuthMTLS` |
 | `/api/v1/auth/platform/request` | POST | Workload submits platform enrollment CSR | `RouteAuthNone` (token-scoped) |
 | `/api/v1/auth/platform/status` | GET | Workload polls platform enrollment status | `RouteAuthNone` (token-scoped) |

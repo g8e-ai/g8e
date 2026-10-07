@@ -32,6 +32,28 @@ func IsDataOperator(op models.OperatorDocumentGo) bool {
 	return HasActiveRole(op, constants.OperatorRoleData)
 }
 
+// IsDedicatedDataOperator reports whether op is an active Data session other
+// than the Gateway's embedded Operator. Selection prefers dedicated Data
+// Operators and falls back to the embedded one only when none is active.
+func IsDedicatedDataOperator(op models.OperatorDocumentGo) bool {
+	return IsDataOperator(op) && op.OperatorType != constants.OperatorTypeEmbedded
+}
+
+// PreferDedicatedDataOperators drops the Gateway's embedded Operator when a
+// dedicated Data session is also present.
+func PreferDedicatedDataOperators(operators []models.OperatorDocumentGo) []models.OperatorDocumentGo {
+	dedicated := make([]models.OperatorDocumentGo, 0, len(operators))
+	for _, op := range operators {
+		if IsDedicatedDataOperator(op) {
+			dedicated = append(dedicated, op)
+		}
+	}
+	if len(dedicated) == 0 {
+		return operators
+	}
+	return dedicated
+}
+
 // IsStackDataOperator reports whether op is the data-operator the unified
 // Docker stack launches: an active data Operator whose heartbeat hostname is
 // constants.DataOperatorHostname.
@@ -39,13 +61,14 @@ func IsStackDataOperator(op models.OperatorDocumentGo) bool {
 	return IsDataOperator(op) && op.CurrentHostname == constants.DataOperatorHostname
 }
 
-// ActiveDataOperators returns every active data-operator session. When stack
-// data-operators (constants.DataOperatorHostname) are present, it returns them;
-// otherwise, it falls back to active remote operators whose role is data (for
-// example, in host-native local development).
+// ActiveDataOperators returns the active data-operator sessions in preference
+// order: stack data-operators (constants.DataOperatorHostname), else dedicated
+// Data Operators (for example, in host-native local development), else the
+// Gateway's embedded Operator.
 func ActiveDataOperators(operators []models.OperatorDocumentGo) []DataOperatorStatus {
 	var stackMatches []DataOperatorStatus
-	var fallbackMatches []DataOperatorStatus
+	var dedicatedMatches []DataOperatorStatus
+	var embeddedMatches []DataOperatorStatus
 	for _, op := range operators {
 		if !IsDataOperator(op) {
 			continue
@@ -57,16 +80,23 @@ func ActiveDataOperators(operators []models.OperatorDocumentGo) []DataOperatorSt
 			Status:            string(op.Status),
 			WorkingDirectory:  wd,
 		}
-		if op.CurrentHostname == constants.DataOperatorHostname {
+		switch {
+		case op.CurrentHostname == constants.DataOperatorHostname:
 			stackMatches = append(stackMatches, status)
-		} else {
-			fallbackMatches = append(fallbackMatches, status)
+		case op.OperatorType == constants.OperatorTypeEmbedded:
+			embeddedMatches = append(embeddedMatches, status)
+		default:
+			dedicatedMatches = append(dedicatedMatches, status)
 		}
 	}
-	if len(stackMatches) > 0 {
+	switch {
+	case len(stackMatches) > 0:
 		return stackMatches
+	case len(dedicatedMatches) > 0:
+		return dedicatedMatches
+	default:
+		return embeddedMatches
 	}
-	return fallbackMatches
 }
 
 // extractWorkingDirectory reads the pwd from the operator's heartbeat.

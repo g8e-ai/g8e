@@ -245,7 +245,39 @@ const (
 	// CLIBindMaxOperators caps how many operator sessions one bind call may
 	// target. 5000 UUIDs stay well inside the gateway's 512KB request limit.
 	CLIBindMaxOperators = 5000
+
+	// CLILogoutCertRevocationReason is the PKI revocation reason recorded for a
+	// CLI certificate revoked by a user-initiated logout.
+	CLILogoutCertRevocationReason = "cli_logout"
 )
+
+// LogoutScope selects which of a user's sessions a logout terminates.
+type LogoutScope string
+
+const (
+	// LogoutScopeAll terminates every web and CLI session of the user.
+	LogoutScopeAll LogoutScope = "all"
+	// LogoutScopeWeb terminates every web session of the user.
+	LogoutScopeWeb LogoutScope = "web"
+	// LogoutScopeCLI terminates every CLI session of the user and revokes the
+	// CLI certificates behind them.
+	LogoutScopeCLI LogoutScope = "cli"
+)
+
+// IncludesWeb reports whether the scope terminates web sessions.
+func (s LogoutScope) IncludesWeb() bool { return s == LogoutScopeAll || s == LogoutScopeWeb }
+
+// IncludesCLI reports whether the scope terminates CLI sessions.
+func (s LogoutScope) IncludesCLI() bool { return s == LogoutScopeAll || s == LogoutScopeCLI }
+
+// Valid reports whether the scope is one of the defined logout scopes.
+func (s LogoutScope) Valid() bool {
+	switch s {
+	case LogoutScopeAll, LogoutScopeWeb, LogoutScopeCLI:
+		return true
+	}
+	return false
+}
 
 // L3 notary constants
 const (

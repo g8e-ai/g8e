@@ -259,11 +259,7 @@ func localEmbeddedOperator(fileSvc fs.RuntimeFileService, profile serve.GatewayL
 		reported: map[string]string{},
 	}
 	if profileErr == nil {
-		row.Roles = append(constants.OperatorRoles{}, profile.Config.OperatorRoles...)
-		if len(row.Roles) == 0 {
-			row.Roles = append(row.Roles, constants.OperatorRoleData)
-		}
-		row.Roles = append(row.Roles, constants.OperatorRoleEmbedded).Canonical()
+		row.Roles = append(append(constants.OperatorRoles{}, profile.Config.OperatorRoles...), constants.OperatorRoleEmbedded).Effective()
 		row.fillFromProfile(profile.Config)
 	}
 	// The launch profile does not record the Gateway's working directory; its

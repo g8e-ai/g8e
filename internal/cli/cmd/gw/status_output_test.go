@@ -161,7 +161,7 @@ func TestStatusDoesNotDuplicateEnrolledEmbeddedOperator(t *testing.T) {
 	mock := &statusMockClient{responses: map[string][]byte{constants.APIPaths.Operators: body}}
 	var buf bytes.Buffer
 	printOperatorTables(&buf, collectOperatorInventory(mock, fileSvc, cfg))
-	require.Contains(t, buf.String(), "embedded,inference")
+	require.Contains(t, buf.String(), "embedded,data,inference")
 	require.Equal(t, 1, operatorTableRows(buf.String(), string(constants.DocIDEmbeddedOperator)))
 	require.NotContains(t, buf.String(), "launch profile")
 }
@@ -293,7 +293,7 @@ func TestGatewayStatusListsEveryOperatorWithTypeCapabilitiesAndStartValues(t *te
 
 	require.Contains(t, out, "\n  OPERATOR ID ")
 	require.Equal(t, []string{"OPERATOR", "ID", "TYPE", "STATUS", "HOST", "HTTP", "PORT", "CAPABILITIES", "DIRECTORY"}, strings.Fields(lineStartingWith(out, "  OPERATOR ID")))
-	require.Equal(t, []string{"embedded-operator", "embedded", "active", "local", "8081", "embedded,inference,provenance", "/home/me/g8e"}, tableRow(t, out, "embedded-operator"))
+	require.Equal(t, []string{"embedded-operator", "embedded", "active", "local", "8081", "embedded,data,inference,provenance", "/home/me/g8e"}, tableRow(t, out, "embedded-operator"))
 	require.Equal(t, []string{"op-inf", "remote", "stale", "gpu-host", "8080", "inference", "/srv/g8e/inference"}, tableRow(t, out, "op-inf"))
 	require.Equal(t, []string{"op-prov", "remote", "active", "store-host", "8080", "provenance", "/srv/g8e/provenance"}, tableRow(t, out, "op-prov"))
 	require.Less(t, strings.Index(out, "embedded-operator"), strings.Index(out, "op-inf"), "embedded Operator is listed first, then by ID")

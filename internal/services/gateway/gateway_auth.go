@@ -237,6 +237,9 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.AuthCLIRefresh, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.AuthCLIBind, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.AuthCLIUnbind, RouteAuthMTLS)
+	// CLI logout — mTLS only, admitted on the certificate alone like refresh
+	// (isCLISessionCertIdentityPath), so an expired session can still log out.
+	r.addExact(constants.APIPaths.AuthCLILogout, RouteAuthMTLS)
 
 	// CLI session info — mTLS only. Returns the authenticated session's
 	// persisted operator binding so the CLI can resync local credentials.
@@ -747,7 +750,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 	if len(r.TLS.PeerCertificates) > 0 {
 		wid := protocol.NewWorkloadIdentity()
 		cert := r.TLS.PeerCertificates[0]
-		if isCLISessionRefreshPath(r.URL.Path) {
+		if isCLISessionCertIdentityPath(r.URL.Path) {
 			return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 		}
 
@@ -758,11 +761,12 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			return true
 		}
 		if cliDoc == nil {
-			// Session not found. The only path that may proceed with a
-			// missing session is the refresh endpoint, where the cert is
-			// the proof of identity and the session may have been lost
-			// (e.g., gateway volume reset). All other paths fail closed.
-			if isCLISessionRefreshPath(r.URL.Path) {
+			// Session not found. The only paths that may proceed with a
+			// missing session are the refresh and logout endpoints, where
+			// the cert is the proof of identity and the session may have
+			// been lost (e.g., gateway volume reset). All other paths fail
+			// closed.
+			if isCLISessionCertIdentityPath(r.URL.Path) {
 				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 			}
 			s.logger.Warn("gateway: auth: CLI session not found", "cli_session_id", cliSessionID)
@@ -793,12 +797,12 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		if (!cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(checkTime)) ||
 			(!cliSession.AbsoluteExpiresAt.IsZero() && cliSession.AbsoluteExpiresAt.Before(checkTime)) ||
 			(!cliSession.IdleExpiresAt.IsZero() && cliSession.IdleExpiresAt.Before(checkTime)) {
-			// Session expired. The only path that may proceed with an
-			// expired session is the refresh endpoint, where the cert is
-			// the proof of identity and the session expiry is the
-			// condition being recovered from. All other paths fail
-			// closed.
-			if isCLISessionRefreshPath(r.URL.Path) {
+			// Session expired. The only paths that may proceed with an
+			// expired session are the refresh and logout endpoints, where
+			// the cert is the proof of identity and the session expiry is
+			// the condition being recovered from (or logged out of). All
+			// other paths fail closed.
+			if isCLISessionCertIdentityPath(r.URL.Path) {
 				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 			}
 			s.logger.Warn("gateway: auth: CLI session expired", "cli_session_id", cliSessionID)
@@ -907,11 +911,16 @@ func matchesCertificateFingerprint(cert *x509.Certificate, expected string) bool
 	return subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
-func isCLISessionRefreshPath(path string) bool {
-	return path == constants.APIPaths.AuthCLIRefresh
+// isCLISessionCertIdentityPath reports whether path is admitted on the CLI
+// certificate alone, whatever state its CLI session is in. Refresh needs this
+// to recover a stale session. Logout needs it so a user whose session already
+// expired can still log out; it grants nothing refresh does not, since any
+// holder of an unrevoked certificate can refresh and then log out.
+func isCLISessionCertIdentityPath(path string) bool {
+	return path == constants.APIPaths.AuthCLIRefresh || path == constants.APIPaths.AuthCLILogout
 }
 
-// handleCLIRefreshAuth is the fail-closed auth path for the CLI session refresh endpoint. It runs before persisted CLI session and Operator binding validation because refresh recovers expired, missing, inactive, or stale session state. The cert is the proof of identity: handleMTLSAuth already verified its revocation status, chain, and expiry.
+// handleCLIRefreshAuth is the fail-closed auth path for the CLI session refresh and logout endpoints. It runs before persisted CLI session and Operator binding validation because refresh recovers expired, missing, inactive, or stale session state, and logout must work from that same state. The cert is the proof of identity: handleMTLSAuth already verified its revocation status, chain, and expiry.
 //
 // Security guarantees:
 //   - The cert is verified (revocation, chain, expiry) by handleMTLSAuth.
@@ -919,8 +928,8 @@ func isCLISessionRefreshPath(path string) bool {
 //     request body or the expired/missing session record.
 //   - The user is validated as active.
 //   - The header session either matches the cert URI SAN or carries the same user and certificate fingerprint after a prior session rotation.
-//   - Only the refresh endpoint is reachable through this path; all other
-//     endpoints fail closed on expired/missing sessions.
+//   - Only the refresh and logout endpoints are reachable through this path;
+//     all other endpoints fail closed on expired/missing sessions.
 func (s *AuthService) cliRefreshSessionMatchesCertificate(cliSessionID, userID string, cert *x509.Certificate) (bool, error) {
 	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
