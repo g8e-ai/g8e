@@ -3,8 +3,8 @@ doc_id: ensemble-devs
 title: Ensemble Development Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.7
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - ensemble/
   - ensemble/app/
@@ -62,7 +62,9 @@ Most application modules import Pydantic types through `app.models.base`; [app/l
 
 ## Local setup
 
-Run these commands from `ensemble/` unless stated otherwise. Python 3.12 or newer is required.
+Python 3.12 or newer is required. From the repository root, `make dev-python` provisions the repository-root `.venv` with uv (uv installs Python 3.12 itself when the system has none) and installs the editable `protocol/python` package and `ensemble[test]`. Both the root and `ensemble/` Makefiles prefer that `.venv`.
+
+To manage an environment by hand, run these commands from `ensemble/`:
 
 ```bash
 cd ensemble
@@ -70,10 +72,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ../protocol/python
 pip install -e ".[dev,test,docs]"
-pre-commit install
 ```
 
-`make setup` from `ensemble/` installs the editable protocol package and the ensemble `dev` and `test` extras. The `docs` extra is not included by that target; install `.[dev,test,docs]` when working on MkDocs documentation. The root Makefile also uses a repository-root `.venv` for its ensemble targets, so install the editable packages into that environment when using `make ensemble-test` or `make ensemble-lint` from the repository root.
+`make setup` from `ensemble/` installs the editable protocol package and the ensemble `dev` and `test` extras. The `docs` extra is not included by that target; install `.[dev,test,docs]` when working on MkDocs documentation.
 
 After changing [protocol/python/](../../protocol/python/), refresh the environment used by the command you are running:
 
@@ -86,13 +87,13 @@ The service reads `.env` with `python-dotenv` at import time without overriding 
 
 ## Development commands
 
-The [ensemble/Makefile](../../ensemble/Makefile) selects `ensemble/.venv/bin/python`, `ruff`, and `pyright` when those files exist and otherwise falls back to tools on `PATH`.
+The [ensemble/Makefile](../../ensemble/Makefile) selects `python`, `ruff`, and `pyright` from the repository-root `.venv` first, then `ensemble/.venv`, and otherwise falls back to tools on `PATH` (`python3` for Python).
 
 ```bash
 # From ensemble/
 make setup       # Install editable protocol and ensemble dev/test packages
-make test        # Run all tests under tests/
-make lint        # Run Ruff on app/ and Pyright on app/
+make test        # Run all tests under tests/ (includes external-marker tests)
+make lint        # Run Ruff on app/ and tests/ and Pyright with pyrightconfig.json
 make format      # Format app/ and tests/ with Ruff
 make check       # Format, lint, then test
 make proto       # Check canonical Python protobuf stubs
@@ -103,12 +104,12 @@ Use the repository-root targets when you need the supported split between local 
 
 ```bash
 make ensemble-test    # tests/unit and tests/integration, excluding external-service markers
-make ensemble-test-external    # integration tests marked ai_integration, requires_web_search, requires_api, or requires_system_one
-make ensemble-lint    # Ruff and Pyright for ensemble/app
+make ensemble-test-external    # integration tests marked ai_integration, requires_web_search, requires_api, requires_system_one, or requires_operator
+make ensemble-lint    # Ruff and Pyright for ensemble/app and ensemble/tests (delegates to ensemble make lint)
 make ensemble-build   # Build g8e-ensemble:<VERSION> from ensemble/Dockerfile
 ```
 
-The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one"`. The `make ensemble-test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_system_one"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_system_one`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
+The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one and not requires_operator"`. The `make ensemble-test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_system_one or requires_operator"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_system_one`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
 
 For a focused test, use the environment selected by the target or invoke the ensemble interpreter explicitly:
 
@@ -121,7 +122,7 @@ Tests use the pytest configuration in [ensemble/pyproject.toml](../../ensemble/p
 ## Coding standards
 
 - Use Ruff for linting and formatting. The configured target is Python 3.12, with a 100-character line length and four-space indentation.
-- Use Pyright against `app/`; the project configuration enables strict typing rules.
+- Use Pyright against `app/` and `tests/` with the shared `pyrightconfig.json` (the `standard` preset). Lint configuration and rationale live in [Python Linting](../devs/python-linting.md); do not duplicate them here.
 - Route new Pydantic imports through `app.models.base` and use typed protocol or application models rather than raw dictionaries for known shapes.
 - Import shared constants, API paths, model types, and enums from the in-tree `g8e` package. Keep values in `app/constants/` only when they are ensemble-owned.
 - Keep service construction and dependency wiring in `ServiceFactory` and its typed `CoreServices`, `DataServices`, `DomainServices`, `OperatorServices`, and `AllServices` containers. Do not create a second production wiring path in a router or provider.
@@ -132,8 +133,6 @@ Tests use the pytest configuration in [ensemble/pyproject.toml](../../ensemble/p
 - Preserve exact Operator/session binding when constructing command requests. Do not broadcast commands or trust caller-supplied identity headers without authenticated-context validation.
 - Add unit tests for isolated behavior and integration tests for real Gateway, Operator, HTTP dispatch, or provider boundaries. Add a regression test before fixing a bug.
 - Keep documentation under [docs/ensemble/](../) synchronized when interfaces, models, provider boundaries, lifecycle behavior, or test commands change.
-
-Pre-commit runs the configured Ruff and Pyright checks on staged files. It is an additional local check, not a replacement for the Make targets or the relevant integration tests.
 
 ## LLM provider boundary
 

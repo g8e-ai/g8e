@@ -4,7 +4,7 @@ title: Host-Native Headless UX Smoke Test
 audience: developers, evaluators, compliance auditors
 status: retired
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - docs/guides/ux_smoke_test.md
 related:

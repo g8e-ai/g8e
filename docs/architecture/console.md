@@ -4,7 +4,7 @@ title: Console Architecture and Development Guide
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - console/
   - internal/services/gateway/console/
@@ -138,7 +138,7 @@ All three start through `POST /api/v1/chat`:
 | New investigation in a case | `{"message": …, "context": {"case_id": …}, "resource_creation": {"create_investigation": true}}` |
 | Continue an investigation | `{"message": …, "context": {"case_id": …, "investigation_id": …}}` |
 
-The response returns `case_id` and `investigation_id` immediately; the reply streams over SSE. g8ee opens a new investigation only under a case the caller owns, and reports another user's case as not found. The selected case and investigation are kept in the URL query (`?case=…&investigation=…`) so a refresh restores them.
+Case and investigation statuses are typed constants in `console/src/lib/types.ts` (`CaseStatus`, `InvestigationStatus`) rather than free-form strings. The response returns `case_id` and `investigation_id` immediately; the reply streams over SSE. g8ee opens a new investigation only under a case the caller owns, and reports another user's case as not found. The selected case and investigation are kept in the URL query (`?case=…&investigation=…`) so a refresh restores them.
 
 When the ensemble is starting up or awaiting workload approval, `CasesView` displays an empty state with a spinner ("Connecting to ensemble…" or "Ensemble enrolling…") and an action to review in Approvals when an enrollment request is pending. It automatically reloads when SSE events (`platform.approvals.changed`, `g8e.v1.ai.*`, `g8e.v1.app.*`) or stream reconnects signal that the ensemble is ready.
 
@@ -187,6 +187,8 @@ The fastest loop is to rebuild and reload the Gateway-served console, which keep
 ```bash
 make console-build console-embed && make build && ./g8e gw restart
 ```
+
+The embed is committed. When `console/dist` is absent (a fresh clone without Node), `make build` uses the committed embed as-is; when `console/dist` exists, `make build` copies it into the embed first.
 
 To use the Vite dev server (`npm run dev`, `http://127.0.0.1:5174/console/`), the page and the Gateway are different origins, so the Gateway must allow the dev origin first: `./g8e gw connect http://localhost:5174`. Relative API paths then need a dev proxy or an absolute Gateway origin; keep such changes local.
 

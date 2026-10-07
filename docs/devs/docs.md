@@ -4,7 +4,7 @@ title: Documentation Guide
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - docs/
   - protocol/docs/
@@ -13,6 +13,9 @@ owners:
   - Makefile
   - internal/services/gateway/docs/
   - internal/tools/constgen/
+  - internal/tools/explorercatalog/
+  - g8e-adapter/generator/
+  - website/
 related:
   - docs/devs/devs.md
   - docs/devs/codemap.md
@@ -56,7 +59,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-DOC-FMT-01 | Maintained developer files in `docs/devs/` MUST use the dev docs format with YAML front matter (`doc_id`, `title`, `audience`, `status`, `last_updated`, `version`, `owners`, `related`, `when_to_read`, `do_not_use_for`) and standard H2 sections: Purpose, Quick index, Invariants, Owned surfaces, Procedures, Anti-patterns, Links out. |
-| INV-DOC-FMT-02 | `last_updated` and `version` metadata MUST be updated only after completing the full [End-to-End Audit Workflow](#end-to-end-audit-workflow). `version` MUST match the exact string in `VERSION`. |
+| INV-DOC-FMT-02 | `last_updated` and `version` metadata MUST be updated only after completing the full [End-to-End Audit Workflow](#end-to-end-audit-workflow). `version` MUST match the exact string in `VERSION`. Documents that carry the older `Last Updated` and `Version` body header instead of front matter follow the same rule. |
 | INV-DOC-FMT-03 | Documents evaluated for impact during a change or release that require no edits MUST retain their existing metadata. Blanket-bumping metadata without an audit is prohibited. |
 | INV-DOC-FMT-04 | Historical release notes in `docs/release_notes/` and evidence artifacts are immutable and MUST retain the version, run ID, and timestamps of their original scope. |
 | INV-DOC-FMT-05 | Maintained protocol specifications under `protocol/docs/` (`a2a.md`, `constants.md`, `mcp.md`, `spec.md`) MUST include a `Version: vX.Y.Z` header matching the exact string in `VERSION`. |
@@ -75,10 +78,11 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-DOC-GEN-01 | Generated protobuf references in `protocol/docs/reference/api/` MUST change only through edits to `.proto` files in `protocol/proto/g8e/` followed by `make proto-generate` (or `make proto-go`). MUST NOT hand-edit generated protobuf output. |
-| INV-DOC-GEN-02 | Gateway OpenAPI specifications (`internal/services/gateway/docs/swagger.json` and `swagger.yaml`) MUST change only through Go Swagger annotations followed by `make swagger-generate`. `swagger.json` is embedded into the Gateway binary via `internal/services/gateway/docs/docs.go` and verified by `go test ./internal/services/gateway/docs`. |
+| INV-DOC-GEN-02 | Gateway OpenAPI specifications (`internal/services/gateway/docs/swagger.json` and `swagger.yaml`) MUST change only through Go Swagger annotations followed by `make swagger-generate`. `swagger.json` is embedded into the Gateway binary via `internal/services/gateway/docs/docs.go` and verified by `./g8e test unit --pkg ./internal/services/gateway/docs`. |
 | INV-DOC-GEN-03 | Machine-readable protocol constants and schemas under `protocol/constants/`, `protocol/models/`, and `protocol/schemas/` MUST remain synchronized with their Go, Python, and TypeScript mirrors via owning validation commands (`make constants-check`, `make doctrines-validate`, `make agent-tool-registry-check`, `make explorer-catalog-check`). |
 | INV-DOC-GEN-04 | Static website documentation in `website/` MUST be rendered from root `README.md` via `make website-build` and validated via `make website-test`. MUST NOT hand-edit rendered website output. |
 | INV-DOC-GEN-05 | Release compliance evidence projections (`docs/release_notes/vX.Y.x/*-compliance-evidence.md` and `.csv`) MUST be generated through `./g8e compliance release-prepare` or `./g8e compliance release-evidence`. MUST NOT hand-edit projected compliance evidence. |
+| INV-DOC-GEN-06 | The observe frontend contract pack under `g8e-adapter/contract-pack/`, including its `README.md`, `builder-prompt.md`, `public/README.md`, and `public/offline-verifier.md`, MUST change only through `g8e-adapter/generator/gen-contract-pack.mjs` (`npm run gen:contract-pack` from `g8e-adapter/`) and MUST pass `npm run gen:contract-pack:check`. MUST NOT hand-edit contract pack output. |
 
 ### Style and structure (`INV-DOC-STYLE`)
 
@@ -88,6 +92,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-DOC-STYLE-02 | Code references MUST use repository-relative paths and stable symbol names. Line-number references and machine-absolute paths are prohibited. |
 | INV-DOC-STYLE-03 | Relative links MUST resolve from the directory containing the document. Link syntax MUST use `[text](target.md)`. |
 | INV-DOC-STYLE-04 | Standalone component and guide documents MUST link to their canonical architecture or index document. Component index documents MUST list all maintained documents in their set. |
+| INV-DOC-STYLE-05 | The [Documentation catalog](#documentation-catalog) MUST list every maintained first-party document exactly once, and each entry MUST resolve to an existing file. A change that adds, renames, retires, or removes a document MUST update the catalog in the same change. Vendored third-party documentation under `vendor/` is outside the catalog. |
 
 ## Owned surfaces
 
@@ -98,32 +103,36 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Dev docs format | `docs/devs/` | YAML front matter and required H2 section order |
 | Documentation catalog | `docs/devs/docs.md` | Authoritative inventory of all first-party docs |
 | Protobuf API references | `protocol/proto/g8e/`, `protocol/docs/reference/api/` | `make proto-generate` (or `make proto-go`) |
-| Gateway OpenAPI | `internal/services/gateway/docs/`, Go Swagger annotations | `make swagger-generate`, `go test ./internal/services/gateway/docs` |
-| Protocol events and constants | `protocol/constants/events.json`, `internal/constants/` | `make constants-generate`, `make constants-check` |
-| Protocol doctrines | `protocol/constants/doctrine/*.json` | `make doctrines-validate` |
-| Agent tool registry | `protocol/constants/agenttools/agent-tool-registry.json` | `make agent-tool-registry-generate`, `make agent-tool-registry-check` |
-| Explorer scenario catalog | `evaluation-explorer/` (`scenario-catalog.generated.ts`) | `make explorer-catalog-generate`, `make explorer-catalog-check` |
+| Gateway OpenAPI | `internal/services/gateway/docs/`, Go Swagger annotations | `make swagger-generate`, `./g8e test unit --pkg ./internal/services/gateway/docs` |
+| Protocol events and constants | `protocol/constants/events.json`, `internal/tools/constgen/`; generated `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `console/src/generated/events.ts`, `protocol/python/g8e/_data/events.json` | `make constants-generate`, `make constants-check` |
+| Protocol doctrines | `protocol/constants/doctrine/*.json` | `make doctrines-validate` (checks that each doctrine file is valid JSON) |
+| Agent tool registry | `protocol/constants/agenttools/agent-tool-registry.json`, exported from Ensemble by `ensemble/app/services/evaluation/agent_tool_registry_export.py` | `make agent-tool-registry-generate`, `make agent-tool-registry-check` |
+| Explorer scenario catalog | `evaluation-explorer/src/content/scenario-catalog.generated.ts`, `internal/tools/explorercatalog/` | `make explorer-catalog-generate`, `make explorer-catalog-check` |
+| Observe frontend contract pack | `g8e-adapter/contract-pack/`, `g8e-adapter/generator/gen-contract-pack.mjs` | `npm run gen:contract-pack` and `npm run gen:contract-pack:check` from `g8e-adapter/` |
+| FedRAMP KSI catalog and COSAiS overlays | `docs/reference/ksi-catalog.json`, `docs/reference/cosais-overlays.json` | `./g8e compliance overlay` loads the overlays and checks that KSI references resolve. The standalone `make cosais-validate` target was removed in v2.3.2. |
 | Static website | `README.md`, `website/` | `make website-build`, `make website-test` |
 | Compliance evidence projections | `docs/release_notes/vX.Y.x/` | `./g8e compliance release-prepare`, `./g8e compliance report verify` |
 
 ### Documentation catalog
 
-This catalog provides the authoritative inventory of all first-party documentation across the repository.
+This catalog provides the authoritative inventory of all first-party documentation across the repository. INV-DOC-STYLE-05 governs its completeness. Descriptions summarize each document's purpose; the document itself and its source owners remain authoritative.
 
 #### Repository entry points and governance
 
-- [Root README](../../README.md): Product overview, evidence boundaries, quick start, architecture summary, and documentation entry routes.
+- [Root README](../../README.md): Product overview, local quick-start paths, repository map, project status, contribution routes, and documentation entry links. Source for the rendered website (INV-DOC-GEN-04).
 - [Changelog](../../CHANGELOG.md): Release index documenting changes across versions with links to per-release notes.
-- [Early Testers Guide](../../EARLY_TESTERS.md): Program guide and onboarding instructions for early testers.
-- [Contributing](../../.github/CONTRIBUTING.md): Contribution workflow, PR expectations, and developer entry points.
+- [Early Testers Guide](../../EARLY_TESTERS.md): Early-tester program terms, feedback channels, and the reports that help most.
+- [Contributing](../../.github/CONTRIBUTING.md): Contribution workflow, local development setup, check selection, pull request and issue expectations, documentation contributions, and licensing.
 - [Code of Conduct](../../.github/CODE_OF_CONDUCT.md): Contributor code of conduct.
-- [Security Policy](../../.github/SECURITY.md): Vulnerability disclosure procedures and supported release versions.
-- [Pull Request Template](../../.github/pull_request_template.md): Required change summary, test evidence, and verification checklist.
+- [Security Policy](../../.github/SECURITY.md): Supported versions, private vulnerability reporting, disclosure policy, and scope.
+- [Pull Request Template](../../.github/pull_request_template.md): Summary, details, and test results sections for pull requests.
+- [Agent Instructions](../../AGENTS.md): Operational constraints, build and test entry points, architecture summary, and critical invariants for AI coding agents. Summarizes `docs/devs/` and defers to it.
+- [Claude Code Instructions](../../CLAUDE.md): Repository guidance for Claude Code with build and test commands, the governance pipeline summary, and invariants most likely to matter to an agent. Summarizes `docs/devs/` and defers to it.
 
 #### Core platform concepts and position papers
 
-- [About g8e](../core/about.md): High-level mission, platform philosophy, and design principles.
-- [Position Paper](../core/position_paper.md): Conceptual governance framework, architectural rationale, and trust models.
+- [About g8e](../core/about.md): Why g8e exists, what it is, the verification boundary, sovereignty and accountability, and the current reference implementation.
+- [Position Paper](../core/position_paper.md): Position on governing agentic execution without surrendering data custody, including design requirements, the system model, evidence and claim discipline, and limitations.
 
 #### Developer documentation (`docs/devs/`)
 
@@ -193,6 +202,7 @@ This catalog provides the authoritative inventory of all first-party documentati
 - [Operator Lifecycle Graph](../diagrams/graph-operator-lifecycle.md): Operator lifecycle state machine from bootstrap to shutdown.
 - [Operator Pipeline L1-L5 Graph](../diagrams/graph-operator-pipeline-l1-l5.md): L1-L5 execution pipeline through the Operator engine.
 - [50k System Graph](../diagrams/graph-system-50k.md): 50,000-foot component graph and protocol interaction boundaries.
+- [g8e System Diagram](../diagrams/g8e-diagram.png): Rendered system overview image (immutable binary asset; do not edit).
 - [Sequence Principal Ensemble Gateway Operator v3](../diagrams/sequence-principal-ensemble-gateway-operator-v3.md): End-to-end sequence diagram for governed execution.
 
 #### Ensemble subsystem documentation (`docs/ensemble/` and `ensemble/`)
@@ -206,6 +216,7 @@ This catalog provides the authoritative inventory of all first-party documentati
 - [Ensemble Getting Started](../ensemble/getting-started.md): Developer quick start for running and extending Ensemble.
 - [Ensemble Developer Guide](../ensemble/devs.md): Python development conventions, virtual environments, and typing standards.
 - [Ensemble Governance](../ensemble/governance.md): Integration between Ensemble agent steps and Gateway governance.
+- [Ensemble Evals](../ensemble/evals.md): Ensemble-side evaluation services, trace capture, and agent tool registry export.
 - [Ensemble Decision Providers](../ensemble/decision-providers.md): Provider abstraction for voting and consensus decisions.
 - [Ensemble LLM Providers](../ensemble/llm-providers.md): Configuration and drivers for Ollama, OpenAI, Anthropic, Gemini, and local models.
 - [Ensemble PKI](../ensemble/pki.md): Ensemble mTLS certificate handling and workload identity.

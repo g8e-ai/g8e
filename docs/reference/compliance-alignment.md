@@ -1,8 +1,8 @@
 # Compliance Alignment
 
-**Document Version:** 2.3.1
+**Document Version:** 2.3.2
 **Last Updated:** 2026-10-06
-**Platform:** g8e v2.3.1
+**Platform:** g8e v2.3.2
 **Maintained by:** Security and Compliance Team
 
 ## Purpose and claim boundary
@@ -35,7 +35,7 @@ SOC 2 Trust Services Criteria, ISO/IEC 27001, HIPAA Security Rule, PCI DSS, GDPR
 
 The proof-backed reporting path separates collection, verification, grading, analysis, profiling, and rendering:
 
-1. Read-only importers decode persisted demo, eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence through registered evidence importers.
+1. Read-only importers decode persisted eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence through registered evidence importers.
 2. The evidence graph validates canonical digests, content addresses, references, prohibited cycles, assessed trust, encryption metadata, freshness, and scope, run, attempt, scenario, transaction, and evidence-window binding.
 3. Assertion assessment evaluates each selected subject independently from verified, scope-bound evidence, enforces compatible run, attempt, scenario, and transaction bindings, derives achieved evidence strength from reproduced grader and verifier checks, and preserves known negative measurements when other selected subjects are unavailable.
 4. Framework assessment projects assertion assessments through the reviewed crosswalk without changing the underlying assertion outcomes, preserving partial, supporting, and full mapping distinctions.
@@ -127,7 +127,7 @@ Assessment results belong in generated artifacts, not this document. The reposit
 - [v2.1.4 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.md)
 - [v2.1.4 release evidence (CSV)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.csv)
 
-The retained historical release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs. They predate the current signed report-bundle projection path and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. New release projections are generated only from a verified public bundle and carry the protected assessment scope's release version, analysis identity, source limitations, and claim boundaries; later evidence does not rewrite an earlier result.
+The retained historical release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs (the demo system is removed in v2.3.2). They predate the current signed report-bundle projection path and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. New release projections are generated only from a verified public bundle and carry the protected assessment scope's release version, analysis identity, source limitations, and claim boundaries; later evidence does not rewrite an earlier result.
 
 ## Responsibility boundaries
 

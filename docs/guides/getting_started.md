@@ -4,7 +4,7 @@ title: Getting Started
 audience: new users and platform evaluators
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - docs/guides/getting_started.md
   - Makefile
@@ -47,7 +47,7 @@ Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcomm
 - Go 1.26.6
 - Make
 - Git
-- Node.js 22+ with npm (for the evaluation explorer)
+- Node.js 22+ with npm (only to rebuild the Console or evaluation explorer; a fresh clone builds from the committed embeds)
 - A modern browser with WebAuthn support (or use headless enrollment)
 
 ### Clone the repository
@@ -63,12 +63,16 @@ If build tools are missing, run the setup script from this checkout:
 - **macOS:** `bash scripts/macos-setup.sh --build-only`
 - **Windows:** `pwsh scripts/windows-setup.ps1`
 
+For a Gateway in WSL that LAN Operators must reach, see the Windows-to-WSL port-forwarding helper `scripts/configure-gateway-lan.ps1` in [Connect Operator to Gateway](connect_operator_to_gateway.md).
+
 Linux and macOS setup without `--build-only` also installs the contributor toolchain, including Python test and lint dependencies. Pass `-y` to accept installs without prompting, for example `bash scripts/linux-setup.sh --build-only -y`. After setup, open a new terminal or source the shell profile printed by the script, then return to the repository root.
 
 ### Gateway-only track
 
 The Gateway-only track has no Python, Ollama, or model SDK requirement. It
-requires Git, Go 1.26.6, Make, and Node.js 22+ to build the embedded explorer.
+requires Git, Go 1.26.6, and Make. When `console/dist` and
+`evaluation-explorer/dist` are absent (a fresh clone), `make build` uses the
+committed Console and explorer embeds, so Node.js is not needed.
 Build and start the Gateway on localhost:
 
 ```bash
@@ -179,7 +183,7 @@ There are two ways to run g8e: **natively on your host** (compile and run direct
 | Go | 1.26.6 | Required to build from source |
 | Make | Any recent | Required to run Makefile targets |
 | Git | Any recent | Required to clone the repository |
-| Node.js and npm | 22+ | Required to build the evaluation explorer (once, at build time) |
+| Node.js and npm | 22+ | Required only to rebuild the Console or evaluation explorer embeds; `make build` and `make up` use the committed embeds when `dist/` is absent |
 | Python | 3.12+ | Required for `make full` / `make full-setup` (Ensemble); `make ensemble-env` installs runtime dependencies, and `make dev-python` adds test and lint dependencies. Also used for protocol library development |
 
 ### Docker path (no local toolchain required)
@@ -306,6 +310,8 @@ The gateway starts in Doctrine mode by default (L1 enforced, L2/L3 audited). To 
 ./g8e gw start --posture notary      # L1/L2/L3 strictly enforced
 ```
 
+`make clean` removes build and test artifacts and does not reset runtime state, trust, or databases. To intentionally reset the Gateway runtime, run `./g8e gw clean`, which archives `.g8e/` and requires fresh owner and workload enrollment.
+
 The default plain-HTTP port is `8080` and serves bootstrap and PKI discovery. The default HTTPS port is `8443` and serves authenticated APIs, MCP, and the Web Console.
 
 ### Monitor the Gateway
@@ -412,7 +418,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 ### Go module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.3.1
+go get github.com/g8e-ai/g8e/v2@v2.3.2
 ```
 
 Import in your Go code:
@@ -427,7 +433,7 @@ import (
 ### Python package
 
 ```bash
-pip install g8e==2.3.1
+pip install g8e==2.3.2
 ```
 
 Or pinned to latest:

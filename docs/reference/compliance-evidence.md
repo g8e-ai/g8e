@@ -1,8 +1,8 @@
 # Proof-Backed Compliance Evidence
 
-**Document Version:** 2.3.1
+**Document Version:** 2.3.2
 **Last Updated:** 2026-10-06
-**Platform:** g8e v2.3.1
+**Platform:** g8e v2.3.2
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -109,7 +109,7 @@ The catalog assigns L2 to deterministic integrity and specialized measurement co
 
 ## Framework crosswalk
 
-The canonical crosswalk (`protocol/constants/compliance/fedramp-nist-crosswalk.json`) maps framework controls to atomic assertions. The initial crosswalk targets FedRAMP 20x (CR26-2026-06-24) and NIST SP 800-53 (rev5), the two frameworks for which the repository already has a 31-KSI catalog, Class A-D method requirements, validation cycles, a KSI evaluator, history, OSCAL export, typed doctrine linkages, and a real-stack demo.
+The canonical crosswalk (`protocol/constants/compliance/fedramp-nist-crosswalk.json`) maps framework controls to atomic assertions. The initial crosswalk targets FedRAMP 20x (CR26-2026-06-24) and NIST SP 800-53 (rev5), the two frameworks for which the repository already has a 31-KSI catalog, Class A-D method requirements, validation cycles, a KSI evaluator, history, OSCAL export, typed doctrine linkages, and (before v2.3.2) a real-stack demo.
 
 Crosswalk identity: SHA-256 `f29489b373b64afae0bd1242e9f9dfd521b60a0d2f0c0172ccec3bf23ccd5208`.
 
@@ -180,7 +180,7 @@ The verifier independently checks:
 - Typed metric source, grader, and grade reproduction
 - Artifact directory integrity and root directory enforcement
 
-Missing, malformed, duplicated, unexpected, cross-scope, stale, unsigned, checksum-mismatched, or unresolvable evidence invalidates the report. Demo, eval, standalone receipt and persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed-attestation importers use shared evidence-graph and cryptographic verification primitives. Signed report-bundle generation copies explicit source bytes into canonical protected paths. Complete-bundle verification independently replays protected demo and eval inventories and standalone KSI, commitment, customer and assessor attestation, audit, ledger, and build/configuration sources through their registered importers, compares reproduced evidence resources with signed canonical analysis, and rejects every unknown artifact type without a route.
+Missing, malformed, duplicated, unexpected, cross-scope, stale, unsigned, checksum-mismatched, or unresolvable evidence invalidates the report. Eval, standalone receipt and persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed-attestation importers use shared evidence-graph and cryptographic verification primitives. Signed report-bundle generation copies explicit source bytes into canonical protected paths. Complete-bundle verification independently replays protected eval inventories and standalone KSI, commitment, customer and assessor attestation, audit, ledger, and build/configuration sources through their registered importers, compares reproduced evidence resources with signed canonical analysis, and rejects every unknown artifact type without a route.
 
 ---
 
@@ -218,7 +218,7 @@ Report-signing trust and source-evidence trust are separate inputs. `--trust-pol
 
 External trust refers to that separate trust input, not a mandatory third-party assessor. A release owner or delegated engineering assessor can establish and record first-party signer trust with the required key, identity, scope, purpose, assessment, and validity metadata. The verifier checks the policy and signatures; it does not establish an assessor's real-world independence or confer evidence-level L5 external attestation. First-party assessment and reproducible offline verification satisfy the standard release reporting contract without claiming certification. The [Release Process](../devs/release_process.md#compliance-evidence-generation) defines generation, release eligibility, conditional source trust, and clean offline acceptance.
 
-The verifier reads all source bodies through the bundle root, enforces the signed directory inventory and artifact limits, and does not discover evidence or trust from the working directory or runtime state. It reproduces demo and eval source-verification reports, reimports every standalone source, compares every reproduced protocol evidence reference with protected analysis, reproduces every renderer according to the protected bundle profile, and fails closed for missing, orphaned, duplicated, transplanted, substituted, malformed, unsupported, or unassessed evidence. One report has one assessment scope; generation includes only source records bound to that scope. Generation defaults to the restricted profile. Public generation requires every source admission to be explicitly public and renders release Markdown and CSV through a fixed allowlist that excludes source-local identities, runtime paths, free-form diagnostics, limitations, and source bodies.
+The verifier reads all source bodies through the bundle root, enforces the signed directory inventory and artifact limits, and does not discover evidence or trust from the working directory or runtime state. It reproduces eval source-verification reports, reimports every standalone source, compares every reproduced protocol evidence reference with protected analysis, reproduces every renderer according to the protected bundle profile, and fails closed for missing, orphaned, duplicated, transplanted, substituted, malformed, unsupported, or unassessed evidence. One report has one assessment scope; generation includes only source records bound to that scope. Generation defaults to the restricted profile. Public generation requires every source admission to be explicitly public and renders release Markdown and CSV through a fixed allowlist that excludes source-local identities, runtime paths, free-form diagnostics, limitations, and source bodies.
 
 ## Roadmap
 

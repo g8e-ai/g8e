@@ -3,8 +3,8 @@ doc_id: connect_frontend_to_gateway
 title: Connect Frontend to Gateway
 audience: frontend developers integrating with g8e
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - docs/guides/connect_frontend_to_gateway.md
   - internal/services/gateway/
@@ -50,7 +50,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-FE-AUTH-01 | Browser-accessible routes (web session required) MUST use `GET /api/v1/users/me`, `GET /api/v1/auth/sessions/me`, `GET /api/v1/auth/passkeys`, `DELETE /api/v1/auth/passkeys/{credentialId}`, `GET /api/v1/approvals`, `GET /api/v1/approvals/{txHash}/challenge`, `POST /api/v1/approvals/{txHash}/verify`, `GET /api/v1/sse/stream`, and `GET /api/v1/sse/events` as the canonical set. Additional routes may exist for infrastructure or observability; consult OpenAPI spec at `/swagger/doc.json` before exposing unlisted operations. |
-| INV-FE-AUTH-02 | Public endpoints (no auth required) MUST include passkey registration and authentication challenges, bootstrap status, enrollment token validation, logout, and CLI recovery approval routes. Consult [gateway_http_router.go:23-141](internal/services/gateway/gateway_http_router.go#L23-L141) for the complete canonical list. |
+| INV-FE-AUTH-02 | Public endpoints (no auth required) MUST include passkey registration and authentication challenges, bootstrap status, enrollment token validation, logout, and CLI recovery approval routes. Consult `internal/services/gateway/gateway_http_router.go` for the complete canonical list. |
 | INV-FE-AUTH-03 | Every session-authenticated call MUST include `credentials: 'include'` in the fetch options so the gateway's `g8e_web_session_cookie` is sent. CORS-restricted browsers block cookies without this flag. |
 | INV-FE-AUTH-04 | API responses MUST be interpreted through their HTTP status code: 200 (success), 401 (not authenticated, redirect to login), 403 (forbidden by policy), 404 (resource not found), 409 (conflict, e.g. token already used), 410 (gone, e.g. token expired), 5xx (server error). |
 
@@ -84,11 +84,11 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 | Claim | Path | Verify |
 | --- | --- | --- |
-| Browser credential flows | [internal/services/gateway/passkey_service_http.go](internal/services/gateway/passkey_service_http.go) | Register and authenticate challenges, enrollment token validation, WebAuthn response verification. |
-| CORS and session cookie behavior | [internal/services/gateway/passkey_service_http.go:47-61](internal/services/gateway/passkey_service_http.go#L47-L61) | Cookie attributes (`HttpOnly`, `Secure`, `SameSite` selection based on `crossOrigin` flag). |
-| Web session routes (browser-accessible) | [internal/services/gateway/gateway_http_router.go:245-251](internal/services/gateway/gateway_http_router.go#L245-L251) | Unified middleware validates cookie before handler invocation. |
-| SSE stream and poll endpoints | [internal/services/gateway/gateway_http_router.go:203-205](internal/services/gateway/gateway_http_router.go#L203-L205) | Event delivery, cursor tracking, streaming vs. polling fallback. |
-| API paths and constants | [internal/constants/api_paths.go:98-319](internal/constants/api_paths.go#L98-L319) | Canonical endpoint paths for auth, users, approvals, and observability routes. |
+| Browser credential flows | `internal/services/gateway/passkey_service_http.go` | Register and authenticate challenges, enrollment token validation, WebAuthn response verification. |
+| CORS and session cookie behavior | `internal/services/gateway/passkey_service_http.go` | Cookie attributes (`HttpOnly`, `Secure`, `SameSite` selection based on `crossOrigin` flag). |
+| Web session routes (browser-accessible) | `internal/services/gateway/gateway_http_router.go` | Unified middleware validates cookie before handler invocation. |
+| SSE stream and poll endpoints | `internal/services/gateway/gateway_http_router.go` | Event delivery, cursor tracking, streaming vs. polling fallback. |
+| API paths and constants | `internal/constants/api_paths.go` | Canonical endpoint paths for auth, users, approvals, and observability routes. |
 
 ## Procedures
 

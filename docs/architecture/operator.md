@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-10-02
-Version: v2.3.0
+Last Updated: 2026-10-06
+Version: v2.3.2
 
 The Governed Operator is the Policy Execution Point (PEP) for the runtime in which the Operator process runs. The reference implementation is the `g8e` binary started with `g8e operator start`. It receives governed `GovernanceEnvelope` transactions from a Gateway over an outbound-only mTLS WebSocket connection, verifies each transaction locally, executes accepted typed actions through the L5 Actuator, and stores authoritative local execution evidence.
 
@@ -38,7 +38,7 @@ One `g8e` binary can assume any nonempty combination of Embedded, Data, Inferenc
 
 Embedded runs the Gateway in process, including its enrollment and governance substrate. It does not become a remote worker by enabling another capability. `operator_type` continues to distinguish `embedded` and `remote` deployment. Cloud remains a deployment setting (`--cloud` and `--provider`), and Cloud, System, and Node are not entries in the operator type or role vocabulary. “Inference Node” names the Inference topology, not a separate operator type.
 
-The singular `operator_role` and runtime `role` fields are replaced by role arrays. Deploy remote workers with `operator deploy --roles data,provenance`; role settings are forwarded intact to startup. Role identity and fingerprints include the entire canonical set, so flag order and duplicate values do not change identity.
+The singular `operator_role` and runtime `role` fields are replaced by role arrays. Deploy remote workers with `operator deploy --roles data,provenance`; role settings are forwarded intact to startup. `operator deploy` places up to 5000 Operators per target (`--count`, `--start-index`, each in its own `op-NNNNN` directory under `--dest-dir`) on the local system (`--local`), over SSH (`--hosts`), or as one Docker container per Operator (`--docker-context` with `--docker-image`). The owner-facing Gateway address is the global `--endpoint`; `--operator-endpoint` selects the worker-facing address the deployed Operators use and defaults to `--endpoint`. `--background` starts the workers, and `--approve` approves each enrollment request as the authenticated owner and verifies the sessions are online. Run `./g8e operator deploy --help` for the flag inventory. Role identity and fingerprints include the entire canonical set, so flag order and duplicate values do not change identity.
 
 ## Runtime and trust boundaries
 

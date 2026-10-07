@@ -4,7 +4,7 @@ title: Public Spectator Architecture and Threat Model
 audience: architects and security reviewers
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - internal/services/gateway/public_mirror.go
   - internal/services/publicdisclosure/
@@ -332,7 +332,7 @@ The SSE stream has a bounded in-memory queue. If a connected consumer falls behi
 | Event history (feed records and batches) | Bounded recent history | The mirror retains up to 25,000 batches by default and advances the retained predecessor hash when older batches are pruned |
 | Proof artifacts and metadata | Append-only in the mirror state | Content-addressed artifacts remain available while their catalog and manifest remain valid; the current implementation has no tombstone cleanup job |
 | Snapshots | Current publisher and mirror checkpoints | A snapshot records the current high-water sequence and feed-chain hash; clients reconcile against the retained chain |
-| Publisher outbox | Until mirror acknowledgment | The publisher prunes acknowledged entries after its configured acknowledgment window; failed entries remain retryable |
+| Publisher outbox | Until mirror acknowledgment | The publisher prunes acknowledged entries after its configured acknowledgment window; failed entries remain retryable. Entries are indexed by the batch's last sequence; recovery and repair judge continuity by the batch's first sequence and prior-batch hash, so pending multi-record batches are retained and retransmitted |
 
 The publisher never silently deletes reports, encrypted evidence, indexes, or proofs. Storage pressure is reported and requires an explicit owner retention operation.
 

@@ -3,8 +3,8 @@ doc_id: ensemble_llm_providers
 title: LLM Providers
 audience: platform and feature developers, coding agents
 status: current
-last_updated: 2026-10-02
-version: v2.3.0
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - ensemble/app/llm/
   - ensemble/app/models/model_configs.py
@@ -208,7 +208,9 @@ Provider capability failures are translated only at call sites that requested th
 
 ### Retries, Caching, and Shutdown
 
-Gemini uses tenacity for exponential backoff retries on transient errors (timeouts, HTTP 429, HTTP 503) for up to four attempts. OpenAI and Anthropic disable SDK retries (max_retries=0). Ollama and llama.cpp do not add provider-level retries. Agent and evaluation services may apply their own retries around an adapter call.
+Gemini uses tenacity for exponential backoff retries on transient errors (timeouts, HTTP 429, HTTP 503) for up to four attempts. OpenAI and Anthropic disable SDK retries (max_retries=0). Ollama and llama.cpp do not add provider-level retries. Agent and evaluation services may apply their own retries around an adapter call, except for `ContextWindowExceededError`, which is never retried (see [Ensemble Developer Guide](devs.md)).
+
+The factory loads provider adapters lazily: `get_llm_provider_class` imports only the selected provider's module (mapped in `_PROVIDER_MODULES` in `ensemble/app/llm/factory.py`), so SDKs for unused providers are never imported. Ollama endpoint normalization lives in `ensemble/app/llm/endpoints.py` (`normalize_ollama_host`), independent of any provider SDK, and the factory uses it to build the cache key. At package import, `ensemble/app/utils/proxy_env.py` rewrites bracketed IPv6 literals in `NO_PROXY` and `no_proxy` to the bare form because some HTTP client libraries cannot parse the bracketed form.
 
 The factory caches provider clients by connection configuration, not by model. Gemini keys include provider and API key; OpenAI and Anthropic keys include provider, endpoint, and API key; Ollama and llama.cpp keys include provider, normalized endpoint, and API key; the fake provider uses one cache entry. Shutdown calls `clear_provider_cache()` to force-close cached clients.
 

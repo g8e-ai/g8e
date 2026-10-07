@@ -146,7 +146,7 @@ An app certificate is accepted only while its `AppPolicy` exists. The current au
 The Go protocol packages are part of the platform module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.3.1
+go get github.com/g8e-ai/g8e/v2@v2.3.2
 ```
 
 Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers. Host-operation dispatch uses registered request `event_type` values at `POST /api/v1/operators/commands`; the historical `CommandIntent` pub/sub shape was removed in v2.1.14 and is no longer available.
@@ -156,7 +156,7 @@ Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. T
 Install the Python protocol package from PyPI:
 
 ```bash
-pip install g8e==2.3.1
+pip install g8e==2.3.2
 ```
 
 The package requires Python 3.10 or later. It includes generated protobuf modules, Pydantic models, protocol constants, deterministic transaction hashing, and receipt parsing and verification helpers. `G8E_PROTOCOL_DIR` overrides the bundled protocol constants directory for development.

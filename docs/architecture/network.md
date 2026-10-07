@@ -4,7 +4,7 @@ title: Network Architecture
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - internal/services/gateway/
   - internal/services/network/
@@ -259,6 +259,10 @@ At startup, the Gateway runs `network.Detector` to discover local identity candi
 The service then compares that detected identity set with the gateway serving certificate SANs. If new non-loopback IPs or DNS names are discovered and absent from the cert, `InitializePKIWithNames()` refreshes the serving certificate on the next authorized PKI refresh path so the certificate remains aligned with the current runtime identity. Dropped aliases are intentionally ignored to avoid certificate churn caused by transient or temporary identity changes.
 
 This is the current implementation model for SAN drift: additive identity discovery triggers regeneration; removal of a previously valid alias does not reopen certificate churn.
+
+### Windows/WSL LAN access
+
+`scripts/configure-gateway-lan.ps1` (`-Action Inspect|Apply|Remove`) configures Windows port forwarding and firewall rules for Gateway ports 8080 and 8443 so LAN hosts can reach a Gateway running in WSL. Inspect is the default action; Apply and Remove require an elevated session.
 
 ## Anti-patterns
 

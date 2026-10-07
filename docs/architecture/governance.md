@@ -3,8 +3,8 @@ doc_id: governance
 title: Governance Architecture
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - internal/services/governance/
   - internal/governance/envelope.go
@@ -66,7 +66,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-GOV-POST-01 | The four canonical governance postures (`doctrine`, `consensus`, `ratify`, `notary`) MUST be parsed via `ParseGovernancePosture` and fail closed on unrecognized names with an immediate validation error or panic. |
+| INV-GOV-POST-01 | The four canonical governance postures (`doctrine`, `consensus`, `ratify`, `notary`) MUST be parsed via `ParseGovernancePosture` (`NewGovernancePosture` delegates to it) and fail closed on unrecognized names with an error that wraps `ErrInvalidPosture`. Callers MUST propagate that error; neither function panics or falls back to a weaker posture. |
 | INV-GOV-POST-02 | The Gateway MUST inject the configured governance posture into `GovernanceEnvelope.Posture` at construction time. The L4 Warden MUST read posture per-envelope from `envelope.Posture` and fail closed with `ErrEnvelopePostureMissing` if absent. |
 | INV-GOV-POST-03 | Posture configuration is immutable for the lifetime of the process. In gateway mode, `--posture` defaults to `doctrine`. In outbound operator mode, posture is authoritative from the received envelope. |
 | INV-GOV-POST-04 | L2 consensus is enforced under `consensus` and `notary` postures (`RequiresL2Signature() == true`). L3 notary proof is enforced for mutation action types under `ratify` and `notary` postures (`RequiresL3Proof() == true`). |
@@ -76,8 +76,8 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-GOV-ENV-01 | All new ingress transactions MUST declare protocol version `"2"` (`GovernanceProtocolVersionV2`). Envelopes with version `"1.0"` or other values MUST fail closed at L4 with `ErrTxProtocolVersionUnsupported`. |
-| INV-GOV-ENV-02 | The canonical transaction hash (`GenerateMessageID`) for protocol version 2 MUST hash the prefix `g8e-tx-v2|` followed by `action_type|event_type|` and the canonical v1 string representation with SHA-256 encoded as lowercase hex. |
-| INV-GOV-ENV-03 | The v1 canonical string MUST serialize fields in strict documented order: `action_type`, `target_resource`, base64-encoded `payload`, `state_merkle_root`, `nonce`, RFC3339 `expires_at`, canonicalized `intent_data`, `requestor_user_id`, `acting_app_id`, `operator_id`, `operator_session_id`, `case_id`, `investigation_id`, `task_id`, `web_session_id`, and `cli_session_id`, delimited by `|`. |
+| INV-GOV-ENV-02 | The canonical transaction hash (`GenerateMessageID`) for protocol version 2 MUST hash the prefix `g8e-tx-v2\|` followed by `action_type\|event_type\|` and the canonical v1 string representation with SHA-256 encoded as lowercase hex. |
+| INV-GOV-ENV-03 | The v1 canonical string MUST serialize fields in strict documented order: `action_type`, `target_resource`, base64-encoded `payload`, `state_merkle_root`, `nonce`, RFC3339 `expires_at`, canonicalized `intent_data`, `requestor_user_id`, `acting_app_id`, `operator_id`, `operator_session_id`, `case_id`, `investigation_id`, `task_id`, `web_session_id`, and `cli_session_id`. Each non-empty field is followed by `\|`; empty or absent fields are omitted together with their delimiter. |
 | INV-GOV-ENV-04 | `envelope.Id` and `envelope.TransactionHash` MUST both equal the recomputed transaction hash. Any mismatch MUST be rejected at L4 with `ErrTxTransactionIDMismatch` or `ErrTxTransactionHashMismatch`. |
 | INV-GOV-ENV-05 | Posture and L2/L3 governance proofs MUST NOT be included in the transaction hash canonicalization, allowing L2 consensus members to sign before human notary approval and allowing the gateway to set envelope posture without invalidating hashes. |
 
@@ -86,10 +86,10 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-GOV-LAY-01 | L1 Doctrine MUST validate protobuf field options `(g8e.common.v1).forbidden_patterns` on string fields and run MITRE ATT&CK threat detectors across command, MCP argument, A2A payload, and critical system file edit requests. Any violation MUST reject the transaction fail closed with `ErrTxL1ValidationFailed` across all postures. |
-| INV-GOV-LAY-02 | L2 Consensus member votes MUST be Ed25519 signatures over `<transaction_hash>|<decision>`. Under `consensus` and `notary` postures, affirmative votes (`decision=true`) from distinct members (when `require_distinct` is true) MUST meet policy quorum, or reject with `ErrTxL2QuorumNotMet`. |
+| INV-GOV-LAY-02 | L2 Consensus member votes MUST be Ed25519 signatures over `<transaction_hash>\|<decision>`. Under `consensus` and `notary` postures, affirmative votes (`decision=true`) from distinct members (when `require_distinct` is true) MUST meet policy quorum, or reject with `ErrTxL2QuorumNotMet`. |
 | INV-GOV-LAY-03 | Platform bootstrap action types (`actionType.IsBootstrapAction()`) MUST be exempt from L2 consensus gating across all postures, allowing platform enrollment before consensus members are enrolled. |
 | INV-GOV-LAY-04 | L3 Notary verification MUST gate mutation actions under `ratify` and `notary` postures (`ErrTxL3ProofMissing`). Read-only actions MUST NOT require an L3 proof under any posture. |
-| INV-GOV-LAY-05 | In gateway mode, L3 Notary requires a WebAuthn passkey assertion with challenge matching the transaction hash (`ErrPasskeyProofRequired`). In outbound operator mode, L3 Notary verifies an approved suspended transaction within the 30-minute window (`L3ApprovalWindow`) signed by the operator private key with matching certificate fingerprint. L4 passes `requestor_user_id` as the approving user; `operator_id` identifies the execution target. Attaching approval proof MUST preserve every hashed envelope field. |
+| INV-GOV-LAY-05 | In gateway mode, L3 Notary requires a WebAuthn passkey assertion with challenge matching the transaction hash (`ErrPasskeyProofRequired`). In outbound operator mode, L3 Notary verifies an approved suspended transaction recorded for the same user within the 30-minute window (`L3ApprovalWindow`) and an Ed25519 `cli_signature` over the transaction hash that verifies against the approval public key stored with that suspended transaction; when the record carries an expected certificate fingerprint, the proof's `mtls_cert_fingerprint` MUST match it. L4 passes `requestor_user_id` as the approving user; `operator_id` identifies the execution target. Attaching approval proof MUST preserve every hashed envelope field. |
 
 ### L4 Warden Pre-Dispatch (`INV-GOV-WARD`)
 
@@ -97,7 +97,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-GOV-WARD-01 | L4 Warden MUST track nonces in memory (`inFlight`) before stateful operations to prevent race conditions, and MUST durably reserve the nonce in `ReplayStore` before payload validation. |
 | INV-GOV-WARD-02 | Expiry (`envelope.ExpiresAt`) MUST be strictly checked against the clock before nonce reservation. Expired transactions MUST fail closed with `ErrTxTransactionExpired`. |
-| INV-GOV-WARD-03 | Stateless checks MUST run before stateful checks: protocol version, L1 doctrine presence, non-empty ID, event type validation, known action type, non-empty payload (except heartbeat), typed payload decoding, document collection scope, execution target ownership, L1 doctrine scanning, and dual hash matching. |
+| INV-GOV-WARD-03 | Stateless checks MUST run before stateful checks: protocol version, L1 doctrine presence, non-empty ID, event and action agreement (a governed request event MUST map to the envelope `action_type`, otherwise `ErrTxEventActionMismatch`), known action type, non-empty payload (except heartbeat), typed payload decoding, document collection scope, execution target ownership, L1 doctrine scanning, and dual hash matching. |
 | INV-GOV-WARD-04 | The state Merkle root (`envelope.StateMerkleRoot`) MUST match the current root from `StateRootProvider` (or the pre-fetched root in context for in-process gateway builds); mismatches MUST fail closed with `ErrTxStateRootMismatch`. |
 | INV-GOV-WARD-05 | Any validation failure occurring after nonce reservation MUST release the nonce reservation via `replayStore.ReleaseNonce` so that non-admitted transactions do not leave dangling replay locks. |
 | INV-GOV-WARD-06 | A `DOCUMENT_UPDATE` or `DOCUMENT_DELETE` payload MUST target a collection marked `_governed` in `protocol/constants/collections.json` (`CollectionName.IsGovernedDocument`); any other collection MUST fail closed with `ErrTxDocumentCollectionNotGoverned` before execution. The governed document store is the Gateway's platform document store, which also holds `users`, `trusted_signers`, `app_policies`, and other authority records that only their owning Gateway services write. |
@@ -108,7 +108,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-GOV-ACT-01 | The L5 Actuator MUST enforce fail-closed execution: receipt signing key, non-empty event type, and execution handler MUST be present. When SQL audit is enabled, auditor signing key, key ID, and commitment ledger MUST be present. |
-| INV-GOV-ACT-02 | The Actuator MUST sign and persist an `EXECUTING` status `ActionReceipt` to the audit stores before invoking the execution handler. Failure to sign or persist MUST abort execution without invoking the handler (`ErrL5ActuatorLogReceipt`). |
+| INV-GOV-ACT-02 | The Actuator MUST sign and persist an `EXECUTING` status `ActionReceipt` to the audit stores before invoking the execution handler. Failure to sign or persist MUST abort execution without invoking the handler (`ErrL5ActuatorSignReceipt`, `ErrL5ActuatorLogReceipt`). |
 | INV-GOV-ACT-03 | When `SQLAuditStore` is configured, the Actuator MUST append a signed `CommitmentAttestation` to the SQLite hash-chained commitment ledger against the current chain head before execution. |
 | INV-GOV-ACT-04 | The Actuator MUST mint a transaction-scoped, single-action `Capability` bound to the transaction hash, action type, target resource, operator ID, session, and expiry before execution, and MUST dissolve the capability immediately after execution completes or fails. |
 | INV-GOV-ACT-05 | The Actuator MUST finalize the `ActionReceipt` with status (`COMPLETED` or `FAILED`), state root after, execution timestamp, and typed `ReceiptFailureCode`. It MUST sign the final receipt, log it, and attach a signed `ReceiptPersistenceAttestation`. |
@@ -179,7 +179,7 @@ Every transaction submitted to the g8e platform passes through a five-layer veri
 
 ### Governance Postures and Enforcement Matrix
 
-Governance postures define which layers are enforced as fail-closed admission gates versus which are audited for compliance evidence. When a layer is audited, verification runs if evidence is present and records the result in the receipt, but missing or invalid proofs do not block execution.
+Governance postures define which layers are enforced as fail-closed admission gates versus which are audited for compliance evidence. When a layer is audited, verification runs if evidence is present and the outcome is recorded in the L2 and L3 deterministic stage evidence, but missing or invalid proofs do not block execution. The receipt `L2Status` and `L3Status` fields report required-valid or required-failed only for layers the active posture enforces; otherwise they carry `NOT_REQUIRED`.
 
 | Posture | L1 Doctrine | L2 Consensus | L3 Notary (Mutations) | L3 Notary (Read-Only) | Typical Use |
 | --- | --- | --- | --- | --- | --- |
@@ -198,8 +198,8 @@ Governance postures define which layers are enforced as fail-closed admission ga
 #### Gateway Posture Ingestion and Operator Propagation
 
 1. **Gateway Startup**: The Gateway parses `--posture` using `governance.ParseGovernancePosture`. Invalid posture names fail startup fast.
-2. **Startup Advisories**: If a posture requires L2 consensus (`consensus` or `notary`), the Gateway checks whether `--consensus-id` is provided and resolves to an enabled policy. If unconfigured or disabled, the Gateway logs an advisory warning (`L2 posture requires consensus but policy not found or disabled`) and continues booting; L2-gated transactions fail closed at transaction time.
-3. **Envelope Posture Injection**: At transaction creation, the Gateway writes its configured posture string into `GovernanceEnvelope.Posture`.
+2. **Startup Advisories**: If a posture requires L2 consensus (`consensus` or `notary`), the Gateway checks whether `--consensus-id` is provided and resolves to an enabled policy. If the flag is unset, or the policy is not found or is disabled, the Gateway logs an advisory warning (`L2 posture requires consensus but no --consensus-id set` or `L2 posture requires consensus but policy not found or disabled`) and continues booting; L2-gated transactions fail closed at transaction time.
+3. **Envelope Posture Injection**: At transaction creation, the Gateway writes its configured posture string into `GovernanceEnvelope.Posture`. `BuildGovernanceEnvelope` (governed HTTP dispatch) and the MCP and A2A envelope builder stamp it unconditionally. Direct envelope submission (`POST /api/v1/governance/envelopes`) stamps it only when the submitted envelope has an empty `posture`; `injectEnvelopePosture` leaves a non-empty client-supplied value unchanged, and the Warden then evaluates that value.
 4. **Authoritative Envelope Posture**: When the L4 Warden evaluates a transaction in an Operator runtime, it reads `envelope.Posture` via `postureFromEnvelope`. The envelope is authoritative; if the field is empty, the Warden rejects the transaction with `ErrEnvelopePostureMissing`.
 
 ### Canonical Transaction Envelope and Deterministic Hashing
@@ -266,7 +266,7 @@ The embedded `canonical_v1` string serializes fields in strict canonical order w
 15. `web_session_id` (UTF-8 string)
 16. `cli_session_id` (UTF-8 string)
 
-Absent optional fields append nothing prior to their terminating delimiter. Posture (`posture`), envelope ID (`id`), transaction hash (`transaction_hash`), timestamp (`timestamp`), and governance metadata (`governance`) are excluded from hashing. This guarantees that:
+Each non-empty field is followed by `|`. Empty or absent optional fields are omitted entirely, delimiter included, so the string ends with a trailing `|` after the last present field. Posture (`posture`), envelope ID (`id`), transaction hash (`transaction_hash`), timestamp (`timestamp`), and governance metadata (`governance`) are excluded from hashing. This guarantees that:
 - L2 consensus members can sign the transaction hash before human L3 notary approval is gathered.
 - The Gateway can stamp the posture into `envelope.Posture` without altering the cryptographic signature.
 - Both `envelope.Id` and `envelope.TransactionHash` MUST match `transaction_hash`.
@@ -276,11 +276,11 @@ Absent optional fields append nothing prior to their terminating delimiter. Post
 L1 Doctrine performs technical verification on the raw intent without external network or identity dependencies:
 
 1. **Protobuf Field Option Screening**: Scans fields of decoded protobuf messages for the `(g8e.common.v1).forbidden_patterns` custom extension. When declared, comma-separated regular expressions are evaluated against string field values. Matches cause immediate rejection.
-2. **Payload Threat Detection**:
+2. **Payload Threat Detection**: Only threat signals with `BlockRecommended` set become violations; directory-loaded rules set it for `critical` and `high` severities.
    - `operatorv1.CommandRequested`: Command lines are scanned via `L1Doctrine.AnalyzeCommand` against built-in MITRE ATT&CK detectors and directory-loaded doctrine rules.
    - `operatorv1.McpCallRequested`: Arguments JSON strings are decoded and recursively scanned for injection patterns, shell metacharacters, and path traversals via `L1Doctrine.AnalyzeMCPArguments`.
    - `operatorv1.A2ACallRequested`: Sub-agent JSON skill payloads are recursively scanned for malicious tool invocation vectors.
-   - `operatorv1.FileEditRequested`: Verifies that `FilePath` does not target critical system files (`/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `.ssh/authorized_keys`, root filesystem boundaries) and scans file contents for embedded threat patterns.
+   - `operatorv1.FileEditRequested`: Verifies that `FilePath` does not target the critical system paths and directories declared in `CriticalSystemPaths` and `CriticalSystemDirs` (for example `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/root/.ssh/`, `/boot`, and the system binary and library directories) and scans file contents for embedded threat patterns.
 3. **Directory Doctrine Files**: `NewL1DoctrineFromDir` loads external JSON doctrine catalogs (e.g. `blacklist_doctrine.json`, `gitleaks_doctrine.json`, `owasp_crs_doctrine.json`). Loaded patterns combine with hardcoded MITRE detectors.
 4. **Doctrine Bundle Identity**: Computes a deterministic SHA-256 `doctrine_bundle_hash` and `doctrine_bundle_version` (`g8e-l1-doctrine-v1+<source@version>`) recorded in deterministic stage evidence for auditing.
 
@@ -291,7 +291,7 @@ L2 Consensus authenticates machine review by requiring independent affirmative c
 1. **Vote Format**: Each member vote is an Ed25519 signature over the UTF-8 payload `<transaction_hash>|<decision>`, where decision is `true` or `false`.
 2. **Policy Evaluation**: The Warden resolves the policy ID from `envelope.Governance.L2.ConsensusSetId`. The policy defines `MemberKeyIDs`, `Quorum`, `RequireDistinct`, and `Enabled`.
 3. **Distinct Member Verification**: If `RequireDistinct` is true, multiple votes from the same `signer_key_id` reject the transaction with `ErrTxL2DuplicateSigner`.
-4. **Public Key Resolution**: Each signer key is resolved from `SignerStore.GetTrustedSigner`. Unregistered or inactive signers are rejected.
+4. **Public Key Resolution**: Each signer key is resolved from `SignerStore.GetTrustedSigner`. Votes from signers outside the policy `MemberKeyIDs`, from unregistered or inactive signers, or with an invalid signature are skipped and do not count toward quorum.
 5. **Quorum Evaluation**: Only affirmative (`decision=true`) votes signed by enrolled, trusted members count toward quorum. Negative votes record authenticated dissent. If affirmative votes < `Quorum`, the transaction is rejected with `ErrTxL2QuorumNotMet`.
 6. **Bootstrap Action Exemption**: Platform bootstrap actions (actions where `actionType.IsBootstrapAction() == true`, such as initial platform enrollment) are exempt from L2 enforcement. They establish the initial consensus tribunal before signers exist. L2 votes are verified if present and recorded as evidence, but missing votes do not reject bootstrap envelopes.
 
@@ -302,15 +302,16 @@ L3 Notary provides non-repudiable human-in-the-loop authorization for mutations 
 1. **Mutation Classification**: Action types carry an intrinsic `_mutation` boolean in `protocol/constants/status.json`. Read-only operations (`FS_READ`, `FS_LIST`, `MCP_PROMPT_GET`, etc.) bypass L3 enforcement.
 2. **Gateway Mode (`gatewayNotary`)**:
    - **Passkey Authorization**: Requires a WebAuthn passkey assertion. The browser client receives a challenge matching the transaction hash and returns an assertion containing `credential_id`, `authenticator_data`, `client_data_json`, and `signature`. Verified by `PasskeyVerifier`.
-   - **CLI mTLS Session Layer**: CLI callers additionally include `mtls_cert_fingerprint` and `cli_signature`. The notary calls `CLISessionVerifier` to confirm the user is active, the CLI session is valid, and the certificate is not revoked.
+   - **CLI mTLS Session Layer**: CLI callers additionally include `mtls_cert_fingerprint`. When it is present, the notary calls `CLISessionVerifier` to confirm the user is active, the CLI session is valid, and the certificate is not revoked.
 3. **Outbound Operator Mode (`outboundNotary`)**:
-   - Checks `SuspendedTransactionStore` for an approved record matching the transaction hash.
+   - Checks `SuspendedTransactionStore` for a record matching the transaction hash whose `UserID` equals the envelope `requestor_user_id`.
    - Requires `Approved == true` and verifies the approval was granted within the 30-minute window (`L3ApprovalWindow`).
-   - Verifies an Ed25519 `cli_signature` over the transaction hash using the stored approval public key, and ensures `mtls_cert_fingerprint` matches the expected certificate.
+   - Verifies an Ed25519 `cli_signature` over the transaction hash using the approval public key stored on the suspended transaction. When the record carries an expected certificate fingerprint, `mtls_cert_fingerprint` must match it.
 4. **Suspension and Resume Mechanics**:
-   - On Gateway MCP and A2A ingress, transactions lacking L3 proofs under `ratify` or `notary` postures are suspended. The Gateway stores the envelope in `SuspendedTransactionStore` and returns an approval challenge/URL to the caller.
-   - Once approved via passkey WebAuthn, the transaction resumes execution with the minted proof.
-   - On direct envelope submission (`/governance/v1/envelope`) and Gateway CLI dispatch, transactions lacking required L3 proofs are not suspended; they fail closed with `ErrTxL3ProofUnmintable` or `ErrTxL3ProofMissing`.
+   - On Gateway MCP and A2A ingress, transactions whose L3 proof is missing or invalid under `ratify` or `notary` postures are suspended. The Gateway stores the envelope in `SuspendedTransactionStore` and returns an approval challenge/URL to the caller.
+   - Once approved via passkey WebAuthn, the transaction resumes execution with the minted proof (`ResumeWithL3Proof`).
+   - On direct envelope submission (`POST /api/v1/governance/envelopes`), transactions lacking required L3 proofs are not suspended and the Gateway does not mint proofs; they fail closed at L4 with `ErrTxL3ProofMissing` or `ErrTxL3ProofInvalid` (HTTP 403).
+   - On governed HTTP dispatch (`POST /api/v1/operators/commands`), `BuildGovernanceEnvelope` rejects mutation actions under `ratify` and `notary` with `ErrTxL3ProofUnmintable` before an envelope is published, because the dispatch path cannot mint human proofs.
 
 ### Layer 4 (L4) Warden: Pre-Dispatch Verification Pipeline
 

@@ -3,8 +3,8 @@ doc_id: overview
 title: Platform Architecture Overview
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - cmd/g8e/
   - internal/cli/
@@ -353,7 +353,7 @@ The g8e Protocol Library (`protocol/`) defines canonical wire contracts, schemas
 ### Compliance Evidence and KSI Verification Foundation
 
 The platform incorporates a protocol-owned compliance evidence foundation:
-- **Catalog Infrastructure**: Canonical assertion, framework, and crosswalk catalogs define the reviewed FedRAMP 20x and NIST mappings. The retained demo-scenario catalog is historical and has no current runner.
+- **Catalog Infrastructure**: Canonical assertion, framework, and crosswalk catalogs define the reviewed FedRAMP 20x and NIST mappings. The retained demo-scenario catalog is historical data; the `g8e demos` group, `g8e compliance demo-run`, and demo catalog import are removed.
 - **Evaluation Evidence**: Verified evaluation bundles can be imported into a typed content-addressed graph with `g8e compliance evidence-graph verify --eval-run <run-id>`.
 - **Operational Release Evidence**: `g8e compliance release-prepare` exports bounded Gateway operational evidence, creates external trust policies, generates and signs a public report bundle, verifies it offline, and projects its canonical Markdown and CSV into the release-notes directory.
 
@@ -366,6 +366,8 @@ The root `docker-compose.yml` launches the complete platform in the default prof
 - `g8e-ensemble`: First-party Python agentic ensemble on port 8000.
 
 **Binary Precedence Rule**: Host binaries mounted at `./bin:/opt/g8e/bin:ro` take precedence over image baked-in binaries (`/g8e`). Running `make build` and restarting containers immediately updates all services without rebuilding container images. See [Unified Docker Stack Guide](../guides/unified_stack.md).
+
+**Host-native alternative**: `make full` starts the Gateway, the four Operator roles, and g8ee as local processes through `scripts/full.py` without Docker. See [Host lifecycle launcher](../guides/unified_stack.md#host-lifecycle-launcher-make-full).
 
 ## Anti-patterns
 
@@ -395,7 +397,7 @@ The root `docker-compose.yml` launches the complete platform in the default prof
 - [Ensemble Architecture](ensemble.md): First-party Python agentic ensemble runtime and tool loops.
 - [Console Architecture](console.md): Gateway-embedded browser frontend and its trust boundaries.
 - [Protocol Library](protocol.md): Protobuf definitions, JSON registries, and code generation.
-- [Scripts Reference](scripts.md): Bootstrap, smoke test, deployment, and demo scripts.
+- [Scripts Reference](scripts.md): Bootstrap, host launcher, smoke test, and deployment scripts.
 - [Documentation Guide](../devs/docs.md): Invariant definitions, metadata specifications, and audit workflows.
 - [Developer Guidelines](../devs/devs.md): Repository coding standards and invariant rules.
 - [Unified Docker Stack Guide](../guides/unified_stack.md): Container compose setup and campaign execution.

@@ -4,7 +4,7 @@ title: Event and Action Protocol
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - protocol/constants/events.json
   - internal/services/gateway/

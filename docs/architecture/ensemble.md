@@ -3,8 +3,8 @@ doc_id: ensemble
 title: Ensemble Architecture (g8ee)
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-02
-version: v2.3.0
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - ensemble/
   - ensemble/app/main.py
@@ -122,7 +122,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 The root Docker Compose stack runs `g8ee` as the `ensemble` service in the default profile (`docker compose up -d`). The container image is built from `ensemble/Dockerfile` using Python 3.12-slim in a multi-stage build that compiles in-tree protocol constants and Python packages:
 
-- **Ports**: Exposes container port 8000, published to the host as port 8000 (a literal in `docker-compose.yml`).
+- **Ports**: Exposes container port 8000, published to the host on loopback only (`127.0.0.1:8000:8000`, a literal in `docker-compose.yml`) for host tools. The loopback binding is not a security control: g8ee accepts proxy identity only with the Gateway's signature (INV-AUTH-ID-07 in [Authentication](auth.md#identity-and-authentication-inv-auth-id)). The container entrypoint is `python -m app.serve` (`ensemble/app/serve.py`), which takes the Gateway endpoints and the runtime directory as explicit command arguments, not environment variables (INV-ENV-04 in [Developer Guidelines](../devs/devs.md)).
 - **Volumes**:
   - `g8e-ensemble-data` mounted at `/root/.g8e`: Stores the ensemble's mTLS certificate, private key, trusted CA bundle, and pending enrollment state.
   - `g8e-shared-tmp` mounted at `/tmp`: Shared temporary volume for inter-service artifacts.
@@ -130,6 +130,8 @@ The root Docker Compose stack runs `g8ee` as the `ensemble` service in the defau
 - **Healthcheck**: Uses `python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"` running every 10 seconds with a 15-second startup grace period.
 
 The ensemble container does not execute host commands directly. It possesses no host bind mounts or elevated privileges; host operations target a separately enrolled Operator container or remote host over the Gateway HTTP dispatch channel.
+
+The same application also runs host-native, without Docker. `make ensemble-env` installs the Python runtime into the repository-root `.venv`, and `make full` (or `make full-setup` / `make full-reset`) starts g8ee through `scripts/full.py` as `python -m app.serve --host 127.0.0.1` with working directory `.local.dev/full/ensemble`, runtime directory `.local.dev/full/ensemble/.g8e`, and the Gateway endpoints passed as `--gateway-*` arguments. The host process uses the same platform enrollment and mTLS identity as the container; it does not become ready until the owner approves its enrollment. `make ensemble-start`, `ensemble-stop`, `ensemble-restart`, and `ensemble-status`, and the `g8e ensemble` group (`start`, `stop`, `restart`, `status`, `logs`, `reset-identity`), manage that process; `g8e ensemble status` probes `http://127.0.0.1:8000/health`. `reset-identity` stops the process and removes its certificates, keys, cached trust, and pending enrollment while preserving data, configuration, and logs. See [Getting Started](../guides/getting_started.md) for the onboarding flow and [Automation Scripts](scripts.md) for the script owners.
 
 ### API Router Architecture and Endpoint Taxonomy
 
@@ -161,6 +163,8 @@ The FastAPI application registers three router groups across root and internal p
    - **Health**: `GET /api/v1/health`.
 
 All chat, investigation, case, and settings endpoints require authenticated context via `require_authenticated_context`, extracting user identity from validated `G8eHttpContext` dependencies.
+
+Case and investigation `status` fields are typed with the protocol package's `CaseStatus` and `InvestigationStatus` enums on the case and investigation models and on the investigation update and query requests. A missing status takes the model default, a value that matches no member is rejected, and the protocol string enums accept case and separator variations while serializing the canonical wire value.
 
 ### Trust Boundaries and Client Hierarchy
 

@@ -88,7 +88,7 @@ Ids are stable. Append the next free number in a group. Do not renumber.
 | Makefile air-gap target | `Makefile` | `make test-airgap` |
 | Go vendor build support | `go.mod`, `vendor/` | `go build -mod=vendor ./...` succeeds |
 | Container image build | `Dockerfile`, `docker-compose.yml` | `docker compose build` completes without external registry access on connected host |
-| Python wheel build | `protocol/python/pyproject.toml`, `Makefile` | `make protocol-python-build` produces `protocol/python/dist/g8e-2.3.1-py3-none-any.whl` |
+| Python wheel build | `protocol/python/pyproject.toml`, `Makefile` | `make protocol-python-build` produces `protocol/python/dist/g8e-2.3.2-py3-none-any.whl` |
 | Gateway port defaults | `internal/constants/ports.go` | HTTP 8080, HTTPS 8443 |
 
 ## Procedures
@@ -245,13 +245,13 @@ Build the Python protocol wheel and collect its transitive dependencies on the c
 
 ```bash
 make protocol-python-build
-pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.3.1-py3-none-any.whl
+pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.3.2-py3-none-any.whl
 ```
 
 Transfer the complete wheel directory, then install without an index:
 
 ```bash
-pip install --no-index --find-links /media/g8e-python-wheels g8e==2.3.1
+pip install --no-index --find-links /media/g8e-python-wheels g8e==2.3.2
 ```
 
 The Python package includes JSON constants at `g8e/_data`; there is no `G8E_PROTOCOL_DIR` runtime setting.

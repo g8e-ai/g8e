@@ -4,7 +4,7 @@ title: Testing Guide
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - internal/cli/cmd/test/
   - internal/testutil/
@@ -67,7 +67,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | --- | --- |
 | INV-TEST-ISO-01 | Tests MUST be table-driven where applicable and MUST use descriptive names that state the exact behavior verified. MUST NOT use generic test names like `TestCoverage`, `TestMisc`, or `TestEdgeCases`. |
 | INV-TEST-ISO-02 | Tests MUST use `testutil.TempDir(t)` for isolated runtime roots and pass the resulting base directory to `fs.NewRuntimeFileService` and `paths.InitWithBase`. MUST NOT append `.g8e` manually. |
-| INV-TEST-ISO-03 | Tests MUST NOT use `os.Chdir` to align runtime state. `os.Chdir` is permitted only for behavior requiring directory discovery (e.g. demos, Swagger source discovery), and MUST restore the original working directory with `t.Cleanup`. |
+| INV-TEST-ISO-03 | Tests MUST NOT use `os.Chdir` to align runtime state. `os.Chdir` is permitted only for behavior requiring directory discovery (e.g. Swagger source discovery), and MUST restore the original working directory with `t.Cleanup`. |
 | INV-TEST-ISO-04 | Tests MUST use typed constants from `internal/constants/` for statuses, paths, reason strings, and permissions instead of ad hoc string literals. |
 | INV-TEST-ISO-05 | Tests that discover user configuration MUST isolate both `HOME` and `USERPROFILE` with `t.Setenv`; Go's `os.UserHomeDir` reads `USERPROFILE` on Windows. Browser approval tests MUST inject a browser opener so automated suites do not launch a real browser. |
 
@@ -187,7 +187,9 @@ make console-embed-check
 # Protocol: Python pytest, conformance tests, and Node TypeScript checks
 make ci-protocol
 
-# Full local CI pipeline across all components
+# Full local CI pipeline across all components. Stages run in sequence even under make -j:
+# console and adapter, platform, protocol, Ensemble, website, scripts.
+# It refreshes generated artifacts locally; GitHub Actions separately enforces committed freshness.
 make ci
 ```
 

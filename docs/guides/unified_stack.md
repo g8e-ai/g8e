@@ -3,8 +3,8 @@ doc_id: unified_stack
 title: Unified Docker Stack Guide
 audience: platform operators and evaluators
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - docker-compose.yml
   - docs/guides/
@@ -72,7 +72,7 @@ This guide covers the unified evaluation stack — how to bootstrap it, enroll o
 - Optional: Host Go toolchain and `make` (when developing locally and using `make build`).
 - Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **8081**, **8082**, **5173**. The ensemble, mirror, and explorer ports are loopback-only in the root Compose file.
 - Repository-root `.env` (copy from `.env.example`) with `G8E_OLLAMA_ENDPOINT` set.
-- `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider** (defaults to `http://127.0.0.1:11434` if unset).
+- `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider**. It has no default; Compose and `make full` fail when it is unset.
 - Remote Ollama reachable from the Docker network, for example: `curl -fsS http://192.168.1.2:11434/api/version`.
 
 For interactive owner enrollment you need a browser with WebAuthn support. For headless campaign operation use `docker compose exec g8e-gateway /g8e auth enroll user --headless -e localhost` or `./g8e auth enroll user --headless -e localhost`.
@@ -111,6 +111,32 @@ The platform leverages Docker volume mounts (`./bin:/opt/g8e/bin:ro`) so that a 
   # make equivalent:
   make docker-build
   ```
+
+## Host lifecycle launcher (`make full`)
+
+The host-native alternative to Compose runs the Gateway, the four Operator roles, and g8ee as local processes through `scripts/full.py`. The `make` targets never call Docker, and `make clean` does not reset runtime state (`g8e gw clean` does). All `make full*` targets depend on `make build`.
+
+| Target | Behavior |
+| --- | --- |
+| `make full` | Unattended start: `g8e gw start --quiet` with the public URL, passkey RP ID/origin, and CORS origin derived from `G8E_HOSTNAME`, then the four Operators and g8ee. Requires `G8E_OLLAMA_ENDPOINT`. |
+| `make full-setup` | Same start, but prompts for each role's system, working directory, model storage, and Ollama URL, and does not pass the hostname-derived Gateway flags. Requires interactive input. |
+| `make full-reset` | `make full` with `--reset-identities`; `make full RESET_IDENTITIES=1` is equivalent. |
+| `make status` (`full-status`) | Gateway, local Operator, and g8ee state. |
+| `make ensemble-start`, `ensemble-stop`, `ensemble-restart`, `ensemble-status` (`g8ee-status`) | g8ee lifecycle only. |
+| `make operators-stop`, `operators-restart`, `operators-status` | Local Operator lifecycle only. |
+| `make down` (`stop`, `full-down`, `full-stop`) | Stops g8ee, local Operators, and the Gateway. |
+
+`FULL_ARGS` passes extra launcher flags, for example `make full FULL_ARGS=--dry-run`. `--dry-run` prints the Gateway and Operator commands, working directories, and remote-host commands without starting processes or writing runtime state. `scripts/full.py --help` lists every flag, including `--env-file`, `--model-storage-root`, `--<role>-working-dir`, and `--keep-gateway` (leave the Gateway running when stopping workloads).
+
+**Configuration.** The launcher reads only these variables, from the process environment or the `--env-file` (default repository-root `.env`, parsed as data and never sourced): `G8E_HOSTNAME` (default `g8e.local`), `G8E_OLLAMA_ENDPOINT` (required, validated as an HTTP(S) URL), and `G8E_PROVENANCE_HOST`, `G8E_OBSERVER_HOST`, `G8E_INFERENCE_HOST`, `G8E_DATA_HOST` (each default `localhost`). Exported variables beat `.env`; other `.env` settings are not exported to launched processes. It needs `python-dotenv` from `make ensemble-env`.
+
+**Roles and working directories.** The roles are provenance, observer, inference, and data. Each Operator needs its own working directory, because a shared directory would share its `.g8e` runtime and credentials; the launcher rejects duplicates. The default is `~/.ollama/g8e/<role>` (override with `--<role>-working-dir`). g8ee runs from `.local.dev/full/ensemble`. Each local process writes `full.pid` and `full.log` in its directory, and the launcher records local workload directories in `.local.dev/full/workloads.json`. The provenance model storage root comes from `--model-storage-root` or is detected from common Ollama locations.
+
+**Identity preflight.** Before launch the launcher installs the local Gateway trust bundle into each local workload directory. When a workload's saved trust no longer matches the Gateway root CA, `make full` stops and asks for an explicit reset (`make full-reset` or `RESET_IDENTITIES=1`; `make full-setup` prompts). The reset runs `g8e operator reset-identity` or `g8e ensemble reset-identity` for the stale workloads and preserves their working data, model files, vault keys, configuration, and logs; the workloads then submit fresh enrollment requests. Approve them as in [Standard bootstrap workflow](#standard-bootstrap-workflow).
+
+**Remote roles.** A role whose host is not `localhost`, `127.0.0.1`, or `::1` is not started. The launcher prints POSIX shell and Windows PowerShell commands to run on that host with a `g8e` binary built for it, using `--trust-bundle gateway-ca-bundle.pem`. Copy the Gateway CA bundle there over a trusted channel and verify its fingerprint independently. The Gateway hostname must be reachable from that host and match the Gateway TLS certificate.
+
+**Windows hosts with the Gateway in WSL.** `scripts/configure-gateway-lan.ps1` (`-Action Inspect|Apply|Remove`, default `Inspect`) forwards ports 8080 and 8443 from a Windows LAN address to the WSL address and manages matching firewall rules; `Apply` requires `-RemoteScope`. See [Network Architecture](../architecture/network.md) and [Connect Operator to Gateway](connect_operator_to_gateway.md).
 
 ## Compose services and unified stack
 
@@ -696,7 +722,7 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 | Command | Pure Docker Equivalent | Make Equivalent | Behavior |
 | --- | --- | --- | --- |
 | `./g8e docker init` | `docker compose up -d` + exec enroll/approvals | `make docker-up` (manual approvals) | Build images, enroll owner, start unified stack, auto-approve platform enrollments, and wait for readiness. |
-| `./g8e docker start` | `docker compose up -d` | `make docker-up` | Starts default unified stack (all 5 core services) and offers enrollment walkthrough. |
+| `./g8e docker start` | `docker compose up -d` | `make docker-up` | Starts default unified stack (all 4 core services) and offers enrollment walkthrough. |
 | `./g8e docker restart [service...]` | `docker compose restart g8e-data-operator g8e-inference-operator` | `make docker-restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
 | `./g8e docker stop` | `docker compose down` | `make docker-down` | Stops stack, preserves volumes. |
 | `./g8e docker status` | `docker compose ps` | — | Shows running containers and health status. |

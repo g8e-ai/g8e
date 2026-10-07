@@ -3,8 +3,8 @@ doc_id: model-provenance
 title: Model Provenance
 audience: engineering, campaign operators
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - internal/services/inference/model_provenance/
   - protocol/proto/g8e/eval/v1/eval.proto
@@ -118,7 +118,7 @@ For each scored inference with a non-empty served tag and expected model digest,
 
 The command and result are relayed through the normal governed Operator path. Results are evidence; pub/sub delivery is not itself durable governance evidence. The Gateway's stored window is a verified mirror of the Provenance Operator's attestation, while the storage-side Operator remains the authority for the local files it hashed.
 
-Before execution, strict campaign workflows can run two preflights: one verifies that exactly one active Provenance Operator is enrolled and subscribed to its command channel, and the other sends a probe BEGIN/FINALIZE pair for each frozen served-tag/digest binding and waits for a matching attestation. A failed preflight stops the workflow before scored assignments are consumed.
+Before execution, strict campaign workflows can run two preflights: one verifies that exactly one active Provenance Operator is enrolled and subscribed to its command channel, and the other sends a probe BEGIN/FINALIZE pair for each frozen served-tag/digest binding. The Gateway registers for the exact Operator receipt and completion event before dispatch, verifies the BEGIN and FINALIZE outcomes without polling the window store, and reports progress through the ephemeral `g8e.v1.inference.model.provenance.preflight.updated` SSE event (see [SSE](sse.md#model-provenance-preflight-progress)). A failed preflight stops the workflow before scored assignments are consumed.
 
 The Provenance Operator permits at most two concurrent storage attestations. Additional FINALIZE commands wait for a hashing slot and honor cancellation. Blob hashing checks cancellation between filesystem reads. Every attempt still hashes its own manifest and blobs; hashes are not reused across attempts.
 

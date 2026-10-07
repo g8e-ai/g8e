@@ -61,7 +61,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Gateway start command and flags | `internal/cli/cmd/gw/gateway.go` (gatewayStartCmd) | `./g8e gw start --help` |
 | Operator list/bind/run/stop commands | `internal/cli/cmd/operator/operator.go` | `./g8e operator --help` |
 | Vault administration | `internal/cli/cmd/vault/` | `./g8e vault --help` |
-| Public protocol Go module | `github.com/g8e-ai/g8e/v2@v2.3.1` | `go get -d github.com/g8e-ai/g8e/v2@v2.3.1` |
+| Public protocol Go module | `github.com/g8e-ai/g8e/v2@v2.3.2` | `go get -d github.com/g8e-ai/g8e/v2@v2.3.2` |
 
 ## Procedures
 
@@ -327,7 +327,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.3.1
+go get github.com/g8e-ai/g8e/v2@v2.3.2
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -339,7 +339,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.3.1
+pip install g8e==2.3.2
 ```
 
 See the [Protocol Library architecture document](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.

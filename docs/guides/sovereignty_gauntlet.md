@@ -4,7 +4,7 @@ title: Sovereignty Gauntlet Evidence Guide
 audience: maintainers, evaluators, and publication reviewers
 status: retired
 last_updated: 2026-10-06
-version: v2.3.1
+version: v2.3.2
 owners:
   - docs/guides/sovereignty_gauntlet.md
 related:

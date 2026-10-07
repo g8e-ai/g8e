@@ -3,8 +3,8 @@ doc_id: sse
 title: SSE Streaming
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-02
-version: v2.3.0
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - internal/services/gateway/sse_controller.go
   - internal/services/gateway/sse_event_service.go

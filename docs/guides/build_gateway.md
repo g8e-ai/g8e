@@ -3,8 +3,8 @@ doc_id: build-gateway
 title: Build Gateway
 audience: developers and operators
 status: current
-last_updated: 2026-10-01
-version: v2.2.6
+last_updated: 2026-10-06
+version: v2.3.2
 owners:
   - docs/guides/build_gateway.md
   - Makefile
@@ -53,21 +53,19 @@ The reference implementation is the static `g8e` binary running in gateway mode.
 
 - **Go 1.26.6+** - Required for building the reference gateway. The root `go.mod` is authoritative; the Makefile may select a newer toolchain automatically unless `GOTOOLCHAIN=local` is set.
 - **Make** - Required to run the root build targets.
-- **Node.js and npm** - Required to build the Evaluation Explorer asset that the Go build embeds. The console build is committed as an embed, so `make build` needs Node only to refresh it (`make console-build`).
+- **Node.js and npm** - Required only to refresh the Evaluation Explorer and Console embeds. Both embeds are committed, so `make build` and `make up` on a fresh clone use them when the gitignored `evaluation-explorer/dist` and `console/dist` directories are absent.
 - **Docker Engine and the Docker Compose plugin** - Required only for the container build and Compose deployment.
 
-Before the first Go build, build the Evaluation Explorer asset from the repository root:
+A fresh clone needs no Node build before `make build`. To refresh the Evaluation Explorer embed after changing its source, build it and run the strict embed target from the repository root:
 
 ```bash
-cd evaluation-explorer
-npm install
-npm run build
-cd ../../..
+cd evaluation-explorer && npm install && npm run build && cd ..
+make explorer-embed
 ```
 
-The resulting `evaluation-explorer/dist/index.html` is required by `make build` and `make build-all`. If the asset is already present, do not rebuild it unless its source changed.
+`make explorer-embed` fails when `evaluation-explorer/dist/index.html` is missing. Refresh the Console embed with `make console-embed`.
 
-> **Don't have the local build toolchain installed?** Run the setup script for your platform to install prerequisites, build the evaluation explorer, and compile `g8e`:
+> **Don't have the local build toolchain installed?** Run the setup script for your platform to install prerequisites and compile `g8e`:
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`
@@ -195,6 +193,8 @@ Consensus and notary require an enabled consensus policy, trusted signers, and a
 - `--passkey-rp-origin <origin>` - Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)
 - `--rate-limit-rps <rps>` - Gateway requests per second limit (set to 0 to disable, default: 0)
 - `--rate-limit-burst <burst>` - Gateway rate limit burst size (default: 0)
+- `--roles <roles>` - Embedded Operator roles: data, inference, provenance, observer (repeatable; default: embedded,data)
+- `--ensemble-upstream-url <url>` - HTTP URL of the g8ee Ensemble for browser proxy forwarding (default: `http://127.0.0.1:8000`)
 - `--log <level>` - Log level: info, error, debug (default: info)
 - `--cert-mode <mode>` - Certificate identity mode: `full` includes detected hostnames and IP addresses (default), while `localhost` uses only loopback identities
 - `--consensus-id <id>` - ID of the enabled `ConsensusPolicy` used by the L2-enforcing `consensus` and `notary` postures
@@ -232,7 +232,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.3.1
+go get github.com/g8e-ai/g8e/v2@v2.3.2
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -244,7 +244,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.3.1
+pip install g8e==2.3.2
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -379,7 +379,7 @@ Run the local platform, Ensemble, and Console CI targets, including protocol gen
 make ci
 ```
 
-`make ci` refreshes the console embed, protobuf code (Go, Python, and Node), protocol reference docs, lockfiles, and Swagger docs automatically. Local CI validates these outputs without comparing your working tree to Git. GitHub Actions still verifies that generated files are committed and current. It runs all Go unit and in-process integration packages with coverage, protocol Python/Node and conformance tests, Ensemble checks, console and adapter checks, website tests/build, script regressions, air-gap verification, lint, vulnerability checks, and registry/catalog checks. Docker E2E, cross-enrollment, demo verification, and real-provider tests remain opt-in through their dedicated Makefile targets.
+`make ci` refreshes the console embed, protobuf code (Go, Python, and Node), protocol reference docs, lockfiles, and Swagger docs automatically. Local CI validates these outputs without comparing your working tree to Git. GitHub Actions still verifies that generated files are committed and current. It runs all Go unit and in-process integration packages with coverage, protocol Python/Node and conformance tests, Ensemble checks, console and adapter checks, website tests/build, script regressions, air-gap verification, lint, vulnerability checks, and registry/catalog checks. Docker E2E, cross-enrollment, and real-provider tests remain opt-in through their dedicated Makefile targets.
 
 `make ci` starts with `make dev-check`, which lists every missing tool at once. A machine set up with `scripts/linux-setup.sh` or `scripts/macos-setup.sh` (without `--build-only`) passes it; otherwise run `make dev-setup` after installing the operating-system prerequisites.
 
