@@ -14,6 +14,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -282,7 +284,7 @@ func (c *CLIRefreshController) registryOperatorBinding(userID string) (sessionID
 	}
 	// The stack's data-operator is the preferred primary binding; any other
 	// dedicated data Operator is the fallback, then the Gateway's embedded one.
-	for _, isCandidate := range []func(models.OperatorDocumentGo) bool{operatorcapability.IsStackDataOperator, operatorcapability.IsDedicatedDataOperator} {
+	for _, isCandidate := range []func(operatorv1.OperatorDocument) bool{operatorcapability.IsStackDataOperator, operatorcapability.IsDedicatedDataOperator} {
 		for _, op := range operators {
 			if !isCandidate(op) {
 				continue

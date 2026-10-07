@@ -11,13 +11,14 @@ import (
 	"context"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -34,12 +35,12 @@ func markFirstAssignmentRunning(t *testing.T, env *runEnv) {
 }
 
 func TestResolveCampaignOllamaEndpoint_UsesExactOperatorRuntimeConfig(t *testing.T) {
-	operators := []models.OperatorDocumentGo{{
+	operators := []*operatorv1.OperatorDocument{{
 		ID:                "inference-1",
 		OperatorSessionID: "inference-session",
 		Status:            constants.OperatorStatusActive,
 		OperatorType:      constants.OperatorTypeRemote,
-		RuntimeConfig: &models.RuntimeConfig{
+		RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 			InferenceEnabled:        true,
 			InferenceOllamaEndpoint: "http://provider.example:11434",
 		},

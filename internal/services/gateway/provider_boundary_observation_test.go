@@ -14,13 +14,14 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
@@ -29,19 +30,19 @@ import (
 )
 
 type stubProviderBoundaryOperatorLister struct {
-	operators []models.OperatorDocumentGo
+	operators []*operatorv1.OperatorDocument
 	err       error
 }
 
-func (s *stubProviderBoundaryOperatorLister) ListOperatorsForObservation() ([]models.OperatorDocumentGo, error) {
+func (s *stubProviderBoundaryOperatorLister) ListOperatorsForObservation() ([]*operatorv1.OperatorDocument, error) {
 	return s.operators, s.err
 }
 
 type mutableProviderBoundaryOperatorLister struct {
-	operators []models.OperatorDocumentGo
+	operators []*operatorv1.OperatorDocument
 }
 
-func (l *mutableProviderBoundaryOperatorLister) ListOperatorsForObservation() ([]models.OperatorDocumentGo, error) {
+func (l *mutableProviderBoundaryOperatorLister) ListOperatorsForObservation() ([]*operatorv1.OperatorDocument, error) {
 	return l.operators, nil
 }
 
@@ -54,13 +55,13 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_SubscribesToOwner
 
 	coordinator := NewProviderBoundaryObservationCoordinator(
 		&DispatchService{},
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubProviderBoundaryOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "observer-1",
 				OperatorSessionID: "sess-observer-1",
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 			},
 		}},
 		pubsubHandler,
@@ -78,7 +79,7 @@ func TestProviderBoundaryObservationCoordinator_NotifyAttemptBegin_FailsWithoutC
 	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
 	windowStore, err := provider_observer.NewWindowStore(fileSvc)
 	require.NoError(t, err)
-	op := &models.OperatorDocumentGo{
+	op := &operatorv1.OperatorDocument{
 		ID:                "observer-1",
 		OperatorSessionID: "sess-observer-1",
 	}
@@ -86,13 +87,13 @@ func TestProviderBoundaryObservationCoordinator_NotifyAttemptBegin_FailsWithoutC
 
 	coordinator := NewProviderBoundaryObservationCoordinator(
 		dispatchSvc,
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubProviderBoundaryOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                op.ID,
 				OperatorSessionID: op.OperatorSessionID,
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 			},
 		}},
 		pubsubHandler,
@@ -114,13 +115,13 @@ func TestProviderBoundaryObservationCoordinator_PreflightCommandDelivery_FailsWi
 
 	coordinator := NewProviderBoundaryObservationCoordinator(
 		&DispatchService{pubsub: pubsubHandler},
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubProviderBoundaryOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "observer-1",
 				OperatorSessionID: "sess-observer-1",
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 			},
 		}},
 		pubsubHandler,
@@ -139,13 +140,13 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSes
 	windowStore, err := provider_observer.NewWindowStore(fileSvc)
 	require.NoError(t, err)
 	pubsubHandler := NewGatewayWebSocketHandler(logger)
-	lister := &mutableProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+	lister := &mutableProviderBoundaryOperatorLister{operators: []*operatorv1.OperatorDocument{
 		{
 			ID:                "observer-1",
 			OperatorSessionID: "sess-observer-old",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		},
 	}}
 
@@ -161,13 +162,13 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSes
 	require.NotNil(t, coordinator.observer)
 	assert.Equal(t, "sess-observer-old", coordinator.observer.OperatorSessionID)
 
-	lister.operators = []models.OperatorDocumentGo{
+	lister.operators = []*operatorv1.OperatorDocument{
 		{
 			ID:                "observer-2",
 			OperatorSessionID: "sess-observer-new",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		},
 	}
 
@@ -220,13 +221,13 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_LogsNotFound(t *t
 
 	coordinator := NewProviderBoundaryObservationCoordinator(
 		&DispatchService{},
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubProviderBoundaryOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "data-1",
 				OperatorSessionID: "sess-data-1",
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 			},
 		}},
 		NewGatewayWebSocketHandler(logger),
@@ -242,18 +243,18 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_LogsNotFound(t *t
 // duplicateObserverOperators models a re-enrolled observer: two remote sessions
 // with the observer flag and the same hardware fingerprint, plus an inference
 // node on a different host whose fingerprint matches neither.
-func duplicateObserverOperators() []models.OperatorDocumentGo {
-	observer := func(id, session string) models.OperatorDocumentGo {
-		return models.OperatorDocumentGo{
+func duplicateObserverOperators() []*operatorv1.OperatorDocument {
+	observer := func(id, session string) operatorv1.OperatorDocument {
+		return operatorv1.OperatorDocument{
 			ID:                id,
 			OperatorSessionID: session,
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
 			SystemFingerprint: "fp-observer-host",
-			RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		}
 	}
-	return []models.OperatorDocumentGo{
+	return []*operatorv1.OperatorDocument{
 		observer("observer-old", "sess-observer-old"),
 		observer("observer-new", "sess-observer-new"),
 		{
@@ -262,7 +263,7 @@ func duplicateObserverOperators() []models.OperatorDocumentGo {
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
 			SystemFingerprint: "fp-inference-host",
-			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 		},
 	}
 }
@@ -326,13 +327,13 @@ func TestProviderBoundaryObservationCoordinator_IngestAfterDispatchContextCancel
 
 	coordinator := NewProviderBoundaryObservationCoordinator(
 		&DispatchService{},
-		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubProviderBoundaryOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "observer-1",
 				OperatorSessionID: "sess-observer-1",
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 			},
 		}},
 		pubsubHandler,

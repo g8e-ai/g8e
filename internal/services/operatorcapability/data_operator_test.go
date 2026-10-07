@@ -16,14 +16,13 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func TestIsDataOperator_ExcludesOtherRoles(t *testing.T) {
 	t.Parallel()
 
-	data := models.OperatorDocumentGo{
+	data := operatorv1.OperatorDocument{
 		ID:                "data-1",
 		OperatorSessionID: "sess-data-1",
 		Status:            constants.OperatorStatusActive,
@@ -31,27 +30,27 @@ func TestIsDataOperator_ExcludesOtherRoles(t *testing.T) {
 	}
 	assert.True(t, IsDataOperator(data))
 
-	cases := []models.OperatorDocumentGo{
+	cases := []*operatorv1.OperatorDocument{
 		{
 			ID:                "infer-1",
 			OperatorSessionID: "sess-infer-1",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 		},
 		{
 			ID:                "observer-1",
 			OperatorSessionID: "sess-observer-1",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 		},
 		{
 			ID:                "prov-1",
 			OperatorSessionID: "sess-prov-1",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		},
 		{
 			ID:                "role-1",
@@ -78,8 +77,8 @@ func TestIsDataOperator_ExcludesOtherRoles(t *testing.T) {
 	}
 }
 
-func stackDataOperatorDoc(id, sessionID, hostname string) models.OperatorDocumentGo {
-	return models.OperatorDocumentGo{
+func stackDataOperatorDoc(id, sessionID, hostname string) operatorv1.OperatorDocument {
+	return operatorv1.OperatorDocument{
 		ID:                id,
 		OperatorSessionID: sessionID,
 		Status:            constants.OperatorStatusActive,
@@ -90,7 +89,7 @@ func stackDataOperatorDoc(id, sessionID, hostname string) models.OperatorDocumen
 
 func TestSelectDataOperator_ConsidersOnlyTheStackDataOperator(t *testing.T) {
 	t.Parallel()
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		stackDataOperatorDoc("load-1", "sess-load-1", "load-host-1"),
 		stackDataOperatorDoc("stack", "sess-stack", constants.DataOperatorHostname),
 		stackDataOperatorDoc("load-2", "sess-load-2", "load-host-2"),
@@ -105,15 +104,15 @@ func TestSelectDataOperator_ConsidersOnlyTheStackDataOperator(t *testing.T) {
 func TestSelectDataOperator_IgnoresOtherRolesOnTheStackHostname(t *testing.T) {
 	t.Parallel()
 	inference := stackDataOperatorDoc("infer", "sess-infer", constants.DataOperatorHostname)
-	inference.RuntimeConfig = &models.RuntimeConfig{InferenceEnabled: true}
+	inference.RuntimeConfig = &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}
 
-	_, err := SelectDataOperator([]models.OperatorDocumentGo{inference})
+	_, err := SelectDataOperator([]*operatorv1.OperatorDocument{inference})
 	require.ErrorIs(t, err, constants.ErrDataOperatorNotFound)
 }
 
 func TestSelectDataOperator_ResolvesHostNativeWithoutStackDataOperator(t *testing.T) {
 	t.Parallel()
-	selected, err := SelectDataOperator([]models.OperatorDocumentGo{stackDataOperatorDoc("load-1", "sess-load-1", "load-host-1")})
+	selected, err := SelectDataOperator([]*operatorv1.OperatorDocument{stackDataOperatorDoc("load-1", "sess-load-1", "load-host-1")})
 	require.NoError(t, err)
 	assert.Equal(t, "load-1", selected.OperatorID)
 	assert.Equal(t, "sess-load-1", selected.OperatorSessionID)
@@ -124,13 +123,13 @@ func TestSelectDataOperator_ResolvesHostNativeWithoutStackDataOperator(t *testin
 
 func TestSelectDataOperator_AmbiguousWhenTwoStackDataOperatorsAreActive(t *testing.T) {
 	t.Parallel()
-	_, err := SelectDataOperator([]models.OperatorDocumentGo{
+	_, err := SelectDataOperator([]*operatorv1.OperatorDocument{
 		stackDataOperatorDoc("a", "sess-a", constants.DataOperatorHostname),
 		stackDataOperatorDoc("b", "sess-b", constants.DataOperatorHostname),
 	})
 	require.ErrorIs(t, err, constants.ErrDataOperatorAmbiguous)
 
-	_, err = SelectDataOperator([]models.OperatorDocumentGo{
+	_, err = SelectDataOperator([]*operatorv1.OperatorDocument{
 		stackDataOperatorDoc("a", "sess-a", "host-a"),
 		stackDataOperatorDoc("b", "sess-b", "host-b"),
 	})
@@ -140,7 +139,7 @@ func TestSelectDataOperator_AmbiguousWhenTwoStackDataOperatorsAreActive(t *testi
 func TestIsStackDataOperator_RequiresDataOperatorHostname(t *testing.T) {
 	t.Parallel()
 
-	stack := models.OperatorDocumentGo{
+	stack := operatorv1.OperatorDocument{
 		ID:                "data-1",
 		OperatorSessionID: "sess-data-1",
 		Status:            constants.OperatorStatusActive,
@@ -154,7 +153,7 @@ func TestIsStackDataOperator_RequiresDataOperatorHostname(t *testing.T) {
 	assert.False(t, IsStackDataOperator(other))
 
 	inference := stack
-	inference.RuntimeConfig = &models.RuntimeConfig{InferenceEnabled: true}
+	inference.RuntimeConfig = &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}
 	assert.False(t, IsStackDataOperator(inference))
 }
 
@@ -235,7 +234,7 @@ func TestActiveDataOperators_IncludesWorkingDirectory(t *testing.T) {
 	hb, err := protojson.Marshal(hr)
 	require.NoError(t, err)
 
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		{
 			ID:                "stack",
 			OperatorSessionID: "sess-stack",
@@ -255,7 +254,7 @@ func TestActiveDataOperators_IncludesWorkingDirectory(t *testing.T) {
 func TestActiveDataOperators_EmptyHeartbeatLeavesWorkingDirectoryEmpty(t *testing.T) {
 	t.Parallel()
 
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		{
 			ID:                "stack",
 			OperatorSessionID: "sess-stack",
@@ -271,19 +270,19 @@ func TestActiveDataOperators_EmptyHeartbeatLeavesWorkingDirectoryEmpty(t *testin
 	assert.Empty(t, statuses[0].WorkingDirectory)
 }
 
-func tierOp(id string, kind constants.OperatorType, hostname string, roles ...constants.OperatorRole) models.OperatorDocumentGo {
-	return models.OperatorDocumentGo{
+func tierOp(id string, kind constants.OperatorType, hostname string, roles ...constants.OperatorRole) operatorv1.OperatorDocument {
+	return operatorv1.OperatorDocument{
 		ID:                id,
 		OperatorSessionID: "sess-" + id,
 		Status:            constants.OperatorStatusActive,
 		OperatorType:      kind,
 		CurrentHostname:   hostname,
-		RuntimeConfig:     &models.RuntimeConfig{Roles: roles},
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{Roles: roles},
 	}
 }
 
 func TestEmbeddedOnlyImpliesDataAndWitnessCommands(t *testing.T) {
-	cfg := &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleEmbedded}}
+	cfg := &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleEmbedded}}
 	require.Equal(t, constants.OperatorRoles{constants.OperatorRoleEmbedded, constants.OperatorRoleData}, ResolveOperatorRoles(cfg))
 	require.NoError(t, ValidateWitnessCommand(cfg, "pwd"))
 	op := tierOp("embedded-operator", constants.OperatorTypeEmbedded, "", constants.OperatorRoleEmbedded)
@@ -296,18 +295,18 @@ func TestDataOperatorTiering(t *testing.T) {
 	remote := tierOp("data", constants.OperatorTypeRemote, "host", constants.OperatorRoleData)
 	stack := tierOp("stack", constants.OperatorTypeRemote, constants.DataOperatorHostname, constants.OperatorRoleData)
 
-	sel, err := SelectDataOperator([]models.OperatorDocumentGo{embedded, remote})
+	sel, err := SelectDataOperator([]*operatorv1.OperatorDocument{embedded, remote})
 	require.NoError(t, err)
 	require.Equal(t, "data", sel.OperatorID)
 
-	sel, err = SelectDataOperator([]models.OperatorDocumentGo{embedded})
+	sel, err = SelectDataOperator([]*operatorv1.OperatorDocument{embedded})
 	require.NoError(t, err)
 	require.Equal(t, "embedded-operator", sel.OperatorID)
 
-	sel, err = SelectDataOperator([]models.OperatorDocumentGo{embedded, remote, stack})
+	sel, err = SelectDataOperator([]*operatorv1.OperatorDocument{embedded, remote, stack})
 	require.NoError(t, err)
 	require.Equal(t, "stack", sel.OperatorID)
 
-	require.Equal(t, []models.OperatorDocumentGo{remote}, PreferDedicatedDataOperators([]models.OperatorDocumentGo{embedded, remote}))
-	require.Equal(t, []models.OperatorDocumentGo{embedded}, PreferDedicatedDataOperators([]models.OperatorDocumentGo{embedded}))
+	require.Equal(t, []*operatorv1.OperatorDocument{remote}, PreferDedicatedDataOperators([]*operatorv1.OperatorDocument{embedded, remote}))
+	require.Equal(t, []*operatorv1.OperatorDocument{embedded}, PreferDedicatedDataOperators([]*operatorv1.OperatorDocument{embedded}))
 }

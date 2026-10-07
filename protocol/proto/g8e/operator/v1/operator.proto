@@ -13,6 +13,7 @@ option go_package = "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1;ope
 
 import "g8e/common/v1/common.proto";
 import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
 
 // Execution status enum for command and operation results
 enum ExecutionStatus {
@@ -364,6 +365,35 @@ message SetTargetContextResult {
   string error = 3;
 }
 
+// OperatorRuntimeConfig captures the CLI flags and env var overrides active
+// when the Operator started. Sent to the Gateway at bootstrap and stored in
+// OperatorDocument.runtime_config.
+message OperatorRuntimeConfig {
+  bool cloud_mode = 1;
+  string cloud_provider = 2;
+  bool local_storage_enabled = 3;
+  bool no_git = 4;
+  string log_level = 5;
+  int32 http_port = 6;
+  repeated string roles = 7;
+  string local_dir = 8;
+  string account = 9;
+  // True when the Operator started with --inference-enabled (Inference Node).
+  bool inference_enabled = 10;
+  // Approved remote Ollama provider URL (--inference-ollama-endpoint).
+  string inference_ollama_endpoint = 11;
+  // True when started with --provider-boundary-observer-enabled.
+  bool provider_boundary_observer_enabled = 12;
+  // True when started with --provenance-operator-enabled.
+  bool provenance_operator_enabled = 13;
+  // Root directory containing content-addressed model weight blobs.
+  string provenance_operator_model_storage_root = 14;
+  // Operator host GOOS recorded at startup (for example "linux" or "windows").
+  string platform = 15;
+}
+
+// OperatorDocument is the canonical Operator record. The Gateway owns and
+// persists it; every other component reads it through this contract.
 message OperatorDocument {
   string id = 1;
   string user_id = 2;
@@ -384,8 +414,23 @@ message OperatorDocument {
   reserved 15;
   reserved "cloud_subtype";
   string system_fingerprint = 16;
-  int64 created_at_unix_ms = 17;
-  int64 updated_at_unix_ms = 18;
+  // Fields 17/18 carried unix-millisecond integers; times are now Timestamps.
+  reserved 17, 18;
+  reserved "created_at_unix_ms", "updated_at_unix_ms";
+  google.protobuf.Timestamp created_at = 19;
+  google.protobuf.Timestamp updated_at = 20;
+  google.protobuf.Timestamp started_at = 21;
+  google.protobuf.Timestamp claimed_at = 22;
+  google.protobuf.Timestamp last_heartbeat_at = 23;
+  repeated string operator_roles = 24;
+  string local_dir = 25;
+  string account = 26;
+  int32 port = 27;
+  string stop_reason = 28;
+  google.protobuf.Struct latest_heartbeat_snapshot = 29;
+  string current_hostname = 30;
+  OperatorRuntimeConfig runtime_config = 31;
+  string consumed_by_operator_id = 32;
 }
 
 message ShutdownRequested {

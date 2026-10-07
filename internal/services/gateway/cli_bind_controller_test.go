@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -40,7 +42,7 @@ func bindRequestWithContext(t *testing.T, userID, oldCLISessionID, operatorSessi
 func persistOperatorForBindController(t *testing.T, c *CLIRefreshController, userID, operatorID, operatorSessionID string) {
 	t.Helper()
 	now := time.Now().UTC()
-	opDoc := &models.OperatorDocumentGo{
+	opDoc := &operatorv1.OperatorDocument{
 		ID:                operatorID,
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusActive,

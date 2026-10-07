@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
@@ -382,7 +384,7 @@ func operatorStartCmd() *cobra.Command {
 			if roles.Has(constants.OperatorRoleEmbedded) {
 				return serve.RunGateway(serve.GatewayConfig{
 					WorkingDir: workingDir,
-					OperatorRoles: operatorcapability.ResolveOperatorRoles(&models.RuntimeConfig{
+					OperatorRoles: operatorcapability.ResolveOperatorRoles(&operatorv1.OperatorRuntimeConfig{
 						Roles:                           roles,
 						InferenceEnabled:                inferenceEnabled,
 						ProvenanceOperatorEnabled:       provenanceOperatorEnabled,

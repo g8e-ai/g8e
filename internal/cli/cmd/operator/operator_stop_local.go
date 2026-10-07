@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/spf13/cobra"
 )
@@ -27,7 +29,7 @@ type localOperatorProcess struct {
 	close     func()
 }
 
-func (p localOperatorProcess) matches(op models.OperatorDocumentGo) bool {
+func (p localOperatorProcess) matches(op operatorv1.OperatorDocument) bool {
 	if p.sessionID != "" {
 		return p.sessionID == op.OperatorSessionID
 	}

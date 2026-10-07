@@ -10,8 +10,9 @@ package operatorcapability
 import (
 	"fmt"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // ProviderBoundaryObserverStatus summarizes one active remote provider-boundary
@@ -26,15 +27,15 @@ type ProviderBoundaryObserverStatus struct {
 
 // ActiveProviderBoundaryObservers returns every active remote operator with
 // runtime_config.provider_boundary_observer_enabled set.
-func ActiveProviderBoundaryObservers(operators []models.OperatorDocumentGo) []ProviderBoundaryObserverStatus {
+func ActiveProviderBoundaryObservers(operators []*operatorv1.OperatorDocument) []ProviderBoundaryObserverStatus {
 	matches := make([]ProviderBoundaryObserverStatus, 0)
 	for _, op := range operators {
 		if op.RuntimeConfig == nil || !HasActiveRole(op, constants.OperatorRoleObserver) {
 			continue
 		}
 		matches = append(matches, ProviderBoundaryObserverStatus{
-			OperatorID:        op.ID,
-			OperatorSessionID: op.OperatorSessionID,
+			OperatorID:        op.Id,
+			OperatorSessionID: op.OperatorSessionId,
 			Status:            string(op.Status),
 			ObserverEnabled:   true,
 			Platform:          op.RuntimeConfig.Platform,
@@ -46,14 +47,14 @@ func ActiveProviderBoundaryObservers(operators []models.OperatorDocumentGo) []Pr
 // SelectProviderBoundaryObserver resolves exactly one provider-boundary
 // observer operator. When sessionID is non-empty it must match an active
 // observer; otherwise exactly one active observer must exist.
-func SelectProviderBoundaryObserver(operators []models.OperatorDocumentGo, sessionID string) (*ProviderBoundaryObserverStatus, error) {
+func SelectProviderBoundaryObserver(operators []*operatorv1.OperatorDocument, sessionID string) (*ProviderBoundaryObserverStatus, error) {
 	return SelectProviderBoundaryObserverForHardware(operators, sessionID, "")
 }
 
 // SelectProviderBoundaryObserverForHardware resolves an observer using the
 // exact OperatorDocument system fingerprint when one is available.
 func SelectProviderBoundaryObserverForHardware(
-	operators []models.OperatorDocumentGo,
+	operators []*operatorv1.OperatorDocument,
 	sessionID string,
 	systemFingerprint string,
 ) (*ProviderBoundaryObserverStatus, error) {
@@ -65,7 +66,7 @@ func SelectProviderBoundaryObserverForHardware(
 				continue
 			}
 			for _, match := range matches {
-				if match.OperatorSessionID == op.OperatorSessionID {
+				if match.OperatorSessionID == op.OperatorSessionId {
 					filtered = append(filtered, match)
 					break
 				}

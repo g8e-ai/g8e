@@ -220,7 +220,7 @@ type DispatchResult struct {
 // document. AuthService implements this; the interface makes the dispatch
 // service's dependency on auth explicit and testable.
 type operatorSessionValidator interface {
-	ValidateOperatorSession(operatorSessionID string) (*models.OperatorDocumentGo, error)
+	ValidateOperatorSession(operatorSessionID string) (*operatorv1.OperatorDocument, error)
 }
 
 // L2ConsensusDeliberator sends an envelope to an L2 consensus service for

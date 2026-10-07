@@ -13,11 +13,12 @@ import (
 	"context"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // TestPlatform_FullBootstrap verifies that a fully bootstrapped live stack
@@ -39,7 +40,7 @@ func TestPlatform_FullBootstrap(t *testing.T) {
 		require.NoError(t, err, "listing operators must succeed")
 		require.True(t, operators.Success, "operator list must report success")
 		require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
-		var remoteOperator *models.OperatorDocumentGo
+		var remoteOperator *operatorv1.OperatorDocument
 		for i := range operators.Operators {
 			if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
 				remoteOperator = &operators.Operators[i]

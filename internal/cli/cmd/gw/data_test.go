@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -291,9 +293,9 @@ func TestDataCommandJSONUnmarshaling(t *testing.T) {
 			errorMsg:    "failed to parse response",
 		},
 		{
-			name:        "valid OperatorDocumentGo JSON",
+			name:        "valid OperatorDocument JSON",
 			jsonData:    `[{"id":"op1","operator_type":"remote","status":"active"}]`,
-			targetType:  &[]models.OperatorDocumentGo{},
+			targetType:  &[]*operatorv1.OperatorDocument{},
 			expectError: false,
 		},
 		{
@@ -604,7 +606,7 @@ func TestDataCommandErrorHandling(t *testing.T) {
 
 	t.Run("operators command handles JSON parse errors", func(t *testing.T) {
 		invalidJSON := `{invalid}`
-		var operators []models.OperatorDocumentGo
+		var operators []*operatorv1.OperatorDocument
 		err := json.Unmarshal([]byte(invalidJSON), &operators)
 		require.Error(t, err)
 	})

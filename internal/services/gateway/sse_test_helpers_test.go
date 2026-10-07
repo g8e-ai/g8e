@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -86,7 +88,7 @@ func makeTLSRequest(method, _ string, body string, cert *x509.Certificate) *http
 // code's DocGet(operators, operatorSessionID) lookup pattern.
 func seedOperatorDoc(t *testing.T, h *HTTPHandler, opID, userID, operatorSessionID string) {
 	t.Helper()
-	op := models.OperatorDocumentGo{
+	op := operatorv1.OperatorDocument{
 		ID:                opID,
 		UserID:            userID,
 		Status:            constants.OperatorStatusActive,

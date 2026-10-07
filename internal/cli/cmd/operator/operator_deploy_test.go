@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -151,9 +153,9 @@ func TestOperatorDeployApprovesEachOperatorAndReportsSessions(t *testing.T) {
 	remoteDir := filepath.Join(t.TempDir(), "fleet")
 	dirs := operatorDeployDirs(remoteDir, 2)
 
-	sessions := make([]models.OperatorDocumentGo, len(dirs))
+	sessions := make([]*operatorv1.OperatorDocument, len(dirs))
 	for i, dir := range dirs {
-		sessions[i] = models.OperatorDocumentGo{
+		sessions[i] = operatorv1.OperatorDocument{
 			OperatorSessionID: deployedDirID(dir) + "-111",
 			Status:            constants.OperatorStatusActive,
 		}
@@ -183,7 +185,7 @@ func TestOperatorDeployDoesNotWaitForARequestFromAnAlreadyEnrolledOperator(t *te
 	useFakeSSH(t, fakeWorkerAlreadyEnrolled)
 	remoteDir := filepath.Join(t.TempDir(), "fleet")
 
-	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{
+	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
 		{OperatorSessionID: deployedDirID(remoteDir) + "-111", Status: constants.OperatorStatusActive},
 	}})
 	require.NoError(t, err)
@@ -338,10 +340,10 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 	useFakeSSH(t, fakeWorkerEnrolls)
 	root := filepath.Join(t.TempDir(), "fleet")
 	dirs := operatorDeployDirs(root, 12)
-	sessions := make([]models.OperatorDocumentGo, len(dirs))
+	sessions := make([]*operatorv1.OperatorDocument, len(dirs))
 	expected := make(map[string]bool, len(dirs))
 	for i, dir := range dirs {
-		sessions[i] = models.OperatorDocumentGo{OperatorSessionID: deployedDirID(dir) + "-111", Status: constants.OperatorStatusActive}
+		sessions[i] = operatorv1.OperatorDocument{OperatorSessionID: deployedDirID(dir) + "-111", Status: constants.OperatorStatusActive}
 		expected[deployedDirID(dir)+"-000"] = true
 	}
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: sessions})

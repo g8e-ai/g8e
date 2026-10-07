@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
@@ -432,7 +434,7 @@ func releaseRunModels(
 	opts runExecuteOptions,
 	cfg *config.Config,
 	authContext *auth.ClientAuthContext,
-	operators []models.OperatorDocumentGo,
+	operators []*operatorv1.OperatorDocument,
 	inferenceSessionID string,
 	spec *evalv1.EvaluationCampaignSpec,
 ) error {
@@ -489,7 +491,7 @@ func releaseRunModels(
 	return nil
 }
 
-func resolveCampaignOllamaEndpoint(operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
+func resolveCampaignOllamaEndpoint(operators []*operatorv1.OperatorDocument, inferenceSessionID string) (string, error) {
 	endpoint, err := evaluation.GovernedInferenceOllamaEndpoint(operators, inferenceSessionID)
 	if err != nil {
 		return "", fmt.Errorf("evaluation: run execute: %w", err)

@@ -15,11 +15,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestInvestigationsQueryBody_JSONMatchesSortedMapShape(t *testing.T) {
@@ -90,11 +91,11 @@ func TestBrowserOperatorStopResponseJSON(t *testing.T) {
 }
 
 type fakeOperatorLister struct {
-	ops []models.OperatorDocumentGo
+	ops []*operatorv1.OperatorDocument
 	err error
 }
 
-func (f fakeOperatorLister) ListUserOperators(string) ([]models.OperatorDocumentGo, error) {
+func (f fakeOperatorLister) ListUserOperators(string) ([]*operatorv1.OperatorDocument, error) {
 	return f.ops, f.err
 }
 
@@ -117,7 +118,7 @@ func TestInjectBrowserContext_ReplacesBrowserSuppliedBoundOperators(t *testing.T
 func TestBoundOperators_FiltersToWebSession(t *testing.T) {
 	c := &EnsembleBrowserProxyController{
 		logger: slog.Default(),
-		operators: fakeOperatorLister{ops: []models.OperatorDocumentGo{
+		operators: fakeOperatorLister{ops: []*operatorv1.OperatorDocument{
 			{ID: "op-1", OperatorSessionID: "os-1", BoundWebSessionID: "web-1", Status: constants.OperatorStatusBound},
 			{ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "os-embedded", BoundWebSessionID: "web-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded},
 			{ID: "op-remote", OperatorSessionID: "os-remote", BoundWebSessionID: "web-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},

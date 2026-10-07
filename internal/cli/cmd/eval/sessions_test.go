@@ -10,15 +10,16 @@ package eval
 import (
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-func remoteOperator(id, session string, cfg *models.RuntimeConfig) models.OperatorDocumentGo {
-	return models.OperatorDocumentGo{
+func remoteOperator(id, session string, cfg *operatorv1.OperatorRuntimeConfig) operatorv1.OperatorDocument {
+	return operatorv1.OperatorDocument{
 		ID:                id,
 		OperatorSessionID: session,
 		Status:            constants.OperatorStatusActive,
@@ -27,40 +28,40 @@ func remoteOperator(id, session string, cfg *models.RuntimeConfig) models.Operat
 	}
 }
 
-func inferenceOperatorFixture(id, session string) models.OperatorDocumentGo {
-	return remoteOperator(id, session, &models.RuntimeConfig{InferenceEnabled: true, InferenceOllamaEndpoint: "http://provider.example:11434"})
+func inferenceOperatorFixture(id, session string) operatorv1.OperatorDocument {
+	return remoteOperator(id, session, &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true, InferenceOllamaEndpoint: "http://provider.example:11434"})
 }
 
 // dataOperatorFixture is the stack's data-operator: a data Operator whose
 // heartbeat hostname is constants.DataOperatorHostname.
-func dataOperatorFixture(id, session string) models.OperatorDocumentGo {
-	op := remoteOperator(id, session, &models.RuntimeConfig{})
+func dataOperatorFixture(id, session string) operatorv1.OperatorDocument {
+	op := remoteOperator(id, session, &operatorv1.OperatorRuntimeConfig{})
 	op.CurrentHostname = constants.DataOperatorHostname
 	return op
 }
 
 // otherDataOperatorFixture is a data Operator enrolled from elsewhere.
-func otherDataOperatorFixture(id, session string) models.OperatorDocumentGo {
-	op := remoteOperator(id, session, &models.RuntimeConfig{})
+func otherDataOperatorFixture(id, session string) operatorv1.OperatorDocument {
+	op := remoteOperator(id, session, &operatorv1.OperatorRuntimeConfig{})
 	op.CurrentHostname = "other-host"
 	return op
 }
 
 func TestResolveOperatorSessionsFrom(t *testing.T) {
-	single := []models.OperatorDocumentGo{inferenceOperatorFixture("i1", "infer-1"), dataOperatorFixture("d1", "data-1")}
-	withOthers := []models.OperatorDocumentGo{
+	single := []*operatorv1.OperatorDocument{inferenceOperatorFixture("i1", "infer-1"), dataOperatorFixture("d1", "data-1")}
+	withOthers := []*operatorv1.OperatorDocument{
 		inferenceOperatorFixture("i1", "infer-1"),
 		otherDataOperatorFixture("x1", "other-1"), dataOperatorFixture("d1", "data-1"), otherDataOperatorFixture("x2", "other-2"),
 	}
-	manyInference := []models.OperatorDocumentGo{inferenceOperatorFixture("i1", "infer-1"), inferenceOperatorFixture("i2", "infer-2")}
-	observer := remoteOperator("obs", "obs-1", &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true})
+	manyInference := []*operatorv1.OperatorDocument{inferenceOperatorFixture("i1", "infer-1"), inferenceOperatorFixture("i2", "infer-2")}
+	observer := remoteOperator("obs", "obs-1", &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true})
 	observer.CurrentHostname = constants.DataOperatorHostname
 	inactive := inferenceOperatorFixture("i1", "infer-1")
 	inactive.Status = constants.OperatorStatusOffline
 
 	tests := []struct {
 		name      string
-		operators []models.OperatorDocumentGo
+		operators []*operatorv1.OperatorDocument
 		roles     []operatorRole
 		want      operatorSessions
 		wantErr   error
@@ -71,7 +72,7 @@ func TestResolveOperatorSessionsFrom(t *testing.T) {
 			want:  operatorSessions{InferenceSessionID: "infer-1", DataSessionID: "data-1", DataOperatorID: "d1"},
 		},
 		{
-			name: "only requested roles are resolved", operators: []models.OperatorDocumentGo{inferenceOperatorFixture("i1", "infer-1")},
+			name: "only requested roles are resolved", operators: []*operatorv1.OperatorDocument{inferenceOperatorFixture("i1", "infer-1")},
 			roles: []operatorRole{operatorRoleInference},
 			want:  operatorSessions{InferenceSessionID: "infer-1"},
 		},
@@ -86,27 +87,27 @@ func TestResolveOperatorSessionsFrom(t *testing.T) {
 			wantErr: constants.ErrInferenceOperatorAmbiguous,
 		},
 		{
-			name: "no inference session", operators: []models.OperatorDocumentGo{dataOperatorFixture("d1", "data-1")},
+			name: "no inference session", operators: []*operatorv1.OperatorDocument{dataOperatorFixture("d1", "data-1")},
 			roles:   []operatorRole{operatorRoleInference},
 			wantErr: constants.ErrInferenceOperatorNotFound,
 		},
 		{
-			name: "resolves host-native data operator when stack data-operator absent", operators: []models.OperatorDocumentGo{otherDataOperatorFixture("x1", "other-1")},
+			name: "resolves host-native data operator when stack data-operator absent", operators: []*operatorv1.OperatorDocument{otherDataOperatorFixture("x1", "other-1")},
 			roles: []operatorRole{operatorRoleData},
 			want:  operatorSessions{DataSessionID: "other-1", DataOperatorID: "x1"},
 		},
 		{
-			name: "multiple host-native data operators are ambiguous", operators: []models.OperatorDocumentGo{otherDataOperatorFixture("x1", "other-1"), otherDataOperatorFixture("x2", "other-2")},
+			name: "multiple host-native data operators are ambiguous", operators: []*operatorv1.OperatorDocument{otherDataOperatorFixture("x1", "other-1"), otherDataOperatorFixture("x2", "other-2")},
 			roles:   []operatorRole{operatorRoleData},
 			wantErr: constants.ErrDataOperatorAmbiguous,
 		},
 		{
-			name: "observers are not data-operators", operators: []models.OperatorDocumentGo{observer},
+			name: "observers are not data-operators", operators: []*operatorv1.OperatorDocument{observer},
 			roles:   []operatorRole{operatorRoleData},
 			wantErr: constants.ErrDataOperatorNotFound,
 		},
 		{
-			name: "inactive operators are ignored", operators: []models.OperatorDocumentGo{inactive},
+			name: "inactive operators are ignored", operators: []*operatorv1.OperatorDocument{inactive},
 			roles:   []operatorRole{operatorRoleInference},
 			wantErr: constants.ErrInferenceOperatorNotFound,
 		},

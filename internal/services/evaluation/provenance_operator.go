@@ -8,19 +8,19 @@
 package evaluation
 
 import (
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // ProvenanceOperatorStatus summarizes one active remote provenance operator.
 type ProvenanceOperatorStatus = operatorcapability.ProvenanceOperatorStatus
 
 // ActiveProvenanceOperators returns every active remote provenance operator.
-func ActiveProvenanceOperators(operators []models.OperatorDocumentGo) []ProvenanceOperatorStatus {
+func ActiveProvenanceOperators(operators []*operatorv1.OperatorDocument) []ProvenanceOperatorStatus {
 	return operatorcapability.ActiveProvenanceOperators(operators)
 }
 
 // SelectProvenanceOperator resolves exactly one provenance operator.
-func SelectProvenanceOperator(operators []models.OperatorDocumentGo, sessionID string) (*ProvenanceOperatorStatus, error) {
+func SelectProvenanceOperator(operators []*operatorv1.OperatorDocument, sessionID string) (*ProvenanceOperatorStatus, error) {
 	return operatorcapability.SelectProvenanceOperator(operators, sessionID)
 }

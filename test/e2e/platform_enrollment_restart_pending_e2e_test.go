@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -86,7 +88,7 @@ func TestPlatformEnrollment_RestartDuringPending(t *testing.T) {
 	// credential issuance; the operator completes enrollment and registers.
 	// A 180-second window accommodates issuance, WS reconnection, and
 	// registry update.
-	var active *models.OperatorDocumentGo
+	var active *operatorv1.OperatorDocument
 	require.Eventually(t, func() bool {
 		operators, err := e2eClient.ListOperators(ctx)
 		if err != nil {

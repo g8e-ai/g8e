@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -78,9 +80,9 @@ func (s *Service) ExecutesFor(operatorID string) bool {
 	return s != nil && operatorID == string(constants.DocIDEmbeddedOperator)
 }
 
-func pendingDocument(now time.Time) *models.OperatorDocumentGo {
-	return &models.OperatorDocumentGo{
-		ID:           string(constants.DocIDEmbeddedOperator),
+func pendingDocument(now time.Time) *operatorv1.OperatorDocument {
+	return &operatorv1.OperatorDocument{
+		Id:           string(constants.DocIDEmbeddedOperator),
 		Component:    constants.ComponentNameG8EO,
 		Name:         string(constants.DocIDEmbeddedOperator),
 		Status:       constants.OperatorStatusAvailable,
@@ -107,12 +109,12 @@ func (s *Service) RegisterPending() error {
 	return persistDocument(s.docs, pendingDocument(time.Now().UTC()))
 }
 
-func persistDocument(docs Store, op *models.OperatorDocumentGo) error {
+func persistDocument(docs Store, op *operatorv1.OperatorDocument) error {
 	b, err := json.Marshal(op)
 	if err != nil {
 		return fmt.Errorf("gateway: embedded operator: marshal document: %w", err)
 	}
-	if err := docs.DocSet(marshaler.CollectionName(constants.CollectionOperators), op.ID, b); err != nil {
+	if err := docs.DocSet(marshaler.CollectionName(constants.CollectionOperators), op.Id, b); err != nil {
 		return fmt.Errorf("gateway: embedded operator: persist document: %w", err)
 	}
 	return nil
@@ -169,7 +171,7 @@ func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operat
 		}
 	}
 
-	var op models.OperatorDocumentGo
+	var op operatorv1.OperatorDocument
 	b, err := json.Marshal(doc.Data)
 	if err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: marshal document data: %w", err)
@@ -177,13 +179,13 @@ func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operat
 	if err := json.Unmarshal(b, &op); err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: unmarshal document: %w", err)
 	}
-	op.ID = doc.ID
+	op.Id = doc.ID
 
 	if op.Claimed {
-		if op.UserID == userID {
-			return op.ID, op.OperatorSessionID, nil
+		if op.UserId == userID {
+			return op.Id, op.OperatorSessionId, nil
 		}
-		return "", "", fmt.Errorf("gateway: embedded operator: claimed by %s, not %s: %w", op.UserID, userID, constants.ErrEmbeddedOperatorClaimed)
+		return "", "", fmt.Errorf("gateway: embedded operator: claimed by %s, not %s: %w", op.UserId, userID, constants.ErrEmbeddedOperatorClaimed)
 	}
 
 	operatorSessionID, err = uuid.NewString()
@@ -213,8 +215,8 @@ func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operat
 	if err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: marshal claim: %w", err)
 	}
-	if _, err := s.docs.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), op.ID, updateBytes); err != nil {
+	if _, err := s.docs.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), op.Id, updateBytes); err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: persist claim: %w", err)
 	}
-	return op.ID, operatorSessionID, nil
+	return op.Id, operatorSessionID, nil
 }

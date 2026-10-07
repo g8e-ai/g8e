@@ -11,13 +11,12 @@ import (
 	"fmt"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-func validateWitnessCommandDispatch(op *models.OperatorDocumentGo, actionType string, payload []byte) error {
+func validateWitnessCommandDispatch(op *operatorv1.OperatorDocument, actionType string, payload []byte) error {
 	if op == nil || actionType != string(constants.ActionTypeExecuteBash) {
 		return nil
 	}

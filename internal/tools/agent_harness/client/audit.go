@@ -232,7 +232,7 @@ func (c *Client) DiscoverOperator(ctx context.Context) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("discover operator: %w", err)
 	}
-	var matches []models.OperatorDocumentGo
+	var matches []*operatorv1.OperatorDocument
 	for _, op := range operators {
 		if op.ID == "" || op.OperatorSessionID == "" || op.Status != constants.OperatorStatusActive {
 			continue

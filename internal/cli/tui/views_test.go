@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
@@ -97,7 +99,7 @@ func TestApprovalsViewKeys(t *testing.T) {
 }
 
 func TestOperatorsViewKeys(t *testing.T) {
-	m := NewModel(Options{Identity: Identity{OperatorID: "op-2"}}).applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+	m := NewModel(Options{Identity: Identity{OperatorID: "op-2"}}).applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
 		{ID: "op-1", CurrentHostname: "alpha", Status: constants.OperatorStatusActive},
 		{ID: "op-2", CurrentHostname: "bravo", Status: constants.OperatorStatusActive},
 	}})
@@ -111,7 +113,7 @@ func TestOperatorsViewKeys(t *testing.T) {
 }
 
 func TestOperatorDetailsView(t *testing.T) {
-	m := NewModel(Options{}).applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+	m := NewModel(Options{}).applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
 		{
 			ID:                "op-detail",
 			OperatorSessionID: "session-detail",
@@ -208,7 +210,7 @@ func TestGatewayStatusView(t *testing.T) {
 			Posture:         "notary",
 			StateMerkleRoot: "root-123456789",
 		}}).
-		applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+		applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
 			{ID: "op-1", CurrentHostname: "worker-1", Status: constants.OperatorStatusActive},
 		}}).
 		applyEnrollmentsMsg(enrollmentsFixture())
@@ -432,7 +434,7 @@ func TestOperatorStop(t *testing.T) {
 	setup := func(t *testing.T) (Model, *testSession) {
 		t.Helper()
 		session := &testSession{}
-		m := NewModel(Options{Session: session}).applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+		m := NewModel(Options{Session: session}).applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
 			{ID: "op-embedded", CurrentHostname: "gateway", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorSessionID: "sess-embedded"},
 			{ID: "op-remote", CurrentHostname: "web-01", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "sess-remote"},
 		}})
@@ -524,7 +526,7 @@ func TestOperatorBindAndUnbindRotateSession(t *testing.T) {
 			rebuiltSession = &testSession{}
 			return rebuiltSession, nil
 		},
-	}).applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+	}).applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
 		{ID: "op-remote", OperatorSessionID: "sess-remote", CurrentHostname: "web-01", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
 	}})
 	m, _ = press(t, m, runeKey('3'))
@@ -567,7 +569,7 @@ func TestOperatorBindAndUnbindRotateSession(t *testing.T) {
 func TestViews_FitTerminalExactly(t *testing.T) {
 	base := NewModel(Options{Session: &testSession{}, Version: "v2.3.1", Identity: Identity{UserID: strings.Repeat("u", 36), CLISessionID: "session", OperatorID: "op-1"}}).
 		applyPendingApprovalsMsg(pendingTxs(strings.Repeat("a", 64), "tx-2")).
-		applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{{ID: "op-1", CurrentHostname: strings.Repeat("h", 80), Status: constants.OperatorStatusActive, LocalDir: strings.Repeat("/d", 60)}}}).
+		applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{{ID: "op-1", CurrentHostname: strings.Repeat("h", 80), Status: constants.OperatorStatusActive, LocalDir: strings.Repeat("/d", 60)}}}).
 		applyEnrollmentsMsg(enrollmentsFixture())
 
 	confirming := base

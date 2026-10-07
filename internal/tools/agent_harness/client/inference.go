@@ -29,7 +29,7 @@ import (
 
 // ListOperators returns the authenticated user's Operator documents through
 // GET /api/v1/operators.
-func (c *Client) ListOperators(ctx context.Context) ([]models.OperatorDocumentGo, []byte, error) {
+func (c *Client) ListOperators(ctx context.Context) ([]*operatorv1.OperatorDocument, []byte, error) {
 	if c.cfg.UserID == "" {
 		return nil, nil, fmt.Errorf("%w: authenticated user id is required for operator list", constants.ErrMissingRequiredField)
 	}
@@ -53,12 +53,12 @@ func (c *Client) ListOperators(ctx context.Context) ([]models.OperatorDocumentGo
 
 // DiscoverInferenceOperator selects exactly one active inference-capable remote
 // Operator. When operatorSessionID is non-empty it must match that session.
-func (c *Client) DiscoverInferenceOperator(ctx context.Context, operatorSessionID string) (*models.OperatorDocumentGo, []byte, error) {
+func (c *Client) DiscoverInferenceOperator(ctx context.Context, operatorSessionID string) (*operatorv1.OperatorDocument, []byte, error) {
 	operators, body, err := c.ListOperators(ctx)
 	if err != nil {
 		return nil, body, err
 	}
-	var matches []models.OperatorDocumentGo
+	var matches []*operatorv1.OperatorDocument
 	for _, op := range operators {
 		if op.RuntimeConfig == nil || !operatorcapability.HasActiveRole(op, constants.OperatorRoleInference) {
 			continue

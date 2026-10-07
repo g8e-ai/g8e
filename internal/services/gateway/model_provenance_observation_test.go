@@ -22,7 +22,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
@@ -53,11 +52,11 @@ func testModelProvenanceWindow(t *testing.T, providerAttemptID string) *evalv1.M
 }
 
 type stubModelProvenanceOperatorLister struct {
-	operators []models.OperatorDocumentGo
+	operators []*operatorv1.OperatorDocument
 	err       error
 }
 
-func (s *stubModelProvenanceOperatorLister) ListOperatorsForProvenance() ([]models.OperatorDocumentGo, error) {
+func (s *stubModelProvenanceOperatorLister) ListOperatorsForProvenance() ([]*operatorv1.OperatorDocument, error) {
 	return s.operators, s.err
 }
 
@@ -70,13 +69,13 @@ func TestModelProvenanceObservationCoordinator_EnsureOperator_SubscribesToProven
 
 	coordinator := NewModelProvenanceObservationCoordinator(
 		&DispatchService{},
-		&stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "prov-1",
 				OperatorSessionID: "sess-prov-1",
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
 		pubsubHandler,
@@ -98,13 +97,13 @@ func TestModelProvenanceObservationCoordinator_PreflightCommandDelivery_FailsWit
 
 	coordinator := NewModelProvenanceObservationCoordinator(
 		&DispatchService{pubsub: pubsubHandler},
-		&stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "prov-1",
 				OperatorSessionID: "sess-prov-1",
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
 		pubsubHandler,
@@ -126,13 +125,13 @@ func TestModelProvenanceObservationCoordinator_IngestPersistsAttestationWindow(t
 
 	coordinator := NewModelProvenanceObservationCoordinator(
 		&DispatchService{},
-		&stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "prov-1",
 				OperatorSessionID: "sess-prov-1",
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
 		pubsubHandler,
@@ -164,7 +163,7 @@ func TestModelProvenanceObservationCoordinator_NotifyAttemptBegin_FailsWithoutCm
 	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
 	windowStore, err := model_provenance.NewWindowStore(fileSvc)
 	require.NoError(t, err)
-	op := &models.OperatorDocumentGo{
+	op := &operatorv1.OperatorDocument{
 		ID:                "prov-1",
 		OperatorSessionID: "sess-prov-1",
 	}
@@ -172,13 +171,13 @@ func TestModelProvenanceObservationCoordinator_NotifyAttemptBegin_FailsWithoutCm
 
 	coordinator := NewModelProvenanceObservationCoordinator(
 		dispatchSvc,
-		&stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{
+		&stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                op.ID,
 				OperatorSessionID: op.OperatorSessionID,
 				Status:            constants.OperatorStatusActive,
 				OperatorType:      constants.OperatorTypeRemote,
-				RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 			},
 		}},
 		pubsubHandler,
@@ -215,10 +214,10 @@ func TestModelProvenanceObservationCoordinator_PreflightStorageAttestation(t *te
 				logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 				store, err := model_provenance.NewWindowStore(storagetest.NewTestFileSvc(t, t.TempDir()))
 				require.NoError(t, err)
-				op := models.OperatorDocumentGo{ID: "prov-1", OperatorSessionID: "sess-prov-1", Status: constants.OperatorStatusActive,
-					OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true}}
+				op := operatorv1.OperatorDocument{ID: "prov-1", OperatorSessionID: "sess-prov-1", Status: constants.OperatorStatusActive,
+					OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true}}
 				dispatch, broker := newTestDispatchService(t, "root-abc", &op)
-				coordinator := NewModelProvenanceObservationCoordinator(dispatch, &stubModelProvenanceOperatorLister{operators: []models.OperatorDocumentGo{op}}, broker, eventOnlyProvenanceStore{store}, logger)
+				coordinator := NewModelProvenanceObservationCoordinator(dispatch, &stubModelProvenanceOperatorLister{operators: []*operatorv1.OperatorDocument{op}}, broker, eventOnlyProvenanceStore{store}, logger)
 				defer coordinator.Stop()
 				cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
 				subscriber := &wsSubscriber{buf: newDropOldestBuf(4), done: make(chan struct{})}

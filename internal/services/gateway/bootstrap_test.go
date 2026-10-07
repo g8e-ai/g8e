@@ -22,6 +22,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -32,14 +34,14 @@ import (
 
 // loadEmbeddedOperatorDoc fetches and unmarshals the embedded-operator
 // document for assertions.
-func loadEmbeddedOperatorDoc(t *testing.T, docStore *DocumentStoreService) *models.OperatorDocumentGo {
+func loadEmbeddedOperatorDoc(t *testing.T, docStore *DocumentStoreService) *operatorv1.OperatorDocument {
 	t.Helper()
 	doc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	require.NoError(t, err)
 	require.NotNil(t, doc, "embedded operator document must exist")
 	b, err := json.Marshal(doc.Data)
 	require.NoError(t, err)
-	var op models.OperatorDocumentGo
+	var op operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(b, &op))
 	op.ID = doc.ID
 	return &op

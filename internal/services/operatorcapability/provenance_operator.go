@@ -10,8 +10,9 @@ package operatorcapability
 import (
 	"fmt"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // ProvenanceOperatorStatus summarizes one active remote provenance operator
@@ -27,15 +28,15 @@ type ProvenanceOperatorStatus struct {
 
 // ActiveProvenanceOperators returns every active remote operator with
 // runtime_config.provenance_operator_enabled set.
-func ActiveProvenanceOperators(operators []models.OperatorDocumentGo) []ProvenanceOperatorStatus {
+func ActiveProvenanceOperators(operators []*operatorv1.OperatorDocument) []ProvenanceOperatorStatus {
 	matches := make([]ProvenanceOperatorStatus, 0)
 	for _, op := range operators {
 		if op.RuntimeConfig == nil || !HasActiveRole(op, constants.OperatorRoleProvenance) {
 			continue
 		}
 		matches = append(matches, ProvenanceOperatorStatus{
-			OperatorID:        op.ID,
-			OperatorSessionID: op.OperatorSessionID,
+			OperatorID:        op.Id,
+			OperatorSessionID: op.OperatorSessionId,
 			Status:            string(op.Status),
 			ProvenanceEnabled: true,
 			ModelStorageRoot:  op.RuntimeConfig.ProvenanceOperatorModelStorageRoot,
@@ -48,7 +49,7 @@ func ActiveProvenanceOperators(operators []models.OperatorDocumentGo) []Provenan
 // SelectProvenanceOperator resolves exactly one provenance operator. When
 // sessionID is non-empty it must match an active provenance operator;
 // otherwise exactly one active provenance operator must exist.
-func SelectProvenanceOperator(operators []models.OperatorDocumentGo, sessionID string) (*ProvenanceOperatorStatus, error) {
+func SelectProvenanceOperator(operators []*operatorv1.OperatorDocument, sessionID string) (*ProvenanceOperatorStatus, error) {
 	matches := ActiveProvenanceOperators(operators)
 	if sessionID != "" {
 		for _, match := range matches {

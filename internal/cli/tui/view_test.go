@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -555,7 +557,7 @@ func TestRenderOperators_LoadingState(t *testing.T) {
 
 func TestRenderOperators_ConnectedCount(t *testing.T) {
 	m := NewModel(Options{})
-	m.operators = []models.OperatorDocumentGo{
+	m.operators = []*operatorv1.OperatorDocument{
 		{ID: "op1", Status: "healthy"},
 		{ID: "op2", Status: "healthy"},
 	}
@@ -576,7 +578,7 @@ func TestRenderOperators_ErrorState(t *testing.T) {
 func TestRenderOperators_BoundMarked(t *testing.T) {
 	m := NewModel(Options{})
 	m.identity.OperatorID = "bound-op"
-	m.operators = []models.OperatorDocumentGo{
+	m.operators = []*operatorv1.OperatorDocument{
 		{ID: "bound-op", Status: "healthy"},
 	}
 	m.operatorsLoaded = true
@@ -673,7 +675,7 @@ func TestView_FitsTerminalExactly(t *testing.T) {
 			})
 		}
 		for i := 0; i < 9; i++ {
-			m.operators = append(m.operators, models.OperatorDocumentGo{ID: strings.Repeat("f", 36), CurrentHostname: strings.Repeat("host", 20), Status: "active"})
+			m.operators = append(m.operators, operatorv1.OperatorDocument{ID: strings.Repeat("f", 36), CurrentHostname: strings.Repeat("host", 20), Status: "active"})
 		}
 		m.operatorsLoaded = true
 

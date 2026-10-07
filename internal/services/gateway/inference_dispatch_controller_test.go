@@ -63,20 +63,20 @@ func (s *stubInferenceCommandDispatcher) Dispatch(_ context.Context, req dispatc
 // stubInferenceOperatorLister implements dispatch.OperatorLister for
 // controller unit tests.
 type stubInferenceOperatorLister struct {
-	ops []models.OperatorDocumentGo
+	ops []*operatorv1.OperatorDocument
 	err error
 }
 
-func (s *stubInferenceOperatorLister) ListUserOperators(_ string) ([]models.OperatorDocumentGo, error) {
+func (s *stubInferenceOperatorLister) ListUserOperators(_ string) ([]*operatorv1.OperatorDocument, error) {
 	return s.ops, s.err
 }
 
-func inferenceCapableOperator(_ string) models.OperatorDocumentGo {
-	return models.OperatorDocumentGo{
+func inferenceCapableOperator(_ string) operatorv1.OperatorDocument {
+	return operatorv1.OperatorDocument{
 		ID:                "op-inf-001",
 		OperatorSessionID: "sess-inf-1",
 		Status:            constants.OperatorStatusActive,
-		RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 	}
 }
 
@@ -266,7 +266,7 @@ func TestInferenceDispatchController_OversizedBodyRejected(t *testing.T) {
 
 func TestInferenceDispatchController_EmptyMessagesRejected(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{}
-	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}, 1024)
+	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}, 1024)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
 		Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
@@ -281,7 +281,7 @@ func TestInferenceDispatchController_EmptyMessagesRejected(t *testing.T) {
 
 func TestInferenceDispatchController_InvalidRoleRejected(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{}
-	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}, 1024)
+	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}, 1024)
 
 	for _, body := range [][]byte{
 		marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{Messages: inferenceTextMessages("hi")}),
@@ -298,7 +298,7 @@ func TestInferenceDispatchController_InvalidRoleRejected(t *testing.T) {
 
 func TestInferenceDispatchController_ActingAppIDMismatchRejected(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{}
-	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}, 1024)
+	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}, 1024)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
 		Role:        operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
@@ -315,7 +315,7 @@ func TestInferenceDispatchController_ActingAppIDMismatchRejected(t *testing.T) {
 
 func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{}
-	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	lister := &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 	topP := float32(0.8)
 	topK := int32(40)
@@ -453,7 +453,7 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 
 func TestInferenceDispatchController_ActingAppIDDerivedFromIdentity(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{result: successDispatchResult(t)}
-	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	lister := &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	// A body acting_app_id equal to the authenticated identity is accepted;
@@ -503,7 +503,7 @@ func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dispatcher := &stubInferenceCommandDispatcher{err: tt.dispatchErr}
-			lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+			lister := &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}
 			ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 			body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
@@ -523,7 +523,7 @@ func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 
 func TestInferenceDispatchController_InternalErrorIsPublicSafe(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{err: fmt.Errorf("pq: password authentication failed for user \"gateway\"")}
-	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	lister := &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
@@ -542,7 +542,7 @@ func TestInferenceDispatchController_InternalErrorIsPublicSafe(t *testing.T) {
 
 func TestInferenceDispatchController_StreamingReturnsNDJSONProgressAndCompletion(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{result: successDispatchResult(t)}
-	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	lister := &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
@@ -580,7 +580,7 @@ func TestInferenceDispatchController_StreamingReturnsNDJSONProgressAndCompletion
 
 func TestInferenceDispatchController_StreamingDispatchFailureWritesFailureFrame(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{err: constants.ErrInferenceProgressBackpressure}
-	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	lister := &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
@@ -629,7 +629,7 @@ func (w *failingFlushWriter) Flush() {
 
 func TestInferenceDispatchController_StreamingWriteFailureIsCallerDisconnect(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{result: successDispatchResult(t)}
-	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	lister := &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
@@ -648,7 +648,7 @@ func TestInferenceDispatchController_StreamingWriteFailureIsCallerDisconnect(t *
 
 func TestInferenceDispatchController_ContextCanceledWritesNothing(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{err: context.Canceled}
-	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	lister := &stubInferenceOperatorLister{ops: []*operatorv1.OperatorDocument{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{

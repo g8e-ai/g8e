@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -449,7 +451,7 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	// Persist the operator document idempotently. The operator identity
 	// is certificate-based; user_id is the approving owner so the owner
 	// can discover and manage the platform-enrolled operator.
-	operatorDoc := &models.OperatorDocumentGo{
+	operatorDoc := &operatorv1.OperatorDocument{
 		ID:                operatorID,
 		UserID:            user.ID,
 		OrganizationID:    organization.ID,

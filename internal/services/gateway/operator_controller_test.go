@@ -64,7 +64,7 @@ func seedStopOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessi
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
-	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID:                operatorID,
 		UserID:            userID,
 		OrganizationID:    "stop-org",
@@ -162,7 +162,7 @@ func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testin
 		require.NotNil(t, doc)
 		body, err := json.Marshal(doc.Data)
 		require.NoError(t, err)
-		var operator models.OperatorDocumentGo
+		var operator operatorv1.OperatorDocument
 		require.NoError(t, json.Unmarshal(body, &operator))
 		assert.Equal(t, constants.OperatorStatusStopped, operator.Status)
 		assert.Equal(t, "planned maintenance", operator.StopReason)
@@ -267,7 +267,7 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 		// Persist a platform-enrolled operator (is_slot=false) stamped
 		// with the same user_id, mimicking what signOperatorComponent
 		// writes for a platform-enrolled operator.
-		platformOp := models.OperatorDocumentGo{
+		platformOp := operatorv1.OperatorDocument{
 			ID:        "platform-op-controller",
 			UserID:    "user-platform",
 			Component: constants.ComponentNameG8EO,
@@ -749,7 +749,7 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
-	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID: operatorID, UserID: userID, OperatorSessionID: operatorSessionID,
 		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	})
@@ -869,7 +869,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
-	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID: operatorID, UserID: userID, OperatorSessionID: operatorSessionID,
 		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	})
@@ -933,25 +933,25 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 
 func TestWithResolvedOperatorRole(t *testing.T) {
 	t.Run("keeps a stored role", func(t *testing.T) {
-		op := models.OperatorDocumentGo{
+		op := operatorv1.OperatorDocument{
 			OperatorRoles: constants.OperatorRoles{constants.OperatorRoleObserver},
-			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		}
 		withResolvedOperatorRoles(&op)
 		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, op.OperatorRoles)
 	})
 
 	t.Run("resolves a missing role from runtime config", func(t *testing.T) {
-		op := models.OperatorDocumentGo{
+		op := operatorv1.OperatorDocument{
 			Claimed:       true,
-			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		}
 		withResolvedOperatorRoles(&op)
 		assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, op.OperatorRoles)
 	})
 
 	t.Run("leaves an unclaimed slot without a role", func(t *testing.T) {
-		op := models.OperatorDocumentGo{IsSlot: true}
+		op := operatorv1.OperatorDocument{IsSlot: true}
 		withResolvedOperatorRoles(&op)
 		assert.Empty(t, op.OperatorRoles)
 	})

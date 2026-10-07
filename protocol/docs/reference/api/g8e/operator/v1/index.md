@@ -99,6 +99,7 @@
     - [OllamaModelResidencyRequested](#g8e-operator-v1-OllamaModelResidencyRequested)
     - [OllamaModelResidencyResult](#g8e-operator-v1-OllamaModelResidencyResult)
     - [OperatorDocument](#g8e-operator-v1-OperatorDocument)
+    - [OperatorRuntimeConfig](#g8e-operator-v1-OperatorRuntimeConfig)
     - [PasskeyAuthChallengeRequested](#g8e-operator-v1-PasskeyAuthChallengeRequested)
     - [PasskeyAuthChallengeResult](#g8e-operator-v1-PasskeyAuthChallengeResult)
     - [PasskeyAuthVerifyRequested](#g8e-operator-v1-PasskeyAuthVerifyRequested)
@@ -2078,7 +2079,8 @@ Reads a specific resource from the downstream MCP server.
 <a name="g8e-operator-v1-OperatorDocument"></a>
 
 ### OperatorDocument
-
+OperatorDocument is the canonical Operator record. The Gateway owns and
+persists it; every other component reads it through this contract.
 
 
 | Field | Type | Label | Description |
@@ -2098,8 +2100,51 @@ Reads a specific resource from the downstream MCP server.
 | claimed | [bool](#bool) |  |  |
 | operator_type | [string](#string) |  |  |
 | system_fingerprint | [string](#string) |  |  |
-| created_at_unix_ms | [int64](#int64) |  |  |
-| updated_at_unix_ms | [int64](#int64) |  |  |
+| created_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| updated_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| started_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| claimed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| last_heartbeat_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| operator_roles | [string](#string) | repeated |  |
+| local_dir | [string](#string) |  |  |
+| account | [string](#string) |  |  |
+| port | [int32](#int32) |  |  |
+| stop_reason | [string](#string) |  |  |
+| latest_heartbeat_snapshot | [google.protobuf.Struct](#google-protobuf-Struct) |  |  |
+| current_hostname | [string](#string) |  |  |
+| runtime_config | [OperatorRuntimeConfig](#g8e-operator-v1-OperatorRuntimeConfig) |  |  |
+| consumed_by_operator_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-OperatorRuntimeConfig"></a>
+
+### OperatorRuntimeConfig
+OperatorRuntimeConfig captures the CLI flags and env var overrides active
+when the Operator started. Sent to the Gateway at bootstrap and stored in
+OperatorDocument.runtime_config.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| cloud_mode | [bool](#bool) |  |  |
+| cloud_provider | [string](#string) |  |  |
+| local_storage_enabled | [bool](#bool) |  |  |
+| no_git | [bool](#bool) |  |  |
+| log_level | [string](#string) |  |  |
+| http_port | [int32](#int32) |  |  |
+| roles | [string](#string) | repeated |  |
+| local_dir | [string](#string) |  |  |
+| account | [string](#string) |  |  |
+| inference_enabled | [bool](#bool) |  | True when the Operator started with --inference-enabled (Inference Node). |
+| inference_ollama_endpoint | [string](#string) |  | Approved remote Ollama provider URL (--inference-ollama-endpoint). |
+| provider_boundary_observer_enabled | [bool](#bool) |  | True when started with --provider-boundary-observer-enabled. |
+| provenance_operator_enabled | [bool](#bool) |  | True when started with --provenance-operator-enabled. |
+| provenance_operator_model_storage_root | [string](#string) |  | Root directory containing content-addressed model weight blobs. |
+| platform | [string](#string) |  | Operator host GOOS recorded at startup (for example &#34;linux&#34; or &#34;windows&#34;). |
 
 
 

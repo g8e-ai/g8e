@@ -40,11 +40,11 @@ func (s *stubCommandDispatcher) Dispatch(_ context.Context, req CommandDispatchR
 }
 
 type stubOperatorLister struct {
-	ops []models.OperatorDocumentGo
+	ops []*operatorv1.OperatorDocument
 	err error
 }
 
-func (s *stubOperatorLister) ListUserOperators(_ string) ([]models.OperatorDocumentGo, error) {
+func (s *stubOperatorLister) ListUserOperators(_ string) ([]*operatorv1.OperatorDocument, error) {
 	return s.ops, s.err
 }
 
@@ -56,12 +56,12 @@ type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
 
-func capableOp(sessionID string) models.OperatorDocumentGo {
-	return models.OperatorDocumentGo{
+func capableOp(sessionID string) operatorv1.OperatorDocument {
+	return operatorv1.OperatorDocument{
 		ID:                "op-" + sessionID,
 		OperatorSessionID: sessionID,
 		Status:            constants.OperatorStatusActive,
-		RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true},
 	}
 }
 
@@ -174,7 +174,7 @@ func TestValidateCampaignModelRegistry_FailsClosedOnInvalidAuthority(t *testing.
 
 func TestDispatchInference_ZeroCapableOperatorsFailsClosed(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		{ID: "op-plain", OperatorSessionID: "sess-plain"},
 	}}, testLogger())
 
@@ -186,7 +186,7 @@ func TestDispatchInference_ZeroCapableOperatorsFailsClosed(t *testing.T) {
 
 func TestDispatchInference_SingleCapableOperatorSelected(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		{ID: "op-plain", OperatorSessionID: "sess-plain"},
 		capableOp("sess-inf"),
 	}}, testLogger())
@@ -202,7 +202,7 @@ func TestDispatchInference_SingleCapableOperatorSelected(t *testing.T) {
 
 func TestDispatchInference_MultipleCapableOperatorsRejectedWithoutTarget(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 		capableOp("sess-b"),
 	}}, testLogger())
@@ -215,7 +215,7 @@ func TestDispatchInference_MultipleCapableOperatorsRejectedWithoutTarget(t *test
 
 func TestDispatchInference_ExplicitTargetSelectsOperator(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 		capableOp("sess-b"),
 	}}, testLogger())
@@ -229,7 +229,7 @@ func TestDispatchInference_ExplicitTargetSelectsOperator(t *testing.T) {
 
 func TestDispatchInference_ExplicitTargetNotOwnedByRequestor(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -243,7 +243,7 @@ func TestDispatchInference_ExplicitTargetNotOwnedByRequestor(t *testing.T) {
 
 func TestDispatchInference_ExplicitTargetNotCapable(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		{ID: "op-plain", OperatorSessionID: "sess-plain", Status: constants.OperatorStatusActive},
 		capableOp("sess-a"),
 	}}, testLogger())
@@ -267,7 +267,7 @@ func TestDispatchInference_NonActiveOperatorNotSelectable(t *testing.T) {
 			dispatcher := &stubCommandDispatcher{}
 			inactive := capableOp("sess-dead")
 			inactive.Status = status
-			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 				inactive,
 			}}, testLogger())
 
@@ -283,7 +283,7 @@ func TestDispatchInference_StaleOperatorDoesNotContestSelection(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
 	stale := capableOp("sess-stale")
 	stale.Status = constants.OperatorStatusStale
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		stale,
 		capableOp("sess-live"),
 	}}, testLogger())
@@ -297,7 +297,7 @@ func TestDispatchInference_StaleOperatorDoesNotContestSelection(t *testing.T) {
 
 func TestDispatchInference_UnspecifiedRoleRejected(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -323,7 +323,7 @@ func TestDispatchInference_MissingRequestorRejected(t *testing.T) {
 
 func TestDispatchInference_MissingProviderAttemptIDRejected(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-a")}}, testLogger())
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{capableOp("sess-a")}}, testLogger())
 
 	req := baseRequest()
 	req.ProviderAttemptID = ""
@@ -348,7 +348,7 @@ func TestDispatchInference_OperatorListerErrorPropagates(t *testing.T) {
 
 func TestDispatchInference_DispatchDeadlineMapsToUnknownOutcome(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{err: fmt.Errorf("dispatch: %w", constants.ErrDispatchResultTimeout)}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -361,7 +361,7 @@ func TestDispatchInference_DispatchDeadlineMapsToUnknownOutcome(t *testing.T) {
 
 func TestDispatchInference_DispatchErrorPropagates(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{err: fmt.Errorf("dispatch: %w", constants.ErrDispatchNoDelivery)}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -372,7 +372,7 @@ func TestDispatchInference_DispatchErrorPropagates(t *testing.T) {
 
 func TestDispatchInference_EmptyResultPayloadFailsClosed(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{TransactionID: "tx-1"}}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -386,7 +386,7 @@ func TestDispatchInference_MalformedResultPayloadFailsClosed(t *testing.T) {
 		TransactionID: "tx-1",
 		ResultPayload: []byte{0xff, 0xff, 0xff},
 	}}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -449,7 +449,7 @@ func TestDispatchInference_ContradictoryResultMetadataFailsClosed(t *testing.T) 
 			payload, err := proto.Marshal(tt.result)
 			require.NoError(t, err)
 			dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{TransactionID: "tx-1", ResultPayload: payload}}
-			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-a")}}, testLogger())
+			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{capableOp("sess-a")}}, testLogger())
 
 			result, err := svc.DispatchInference(context.Background(), baseRequest())
 
@@ -488,7 +488,7 @@ func TestDispatchInference_ResultIdentityMismatchFailsClosed(t *testing.T) {
 			payload, err := proto.Marshal(result)
 			require.NoError(t, err)
 			dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{TransactionID: "tx-1", ResultPayload: payload}}
-			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-a")}}, testLogger())
+			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{capableOp("sess-a")}}, testLogger())
 
 			out, err := svc.DispatchInference(context.Background(), req)
 
@@ -517,7 +517,7 @@ func TestDispatchInference_SuccessReturnsResultAndReceipt(t *testing.T) {
 		ResultPayload: resultPayload,
 		Receipt:       receipt,
 	}}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -536,7 +536,7 @@ func TestDispatchInference_SuccessReturnsResultAndReceipt(t *testing.T) {
 
 func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-a"),
 	}}, testLogger())
 
@@ -617,7 +617,7 @@ func TestDispatchInference_UndecodableResultFinalizesObservation(t *testing.T) {
 			dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{
 				TransactionID: "tx-1", ResultPayload: payload,
 			}}
-			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-inf")}}, testLogger())
+			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{capableOp("sess-inf")}}, testLogger())
 			notifier := &stubObservationNotifier{}
 			svc.SetProviderObservationNotifier(notifier)
 			_, err := svc.DispatchInference(context.Background(), baseRequest())
@@ -640,7 +640,7 @@ func (s *stubObservationNotifier) NotifyAttemptFinalize(_ context.Context, _, _,
 
 func TestDispatchInference_ObservationBeginFailureFailsClosedBeforeProviderCall(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-inf"),
 	}}, testLogger())
 	notifier := &stubObservationNotifier{beginErr: constants.ErrDispatchNoDelivery}
@@ -660,7 +660,7 @@ func TestDispatchInference_CampaignObservationFinalizeFailureFailsClosed(t *test
 	req := baseRequest()
 	configureCampaignRequest(t, &req)
 	dispatcher := &stubCommandDispatcher{result: successDispatchResultFor(t, req)}
-	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []*operatorv1.OperatorDocument{
 		capableOp("sess-inf"),
 	}}, testLogger())
 	notifier := &stubObservationNotifier{finalizeErr: constants.ErrDispatchNoDelivery}

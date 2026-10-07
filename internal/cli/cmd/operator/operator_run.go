@@ -187,7 +187,7 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 				return nil
 			}
 			var client authcmd.APIClient
-			var operators []models.OperatorDocumentGo
+			var operators []*operatorv1.OperatorDocument
 			governedErr := func() error {
 				cfg, err := configLoader("")
 				if err != nil {
@@ -212,7 +212,7 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 				if governedErr != nil {
 					return fmt.Errorf("operator stop: %w", governedErr)
 				}
-				var target *models.OperatorDocumentGo
+				var target *operatorv1.OperatorDocument
 				for i := range operators {
 					if operators[i].OperatorSessionID == sessionID {
 						target = &operators[i]
@@ -264,7 +264,7 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 				response := models.StopOperatorResponse{}
 				err := governedErr
 				if err == nil {
-					var targets []models.OperatorDocumentGo
+					var targets []*operatorv1.OperatorDocument
 					for _, op := range operators {
 						if op.OperatorType == constants.OperatorTypeRemote && p.matches(op) {
 							targets = append(targets, op)
@@ -323,7 +323,7 @@ func dedupeOperatorSessionIDs(args []string) []string {
 	return ordered
 }
 
-func listUserOperators(client authcmd.APIClient, userID string) ([]models.OperatorDocumentGo, error) {
+func listUserOperators(client authcmd.APIClient, userID string) ([]*operatorv1.OperatorDocument, error) {
 	resp, err := client.Get(constants.APIPaths.Operators + "?user_id=" + userID)
 	if err != nil {
 		return nil, fmt.Errorf("list operators: %w", err)
@@ -340,8 +340,8 @@ type operatorRunTarget struct {
 	OperatorSessionID string
 }
 
-func resolveOperatorRunTargets(operators []models.OperatorDocumentGo, sessionIDs []string) ([]operatorRunTarget, error) {
-	bySession := make(map[string]models.OperatorDocumentGo, len(operators))
+func resolveOperatorRunTargets(operators []*operatorv1.OperatorDocument, sessionIDs []string) ([]operatorRunTarget, error) {
+	bySession := make(map[string]operatorv1.OperatorDocument, len(operators))
 	for _, op := range operators {
 		if op.OperatorSessionID != "" {
 			bySession[op.OperatorSessionID] = op

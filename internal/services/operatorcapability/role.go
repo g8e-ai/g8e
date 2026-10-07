@@ -12,13 +12,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // ResolveOperatorRoles returns every enabled role. Ordinary operators default to
 // Data, and Embedded always includes Data.
-func ResolveOperatorRoles(cfg *models.RuntimeConfig) constants.OperatorRoles {
+func ResolveOperatorRoles(cfg *operatorv1.OperatorRuntimeConfig) constants.OperatorRoles {
 	if cfg == nil {
 		return constants.OperatorRoles{constants.OperatorRoleData}
 	}
@@ -39,7 +40,7 @@ func ResolveOperatorRoles(cfg *models.RuntimeConfig) constants.OperatorRoles {
 }
 
 // GetOperatorRoles resolves runtime capabilities; stored role metadata is used only without runtime configuration.
-func GetOperatorRoles(op models.OperatorDocumentGo) constants.OperatorRoles {
+func GetOperatorRoles(op operatorv1.OperatorDocument) constants.OperatorRoles {
 	var roles constants.OperatorRoles
 	if op.RuntimeConfig != nil {
 		roles = ResolveOperatorRoles(op.RuntimeConfig)
@@ -57,8 +58,8 @@ func GetOperatorRoles(op models.OperatorDocumentGo) constants.OperatorRoles {
 // IsActiveOperatorSession reports whether op is a live, session-bound Operator
 // that may serve governed work: an active remote Operator, or an active
 // embedded Operator that has reported its runtime configuration.
-func IsActiveOperatorSession(op models.OperatorDocumentGo) bool {
-	if op.Status != constants.OperatorStatusActive || op.OperatorSessionID == "" {
+func IsActiveOperatorSession(op operatorv1.OperatorDocument) bool {
+	if op.Status != constants.OperatorStatusActive || op.OperatorSessionId == "" {
 		return false
 	}
 	switch op.OperatorType {
@@ -73,7 +74,7 @@ func IsActiveOperatorSession(op models.OperatorDocumentGo) bool {
 
 // HasActiveRole reports whether op is an active Operator session whose
 // resolved roles include role.
-func HasActiveRole(op models.OperatorDocumentGo, role constants.OperatorRole) bool {
+func HasActiveRole(op operatorv1.OperatorDocument, role constants.OperatorRole) bool {
 	return IsActiveOperatorSession(op) && GetOperatorRoles(op).Has(role)
 }
 
@@ -96,12 +97,12 @@ func RoleResponsibilities(role constants.OperatorRole) string {
 }
 
 // ValidateOperatorRoleCapabilities verifies that an operator document possesses the required role.
-func ValidateOperatorRoleCapabilities(op models.OperatorDocumentGo, requiredRole constants.OperatorRole) error {
+func ValidateOperatorRoleCapabilities(op operatorv1.OperatorDocument, requiredRole constants.OperatorRole) error {
 	actualRole := GetOperatorRoles(op)
 	if !actualRole.Has(requiredRole) {
 		return fmt.Errorf("%w: operator %s has role %q (%s), but required role is %q (%s)",
 			constants.ErrWitnessCommandNotCapable,
-			op.ID,
+			op.Id,
 			actualRole,
 			actualRole.String(),
 			requiredRole,
@@ -114,10 +115,10 @@ func ValidateOperatorRoleCapabilities(op models.OperatorDocumentGo, requiredRole
 // VerifyOperatorSeparation verifies whether two operator instances running on the same host
 // are cleanly separated by their local directory, account, port, role, or fingerprint.
 // Returns (true, reason) if properly separated, or (false, reason) if colliding.
-func VerifyOperatorSeparation(op1, op2 models.OperatorDocumentGo) (bool, string) {
+func VerifyOperatorSeparation(op1, op2 operatorv1.OperatorDocument) (bool, string) {
 	// If different IDs and different session IDs
-	if op1.ID != "" && op2.ID != "" && op1.ID == op2.ID {
-		return false, fmt.Sprintf("colliding operator ID: %s", op1.ID)
+	if op1.Id != "" && op2.Id != "" && op1.Id == op2.Id {
+		return false, fmt.Sprintf("colliding operator ID: %s", op1.Id)
 	}
 
 	role1 := GetOperatorRoles(op1)
@@ -155,7 +156,7 @@ func VerifyOperatorSeparation(op1, op2 models.OperatorDocumentGo) (bool, string)
 	return false, "operators on same system share identical role, directory, account, port, and fingerprint"
 }
 
-func cleanDir(op models.OperatorDocumentGo) string {
+func cleanDir(op operatorv1.OperatorDocument) string {
 	if op.LocalDir != "" {
 		return filepath.Clean(op.LocalDir)
 	}
@@ -165,17 +166,17 @@ func cleanDir(op models.OperatorDocumentGo) string {
 	return ""
 }
 
-func opPort(op models.OperatorDocumentGo) int {
+func opPort(op operatorv1.OperatorDocument) int {
 	if op.Port > 0 {
 		return op.Port
 	}
-	if op.RuntimeConfig != nil && op.RuntimeConfig.HTTPPort > 0 {
-		return op.RuntimeConfig.HTTPPort
+	if op.RuntimeConfig != nil && op.RuntimeConfig.HttpPort > 0 {
+		return op.RuntimeConfig.HttpPort
 	}
 	return 0
 }
 
-func opAccount(op models.OperatorDocumentGo) string {
+func opAccount(op operatorv1.OperatorDocument) string {
 	if op.Account != "" {
 		return strings.TrimSpace(op.Account)
 	}

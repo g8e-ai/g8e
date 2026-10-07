@@ -19,13 +19,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// OperatorDocumentGo JSON marshaling
+// OperatorDocument JSON marshaling
 // ---------------------------------------------------------------------------
 
-func TestOperatorDocumentGoMarshalJSON_OmitsUnsetOperatorType(t *testing.T) {
+func TestOperatorDocumentMarshalJSON_OmitsUnsetOperatorType(t *testing.T) {
 	t.Parallel()
 
-	doc := OperatorDocumentGo{
+	doc := OperatorDocument{
 		ID:        "op-1",
 		UserID:    "user-1",
 		Component: constants.ComponentNameG8EO,
@@ -44,11 +44,11 @@ func TestOperatorDocumentGoMarshalJSON_OmitsUnsetOperatorType(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestOperatorDocumentGoMarshalJSON_PreservesExplicitOperatorType(t *testing.T) {
+func TestOperatorDocumentMarshalJSON_PreservesExplicitOperatorType(t *testing.T) {
 	t.Parallel()
 
 	for _, opType := range []constants.OperatorType{constants.OperatorTypeEmbedded, constants.OperatorTypeRemote} {
-		doc := OperatorDocumentGo{
+		doc := OperatorDocument{
 			ID:           "op-2",
 			UserID:       "user-2",
 			Component:    constants.ComponentNameG8EO,
@@ -66,10 +66,10 @@ func TestOperatorDocumentGoMarshalJSON_PreservesExplicitOperatorType(t *testing.
 	}
 }
 
-func TestOperatorDocumentGoMarshalJSON_RoundTrip(t *testing.T) {
+func TestOperatorDocumentMarshalJSON_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	doc := OperatorDocumentGo{
+	doc := OperatorDocument{
 		ID:           "op-4",
 		UserID:       "user-4",
 		Component:    constants.ComponentNameG8EO,
@@ -83,7 +83,7 @@ func TestOperatorDocumentGoMarshalJSON_RoundTrip(t *testing.T) {
 	data, err := json.Marshal(&doc)
 	require.NoError(t, err)
 
-	var decoded OperatorDocumentGo
+	var decoded OperatorDocument
 	require.NoError(t, json.Unmarshal(data, &decoded))
 
 	assert.Equal(t, doc.ID, decoded.ID)

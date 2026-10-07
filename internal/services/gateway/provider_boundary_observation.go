@@ -14,11 +14,12 @@ import (
 	"log/slog"
 	"sync"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
@@ -31,7 +32,7 @@ import (
 // infrastructure. Observer operators are enrolled under the gateway owner,
 // not the per-request app identity on inference dispatch.
 type providerBoundaryOperatorLister interface {
-	ListOperatorsForObservation() ([]models.OperatorDocumentGo, error)
+	ListOperatorsForObservation() ([]*operatorv1.OperatorDocument, error)
 }
 
 type registrationOwnerOperatorLister struct {
@@ -39,7 +40,7 @@ type registrationOwnerOperatorLister struct {
 	userSvc *UserService
 }
 
-func (l *registrationOwnerOperatorLister) ListOperatorsForObservation() ([]models.OperatorDocumentGo, error) {
+func (l *registrationOwnerOperatorLister) ListOperatorsForObservation() ([]*operatorv1.OperatorDocument, error) {
 	if l.reg == nil || l.userSvc == nil {
 		return nil, constants.ErrServiceUnavailable
 	}
@@ -53,7 +54,7 @@ func (l *registrationOwnerOperatorLister) ListOperatorsForObservation() ([]model
 	return l.reg.ListUserOperators(ownerID)
 }
 
-func (l *registrationOwnerOperatorLister) ListOperatorsForProvenance() ([]models.OperatorDocumentGo, error) {
+func (l *registrationOwnerOperatorLister) ListOperatorsForProvenance() ([]*operatorv1.OperatorDocument, error) {
 	if l.reg == nil || l.userSvc == nil {
 		return nil, constants.ErrServiceUnavailable
 	}
@@ -180,7 +181,7 @@ func (c *ProviderBoundaryObservationCoordinator) synchronizeObserverSubscription
 // live observer. When that happens the tie is broken by the inference node's
 // system fingerprint; if that fails too, the ambiguity error is returned so the
 // operator sees why selection failed instead of a misleading not-found.
-func selectProviderBoundaryObserverForGateway(operators []models.OperatorDocumentGo) (*operatorcapability.ProviderBoundaryObserverStatus, error) {
+func selectProviderBoundaryObserverForGateway(operators []*operatorv1.OperatorDocument) (*operatorcapability.ProviderBoundaryObserverStatus, error) {
 	selected, err := operatorcapability.SelectProviderBoundaryObserver(operators, "")
 	if err == nil || !errors.Is(err, constants.ErrProviderBoundaryObserverAmbiguous) {
 		return selected, err
@@ -190,7 +191,7 @@ func selectProviderBoundaryObserverForGateway(operators []models.OperatorDocumen
 	// When there is one inference node, use the canonical system fingerprint
 	// to disambiguate multiple observer sessions on the owner account. Never
 	// choose by list order or recency.
-	inference := make([]models.OperatorDocumentGo, 0, len(operators))
+	inference := make([]*operatorv1.OperatorDocument, 0, len(operators))
 	for _, op := range operators {
 		if op.Status == constants.OperatorStatusActive &&
 			(op.OperatorType == constants.OperatorTypeRemote || op.OperatorType == constants.OperatorTypeEmbedded) &&

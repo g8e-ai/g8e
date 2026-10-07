@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -31,7 +33,7 @@ func timeAgo(d time.Duration) *time.Time {
 
 // putOperator persists an operator document whose created_at is createdAgo in
 // the past, bypassing the reconciler so the test controls the starting state.
-func putOperator(t *testing.T, svc *DocumentStoreService, id string, op models.OperatorDocumentGo, createdAgo time.Duration) {
+func putOperator(t *testing.T, svc *DocumentStoreService, id string, op operatorv1.OperatorDocument, createdAgo time.Duration) {
 	t.Helper()
 	body, err := json.Marshal(op)
 	require.NoError(t, err)
@@ -50,8 +52,8 @@ func persistedOperatorStatus(t *testing.T, svc *DocumentStoreService, _ string) 
 	return status
 }
 
-func remoteOperator(status constants.OperatorStatus) models.OperatorDocumentGo {
-	return models.OperatorDocumentGo{
+func remoteOperator(status constants.OperatorStatus) operatorv1.OperatorDocument {
+	return operatorv1.OperatorDocument{
 		Status:       status,
 		OperatorType: constants.OperatorTypeRemote,
 	}
@@ -135,10 +137,10 @@ func TestOperatorStaleness_LastSignOfLife(t *testing.T) {
 func TestOperatorStaleness_OnlyActiveRemoteOperatorsGoStale(t *testing.T) {
 	silent := constants.OperatorHeartbeatStaleAfter * 10
 
-	embedded := models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}
+	embedded := operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}
 	tests := []struct {
 		name string
-		op   models.OperatorDocumentGo
+		op   operatorv1.OperatorDocument
 		want constants.OperatorStatus
 	}{
 		{"embedded active", embedded, constants.OperatorStatusActive},

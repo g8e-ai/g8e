@@ -30,7 +30,7 @@ import (
 
 type laneClient interface {
 	Health(context.Context) (*models.HealthResponse, []byte, error)
-	DiscoverRemoteOperator(context.Context) (*models.OperatorDocumentGo, []byte, error)
+	DiscoverRemoteOperator(context.Context) (*operatorv1.OperatorDocument, []byte, error)
 	DispatchCommand(context.Context, client.Persona, client.DispatchCommandRequest) (int, *client.DispatchCommandResponse, []byte, error)
 	GetActionReceipt(context.Context, string, ...client.Persona) (*operatorv1.ActionReceipt, []byte, error)
 	GetTrustedSignerPublicKey(context.Context, string) (ed25519.PublicKey, error)

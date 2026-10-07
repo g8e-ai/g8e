@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
 	"github.com/spf13/cobra"
@@ -712,7 +714,7 @@ func printEnrollmentSummary(w io.Writer, client authcmd.APIClient) {
 	fmt.Fprintf(w, "Enrollments  users %s · pending %s · apps %s · dashboards %s\n", userCount, pendingCount, appCount, dashboardCount)
 }
 
-func operatorHostnameDisplay(op models.OperatorDocumentGo) string {
+func operatorHostnameDisplay(op operatorv1.OperatorDocument) string {
 	if op.CurrentHostname != "" {
 		return op.CurrentHostname
 	}

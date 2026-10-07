@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"net/url"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
@@ -25,7 +27,7 @@ import (
 // data Operator whose hostname is constants.DataOperatorHostname. Zero matches
 // return ErrEvaluationTargetUnavailable and multiple matches return
 // ErrEvaluationTargetAmbiguous; every other enrolled Operator is ignored.
-func (c *Client) DiscoverRemoteOperator(ctx context.Context) (*models.OperatorDocumentGo, []byte, error) {
+func (c *Client) DiscoverRemoteOperator(ctx context.Context) (*operatorv1.OperatorDocument, []byte, error) {
 	if c.cfg.UserID == "" {
 		return nil, nil, fmt.Errorf("%w: authenticated user id is required for operator discovery", constants.ErrMissingRequiredField)
 	}

@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
@@ -238,7 +240,7 @@ func TestRegistrationService_ListUserOperators(t *testing.T) {
 		// Persist a platform-enrolled operator (is_slot=false) stamped
 		// with the same user_id, mimicking what signOperatorComponent
 		// writes for a platform-enrolled operator.
-		platformOp := models.OperatorDocumentGo{
+		platformOp := operatorv1.OperatorDocument{
 			ID:        "platform-op-1",
 			UserID:    "user-123",
 			Component: constants.ComponentNameG8EO,
@@ -343,7 +345,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
-		var op models.OperatorDocumentGo
+		var op operatorv1.OperatorDocument
 		b, _ := json.Marshal(doc.ForWire())
 		_ = json.Unmarshal(b, &op)
 		assert.Equal(t, constants.OperatorStatusTerminated, op.Status)

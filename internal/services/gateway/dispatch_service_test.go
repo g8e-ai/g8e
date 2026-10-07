@@ -26,7 +26,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -48,11 +47,11 @@ func (s *stubStateRootProvider) GetCurrentStateRoot() (string, error) {
 
 // stubOperatorSessionValidator implements operatorSessionValidator for unit tests.
 type stubOperatorSessionValidator struct {
-	op  *models.OperatorDocumentGo
+	op  *operatorv1.OperatorDocument
 	err error
 }
 
-func (s *stubOperatorSessionValidator) ValidateOperatorSession(_ string) (*models.OperatorDocumentGo, error) {
+func (s *stubOperatorSessionValidator) ValidateOperatorSession(_ string) (*operatorv1.OperatorDocument, error) {
 	return s.op, s.err
 }
 
@@ -188,7 +187,7 @@ func fsReadPayloadBytes(t *testing.T) []byte {
 // simulated by registering an in-process handler on the cmd channel that
 // publishes a result envelope on the results channel.
 
-func newTestDispatchService(t *testing.T, _ string, op *models.OperatorDocumentGo) (*DispatchService, *GatewayWebSocketHandler) {
+func newTestDispatchService(t *testing.T, _ string, op *operatorv1.OperatorDocument) (*DispatchService, *GatewayWebSocketHandler) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
@@ -207,7 +206,7 @@ func newTestDispatchService(t *testing.T, _ string, op *models.OperatorDocumentG
 }
 
 func TestDispatchService_Dispatch_Success(t *testing.T) {
-	op := &models.OperatorDocumentGo{
+	op := &operatorv1.OperatorDocument{
 		ID:                "op-001",
 		OperatorSessionID: "sess-001",
 	}
@@ -271,7 +270,7 @@ func TestDispatchService_Dispatch_InvalidOperatorSession(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 	svc := NewDispatchService(
@@ -296,7 +295,7 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_ZeroDeliveryFailsClosed(t *testing.T) {
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, _ := newTestDispatchService(t, "root-abc", op)
 
 	// No operator handler registered — the publish delivers to zero
@@ -311,7 +310,7 @@ func TestDispatchService_Dispatch_ZeroDeliveryFailsClosed(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	// Operator handler is registered (so delivery succeeds) but never
@@ -333,7 +332,7 @@ func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_RequestTimeoutOverridesDefault(t *testing.T) {
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
@@ -352,7 +351,7 @@ func TestDispatchService_Dispatch_RequestTimeoutOverridesDefault(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
@@ -378,7 +377,7 @@ func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testing.T) {
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
@@ -426,18 +425,18 @@ func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testin
 
 // resultHandlerCount returns the number of registered in-process handlers on
 // the operator's results channel, for leak assertions.
-func resultHandlerCount(b *GatewayWebSocketHandler, op *models.OperatorDocumentGo) int {
+func resultHandlerCount(b *GatewayWebSocketHandler, op *operatorv1.OperatorDocument) int {
 	b.handlersMu.RLock()
 	defer b.handlersMu.RUnlock()
 	return len(b.handlers[pubsub.ResultsChannel(op.ID, op.OperatorSessionID)])
 }
 
 func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) {
-	newOp := func() *models.OperatorDocumentGo {
-		return &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	newOp := func() *operatorv1.OperatorDocument {
+		return &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	}
 
-	publishResult := func(broker *GatewayWebSocketHandler, op *models.OperatorDocumentGo) func(string, []byte) {
+	publishResult := func(broker *GatewayWebSocketHandler, op *operatorv1.OperatorDocument) func(string, []byte) {
 		return func(_ string, data []byte) {
 			cmdEnv := &commonv1.GovernanceEnvelope{}
 			if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
@@ -518,7 +517,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 }
 
 func TestDispatchService_Dispatch_LateResultDiscarded(t *testing.T) {
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	var cmdEnvID string
@@ -549,7 +548,7 @@ func TestDispatchService_Dispatch_LateResultDiscarded(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_DuplicateResultDropped(t *testing.T) {
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
 	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
@@ -636,10 +635,10 @@ func TestDispatchController_HandleDispatch_ValidationFails(t *testing.T) {
 }
 
 func TestDispatchController_HandleDispatch_WitnessCommandRejectedAsUnprocessableEntity(t *testing.T) {
-	observer := &models.OperatorDocumentGo{
+	observer := &operatorv1.OperatorDocument{
 		ID:                "observer-op",
 		OperatorSessionID: "observer-session",
-		RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true},
 	}
 	dispatchSvc, _ := newTestDispatchService(t, "root-abc", observer)
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
@@ -703,7 +702,7 @@ func TestOperatorCommandResultHelpers(t *testing.T) {
 }
 
 func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.T) {
-	op := &models.OperatorDocumentGo{
+	op := &operatorv1.OperatorDocument{
 		ID:                "op-001",
 		OperatorSessionID: "sess-001",
 	}

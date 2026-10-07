@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
@@ -87,7 +89,7 @@ session ID (from the Session ID column in './g8e operator list').`,
 	return cmd
 }
 
-func findOperatorByIDOrSession(operators []models.OperatorDocumentGo, idOrSession string) *models.OperatorDocumentGo {
+func findOperatorByIDOrSession(operators []*operatorv1.OperatorDocument, idOrSession string) *operatorv1.OperatorDocument {
 	for i := range operators {
 		if operators[i].ID == idOrSession || operators[i].OperatorSessionID == idOrSession {
 			return &operators[i]
@@ -96,7 +98,7 @@ func findOperatorByIDOrSession(operators []models.OperatorDocumentGo, idOrSessio
 	return nil
 }
 
-func operatorHostnameValue(op models.OperatorDocumentGo) string {
+func operatorHostnameValue(op operatorv1.OperatorDocument) string {
 	view := clioperator.ParseHeartbeatView(op.LatestHeartbeat)
 	if view != nil && view.SystemIdentity.Hostname != "" {
 		return view.SystemIdentity.Hostname
@@ -104,7 +106,7 @@ func operatorHostnameValue(op models.OperatorDocumentGo) string {
 	return op.CurrentHostname
 }
 
-func operatorHostnameDisplay(op models.OperatorDocumentGo) string {
+func operatorHostnameDisplay(op operatorv1.OperatorDocument) string {
 	if hostname := operatorHostnameValue(op); hostname != "" {
 		return hostname
 	}
@@ -112,19 +114,19 @@ func operatorHostnameDisplay(op models.OperatorDocumentGo) string {
 }
 
 type operatorShowOutput struct {
-	OperatorID        string                   `json:"operator_id"`
-	OperatorSessionID string                   `json:"operator_session_id"`
-	OperatorType      constants.OperatorType   `json:"operator_type"`
-	OperatorRoles     constants.OperatorRoles  `json:"operator_roles"`
-	Status            constants.OperatorStatus `json:"status"`
-	Component         constants.ComponentName  `json:"component"`
-	CreatedAt         time.Time                `json:"created_at"`
-	UpdatedAt         time.Time                `json:"updated_at"`
-	Name              string                   `json:"name,omitempty"`
-	SystemFingerprint string                   `json:"system_fingerprint,omitempty"`
-	LastHeartbeatAt   *time.Time               `json:"last_heartbeat_at,omitempty"`
-	RuntimeConfig     *models.RuntimeConfig    `json:"runtime_config,omitempty"`
-	Heartbeat         *operatorHeartbeatOutput `json:"heartbeat,omitempty"`
+	OperatorID        string                            `json:"operator_id"`
+	OperatorSessionID string                            `json:"operator_session_id"`
+	OperatorType      constants.OperatorType            `json:"operator_type"`
+	OperatorRoles     constants.OperatorRoles           `json:"operator_roles"`
+	Status            constants.OperatorStatus          `json:"status"`
+	Component         constants.ComponentName           `json:"component"`
+	CreatedAt         time.Time                         `json:"created_at"`
+	UpdatedAt         time.Time                         `json:"updated_at"`
+	Name              string                            `json:"name,omitempty"`
+	SystemFingerprint string                            `json:"system_fingerprint,omitempty"`
+	LastHeartbeatAt   *time.Time                        `json:"last_heartbeat_at,omitempty"`
+	RuntimeConfig     *operatorv1.OperatorRuntimeConfig `json:"runtime_config,omitempty"`
+	Heartbeat         *operatorHeartbeatOutput          `json:"heartbeat,omitempty"`
 }
 
 type operatorHeartbeatOutput struct {
@@ -144,7 +146,7 @@ type operatorHeartbeatOutput struct {
 	SystemFingerprint  string                              `json:"system_fingerprint,omitempty"`
 }
 
-func operatorShowPayload(op models.OperatorDocumentGo) operatorShowOutput {
+func operatorShowPayload(op operatorv1.OperatorDocument) operatorShowOutput {
 	payload := operatorShowOutput{
 		OperatorID:        op.ID,
 		OperatorSessionID: op.OperatorSessionID,
@@ -203,7 +205,7 @@ func heartbeatViewOutput(view *clioperator.HeartbeatView) *operatorHeartbeatOutp
 	return result
 }
 
-func printOperatorShow(cmd *cobra.Command, op models.OperatorDocumentGo) {
+func printOperatorShow(cmd *cobra.Command, op operatorv1.OperatorDocument) {
 	view := clioperator.ParseHeartbeatView(op.LatestHeartbeat)
 
 	cmd.Printf("Operator:  %s\n", op.ID)

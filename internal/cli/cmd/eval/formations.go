@@ -21,7 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
@@ -867,7 +866,7 @@ func buildCampaignFormationProductionDeps(
 	cfg *config.Config,
 	fileSvc fs.RuntimeFileService,
 	authContext *auth.ClientAuthContext,
-	operators []models.OperatorDocumentGo,
+	operators []*operatorv1.OperatorDocument,
 	variants []*evalv1.ModelVariant,
 	registryDigest string,
 	opts campaignFormationProductionOptions,

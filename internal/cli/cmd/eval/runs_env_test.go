@@ -32,7 +32,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -107,14 +106,14 @@ func testQwenVariant() *evalv1.ModelVariant {
 	}
 }
 
-func testRunOperators() []models.OperatorDocumentGo {
-	return []models.OperatorDocumentGo{
+func testRunOperators() []*operatorv1.OperatorDocument {
+	return []*operatorv1.OperatorDocument{
 		{
 			ID:                "infer-op",
 			OperatorSessionID: testInferenceSession,
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig: &models.RuntimeConfig{
+			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 				InferenceEnabled:        true,
 				InferenceOllamaEndpoint: "http://provider.example:11434",
 			},
@@ -125,7 +124,7 @@ func testRunOperators() []models.OperatorDocumentGo {
 			CurrentHostname:   constants.DataOperatorHostname,
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: false},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false},
 			LatestHeartbeat:   testDataOperatorHeartbeat(testDataOperatorWorkingDirectory),
 		},
 	}

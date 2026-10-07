@@ -10,21 +10,22 @@ package evaluation
 import (
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestSelectProvenanceOperator(t *testing.T) {
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		{
 			ID:                "prov-1",
 			OperatorSessionID: "sess-prov-1",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		},
 	}
 	selected, err := SelectProvenanceOperator(operators, "")
@@ -38,20 +39,20 @@ func TestSelectProvenanceOperator_NotFound(t *testing.T) {
 }
 
 func TestSelectProvenanceOperator_Ambiguous(t *testing.T) {
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		{
 			ID:                "prov-1",
 			OperatorSessionID: "sess-prov-1",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		},
 		{
 			ID:                "prov-2",
 			OperatorSessionID: "sess-prov-2",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		},
 	}
 	_, err := SelectProvenanceOperator(operators, "")

@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
 	"github.com/stretchr/testify/assert"
@@ -118,7 +120,7 @@ func TestOperatorListCmdWithConfig_EmptyOperatorsListPrintsNoOperators(t *testin
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
 
-	slotResp := models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}}
+	slotResp := models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{}}
 	respJSON, _ := json.Marshal(slotResp)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -140,7 +142,7 @@ func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T
 
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{ID: "op-001", OperatorSessionID: "session-001", OperatorType: "embedded", Status: "active"},
 			{ID: "op-002", OperatorSessionID: "session-002", OperatorType: "remote", Status: "standby"},
 		},
@@ -174,20 +176,20 @@ func TestOperatorListCmdWithConfig_JSONOutputIncludesRuntimeFlags(t *testing.T) 
 
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "data-op",
 				OperatorSessionID: "data-session",
 				OperatorType:      constants.OperatorTypeRemote,
 				Status:            constants.OperatorStatusActive,
-				RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: false},
+				RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false},
 			},
 			{
 				ID:                "infer-op",
 				OperatorSessionID: "infer-session",
 				OperatorType:      constants.OperatorTypeRemote,
 				Status:            constants.OperatorStatusActive,
-				RuntimeConfig: &models.RuntimeConfig{
+				RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 					InferenceEnabled:                true,
 					ProviderBoundaryObserverEnabled: false,
 				},
@@ -222,7 +224,7 @@ func TestOperatorListCmdWithConfig_SendsUserIDQueryParameter(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-distinct-123")
 
-	slotResp := models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}}
+	slotResp := models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{}}
 	respJSON, _ := json.Marshal(slotResp)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }

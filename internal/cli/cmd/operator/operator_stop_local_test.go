@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -78,7 +80,7 @@ func TestStopLocalOperatorSignalFailure(t *testing.T) {
 func TestTargetedStopFallsBackAfterShutdownFailure(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
-	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{{ID: "op-a", OperatorSessionID: "session-a", OperatorType: constants.OperatorTypeRemote}}})
+	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{{ID: "op-a", OperatorSessionID: "session-a", OperatorType: constants.OperatorTypeRemote}}})
 	require.NoError(t, err)
 	client := &cmdtest.MockAPIClient{GetResp: body, PostErr: errors.New("shutdown channel disconnected")}
 	checks := 0

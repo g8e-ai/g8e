@@ -12,6 +12,8 @@ import (
 	"log/slog"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,13 +21,12 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func activeOperatorSessionDoc(id, sessionID string) models.OperatorDocumentGo {
-	return models.OperatorDocumentGo{
+func activeOperatorSessionDoc(id, sessionID string) operatorv1.OperatorDocument {
+	return operatorv1.OperatorDocument{
 		ID:                id,
 		OperatorSessionID: sessionID,
 		Status:            constants.OperatorStatusActive,
@@ -36,7 +37,7 @@ func activeOperatorSessionDoc(id, sessionID string) models.OperatorDocumentGo {
 func TestChatEvalBindDataOperator(t *testing.T) {
 	const dataSession = "data-session"
 	errGateway := fmt.Errorf("gateway unavailable")
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		activeOperatorSessionDoc("primary", "primary-session"),
 		activeOperatorSessionDoc("other", "other-session"),
 		activeOperatorSessionDoc("data", dataSession),

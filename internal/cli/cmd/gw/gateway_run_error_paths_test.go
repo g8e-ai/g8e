@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
 	"github.com/stretchr/testify/assert"
@@ -284,7 +286,7 @@ func TestGatewayStatusCmd_ReportsConnectedOperators(t *testing.T) {
 	})
 	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "g8e-model-provenance-operator",
 				OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleProvenance},
@@ -361,7 +363,7 @@ func TestGatewayStatusCmd_ReportsNoConnectedOperatorsWhenEmpty(t *testing.T) {
 	})
 	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{
 		Success:   true,
-		Operators: []models.OperatorDocumentGo{},
+		Operators: []*operatorv1.OperatorDocument{},
 	})
 
 	mockClient := &statusMockClient{
@@ -394,7 +396,7 @@ func TestGatewayStatusCmd_ReportsEnrollmentSections(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 	healthResp, _ := json.Marshal(models.HealthResponse{Status: constants.GatewayModeStatusOK, PID: 9999})
-	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}})
+	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{}})
 	pendingResp, _ := json.Marshal(models.PlatformEnrollmentPendingResponse{
 		Requests: []models.PlatformEnrollmentPendingRequest{
 			{RequestID: "req-pending", ComponentKind: models.PlatformComponentApplication, ComponentName: "pending-app", InstanceID: "app-pending-host", Hostname: "host", State: models.PlatformEnrollmentStatePending},
@@ -445,7 +447,7 @@ func TestGatewayStatusCmd_ReportsEmptyEnrollmentSections(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 	healthResp, _ := json.Marshal(models.HealthResponse{Status: constants.GatewayModeStatusOK, PID: 9999})
-	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}})
+	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{}})
 	pendingResp, _ := json.Marshal(models.PlatformEnrollmentPendingResponse{})
 	enrolledResp, _ := json.Marshal(models.PlatformEnrollmentEnrolledResponse{})
 	usersResp, _ := json.Marshal([]models.User{})
@@ -478,7 +480,7 @@ func TestGatewayStatusCmd_EnrollmentListUnavailable(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
 	healthResp, _ := json.Marshal(models.HealthResponse{Status: constants.GatewayModeStatusOK, PID: 9999})
-	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}})
+	operatorsResp, _ := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{}})
 
 	mockClient := &statusMockClient{
 		responses: map[string][]byte{

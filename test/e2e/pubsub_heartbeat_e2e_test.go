@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // TestPubSub_HeartbeatAdvances proves heartbeat delivery over the pub/sub
@@ -45,7 +46,7 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 	// Poll until UpdatedAt advances past the first observation. The E2E
 	// stack uses a short configurable heartbeat interval so a dead path
 	// fails quickly.
-	var second *models.OperatorDocumentGo
+	var second *operatorv1.OperatorDocument
 	require.Eventually(t, func() bool {
 		operators, err := e2eClient.ListOperators(ctx)
 		if err != nil {
@@ -75,7 +76,7 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 // active remote operator. It fails the test if no active remote operator is found. The
 // caller owns the context; this helper does not call require.Eventually or
 // introduce its own polling — it is a single typed observation.
-func activeOperator(t *testing.T, ctx context.Context) *models.OperatorDocumentGo {
+func activeOperator(t *testing.T, ctx context.Context) *operatorv1.OperatorDocument {
 	t.Helper()
 	operators, err := e2eClient.ListOperators(ctx)
 	require.NoError(t, err, "operator list must succeed for heartbeat observation")
@@ -86,6 +87,6 @@ func activeOperator(t *testing.T, ctx context.Context) *models.OperatorDocumentG
 	return operator
 }
 
-func findActiveRemoteOperator(operators []models.OperatorDocumentGo) *models.OperatorDocumentGo {
+func findActiveRemoteOperator(operators []*operatorv1.OperatorDocument) *operatorv1.OperatorDocument {
 	return findLiveActiveRemoteOperator(operators)
 }

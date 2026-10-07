@@ -11,8 +11,9 @@ import (
 	"fmt"
 	"strings"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
@@ -28,7 +29,7 @@ type InferenceOperatorStatus struct {
 
 // ActiveInferenceOperators returns every active remote or configured embedded
 // Operator whose runtime roles include Inference.
-func ActiveInferenceOperators(operators []models.OperatorDocumentGo) []InferenceOperatorStatus {
+func ActiveInferenceOperators(operators []*operatorv1.OperatorDocument) []InferenceOperatorStatus {
 	matches := make([]InferenceOperatorStatus, 0)
 	for _, op := range operators {
 		if op.RuntimeConfig == nil || !operatorcapability.HasActiveRole(op, constants.OperatorRoleInference) {
@@ -48,14 +49,14 @@ func ActiveInferenceOperators(operators []models.OperatorDocumentGo) []Inference
 // SelectInferenceOperator resolves exactly one inference-capable Operator.
 // When sessionID is non-empty it must match an active inference Operator;
 // otherwise exactly one active inference Operator must exist.
-func SelectInferenceOperator(operators []models.OperatorDocumentGo, sessionID string) (*InferenceOperatorStatus, error) {
+func SelectInferenceOperator(operators []*operatorv1.OperatorDocument, sessionID string) (*InferenceOperatorStatus, error) {
 	return SelectInferenceOperatorForHardware(operators, sessionID, "")
 }
 
 // SelectInferenceOperatorForHardware resolves an inference operator using the
 // exact OperatorDocument system fingerprint when one is available.
 func SelectInferenceOperatorForHardware(
-	operators []models.OperatorDocumentGo,
+	operators []*operatorv1.OperatorDocument,
 	sessionID string,
 	systemFingerprint string,
 ) (*InferenceOperatorStatus, error) {
@@ -95,7 +96,7 @@ func SelectInferenceOperatorForHardware(
 	}
 }
 
-func inferenceOperatorOllamaEndpoint(op models.OperatorDocumentGo) string {
+func inferenceOperatorOllamaEndpoint(op operatorv1.OperatorDocument) string {
 	if op.RuntimeConfig == nil {
 		return ""
 	}
@@ -105,7 +106,7 @@ func inferenceOperatorOllamaEndpoint(op models.OperatorDocumentGo) string {
 // GovernedInferenceOllamaEndpoint returns the approved provider endpoint from
 // the exact Inference Operator runtime_config. Campaign-host environment
 // overrides are intentionally rejected.
-func GovernedInferenceOllamaEndpoint(operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
+func GovernedInferenceOllamaEndpoint(operators []*operatorv1.OperatorDocument, inferenceSessionID string) (string, error) {
 	if inferenceSessionID == "" {
 		return "", fmt.Errorf("evaluation: governed inference endpoint: %w", constants.ErrMissingRequiredField)
 	}

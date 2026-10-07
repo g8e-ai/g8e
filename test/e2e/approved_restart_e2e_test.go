@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // TestApprovedRestart_IdentityPersists verifies that an operator's identity and
@@ -47,7 +48,7 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 
 	// The operator must be active. Poll to accommodate reconnection latency
 	// after a restart, or initial registration on a fresh approved stack.
-	var active *models.OperatorDocumentGo
+	var active *operatorv1.OperatorDocument
 	require.Eventually(t, func() bool {
 		operators, err := e2eClient.ListOperators(ctx)
 		if err != nil {
@@ -88,7 +89,7 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 	t.Logf("first heartbeat observation: updated_at=%s",
 		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 
-	var second *models.OperatorDocumentGo
+	var second *operatorv1.OperatorDocument
 	require.Eventually(t, func() bool {
 		operators, err := e2eClient.ListOperators(ctx)
 		if err != nil {

@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // OperatorRegistrationRequest is the inbound body for /api/pki/device-enroll (CSR-based enrollment).
@@ -98,43 +99,9 @@ type SessionSummary struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
-// OperatorDocumentGo is a Go representation of the canonical OperatorDocument.
-// Authority: protocol/models/operator_document.json
-type OperatorDocumentGo struct {
-	ID                   string                   `json:"id"`
-	UserID               string                   `json:"user_id"`
-	OrganizationID       string                   `json:"organization_id,omitempty"`
-	Component            constants.ComponentName  `json:"component"`
-	Name                 string                   `json:"name,omitempty"`
-	Status               constants.OperatorStatus `json:"status"`
-	OperatorSessionID    string                   `json:"operator_session_id,omitempty"`
-	BoundWebSessionID    string                   `json:"bound_web_session_id,omitempty"`
-	OperatorCert         string                   `json:"operator_cert,omitempty"`
-	OperatorCertSerial   string                   `json:"operator_cert_serial,omitempty"`
-	SlotNumber           int                      `json:"slot_number,omitempty"`
-	IsSlot               bool                     `json:"is_slot"`
-	Claimed              bool                     `json:"claimed"`
-	OperatorType         constants.OperatorType   `json:"operator_type,omitempty"`
-	SystemFingerprint    string                   `json:"system_fingerprint,omitempty"`
-	OperatorRoles        constants.OperatorRoles  `json:"operator_roles,omitempty"`
-	LocalDir             string                   `json:"local_dir,omitempty"`
-	Account              string                   `json:"account,omitempty"`
-	Port                 int                      `json:"port,omitempty"`
-	CreatedAt            time.Time                `json:"created_at"`
-	UpdatedAt            time.Time                `json:"updated_at"`
-	StartedAt            *time.Time               `json:"started_at,omitempty"`
-	ClaimedAt            *time.Time               `json:"claimed_at,omitempty"`
-	StopReason           string                   `json:"stop_reason,omitempty"`
-	LatestHeartbeat      json.RawMessage          `json:"latest_heartbeat_snapshot,omitempty"`
-	LastHeartbeatAt      *time.Time               `json:"last_heartbeat_at,omitempty"`
-	CurrentHostname      string                   `json:"current_hostname,omitempty"`
-	RuntimeConfig        *RuntimeConfig           `json:"runtime_config,omitempty"`
-	ConsumedByOperatorID string                   `json:"consumed_by_operator_id,omitempty"`
-}
-
 type OperatorSlotResponse struct {
-	Success   bool                 `json:"success"`
-	Operators []OperatorDocumentGo `json:"operators"`
+	Success   bool                           `json:"success"`
+	Operators []*operatorv1.OperatorDocument `json:"operators"`
 }
 
 type OperatorSessionValidationRequest struct {
@@ -150,8 +117,8 @@ type OperatorSessionValidationResponse struct {
 }
 
 type OperatorResponse struct {
-	Success  bool                `json:"success"`
-	Operator *OperatorDocumentGo `json:"operator,omitempty"`
+	Success  bool                         `json:"success"`
+	Operator *operatorv1.OperatorDocument `json:"operator,omitempty"`
 }
 
 // OperatorStatusUpdatedPayload is the SSE payload of the

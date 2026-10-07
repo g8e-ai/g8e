@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -483,7 +485,7 @@ func (s *AuthService) InvalidateUserCache(userID string) {
 // Auth depends on session validity (existence + certificate revocation), not on operator
 // status liveness signals from other processes. The primary session invalidation mechanism
 // is certificate revocation via PKI authority.
-func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models.OperatorDocumentGo, error) {
+func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operatorv1.OperatorDocument, error) {
 	if operatorSessionID == "" {
 		return nil, &AuthError{Message: constants.ErrGatewayOperatorSessionIDRequired.Error(), Status: http.StatusUnauthorized}
 	}
@@ -504,13 +506,13 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		return nil, &AuthError{Message: constants.ErrGatewayOperatorSessionDuplicate.Error(), Status: http.StatusUnauthorized}
 	}
 
-	// Convert Document to OperatorDocumentGo
+	// Convert Document to OperatorDocument
 	b, err := json.Marshal(docs[0].ForWire())
 	if err != nil {
 		return nil, fmt.Errorf("gateway: auth: marshal operator document: %w: %w", err, constants.ErrRequestMarshalFailed)
 	}
 
-	var op models.OperatorDocumentGo
+	var op operatorv1.OperatorDocument
 	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, fmt.Errorf("gateway: auth: unmarshal operator document: %w: %w", err, constants.ErrResponseParseFailed)
 	}
@@ -535,7 +537,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	return &op, nil
 }
 
-func (s *AuthService) ValidateOperatorCLISessionBinding(operatorSessionID, cliSessionID, userID string) (*models.OperatorDocumentGo, error) {
+func (s *AuthService) ValidateOperatorCLISessionBinding(operatorSessionID, cliSessionID, userID string) (*operatorv1.OperatorDocument, error) {
 	op, err := s.ValidateOperatorSession(operatorSessionID)
 	if err != nil {
 		return nil, err

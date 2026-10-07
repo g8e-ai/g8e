@@ -10,17 +10,18 @@ package evaluation
 import (
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestSelectProviderBoundaryObserver(t *testing.T) {
-	operators := []models.OperatorDocumentGo{
-		{ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "data-1", OperatorSessionID: "sess-data-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{InferenceEnabled: true}},
+	operators := []*operatorv1.OperatorDocument{
+		{ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{ID: "data-1", OperatorSessionID: "sess-data-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
 	}
 	selected, err := SelectProviderBoundaryObserver(operators, "")
 	require.NoError(t, err)
@@ -33,9 +34,9 @@ func TestSelectProviderBoundaryObserver_NotFound(t *testing.T) {
 }
 
 func TestSelectProviderBoundaryObserver_Ambiguous(t *testing.T) {
-	operators := []models.OperatorDocumentGo{
-		{ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}},
-		{ID: "obs-2", OperatorSessionID: "sess-obs-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+	operators := []*operatorv1.OperatorDocument{
+		{ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{ID: "obs-2", OperatorSessionID: "sess-obs-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{ProviderBoundaryObserverEnabled: true}},
 	}
 	_, err := SelectProviderBoundaryObserver(operators, "")
 	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverAmbiguous)

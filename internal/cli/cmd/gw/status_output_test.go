@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -59,7 +61,7 @@ func TestGatewayStatusDistinguishesUnknownAndEmptyRegistry(t *testing.T) {
 
 func TestGatewayStatusOnlyShowsConnectedOperators(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
-	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{
+	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
 		{OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}, CurrentHostname: "gpu-host", Status: constants.OperatorStatusActive},
 		{CurrentHostname: "stopped-host", Status: constants.OperatorStatusStopped},
 		{CurrentHostname: "unclaimed-host", Status: constants.OperatorStatusActive, IsSlot: true},
@@ -154,7 +156,7 @@ func TestStatusDoesNotDuplicateEnrolledEmbeddedOperator(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(constants.PidDirname, constants.OperatorPIDFilename), []byte(strconv.Itoa(os.Getpid())), constants.PermFilePrivate))
 	require.NoError(t, serve.WriteLaunchProfile(fileSvc, serve.GatewayConfig{OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}, Posture: "doctrine", LogLevel: constants.LogLevelInfo}))
-	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{
+	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
 		{ID: string(constants.DocIDEmbeddedOperator), OperatorType: constants.OperatorTypeEmbedded, Status: constants.OperatorStatusActive, OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference}},
 	}})
 	require.NoError(t, err)
@@ -257,10 +259,10 @@ func TestGatewayStatusListsEveryOperatorWithTypeCapabilitiesAndStartValues(t *te
 		Posture:                 "doctrine",
 		LogLevel:                constants.LogLevelInfo,
 	}))
-	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{
+	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
 		{
 			ID: "op-prov", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive, CurrentHostname: "store-host",
-			RuntimeConfig: &models.RuntimeConfig{
+			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 				Roles: constants.OperatorRoles{constants.OperatorRoleProvenance}, ProvenanceOperatorEnabled: true,
 				ProvenanceOperatorModelStorageRoot: "/srv/models", LocalDir: "/srv/g8e/provenance", HTTPPort: 8080,
 				// Reported by every Operator, but only meaningful with the inference role.
@@ -269,7 +271,7 @@ func TestGatewayStatusListsEveryOperatorWithTypeCapabilitiesAndStartValues(t *te
 		},
 		{
 			ID: "op-inf", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusStale, CurrentHostname: "gpu-host",
-			RuntimeConfig: &models.RuntimeConfig{
+			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 				Roles: constants.OperatorRoles{constants.OperatorRoleInference}, InferenceEnabled: true,
 				InferenceOllamaEndpoint: "http://gpu-host:11434", LocalDir: "/srv/g8e/inference", HTTPPort: 8080,
 				LogLevel: "debug", NoGit: true,
@@ -277,7 +279,7 @@ func TestGatewayStatusListsEveryOperatorWithTypeCapabilitiesAndStartValues(t *te
 		},
 		{
 			ID: string(constants.DocIDEmbeddedOperator), OperatorType: constants.OperatorTypeEmbedded, Status: constants.OperatorStatusActive,
-			RuntimeConfig: &models.RuntimeConfig{
+			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 				Roles: constants.OperatorRoles{constants.OperatorRoleInference, constants.OperatorRoleProvenance}, InferenceEnabled: true,
 				InferenceOllamaEndpoint: "http://192.168.1.2:11434", ProvenanceOperatorEnabled: true,
 				ProvenanceOperatorModelStorageRoot: "/mnt/models", LocalDir: "/home/me/g8e", HTTPPort: 8081,

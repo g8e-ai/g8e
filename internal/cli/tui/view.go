@@ -12,11 +12,12 @@ import (
 	"strings"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	clioperator "github.com/g8e-ai/g8e/v2/internal/cli/operator"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
@@ -358,7 +359,7 @@ func listWindow(n, selected int) (int, int) {
 }
 
 // operatorHostname names an Operator for display, as 'g8e gw status' does.
-func operatorHostname(op models.OperatorDocumentGo) string {
+func operatorHostname(op operatorv1.OperatorDocument) string {
 	if view := clioperator.ParseHeartbeatView(op.LatestHeartbeat); view != nil && view.SystemIdentity.Hostname != "" {
 		return view.SystemIdentity.Hostname
 	}

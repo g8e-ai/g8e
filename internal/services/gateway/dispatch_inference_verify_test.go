@@ -87,7 +87,7 @@ func newInferenceDispatchService(t *testing.T, signerStore governance.SignerStor
 		logger,
 		NewGatewayWebSocketHandler(logger),
 		&stubStateRootProvider{root: "root-abc"},
-		&stubOperatorSessionValidator{op: &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}},
+		&stubOperatorSessionValidator{op: &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}},
 		"doctrine",
 		governance.NewL1Doctrine(),
 		nil,

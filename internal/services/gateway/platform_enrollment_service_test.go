@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -467,7 +469,7 @@ func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSess
 	require.NotNil(t, opDoc)
 	opBytes, err := json.Marshal(opDoc.Data)
 	require.NoError(t, err)
-	var op models.OperatorDocumentGo
+	var op operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(opBytes, &op))
 	assert.Equal(t, constants.OperatorStatusTerminated, op.Status)
 
@@ -559,7 +561,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	require.NotNil(t, opDoc)
 	dataBytes, err := json.Marshal(opDoc.Data)
 	require.NoError(t, err)
-	var op models.OperatorDocumentGo
+	var op operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(dataBytes, &op))
 	// DocSet strips the "id" field from the data JSON (the ID is stored
 	// separately in the documents table), so op.ID is empty. The operator
@@ -656,7 +658,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceIsDiscoverableViaListUserOper
 	require.NoError(t, err)
 	require.NotEmpty(t, operators, "owner must see the platform-enrolled operator")
 
-	var found *models.OperatorDocumentGo
+	var found *operatorv1.OperatorDocument
 	for i := range operators {
 		if operators[i].ID == resp.Operator.OperatorID {
 			found = &operators[i]
@@ -702,7 +704,7 @@ func TestPlatformEnrollmentService_ReEnrollmentSupersedesPriorOperatorLease(t *t
 
 	operators, err := env.svc.GetRegistrationService().ListUserOperators(env.ownerID)
 	require.NoError(t, err)
-	byID := make(map[string]models.OperatorDocumentGo, len(operators))
+	byID := make(map[string]operatorv1.OperatorDocument, len(operators))
 	for _, op := range operators {
 		byID[op.ID] = op
 	}

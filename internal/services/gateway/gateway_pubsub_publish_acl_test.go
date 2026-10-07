@@ -20,7 +20,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -334,7 +333,7 @@ func TestHandlePublish_AppCommandPublishRejectedAtACL(t *testing.T) {
 }
 
 func TestHandlePublish_OperatorPublishToCmdRejected(t *testing.T) {
-	op := &models.OperatorDocumentGo{
+	op := &operatorv1.OperatorDocument{
 		ID:                "op-001",
 		OperatorSessionID: "sess-001",
 	}
@@ -439,7 +438,7 @@ func TestSetCommandRelayDeps(t *testing.T) {
 	assert.Nil(t, broker.doctrine, "doctrine must be nil before SetCommandRelayDeps")
 
 	provider := &stubStateRootProvider{root: "root-1"}
-	validator := &stubOperatorSessionValidator{op: &models.OperatorDocumentGo{ID: "op-1"}}
+	validator := &stubOperatorSessionValidator{op: &operatorv1.OperatorDocument{ID: "op-1"}}
 	doctrine := governance.NewL1Doctrine()
 	broker.SetCommandRelayDeps(provider, validator, "doctrine", doctrine)
 

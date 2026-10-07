@@ -94,7 +94,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 	cs.logger.Info("Parsed command payload via Protobuf (CommandRequested)")
 
 	command := protoCmd.Command
-	if err := operatorcapability.ValidateWitnessCommand(&models.RuntimeConfig{
+	if err := operatorcapability.ValidateWitnessCommand(&operatorv1.OperatorRuntimeConfig{
 		Roles:                           cs.config.EffectiveOperatorRoles(),
 		ProviderBoundaryObserverEnabled: cs.config.ProviderBoundaryObserver.Enabled,
 		ProvenanceOperatorEnabled:       cs.config.ProvenanceOperator.Enabled,

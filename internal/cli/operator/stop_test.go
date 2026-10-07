@@ -10,6 +10,8 @@ package operator
 import (
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,9 +20,9 @@ import (
 )
 
 func TestCheckStoppable(t *testing.T) {
-	assert.NoError(t, CheckStoppable(models.OperatorDocumentGo{OperatorType: constants.OperatorTypeRemote}))
-	assert.ErrorIs(t, CheckStoppable(models.OperatorDocumentGo{OperatorType: constants.OperatorTypeEmbedded}), constants.ErrOperatorStopEmbedded)
-	assert.ErrorIs(t, CheckStoppable(models.OperatorDocumentGo{}), constants.ErrOperatorStopNotRemote)
+	assert.NoError(t, CheckStoppable(operatorv1.OperatorDocument{OperatorType: constants.OperatorTypeRemote}))
+	assert.ErrorIs(t, CheckStoppable(operatorv1.OperatorDocument{OperatorType: constants.OperatorTypeEmbedded}), constants.ErrOperatorStopEmbedded)
+	assert.ErrorIs(t, CheckStoppable(operatorv1.OperatorDocument{}), constants.ErrOperatorStopNotRemote)
 }
 
 func TestNewStopRequest_TrimsReason(t *testing.T) {

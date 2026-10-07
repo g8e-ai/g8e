@@ -17,13 +17,14 @@ import (
 	"strings"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
@@ -523,7 +524,7 @@ func chatEvalBindDataOperator(
 	cfg *config.Config,
 	fileSvc fs.RuntimeFileService,
 	authContext *auth.ClientAuthContext,
-	operators []models.OperatorDocumentGo,
+	operators []*operatorv1.OperatorDocument,
 	dataSessionID string,
 	autoBind bool,
 ) (*auth.ClientAuthContext, error) {
@@ -540,7 +541,7 @@ func chatEvalBindDataOperator(
 	}
 	targets := make([]string, 0, len(bound)+1)
 	for _, sessionID := range bound {
-		if slices.ContainsFunc(operators, func(op models.OperatorDocumentGo) bool {
+		if slices.ContainsFunc(operators, func(op operatorv1.OperatorDocument) bool {
 			return op.OperatorSessionID == sessionID && op.Status == constants.OperatorStatusActive
 		}) {
 			targets = append(targets, sessionID)
@@ -554,7 +555,7 @@ func chatEvalListOperators(
 	deps chatEvalDeps,
 	cfg *config.Config,
 	authContext *auth.ClientAuthContext,
-) ([]models.OperatorDocumentGo, error) {
+) ([]*operatorv1.OperatorDocument, error) {
 	gatewayClient, err := deps.clientFactory(nativeEvalClientConfig(cfg, authContext))
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: initialize gateway client: %w", err)

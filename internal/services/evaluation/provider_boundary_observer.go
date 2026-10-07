@@ -8,8 +8,8 @@
 package evaluation
 
 import (
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // ProviderBoundaryObserverStatus summarizes one active remote provider-boundary
@@ -18,13 +18,13 @@ type ProviderBoundaryObserverStatus = operatorcapability.ProviderBoundaryObserve
 
 // ActiveProviderBoundaryObservers returns every active remote operator with
 // runtime_config.provider_boundary_observer_enabled set.
-func ActiveProviderBoundaryObservers(operators []models.OperatorDocumentGo) []ProviderBoundaryObserverStatus {
+func ActiveProviderBoundaryObservers(operators []*operatorv1.OperatorDocument) []ProviderBoundaryObserverStatus {
 	return operatorcapability.ActiveProviderBoundaryObservers(operators)
 }
 
 // SelectProviderBoundaryObserver resolves exactly one provider-boundary
 // observer operator. When sessionID is non-empty it must match an active
 // observer; otherwise exactly one active observer must exist.
-func SelectProviderBoundaryObserver(operators []models.OperatorDocumentGo, sessionID string) (*ProviderBoundaryObserverStatus, error) {
+func SelectProviderBoundaryObserver(operators []*operatorv1.OperatorDocument, sessionID string) (*ProviderBoundaryObserverStatus, error) {
 	return operatorcapability.SelectProviderBoundaryObserver(operators, sessionID)
 }

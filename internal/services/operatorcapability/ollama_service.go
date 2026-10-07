@@ -11,8 +11,9 @@ import (
 	"fmt"
 	"strings"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func validateServedModelTag(modelTag string) error {
@@ -73,7 +74,7 @@ func OllamaResidencyCommand() string {
 
 // ValidateWitnessCommand rejects generic command execution on read-only witness
 // operators. Their narrowly scoped observation handlers remain available.
-func ValidateWitnessCommand(cfg *models.RuntimeConfig, command string) error {
+func ValidateWitnessCommand(cfg *operatorv1.OperatorRuntimeConfig, command string) error {
 	if ResolveOperatorRoles(cfg).Has(constants.OperatorRoleData) || ResolveOperatorRoles(cfg).Has(constants.OperatorRoleInference) {
 		return nil
 	}

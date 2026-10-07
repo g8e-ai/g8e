@@ -36,7 +36,7 @@ func TestOperatorRunCmdWithConfig_Success(t *testing.T) {
 
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{ID: "op-a", OperatorSessionID: sessionA, OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
 			{ID: "op-b", OperatorSessionID: sessionB, OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
 		},
@@ -68,7 +68,7 @@ func TestOperatorRunCmdWithConfig_OperatorNotFound(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
 
-	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}})
+	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{}})
 	require.NoError(t, err)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -93,7 +93,7 @@ func TestOperatorStopCmdWithConfig_SendsTargetedShutdown(t *testing.T) {
 	sessionID := "4881d566-90a9-44c9-9e3e-c6bb51e07f5c"
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{{
+		Operators: []*operatorv1.OperatorDocument{{
 			ID: "op-a", OperatorSessionID: sessionID, OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive,
 		}},
 	})
@@ -123,7 +123,7 @@ func TestOperatorStopCmdWithConfig_RejectsEmbeddedOperator(t *testing.T) {
 
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{{
+		Operators: []*operatorv1.OperatorDocument{{
 			ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "embedded-session", OperatorType: constants.OperatorTypeEmbedded, Status: constants.OperatorStatusActive,
 		}},
 	})

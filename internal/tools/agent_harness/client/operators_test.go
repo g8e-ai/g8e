@@ -11,16 +11,17 @@ import (
 	"context"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
-func stackDataOperator(id, sessionID string) models.OperatorDocumentGo {
-	return models.OperatorDocumentGo{
+func stackDataOperator(id, sessionID string) operatorv1.OperatorDocument {
+	return operatorv1.OperatorDocument{
 		ID: id, OperatorSessionID: sessionID, CurrentHostname: constants.DataOperatorHostname,
 		Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
 	}

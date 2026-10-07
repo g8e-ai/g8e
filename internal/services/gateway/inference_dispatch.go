@@ -82,7 +82,7 @@ type gatewayOperatorListerAdapter struct {
 
 // ListUserOperators implements dispatch.OperatorLister by delegating to
 // the gateway's RegistrationService.
-func (a *gatewayOperatorListerAdapter) ListUserOperators(userID string) ([]models.OperatorDocumentGo, error) {
+func (a *gatewayOperatorListerAdapter) ListUserOperators(userID string) ([]*operatorv1.OperatorDocument, error) {
 	return a.svc.ListUserOperators(userID)
 }
 

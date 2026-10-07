@@ -10,6 +10,8 @@ package tui
 import (
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
@@ -168,7 +170,7 @@ type ApprovalVerifiedMsg struct {
 // OperatorsMsg carries the session user's Operators as listed by the Gateway,
 // or the error that prevented listing them.
 type OperatorsMsg struct {
-	Operators []models.OperatorDocumentGo
+	Operators []*operatorv1.OperatorDocument
 	Err       error
 }
 

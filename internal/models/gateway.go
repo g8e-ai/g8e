@@ -254,8 +254,8 @@ type SSEEventsWipeResponse struct {
 
 // ReauthResponse is the typed response for POST /api/operators/reauth.
 type ReauthResponse struct {
-	Success  bool                `json:"success"`
-	Operator *OperatorDocumentGo `json:"operator"`
+	Success  bool                         `json:"success"`
+	Operator *operatorv1.OperatorDocument `json:"operator"`
 }
 
 // TrustedSignersResponse is the typed response for GET /api/governance/signers.

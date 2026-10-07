@@ -170,8 +170,8 @@ func (c *E2EClient) ListOperators(ctx context.Context) (models.OperatorSlotRespo
 // When several operators share a fresh UpdatedAt window, prefer the one whose
 // CurrentHostname differs from enrollment Name — that signals canonical
 // heartbeat telemetry rather than stale enrollment metadata.
-func findLiveActiveRemoteOperator(operators []models.OperatorDocumentGo) *models.OperatorDocumentGo {
-	var candidates []*models.OperatorDocumentGo
+func findLiveActiveRemoteOperator(operators []*operatorv1.OperatorDocument) *operatorv1.OperatorDocument {
+	var candidates []*operatorv1.OperatorDocument
 	for i := range operators {
 		op := &operators[i]
 		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
@@ -183,7 +183,7 @@ func findLiveActiveRemoteOperator(operators []models.OperatorDocumentGo) *models
 		candidates = append(candidates, op)
 	}
 	if len(candidates) == 0 {
-		var fallback *models.OperatorDocumentGo
+		var fallback *operatorv1.OperatorDocument
 		for i := range operators {
 			op := &operators[i]
 			if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
@@ -215,7 +215,7 @@ func findLiveActiveRemoteOperator(operators []models.OperatorDocumentGo) *models
 	return best
 }
 
-func findOperatorByID(operators []models.OperatorDocumentGo, id string) *models.OperatorDocumentGo {
+func findOperatorByID(operators []*operatorv1.OperatorDocument, id string) *operatorv1.OperatorDocument {
 	for i := range operators {
 		if operators[i].ID == id {
 			return &operators[i]
@@ -453,7 +453,7 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 	require.True(t, operators.Success, "operator list response must report success")
 	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
 
-	var target *models.OperatorDocumentGo
+	var target *operatorv1.OperatorDocument
 	target = findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, target, "a live active remote operator must exist as the dispatch target")
 	require.NotEmpty(t, target.OperatorSessionID, "target operator must have a session ID")
@@ -523,9 +523,9 @@ func (c *E2EClient) DiscoverPendingOperatorByHostname(t *testing.T, ctx context.
 // cross-enrollment tests to find the secondary gateway's operator after
 // approval. The caller owns the context; this helper uses require.Eventually
 // for polling so it must be called from a test goroutine.
-func (c *E2EClient) DiscoverActiveOperatorByName(t *testing.T, ctx context.Context, nameSubstring string) models.OperatorDocumentGo {
+func (c *E2EClient) DiscoverActiveOperatorByName(t *testing.T, ctx context.Context, nameSubstring string) operatorv1.OperatorDocument {
 	t.Helper()
-	var found models.OperatorDocumentGo
+	var found operatorv1.OperatorDocument
 	require.Eventually(t, func() bool {
 		operators, err := c.ListOperators(ctx)
 		if err != nil {

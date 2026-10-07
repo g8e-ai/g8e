@@ -151,7 +151,7 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 // withResolvedOperatorRoles fills operator_roles for browser and CLI listings so
 // every enrolled Operator reports its complete capability set, including
 // documents whose claim predates stored roles. Unclaimed slots have no runtime and keep an empty role.
-func withResolvedOperatorRoles(op *models.OperatorDocumentGo) {
+func withResolvedOperatorRoles(op *operatorv1.OperatorDocument) {
 	if op.IsSlot && !op.Claimed {
 		return
 	}
@@ -399,7 +399,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var req struct {
-		RuntimeConfig *models.RuntimeConfig `json:"runtime_config"`
+		RuntimeConfig *operatorv1.OperatorRuntimeConfig `json:"runtime_config"`
 	}
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &req); err != nil {

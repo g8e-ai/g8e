@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -32,7 +31,7 @@ func (f embeddedEnvelopeProcessorFunc) ProcessEnvelope(ctx context.Context, wire
 func TestEmbeddedDispatchUsesGovernanceProcessorAndCorrelatesResult(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	broker := NewGatewayWebSocketHandler(logger)
-	op := &models.OperatorDocumentGo{ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "embedded-session", OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleObserver}}}
+	op := &operatorv1.OperatorDocument{ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "embedded-session", OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleObserver}}}
 	called := false
 	processor := embeddedEnvelopeProcessorFunc(func(ctx context.Context, wire []byte) (*operatorv1.ActionReceipt, error) {
 		called = true

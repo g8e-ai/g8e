@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
@@ -30,7 +32,7 @@ import (
 
 // newGatewayTestDeps builds eval dependencies whose Gateway client talks to an
 // in-process server that lists the given operators.
-func newGatewayTestDeps(t *testing.T, root string, operators []models.OperatorDocumentGo) nativeEvalDeps {
+func newGatewayTestDeps(t *testing.T, root string, operators []*operatorv1.OperatorDocument) nativeEvalDeps {
 	t.Helper()
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: operators})
 	require.NoError(t, err)

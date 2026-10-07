@@ -34,6 +34,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
@@ -509,7 +511,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 		if err != nil || op == nil {
 			return false
 		}
-		var opDoc models.OperatorDocumentGo
+		var opDoc operatorv1.OperatorDocument
 		opBytes, err := json.Marshal(op.ForWire())
 		if err != nil {
 			return false

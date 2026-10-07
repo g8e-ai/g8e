@@ -16,6 +16,8 @@ import (
 	"os"
 	"strings"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
 	"github.com/spf13/cobra"
@@ -177,7 +179,7 @@ func runOperatorBind(
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
-	resolved := make([]*models.OperatorDocumentGo, 0, len(targets))
+	resolved := make([]*operatorv1.OperatorDocument, 0, len(targets))
 	for _, id := range targets {
 		target := findOperatorBySessionID(slotResp.Operators, id)
 		if target == nil {
@@ -244,7 +246,7 @@ func runOperatorBind(
 // operator; bigger binds print a summary instead of thousands of lines.
 const operatorBindDetailLimit = 10
 
-func printOperatorBindTargets(cmd *cobra.Command, targets []*models.OperatorDocumentGo, creds *auth.Credentials) {
+func printOperatorBindTargets(cmd *cobra.Command, targets []*operatorv1.OperatorDocument, creds *auth.Credentials) {
 	if len(targets) == 1 {
 		target := targets[0]
 		cmd.Printf("Operator bind target\n")
@@ -309,7 +311,7 @@ func runOperatorBindList(
 		boundSessionIDs = []string{sessionInfo.OperatorSessionID}
 	}
 
-	var operators []models.OperatorDocumentGo
+	var operators []*operatorv1.OperatorDocument
 	if len(boundSessionIDs) > 0 {
 		client, err := clientFactory(fileSvc, cfg)
 		if err != nil {
@@ -330,7 +332,7 @@ func runOperatorBindList(
 				operators = append(operators, *target)
 				continue
 			}
-			unknown := models.OperatorDocumentGo{OperatorSessionID: sessionID, Status: "unknown"}
+			unknown := operatorv1.OperatorDocument{OperatorSessionID: sessionID, Status: "unknown"}
 			if sessionID == sessionInfo.OperatorSessionID {
 				unknown.ID = sessionInfo.OperatorID
 			}
@@ -454,7 +456,7 @@ func runOperatorBindUnbind(
 	return nil
 }
 
-func findOperatorBySessionID(operators []models.OperatorDocumentGo, operatorSessionID string) *models.OperatorDocumentGo {
+func findOperatorBySessionID(operators []*operatorv1.OperatorDocument, operatorSessionID string) *operatorv1.OperatorDocument {
 	for i := range operators {
 		if operators[i].OperatorSessionID == operatorSessionID {
 			return &operators[i]

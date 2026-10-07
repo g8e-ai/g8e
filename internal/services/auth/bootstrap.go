@@ -19,11 +19,12 @@ import (
 	"runtime"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/httpclient"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
@@ -151,7 +152,7 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 
 // operatorAuthRequest is the request body for POST /api/v1/operators/reauth.
 type operatorAuthRequest struct {
-	RuntimeConfig *models.RuntimeConfig `json:"runtime_config"`
+	RuntimeConfig *operatorv1.OperatorRuntimeConfig `json:"runtime_config"`
 }
 
 // requestHTTPAuth authenticates via POST /api/v1/operators/reauth with exponential backoff.
@@ -160,14 +161,14 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 	account := ResolveCurrentAccount()
 
-	runtimeConfig := &models.RuntimeConfig{
+	runtimeConfig := &operatorv1.OperatorRuntimeConfig{
 		CloudMode:             bs.config.CloudMode,
 		CloudProvider:         bs.config.CloudProvider,
 		ExecutionVaultEnabled: bs.config.ExecutionVaultEnabled,
 		NoGit:                 bs.config.NoGit,
 		LogLevel:              bs.config.LogLevel,
 
-		HTTPPort: bs.config.HTTPPort,
+		HttpPort: bs.config.HTTPPort,
 		Roles:    roles,
 		LocalDir: bs.config.WorkDir,
 		Account:  account,

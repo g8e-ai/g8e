@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -47,7 +49,7 @@ func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool, cer
 	if sessionID != "" {
 		cliSessionID = sessionID
 		now := time.Now().UTC()
-		operatorDoc := models.OperatorDocumentGo{
+		operatorDoc := operatorv1.OperatorDocument{
 			ID:                "refresh-auth-operator",
 			UserID:            userID,
 			Status:            constants.OperatorStatusActive,
@@ -356,7 +358,7 @@ func TestHandleCLIRefreshAuth_StaleOperatorBinding_Admitted(t *testing.T) {
 	operatorDoc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator")
 	require.NoError(t, err)
 	require.NotNil(t, operatorDoc)
-	var operator models.OperatorDocumentGo
+	var operator operatorv1.OperatorDocument
 	data, err := json.Marshal(operatorDoc.Data)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &operator))

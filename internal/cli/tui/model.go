@@ -11,6 +11,8 @@ import (
 	"context"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -106,7 +108,7 @@ type Model struct {
 
 	// Operators from the last successful refresh: connected ones only, plus
 	// the total the Gateway listed.
-	operators            []models.OperatorDocumentGo
+	operators            []*operatorv1.OperatorDocument
 	operatorsTotal       int
 	operatorsLoaded      bool
 	operatorsErr         string

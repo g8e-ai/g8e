@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -371,7 +373,7 @@ func TestApproveFlow(t *testing.T) {
 
 func TestApplyOperatorsMsg(t *testing.T) {
 	m := NewModel(Options{})
-	m = m.applyOperatorsMsg(OperatorsMsg{Operators: []models.OperatorDocumentGo{
+	m = m.applyOperatorsMsg(OperatorsMsg{Operators: []*operatorv1.OperatorDocument{
 		{ID: "op-1", Status: constants.OperatorStatusActive},
 		{ID: "op-2", Status: constants.OperatorStatusOffline},
 		{ID: "slot", IsSlot: true, Status: constants.OperatorStatusAvailable},

@@ -70,7 +70,7 @@ func seedOperatorForDispatch(t *testing.T, infra *TestInfrastructure) (operatorI
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
-	opDoc := &models.OperatorDocumentGo{
+	opDoc := &operatorv1.OperatorDocument{
 		ID:                operatorID,
 		UserID:            userID,
 		OrganizationID:    "org-dispatch-int",
@@ -444,14 +444,14 @@ func boundaryInferenceResultText(t *testing.T, result *operatorv1.InferenceResul
 
 func seedInferenceOperator(t *testing.T, infra *TestInfrastructure, userID, operatorID, sessionID string, capable bool) {
 	t.Helper()
-	op := &models.OperatorDocumentGo{
+	op := &operatorv1.OperatorDocument{
 		ID:                operatorID,
 		UserID:            userID,
 		OrganizationID:    "org-inference-boundary",
 		Status:            constants.OperatorStatusActive,
 		OperatorType:      constants.OperatorTypeRemote,
 		OperatorSessionID: sessionID,
-		RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: capable},
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: capable},
 		CreatedAt:         time.Now().UTC(),
 		UpdatedAt:         time.Now().UTC(),
 	}
@@ -1116,14 +1116,14 @@ func TestInferenceDispatch_CallerCancellationRemovesHandlerWhileRemoteExecutionC
 	case <-time.After(time.Second):
 		t.Fatal("dispatch did not return after caller cancellation")
 	}
-	assert.Zero(t, resultHandlerCount(infra.Pubsub, &models.OperatorDocumentGo{ID: operatorID, OperatorSessionID: sessionID}))
+	assert.Zero(t, resultHandlerCount(infra.Pubsub, &operatorv1.OperatorDocument{ID: operatorID, OperatorSessionID: sessionID}))
 
 	close(release)
 	require.Eventually(t, func() bool {
 		receipt, err := infra.AuditStore.GetActionReceipt(transactionID)
 		return err == nil && receipt != nil && receipt.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	}, time.Second, 10*time.Millisecond)
-	assert.Zero(t, resultHandlerCount(infra.Pubsub, &models.OperatorDocumentGo{ID: operatorID, OperatorSessionID: sessionID}))
+	assert.Zero(t, resultHandlerCount(infra.Pubsub, &operatorv1.OperatorDocument{ID: operatorID, OperatorSessionID: sessionID}))
 	calls, _ := backend.snapshot()
 	assert.Equal(t, 1, calls)
 }

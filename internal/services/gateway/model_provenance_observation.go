@@ -33,7 +33,7 @@ import (
 // modelProvenanceOperatorLister resolves operators capable of storage-side model
 // provenance attestation. Provenance operators are enrolled under the gateway owner.
 type modelProvenanceOperatorLister interface {
-	ListOperatorsForProvenance() ([]models.OperatorDocumentGo, error)
+	ListOperatorsForProvenance() ([]*operatorv1.OperatorDocument, error)
 }
 
 // ModelProvenanceObservationCoordinator fans out BEGIN/FINALIZE provenance

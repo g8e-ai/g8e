@@ -33,7 +33,7 @@ import (
 
 type laneTestClient struct {
 	health           *models.HealthResponse
-	discovered       *models.OperatorDocumentGo
+	discovered       *operatorv1.OperatorDocument
 	dispatchStatus   int
 	dispatchResponse *client.DispatchCommandResponse
 	dispatchRaw      []byte
@@ -54,7 +54,7 @@ func (c *laneTestClient) Health(context.Context) (*models.HealthResponse, []byte
 	return c.health, nil, nil
 }
 
-func (c *laneTestClient) DiscoverRemoteOperator(context.Context) (*models.OperatorDocumentGo, []byte, error) {
+func (c *laneTestClient) DiscoverRemoteOperator(context.Context) (*operatorv1.OperatorDocument, []byte, error) {
 	return c.discovered, nil, nil
 }
 
@@ -144,7 +144,7 @@ func (s *laneTestArtifactSink) reference(scope EvidenceScope, artifactType compl
 }
 
 func TestCommandLane_ResolveTargetAndPostureFailClosed(t *testing.T) {
-	activeRemote := &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote}
+	activeRemote := &operatorv1.OperatorDocument{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote}
 	tests := []struct {
 		name       string
 		client     *laneTestClient
@@ -152,10 +152,10 @@ func TestCommandLane_ResolveTargetAndPostureFailClosed(t *testing.T) {
 		wantErr    error
 	}{
 		{name: "discovered active remote operator", client: &laneTestClient{discovered: activeRemote}, wantTarget: Target{OperatorID: "operator-1", SessionID: "session-1"}},
-		{name: "configured blended embedded Data operator", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "blend", OperatorSessionID: "blend-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference}}}}, wantTarget: Target{OperatorID: "blend", SessionID: "blend-session"}},
-		{name: "remote witness without Data rejected", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "witness", OperatorSessionID: "witness-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleObserver}}}}, wantErr: constants.ErrEvaluationTargetUnavailable},
-		{name: "discovered embedded operator rejected", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}}, wantErr: constants.ErrEvaluationTargetUnavailable},
-		{name: "discovered inactive operator rejected", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote}}, wantErr: constants.ErrEvaluationTargetUnavailable},
+		{name: "configured blended embedded Data operator", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{ID: "blend", OperatorSessionID: "blend-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleData, constants.OperatorRoleInference}}}}, wantTarget: Target{OperatorID: "blend", SessionID: "blend-session"}},
+		{name: "remote witness without Data rejected", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{ID: "witness", OperatorSessionID: "witness-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleObserver}}}}, wantErr: constants.ErrEvaluationTargetUnavailable},
+		{name: "discovered embedded operator rejected", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}}, wantErr: constants.ErrEvaluationTargetUnavailable},
+		{name: "discovered inactive operator rejected", client: &laneTestClient{discovered: &operatorv1.OperatorDocument{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote}}, wantErr: constants.ErrEvaluationTargetUnavailable},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

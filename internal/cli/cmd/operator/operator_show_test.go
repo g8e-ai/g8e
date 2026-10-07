@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
 	"github.com/stretchr/testify/assert"
@@ -89,7 +91,7 @@ func TestParseOperatorHeartbeatView_RejectsLegacyPythonShape(t *testing.T) {
 }
 
 func TestFindOperatorByIDOrSession(t *testing.T) {
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		{ID: "op-1", OperatorSessionID: "session-1"},
 		{ID: "op-2", OperatorSessionID: "session-2"},
 	}
@@ -105,7 +107,7 @@ func TestOperatorShowCmdWithConfig_NotFound(t *testing.T) {
 
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{ID: "op-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive},
 		},
 	}
@@ -148,7 +150,7 @@ func TestOperatorShowCmdWithConfig_PrintsHeartbeatDetails(t *testing.T) {
 
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "286d7a56-b961-4cff-9c69-063a84b69afd",
 				OperatorSessionID: "74a859f4-2443-4a4b-ae9c-35da879c1ad3",
@@ -186,7 +188,7 @@ func TestOperatorShowCmdWithConfig_JSONOutput(t *testing.T) {
 	heartbeat := json.RawMessage(`{"system_identity":{"hostname":"json-host"}}`)
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "op-json",
 				OperatorSessionID: "session-json",
@@ -223,7 +225,7 @@ func TestOperatorShowCmdWithConfig_ReportsLastHeartbeatAndStaleStatus(t *testing
 	lastHeartbeat := time.Date(2026, time.September, 30, 12, 34, 56, 0, time.UTC)
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "op-stale",
 				OperatorSessionID: "session-stale",
@@ -280,7 +282,7 @@ func TestOperatorListCmdWithConfig_IncludesHostname(t *testing.T) {
 	heartbeat := json.RawMessage(`{"system_identity":{"hostname":"list-host"}}`)
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{
 				ID:                "op-host",
 				OperatorSessionID: "session-host",
@@ -306,14 +308,14 @@ func TestOperatorListCmdWithConfig_IncludesHostname(t *testing.T) {
 }
 
 func TestOperatorHostnameValue_FallbackToCurrentHostname(t *testing.T) {
-	op := models.OperatorDocumentGo{
+	op := operatorv1.OperatorDocument{
 		ID:              "op-1",
 		CurrentHostname: "cached-worker",
 	}
 	assert.Equal(t, "cached-worker", operatorHostnameValue(op))
 	assert.Equal(t, "cached-worker", operatorHostnameDisplay(op))
 
-	emptyOp := models.OperatorDocumentGo{ID: "op-2"}
+	emptyOp := operatorv1.OperatorDocument{ID: "op-2"}
 	assert.Equal(t, "", operatorHostnameValue(emptyOp))
 	assert.Equal(t, "-", operatorHostnameDisplay(emptyOp))
 }

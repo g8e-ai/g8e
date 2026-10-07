@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -1193,7 +1195,7 @@ func TestHandleIssue_OperatorSignsBothCSRsAndPersistsOwnedOperator(t *testing.T)
 	require.NotNil(t, doc)
 	raw, err := json.Marshal(doc.Data)
 	require.NoError(t, err)
-	var opDoc models.OperatorDocumentGo
+	var opDoc operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(raw, &opDoc))
 	assert.Equal(t, enrollTestOwnerID, opDoc.UserID)
 	assert.Equal(t, enrollTestOrgID, opDoc.OrganizationID)

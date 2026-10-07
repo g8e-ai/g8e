@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -140,14 +142,14 @@ func cloneRawMap(in map[string]json.RawMessage) map[string]json.RawMessage {
 	return out
 }
 
-func loadOperator(t *testing.T, store *memStore) *models.OperatorDocumentGo {
+func loadOperator(t *testing.T, store *memStore) *operatorv1.OperatorDocument {
 	t.Helper()
 	doc, err := store.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	b, err := json.Marshal(doc.Data)
 	require.NoError(t, err)
-	var op models.OperatorDocumentGo
+	var op operatorv1.OperatorDocument
 	require.NoError(t, json.Unmarshal(b, &op))
 	op.ID = doc.ID
 	return &op

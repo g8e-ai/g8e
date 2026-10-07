@@ -10,8 +10,9 @@ package tui
 import (
 	"fmt"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/operator"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
@@ -36,7 +37,7 @@ func (m Model) renderOperatorDetailsView(width, height int) string {
 
 // operatorDetailsLines mirrors the data shown by 'g8e operator show': the
 // identity and runtime fields followed by the normalized heartbeat sections.
-func operatorDetailsLines(op models.OperatorDocumentGo, identity Identity) []string {
+func operatorDetailsLines(op operatorv1.OperatorDocument, identity Identity) []string {
 	bound := op.BoundWebSessionID
 	if op.ID == identity.OperatorID {
 		bound = "yes (this CLI session)"

@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
@@ -70,7 +72,7 @@ func sessionOperatorBindKey(operatorSessionID string) string {
 	return sessionOperatorBindPrefix + operatorSessionID + sessionBindSuffix
 }
 
-func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.OperatorDocumentGo, error) {
+func (s *RegistrationService) ListOperatorSlots(userID string) ([]*operatorv1.OperatorDocument, error) {
 	if userID == "" {
 		return nil, constants.ErrRegistrationUserIDRequired
 	}
@@ -82,7 +84,7 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 	if err != nil {
 		return nil, err
 	}
-	slots := make([]models.OperatorDocumentGo, 0, len(docs))
+	slots := make([]*operatorv1.OperatorDocument, 0, len(docs))
 	for _, doc := range docs {
 		slot, err := s.toOperatorDoc(doc)
 		if err != nil {
@@ -100,7 +102,7 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 // manage it through this method. ListOperatorSlots remains limited to
 // slots for callers that only want user-created slots.
 // GetOperator returns a single operator document by ID.
-func (s *RegistrationService) GetOperator(operatorID string) (*models.OperatorDocumentGo, error) {
+func (s *RegistrationService) GetOperator(operatorID string) (*operatorv1.OperatorDocument, error) {
 	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return nil, err
@@ -108,7 +110,7 @@ func (s *RegistrationService) GetOperator(operatorID string) (*models.OperatorDo
 	return s.toOperatorDoc(doc)
 }
 
-func (s *RegistrationService) ListUserOperators(userID string) ([]models.OperatorDocumentGo, error) {
+func (s *RegistrationService) ListUserOperators(userID string) ([]*operatorv1.OperatorDocument, error) {
 	if userID == "" {
 		return nil, constants.ErrRegistrationUserIDRequired
 	}
@@ -119,7 +121,7 @@ func (s *RegistrationService) ListUserOperators(userID string) ([]models.Operato
 	if err != nil {
 		return nil, err
 	}
-	operators := make([]models.OperatorDocumentGo, 0, len(docs))
+	operators := make([]*operatorv1.OperatorDocument, 0, len(docs))
 	for _, doc := range docs {
 		op, err := s.toOperatorDoc(doc)
 		if err != nil {
@@ -133,7 +135,7 @@ func (s *RegistrationService) ListUserOperators(userID string) ([]models.Operato
 // UpdateOperatorRuntimeConfig persists the operator-reported runtime config on
 // the operator document so owner discovery and inference dispatch can resolve
 // capability flags such as inference_enabled.
-func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, runtimeConfig *models.RuntimeConfig) error {
+func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, runtimeConfig *operatorv1.OperatorRuntimeConfig) error {
 	if operatorID == "" {
 		return constants.ErrRegistrationOperatorIDRequired
 	}
@@ -141,12 +143,12 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 		return constants.ErrMissingRequiredField
 	}
 	type configUpdatePayload struct {
-		RuntimeConfig *models.RuntimeConfig   `json:"runtime_config"`
-		OperatorRoles constants.OperatorRoles `json:"operator_roles,omitempty"`
-		LocalDir      string                  `json:"local_dir,omitempty"`
-		Account       string                  `json:"account,omitempty"`
-		Port          int                     `json:"port,omitempty"`
-		UpdatedAt     time.Time               `json:"updated_at"`
+		RuntimeConfig *operatorv1.OperatorRuntimeConfig `json:"runtime_config"`
+		OperatorRoles constants.OperatorRoles           `json:"operator_roles,omitempty"`
+		LocalDir      string                            `json:"local_dir,omitempty"`
+		Account       string                            `json:"account,omitempty"`
+		Port          int                               `json:"port,omitempty"`
+		UpdatedAt     time.Time                         `json:"updated_at"`
 	}
 	payload := configUpdatePayload{
 		RuntimeConfig: runtimeConfig,
@@ -291,7 +293,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	}
 
 	// Resolve or create Operator slot
-	var operator *models.OperatorDocumentGo
+	var operator *operatorv1.OperatorDocument
 	var err error
 
 	// Resolve the operator slot in three steps:
@@ -345,7 +347,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 }
 
 // completeRegistration performs the common registration logic after Operator slot is resolved.
-func (s *RegistrationService) completeRegistration(operator *models.OperatorDocumentGo, userID, organizationID string, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
+func (s *RegistrationService) completeRegistration(operator *operatorv1.OperatorDocument, userID, organizationID string, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
 	// Create Operator session
 	operatorSessionID, err := uuid.NewString()
 	if err != nil {
@@ -514,19 +516,19 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	}, nil
 }
 
-func (s *RegistrationService) toOperatorDoc(doc *models.Document) (*models.OperatorDocumentGo, error) {
+func (s *RegistrationService) toOperatorDoc(doc *models.Document) (*operatorv1.OperatorDocument, error) {
 	b, err := json.Marshal(doc.ForWire())
 	if err != nil {
 		return nil, err
 	}
-	var op models.OperatorDocumentGo
+	var op operatorv1.OperatorDocument
 	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, err
 	}
 	return &op, nil
 }
 
-func (s *RegistrationService) createSlot(userID, orgID string) (*models.OperatorDocumentGo, error) {
+func (s *RegistrationService) createSlot(userID, orgID string) (*operatorv1.OperatorDocument, error) {
 	id, err := uuid.NewString()
 	if err != nil {
 		return nil, err
@@ -545,7 +547,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		slotNumber = len(docs) + 1
 	}
 
-	op := &models.OperatorDocumentGo{
+	op := &operatorv1.OperatorDocument{
 		ID:             id,
 		UserID:         userID,
 		OrganizationID: orgID,
@@ -933,7 +935,7 @@ func (s *RegistrationService) UnbindUserWebOperators(userID string) ([]string, e
 		return nil, fmt.Errorf("unbind user web operators: list operators: %w", err)
 	}
 
-	byWebSession := map[string][]models.OperatorDocumentGo{}
+	byWebSession := map[string][]*operatorv1.OperatorDocument{}
 	for _, op := range operators {
 		if op.BoundWebSessionID != "" {
 			byWebSession[op.BoundWebSessionID] = append(byWebSession[op.BoundWebSessionID], op)

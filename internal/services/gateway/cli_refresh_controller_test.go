@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -255,13 +257,13 @@ func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.
 	dataSessionID := "op-refresh-data"
 	now := time.Now().UTC()
 
-	provenanceBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	provenanceBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID:                "op-id-provenance",
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,
 		OperatorType:      constants.OperatorTypeRemote,
 		OperatorSessionID: provenanceSessionID,
-		RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{ProvenanceOperatorEnabled: true},
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	})
@@ -270,7 +272,7 @@ func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.
 		marshaler.CollectionName(constants.CollectionOperators), "op-id-provenance", provenanceBytes,
 	))
 
-	dataBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	dataBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID:                "op-id-data",
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,
@@ -306,7 +308,7 @@ func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testi
 	))
 
 	now := time.Now().UTC()
-	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID:                "op-id-registry-active",
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,
@@ -404,7 +406,7 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 	// local binding — but the old CLI session predates the binding work
 	// and carries no operator_session_id.
 	now := time.Now().UTC()
-	embeddedBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	embeddedBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID:                string(constants.DocIDEmbeddedOperator),
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,
@@ -415,7 +417,7 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 	})
 	require.NoError(t, err)
 	require.NoError(t, c.cliSessionSvc.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator), embeddedBytes))
-	staleRemoteBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	staleRemoteBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID:                "stale-remote-operator",
 		UserID:            user.ID,
 		Status:            constants.OperatorStatusActive,

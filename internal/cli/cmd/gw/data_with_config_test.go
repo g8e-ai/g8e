@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
 	"github.com/stretchr/testify/assert"
@@ -135,7 +137,7 @@ func TestDataOperatorsCmdWithConfig_ValidResponse(t *testing.T) {
 
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{
+		Operators: []*operatorv1.OperatorDocument{
 			{ID: "op1", OperatorType: "remote", Status: "active"},
 		},
 	}
@@ -191,7 +193,7 @@ func TestDataOperatorsCmdWithConfig_SendsUserIDQueryParameter(t *testing.T) {
 	env := newDataTestEnv(t)
 	saveDataTestCredentials(t, env.fileSvc, env.cfg, "user-distinct-456")
 
-	slotResp := models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}}
+	slotResp := models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{}}
 	opsJSON, _ := json.Marshal(slotResp)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }

@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"text/tabwriter"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -30,7 +32,7 @@ import (
 )
 
 // Start flags `gw status` can attribute to an Operator. The Gateway only knows
-// the values an Operator reported at registration (models.RuntimeConfig) plus,
+// the values an Operator reported at registration (operatorv1.OperatorRuntimeConfig) plus,
 // for the embedded Operator, the Gateway's own launch profile.
 const (
 	flagLog                = "--log"
@@ -82,7 +84,7 @@ type operatorInventory struct {
 	Unavailable string
 }
 
-func operatorStatusFromDocument(op models.OperatorDocumentGo) operatorStatus {
+func operatorStatusFromDocument(op operatorv1.OperatorDocument) operatorStatus {
 	row := operatorStatus{
 		ID:       op.ID,
 		Type:     operatorTypeDisplay(op.OperatorType),

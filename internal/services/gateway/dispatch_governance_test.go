@@ -20,7 +20,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
@@ -200,7 +199,7 @@ func TestBuildGovernanceEnvelope_RatifyAllowsReadOnly(t *testing.T) {
 // rejected before deliberation because the path cannot mint L3 proofs.
 func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 
 	cases := []struct {
 		name            string
@@ -293,7 +292,7 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 // fails closed rather than publishing an unsigned envelope.
 func TestDispatchService_L2DeliberationFailureFailsClosed(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	op := &operatorv1.OperatorDocument{ID: "op-001", OperatorSessionID: "sess-001"}
 	broker := NewGatewayWebSocketHandler(logger)
 	svc := NewDispatchService(
 		logger, broker,

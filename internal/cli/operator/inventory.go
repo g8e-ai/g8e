@@ -9,13 +9,13 @@ package operator
 
 import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // IsConnected reports whether an Operator document from GET
 // APIPaths.Operators represents a live connection: an unclaimed slot never
 // does, and a claimed Operator does while it is active, bound, or stale.
-func IsConnected(op models.OperatorDocumentGo) bool {
+func IsConnected(op operatorv1.OperatorDocument) bool {
 	if op.IsSlot && !op.Claimed {
 		return false
 	}

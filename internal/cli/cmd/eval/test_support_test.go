@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -136,14 +138,14 @@ func (f *fakeBindClient) Bind(_ context.Context, _ fs.RuntimeFileService, operat
 	}, nil
 }
 
-func campaignOrchestrateOperators() []models.OperatorDocumentGo {
-	return []models.OperatorDocumentGo{
+func campaignOrchestrateOperators() []*operatorv1.OperatorDocument {
+	return []*operatorv1.OperatorDocument{
 		{
 			ID:                "infer-op",
 			OperatorSessionID: "infer-session",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig: &models.RuntimeConfig{
+			RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 				InferenceEnabled:        true,
 				InferenceOllamaEndpoint: "http://provider.example:11434",
 			},
@@ -154,7 +156,7 @@ func campaignOrchestrateOperators() []models.OperatorDocumentGo {
 			CurrentHostname:   constants.DataOperatorHostname,
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: false},
+			RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{InferenceEnabled: false},
 		},
 	}
 }

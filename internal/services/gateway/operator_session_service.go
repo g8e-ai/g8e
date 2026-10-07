@@ -13,6 +13,8 @@ import (
 	"log/slog"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -182,13 +184,13 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 	if err != nil {
 		return nil, fmt.Errorf("query active operators for user %s: %w", userID, err)
 	}
-	var fallback, embeddedFallback *models.OperatorDocumentGo
+	var fallback, embeddedFallback *operatorv1.OperatorDocument
 	for _, doc := range docs {
 		dataBytes, err := json.Marshal(doc.Data)
 		if err != nil {
 			return nil, fmt.Errorf("marshal operator document: %w", err)
 		}
-		var operator models.OperatorDocumentGo
+		var operator operatorv1.OperatorDocument
 		if err := json.Unmarshal(dataBytes, &operator); err != nil {
 			return nil, fmt.Errorf("unmarshal operator document: %w", err)
 		}
@@ -211,7 +213,7 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 	return nil, nil
 }
 
-func dataOperatorSession(operator models.OperatorDocumentGo) *models.OperatorSession {
+func dataOperatorSession(operator operatorv1.OperatorDocument) *models.OperatorSession {
 	return &models.OperatorSession{
 		ID:         operator.OperatorSessionID,
 		UserID:     operator.UserID,

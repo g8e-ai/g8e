@@ -106,7 +106,7 @@ type OperatorLister interface {
 	// including platform-enrolled operators. The dispatch service filters
 	// these by RuntimeConfig.InferenceEnabled to resolve the Inference
 	// Node's operator session.
-	ListUserOperators(userID string) ([]models.OperatorDocumentGo, error)
+	ListUserOperators(userID string) ([]*operatorv1.OperatorDocument, error)
 }
 
 // ProviderObservationNotifier coordinates remote provider-boundary observation
@@ -614,7 +614,7 @@ func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest)
 		return "", err
 	}
 
-	capable := func(op *models.OperatorDocumentGo) bool {
+	capable := func(op *operatorv1.OperatorDocument) bool {
 		return op.RuntimeConfig != nil &&
 			operatorcapability.GetOperatorRoles(*op).Has(constants.OperatorRoleInference) &&
 			op.OperatorSessionID != "" &&

@@ -10,9 +10,10 @@ package eval
 import (
 	"fmt"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
@@ -48,7 +49,7 @@ func resolveOperatorSessions(cmd *cobra.Command, deps nativeEvalDeps, roles ...o
 	return resolveOperatorSessionsFrom(operators, roles...)
 }
 
-func resolveOperatorSessionsFrom(operators []models.OperatorDocumentGo, roles ...operatorRole) (operatorSessions, error) {
+func resolveOperatorSessionsFrom(operators []*operatorv1.OperatorDocument, roles ...operatorRole) (operatorSessions, error) {
 	var sessions operatorSessions
 	for _, role := range roles {
 		switch role {

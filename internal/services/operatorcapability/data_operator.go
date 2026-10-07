@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -28,21 +27,21 @@ type DataOperatorStatus struct {
 
 // IsDataOperator reports whether an active remote or configured embedded
 // session includes Data, even when other roles are enabled.
-func IsDataOperator(op models.OperatorDocumentGo) bool {
+func IsDataOperator(op operatorv1.OperatorDocument) bool {
 	return HasActiveRole(op, constants.OperatorRoleData)
 }
 
 // IsDedicatedDataOperator reports whether op is an active Data session other
 // than the Gateway's embedded Operator. Selection prefers dedicated Data
 // Operators and falls back to the embedded one only when none is active.
-func IsDedicatedDataOperator(op models.OperatorDocumentGo) bool {
+func IsDedicatedDataOperator(op operatorv1.OperatorDocument) bool {
 	return IsDataOperator(op) && op.OperatorType != constants.OperatorTypeEmbedded
 }
 
 // PreferDedicatedDataOperators drops the Gateway's embedded Operator when a
 // dedicated Data session is also present.
-func PreferDedicatedDataOperators(operators []models.OperatorDocumentGo) []models.OperatorDocumentGo {
-	dedicated := make([]models.OperatorDocumentGo, 0, len(operators))
+func PreferDedicatedDataOperators(operators []*operatorv1.OperatorDocument) []*operatorv1.OperatorDocument {
+	dedicated := make([]*operatorv1.OperatorDocument, 0, len(operators))
 	for _, op := range operators {
 		if IsDedicatedDataOperator(op) {
 			dedicated = append(dedicated, op)
@@ -57,7 +56,7 @@ func PreferDedicatedDataOperators(operators []models.OperatorDocumentGo) []model
 // IsStackDataOperator reports whether op is the data-operator the unified
 // Docker stack launches: an active data Operator whose heartbeat hostname is
 // constants.DataOperatorHostname.
-func IsStackDataOperator(op models.OperatorDocumentGo) bool {
+func IsStackDataOperator(op operatorv1.OperatorDocument) bool {
 	return IsDataOperator(op) && op.CurrentHostname == constants.DataOperatorHostname
 }
 
@@ -65,7 +64,7 @@ func IsStackDataOperator(op models.OperatorDocumentGo) bool {
 // order: stack data-operators (constants.DataOperatorHostname), else dedicated
 // Data Operators (for example, in host-native local development), else the
 // Gateway's embedded Operator.
-func ActiveDataOperators(operators []models.OperatorDocumentGo) []DataOperatorStatus {
+func ActiveDataOperators(operators []*operatorv1.OperatorDocument) []DataOperatorStatus {
 	var stackMatches []DataOperatorStatus
 	var dedicatedMatches []DataOperatorStatus
 	var embeddedMatches []DataOperatorStatus
@@ -75,8 +74,8 @@ func ActiveDataOperators(operators []models.OperatorDocumentGo) []DataOperatorSt
 		}
 		wd := extractWorkingDirectory(op.LatestHeartbeat)
 		status := DataOperatorStatus{
-			OperatorID:        op.ID,
-			OperatorSessionID: op.OperatorSessionID,
+			OperatorID:        op.Id,
+			OperatorSessionID: op.OperatorSessionId,
 			Status:            string(op.Status),
 			WorkingDirectory:  wd,
 		}
@@ -123,7 +122,7 @@ func extractWorkingDirectory(hb []byte) string {
 
 // SelectDataOperator resolves exactly one data-operator. Zero sessions return
 // ErrDataOperatorNotFound and several return ErrDataOperatorAmbiguous.
-func SelectDataOperator(operators []models.OperatorDocumentGo) (*DataOperatorStatus, error) {
+func SelectDataOperator(operators []*operatorv1.OperatorDocument) (*DataOperatorStatus, error) {
 	matches := ActiveDataOperators(operators)
 	switch len(matches) {
 	case 0:

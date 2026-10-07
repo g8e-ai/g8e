@@ -10,8 +10,9 @@ package operatorcapability
 import (
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,21 +21,21 @@ func TestResolveOperatorRoles(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleData}, ResolveOperatorRoles(nil))
-	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleData}, ResolveOperatorRoles(&models.RuntimeConfig{}))
+	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleData}, ResolveOperatorRoles(&operatorv1.OperatorRuntimeConfig{}))
 
-	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleInference}, ResolveOperatorRoles(&models.RuntimeConfig{
+	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleInference}, ResolveOperatorRoles(&operatorv1.OperatorRuntimeConfig{
 		InferenceEnabled: true,
 	}))
 
-	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, ResolveOperatorRoles(&models.RuntimeConfig{
+	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleProvenance}, ResolveOperatorRoles(&operatorv1.OperatorRuntimeConfig{
 		ProvenanceOperatorEnabled: true,
 	}))
 
-	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleObserver}, ResolveOperatorRoles(&models.RuntimeConfig{
+	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleObserver}, ResolveOperatorRoles(&operatorv1.OperatorRuntimeConfig{
 		ProviderBoundaryObserverEnabled: true,
 	}))
 
-	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleData}, ResolveOperatorRoles(&models.RuntimeConfig{
+	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleData}, ResolveOperatorRoles(&operatorv1.OperatorRuntimeConfig{
 		Roles: constants.OperatorRoles{constants.OperatorRoleData},
 	}))
 }
@@ -42,16 +43,16 @@ func TestResolveOperatorRoles(t *testing.T) {
 func TestGetOperatorRoles(t *testing.T) {
 	t.Parallel()
 
-	opDoc := models.OperatorDocumentGo{
+	opDoc := operatorv1.OperatorDocument{
 		OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference},
-		RuntimeConfig: &models.RuntimeConfig{
+		RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 			Roles: constants.OperatorRoles{constants.OperatorRoleData}, // OperatorRole takes precedence
 		},
 	}
 	assert.Equal(t, constants.OperatorRoles{constants.OperatorRoleData}, GetOperatorRoles(opDoc))
 
-	opDoc2 := models.OperatorDocumentGo{
-		RuntimeConfig: &models.RuntimeConfig{
+	opDoc2 := operatorv1.OperatorDocument{
+		RuntimeConfig: &operatorv1.OperatorRuntimeConfig{
 			ProviderBoundaryObserverEnabled: true,
 		},
 	}
@@ -61,7 +62,7 @@ func TestGetOperatorRoles(t *testing.T) {
 func TestValidateOperatorRoleCapabilities(t *testing.T) {
 	t.Parallel()
 
-	infOp := models.OperatorDocumentGo{
+	infOp := operatorv1.OperatorDocument{
 		ID:            "inf-op",
 		OperatorRoles: constants.OperatorRoles{constants.OperatorRoleInference},
 	}
@@ -78,7 +79,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 	t.Parallel()
 
 	t.Run("separated by distinct roles on same host", func(t *testing.T) {
-		opInf := models.OperatorDocumentGo{
+		opInf := operatorv1.OperatorDocument{
 			ID:                "op-inf",
 			LocalDir:          "/home/user/runtime",
 			Port:              8444,
@@ -86,7 +87,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleInference},
 			SystemFingerprint: "fp-1",
 		}
-		opData := models.OperatorDocumentGo{
+		opData := operatorv1.OperatorDocument{
 			ID:                "op-data",
 			LocalDir:          "/home/user/runtime",
 			Port:              8444,
@@ -101,7 +102,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 	})
 
 	t.Run("separated by local directory", func(t *testing.T) {
-		op1 := models.OperatorDocumentGo{
+		op1 := operatorv1.OperatorDocument{
 			ID:                "op-1",
 			LocalDir:          "/data/g8e/op1",
 			Port:              8443,
@@ -109,7 +110,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-1",
 		}
-		op2 := models.OperatorDocumentGo{
+		op2 := operatorv1.OperatorDocument{
 			ID:                "op-2",
 			LocalDir:          "/data/g8e/op2",
 			Port:              8443,
@@ -124,7 +125,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 	})
 
 	t.Run("separated by port", func(t *testing.T) {
-		op1 := models.OperatorDocumentGo{
+		op1 := operatorv1.OperatorDocument{
 			ID:                "op-1",
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
@@ -132,7 +133,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-1",
 		}
-		op2 := models.OperatorDocumentGo{
+		op2 := operatorv1.OperatorDocument{
 			ID:                "op-2",
 			LocalDir:          "/data/g8e/op",
 			Port:              8444,
@@ -147,7 +148,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 	})
 
 	t.Run("separated by account", func(t *testing.T) {
-		op1 := models.OperatorDocumentGo{
+		op1 := operatorv1.OperatorDocument{
 			ID:                "op-1",
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
@@ -155,7 +156,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-1",
 		}
-		op2 := models.OperatorDocumentGo{
+		op2 := operatorv1.OperatorDocument{
 			ID:                "op-2",
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
@@ -170,7 +171,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 	})
 
 	t.Run("colliding operators on same system detected", func(t *testing.T) {
-		op1 := models.OperatorDocumentGo{
+		op1 := operatorv1.OperatorDocument{
 			ID:                "op-1",
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
@@ -178,7 +179,7 @@ func TestVerifyOperatorSeparation(t *testing.T) {
 			OperatorRoles:     constants.OperatorRoles{constants.OperatorRoleData},
 			SystemFingerprint: "fp-same-123456",
 		}
-		op2 := models.OperatorDocumentGo{
+		op2 := operatorv1.OperatorDocument{
 			ID:                "op-2",
 			LocalDir:          "/data/g8e/op",
 			Port:              8443,
@@ -198,15 +199,15 @@ func TestIsActiveOperatorSession(t *testing.T) {
 
 	tests := []struct {
 		name string
-		op   models.OperatorDocumentGo
+		op   operatorv1.OperatorDocument
 		want bool
 	}{
-		{"active remote", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "s"}, true},
-		{"active embedded with runtime config", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorSessionID: "s", RuntimeConfig: &models.RuntimeConfig{}}, true},
-		{"active embedded without runtime config", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorSessionID: "s"}, false},
-		{"stale remote", models.OperatorDocumentGo{Status: constants.OperatorStatusStale, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "s"}, false},
-		{"active remote without session", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote}, false},
-		{"active with unset type", models.OperatorDocumentGo{Status: constants.OperatorStatusActive, OperatorSessionID: "s"}, false},
+		{"active remote", operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "s"}, true},
+		{"active embedded with runtime config", operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorSessionID: "s", RuntimeConfig: &operatorv1.OperatorRuntimeConfig{}}, true},
+		{"active embedded without runtime config", operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, OperatorSessionID: "s"}, false},
+		{"stale remote", operatorv1.OperatorDocument{Status: constants.OperatorStatusStale, OperatorType: constants.OperatorTypeRemote, OperatorSessionID: "s"}, false},
+		{"active remote without session", operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote}, false},
+		{"active with unset type", operatorv1.OperatorDocument{Status: constants.OperatorStatusActive, OperatorSessionID: "s"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -219,11 +220,11 @@ func TestIsActiveOperatorSession(t *testing.T) {
 func TestHasActiveRoleRequiresActiveSessionAndRole(t *testing.T) {
 	t.Parallel()
 
-	inference := models.OperatorDocumentGo{
+	inference := operatorv1.OperatorDocument{
 		Status:            constants.OperatorStatusActive,
 		OperatorType:      constants.OperatorTypeRemote,
 		OperatorSessionID: "s",
-		RuntimeConfig:     &models.RuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleInference}},
+		RuntimeConfig:     &operatorv1.OperatorRuntimeConfig{Roles: constants.OperatorRoles{constants.OperatorRoleInference}},
 	}
 	assert.True(t, HasActiveRole(inference, constants.OperatorRoleInference))
 	assert.False(t, HasActiveRole(inference, constants.OperatorRoleData))

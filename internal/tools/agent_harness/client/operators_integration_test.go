@@ -17,6 +17,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -26,7 +28,7 @@ import (
 )
 
 func TestDiscoverRemoteOperator_SelectsTheStackDataOperator(t *testing.T) {
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		{ID: "op-embedded", OperatorSessionID: "sess-embedded", CurrentHostname: constants.DataOperatorHostname, Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded},
 		{ID: "op-offline", OperatorSessionID: "sess-offline", CurrentHostname: constants.DataOperatorHostname, Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote},
 		{ID: "op-nosession", CurrentHostname: constants.DataOperatorHostname, Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
@@ -61,7 +63,7 @@ func TestDiscoverRemoteOperator_SelectsTheStackDataOperator(t *testing.T) {
 }
 
 func TestDiscoverRemoteOperator_SelectsHostNativeDataOperator(t *testing.T) {
-	operators := []models.OperatorDocumentGo{
+	operators := []*operatorv1.OperatorDocument{
 		{ID: "op-local", OperatorSessionID: "sess-local", CurrentHostname: "beepboop", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
 	}
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: operators})
@@ -85,7 +87,7 @@ func TestDiscoverRemoteOperator_SelectsHostNativeDataOperator(t *testing.T) {
 func TestDiscoverRemoteOperator_RejectsZeroOrAmbiguousMatches(t *testing.T) {
 	tests := []struct {
 		name      string
-		operators []models.OperatorDocumentGo
+		operators []*operatorv1.OperatorDocument
 		wantErr   error
 	}{
 		{
@@ -95,21 +97,21 @@ func TestDiscoverRemoteOperator_RejectsZeroOrAmbiguousMatches(t *testing.T) {
 		},
 		{
 			name: "no active data-operator session",
-			operators: []models.OperatorDocumentGo{
+			operators: []*operatorv1.OperatorDocument{
 				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: constants.DataOperatorHostname, Status: constants.OperatorStatusStale, OperatorType: constants.OperatorTypeRemote},
 			},
 			wantErr: constants.ErrEvaluationTargetUnavailable,
 		},
 		{
 			name: "inference operators are not data operators",
-			operators: []models.OperatorDocumentGo{
-				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: "elsewhere", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{InferenceEnabled: true}},
+			operators: []*operatorv1.OperatorDocument{
+				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: "elsewhere", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &operatorv1.OperatorRuntimeConfig{InferenceEnabled: true}},
 			},
 			wantErr: constants.ErrEvaluationTargetUnavailable,
 		},
 		{
 			name: "ambiguous active data-operator sessions",
-			operators: []models.OperatorDocumentGo{
+			operators: []*operatorv1.OperatorDocument{
 				stackDataOperator("op-1", "sess-1"),
 				stackDataOperator("op-2", "sess-2"),
 			},
@@ -117,7 +119,7 @@ func TestDiscoverRemoteOperator_RejectsZeroOrAmbiguousMatches(t *testing.T) {
 		},
 		{
 			name: "ambiguous host-native data-operator sessions without stack",
-			operators: []models.OperatorDocumentGo{
+			operators: []*operatorv1.OperatorDocument{
 				{ID: "op-1", OperatorSessionID: "sess-1", CurrentHostname: "elsewhere-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
 				{ID: "op-2", OperatorSessionID: "sess-2", CurrentHostname: "elsewhere-2", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
 			},

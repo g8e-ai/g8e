@@ -12,13 +12,15 @@ import (
 	"fmt"
 	"strings"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // CheckStoppable reports why an Operator cannot receive a governed shutdown:
 // only a remote Operator can, which the Gateway enforces again on the request.
-func CheckStoppable(op models.OperatorDocumentGo) error {
+func CheckStoppable(op operatorv1.OperatorDocument) error {
 	switch op.OperatorType {
 	case constants.OperatorTypeRemote:
 		return nil

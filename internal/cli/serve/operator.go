@@ -23,12 +23,13 @@ import (
 	"syscall"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/adapters/lattice"
 	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/exitcode"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -528,7 +529,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 }
 
 func operatorRoles(opts ServeOperatorOptions) constants.OperatorRoles {
-	return operatorcapability.ResolveOperatorRoles(&models.RuntimeConfig{Roles: opts.OperatorRoles, InferenceEnabled: opts.InferenceEnabled, ProvenanceOperatorEnabled: opts.ProvenanceOperatorEnabled, ProviderBoundaryObserverEnabled: opts.ProviderBoundaryObserverEnabled})
+	return operatorcapability.ResolveOperatorRoles(&operatorv1.OperatorRuntimeConfig{Roles: opts.OperatorRoles, InferenceEnabled: opts.InferenceEnabled, ProvenanceOperatorEnabled: opts.ProvenanceOperatorEnabled, ProviderBoundaryObserverEnabled: opts.ProviderBoundaryObserverEnabled})
 }
 
 func operatorFingerprintOptions(opts ServeOperatorOptions, localDir, account string) auth.FingerprintOptions {

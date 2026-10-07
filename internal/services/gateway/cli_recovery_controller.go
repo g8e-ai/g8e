@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
@@ -502,7 +504,7 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 	if mintRecoveryOperator {
 		// No active operator session exists: mint a fresh remote recovery
 		// operator so the recovered CLI session still has a binding.
-		operator := &models.OperatorDocumentGo{
+		operator := &operatorv1.OperatorDocument{
 			ID:                operatorID,
 			UserID:            user.ID,
 			OrganizationID:    orgID,

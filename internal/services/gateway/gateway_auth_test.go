@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -64,7 +66,7 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 
 	// Create an Operator session with terminated status
 	operatorSessionID := "terminated-session"
-	opDoc := &models.OperatorDocumentGo{
+	opDoc := &operatorv1.OperatorDocument{
 		ID:                "op-123",
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusTerminated,
@@ -100,7 +102,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 
 	// Create an Operator session linked to the inactive user
 	operatorSessionID := "session-with-inactive-user"
-	opDoc := &models.OperatorDocumentGo{
+	opDoc := &operatorv1.OperatorDocument{
 		ID:                "op-789",
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusActive,
@@ -130,7 +132,7 @@ func TestAuthService_ValidateOperatorCLISessionBinding(t *testing.T) {
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
-	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID: "authoritative-operator", UserID: userID, OperatorSessionID: operatorSessionID,
 		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	})
@@ -176,7 +178,7 @@ func TestAuthService_ValidateOperatorSession_RejectsDuplicateRecords(t *testing.
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	for _, operatorID := range []string{"duplicate-operator-one", "duplicate-operator-two"} {
-		opBytes, err := json.Marshal(&models.OperatorDocumentGo{ID: operatorID, UserID: userID, OperatorSessionID: "duplicate-session", Status: constants.OperatorStatusActive})
+		opBytes, err := json.Marshal(&operatorv1.OperatorDocument{ID: operatorID, UserID: userID, OperatorSessionID: "duplicate-session", Status: constants.OperatorStatusActive})
 		require.NoError(t, err)
 		require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 	}
@@ -992,7 +994,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 
 	// Create an Operator session
 	operatorSessionID := "op-session-123"
-	opDoc := &models.OperatorDocumentGo{
+	opDoc := &operatorv1.OperatorDocument{
 		ID:                "op-123",
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusActive,
@@ -1036,7 +1038,7 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 
 	// Create a terminated Operator session
 	operatorSessionID := "terminated-session"
-	opDoc := &models.OperatorDocumentGo{
+	opDoc := &operatorv1.OperatorDocument{
 		ID:                "op-terminated",
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusTerminated,
@@ -1350,7 +1352,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	// Create an Operator session
 	operatorSessionID := "op-session-auth-test"
 	organizationID := "org-auth-test"
-	opDoc := &models.OperatorDocumentGo{
+	opDoc := &operatorv1.OperatorDocument{
 		ID:                "op-auth-test",
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusActive,
@@ -1447,7 +1449,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 
 	// The persisted operator binding must resolve against the operators
 	// collection — the middleware validates it on every request.
-	opDoc := &models.OperatorDocumentGo{
+	opDoc := &operatorv1.OperatorDocument{
 		ID:                "op-cli-auth",
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusActive,
@@ -1622,7 +1624,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 		// collection — the stamped identity comes from this document,
 		// never from request headers (the headers below merely agree with
 		// the persisted binding, which the middleware tolerates).
-		opDoc := &models.OperatorDocumentGo{
+		opDoc := &operatorv1.OperatorDocument{
 			ID:                opID,
 			OperatorSessionID: opSessionID,
 			Status:            constants.OperatorStatusActive,
@@ -1688,7 +1690,7 @@ func seedBoundCLIAuthFixture(t *testing.T, db *CanonicalDBService, userID, opera
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
-	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID:                operatorID,
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusActive,
@@ -1808,7 +1810,7 @@ func TestHandleCLIAuth_RejectsMismatchedOperatorHeaders(t *testing.T) {
 // `operator bind` does.
 func seedSecondBoundOperator(t *testing.T, db *CanonicalDBService, operatorUserID, userID, cliSessionID, primarySessionID, operatorID, operatorSessionID string) {
 	t.Helper()
-	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+	opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 		ID:                operatorID,
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusActive,
@@ -1873,7 +1875,7 @@ func TestHandleCLIAuth_AdmitsEveryBoundOperatorSession(t *testing.T) {
 			auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 			seedBoundCLIAuthFixture(t, db, userID, primaryID, primarySessionID, cliSessionID)
 			seedSecondBoundOperator(t, db, tt.operatorUserID, userID, cliSessionID, primarySessionID, secondID, secondSessionID)
-			strayBytes, err := json.Marshal(&models.OperatorDocumentGo{
+			strayBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 				ID: strayID, OperatorSessionID: straySessionID, Status: constants.OperatorStatusActive, UserID: userID,
 				CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 			})
@@ -1994,7 +1996,7 @@ func TestAuthService_ValidateOperatorSession_PersistentIdentity(t *testing.T) {
 
 	oldTime := time.Now().UTC().Add(-48 * time.Hour)
 	persistAged := func(operatorID, sessionID string, opType constants.OperatorType) {
-		opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 			ID:                operatorID,
 			OperatorSessionID: sessionID,
 			Status:            constants.OperatorStatusActive,
@@ -2016,7 +2018,7 @@ func TestAuthService_ValidateOperatorSession_PersistentIdentity(t *testing.T) {
 
 	for _, status := range []constants.OperatorStatus{constants.OperatorStatusActive, constants.OperatorStatusStale, constants.OperatorStatusOffline} {
 		t.Run(string(status), func(t *testing.T) {
-			opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+			opBytes, err := json.Marshal(&operatorv1.OperatorDocument{
 				ID: "op-remote-old", OperatorSessionID: "sess-remote-old", Status: status,
 				UserID: userID, OperatorType: constants.OperatorTypeRemote, CreatedAt: oldTime, UpdatedAt: oldTime,
 			})

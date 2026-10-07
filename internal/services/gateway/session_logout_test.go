@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -49,7 +51,7 @@ func newLogoutUser(t *testing.T, infra *TestInfrastructure) *models.User {
 func persistLogoutOperator(t *testing.T, infra *TestInfrastructure, userID, operatorID, operatorSessionID string) {
 	t.Helper()
 	now := time.Now().UTC()
-	b, err := json.Marshal(models.OperatorDocumentGo{
+	b, err := json.Marshal(operatorv1.OperatorDocument{
 		ID:                operatorID,
 		OperatorSessionID: operatorSessionID,
 		Status:            constants.OperatorStatusActive,

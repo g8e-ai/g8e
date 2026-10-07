@@ -10,24 +10,25 @@ package operator
 import (
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestIsConnected(t *testing.T) {
 	tests := []struct {
 		name string
-		op   models.OperatorDocumentGo
+		op   operatorv1.OperatorDocument
 		want bool
 	}{
-		{"active", models.OperatorDocumentGo{Status: constants.OperatorStatusActive}, true},
-		{"bound", models.OperatorDocumentGo{Status: constants.OperatorStatusBound}, true},
-		{"stale", models.OperatorDocumentGo{Status: constants.OperatorStatusStale}, true},
-		{"offline", models.OperatorDocumentGo{Status: constants.OperatorStatusOffline}, false},
-		{"unclaimed slot", models.OperatorDocumentGo{IsSlot: true, Status: constants.OperatorStatusActive}, false},
-		{"claimed slot", models.OperatorDocumentGo{IsSlot: true, Claimed: true, Status: constants.OperatorStatusActive}, true},
+		{"active", operatorv1.OperatorDocument{Status: constants.OperatorStatusActive}, true},
+		{"bound", operatorv1.OperatorDocument{Status: constants.OperatorStatusBound}, true},
+		{"stale", operatorv1.OperatorDocument{Status: constants.OperatorStatusStale}, true},
+		{"offline", operatorv1.OperatorDocument{Status: constants.OperatorStatusOffline}, false},
+		{"unclaimed slot", operatorv1.OperatorDocument{IsSlot: true, Status: constants.OperatorStatusActive}, false},
+		{"claimed slot", operatorv1.OperatorDocument{IsSlot: true, Claimed: true, Status: constants.OperatorStatusActive}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

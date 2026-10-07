@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"testing"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 
 	"github.com/stretchr/testify/assert"
@@ -64,7 +66,7 @@ func TestOperatorBindCmdWithConfig_Success(t *testing.T) {
 
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{{
+		Operators: []*operatorv1.OperatorDocument{{
 			ID:                "op-data",
 			OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
 			OperatorType:      constants.OperatorTypeRemote,
@@ -104,8 +106,8 @@ func TestOperatorBindCmdWithConfig_Success(t *testing.T) {
 	assert.Equal(t, "op-data", loaded.OperatorID)
 }
 
-func multiBindOperators() []models.OperatorDocumentGo {
-	return []models.OperatorDocumentGo{
+func multiBindOperators() []*operatorv1.OperatorDocument {
+	return []*operatorv1.OperatorDocument{
 		{ID: "op-a", OperatorSessionID: "sess-a", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
 		{ID: "op-b", OperatorSessionID: "sess-b", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
 		{ID: "op-c", OperatorSessionID: "sess-c", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
@@ -225,7 +227,7 @@ func TestOperatorBindCmdWithConfig_OperatorNotFound(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
 
-	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}})
+	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{}})
 	require.NoError(t, err)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -247,7 +249,7 @@ func TestOperatorBindCmdWithConfig_BindError(t *testing.T) {
 
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{{
+		Operators: []*operatorv1.OperatorDocument{{
 			ID:                "op-data",
 			OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
 			Status:            constants.OperatorStatusActive,
@@ -276,7 +278,7 @@ func TestOperatorBindCmdWithConfig_ListBoundOperator(t *testing.T) {
 
 	listBody, err := json.Marshal(models.OperatorSlotResponse{
 		Success: true,
-		Operators: []models.OperatorDocumentGo{{
+		Operators: []*operatorv1.OperatorDocument{{
 			ID:                "op-data",
 			OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
 			OperatorType:      constants.OperatorTypeRemote,

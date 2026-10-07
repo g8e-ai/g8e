@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // TestOperatorRegistry_ActiveOperator verifies that after platform enrollment
@@ -42,7 +43,7 @@ func TestOperatorRegistry_ActiveOperator(t *testing.T) {
 	require.NotEmpty(t, operators.Operators,
 		"at least one operator must be registered on an approved stack")
 
-	var active *models.OperatorDocumentGo
+	var active *operatorv1.OperatorDocument
 	for i := range operators.Operators {
 		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
 			active = &operators.Operators[i]
@@ -82,7 +83,7 @@ func TestOperatorRegistry_HeartbeatTimestampSet(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, operators.Operators)
 
-	var active *models.OperatorDocumentGo
+	var active *operatorv1.OperatorDocument
 	active = findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, active, "an active operator must exist")
 	assert.False(t, active.UpdatedAt.IsZero(),
