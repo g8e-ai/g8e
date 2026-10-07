@@ -12,7 +12,10 @@ package operator
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -49,6 +52,67 @@ type RunResult struct {
 	Stdout            string `json:"stdout,omitempty"`
 	Stderr            string `json:"stderr,omitempty"`
 	Error             string `json:"error,omitempty"`
+	// StartedAt is when the dispatch request began; DurationMs is its
+	// monotonic-clock elapsed time through response decoding.
+	StartedAt  time.Time `json:"started_at"`
+	DurationMs float64   `json:"duration_ms"`
+}
+
+// RunSummary aggregates dispatch latency for one fan-out. Percentiles use the
+// nearest-rank method over successful dispatches only, so fast-failing
+// dispatches cannot make the distribution look better than it is.
+type RunSummary struct {
+	Targets     int     `json:"targets"`
+	Succeeded   int     `json:"succeeded"`
+	Failed      int     `json:"failed"`
+	WallMs      float64 `json:"wall_ms"`
+	P50Ms       float64 `json:"p50_ms"`
+	P95Ms       float64 `json:"p95_ms"`
+	P99Ms       float64 `json:"p99_ms"`
+	MaxMs       float64 `json:"max_ms"`
+	Concurrency int     `json:"concurrency"`
+}
+
+// SummarizeRun builds the RunSummary for results produced with the given
+// concurrency over wall of elapsed time.
+func SummarizeRun(results []RunResult, wall time.Duration, concurrency int) RunSummary {
+	summary := RunSummary{
+		Targets:     len(results),
+		WallMs:      DurationMs(wall),
+		Concurrency: concurrency,
+	}
+	durations := make([]float64, 0, len(results))
+	for _, result := range results {
+		if !result.Success {
+			summary.Failed++
+			continue
+		}
+		summary.Succeeded++
+		durations = append(durations, result.DurationMs)
+	}
+	if len(durations) == 0 {
+		return summary
+	}
+	sort.Float64s(durations)
+	summary.P50Ms = nearestRank(durations, 50)
+	summary.P95Ms = nearestRank(durations, 95)
+	summary.P99Ms = nearestRank(durations, 99)
+	summary.MaxMs = durations[len(durations)-1]
+	return summary
+}
+
+// DurationMs converts d to fractional milliseconds.
+func DurationMs(d time.Duration) float64 {
+	return float64(d) / float64(time.Millisecond)
+}
+
+// nearestRank returns the percentile p (1..100) of ascending-sorted values.
+func nearestRank(sorted []float64, p int) float64 {
+	rank := int(math.Ceil(float64(p) / 100 * float64(len(sorted))))
+	if rank < 1 {
+		rank = 1
+	}
+	return sorted[rank-1]
 }
 
 // MarshalExecuteBashPayload builds the EXECUTE_BASH CommandRequested protobuf payload.

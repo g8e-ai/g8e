@@ -196,7 +196,7 @@ Archived campaigns are hidden unless --archived is given.`,
 				return nil
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			_, _ = fmt.Fprintln(w, "CAMPAIGN\tLANE\tMODELS\tSCENARIOS\tREPS\tRUNS\tSTATUS\tARCHIVED")
+			_, _ = fmt.Fprintln(w, "CAMPAIGN\tRELEASE\tLANE\tMODELS\tSCENARIOS\tREPS\tRUNS\tSTATUS\tARCHIVED")
 			for _, row := range rows {
 				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%s\t%t\n",
 					row.CampaignID, releaseLabel(row.Release, row.ReleaseBasis), row.Lane, row.ModelCount, row.ScenarioCount, row.RepetitionCount, len(row.RunIDs), row.Status, row.Archived)

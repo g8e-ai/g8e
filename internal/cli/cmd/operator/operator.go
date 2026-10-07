@@ -49,6 +49,7 @@ type operatorListEntry struct {
 	Component                       constants.ComponentName  `json:"component"`
 	Hostname                        string                   `json:"hostname,omitempty"`
 	Name                            string                   `json:"name,omitempty"`
+	LastHeartbeatAt                 *time.Time               `json:"last_heartbeat_at,omitempty"`
 	InferenceEnabled                *bool                    `json:"inference_enabled,omitempty"`
 	InferenceOllamaEndpoint         string                   `json:"inference_ollama_endpoint,omitempty"`
 	ProviderBoundaryObserverEnabled *bool                    `json:"provider_boundary_observer_enabled,omitempty"`
@@ -292,6 +293,10 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 						Status:            constants.OperatorStatus(op.Status),
 						Component:         constants.ComponentName(op.Component),
 						Hostname:          operatorHostnameValue(op),
+					}
+					if op.LastHeartbeatAt != nil {
+						heartbeatAt := op.LastHeartbeatAt.AsTime()
+						entry.LastHeartbeatAt = &heartbeatAt
 					}
 					if op.RuntimeConfig != nil {
 						entry.InferenceEnabled = boolPointer(op.RuntimeConfig.InferenceEnabled)

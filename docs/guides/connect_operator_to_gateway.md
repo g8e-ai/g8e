@@ -343,7 +343,7 @@ Execute a governed shell command on active Operators in parallel:
   --cmd "uname -a"
 ```
 
-Each target Operator must belong to the authenticated user. Binding changes and `operator run` both require an enrolled CLI identity. See [Build Operator](build_operator.md#operate-remote-operators-from-the-cli) and [Authentication and Authorization](../architecture/auth.md#operator-binding).
+Use `--all-active` instead of session IDs to target every active Operator you own, and `--concurrency N` to bound in-flight dispatches. Each target Operator must belong to the authenticated user. Binding changes and `operator run` both require an enrolled CLI identity. See [Build Operator](build_operator.md#operate-remote-operators-from-the-cli) and [Authentication and Authorization](../architecture/auth.md#operator-binding).
 
 ### View Gateway Logs
 

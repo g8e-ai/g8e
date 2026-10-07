@@ -21,6 +21,8 @@ const (
 	verdictPass = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
 	verdictFail = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
 
+	verdictUnavailable = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE
+
 	verdictInvalidEvidence = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE
 
 	outcomeDirect    = evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_DIRECT
@@ -461,7 +463,7 @@ func TestRequiredEvidenceGrade_SemanticGrade(t *testing.T) {
 		{name: "passing judge grade", grades: []any{EvaluationTrace{"status": "pass"}}, want: verdictPass, wantDetail: "semantic judge grading executed"},
 		{name: "failing judge grade reports the judge's detail", grades: []any{EvaluationTrace{"status": "fail", "detail": "missed the root cause"}}, want: verdictFail, wantDetail: "missed the root cause"},
 		{name: "no judge evidence", grades: nil, want: verdictFail, wantDetail: "semantic grade evidence is missing"},
-		{name: "an unrecognised judge status fails closed", grades: []any{EvaluationTrace{"status": "maybe"}}, want: verdictFail},
+		{name: "an unrecognised judge status is unavailable evidence", grades: []any{EvaluationTrace{"status": "maybe"}}, want: verdictUnavailable},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -760,10 +762,10 @@ func TestGradeHomogeneousScenario_SemanticJudgeScenarioWithoutJudgeEvidenceCanno
 	require.NoError(t, err)
 
 	// The deterministic floor passes, but with no judge verdict the semantic
-	// grade fails, so the role criterion and the task fail with it.
+	// grade is unavailable, so the role criterion and the task fail with it.
 	assert.Equal(t, verdictPass, findDeterministicGrade(result.DeterministicGrades, "scenario-content").GetStatus())
 	require.Len(t, result.SemanticGrades, 1)
-	assert.Equal(t, verdictFail, result.SemanticGrades[0].GetStatus())
+	assert.Equal(t, verdictUnavailable, result.SemanticGrades[0].GetStatus())
 	assert.Equal(t, verdictFail, findDeterministicGrade(result.DeterministicGrades, "role-responsibility").GetStatus())
 	assert.Equal(t, verdictFail, findDeterministicGrade(result.DeterministicGrades, "required-evidence:semantic_grade").GetStatus())
 	assert.Equal(t, 0.0, findDecomposedScore(result.DecomposedScores, "task_score").GetValue())

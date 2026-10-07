@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -253,4 +254,35 @@ func TestParseCommandResult_CorruptPayloadWrapsTheProtobufError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "operator dispatch: decode command result")
 	assert.NotNil(t, errors.Unwrap(err), "the underlying protobuf error must stay reachable")
+}
+
+func TestSummarizeRunPercentilesUseSuccessfulDispatchesOnly(t *testing.T) {
+	results := make([]RunResult, 0, 102)
+	for i := 1; i <= 100; i++ {
+		results = append(results, RunResult{Success: true, DurationMs: float64(i)})
+	}
+	results = append(results, RunResult{Success: false, DurationMs: 1}, RunResult{Success: false, DurationMs: 9000})
+
+	summary := SummarizeRun(results, 2500*time.Millisecond, 16)
+
+	assert.Equal(t, RunSummary{
+		Targets:     102,
+		Succeeded:   100,
+		Failed:      2,
+		WallMs:      2500,
+		P50Ms:       50,
+		P95Ms:       95,
+		P99Ms:       99,
+		MaxMs:       100,
+		Concurrency: 16,
+	}, summary)
+}
+
+func TestSummarizeRunWithoutSuccessReportsZeroLatency(t *testing.T) {
+	summary := SummarizeRun([]RunResult{{DurationMs: 40}}, time.Second, 1)
+
+	assert.Equal(t, 1, summary.Failed)
+	assert.Zero(t, summary.Succeeded)
+	assert.Zero(t, summary.P99Ms)
+	assert.Zero(t, summary.MaxMs)
 }

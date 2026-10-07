@@ -277,6 +277,12 @@ Binding pins the authenticated CLI session to one or more active operator sessio
 
 `operator run` fans out governed `EXECUTE_BASH` dispatches in parallel through `POST /api/v1/operators/commands`. Each target must belong to the authenticated user and be `active`. The gateway constructs the envelope, publishes to the operator `cmd:` channel, waits for a terminal result, and returns per-target stdout, stderr, exit code, and transaction ID. Use `--timeout` to override the per-operator dispatch timeout (default 30 seconds, maximum 300).
 
+Dispatch is bounded by `--concurrency N` (default: the number of targets, capped at 64), which also sizes the CLI's idle connection pool so a large fan-out reuses TLS connections. `--all-active` targets every `active` session owned by the authenticated user and cannot be combined with explicit session IDs. With `--json`, each result carries `started_at` and `duration_ms`, and the output adds a `summary` object (`targets`, `succeeded`, `failed`, `wall_ms`, `p50_ms`, `p95_ms`, `p99_ms`, `max_ms`, `concurrency`). Percentiles use the nearest-rank method over successful dispatches only. Text output is unchanged.
+
+```bash
+./g8e operator run --all-active --concurrency 64 --cmd 'uname -n' --timeout 60 --json
+```
+
 This path is the supported owner automation surface for multi-host shell execution. It is distinct from MCP/A2A ingress and from manual `GovernanceEnvelope` submission.
 
 #### Stop or revoke an Operator

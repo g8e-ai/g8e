@@ -11,12 +11,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -48,7 +48,7 @@ func TestOperatorRunCmdWithConfig_Success(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	cmd := operatorRunCmdWithConfig(
 		loader,
-		func(_ fs.RuntimeFileService, _ *config.Config, _ time.Duration) (authcmd.APIClient, error) {
+		func(_ fs.RuntimeFileService, _ *config.Config, _ api.ClientOptions) (authcmd.APIClient, error) {
 			return mockClient, nil
 		},
 		cmdtest.FileSvcFactoryFor(fileSvc),
@@ -74,7 +74,7 @@ func TestOperatorRunCmdWithConfig_OperatorNotFound(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	cmd := operatorRunCmdWithConfig(
 		loader,
-		func(_ fs.RuntimeFileService, _ *config.Config, _ time.Duration) (authcmd.APIClient, error) {
+		func(_ fs.RuntimeFileService, _ *config.Config, _ api.ClientOptions) (authcmd.APIClient, error) {
 			return &cmdtest.MockAPIClient{GetResp: listBody}, nil
 		},
 		cmdtest.FileSvcFactoryFor(fileSvc),

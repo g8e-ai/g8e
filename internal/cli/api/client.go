@@ -42,16 +42,33 @@ func NewClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*Client, erro
 // NewClientWithTimeout creates a client with a custom request timeout. A zero
 // timeout uses the default CLI API timeout.
 func NewClientWithTimeout(fileSvc fs.RuntimeFileService, cfg *config.Config, timeout time.Duration) (*Client, error) {
-	return newClient(fileSvc, cfg, "", timeout)
+	return newClient(fileSvc, cfg, "", ClientOptions{Timeout: timeout})
+}
+
+// ClientOptions tunes a client for callers that issue many concurrent requests.
+// Zero values select the defaults used by NewClient.
+type ClientOptions struct {
+	// Timeout is the per-request timeout; zero uses the default CLI API timeout.
+	Timeout time.Duration
+	// MaxIdleConnsPerHost sizes the idle connection pool so a burst of
+	// concurrent requests reuses connections instead of repeating TLS
+	// handshakes; zero keeps the net/http default.
+	MaxIdleConnsPerHost int
+}
+
+// NewClientWithOptions creates a client with the given tuning.
+func NewClientWithOptions(fileSvc fs.RuntimeFileService, cfg *config.Config, opts ClientOptions) (*Client, error) {
+	return newClient(fileSvc, cfg, "", opts)
 }
 
 // NewClientWithURL creates a client with an optional base URL override for testing.
 // If baseURL is empty, it uses cfg.OperatorHTTPURL().
 func NewClientWithURL(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string) (*Client, error) {
-	return newClient(fileSvc, cfg, baseURL, defaultClientTimeout)
+	return newClient(fileSvc, cfg, baseURL, ClientOptions{})
 }
 
-func newClient(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string, timeout time.Duration) (*Client, error) {
+func newClient(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string, opts ClientOptions) (*Client, error) {
+	timeout := opts.Timeout
 	if timeout <= 0 {
 		timeout = defaultClientTimeout
 	}
@@ -87,7 +104,8 @@ func newClient(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string
 
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
+			TLSClientConfig:     tlsConfig,
+			MaxIdleConnsPerHost: opts.MaxIdleConnsPerHost,
 		},
 		Timeout: timeout,
 	}

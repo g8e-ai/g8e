@@ -33,14 +33,19 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
+// defaultOperatorRunConcurrency bounds in-flight dispatches when --concurrency
+// is not set.
+const defaultOperatorRunConcurrency = 64
+
 type operatorRunJSON struct {
 	Results []operator.RunResult `json:"results"`
+	Summary operator.RunSummary  `json:"summary"`
 }
 
-type operatorRunClientFactory func(fs.RuntimeFileService, *config.Config, time.Duration) (authcmd.APIClient, error)
+type operatorRunClientFactory func(fs.RuntimeFileService, *config.Config, api.ClientOptions) (authcmd.APIClient, error)
 
-func defaultOperatorRunClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Config, timeout time.Duration) (authcmd.APIClient, error) {
-	return api.NewClientWithTimeout(fileSvc, cfg, timeout)
+func defaultOperatorRunClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Config, opts api.ClientOptions) (authcmd.APIClient, error) {
+	return api.NewClientWithOptions(fileSvc, cfg, opts)
 }
 
 func operatorRunCmd() *cobra.Command {
@@ -54,20 +59,33 @@ func operatorRunCmdWithConfig(
 ) *cobra.Command {
 	var command string
 	var timeoutSeconds int
+	var concurrency int
+	var allActive bool
 
 	cmd := &cobra.Command{
-		Use:   "run <operator-session-id> [operator-session-id...]",
+		Use:   "run (<operator-session-id> [operator-session-id...] | --all-active)",
 		Short: "Execute a shell command on one or more remote operators",
 		Long: `Execute a governed shell command on remote operator sessions through the gateway.
 
 Provide one or more operator session IDs (from './g8e operator list') and the
-command to run with --cmd. Commands are dispatched in parallel to every target
-session using the native EXECUTE_BASH gateway path.
+command to run with --cmd, or pass --all-active to target every active
+operator session owned by the authenticated user. Commands are dispatched in
+parallel using the native EXECUTE_BASH gateway path, with at most --concurrency
+requests in flight (default: the number of targets, capped at 64).
+
+With --json the output also carries a summary of dispatch latency
+(p50/p95/p99/max over successful dispatches) and the wall time of the run.
 
 Requires './g8e auth enroll user'. Each target session must belong to the
 authenticated user and be active.`,
-		Args: cobra.MinimumNArgs(1),
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if allActive == (len(args) > 0) {
+				return constants.ErrOperatorRunTargetSelection
+			}
+			if cmd.Flags().Changed("concurrency") && concurrency < 1 {
+				return fmt.Errorf("%w: got %d", constants.ErrOperatorRunInvalidConcurrency, concurrency)
+			}
 			command = strings.TrimSpace(command)
 			if command == "" {
 				return fmt.Errorf("%w: --cmd is required", constants.ErrMissingRequiredField)
@@ -80,7 +98,7 @@ authenticated user and be active.`,
 			}
 
 			targetSessionIDs := dedupeOperatorSessionIDs(args)
-			if len(targetSessionIDs) == 0 {
+			if !allActive && len(targetSessionIDs) == 0 {
 				return fmt.Errorf("%w: at least one operator session id is required", constants.ErrGatewayOperatorSessionIDRequired)
 			}
 
@@ -99,7 +117,14 @@ authenticated user and be active.`,
 				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
 			}
 
-			client, err := clientFactory(fileSvc, cfg, time.Duration(timeoutSeconds)*time.Second+5*time.Second)
+			poolSize := concurrency
+			if poolSize < 1 {
+				poolSize = defaultOperatorRunConcurrency
+			}
+			client, err := clientFactory(fileSvc, cfg, api.ClientOptions{
+				Timeout:             time.Duration(timeoutSeconds)*time.Second + 5*time.Second,
+				MaxIdleConnsPerHost: poolSize,
+			})
 			if err != nil {
 				return fmt.Errorf("operator run: create API client: %w", err)
 			}
@@ -108,14 +133,24 @@ authenticated user and be active.`,
 			if err != nil {
 				return fmt.Errorf("operator run: %w", err)
 			}
-			targets, err := resolveOperatorRunTargets(operators, targetSessionIDs)
+			var targets []operatorRunTarget
+			if allActive {
+				targets, err = activeOperatorRunTargets(operators)
+			} else {
+				targets, err = resolveOperatorRunTargets(operators, targetSessionIDs)
+			}
 			if err != nil {
 				return err
 			}
 
-			results := dispatchOperatorRun(client, targets, command, creds.CLISessionID)
+			effective := min(poolSize, len(targets))
+			started := time.Now()
+			results := dispatchOperatorRun(client, targets, command, creds.CLISessionID, effective)
 			if output.JSONEnabled(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), operatorRunJSON{Results: results})
+				return output.WriteJSON(cmd.OutOrStdout(), operatorRunJSON{
+					Results: results,
+					Summary: operator.SummarizeRun(results, time.Since(started), effective),
+				})
 			}
 
 			failures := writeOperatorRunText(cmd, results)
@@ -128,6 +163,8 @@ authenticated user and be active.`,
 
 	cmd.Flags().StringVar(&command, "cmd", "", "Shell command to execute on each target operator (required)")
 	cmd.Flags().IntVar(&timeoutSeconds, "timeout", constants.DefaultShellCommandTimeout, fmt.Sprintf("Per-operator dispatch timeout in seconds (max %d)", constants.MaxShellCommandTimeout))
+	cmd.Flags().IntVar(&concurrency, "concurrency", 0, fmt.Sprintf("Maximum in-flight dispatches (default: number of targets, capped at %d)", defaultOperatorRunConcurrency))
+	cmd.Flags().BoolVar(&allActive, "all-active", false, "Target every active operator session owned by the authenticated user (cannot be combined with session IDs)")
 	return cmd
 }
 
@@ -365,25 +402,54 @@ func resolveOperatorRunTargets(operators []*operatorv1.OperatorDocument, session
 	return targets, nil
 }
 
-func dispatchOperatorRun(client authcmd.APIClient, targets []operatorRunTarget, command, cliSessionID string) []operator.RunResult {
-	results := make([]operator.RunResult, len(targets))
-	var wg sync.WaitGroup
-	for index, target := range targets {
-		wg.Add(1)
-		go func(i int, t operatorRunTarget) {
-			defer wg.Done()
-			results[i] = dispatchOperatorRunOnce(client, t, command, cliSessionID)
-		}(index, target)
+// activeOperatorRunTargets selects every active operator session in the list.
+func activeOperatorRunTargets(operators []*operatorv1.OperatorDocument) ([]operatorRunTarget, error) {
+	var targets []operatorRunTarget
+	for _, op := range operators {
+		if op.OperatorSessionId == "" || constants.OperatorStatus(op.Status) != constants.OperatorStatusActive {
+			continue
+		}
+		targets = append(targets, operatorRunTarget{OperatorID: op.Id, OperatorSessionID: op.OperatorSessionId})
 	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("operator run: %w", constants.ErrOperatorRunNoActiveOperators)
+	}
+	return targets, nil
+}
+
+// dispatchOperatorRun dispatches to every target with at most concurrency
+// requests in flight. Results keep target order.
+func dispatchOperatorRun(client authcmd.APIClient, targets []operatorRunTarget, command, cliSessionID string, concurrency int) []operator.RunResult {
+	results := make([]operator.RunResult, len(targets))
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for range min(concurrency, len(targets)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				results[i] = dispatchOperatorRunOnce(client, targets[i], command, cliSessionID)
+			}
+		}()
+	}
+	for i := range targets {
+		jobs <- i
+	}
+	close(jobs)
 	wg.Wait()
 	return results
 }
 
-func dispatchOperatorRunOnce(client authcmd.APIClient, target operatorRunTarget, command, cliSessionID string) operator.RunResult {
-	result := operator.RunResult{
+func dispatchOperatorRunOnce(client authcmd.APIClient, target operatorRunTarget, command, cliSessionID string) (result operator.RunResult) {
+	result = operator.RunResult{
 		OperatorSessionID: target.OperatorSessionID,
 		OperatorID:        target.OperatorID,
+		StartedAt:         time.Now(),
 	}
+	defer func() { result.DurationMs = operator.DurationMs(time.Since(result.StartedAt)) }()
 
 	requestID, err := uuid.NewString()
 	if err != nil {

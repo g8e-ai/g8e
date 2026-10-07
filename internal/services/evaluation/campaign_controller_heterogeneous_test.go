@@ -158,6 +158,18 @@ func TestCampaignController_ScheduleAndExecuteFormationCatalogAssignment(t *test
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.NotNil(t, result)
-	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, result.GetLifecycleStatus())
+	// The direct-dispatch runner records no judge evidence, so a semantic-judge
+	// scenario is a grader failure while a deterministic one completes.
+	assignment, err := store.LoadAssignment(context.Background(), req.RunID, result.GetAssignmentId())
+	require.NoError(t, err)
+	catalog, err := store.LoadScenarioCatalog(context.Background(), run.GetCampaignBinding().GetCampaignId())
+	require.NoError(t, err)
+	gradingMethod, err := scenarioGradingMethodForAssignment(catalog, assignment)
+	require.NoError(t, err)
+	wantLifecycle := evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	if gradingMethod == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE {
+		wantLifecycle = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED
+	}
+	assert.Equal(t, wantLifecycle, result.GetLifecycleStatus())
 	assert.Len(t, result.GetModelInferences(), 3)
 }

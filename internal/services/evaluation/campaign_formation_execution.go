@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -288,20 +289,13 @@ func ImportAssignmentResultFromFormationRun(req AssignmentExecutionRequest, form
 	lifecycle, grades := classifyFormationAssignmentOutcome(req, formationResult)
 	var decomposedScores []*evalv1.DecomposedScoreRecord
 	roleTraces, hasRoleTraces := roleTracesFromFormationResult(formationResult)
-	if lifecycle == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED &&
+	judgeUnavailable := lifecycle == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED &&
 		req.GradingMethod == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE &&
 		(!hasRoleTraces || slices.ContainsFunc(roleTraces, func(roleTrace RoleTrace) bool {
 			return semanticJudgeEvidenceUnavailable(roleTrace.Trace)
-		})) {
+		}))
+	if judgeUnavailable {
 		lifecycle = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED
-		grades = append(grades, newDeterministicGrade(
-			req.Assignment.GetAssignmentId(),
-			"semantic-judge-available",
-			basisStructural,
-			evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
-			"semantic judge evidence is missing or unavailable for a formation role",
-			0,
-		))
 	}
 	if hasRoleTraces {
 		grading, err := GradeHeterogeneousScenario(HeterogeneousScenarioGradingRequest{
@@ -319,6 +313,16 @@ func ImportAssignmentResultFromFormationRun(req AssignmentExecutionRequest, form
 		}
 		grades = grading.DeterministicGrades
 		decomposedScores = grading.DecomposedScores
+	}
+	if judgeUnavailable {
+		grades = append(grades, newDeterministicGrade(
+			req.Assignment.GetAssignmentId(),
+			"semantic-judge-available",
+			basisStructural,
+			evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
+			"semantic judge evidence is missing or unavailable for a formation role",
+			0,
+		))
 	}
 	modelInferences, scoredSpan := modelInferenceRecordsFromFormationRun(req.Assignment, req.AttemptID, formationResult, newID)
 	result := &evalv1.EvaluationAssignmentResult{

@@ -11,11 +11,11 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -64,7 +64,7 @@ func TestOperatorShowCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestOperatorRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := cmdtest.NewCmdTestEnv(t)
-	clientFactory := func(fs.RuntimeFileService, *config.Config, time.Duration) (authcmd.APIClient, error) {
+	clientFactory := func(fs.RuntimeFileService, *config.Config, api.ClientOptions) (authcmd.APIClient, error) {
 		panic("operator run client factory should not be called when fileSvcFactory fails")
 	}
 	cmd := operatorRunCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), clientFactory, cmdtest.FailingFileSvcFactory(errFactory))

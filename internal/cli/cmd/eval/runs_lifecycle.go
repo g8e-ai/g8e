@@ -46,10 +46,13 @@ type runStartFlowResult struct {
 	Lane       string
 	Cells      uint64
 	Models     []string
-	Sessions   operatorSessions
-	Prepared   bool
-	Executed   int
-	Report     *evalv1.EvaluationVerificationReport
+	// Sessions is populated only when the flow resolved operator sessions; a
+	// dry run does not.
+	Sessions         operatorSessions
+	SessionsResolved bool
+	Prepared         bool
+	Executed         int
+	Report           *evalv1.EvaluationVerificationReport
 }
 
 type runStartPlanJSON struct {
@@ -59,8 +62,9 @@ type runStartPlanJSON struct {
 	ModelTags           []string `json:"model_tags"`
 	ModelRegistryDigest string   `json:"model_registry_digest"`
 	CellCount           uint64   `json:"cell_count"`
-	InferenceSession    string   `json:"inference_session"`
-	DataSession         string   `json:"data_session"`
+	SessionsResolved    bool     `json:"sessions_resolved"`
+	InferenceSession    string   `json:"inference_session,omitempty"`
+	DataSession         string   `json:"data_session,omitempty"`
 }
 
 type runStartResultJSON struct {
@@ -82,6 +86,7 @@ func runStartPlan(result *runStartFlowResult, digest string) runStartPlanJSON {
 		ModelTags:           result.Models,
 		ModelRegistryDigest: digest,
 		CellCount:           result.Cells,
+		SessionsResolved:    result.SessionsResolved,
 		InferenceSession:    result.Sessions.InferenceSessionID,
 		DataSession:         result.Sessions.DataSessionID,
 	}
@@ -91,8 +96,12 @@ func writeRunStartPlan(cmd *cobra.Command, plan runStartPlanJSON, jsonOutput boo
 	if jsonOutput {
 		return output.WriteJSON(cmd.OutOrStdout(), plan)
 	}
-	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Run start plan\nCampaign: %s\nRun: %s\nLane: %s\nModels: %v\nCells: %d\nModel registry digest: %s\nInference session: %s\nData session: %s\n",
-		plan.CampaignID, plan.RunID, plan.Lane, plan.ModelTags, plan.CellCount, plan.ModelRegistryDigest, plan.InferenceSession, plan.DataSession)
+	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Run start plan\nCampaign: %s\nRun: %s\nLane: %s\nModels: %v\nCells: %d\nModel registry digest: %s\nSessions resolved: %t\n",
+		plan.CampaignID, plan.RunID, plan.Lane, plan.ModelTags, plan.CellCount, plan.ModelRegistryDigest, plan.SessionsResolved)
+	if err != nil || !plan.SessionsResolved {
+		return err
+	}
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Inference session: %s\nData session: %s\n", plan.InferenceSession, plan.DataSession)
 	return err
 }
 
@@ -123,9 +132,12 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: runs start: %w", err)
 	}
-	sessions, err := resolveOperatorSessions(cmd, deps, operatorRoleInference, operatorRoleData)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: runs start: %w", err)
+	var sessions operatorSessions
+	if !opts.DryRun {
+		sessions, err = resolveOperatorSessions(cmd, deps, operatorRoleInference, operatorRoleData)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: runs start: %w", err)
+		}
 	}
 	runID := opts.RunID
 	if runID == "" {
@@ -137,6 +149,8 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 		Lane:       laneName,
 		Cells:      campaignCells(catalog, spec, laneName, stacks),
 		Sessions:   sessions,
+
+		SessionsResolved: !opts.DryRun,
 	}
 	for _, variant := range spec.GetModelRegistry() {
 		result.Models = append(result.Models, variant.GetServedModelTag())
