@@ -153,8 +153,9 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 
 func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "boundary",
-		Short: "Native execution-boundary suite (no models)",
+		Use:     "boundary",
+		Aliases: []string{"boundaries"},
+		Short:   "Native execution-boundary suite (no models)",
 	}
 	cmd.AddCommand(
 		jsonLeaf(boundaryEvalListCmd(deps)),
