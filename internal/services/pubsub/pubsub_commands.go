@@ -1173,14 +1173,14 @@ func (rs *OperatorPubSubService) handleDocumentUpdateSync(ctx context.Context, m
 	}
 
 	if req.Merge {
-		if err := rs.governedDocStore.DocMerge(req.Collection, req.DocumentId, data); err != nil {
+		if err := rs.governedDocStore.DocMerge(ctx, req.Collection, req.DocumentId, data); err != nil {
 			rs.logger.Error("Failed to merge document update",
 				string(constants.ConnectionStateError), err,
 				"collection", req.Collection, "document_id", req.DocumentId)
 			return "", fmt.Errorf("pubsub: document update: doc merge: %w", err)
 		}
 	} else {
-		if err := rs.governedDocStore.DocReplace(req.Collection, req.DocumentId, data); err != nil {
+		if err := rs.governedDocStore.DocReplace(ctx, req.Collection, req.DocumentId, data); err != nil {
 			rs.logger.Error("Failed to persist document update",
 				string(constants.ConnectionStateError), err,
 				"collection", req.Collection, "document_id", req.DocumentId)
@@ -1214,7 +1214,7 @@ func (rs *OperatorPubSubService) handleDocumentDeleteSync(ctx context.Context, m
 		return "", fmt.Errorf("pubsub: document delete: %w", constants.ErrTxPayloadMissing)
 	}
 
-	if err := rs.governedDocStore.DocDelete(req.Collection, req.DocumentId); err != nil {
+	if err := rs.governedDocStore.DocDelete(ctx, req.Collection, req.DocumentId); err != nil {
 		rs.logger.Error("Failed to delete document",
 			string(constants.ConnectionStateError), err,
 			"collection", req.Collection, "document_id", req.DocumentId)

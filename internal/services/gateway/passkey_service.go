@@ -300,7 +300,7 @@ type embeddedOperatorBinder interface {
 // and persists the operator session the claim mints. Satisfied by
 // *embedded.Service.
 type embeddedOperatorClaimer interface {
-	ClaimEmbeddedOperator(userID string) (operatorID, operatorSessionID string, err error)
+	ClaimEmbeddedOperator(ctx context.Context, userID string) (operatorID, operatorSessionID string, err error)
 }
 
 // PasskeyHandler handles HTTP endpoints for passkey registration, authentication,

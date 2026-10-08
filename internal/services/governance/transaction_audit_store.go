@@ -7,7 +7,10 @@
 
 package governance
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+)
 
 //go:generate mockery --name TransactionAuditStore --output ./mocks --dir .
 
@@ -18,6 +21,6 @@ import "encoding/json"
 // table). storagetest.TestSQLAuditStore provides a no-op implementation for
 // tests. No adapter is required in either production mode.
 type TransactionAuditStore interface {
-	DocSet(collection, id string, data json.RawMessage) error
-	DocDelete(collection, id string) error
+	DocSet(ctx context.Context, collection, id string, data json.RawMessage) error
+	DocDelete(ctx context.Context, collection, id string) error
 }

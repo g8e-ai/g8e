@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -44,7 +45,7 @@ func NewEnrollmentTokenService(docStore *DocumentStoreService, logger *slog.Logg
 
 // GenerateToken creates a new one-time enrollment token for the given user and CLI session.
 // The token expires after enrollmentTokenTTL and can only be used once.
-func (s *EnrollmentTokenService) GenerateToken(userID, cliSessionID string) (*models.EnrollmentToken, error) {
+func (s *EnrollmentTokenService) GenerateToken(ctx context.Context, userID, cliSessionID string) (*models.EnrollmentToken, error) {
 	// Generate random 32-byte token
 	tokenBytes := make([]byte, enrollmentTokenBytes)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -70,7 +71,7 @@ func (s *EnrollmentTokenService) GenerateToken(userID, cliSessionID string) (*mo
 		return nil, constants.ErrEnrollmentTokenPersistenceFailed
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), token, tokenData); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionEnrollmentTokens), token, tokenData); err != nil {
 		s.logger.Error("Failed to persist enrollment token", "error", err, "user_id", userID)
 		return nil, constants.ErrEnrollmentTokenPersistenceFailed
 	}
@@ -89,8 +90,8 @@ func (s *EnrollmentTokenService) GenerateToken(userID, cliSessionID string) (*mo
 // (challenge + verify) so the token is only consumed on the verifying step.
 // A consumed token is still rejected (it is no longer valid), so retrying a
 // challenge after a successful verify is correctly blocked.
-func (s *EnrollmentTokenService) ValidateToken(token string) (*models.EnrollmentToken, error) {
-	enrollmentToken, err := s.loadAndCheckToken(token)
+func (s *EnrollmentTokenService) ValidateToken(ctx context.Context, token string) (*models.EnrollmentToken, error) {
+	enrollmentToken, err := s.loadAndCheckToken(ctx, token)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +102,8 @@ func (s *EnrollmentTokenService) ValidateToken(token string) (*models.Enrollment
 // If valid, it atomically marks the token as consumed and returns the associated user_id and cli_session_id.
 // The atomic conditional UPDATE prevents TOCTOU races where concurrent callers could both
 // read consumed=false before either writes consumed=true.
-func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.EnrollmentToken, error) {
-	enrollmentToken, err := s.loadAndCheckToken(token)
+func (s *EnrollmentTokenService) ValidateAndConsumeToken(ctx context.Context, token string) (*models.EnrollmentToken, error) {
+	enrollmentToken, err := s.loadAndCheckToken(ctx, token)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +120,7 @@ func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.
 		return nil, fmt.Errorf("marshal enrollment token consumption update: %w", err)
 	}
 	applied, err := s.db.DocConditionalUpdate(
-		marshaler.CollectionName(constants.CollectionEnrollmentTokens),
+		ctx, marshaler.CollectionName(constants.CollectionEnrollmentTokens),
 		token,
 		consumptionUpdate,
 		"consumed", 0,
@@ -161,14 +162,14 @@ func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.
 // validates that it exists, is not expired, and has not already been consumed.
 // It does NOT mutate the persisted token. Callers that need to consume the
 // token must follow up with a conditional update (see ValidateAndConsumeToken).
-func (s *EnrollmentTokenService) loadAndCheckToken(token string) (*models.EnrollmentToken, error) {
+func (s *EnrollmentTokenService) loadAndCheckToken(ctx context.Context, token string) (*models.EnrollmentToken, error) {
 	tokenPrefix := token
 	if len(tokenPrefix) > 8 {
 		tokenPrefix = tokenPrefix[:8]
 	}
 
 	// Retrieve the token
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), token)
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionEnrollmentTokens), token)
 	if err != nil {
 		s.logger.Error("Failed to look up enrollment token", "error", err, "token_prefix", tokenPrefix)
 		return nil, constants.ErrEnrollmentTokenInvalid
@@ -212,19 +213,19 @@ func (s *EnrollmentTokenService) loadAndCheckToken(token string) (*models.Enroll
 // Note: This relies on lexicographic string comparison of RFC3339 timestamps,
 // which works correctly for UTC values (lexicographic order matches chronological
 // order). This assumes expires_at is always stored as fixed-microsecond UTC.
-func (s *EnrollmentTokenService) CleanupExpiredTokens() error {
+func (s *EnrollmentTokenService) CleanupExpiredTokens(ctx context.Context) error {
 	now := timesvc.NowTimestamp()
 	filters := []models.DocFilter{
 		{Field: "expires_at", Op: "<", Value: json.RawMessage(`"` + now + `"`)},
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionEnrollmentTokens), filters, "", 0)
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionEnrollmentTokens), filters, "", 0)
 	if err != nil {
 		return fmt.Errorf("enrollment token: cleanup: query: %w", err)
 	}
 
 	var deleted int
 	for _, doc := range docs {
-		err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionEnrollmentTokens), doc.ID)
+		err := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionEnrollmentTokens), doc.ID)
 		if err != nil {
 			s.logger.Warn("Failed to delete expired enrollment token", "token_id", doc.ID, "error", err)
 			continue

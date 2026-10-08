@@ -26,7 +26,10 @@ import (
 type operatorStalenessWatcher struct {
 	mu       sync.Mutex
 	watching bool
-	timers   map[string]*operatorStaleTimer
+	// ctx is the WatchOperatorStaleness lifetime. Timer-driven reads use it,
+	// since a deadline timer has no request to inherit a context from.
+	ctx    context.Context
+	timers map[string]*operatorStaleTimer
 }
 
 // operatorStaleTimer is one Operator's deadline timer and the silence window,
@@ -46,6 +49,7 @@ func (s *DocumentStoreService) WatchOperatorStaleness(ctx context.Context) error
 	w := &s.staleness
 	w.mu.Lock()
 	w.watching = true
+	w.ctx = ctx
 	w.timers = make(map[string]*operatorStaleTimer)
 	w.mu.Unlock()
 
@@ -60,7 +64,7 @@ func (s *DocumentStoreService) WatchOperatorStaleness(ctx context.Context) error
 		}
 	}()
 
-	docs, err := s.docQuery(marshaler.CollectionName(constants.CollectionOperators), activeRemoteOperatorFilters(), "", 0)
+	docs, err := s.docQuery(ctx, marshaler.CollectionName(constants.CollectionOperators), activeRemoteOperatorFilters(), "", 0)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrOperatorStalenessReconcile, err)
 	}
@@ -78,7 +82,7 @@ func (s *DocumentStoreService) WatchOperatorStaleness(ctx context.Context) error
 // Operator's silence window, so this reads nothing; an Operator without one is
 // armed from its document. A timer that fires re-reads the persisted deadline
 // before acting, so a window that changed since arming is corrected then.
-func (s *DocumentStoreService) ExtendOperatorStaleness(operatorID string, heartbeatAt time.Time) {
+func (s *DocumentStoreService) ExtendOperatorStaleness(ctx context.Context, operatorID string, heartbeatAt time.Time) {
 	w := &s.staleness
 	w.mu.Lock()
 	t, ok := w.timers[operatorID]
@@ -87,21 +91,21 @@ func (s *DocumentStoreService) ExtendOperatorStaleness(operatorID string, heartb
 	}
 	w.mu.Unlock()
 	if !ok {
-		s.RearmOperatorStaleness(operatorID)
+		s.RearmOperatorStaleness(ctx, operatorID)
 	}
 }
 
 // RearmOperatorStaleness sets operatorID's deadline timer from its persisted
-// document. A failure only costs the timely push: the next read still
-// reconciles the Operator.
-func (s *DocumentStoreService) RearmOperatorStaleness(operatorID string) {
+// document. ctx bounds that read. A failure only costs the timely push: the
+// next read still reconciles the Operator.
+func (s *DocumentStoreService) RearmOperatorStaleness(ctx context.Context, operatorID string) {
 	s.staleness.mu.Lock()
 	watching := s.staleness.watching
 	s.staleness.mu.Unlock()
 	if !watching {
 		return
 	}
-	doc, err := s.docGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	doc, err := s.docGet(ctx, marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err == nil && doc != nil {
 		err = s.armOperatorStaleness(doc)
 	}
@@ -113,12 +117,12 @@ func (s *DocumentStoreService) RearmOperatorStaleness(operatorID string) {
 // trackOperatorStaleness keeps the deadline timer in step with a reported
 // status transition: an Operator that became active gets a timer, any other
 // status (stale, stopped, terminated) cancels it.
-func (s *DocumentStoreService) trackOperatorStaleness(t OperatorStatusTransition) {
+func (s *DocumentStoreService) trackOperatorStaleness(ctx context.Context, t OperatorStatusTransition) {
 	if t.Status != constants.OperatorStatusActive {
 		s.disarmOperatorStaleness(t.OperatorID)
 		return
 	}
-	s.RearmOperatorStaleness(t.OperatorID)
+	s.RearmOperatorStaleness(ctx, t.OperatorID)
 }
 
 // armOperatorStaleness sets doc's timer to its stale deadline, or cancels it
@@ -146,8 +150,9 @@ func (s *DocumentStoreService) armOperatorStaleness(doc *models.Document) error 
 		return nil
 	}
 	operatorID := doc.ID
+	ctx := w.ctx
 	w.timers[operatorID] = &operatorStaleTimer{
-		timer:      time.AfterFunc(delay, func() { s.operatorWentSilent(operatorID) }),
+		timer:      time.AfterFunc(delay, func() { s.operatorWentSilent(ctx, operatorID) }),
 		staleAfter: operatorStaleAfter(op),
 	}
 	return nil
@@ -171,8 +176,8 @@ func (s *DocumentStoreService) disarmOperatorStaleness(operatorID string) {
 // that is still active afterwards (the timer fired a hair before the persisted
 // deadline) has its timer re-armed from that same read, so it can never be left
 // without one. A deleted Operator's timer is dropped.
-func (s *DocumentStoreService) operatorWentSilent(operatorID string) {
-	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+func (s *DocumentStoreService) operatorWentSilent(ctx context.Context, operatorID string) {
+	doc, err := s.DocGet(ctx, marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		s.logger.Warn("Operator staleness reconcile failed", "operator_id", operatorID, "error", err)
 		return

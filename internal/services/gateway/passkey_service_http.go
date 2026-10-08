@@ -144,7 +144,7 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 				h.responder.Error(w, http.StatusInternalServerError, "enrollment token service unavailable")
 				return
 			}
-			tok, err := h.enrollmentTokenSvc.ValidateToken(req.EnrollmentToken)
+			tok, err := h.enrollmentTokenSvc.ValidateToken(r.Context(), req.EnrollmentToken)
 			if err != nil {
 				h.logger.Warn("Enrollment-token register challenge rejected", "error", err)
 				switch {
@@ -303,7 +303,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 				h.responder.Error(w, http.StatusInternalServerError, "enrollment token service unavailable")
 				return
 			}
-			tok, err := h.enrollmentTokenSvc.ValidateAndConsumeToken(req.EnrollmentToken)
+			tok, err := h.enrollmentTokenSvc.ValidateAndConsumeToken(r.Context(), req.EnrollmentToken)
 			if err != nil {
 				h.logger.Warn("Enrollment-token register verify rejected", "error", err)
 				switch {

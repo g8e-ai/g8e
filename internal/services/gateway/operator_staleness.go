@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -40,7 +41,7 @@ import (
 //
 // The embedded Operator is exempt: it is the Gateway's own in-process
 // substrate and is live exactly when the Gateway is.
-func (s *DocumentStoreService) reconcileOperatorStaleness(docs ...*models.Document) (bool, error) {
+func (s *DocumentStoreService) reconcileOperatorStaleness(ctx context.Context, docs ...*models.Document) (bool, error) {
 	if len(docs) == 0 || docs[0].Collection != marshaler.CollectionName(constants.CollectionOperators) {
 		return false, nil
 	}
@@ -59,7 +60,7 @@ func (s *DocumentStoreService) reconcileOperatorStaleness(docs ...*models.Docume
 		// Conditional on the status still being active so a concurrent
 		// heartbeat recovery, stop, or termination is never overwritten.
 		applied, err := s.DocConditionalUpdate(
-			doc.Collection, doc.ID,
+			ctx, doc.Collection, doc.ID,
 			json.RawMessage(fmt.Sprintf(`{"status":%q}`, constants.OperatorStatusStale)),
 			"status", string(constants.OperatorStatusActive),
 		)
@@ -70,7 +71,7 @@ func (s *DocumentStoreService) reconcileOperatorStaleness(docs ...*models.Docume
 			s.logger.Warn("Operator heartbeat stale; marked stale",
 				"operator_id", doc.ID,
 				"stale_after", operatorStaleAfter(op))
-			s.NotifyOperatorStatusChanged(OperatorStatusTransition{
+			s.NotifyOperatorStatusChanged(ctx, OperatorStatusTransition{
 				OperatorID: doc.ID,
 				UserID:     op.GetUserId(),
 				Name:       op.GetName(),

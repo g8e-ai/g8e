@@ -139,7 +139,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	// The receipt and its commitment are persisted by one write, so both stages
 	// share its start.
 	receiptPersistenceStart := governanceMonotonicNow()
-	attestation, err := w.signAndLogReceipt(vt, receipt)
+	attestation, err := w.signAndLogReceipt(context.WithoutCancel(ctx), vt, receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	w.finalizeReceipt(ctx, receipt, summary, execErr)
 	executionStage.StateRootAfter = receipt.StateRootAfter
 
-	if err := w.signAndLogFinalReceipt(vt, receipt); err != nil {
+	if err := w.signAndLogFinalReceipt(context.WithoutCancel(ctx), vt, receipt); err != nil {
 		return receipt, err
 	}
 
@@ -253,7 +253,7 @@ func (w *L5Actuator) RecordRejectedTransaction(ctx context.Context, vt *Verified
 	receipt.ResultSummary = fmt.Sprintf("rejected: %v", rejection)
 	receipt.FailureCode = operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED
 	receipt.ExecutedAtUnixMs = time.Now().UnixMilli()
-	if err := w.signAndLogFinalReceipt(vt, receipt); err != nil {
+	if err := w.signAndLogFinalReceipt(context.WithoutCancel(ctx), vt, receipt); err != nil {
 		return nil, err
 	}
 	if w.ReceiptPublisher != nil {
@@ -325,7 +325,7 @@ func (w *L5Actuator) buildInitialReceipt(ctx context.Context, vt *VerifiedTransa
 // signAndLogReceipt signs the initial receipt and persists it. With an audit
 // store, the receipt and its commitment attestation commit in one transaction
 // and the attestation is returned. Fail-closed: returns error if any step fails.
-func (w *L5Actuator) signAndLogReceipt(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) (*operatorv1.CommitmentAttestation, error) {
+func (w *L5Actuator) signAndLogReceipt(ctx context.Context, vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) (*operatorv1.CommitmentAttestation, error) {
 	sig, err := w.signReceipt(receipt)
 	if err != nil {
 		w.Logger.Error("Fail-closed: Failed to sign initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
@@ -334,7 +334,7 @@ func (w *L5Actuator) signAndLogReceipt(vt *VerifiedTransaction, receipt *operato
 	receipt.Signature = sig
 
 	if w.SQLAuditStore == nil {
-		if err := w.LogReceipt(vt.Envelope, receipt); err != nil {
+		if err := w.LogReceipt(ctx, vt.Envelope, receipt); err != nil {
 			w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
 			return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
 		}
@@ -344,7 +344,7 @@ func (w *L5Actuator) signAndLogReceipt(vt *VerifiedTransaction, receipt *operato
 	if err := w.verifyAuditorKey(); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCommitmentPersist, err)
 	}
-	if err := w.logReceiptDocument(vt.Envelope, receipt); err != nil {
+	if err := w.logReceiptDocument(ctx, vt.Envelope, receipt); err != nil {
 		w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
 		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
 	}
@@ -582,7 +582,7 @@ func classifyReceiptFailure(execErr error) operatorv1.ReceiptFailureCode {
 // returned receipt only when that write succeeds, so an attestation always
 // describes a stored receipt. Best-effort: returns error but receipt is still
 // returned by caller.
-func (w *L5Actuator) signAndLogFinalReceipt(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) signAndLogFinalReceipt(ctx context.Context, vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) error {
 	finalSig, err := w.signReceipt(receipt)
 	if err != nil {
 		w.Logger.Error("Failed to sign final action receipt - returning EXECUTING receipt as evidence", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
@@ -595,7 +595,7 @@ func (w *L5Actuator) signAndLogFinalReceipt(vt *VerifiedTransaction, receipt *op
 		return err
 	}
 	receipt.FinalPersistenceAttestation = attestation
-	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
+	if logErr := w.LogReceipt(ctx, vt.Envelope, receipt); logErr != nil {
 		receipt.FinalPersistenceAttestation = nil
 		w.Logger.Error("Failed to log final action receipt - mutation already executed", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
 		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, logErr)
@@ -800,8 +800,8 @@ func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 }
 
 // LogReceipt records the signed action receipt in the audit store and console_audit.
-func (w *L5Actuator) LogReceipt(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
-	docErr := w.logReceiptDocument(env, r)
+func (w *L5Actuator) LogReceipt(ctx context.Context, env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
+	docErr := w.logReceiptDocument(ctx, env, r)
 
 	if w.SQLAuditStore == nil {
 		return docErr
@@ -822,7 +822,7 @@ func (w *L5Actuator) LogReceipt(env *govtypes.GovernanceEnvelope, r *operatorv1.
 	return docErr
 }
 
-func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) logReceiptDocument(ctx context.Context, env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	if w.ConsoleAuditStore == nil || env == nil {
 		return nil
 	}
@@ -837,7 +837,7 @@ func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *ope
 		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorMarshalReceipt, err)
 	}
 
-	if err := w.ConsoleAuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
+	if err := w.ConsoleAuditStore.DocSet(ctx, marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record action receipt document", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
 		}

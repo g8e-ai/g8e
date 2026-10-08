@@ -8,6 +8,7 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
@@ -30,7 +31,7 @@ type L2ConsensusPolicy struct {
 // ConsensusStore, allowing alternative consensus implementations to be plugged
 // in without modifying the warden.
 type L2ConsensusPolicyStore interface {
-	GetConsensusPolicy(id string) (*L2ConsensusPolicy, error)
+	GetConsensusPolicy(ctx context.Context, id string) (*L2ConsensusPolicy, error)
 }
 
 // NoopConsensusPolicyStore is a no-op implementation of L2ConsensusPolicyStore.
@@ -38,7 +39,7 @@ type L2ConsensusPolicyStore interface {
 // engineering; production outbound mode uses nil with explicit nil-checks.
 type NoopConsensusPolicyStore struct{}
 
-func (NoopConsensusPolicyStore) GetConsensusPolicy(string) (*L2ConsensusPolicy, error) {
+func (NoopConsensusPolicyStore) GetConsensusPolicy(context.Context, string) (*L2ConsensusPolicy, error) {
 	return nil, nil
 }
 
@@ -52,7 +53,7 @@ func (NoopConsensusPolicyStore) GetConsensusPolicy(string) (*L2ConsensusPolicy, 
 // gate: they bring the consensus tribunal into existence and therefore predate
 // its ability to sign. L2 votes are still verified when present and recorded as
 // audit evidence, but their absence does not reject a bootstrap envelope.
-func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, computedHash string, posture GovernancePosture) (bool, error) {
+func (tv *L4Warden) verifyL2Posture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string, posture GovernancePosture) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 	bootstrapExempt := actionType.IsBootstrapAction()
 
@@ -82,7 +83,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, compu
 		return false, nil
 	}
 
-	policy, err := tv.consensusPolicyStore.GetConsensusPolicy(l2.ConsensusSetId)
+	policy, err := tv.consensusPolicyStore.GetConsensusPolicy(ctx, l2.ConsensusSetId)
 	if err != nil {
 		if posture.RequiresL2Signature() && !bootstrapExempt {
 			tv.logger.Error("Failed to load L2 consensus policy", "consensus_set_id", l2.ConsensusSetId, string(constants.ConnectionStateError), err)

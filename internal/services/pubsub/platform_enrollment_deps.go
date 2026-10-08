@@ -25,18 +25,18 @@ import (
 // invert the dependency direction: gateway already imports pubsub).
 type PlatformEnrollmentDocStore interface {
 	DecidePlatformEnrollments(context.Context, string, models.PlatformEnrollmentBatchDecisionRequest, string) error
-	DocSet(collection, id string, data json.RawMessage) error
-	DocGet(collection, id string) (*models.Document, error)
+	DocSet(ctx context.Context, collection, id string, data json.RawMessage) error
+	DocGet(ctx context.Context, collection, id string) (*models.Document, error)
 	FindOperatorLeases(ownerID, systemFingerprint string) ([]*models.Document, error)
-	DocConditionalUpdate(collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error)
-	DocUpdate(collection, id string, data json.RawMessage) (*models.Document, error)
-	DocDelete(collection, id string) error
+	DocConditionalUpdate(ctx context.Context, collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error)
+	DocUpdate(ctx context.Context, collection, id string, data json.RawMessage) (*models.Document, error)
+	DocDelete(ctx context.Context, collection, id string) error
 	// NotifyOperatorEnrolled announces a just-persisted Operator document as
 	// newly active, so a browser session already connected over SSE sees the
 	// Operator without waiting for a later status transition or a manual
 	// reload. Defined with primitive args (rather than the gateway package's
 	// OperatorStatusTransition) so this interface does not import gateway.
-	NotifyOperatorEnrolled(operatorID, userID, name string)
+	NotifyOperatorEnrolled(ctx context.Context, operatorID, userID, name string)
 }
 
 // PlatformEnrollmentPKI is the PKI subset required by the platform
@@ -55,16 +55,16 @@ type PlatformEnrollmentPKI interface {
 // platform enrollment handlers. Implemented natively by
 // gateway.CLISessionService.
 type PlatformEnrollmentCLISessions interface {
-	PersistCLISession(cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error
-	DeactivateCLISession(sessionID string) error
+	PersistCLISession(ctx context.Context, cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error
+	DeactivateCLISession(ctx context.Context, sessionID string) error
 }
 
 // PlatformEnrollmentOperatorSessions is the operator-session subset
 // required by the platform enrollment handlers. Implemented natively by
 // gateway.OperatorSessionService.
 type PlatformEnrollmentOperatorSessions interface {
-	PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error
-	DeactivateOperatorSession(operatorSessionID string) error
+	PersistOperatorSession(ctx context.Context, operatorSessionID, userID, orgID, operatorID, loginMethod string) error
+	DeactivateOperatorSession(ctx context.Context, operatorSessionID string) error
 }
 
 type PlatformEnrollmentConnections interface {
@@ -94,8 +94,8 @@ func platformEnrollmentCollection() string {
 	return marshaler.CollectionName(constants.CollectionPlatformEnrollments)
 }
 
-func loadPlatformEnrollmentOrganization(deps PlatformEnrollmentDeps, userID string) (*models.User, *models.Organization, error) {
-	userDoc, err := deps.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+func loadPlatformEnrollmentOrganization(ctx context.Context, deps PlatformEnrollmentDeps, userID string) (*models.User, *models.Organization, error) {
+	userDoc, err := deps.DocStore.DocGet(ctx, marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("platform enrollment: load user %s: %w", userID, err)
 	}
@@ -114,7 +114,7 @@ func loadPlatformEnrollmentOrganization(deps PlatformEnrollmentDeps, userID stri
 	if user.OrganizationID == "" {
 		return nil, nil, constants.ErrOrganizationIDRequired
 	}
-	organizationDoc, err := deps.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOrganizations), user.OrganizationID)
+	organizationDoc, err := deps.DocStore.DocGet(ctx, marshaler.CollectionName(constants.CollectionOrganizations), user.OrganizationID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("platform enrollment: load organization %s: %w", user.OrganizationID, err)
 	}
@@ -151,7 +151,7 @@ func loadPlatformEnrollmentRequest(ctx context.Context, deps PlatformEnrollmentD
 	if requestID == "" {
 		return nil, nil
 	}
-	doc, err := deps.DocStore.DocGet(platformEnrollmentCollection(), requestID)
+	doc, err := deps.DocStore.DocGet(ctx, platformEnrollmentCollection(), requestID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: load request %s: %w", requestID, err)
 	}

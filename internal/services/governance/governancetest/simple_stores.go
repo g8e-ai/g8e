@@ -24,7 +24,7 @@ type SimpleConsensusStore struct {
 	Consensus map[string]*models.ConsensusPolicy
 }
 
-func (s *SimpleConsensusStore) GetConsensus(id string) (*models.ConsensusPolicy, error) {
+func (s *SimpleConsensusStore) GetConsensus(ctx context.Context, id string) (*models.ConsensusPolicy, error) {
 	if s.Consensus == nil {
 		return nil, nil
 	}

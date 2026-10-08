@@ -231,7 +231,7 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 		return "", constants.ErrPlatformEnrollmentIssuanceInProgress
 	}
 
-	issued, operatorID, operatorSessionID, cliSessionID, certSerial, certFingerprint, err := h.signComponent(req, actorUserID)
+	issued, operatorID, operatorSessionID, cliSessionID, certSerial, certFingerprint, err := h.signComponent(ctx, req, actorUserID)
 	if err != nil {
 		// Roll back issuing -> approved so a retry can re-acquire. A
 		// failed signing must not permanently consume approval.
@@ -242,8 +242,10 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 		if marshalErr != nil {
 			h.logger.Error("platform enrollment: marshal rollback failed", "request_id", requestID, "error", marshalErr)
 		} else {
+			// The rollback must land even when the request was cancelled, or a
+			// retry could never re-acquire the approval.
 			_, rollbackErr := h.deps.DocStore.DocConditionalUpdate(
-				platformEnrollmentCollection(), requestID, rollbackUpdate,
+				context.WithoutCancel(ctx), platformEnrollmentCollection(), requestID, rollbackUpdate,
 				"state", string(models.PlatformEnrollmentStateIssuing),
 			)
 			if rollbackErr != nil {
@@ -274,7 +276,7 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 		return "", fmt.Errorf("platform enrollment: marshal completion %s: %w", requestID, err)
 	}
 	applied, err := h.deps.DocStore.DocConditionalUpdate(
-		platformEnrollmentCollection(), requestID, completionFields,
+		ctx, platformEnrollmentCollection(), requestID, completionFields,
 		"state", string(models.PlatformEnrollmentStateIssuing),
 	)
 	if err != nil {
@@ -302,7 +304,7 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 // cert fingerprint. Operator issuance signs both CSRs and persists the
 // operator document; app issuance uses SignPlatformAppCSR for the
 // dual-SAN certificate.
-func (h *PlatformEnrollmentHandler) signComponent(req *models.PlatformEnrollmentRequest, actorUserID string) (*models.PlatformEnrollmentCompleteResponse, string, string, string, string, string, error) {
+func (h *PlatformEnrollmentHandler) signComponent(ctx context.Context, req *models.PlatformEnrollmentRequest, actorUserID string) (*models.PlatformEnrollmentCompleteResponse, string, string, string, string, string, error) {
 	trustBundle, err := h.deps.PKI.GatewayTrustBundle()
 	if err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("trust bundle: %w", err)
@@ -312,7 +314,7 @@ func (h *PlatformEnrollmentHandler) signComponent(req *models.PlatformEnrollment
 	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble, models.PlatformComponentApplication:
 		return h.signAppComponent(req, actorUserID, trustBundle)
 	case models.PlatformComponentOperator:
-		return h.signOperatorComponent(req, actorUserID, trustBundle)
+		return h.signOperatorComponent(ctx, req, actorUserID, trustBundle)
 	default:
 		return nil, "", "", "", "", "", constants.ErrPlatformEnrollmentInvalidComponent
 	}
@@ -356,11 +358,11 @@ func (h *PlatformEnrollmentHandler) signAppComponent(req *models.PlatformEnrollm
 // and manage it through ListUserOperators. is_slot remains false:
 // platform-enrolled operators are not user-created slots, but they are
 // user-owned.
-func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEnrollmentRequest, actorUserID string, trustBundle []byte) (*models.PlatformEnrollmentCompleteResponse, string, string, string, string, string, error) {
+func (h *PlatformEnrollmentHandler) signOperatorComponent(ctx context.Context, req *models.PlatformEnrollmentRequest, actorUserID string, trustBundle []byte) (*models.PlatformEnrollmentCompleteResponse, string, string, string, string, string, error) {
 	if req.Operator == nil {
 		return nil, "", "", "", "", "", constants.ErrPlatformEnrollmentInvalidPayload
 	}
-	user, organization, err := loadPlatformEnrollmentOrganization(h.deps, actorUserID)
+	user, organization, err := loadPlatformEnrollmentOrganization(ctx, h.deps, actorUserID)
 	if err != nil {
 		return nil, "", "", "", "", "", err
 	}
@@ -416,17 +418,17 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 		return nil, "", "", "", "", "", fmt.Errorf("marshal operator doc: %w", err)
 	}
 	if err := h.deps.DocStore.DocSet(
-		marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes,
+		ctx, marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes,
 	); err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("persist operator doc: %w", err)
 	}
-	if err := h.supersedeOperatorLeases(user.ID, req.SystemFingerprint, operatorID); err != nil {
+	if err := h.supersedeOperatorLeases(ctx, user.ID, req.SystemFingerprint, operatorID); err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("supersede prior operator leases: %w", err)
 	}
 	// Announce the enrollment so an already-connected browser session sees
 	// the new Operator over SSE instead of only on its next reload or the
 	// next unrelated status event's debounced re-list.
-	h.deps.DocStore.NotifyOperatorEnrolled(operatorID, user.ID, req.Hostname)
+	h.deps.DocStore.NotifyOperatorEnrolled(ctx, operatorID, user.ID, req.Hostname)
 
 	creds := &models.PlatformEnrollmentOperatorCredentials{
 		OperatorCert:      operatorCertPEM,
@@ -456,7 +458,7 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 // Operator (provider-boundary observer, provenance, inference) became ambiguous.
 // The new document is persisted first so a failure here leaves a redundant
 // lease, never zero; a retried issuance supersedes whatever it left behind.
-func (h *PlatformEnrollmentHandler) supersedeOperatorLeases(ownerID, systemFingerprint, replacementID string) error {
+func (h *PlatformEnrollmentHandler) supersedeOperatorLeases(ctx context.Context, ownerID, systemFingerprint, replacementID string) error {
 	if systemFingerprint == "" {
 		return nil
 	}
@@ -476,7 +478,7 @@ func (h *PlatformEnrollmentHandler) supersedeOperatorLeases(ownerID, systemFinge
 			}
 		}
 		if sessionID != "" {
-			if err := h.deps.OperatorSessions.DeactivateOperatorSession(sessionID); err != nil &&
+			if err := h.deps.OperatorSessions.DeactivateOperatorSession(ctx, sessionID); err != nil &&
 				!errors.Is(err, constants.ErrGatewayOperatorSessionInvalid) {
 				return fmt.Errorf("deactivate operator session of %s: %w", doc.ID, err)
 			}
@@ -489,7 +491,7 @@ func (h *PlatformEnrollmentHandler) supersedeOperatorLeases(ownerID, systemFinge
 		if err != nil {
 			return fmt.Errorf("marshal termination of %s: %w", doc.ID, err)
 		}
-		if _, err := h.deps.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), doc.ID, update); err != nil {
+		if _, err := h.deps.DocStore.DocUpdate(ctx, marshaler.CollectionName(constants.CollectionOperators), doc.ID, update); err != nil {
 			return fmt.Errorf("terminate superseded operator %s: %w", doc.ID, err)
 		}
 	}
@@ -523,7 +525,7 @@ func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg
 		return "", constants.ErrPlatformEnrollmentInvalidPayload
 	}
 
-	existingDoc, err := h.deps.DocStore.DocGet(targetCollection, targetDocumentID)
+	existingDoc, err := h.deps.DocStore.DocGet(ctx, targetCollection, targetDocumentID)
 	if err != nil {
 		return "", fmt.Errorf("platform enrollment: check existing policy: %w", err)
 	}
@@ -556,7 +558,7 @@ func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg
 	if err != nil {
 		return "", fmt.Errorf("platform enrollment: marshal policy: %w", err)
 	}
-	if err := h.deps.DocStore.DocSet(targetCollection, targetDocumentID, data); err != nil {
+	if err := h.deps.DocStore.DocSet(ctx, targetCollection, targetDocumentID, data); err != nil {
 		return "", fmt.Errorf("platform enrollment: persist policy: %w", err)
 	}
 
@@ -608,7 +610,7 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		if payload.GetTargetDocumentId() == "" {
 			return "", constants.ErrPlatformEnrollmentInvalidPayload
 		}
-		if err := h.deps.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), payload.GetTargetDocumentId()); err != nil {
+		if err := h.deps.DocStore.DocDelete(ctx, marshaler.CollectionName(constants.CollectionAppPolicies), payload.GetTargetDocumentId()); err != nil {
 			return "", fmt.Errorf("platform enrollment: revoke app policy: %w", err)
 		}
 		h.deps.Connections.DisconnectIdentity(payload.GetTargetDocumentId())
@@ -631,12 +633,12 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		if err != nil {
 			return "", err
 		}
-		if err := h.deps.CLISessions.DeactivateCLISession(req.CLISessionID); err != nil &&
+		if err := h.deps.CLISessions.DeactivateCLISession(ctx, req.CLISessionID); err != nil &&
 			!errors.Is(err, constants.ErrCLISessionAlreadyDeactivated) &&
 			!errors.Is(err, constants.ErrCLISessionNotFound) {
 			return "", fmt.Errorf("platform enrollment: deactivate CLI session: %w", err)
 		}
-		if err := h.deps.OperatorSessions.DeactivateOperatorSession(req.OperatorSessionID); err != nil &&
+		if err := h.deps.OperatorSessions.DeactivateOperatorSession(ctx, req.OperatorSessionID); err != nil &&
 			!errors.Is(err, constants.ErrGatewayOperatorSessionInvalid) {
 			return "", fmt.Errorf("platform enrollment: deactivate operator session: %w", err)
 		}
@@ -648,7 +650,7 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		if err != nil {
 			return "", fmt.Errorf("platform enrollment: marshal operator revocation: %w", err)
 		}
-		if _, err := h.deps.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID, update); err != nil {
+		if _, err := h.deps.DocStore.DocUpdate(ctx, marshaler.CollectionName(constants.CollectionOperators), req.OperatorID, update); err != nil {
 			return "", fmt.Errorf("platform enrollment: terminate operator: %w", err)
 		}
 		h.deps.Connections.DisconnectIdentity(operatorSPIFFEID)
@@ -670,7 +672,7 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		return "", fmt.Errorf("platform enrollment: marshal revocation %s: %w", requestID, err)
 	}
 	applied, err := h.deps.DocStore.DocConditionalUpdate(
-		platformEnrollmentCollection(), requestID, revocationUpdate,
+		ctx, platformEnrollmentCollection(), requestID, revocationUpdate,
 		"state", string(models.PlatformEnrollmentStateCompleted),
 	)
 	if err != nil {
@@ -711,7 +713,7 @@ func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg
 	if actorUserID == "" {
 		return "", constants.ErrPlatformEnrollmentInvalidDecision
 	}
-	user, organization, err := loadPlatformEnrollmentOrganization(h.deps, actorUserID)
+	user, organization, err := loadPlatformEnrollmentOrganization(ctx, h.deps, actorUserID)
 	if err != nil {
 		return "", err
 	}
@@ -719,14 +721,14 @@ func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg
 	// Persist the CLI session bound to the approving owner's user_id.
 	// The cert fingerprint/serial come from the payload (populated by
 	// the enrollment service from the ISSUE handler outputs).
-	if err := h.deps.CLISessions.PersistCLISession(
+	if err := h.deps.CLISessions.PersistCLISession(ctx,
 		cliSessionID, operatorSessionID, user.ID,
 		"", payload.GetCertificateFingerprint(), payload.GetCertificateSerial(),
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {
 		return "", fmt.Errorf("platform enrollment: persist cli session: %w", err)
 	}
-	if err := h.deps.OperatorSessions.PersistOperatorSession(
+	if err := h.deps.OperatorSessions.PersistOperatorSession(ctx,
 		operatorSessionID, user.ID, organization.ID, operatorID,
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {

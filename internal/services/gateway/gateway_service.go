@@ -1482,7 +1482,7 @@ func (ls *GatewayModeService) runEnrollmentTokenCleanup(ctx context.Context) {
 			if ls.handler == nil || ls.handler.enrollmentTokenController == nil || ls.handler.enrollmentTokenController.enrollmentTokenSvc == nil {
 				continue
 			}
-			if err := ls.handler.enrollmentTokenController.enrollmentTokenSvc.CleanupExpiredTokens(); err != nil {
+			if err := ls.handler.enrollmentTokenController.enrollmentTokenSvc.CleanupExpiredTokens(ctx); err != nil {
 				ls.logger.Warn("Enrollment token cleanup error", "error", err)
 			}
 		}

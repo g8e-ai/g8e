@@ -51,8 +51,8 @@ func (s *UserService) SetAuthService(authSvc authCacheInvalidator) {
 // Zero-PII: No email or name is stored - only the user ID and passkey credentials.
 // The LocalOSUser field is left nil; callers that need to attach OS user info
 // (the bootstrap path) use CreateUserWithOSUser.
-func (s *UserService) CreateUser() (*models.User, error) {
-	return s.createUser(nil, nil)
+func (s *UserService) CreateUser(ctx context.Context) (*models.User, error) {
+	return s.createUser(ctx, nil, nil)
 }
 
 // CreateUserWithOSUser creates a new active user with a generated ID, the
@@ -60,18 +60,18 @@ func (s *UserService) CreateUser() (*models.User, error) {
 // bootstrap path (handleLocalBootstrapWithURL) so the first human enrollee
 // carries the zero-PII OS-user metadata from the enrollment request and is
 // marked as the gateway owner.
-func (s *UserService) CreateUserWithOSUser(localOSUser *models.LocalOSUser) (*models.User, error) {
-	return s.createUser(localOSUser, []string{string(constants.UserRoleOwner)})
+func (s *UserService) CreateUserWithOSUser(ctx context.Context, localOSUser *models.LocalOSUser) (*models.User, error) {
+	return s.createUser(ctx, localOSUser, []string{string(constants.UserRoleOwner)})
 }
 
 // CreateUserWithSub creates a user with the provided subject (JWT sub) as their ID.
 // Used for JIT provisioning when a valid JWT is presented for an unknown identity.
-func (s *UserService) CreateUserWithSub(sub string) (*models.User, error) {
+func (s *UserService) CreateUserWithSub(ctx context.Context, sub string) (*models.User, error) {
 	if sub == "" {
 		return nil, constants.ErrJWTSessionSubjectMissing
 	}
 
-	existing, err := s.GetByID(sub)
+	existing, err := s.GetByID(ctx, sub)
 	if err != nil {
 		return nil, fmt.Errorf("user service: JIT lookup failed: %w", err)
 	}
@@ -92,7 +92,7 @@ func (s *UserService) CreateUserWithSub(sub string) (*models.User, error) {
 		WebAuthnUserID:     webAuthnUserID,
 	}
 
-	if err := s.persistNewUser(user); err != nil {
+	if err := s.persistNewUser(ctx, user); err != nil {
 		return nil, fmt.Errorf("user service: create JIT user: %w", err)
 	}
 
@@ -104,7 +104,7 @@ func getLocalOSUser() *models.LocalOSUser {
 	return models.CurrentLocalOSUser()
 }
 
-func (s *UserService) createUser(localOSUser *models.LocalOSUser, roles []string) (*models.User, error) {
+func (s *UserService) createUser(ctx context.Context, localOSUser *models.LocalOSUser, roles []string) (*models.User, error) {
 	userID, err := uuid.NewString()
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func (s *UserService) createUser(localOSUser *models.LocalOSUser, roles []string
 		Roles:              roles,
 	}
 
-	if err := s.persistNewUser(user); err != nil {
+	if err := s.persistNewUser(ctx, user); err != nil {
 		return nil, fmt.Errorf("user service: create user: %w", err)
 	}
 
@@ -141,7 +141,7 @@ func (s *UserService) createUser(localOSUser *models.LocalOSUser, roles []string
 	return user, nil
 }
 
-func (s *UserService) persistNewUser(user *models.User) error {
+func (s *UserService) persistNewUser(ctx context.Context, user *models.User) error {
 	now := time.Now().UTC()
 	user.OrganizationID = user.ID
 	organization := &models.Organization{
@@ -159,11 +159,11 @@ func (s *UserService) persistNewUser(user *models.User) error {
 	if err != nil {
 		return fmt.Errorf("marshal user: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOrganizations), organization.ID, organizationData); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionOrganizations), organization.ID, organizationData); err != nil {
 		return fmt.Errorf("store organization: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), user.ID, userData); err != nil {
-		if rollbackErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionOrganizations), organization.ID); rollbackErr != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionUsers), user.ID, userData); err != nil {
+		if rollbackErr := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionOrganizations), organization.ID); rollbackErr != nil {
 			return fmt.Errorf("store user: %w; rollback organization: %v", err, rollbackErr)
 		}
 		return fmt.Errorf("store user: %w", err)
@@ -175,11 +175,11 @@ func (s *UserService) persistNewUser(user *models.User) error {
 // Subsequent reads via GetByID / FindByEmail still return the user (so audit
 // trails remain joinable), but every authentication chokepoint MUST reject
 // requests bearing a disabled user identity. See `User.IsActive`.
-func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID string) error {
+func (s *UserService) Disable(ctx context.Context, userID, reason, actorUserID, actorOperatorID string) error {
 	if userID == "" {
 		return constants.ErrUserIDRequired
 	}
-	existing, err := s.GetByID(userID)
+	existing, err := s.GetByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("user service: failed to get user by ID: %w", err)
 	}
@@ -189,7 +189,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 	if existing.Status == constants.UserStatusDisabled {
 		// Already disabled - idempotent no-op, but still record an audit row
 		// so the caller's intent is visible if they retried.
-		return s.appendAdminAudit(models.AdminAuditEntry{
+		return s.appendAdminAudit(ctx, models.AdminAuditEntry{
 			Action:     models.AdminAuditActionRetireLocalOwner,
 			Actor:      actorUserID,
 			Target:     userID,
@@ -202,7 +202,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 		})
 	}
 
-	if err := s.updateUserStatus(userID, constants.UserStatusDisabled); err != nil {
+	if err := s.updateUserStatus(ctx, userID, constants.UserStatusDisabled); err != nil {
 		return fmt.Errorf("user service: failed to update user status: %w", err)
 	}
 
@@ -211,7 +211,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 		s.authSvc.InvalidateUserCache(userID)
 	}
 
-	if err := s.appendAdminAudit(models.AdminAuditEntry{
+	if err := s.appendAdminAudit(ctx, models.AdminAuditEntry{
 		Action:     models.AdminAuditActionRetireLocalOwner,
 		Actor:      actorUserID,
 		Target:     userID,
@@ -233,8 +233,8 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 
 // FirstUserID returns the user ID of the first human enrollee, who is the
 // gateway owner and admin. Returns an empty string when no users exist.
-func (s *UserService) FirstUserID() (string, error) {
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "created_at ASC", 1)
+func (s *UserService) FirstUserID(ctx context.Context) (string, error) {
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "created_at ASC", 1)
 	if err != nil {
 		return "", fmt.Errorf("user service: failed to query users for first-user lookup: %w", err)
 	}
@@ -251,11 +251,11 @@ func (s *UserService) FirstUserID() (string, error) {
 // user remains admin permanently regardless of how many users are added
 // later. Returns false when the user does not exist or is not the first
 // user by creation order.
-func (s *UserService) IsFirstUser(userID string) (bool, error) {
+func (s *UserService) IsFirstUser(ctx context.Context, userID string) (bool, error) {
 	if userID == "" {
 		return false, constants.ErrUserIDRequired
 	}
-	firstUserID, err := s.FirstUserID()
+	firstUserID, err := s.FirstUserID(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -265,7 +265,7 @@ func (s *UserService) IsFirstUser(userID string) (bool, error) {
 	return firstUserID == userID, nil
 }
 
-func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
+func (s *UserService) appendAdminAudit(ctx context.Context, entry models.AdminAuditEntry) error {
 	if entry.ID == "" {
 		id, err := uuid.NewString()
 		if err != nil {
@@ -280,12 +280,12 @@ func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	if err != nil {
 		return fmt.Errorf("user service: failed to marshal admin audit entry: %w", err)
 	}
-	return s.db.DocSet(marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
+	return s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
 }
 
 // List retrieves all users in the system.
-func (s *UserService) List() ([]models.User, error) {
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 0)
+func (s *UserService) List(ctx context.Context) ([]models.User, error) {
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 0)
 	if err != nil {
 		return nil, fmt.Errorf("user service: list users: %w", err)
 	}
@@ -303,8 +303,8 @@ func (s *UserService) List() ([]models.User, error) {
 }
 
 // GetByID retrieves a user by ID.
-func (s *UserService) GetByID(userID string) (*models.User, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+func (s *UserService) GetByID(ctx context.Context, userID string) (*models.User, error) {
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -316,11 +316,11 @@ func (s *UserService) GetByID(userID string) (*models.User, error) {
 }
 
 // GetBySub retrieves a user by subject (JWT sub claim).
-func (s *UserService) GetBySub(sub string) (*models.User, error) {
+func (s *UserService) GetBySub(ctx context.Context, sub string) (*models.User, error) {
 	if sub == "" {
 		return nil, constants.ErrMissingRequiredField
 	}
-	return s.GetByID(sub)
+	return s.GetByID(ctx, sub)
 }
 
 type userStatusUpdate struct {
@@ -329,7 +329,7 @@ type userStatusUpdate struct {
 }
 
 // updateUserStatus updates a user's status field.
-func (s *UserService) updateUserStatus(userID string, status constants.UserStatus) error {
+func (s *UserService) updateUserStatus(ctx context.Context, userID string, status constants.UserStatus) error {
 	updates := userStatusUpdate{
 		Status:    status,
 		UpdatedAt: time.Now().UTC().UnixMilli(),
@@ -340,7 +340,7 @@ func (s *UserService) updateUserStatus(userID string, status constants.UserStatu
 		return constants.ErrDocumentStoreMarshalDocument
 	}
 
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
+	_, err = s.db.DocUpdate(ctx, marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ type userPasskeyCredentialsUpdate struct {
 }
 
 // UpdatePasskeyCredentials updates a user's passkey credentials.
-func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []models.PasskeyCredential) error {
+func (s *UserService) UpdatePasskeyCredentials(ctx context.Context, userID string, credentials []models.PasskeyCredential) error {
 	updates := userPasskeyCredentialsUpdate{
 		PasskeyCredentials: credentials,
 		UpdatedAt:          time.Now().UTC().UnixMilli(),
@@ -365,7 +365,7 @@ func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []mode
 		return constants.ErrDocumentStoreMarshalDocument
 	}
 
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
+	_, err = s.db.DocUpdate(ctx, marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
 	if err != nil {
 		return err
 	}
@@ -380,8 +380,8 @@ func (s *UserService) HasAnyUsers(ctx context.Context) (bool, error) {
 }
 
 // DeleteUser removes a user by ID.
-func (s *UserService) DeleteUser(userID string) error {
-	deleted, err := s.db.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionUsers), userID)
+func (s *UserService) DeleteUser(ctx context.Context, userID string) error {
+	deleted, err := s.db.DocDeleteWithResult(ctx, marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return err
 	}
@@ -464,7 +464,7 @@ func DefaultPersonaDefinitions() []models.Persona {
 }
 
 // CreatePersona creates a new persona.
-func (s *PersonaService) CreatePersona(persona *models.Persona) error {
+func (s *PersonaService) CreatePersona(ctx context.Context, persona *models.Persona) error {
 	now := time.Now().UTC()
 	persona.CreatedAt = now
 	persona.UpdatedAt = now
@@ -474,7 +474,7 @@ func (s *PersonaService) CreatePersona(persona *models.Persona) error {
 		return fmt.Errorf("persona service: failed to marshal persona: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionPersonas), persona.ID, data); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionPersonas), persona.ID, data); err != nil {
 		return fmt.Errorf("persona service: failed to store persona: %w", err)
 	}
 
@@ -483,8 +483,8 @@ func (s *PersonaService) CreatePersona(persona *models.Persona) error {
 }
 
 // GetByID retrieves a persona by ID.
-func (s *PersonaService) GetByID(id string) (*models.Persona, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionPersonas), id)
+func (s *PersonaService) GetByID(ctx context.Context, id string) (*models.Persona, error) {
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionPersonas), id)
 	if err != nil {
 		return nil, err
 	}
@@ -496,8 +496,8 @@ func (s *PersonaService) GetByID(id string) (*models.Persona, error) {
 }
 
 // GetAll retrieves all personas.
-func (s *PersonaService) GetAll() ([]models.Persona, error) {
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionPersonas), []models.DocFilter{}, "", 100)
+func (s *PersonaService) GetAll(ctx context.Context) ([]models.Persona, error) {
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionPersonas), []models.DocFilter{}, "", 100)
 	if err != nil {
 		return nil, err
 	}
@@ -517,12 +517,12 @@ func (s *PersonaService) GetAll() ([]models.Persona, error) {
 
 // MapRolesToPersona maps JWT roles to a binding persona.
 // Returns the first matching persona, or "default" if no match is found.
-func (s *PersonaService) MapRolesToPersona(roles []string) (string, error) {
+func (s *PersonaService) MapRolesToPersona(ctx context.Context, roles []string) (string, error) {
 	if len(roles) == 0 {
 		return "default", nil
 	}
 
-	personas, err := s.GetAll()
+	personas, err := s.GetAll(ctx)
 	if err != nil {
 		s.logger.Warn("[PERSONA-SERVICE] Failed to load personas, falling back to default", "error", err)
 		return "default", nil

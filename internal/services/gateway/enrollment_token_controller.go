@@ -61,7 +61,7 @@ func (c *EnrollmentTokenController) handleEnrollmentTokenGenerate(w http.Respons
 	}
 
 	// Generate the enrollment token
-	token, err := c.enrollmentTokenSvc.GenerateToken(userIDStr, cliSessionIDStr)
+	token, err := c.enrollmentTokenSvc.GenerateToken(r.Context(), userIDStr, cliSessionIDStr)
 	if err != nil {
 		c.logger.Error("Failed to generate enrollment token", "error", err, "user_id", userIDStr)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to generate enrollment token")
@@ -102,7 +102,7 @@ func (c *EnrollmentTokenController) handleEnrollmentTokenValidate(w http.Respons
 	}
 
 	// Validate and consume the token
-	enrollmentToken, err := c.enrollmentTokenSvc.ValidateAndConsumeToken(req.Token)
+	enrollmentToken, err := c.enrollmentTokenSvc.ValidateAndConsumeToken(r.Context(), req.Token)
 	if err != nil {
 		tokenPrefix := req.Token
 		if len(tokenPrefix) > 8 {

@@ -44,8 +44,8 @@ func NewApprovalsChangePublisher(docStore *DocumentStoreService, userSvc *UserSe
 
 // TransactionsChanged announces that userID's pending suspended transactions
 // changed.
-func (p *ApprovalsChangePublisher) TransactionsChanged(userID string) {
-	if err := p.publish(userID, models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedTransactions}); err != nil {
+func (p *ApprovalsChangePublisher) TransactionsChanged(ctx context.Context, userID string) {
+	if err := p.publish(ctx, userID, models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedTransactions}); err != nil {
 		p.logger.Warn("approvals changed event not delivered",
 			"subject", models.ApprovalsChangedTransactions, "user_id", userID, "error", err)
 	}
@@ -54,24 +54,24 @@ func (p *ApprovalsChangePublisher) TransactionsChanged(userID string) {
 // EnrollmentsChanged announces that the pending platform enrollment requests
 // changed. Only the platform owner reviews them, so the event goes to the
 // owner's sessions.
-func (p *ApprovalsChangePublisher) EnrollmentsChanged() {
-	p.announceEnrollments(models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedEnrollments})
+func (p *ApprovalsChangePublisher) EnrollmentsChanged(ctx context.Context) {
+	p.announceEnrollments(ctx, models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedEnrollments})
 }
 
 // EnrollmentRequested announces that a request became pending. When the
 // worker that created it was launched by `operator deploy`, deploymentID keys
 // the event to that launch so the deploying CLI learns requestID from the
 // event instead of polling the worker's progress file.
-func (p *ApprovalsChangePublisher) EnrollmentRequested(requestID, deploymentID string) {
-	p.announceEnrollments(models.ApprovalsChangedPayload{
+func (p *ApprovalsChangePublisher) EnrollmentRequested(ctx context.Context, requestID, deploymentID string) {
+	p.announceEnrollments(ctx, models.ApprovalsChangedPayload{
 		Subject:      models.ApprovalsChangedEnrollments,
 		DeploymentID: deploymentID,
 		RequestID:    requestID,
 	})
 }
 
-func (p *ApprovalsChangePublisher) announceEnrollments(payload models.ApprovalsChangedPayload) {
-	ownerID, err := p.userSvc.FirstUserID()
+func (p *ApprovalsChangePublisher) announceEnrollments(ctx context.Context, payload models.ApprovalsChangedPayload) {
+	ownerID, err := p.userSvc.FirstUserID(ctx)
 	if err != nil || ownerID == "" {
 		if err != nil {
 			p.logger.Warn("approvals changed event not delivered: resolve owner",
@@ -79,7 +79,7 @@ func (p *ApprovalsChangePublisher) announceEnrollments(payload models.ApprovalsC
 		}
 		return
 	}
-	if err := p.publish(ownerID, payload); err != nil {
+	if err := p.publish(ctx, ownerID, payload); err != nil {
 		p.logger.Warn("approvals changed event not delivered",
 			"subject", models.ApprovalsChangedEnrollments, "user_id", ownerID, "error", err)
 	}
@@ -89,24 +89,24 @@ func (p *ApprovalsChangePublisher) announceEnrollments(payload models.ApprovalsC
 // governed decision commits, then updates the owner's existing SSE views.
 // The internal invalidation uses the registered approvals event; no enrollment
 // token or request details enter pub/sub.
-func (p *ApprovalsChangePublisher) EnrollmentsDecided() {
+func (p *ApprovalsChangePublisher) EnrollmentsDecided(ctx context.Context) {
 	if p.publisher.pubsub != nil {
 		p.publisher.pubsub.Publish(string(constants.EventPlatformApprovalsChanged), nil)
 	}
-	p.EnrollmentsChanged()
+	p.EnrollmentsChanged(ctx)
 }
 
 // publish emits the event to every unexpired web session and active CLI session of userID.
 // Sessions are delivered independently; the returned error joins every failure.
-func (p *ApprovalsChangePublisher) publish(userID string, payload models.ApprovalsChangedPayload) error {
+func (p *ApprovalsChangePublisher) publish(ctx context.Context, userID string, payload models.ApprovalsChangedPayload) error {
 	if userID == "" {
 		return nil
 	}
-	sessionIDs, err := ownerWebSessionIDs(p.docStore, userID)
+	sessionIDs, err := ownerWebSessionIDs(ctx, p.docStore, userID)
 	if err != nil {
 		return fmt.Errorf("resolve web sessions of %s: %w", userID, err)
 	}
-	cliIDs, err := ownerConnectedCLISessionIDs(p.docStore, p.publisher, userID)
+	cliIDs, err := ownerConnectedCLISessionIDs(ctx, p.docStore, p.publisher, userID)
 	if err != nil {
 		p.logger.Warn("resolve cli sessions failed", "user_id", userID, "error", err)
 	}
@@ -134,14 +134,14 @@ func (p *ApprovalsChangePublisher) publish(userID string, payload models.Approva
 // status or approvals event cost the size of the fleet. Candidates are the
 // connected streams, so the lookup is one point read per stream, and a stream
 // owned by another user is skipped.
-func ownerConnectedCLISessionIDs(docStore *DocumentStoreService, publisher *SSEEventPublisher, userID string) ([]string, error) {
+func ownerConnectedCLISessionIDs(ctx context.Context, docStore *DocumentStoreService, publisher *SSEEventPublisher, userID string) ([]string, error) {
 	if docStore == nil || publisher == nil {
 		return nil, nil
 	}
 	now := time.Now().UTC()
 	var ids []string
 	for _, id := range publisher.ConnectedCLISessionIDs() {
-		doc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), id)
+		doc, err := docStore.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), id)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +182,7 @@ func (s *notifyingSuspendedStore) StoreSuspendedTransaction(ctx context.Context,
 	if err := s.SuspendedTransactionStore.StoreSuspendedTransaction(ctx, tx); err != nil {
 		return err
 	}
-	s.notify.TransactionsChanged(tx.UserID)
+	s.notify.TransactionsChanged(ctx, tx.UserID)
 	return nil
 }
 
@@ -191,7 +191,7 @@ func (s *notifyingSuspendedStore) ApproveSuspendedTransaction(ctx context.Contex
 	if err := s.SuspendedTransactionStore.ApproveSuspendedTransaction(ctx, txHash, proof); err != nil {
 		return err
 	}
-	s.notify.TransactionsChanged(userID)
+	s.notify.TransactionsChanged(ctx, userID)
 	return nil
 }
 
@@ -200,7 +200,7 @@ func (s *notifyingSuspendedStore) DeleteSuspendedTransaction(ctx context.Context
 	if err := s.SuspendedTransactionStore.DeleteSuspendedTransaction(ctx, txHash); err != nil {
 		return err
 	}
-	s.notify.TransactionsChanged(userID)
+	s.notify.TransactionsChanged(ctx, userID)
 	return nil
 }
 
@@ -221,7 +221,7 @@ func (s *notifyingSuspendedStore) CleanupExpiredSuspendedTransactions(ctx contex
 			continue
 		}
 		notified[tx.UserID] = struct{}{}
-		s.notify.TransactionsChanged(tx.UserID)
+		s.notify.TransactionsChanged(ctx, tx.UserID)
 	}
 	return deleted, nil
 }

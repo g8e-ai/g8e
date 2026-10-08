@@ -19,6 +19,7 @@
 package embedded
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -35,15 +36,15 @@ import (
 // Store is the document persistence the substrate needs.
 // *gateway.DocumentStoreService satisfies it.
 type Store interface {
-	DocGet(collection, id string) (*models.Document, error)
-	DocSet(collection, id string, data json.RawMessage) error
-	DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error)
+	DocGet(ctx context.Context, collection, id string) (*models.Document, error)
+	DocSet(ctx context.Context, collection, id string, data json.RawMessage) error
+	DocUpdate(ctx context.Context, collection, id string, fields json.RawMessage) (*models.Document, error)
 }
 
 // SessionPersister records the operator session a claim mints.
 // *gateway.OperatorSessionService satisfies it.
 type SessionPersister interface {
-	PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error
+	PersistOperatorSession(ctx context.Context, operatorSessionID, userID, orgID, operatorID, loginMethod string) error
 }
 
 // Service is the gateway's in-process embedded Operator substrate.
@@ -99,23 +100,23 @@ func pendingDocument(now time.Time) *operatorv1.OperatorDocument {
 // It is idempotent: an existing document (pending or claimed) is left
 // untouched. Called once at gateway start; a failure aborts startup so the
 // gateway never runs without its operator substrate record.
-func (s *Service) RegisterPending() error {
-	doc, err := s.docs.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+func (s *Service) RegisterPending(ctx context.Context) error {
+	doc, err := s.docs.DocGet(ctx, marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	if err != nil {
 		return fmt.Errorf("gateway: embedded operator: load pending document: %w", err)
 	}
 	if doc != nil {
 		return nil
 	}
-	return persistDocument(s.docs, pendingDocument(time.Now().UTC()))
+	return persistDocument(ctx, s.docs, pendingDocument(time.Now().UTC()))
 }
 
-func persistDocument(docs Store, op *operatorv1.OperatorDocument) error {
+func persistDocument(ctx context.Context, docs Store, op *operatorv1.OperatorDocument) error {
 	b, err := models.MarshalOperatorDocument(op)
 	if err != nil {
 		return fmt.Errorf("gateway: embedded operator: marshal document: %w", err)
 	}
-	if err := docs.DocSet(marshaler.CollectionName(constants.CollectionOperators), op.Id, b); err != nil {
+	if err := docs.DocSet(ctx, marshaler.CollectionName(constants.CollectionOperators), op.Id, b); err != nil {
 		return fmt.Errorf("gateway: embedded operator: persist document: %w", err)
 	}
 	return nil
@@ -126,13 +127,13 @@ func persistDocument(docs Store, op *operatorv1.OperatorDocument) error {
 // the operator session. Same-user re-claim returns the document's existing
 // operator session ID and re-persists the identical session document, so a
 // retried claim stays idempotent.
-func (s *Service) ClaimEmbeddedOperator(userID string) (operatorID, operatorSessionID string, err error) {
-	operatorID, operatorSessionID, err = s.Claim(userID, "", time.Now().UTC())
+func (s *Service) ClaimEmbeddedOperator(ctx context.Context, userID string) (operatorID, operatorSessionID string, err error) {
+	operatorID, operatorSessionID, err = s.Claim(ctx, userID, "", time.Now().UTC())
 	if err != nil {
 		return "", "", err
 	}
 	if err := s.sessions.PersistOperatorSession(
-		operatorSessionID, userID, userID, operatorID, string(constants.HeartbeatTypeBootstrap)); err != nil {
+		ctx, operatorSessionID, userID, userID, operatorID, string(constants.HeartbeatTypeBootstrap)); err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: persist operator session: %w", err)
 	}
 	return operatorID, operatorSessionID, nil
@@ -157,16 +158,16 @@ func (s *Service) ClaimEmbeddedOperator(userID string) (operatorID, operatorSess
 //
 // Returns the operator document ID and the (possibly newly minted)
 // operator session ID the caller must bind sessions to.
-func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operatorID, operatorSessionID string, err error) {
-	doc, err := s.docs.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+func (s *Service) Claim(ctx context.Context, userID, systemFingerprint string, now time.Time) (operatorID, operatorSessionID string, err error) {
+	doc, err := s.docs.DocGet(ctx, marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	if err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: load document: %w", err)
 	}
 	if doc == nil {
-		if err := persistDocument(s.docs, pendingDocument(now)); err != nil {
+		if err := persistDocument(ctx, s.docs, pendingDocument(now)); err != nil {
 			return "", "", err
 		}
-		doc, err = s.docs.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+		doc, err = s.docs.DocGet(ctx, marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 		if err != nil {
 			return "", "", fmt.Errorf("gateway: embedded operator: reload document: %w", err)
 		}
@@ -211,7 +212,7 @@ func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operat
 	if err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: marshal claim: %w", err)
 	}
-	if _, err := s.docs.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), op.Id, updateBytes); err != nil {
+	if _, err := s.docs.DocUpdate(ctx, marshaler.CollectionName(constants.CollectionOperators), op.Id, updateBytes); err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: persist claim: %w", err)
 	}
 	return op.Id, operatorSessionID, nil

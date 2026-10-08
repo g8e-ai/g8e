@@ -82,7 +82,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	isFirst, err := c.userSvc.IsFirstUser(userID)
+	isFirst, err := c.userSvc.IsFirstUser(r.Context(), userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
 		return
@@ -92,7 +92,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	policyDoc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+	policyDoc, err := c.docStore.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to check app policy")
 		return
@@ -159,7 +159,7 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	isFirst, err := c.userSvc.IsFirstUser(userID)
+	isFirst, err := c.userSvc.IsFirstUser(r.Context(), userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
 		return
@@ -187,13 +187,13 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
+	err = c.docStore.DocDelete(r.Context(), marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete app policy")
 		return
 	}
 
-	err = c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
+	err = c.docStore.DocDelete(r.Context(), marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete trusted signer")
 		return
@@ -211,7 +211,7 @@ func (c *AdminController) handleConsensus(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	isFirst, err := c.userSvc.IsFirstUser(userID)
+	isFirst, err := c.userSvc.IsFirstUser(r.Context(), userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
 		return
@@ -235,7 +235,7 @@ func (c *AdminController) handleConsensus(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		if err := c.consensusStore.AddConsensus(policy); err != nil {
+		if err := c.consensusStore.AddConsensus(r.Context(), policy); err != nil {
 			c.logger.Error("failed to add consensus", "error", err)
 			c.responder.Error(w, http.StatusBadRequest, err.Error())
 			return
@@ -245,7 +245,7 @@ func (c *AdminController) handleConsensus(w http.ResponseWriter, r *http.Request
 		c.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodGet:
-		consensus, err := c.consensusStore.ListConsensus()
+		consensus, err := c.consensusStore.ListConsensus(r.Context())
 		if err != nil {
 			c.logger.Error("failed to list consensus", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to list consensus")
@@ -266,7 +266,7 @@ func (c *AdminController) handleDeleteConsensus(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	isFirst, err := c.userSvc.IsFirstUser(userID)
+	isFirst, err := c.userSvc.IsFirstUser(r.Context(), userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
 		return
@@ -287,7 +287,7 @@ func (c *AdminController) handleDeleteConsensus(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	deleted, err := c.consensusStore.DeleteConsensus(consensusID)
+	deleted, err := c.consensusStore.DeleteConsensus(r.Context(), consensusID)
 	if err != nil {
 		c.logger.Error("failed to delete consensus", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete consensus")

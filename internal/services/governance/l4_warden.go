@@ -501,7 +501,7 @@ func (tv *L4Warden) verifyStateful(ctx context.Context, envelope *govtypes.Gover
 // the active posture requires L2 consensus.
 func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string, posture GovernancePosture) (bool, bool, []*operatorv1.DeterministicStageEvidence, error) {
 	l2Start := governanceMonotonicNow()
-	l2Valid, err := tv.verifyL2Posture(envelope, computedHash, posture)
+	l2Valid, err := tv.verifyL2Posture(ctx, envelope, computedHash, posture)
 	if err != nil {
 		l2Stage := newDeterministicStageEvidence(
 			envelope,

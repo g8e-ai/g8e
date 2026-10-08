@@ -121,7 +121,7 @@ type GatewayService struct {
 // MCP gateway's read_field operation. It is implemented by the gateway's
 // document store (DocumentStoreService).
 type FieldReader interface {
-	GetField(collection, id, fieldPath string) (FieldValue, error)
+	GetField(ctx context.Context, collection, id, fieldPath string) (FieldValue, error)
 }
 
 // NoopFieldReader is a no-op implementation of FieldReader.
@@ -129,7 +129,7 @@ type FieldReader interface {
 // production outbound mode uses nil with explicit nil-checks.
 type NoopFieldReader struct{}
 
-func (NoopFieldReader) GetField(string, string, string) (FieldValue, error) {
+func (NoopFieldReader) GetField(context.Context, string, string, string) (FieldValue, error) {
 	return FieldValue{}, nil
 }
 
@@ -633,7 +633,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 }
 
 // handleReadField processes the read_field tool with governed access controls
-func (g *GatewayService) handleReadField(arguments json.RawMessage) (interface{}, error) {
+func (g *GatewayService) handleReadField(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
 	if g.fieldPathRegistry == nil {
 		return nil, constants.ErrGatewayFieldPathRegistryNotInit
 	}
@@ -678,7 +678,7 @@ func (g *GatewayService) handleReadField(arguments json.RawMessage) (interface{}
 	}
 
 	// Extract field value from database
-	value, err := g.dbService.GetField(req.Collection, req.DocumentID, req.FieldPath)
+	value, err := g.dbService.GetField(ctx, req.Collection, req.DocumentID, req.FieldPath)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
@@ -1295,7 +1295,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage, operatorSessionID string) (string, error) {
 	// Handle read_field tool locally (JIT field resolution)
 	if toolName == "read_field" {
-		result, err := g.handleReadField(toolArgs)
+		result, err := g.handleReadField(ctx, toolArgs)
 		if err != nil {
 			return "", err
 		}

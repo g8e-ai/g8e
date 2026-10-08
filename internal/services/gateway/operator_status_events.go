@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,8 +56,8 @@ type OperatorStatusTransition struct {
 
 // operatorDocument loads the persisted Operator document, or returns
 // constants.ErrNotFound when no such Operator exists.
-func (s *DocumentStoreService) operatorDocument(operatorID string) (*operatorv1.OperatorDocument, error) {
-	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+func (s *DocumentStoreService) operatorDocument(ctx context.Context, operatorID string) (*operatorv1.OperatorDocument, error) {
+	doc, err := s.DocGet(ctx, marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +74,8 @@ func (s *DocumentStoreService) operatorDocument(operatorID string) (*operatorv1.
 // OperatorStatusTransition builds the transition of operatorID into status from
 // the persisted Operator document, for a caller that knows the Operator only by
 // id. It returns constants.ErrNotFound when no such Operator exists.
-func (s *DocumentStoreService) OperatorStatusTransition(operatorID string, status constants.OperatorStatus) (OperatorStatusTransition, error) {
-	op, err := s.operatorDocument(operatorID)
+func (s *DocumentStoreService) OperatorStatusTransition(ctx context.Context, operatorID string, status constants.OperatorStatus) (OperatorStatusTransition, error) {
+	op, err := s.operatorDocument(ctx, operatorID)
 	if err != nil {
 		return OperatorStatusTransition{}, err
 	}
@@ -86,8 +87,8 @@ func (s *DocumentStoreService) OperatorStatusTransition(operatorID string, statu
 // its pub/sub connection. The transition carries the document's current status,
 // so a stopped or stale Operator is reported as such rather than as ready, and
 // nothing is announced when sessionID is no longer the Operator's session.
-func (s *DocumentStoreService) OperatorCommandSubscribed(operatorID, sessionID, deploymentID string) error {
-	op, err := s.operatorDocument(operatorID)
+func (s *DocumentStoreService) OperatorCommandSubscribed(ctx context.Context, operatorID, sessionID, deploymentID string) error {
+	op, err := s.operatorDocument(ctx, operatorID)
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ func (s *DocumentStoreService) OperatorCommandSubscribed(operatorID, sessionID, 
 			"current_session_id", op.GetOperatorSessionId(), "deployment_id", deploymentID)
 		return nil
 	}
-	s.NotifyOperatorStatusChanged(OperatorStatusTransition{
+	s.NotifyOperatorStatusChanged(ctx, OperatorStatusTransition{
 		OperatorID:        operatorID,
 		UserID:            op.GetUserId(),
 		Name:              op.GetName(),
@@ -112,7 +113,7 @@ func (s *DocumentStoreService) OperatorCommandSubscribed(operatorID, sessionID, 
 // transition. The operator document stays the source of truth: an observer
 // reports the change and must not fail the transition that produced it.
 type OperatorStatusObserver interface {
-	OperatorStatusChanged(OperatorStatusTransition)
+	OperatorStatusChanged(context.Context, OperatorStatusTransition)
 }
 
 // OperatorStatusPublisher pushes Operator status transitions to the owning
@@ -135,8 +136,8 @@ func NewOperatorStatusPublisher(docStore *DocumentStoreService, publisher *SSEEv
 
 // OperatorStatusChanged implements OperatorStatusObserver. Delivery failures
 // are logged because the transition is already persisted.
-func (p *OperatorStatusPublisher) OperatorStatusChanged(t OperatorStatusTransition) {
-	if err := p.Publish(t); err != nil {
+func (p *OperatorStatusPublisher) OperatorStatusChanged(ctx context.Context, t OperatorStatusTransition) {
+	if err := p.Publish(ctx, t); err != nil {
 		p.logger.Warn("operator status event not delivered",
 			"operator_id", t.OperatorID,
 			"status", t.Status,
@@ -149,13 +150,13 @@ func (p *OperatorStatusPublisher) OperatorStatusChanged(t OperatorStatusTransiti
 // when t.Status has no Gateway-published event. Sessions are delivered
 // independently, so one failing session does not hide the event from the rest;
 // the returned error joins every per-session failure.
-func (p *OperatorStatusPublisher) Publish(t OperatorStatusTransition) error {
+func (p *OperatorStatusPublisher) Publish(ctx context.Context, t OperatorStatusTransition) error {
 	eventType, ok := operatorStatusEvents[t.Status]
 	if !ok {
 		return fmt.Errorf("%w: %q", constants.ErrOperatorStatusEventUnsupported, t.Status)
 	}
 
-	sessionIDs, err := ownerWebSessionIDs(p.docStore, t.UserID)
+	sessionIDs, err := ownerWebSessionIDs(ctx, p.docStore, t.UserID)
 	if err != nil {
 		return fmt.Errorf("operator status event: resolve web sessions of %s: %w", t.UserID, err)
 	}
@@ -182,7 +183,7 @@ func (p *OperatorStatusPublisher) Publish(t OperatorStatusTransition) error {
 	// CLIs with an open stream are addressed; each worker has a CLI session that
 	// never connects, and a row per such session would multiply with the fleet.
 	// A CLI that connects later reconciles against the Operator list.
-	cliIDs, err := ownerConnectedCLISessionIDs(p.docStore, p.publisher, t.UserID)
+	cliIDs, err := ownerConnectedCLISessionIDs(ctx, p.docStore, p.publisher, t.UserID)
 	if err != nil {
 		return errors.Join(append(errs, fmt.Errorf("operator status event: resolve cli sessions of %s: %w", t.UserID, err))...)
 	}
@@ -197,8 +198,8 @@ func (p *OperatorStatusPublisher) Publish(t OperatorStatusTransition) error {
 
 // ownerWebSessionIDs returns the ids of userID's web sessions that have not
 // expired.
-func ownerWebSessionIDs(docStore *DocumentStoreService, userID string) ([]string, error) {
-	docs, err := docStore.DocQuery(marshaler.CollectionName(constants.CollectionWebSessions), []models.DocFilter{
+func ownerWebSessionIDs(ctx context.Context, docStore *DocumentStoreService, userID string) ([]string, error) {
+	docs, err := docStore.DocQuery(ctx, marshaler.CollectionName(constants.CollectionWebSessions), []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}, "", 0)
 	if err != nil {

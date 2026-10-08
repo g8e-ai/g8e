@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -41,8 +42,8 @@ func NewConsensusStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *Do
 }
 
 // GetConsensus retrieves a ConsensusPolicy by ID from the database.
-func (s *ConsensusStoreService) GetConsensus(id string) (*models.ConsensusPolicy, error) {
-	doc, err := s.docSvc.DocGet(marshaler.CollectionName(constants.CollectionConsensus), id)
+func (s *ConsensusStoreService) GetConsensus(ctx context.Context, id string) (*models.ConsensusPolicy, error) {
+	doc, err := s.docSvc.DocGet(ctx, marshaler.CollectionName(constants.CollectionConsensus), id)
 	if err != nil {
 		return nil, fmt.Errorf("consensus store: get: %w", err)
 	}
@@ -67,8 +68,8 @@ func (s *ConsensusStoreService) GetConsensus(id string) (*models.ConsensusPolicy
 // GetConsensusPolicy implements governance.L2ConsensusPolicyStore by loading
 // the ConsensusPolicy via GetConsensus and adapting it to the generic
 // L2ConsensusPolicy struct.
-func (s *ConsensusStoreService) GetConsensusPolicy(id string) (*governance.L2ConsensusPolicy, error) {
-	policy, err := s.GetConsensus(id)
+func (s *ConsensusStoreService) GetConsensusPolicy(ctx context.Context, id string) (*governance.L2ConsensusPolicy, error) {
+	policy, err := s.GetConsensus(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (s *ConsensusStoreService) GetConsensusPolicy(id string) (*governance.L2Con
 // - Every MemberAppID resolves to an enabled TrustedSigner
 // - No duplicate member IDs
 // - New consensus must be created with Enabled=true (updates may disable)
-func (s *ConsensusStoreService) AddConsensus(policy models.ConsensusPolicy) error {
+func (s *ConsensusStoreService) AddConsensus(ctx context.Context, policy models.ConsensusPolicy) error {
 	if policy.ID == "" {
 		return fmt.Errorf("%w: consensus ID", constants.ErrMissingRequiredField)
 	}
@@ -135,7 +136,7 @@ func (s *ConsensusStoreService) AddConsensus(policy models.ConsensusPolicy) erro
 	// - New consensus must be created with Enabled=true.
 	// - Existing consensus may only be updated via Enabled=false (disable path).
 	// - Overwriting an existing consensus with Enabled=true is rejected.
-	existing, err := s.GetConsensus(policy.ID)
+	existing, err := s.GetConsensus(ctx, policy.ID)
 	if err != nil {
 		return fmt.Errorf("%w: failed to check existing consensus: %w", constants.ErrConstraintViolation, err)
 	}
@@ -159,12 +160,12 @@ func (s *ConsensusStoreService) AddConsensus(policy models.ConsensusPolicy) erro
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
-	return s.docSvc.DocSet(marshaler.CollectionName(constants.CollectionConsensus), policy.ID, data)
+	return s.docSvc.DocSet(ctx, marshaler.CollectionName(constants.CollectionConsensus), policy.ID, data)
 }
 
 // ListConsensus returns all ConsensusPolicies in the database.
-func (s *ConsensusStoreService) ListConsensus() ([]models.ConsensusPolicy, error) {
-	docs, err := s.docSvc.DocQuery(marshaler.CollectionName(constants.CollectionConsensus), nil, "id", 0)
+func (s *ConsensusStoreService) ListConsensus(ctx context.Context) ([]models.ConsensusPolicy, error) {
+	docs, err := s.docSvc.DocQuery(ctx, marshaler.CollectionName(constants.CollectionConsensus), nil, "id", 0)
 	if err != nil {
 		return nil, fmt.Errorf("consensus store: list: %w", err)
 	}
@@ -189,8 +190,8 @@ func (s *ConsensusStoreService) ListConsensus() ([]models.ConsensusPolicy, error
 }
 
 // DeleteConsensus removes a ConsensusPolicy from the database.
-func (s *ConsensusStoreService) DeleteConsensus(id string) (bool, error) {
-	return s.docSvc.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionConsensus), id)
+func (s *ConsensusStoreService) DeleteConsensus(ctx context.Context, id string) (bool, error) {
+	return s.docSvc.DocDeleteWithResult(ctx, marshaler.CollectionName(constants.CollectionConsensus), id)
 }
 
 // isValidConsensusID validates that a consensus ID contains only allowed characters.

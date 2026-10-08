@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -37,7 +38,7 @@ func NewCLISessionService(docStore *DocumentStoreService, logger *slog.Logger) *
 
 // PersistCLISession creates and persists a CLI session document.
 // The operatorSessionID binds this CLI session to an operator session for authorization.
-func (s *CLISessionService) PersistCLISession(cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
+func (s *CLISessionService) PersistCLISession(ctx context.Context, cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
 	cliExpiry := time.Now().UTC().Add(constants.CLISessionTTL)
 	cliSession := models.CLISession{
 		ID:                cliSessionID,
@@ -59,7 +60,7 @@ func (s *CLISessionService) PersistCLISession(cliSessionID, operatorSessionID, u
 		return fmt.Errorf("failed to marshal CLI session: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),cliSessionID, cliSessionBytes); err != nil {
 		s.logger.Error("Failed to persist CLI session", string(constants.ConnectionStateError), err)
 		return fmt.Errorf("failed to persist CLI session: %w", err)
 	}
@@ -101,13 +102,13 @@ func marshalCLISessionDeactivationUpdate() (json.RawMessage, error) {
 // constants.ErrCLISessionAlreadyDeactivated and a missing session returns
 // constants.ErrCLISessionNotFound. The caller is responsible for any PKI
 // revocation side-effect; this method only mutates CLI-session state.
-func (s *CLISessionService) DeactivateCLISession(sessionID string) error {
+func (s *CLISessionService) DeactivateCLISession(ctx context.Context, sessionID string) error {
 	if sessionID == "" {
 		return fmt.Errorf("deactivate CLI session: %w", constants.ErrCLISessionInvalid)
 	}
 
 	// Read first to distinguish not-found from already-deactivated.
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), sessionID)
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),sessionID)
 	if err != nil {
 		return fmt.Errorf("deactivate CLI session: load: %w", err)
 	}
@@ -127,7 +128,7 @@ func (s *CLISessionService) DeactivateCLISession(sessionID string) error {
 	}
 
 	applied, err := s.db.DocConditionalUpdate(
-		marshaler.CollectionName(constants.CollectionCLISessions),
+		ctx, marshaler.CollectionName(constants.CollectionCLISessions),
 		sessionID,
 		deactivationUpdate,
 		"is_active", true,
@@ -138,7 +139,7 @@ func (s *CLISessionService) DeactivateCLISession(sessionID string) error {
 	if !applied {
 		// Another caller deactivated or replaced the session between our read
 		// and the conditional update. Re-read to give a precise error.
-		current, err := s.loadCLISession(sessionID)
+		current, err := s.loadCLISession(ctx, sessionID)
 		if err != nil {
 			return err
 		}
@@ -165,11 +166,11 @@ type cliSessionTerminationUpdate struct {
 // ListUserCLISessions returns every CLI session document owned by userID,
 // active or not. Callers decide which states matter: logout needs the active
 // sessions to terminate and every certificate serial ever issued to the user.
-func (s *CLISessionService) ListUserCLISessions(userID string) ([]*models.CLISession, error) {
+func (s *CLISessionService) ListUserCLISessions(ctx context.Context, userID string) ([]*models.CLISession, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("list user CLI sessions: %w", constants.ErrRegistrationUserIDRequired)
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionCLISessions), []models.DocFilter{
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionCLISessions),[]models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}, "", 0)
 	if err != nil {
@@ -192,7 +193,7 @@ func (s *CLISessionService) ListUserCLISessions(userID string) ([]*models.CLISes
 // session: false with a nil error means a concurrent caller deactivated or
 // replaced it first. The caller owns PKI revocation of the session's
 // certificate; this method only mutates CLI-session state.
-func (s *CLISessionService) TerminateCLISession(sessionID string) (bool, error) {
+func (s *CLISessionService) TerminateCLISession(ctx context.Context, sessionID string) (bool, error) {
 	if sessionID == "" {
 		return false, fmt.Errorf("terminate CLI session: %w", constants.ErrCLISessionInvalid)
 	}
@@ -201,7 +202,7 @@ func (s *CLISessionService) TerminateCLISession(sessionID string) (bool, error) 
 		return false, fmt.Errorf("terminate CLI session: marshal update: %w", err)
 	}
 	applied, err := s.db.DocConditionalUpdate(
-		marshaler.CollectionName(constants.CollectionCLISessions),
+		ctx, marshaler.CollectionName(constants.CollectionCLISessions),
 		sessionID,
 		update,
 		"is_active", true,
@@ -244,7 +245,7 @@ func (s *CLISessionService) TerminateCLISession(sessionID string) (bool, error) 
 // verifier — the typed error lets the caller retry revocation idempotently.
 // The new certificate is signed by the caller BEFORE this method is invoked
 // so a signing failure never leaves a stale deactivated session.
-func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string, newCertFingerprint, newCertSerial string, newFields CLISessionFields) (newSession *models.CLISession, err error) {
+func (s *CLISessionService) ReplaceCLISession(ctx context.Context, oldSessionID, newSessionID string, newCertFingerprint, newCertSerial string, newFields CLISessionFields) (newSession *models.CLISession, err error) {
 	if oldSessionID == "" {
 		return nil, fmt.Errorf("replace CLI session: %w", constants.ErrCLISessionInvalid)
 	}
@@ -256,7 +257,7 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 	}
 
 	// 1. Verify the old session exists and is still active.
-	oldDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
+	oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),oldSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("replace CLI session: load old: %w", err)
 	}
@@ -294,7 +295,7 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 	if err != nil {
 		return nil, fmt.Errorf("replace CLI session: marshal new: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID, createdBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID, createdBytes); err != nil {
 		return nil, fmt.Errorf("replace CLI session: persist new: %w", err)
 	}
 
@@ -306,7 +307,7 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 		return nil, err
 	}
 	applied, err := s.db.DocConditionalUpdate(
-		marshaler.CollectionName(constants.CollectionCLISessions),
+		ctx, marshaler.CollectionName(constants.CollectionCLISessions),
 		oldSessionID,
 		deactivationUpdate,
 		"is_active", true,
@@ -315,7 +316,7 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 		// The new session was persisted but we could not deactivate the old
 		// one due to a store error. Clean up the orphaned new session so we
 		// do not leave an active session with no matching deactivated old one.
-		if delErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
+		if delErr := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID); delErr != nil {
 			s.logger.Error("ReplaceCLISession: failed to clean up orphaned new session after deactivate error",
 				"error", delErr,
 				"new_session_id_prefix", safeTruncateID(newSessionID),
@@ -327,7 +328,7 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 		// A concurrent caller already deactivated the old session. Delete the
 		// orphaned new session we just wrote so an active session document is
 		// not left in the collection with no corresponding deactivated old one.
-		if delErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
+		if delErr := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID); delErr != nil {
 			s.logger.Error("ReplaceCLISession: failed to clean up orphaned new session after race loss",
 				"error", delErr,
 				"new_session_id_prefix", safeTruncateID(newSessionID),
@@ -349,8 +350,8 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 }
 
 // loadCLISession fetches a CLI session by ID and returns typed errors.
-func (s *CLISessionService) loadCLISession(sessionID string) (*models.CLISession, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), sessionID)
+func (s *CLISessionService) loadCLISession(ctx context.Context, sessionID string) (*models.CLISession, error) {
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("load CLI session: %w", err)
 	}
@@ -377,7 +378,7 @@ func (s *CLISessionService) loadCLISession(sessionID string) (*models.CLISession
 // match any persisted session (e.g., after a gateway volume reset). In
 // that case, only the new session is persisted; there is no old session to
 // deactivate.
-func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string, fields CLISessionFields) (*models.CLISession, error) {
+func (s *CLISessionService) RefreshCLISession(ctx context.Context, oldSessionID, newSessionID string, fields CLISessionFields) (*models.CLISession, error) {
 	if newSessionID == "" {
 		return nil, fmt.Errorf("refresh CLI session: missing new session ID")
 	}
@@ -395,7 +396,7 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 		return nil, err
 	}
 	if oldSessionID != "" {
-		oldDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
+		oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),oldSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("refresh CLI session: load old: %w", err)
 		}
@@ -406,7 +407,7 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 			}
 			if oldSession.IsActive {
 				applied, err := s.db.DocConditionalUpdate(
-					marshaler.CollectionName(constants.CollectionCLISessions),
+					ctx, marshaler.CollectionName(constants.CollectionCLISessions),
 					oldSessionID,
 					deactivationUpdate,
 					"is_active", true,
@@ -447,7 +448,7 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 	if err != nil {
 		return nil, fmt.Errorf("refresh CLI session: marshal new: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID, createdBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID, createdBytes); err != nil {
 		return nil, fmt.Errorf("refresh CLI session: persist new: %w", err)
 	}
 
@@ -463,7 +464,7 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 // with no operator binding, deactivating the old session when it still exists.
 // The caller's cert is not rotated. oldSessionID may be empty when the cert's
 // URI SAN session ID does not match any persisted session.
-func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, fields CLISessionFields) (*models.CLISession, error) {
+func (s *CLISessionService) UnbindCLISession(ctx context.Context, oldSessionID, newSessionID string, fields CLISessionFields) (*models.CLISession, error) {
 	if newSessionID == "" {
 		return nil, fmt.Errorf("unbind CLI session: missing new session ID")
 	}
@@ -476,7 +477,7 @@ func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, 
 	}
 
 	if oldSessionID != "" {
-		oldDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
+		oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),oldSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("unbind CLI session: load old: %w", err)
 		}
@@ -487,7 +488,7 @@ func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, 
 			}
 			if oldSession.IsActive {
 				applied, err := s.db.DocConditionalUpdate(
-					marshaler.CollectionName(constants.CollectionCLISessions),
+					ctx, marshaler.CollectionName(constants.CollectionCLISessions),
 					oldSessionID,
 					deactivationUpdate,
 					"is_active", true,
@@ -524,7 +525,7 @@ func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, 
 	if err != nil {
 		return nil, fmt.Errorf("unbind CLI session: marshal new: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID, createdBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID, createdBytes); err != nil {
 		return nil, fmt.Errorf("unbind CLI session: persist new: %w", err)
 	}
 

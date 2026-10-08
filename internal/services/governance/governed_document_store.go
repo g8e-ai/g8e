@@ -7,7 +7,10 @@
 
 package governance
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+)
 
 // GovernedDocumentStore defines the interface for mutating governed documents
 // (cases, investigations, memories). Only the gateway-mode DocumentStoreService
@@ -18,12 +21,12 @@ import "encoding/json"
 type GovernedDocumentStore interface {
 	// DocReplace creates or replaces a document. data must be valid JSON.
 	// Used when DocumentUpdateRequested.merge is false.
-	DocReplace(collection, id string, data json.RawMessage) error
+	DocReplace(ctx context.Context, collection, id string, data json.RawMessage) error
 	// DocMerge merges fields into an existing document. fields must be valid
 	// JSON. Returns an error if the document does not exist. Used when
 	// DocumentUpdateRequested.merge is true. Null values in fields remove
 	// the corresponding key from the document.
-	DocMerge(collection, id string, fields json.RawMessage) error
+	DocMerge(ctx context.Context, collection, id string, fields json.RawMessage) error
 	// DocDelete removes a document. A not-found result is not an error.
-	DocDelete(collection, id string) error
+	DocDelete(ctx context.Context, collection, id string) error
 }

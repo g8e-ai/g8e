@@ -119,7 +119,7 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	// This user IS the first human enrollee and the gateway owner (assigned the
 	// owner role); there is no ephemeral bootstrap-user concept and no
 	// retirement flow.
-	user, err := c.userSvc.CreateUserWithOSUser(req.LocalOSUser)
+	user, err := c.userSvc.CreateUserWithOSUser(r.Context(), req.LocalOSUser)
 	if err != nil {
 		c.logger.Error("Failed to create user", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create user")
@@ -174,7 +174,7 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	// it sets the owner binding and mints the operator session ID every
 	// bootstrap-issued session is bound to. The embedded operator is
 	// certless — no CSR is signed for it.
-	operatorID, operatorSessionID, err := c.embeddedOperator.Claim(user.ID, req.SystemFingerprint, time.Now().UTC())
+	operatorID, operatorSessionID, err := c.embeddedOperator.Claim(r.Context(), user.ID, req.SystemFingerprint, time.Now().UTC())
 	if err != nil {
 		c.logger.Error("Failed to claim embedded operator during bootstrap", "error", err, "user_id", user.ID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to bind embedded operator")
@@ -183,6 +183,7 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 
 	// Persist the operator session the CLI session binds to.
 	err = c.operatorSessionSvc.PersistOperatorSession(
+		r.Context(),
 		operatorSessionID,
 		user.ID,
 		user.ID, // Use user ID as org ID for bootstrap
@@ -199,6 +200,7 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	// session. The persisted binding is authoritative: the auth middleware
 	// stamps operator identity from it, never from request headers.
 	err = c.cliSessionSvc.PersistCLISession(
+		r.Context(),
 		cliSessionID,
 		operatorSessionID,
 		user.ID,

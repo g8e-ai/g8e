@@ -64,10 +64,10 @@ func (s *DocumentStoreService) BindOperatorStatusObserver(observer OperatorStatu
 // persisted to the bound observer. Callers that change an Operator's status
 // outside the staleness reconciler call this after the write succeeds. It also
 // keeps the Operator's stale deadline timer in step with the new status.
-func (s *DocumentStoreService) NotifyOperatorStatusChanged(t OperatorStatusTransition) {
-	s.trackOperatorStaleness(t)
+func (s *DocumentStoreService) NotifyOperatorStatusChanged(ctx context.Context, t OperatorStatusTransition) {
+	s.trackOperatorStaleness(ctx, t)
 	if observer := s.statusObserver.Load(); observer != nil {
-		(*observer).OperatorStatusChanged(t)
+		(*observer).OperatorStatusChanged(ctx, t)
 	}
 }
 
@@ -76,8 +76,8 @@ func (s *DocumentStoreService) NotifyOperatorStatusChanged(t OperatorStatusTrans
 // with primitive args so the platform enrollment handlers (which must not
 // import this package) can announce an enrollment the same way
 // NotifyOperatorStatusChanged announces a later transition.
-func (s *DocumentStoreService) NotifyOperatorEnrolled(operatorID, userID, name string) {
-	s.NotifyOperatorStatusChanged(OperatorStatusTransition{
+func (s *DocumentStoreService) NotifyOperatorEnrolled(ctx context.Context, operatorID, userID, name string) {
+	s.NotifyOperatorStatusChanged(ctx, OperatorStatusTransition{
 		OperatorID: operatorID,
 		UserID:     userID,
 		Name:       name,
@@ -100,9 +100,9 @@ const operatorSessionIdentityQuery = `SELECT id, data, created_at, updated_at FR
 // FindOperatorsBySession reads identity bindings without reconciling heartbeat
 // liveness. Two matches are enough for the authentication owner to reject an
 // ambiguous binding; terminated identities remain visible for its checks.
-func (s *DocumentStoreService) FindOperatorsBySession(sessionID string) ([]*models.Document, error) {
+func (s *DocumentStoreService) FindOperatorsBySession(ctx context.Context, sessionID string) ([]*models.Document, error) {
 	collection := marshaler.CollectionName(constants.CollectionOperators)
-	docs, err := sqliteutil.MaterializeRows(context.Background(), s.db, operatorSessionIdentityQuery, []interface{}{collection, sessionID},
+	docs, err := sqliteutil.MaterializeRows(ctx, s.db, operatorSessionIdentityQuery, []interface{}{collection, sessionID},
 		func(row *sql.Rows) (*models.Document, error) {
 			var id, data, createdAt, updatedAt string
 			if err := row.Scan(&id, &data, &createdAt, &updatedAt); err != nil {
@@ -133,24 +133,24 @@ func (s *DocumentStoreService) DocCollectionHasDocuments(ctx context.Context, co
 // DocGet retrieves a document by collection and id.
 // Returns a typed Document with native time.Time timestamps, or nil if not found.
 // An Operator document is reconciled for heartbeat staleness before it is
-// returned.
-func (s *DocumentStoreService) DocGet(collection, id string) (*models.Document, error) {
+// returned. ctx bounds the read, including its wait for a database connection.
+func (s *DocumentStoreService) DocGet(ctx context.Context, collection, id string) (*models.Document, error) {
 	for {
-		doc, err := s.docGet(collection, id)
+		doc, err := s.docGet(ctx, collection, id)
 		if err != nil || doc == nil {
 			return doc, err
 		}
-		if stale, err := s.reconcileOperatorStaleness(doc); err != nil || !stale {
+		if stale, err := s.reconcileOperatorStaleness(ctx, doc); err != nil || !stale {
 			return doc, err
 		}
 	}
 }
 
 // docGet is DocGet without staleness reconciliation, for the reconciler itself.
-func (s *DocumentStoreService) docGet(collection, id string) (*models.Document, error) {
+func (s *DocumentStoreService) docGet(ctx context.Context, collection, id string) (*models.Document, error) {
 	var dataJSON string
 	var createdAtStr, updatedAtStr string
-	err := s.db.QueryRowWithRetry(context.Background(),
+	err := s.db.QueryRowWithRetry(ctx,
 		"SELECT data, created_at, updated_at FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	).Scan(&dataJSON, &createdAtStr, &updatedAtStr)
@@ -164,13 +164,13 @@ func (s *DocumentStoreService) docGet(collection, id string) (*models.Document, 
 	if err != nil {
 		return nil, err
 	}
-	s.overlayOperatorHeartbeats(doc)
+	s.overlayOperatorHeartbeats(ctx, doc)
 	return doc, nil
 }
 
 // DocCreate creates a document only if it does not already exist. data must be valid JSON.
 // Timestamps are managed by the service - created_at is set once on insert.
-func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMessage) error {
+func (s *DocumentStoreService) DocCreate(ctx context.Context, collection, id string, data json.RawMessage) error {
 	var userDoc map[string]json.RawMessage
 	if err := json.Unmarshal(data, &userDoc); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
@@ -190,7 +190,7 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 	now := time.Now().UTC()
 	nowStr := timesvc.FormatTimestamp(now)
 
-	_, err = s.db.ExecWithRetry(context.Background(),
+	_, err = s.db.ExecWithRetry(ctx,
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)`,
 		collection, id, string(dataJSON), nowStr, nowStr,
@@ -207,15 +207,15 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 // DocSet creates or replaces a document. data must be valid JSON.
 // Timestamps are managed by the service - created_at is set once on insert and
 // never overwritten. updated_at is refreshed on every upsert.
-func (s *DocumentStoreService) DocSet(collection, id string, data json.RawMessage) error {
-	return s.DocSetWithTimestamps(collection, id, data, time.Time{}, time.Time{})
+func (s *DocumentStoreService) DocSet(ctx context.Context, collection, id string, data json.RawMessage) error {
+	return s.DocSetWithTimestamps(ctx, collection, id, data, time.Time{}, time.Time{})
 }
 
 // DocSetWithTimestamps creates or replaces a document with custom timestamps.
 // This is a test-only hook for setting specific created_at/updated_at values.
 // For production use, call DocSet instead which auto-manages timestamps.
 // Zero-valued timestamps are replaced with time.Now().UTC().
-func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data json.RawMessage, createdAt, updatedAt time.Time) error {
+func (s *DocumentStoreService) DocSetWithTimestamps(ctx context.Context, collection, id string, data json.RawMessage, createdAt, updatedAt time.Time) error {
 	var userDoc map[string]json.RawMessage
 	if err := json.Unmarshal(data, &userDoc); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
@@ -243,7 +243,7 @@ func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data 
 		updatedAtStr = timesvc.FormatTimestamp(updatedAt)
 	}
 
-	_, err = s.db.ExecWithRetry(context.Background(),
+	_, err = s.db.ExecWithRetry(ctx,
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(collection, id) DO UPDATE SET
@@ -259,10 +259,10 @@ func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data 
 
 // DocUpdate merges fields into an existing document. fields must be valid JSON.
 // Returns the updated Document with native time.Time timestamps.
-func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error) {
+func (s *DocumentStoreService) DocUpdate(ctx context.Context, collection, id string, fields json.RawMessage) (*models.Document, error) {
 	var existingJSON string
 	var createdAtStr, updatedAtStr string
-	err := s.db.QueryRowWithRetry(context.Background(),
+	err := s.db.QueryRowWithRetry(ctx,
 		"SELECT data, created_at, updated_at FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	).Scan(&existingJSON, &createdAtStr, &updatedAtStr)
@@ -303,7 +303,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 	now := time.Now().UTC()
 	nowStr := timesvc.FormatTimestamp(now)
 
-	_, err = s.db.ExecWithRetry(context.Background(),
+	_, err = s.db.ExecWithRetry(ctx,
 		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
 		string(dataJSON), nowStr, collection, id,
 	)
@@ -359,7 +359,7 @@ func decodeDocumentUpdateFields(data json.RawMessage) ([]documentUpdateField, er
 // performing the check and write in a single SQL statement.
 // Returns (true, nil) if the update was applied, (false, nil) if the condition
 // was not met or the document was not found.
-func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error) {
+func (s *DocumentStoreService) DocConditionalUpdate(ctx context.Context, collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error) {
 	updates, err := decodeDocumentUpdateFields(setFields)
 	if err != nil {
 		return false, fmt.Errorf("gateway: document store: conditional update: decode fields: %w", err)
@@ -378,7 +378,7 @@ func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFi
 	query := "UPDATE documents SET data = " + dataExpr + ", updated_at = ? WHERE collection = ? AND id = ? AND json_extract(data, ?) = ?"
 	args = append(args, nowStr, collection, id, "$."+conditionField, conditionValue)
 
-	result, err := s.db.ExecWithRetry(context.Background(), query, args...)
+	result, err := s.db.ExecWithRetry(ctx, query, args...)
 	if err != nil {
 		return false, fmt.Errorf("gateway: document store: conditional update: %w", err)
 	}
@@ -392,8 +392,8 @@ func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFi
 // DocReplace creates or replaces a document. It satisfies the
 // governance.GovernedDocumentStore interface. Delegates to DocSet which
 // upserts with managed timestamps.
-func (s *DocumentStoreService) DocReplace(collection, id string, data json.RawMessage) error {
-	return s.DocSet(collection, id, data)
+func (s *DocumentStoreService) DocReplace(ctx context.Context, collection, id string, data json.RawMessage) error {
+	return s.DocSet(ctx, collection, id, data)
 }
 
 // DocMerge merges fields into an existing document, preserving untouched
@@ -401,34 +401,34 @@ func (s *DocumentStoreService) DocReplace(collection, id string, data json.RawMe
 // Returns constants.ErrNotFound if the document does not exist. Null values
 // in fields remove the corresponding key from the document. Delegates to
 // DocUpdate and discards the returned Document.
-func (s *DocumentStoreService) DocMerge(collection, id string, fields json.RawMessage) error {
-	_, err := s.DocUpdate(collection, id, fields)
+func (s *DocumentStoreService) DocMerge(ctx context.Context, collection, id string, fields json.RawMessage) error {
+	_, err := s.DocUpdate(ctx, collection, id, fields)
 	return err
 }
 
 // DocList returns all documents in a collection, ordered by id ascending.
 // Operator documents are reconciled for heartbeat staleness before they are
 // returned.
-func (s *DocumentStoreService) DocList(collection string) ([]*models.Document, error) {
+func (s *DocumentStoreService) DocList(ctx context.Context, collection string) ([]*models.Document, error) {
 	for {
-		docs, err := s.docList(collection)
+		docs, err := s.docList(ctx, collection)
 		if err != nil {
 			return nil, err
 		}
-		if stale, err := s.reconcileOperatorStaleness(docs...); err != nil || !stale {
+		if stale, err := s.reconcileOperatorStaleness(ctx, docs...); err != nil || !stale {
 			return docs, err
 		}
 	}
 }
 
-func (s *DocumentStoreService) docList(collection string) ([]*models.Document, error) {
+func (s *DocumentStoreService) docList(ctx context.Context, collection string) ([]*models.Document, error) {
 	type docRow struct {
 		docID        string
 		dataJSON     string
 		createdAtStr string
 		updatedAtStr string
 	}
-	rows, err := sqliteutil.MaterializeRows(context.Background(), s.db,
+	rows, err := sqliteutil.MaterializeRows(ctx, s.db,
 		"SELECT id, data, created_at, updated_at FROM documents WHERE collection = ? ORDER BY id ASC",
 		[]interface{}{collection},
 		func(r *sql.Rows) (docRow, error) {
@@ -450,7 +450,7 @@ func (s *DocumentStoreService) docList(collection string) ([]*models.Document, e
 		}
 		results = append(results, doc)
 	}
-	s.overlayOperatorHeartbeats(results...)
+	s.overlayOperatorHeartbeats(ctx, results...)
 	return results, nil
 }
 
@@ -459,15 +459,15 @@ func (s *DocumentStoreService) docList(collection string) ([]*models.Document, e
 // interfaces. A not-found result is not an error — the document is simply
 // already absent. Callers that need the deleted/not-found distinction should
 // use DocDeleteWithResult.
-func (s *DocumentStoreService) DocDelete(collection, id string) error {
-	_, err := s.DocDeleteWithResult(collection, id)
+func (s *DocumentStoreService) DocDelete(ctx context.Context, collection, id string) error {
+	_, err := s.DocDeleteWithResult(ctx, collection, id)
 	return err
 }
 
 // DocDeleteWithResult removes a document. Returns (true, nil) if deleted,
 // (false, nil) if not found.
-func (s *DocumentStoreService) DocDeleteWithResult(collection, id string) (bool, error) {
-	result, err := s.db.ExecWithRetry(context.Background(),
+func (s *DocumentStoreService) DocDeleteWithResult(ctx context.Context, collection, id string) (bool, error) {
+	result, err := s.db.ExecWithRetry(ctx,
 		"DELETE FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	)
@@ -483,8 +483,8 @@ func (s *DocumentStoreService) DocDeleteWithResult(collection, id string) (bool,
 
 // DocDeleteNamespace removes all documents in a collection.
 // Returns the count of deleted documents.
-func (s *DocumentStoreService) DocDeleteNamespace(collection string) (int64, error) {
-	result, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM documents WHERE collection = ?", collection)
+func (s *DocumentStoreService) DocDeleteNamespace(ctx context.Context, collection string) (int64, error) {
+	result, err := s.db.ExecWithRetry(ctx, "DELETE FROM documents WHERE collection = ?", collection)
 	if err != nil {
 		return 0, fmt.Errorf("gateway: document store: delete namespace: %w", err)
 	}
@@ -497,9 +497,9 @@ func (s *DocumentStoreService) DocDeleteNamespace(collection string) (int64, err
 
 // GetField extracts a single field value from a document using dot notation.
 // This is used for JIT field resolution with governed access controls.
-func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.FieldValue, error) {
+func (s *DocumentStoreService) GetField(ctx context.Context, collection, id, fieldPath string) (mcp.FieldValue, error) {
 	if collection == marshaler.CollectionName(constants.CollectionOperators) {
-		if _, err := s.DocGet(collection, id); err != nil {
+		if _, err := s.DocGet(ctx, collection, id); err != nil {
 			return mcp.FieldValue{}, err
 		}
 	}
@@ -512,7 +512,7 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.F
 	jsonPath := "$." + fieldPath
 
 	var encoded *string
-	err := s.db.QueryRowWithRetry(context.Background(), query, jsonPath, collection, id).Scan(&encoded)
+	err := s.db.QueryRowWithRetry(ctx, query, jsonPath, collection, id).Scan(&encoded)
 	if err == sql.ErrNoRows {
 		return mcp.FieldValue{}, constants.ErrNotFound
 	}
@@ -536,13 +536,13 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.F
 // Operator documents are reconciled for heartbeat staleness before they are
 // returned. A reconciled transition can change which documents match, so the
 // query then runs again.
-func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
+func (s *DocumentStoreService) DocQuery(ctx context.Context, collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
 	for {
-		docs, err := s.docQuery(collection, filters, orderBy, limit)
+		docs, err := s.docQuery(ctx, collection, filters, orderBy, limit)
 		if err != nil {
 			return nil, err
 		}
-		if stale, err := s.reconcileOperatorStaleness(docs...); err != nil || !stale {
+		if stale, err := s.reconcileOperatorStaleness(ctx, docs...); err != nil || !stale {
 			return docs, err
 		}
 	}
@@ -550,7 +550,7 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 
 // docQuery is DocQuery without staleness reconciliation, for the staleness
 // watcher.
-func (s *DocumentStoreService) docQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
+func (s *DocumentStoreService) docQuery(ctx context.Context, collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
 	var query strings.Builder
 	query.WriteString("SELECT id, data, created_at, updated_at FROM documents WHERE collection = ?")
 	args := []interface{}{collection}
@@ -644,7 +644,7 @@ func (s *DocumentStoreService) docQuery(collection string, filters []models.DocF
 		updatedAtStr string
 	}
 
-	rows, err := sqliteutil.MaterializeRows(context.Background(), s.db, query.String(), args, func(r *sql.Rows) (docRow, error) {
+	rows, err := sqliteutil.MaterializeRows(ctx, s.db, query.String(), args, func(r *sql.Rows) (docRow, error) {
 		var row docRow
 		if err := r.Scan(&row.docID, &row.dataJSON, &row.createdAtStr, &row.updatedAtStr); err != nil {
 			return docRow{}, fmt.Errorf("gateway: document store: query: scan: %w", err)
@@ -663,7 +663,7 @@ func (s *DocumentStoreService) docQuery(collection string, filters []models.DocF
 		}
 		results = append(results, doc)
 	}
-	s.overlayOperatorHeartbeats(results...)
+	s.overlayOperatorHeartbeats(ctx, results...)
 	return results, nil
 }
 

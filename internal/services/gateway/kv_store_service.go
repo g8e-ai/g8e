@@ -33,12 +33,12 @@ func NewKVStoreService(db *sqliteutil.DB, logger *slog.Logger) *KVStoreService {
 }
 
 // KVGet retrieves a value by key. Returns ("", false) if not found or expired.
-func (s *KVStoreService) KVGet(key string) (string, bool) {
+func (s *KVStoreService) KVGet(ctx context.Context, key string) (string, bool) {
 	// Use a single query that filters out expired keys, avoiding the need
 	// for a separate lazy-delete goroutine (which risked deadlocks).
 	// Expired entries are cleaned up by RunMaintenance instead.
 	var value string
-	err := s.db.QueryRowWithRetry(context.Background(),
+	err := s.db.QueryRowWithRetry(ctx,
 		"SELECT value FROM kv_store WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)",
 		key, timesvc.NowTimestamp(),
 	).Scan(&value)
@@ -50,7 +50,7 @@ func (s *KVStoreService) KVGet(key string) (string, bool) {
 
 // KVSet stores a key/value pair. ttlSeconds == 0 means no expiration.
 // Negative ttlSeconds means the key is immediately expired.
-func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
+func (s *KVStoreService) KVSet(ctx context.Context, key, value string, ttlSeconds int) error {
 	now := timesvc.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
@@ -61,7 +61,7 @@ func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
 		expiresAt = &exp
 	}
 
-	_, err := s.db.ExecWithRetry(context.Background(),
+	_, err := s.db.ExecWithRetry(ctx,
 		`INSERT INTO kv_store (key, value, created_at, expires_at)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
@@ -74,7 +74,7 @@ func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
 // Observed-state entries are excluded from the bound freshness root and are
 // hashed separately in the observed-state commitment. ttlSeconds == 0 means no expiration.
 // Negative ttlSeconds means the key is immediately expired.
-func (s *KVStoreService) KVSetObserved(key, value string, ttlSeconds int) error {
+func (s *KVStoreService) KVSetObserved(ctx context.Context, key, value string, ttlSeconds int) error {
 	now := timesvc.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
@@ -85,7 +85,7 @@ func (s *KVStoreService) KVSetObserved(key, value string, ttlSeconds int) error 
 		expiresAt = &exp
 	}
 
-	_, err := s.db.ExecWithRetry(context.Background(),
+	_, err := s.db.ExecWithRetry(ctx,
 		`INSERT INTO kv_store (key, value, created_at, expires_at, state_tier)
 		 VALUES (?, ?, ?, ?, 'observed')
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at, state_tier = 'observed'`,
@@ -95,14 +95,14 @@ func (s *KVStoreService) KVSetObserved(key, value string, ttlSeconds int) error 
 }
 
 // KVDelete removes a key.
-func (s *KVStoreService) KVDelete(key string) error {
-	_, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM kv_store WHERE key = ?", key)
+func (s *KVStoreService) KVDelete(ctx context.Context, key string) error {
+	_, err := s.db.ExecWithRetry(ctx, "DELETE FROM kv_store WHERE key = ?", key)
 	return err
 }
 
 // KVKeys returns all keys matching a glob pattern.
-func (s *KVStoreService) KVKeys(pattern string) ([]string, error) {
-	keys, err := sqliteutil.MaterializeRows(context.Background(), s.db,
+func (s *KVStoreService) KVKeys(ctx context.Context, pattern string) ([]string, error) {
+	keys, err := sqliteutil.MaterializeRows(ctx, s.db,
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
 		[]interface{}{pattern, timesvc.NowTimestamp()},
 		func(r *sql.Rows) (string, error) {
@@ -120,9 +120,9 @@ func (s *KVStoreService) KVKeys(pattern string) ([]string, error) {
 
 // KVEntries returns every live key/value pair whose key matches a glob pattern,
 // in one query.
-func (s *KVStoreService) KVEntries(pattern string) (map[string]string, error) {
+func (s *KVStoreService) KVEntries(ctx context.Context, pattern string) (map[string]string, error) {
 	type entry struct{ key, value string }
-	entries, err := sqliteutil.MaterializeRows(context.Background(), s.db,
+	entries, err := sqliteutil.MaterializeRows(ctx, s.db,
 		"SELECT key, value FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
 		[]interface{}{pattern, timesvc.NowTimestamp()},
 		func(r *sql.Rows) (entry, error) {
@@ -141,9 +141,9 @@ func (s *KVStoreService) KVEntries(pattern string) (map[string]string, error) {
 }
 
 // RunMaintenance removes expired KV entries from the database.
-func (s *KVStoreService) RunMaintenance() error {
+func (s *KVStoreService) RunMaintenance(ctx context.Context) error {
 	now := timesvc.NowTimestamp()
-	_, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+	_, err := s.db.ExecWithRetry(ctx, "DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("failed to cleanup expired kv entries: %w", err)
 	}

@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -39,7 +40,7 @@ func NewOperatorSessionService(docStore *DocumentStoreService, logger *slog.Logg
 
 // PersistOperatorSession creates and persists an operator session document.
 // Field names match the canonical Operator session document schema.
-func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error {
+func (s *OperatorSessionService) PersistOperatorSession(ctx context.Context, operatorSessionID, userID, orgID, operatorID, loginMethod string) error {
 	sessionExpiry := time.Now().UTC().Add(1 * time.Hour)
 	now := time.Now().UTC()
 
@@ -62,7 +63,7 @@ func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userI
 		return fmt.Errorf("failed to marshal Operator session document: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
 		s.logger.Error("Failed to persist Operator session document", string(constants.ConnectionStateError), err)
 		return fmt.Errorf("failed to persist Operator session document: %w", err)
 	}
@@ -70,11 +71,11 @@ func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userI
 	return nil
 }
 
-func (s *OperatorSessionService) DeactivateOperatorSession(operatorSessionID string) error {
+func (s *OperatorSessionService) DeactivateOperatorSession(ctx context.Context, operatorSessionID string) error {
 	if operatorSessionID == "" {
 		return constants.ErrGatewayOperatorSessionIDRequired
 	}
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 	if err != nil {
 		return fmt.Errorf("deactivate operator session: load: %w", err)
 	}
@@ -87,7 +88,7 @@ func (s *OperatorSessionService) DeactivateOperatorSession(operatorSessionID str
 	if err != nil {
 		return fmt.Errorf("deactivate operator session: marshal: %w", err)
 	}
-	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, update); err != nil {
+	if _, err := s.db.DocUpdate(ctx, marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, update); err != nil {
 		return fmt.Errorf("deactivate operator session: update: %w", err)
 	}
 	return nil
@@ -102,7 +103,7 @@ func (s *OperatorSessionService) DeactivateOperatorSession(operatorSessionID str
 // When multiple active sessions exist, the session bound to the gateway's
 // embedded operator is preferred — the embedded operator is the canonical
 // local binding — otherwise the newest session wins.
-func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models.OperatorSession, error) {
+func (s *OperatorSessionService) GetActiveSessionForUser(ctx context.Context, userID string) (*models.OperatorSession, error) {
 	userIDVal, err := json.Marshal(userID)
 	if err != nil {
 		return nil, fmt.Errorf("marshal user_id filter: %w", err)
@@ -112,7 +113,7 @@ func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models
 		return nil, fmt.Errorf("marshal is_active filter: %w", err)
 	}
 	docs, err := s.db.DocQuery(
-		marshaler.CollectionName(constants.CollectionOperatorSessions),
+		ctx, marshaler.CollectionName(constants.CollectionOperatorSessions),
 		[]models.DocFilter{
 			{Field: "user_id", Op: "==", Value: userIDVal},
 			{Field: "is_active", Op: "==", Value: activeVal},
@@ -160,7 +161,7 @@ func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models
 // the user's active governed tool Operator as recorded in the operator
 // registry. Registry state wins over stale operator_sessions rows after stack
 // rebuilds or remote Operator re-enrollment.
-func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID string) (*models.OperatorSession, error) {
+func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(ctx context.Context, userID string) (*models.OperatorSession, error) {
 	if userID == "" {
 		return nil, nil
 	}
@@ -173,7 +174,7 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 		return nil, fmt.Errorf("marshal status filter: %w", err)
 	}
 	docs, err := s.db.DocQuery(
-		marshaler.CollectionName(constants.CollectionOperators),
+		ctx, marshaler.CollectionName(constants.CollectionOperators),
 		[]models.DocFilter{
 			{Field: "user_id", Op: "==", Value: userIDVal},
 			{Field: "status", Op: "==", Value: activeStatus},
