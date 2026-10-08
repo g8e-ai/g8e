@@ -118,7 +118,7 @@ func (s *enrollTestDocStore) field(t *testing.T, collection, id, name string) st
 	return out
 }
 
-func (s *enrollTestDocStore) DocSet(collection, id string, data json.RawMessage) error {
+func (s *enrollTestDocStore) DocSet(_ context.Context, collection, id string, data json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.setErr != nil {
@@ -132,7 +132,7 @@ func (s *enrollTestDocStore) DocSet(collection, id string, data json.RawMessage)
 	return nil
 }
 
-func (s *enrollTestDocStore) DocGet(collection, id string) (*models.Document, error) {
+func (s *enrollTestDocStore) DocGet(_ context.Context, collection, id string) (*models.Document, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.getErr[collection]; err != nil {
@@ -178,7 +178,7 @@ func (s *enrollTestDocStore) FindOperatorLeases(ownerID, systemFingerprint strin
 	}, "", 0)
 }
 
-func (s *enrollTestDocStore) DocConditionalUpdate(collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error) {
+func (s *enrollTestDocStore) DocConditionalUpdate(_ context.Context, collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var set map[string]json.RawMessage
@@ -214,7 +214,7 @@ func (s *enrollTestDocStore) DocConditionalUpdate(collection, id string, setFiel
 	return applied, nil
 }
 
-func (s *enrollTestDocStore) DocUpdate(collection, id string, data json.RawMessage) (*models.Document, error) {
+func (s *enrollTestDocStore) DocUpdate(_ context.Context, collection, id string, data json.RawMessage) (*models.Document, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.updErr != nil {
@@ -234,7 +234,7 @@ func (s *enrollTestDocStore) DocUpdate(collection, id string, data json.RawMessa
 	return doc, nil
 }
 
-func (s *enrollTestDocStore) DocDelete(collection, id string) error {
+func (s *enrollTestDocStore) DocDelete(_ context.Context, collection, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.delErr != nil {
@@ -245,7 +245,7 @@ func (s *enrollTestDocStore) DocDelete(collection, id string) error {
 	return nil
 }
 
-func (s *enrollTestDocStore) NotifyOperatorEnrolled(operatorID, userID, name string) {
+func (s *enrollTestDocStore) NotifyOperatorEnrolled(_ context.Context, operatorID, userID, name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.enrolled = append(s.enrolled, operatorID+"/"+userID+"/"+name)
@@ -305,7 +305,7 @@ func (p *enrollTestPKI) GatewayTrustBundle() ([]byte, error) {
 	return p.trustBundle, nil
 }
 
-func (p *enrollTestPKI) RevokeCertificate(serial, reason string) error {
+func (p *enrollTestPKI) RevokeCertificate(_ context.Context, serial, reason string) error {
 	p.revocations = append(p.revocations, enrollTestRevocation{Serial: serial, Reason: reason})
 	if err := p.revokeErrFor[serial]; err != nil {
 		return err
@@ -324,7 +324,7 @@ type enrollTestCLISession struct {
 	CLISessionID, OperatorSessionID, UserID, SystemFingerprint, CertFingerprint, CertSerial, LoginMethod string
 }
 
-func (c *enrollTestCLISessions) PersistCLISession(cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
+func (c *enrollTestCLISessions) PersistCLISession(_ context.Context, cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
 	if c.persistErr != nil {
 		return c.persistErr
 	}
@@ -336,7 +336,7 @@ func (c *enrollTestCLISessions) PersistCLISession(cliSessionID, operatorSessionI
 	return nil
 }
 
-func (c *enrollTestCLISessions) DeactivateCLISession(sessionID string) error {
+func (c *enrollTestCLISessions) DeactivateCLISession(_ context.Context, sessionID string) error {
 	c.deactivated = append(c.deactivated, sessionID)
 	return c.deactivateErr
 }
@@ -352,7 +352,7 @@ type enrollTestOperatorSession struct {
 	OperatorSessionID, UserID, OrgID, OperatorID, LoginMethod string
 }
 
-func (o *enrollTestOperatorSessions) PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error {
+func (o *enrollTestOperatorSessions) PersistOperatorSession(_ context.Context, operatorSessionID, userID, orgID, operatorID, loginMethod string) error {
 	if o.persistErr != nil {
 		return o.persistErr
 	}
@@ -363,7 +363,7 @@ func (o *enrollTestOperatorSessions) PersistOperatorSession(operatorSessionID, u
 	return nil
 }
 
-func (o *enrollTestOperatorSessions) DeactivateOperatorSession(operatorSessionID string) error {
+func (o *enrollTestOperatorSessions) DeactivateOperatorSession(_ context.Context, operatorSessionID string) error {
 	o.deactivated = append(o.deactivated, operatorSessionID)
 	return o.deactivateErr
 }
@@ -1171,7 +1171,7 @@ func TestLoadPlatformEnrollmentOrganization_AcceptsListedMemberWhoIsNotTheOwner(
 	env.store.seed(t, marshaler.CollectionName(constants.CollectionOrganizations), enrollTestOrgID,
 		models.Organization{OwnerUserID: enrollTestOwnerID, MemberUserIDs: []string{"member-1"}})
 
-	user, org, err := loadPlatformEnrollmentOrganization(env.handler.deps, "member-1")
+	user, org, err := loadPlatformEnrollmentOrganization(context.Background(), env.handler.deps, "member-1")
 
 	require.NoError(t, err)
 	assert.Equal(t, "member-1", user.ID)
@@ -1276,7 +1276,7 @@ func TestSupersedeOperatorLeases_BehaviorMatrix(t *testing.T) {
 		env.store.queryErr = errEnrollTestBoom // would surface if a query were issued
 		seedEnrollOperator(t, env, "op-a", enrollTestOwnerID, "", constants.OperatorStatusActive, "s")
 
-		require.NoError(t, env.handler.supersedeOperatorLeases(enrollTestOwnerID, "", "new-op"))
+		require.NoError(t, env.handler.supersedeOperatorLeases(context.Background(), enrollTestOwnerID, "", "new-op"))
 		assert.Equal(t, string(constants.OperatorStatusActive), env.store.field(t, opColl, "op-a", "status"))
 	})
 
@@ -1284,7 +1284,7 @@ func TestSupersedeOperatorLeases_BehaviorMatrix(t *testing.T) {
 		env := newEnrollTestEnv(t)
 		seedEnrollOperator(t, env, "new-op", enrollTestOwnerID, "fp", constants.OperatorStatusActive, "new-session")
 
-		require.NoError(t, env.handler.supersedeOperatorLeases(enrollTestOwnerID, "fp", "new-op"))
+		require.NoError(t, env.handler.supersedeOperatorLeases(context.Background(), enrollTestOwnerID, "fp", "new-op"))
 		assert.Equal(t, string(constants.OperatorStatusActive), env.store.field(t, opColl, "new-op", "status"))
 		assert.Empty(t, env.opSession.deactivated)
 	})
@@ -1293,7 +1293,7 @@ func TestSupersedeOperatorLeases_BehaviorMatrix(t *testing.T) {
 		env := newEnrollTestEnv(t)
 		seedEnrollOperator(t, env, "old", enrollTestOwnerID, "fp", constants.OperatorStatusActive, "")
 
-		require.NoError(t, env.handler.supersedeOperatorLeases(enrollTestOwnerID, "fp", "new-op"))
+		require.NoError(t, env.handler.supersedeOperatorLeases(context.Background(), enrollTestOwnerID, "fp", "new-op"))
 		assert.Equal(t, string(constants.OperatorStatusTerminated), env.store.field(t, opColl, "old", "status"))
 		assert.Empty(t, env.opSession.deactivated)
 	})
@@ -1303,7 +1303,7 @@ func TestSupersedeOperatorLeases_BehaviorMatrix(t *testing.T) {
 		seedEnrollOperator(t, env, "old", enrollTestOwnerID, "fp", constants.OperatorStatusActive, "stale")
 		env.opSession.deactivateErr = constants.ErrGatewayOperatorSessionInvalid
 
-		require.NoError(t, env.handler.supersedeOperatorLeases(enrollTestOwnerID, "fp", "new-op"))
+		require.NoError(t, env.handler.supersedeOperatorLeases(context.Background(), enrollTestOwnerID, "fp", "new-op"))
 		assert.Equal(t, string(constants.OperatorStatusTerminated), env.store.field(t, opColl, "old", "status"))
 	})
 
@@ -1312,7 +1312,7 @@ func TestSupersedeOperatorLeases_BehaviorMatrix(t *testing.T) {
 		seedEnrollOperator(t, env, "old", enrollTestOwnerID, "fp", constants.OperatorStatusActive, "live")
 		env.opSession.deactivateErr = errEnrollTestBoom
 
-		err := env.handler.supersedeOperatorLeases(enrollTestOwnerID, "fp", "new-op")
+		err := env.handler.supersedeOperatorLeases(context.Background(), enrollTestOwnerID, "fp", "new-op")
 
 		require.ErrorIs(t, err, errEnrollTestBoom)
 		assert.Contains(t, err.Error(), "deactivate operator session of old")
@@ -1325,7 +1325,7 @@ func TestSupersedeOperatorLeases_BehaviorMatrix(t *testing.T) {
 		seedEnrollOperator(t, env, "old", enrollTestOwnerID, "fp", constants.OperatorStatusActive, "s")
 		env.store.updErr = errEnrollTestBoom
 
-		err := env.handler.supersedeOperatorLeases(enrollTestOwnerID, "fp", "new-op")
+		err := env.handler.supersedeOperatorLeases(context.Background(), enrollTestOwnerID, "fp", "new-op")
 
 		require.ErrorIs(t, err, errEnrollTestBoom)
 		assert.Contains(t, err.Error(), "terminate superseded operator old")
@@ -1341,7 +1341,7 @@ func TestSupersedeOperatorLeases_BehaviorMatrix(t *testing.T) {
 			"operator_session_id": json.RawMessage(`123`),
 		})
 
-		err := env.handler.supersedeOperatorLeases(enrollTestOwnerID, "fp", "new-op")
+		err := env.handler.supersedeOperatorLeases(context.Background(), enrollTestOwnerID, "fp", "new-op")
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "decode operator session of old")

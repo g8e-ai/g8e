@@ -225,12 +225,12 @@ func NewObserveService(docStore *DocumentStoreService, logger *slog.Logger) *Obs
 // summaries, measurements, and download metadata. All measurement cards
 // remain unavailable until a real host telemetry collector exists (Phase 3).
 func (s *ObserveService) GetBootstrapSnapshot(ctx context.Context, userID string) (*models.ObserveBootstrapSnapshot, error) {
-	agents, err := s.listAgentStates(userID)
+	agents, err := s.listAgentStates(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("observe: bootstrap: list agents: %w", err)
 	}
 
-	runs, err := s.listRuns(userID, observeCursor{}, ObserveBootstrapRecent)
+	runs, err := s.listRuns(ctx, userID, observeCursor{}, ObserveBootstrapRecent)
 	if err != nil {
 		return nil, fmt.Errorf("observe: bootstrap: list runs: %w", err)
 	}
@@ -238,7 +238,7 @@ func (s *ObserveService) GetBootstrapSnapshot(ctx context.Context, userID string
 		runs = runs[:ObserveBootstrapRecent]
 	}
 
-	evals, err := s.listEvals(userID, observeCursor{}, ObserveBootstrapRecent)
+	evals, err := s.listEvals(ctx, userID, observeCursor{}, ObserveBootstrapRecent)
 	if err != nil {
 		return nil, fmt.Errorf("observe: bootstrap: list evals: %w", err)
 	}
@@ -246,7 +246,7 @@ func (s *ObserveService) GetBootstrapSnapshot(ctx context.Context, userID string
 		evals = evals[:ObserveBootstrapRecent]
 	}
 
-	downloads, err := s.listDownloads(userID, observeCursor{}, ObserveBootstrapRecent)
+	downloads, err := s.listDownloads(ctx, userID, observeCursor{}, ObserveBootstrapRecent)
 	if err != nil {
 		return nil, fmt.Errorf("observe: bootstrap: list downloads: %w", err)
 	}
@@ -308,7 +308,7 @@ func (s *ObserveService) ListRuns(ctx context.Context, userID, cursorStr string,
 	if err != nil {
 		return nil, err
 	}
-	runs, err := s.listRuns(userID, cursor, limit)
+	runs, err := s.listRuns(ctx, userID, cursor, limit)
 	if err != nil {
 		return nil, fmt.Errorf("observe: list runs: %w", err)
 	}
@@ -319,7 +319,7 @@ func (s *ObserveService) ListRuns(ctx context.Context, userID, cursorStr string,
 // links. Returns constants.ErrObserveRunNotFound if the run does not exist or
 // is owned by a different user.
 func (s *ObserveService) GetRun(ctx context.Context, userID, runID string) (*models.RunDetail, error) {
-	proj, err := s.getRunProjection(userID, runID)
+	proj, err := s.getRunProjection(ctx, userID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +338,7 @@ func (s *ObserveService) ListEvals(ctx context.Context, userID, cursorStr string
 	if err != nil {
 		return nil, err
 	}
-	evals, err := s.listEvals(userID, cursor, limit)
+	evals, err := s.listEvals(ctx, userID, cursor, limit)
 	if err != nil {
 		return nil, fmt.Errorf("observe: list evals: %w", err)
 	}
@@ -349,7 +349,7 @@ func (s *ObserveService) ListEvals(ctx context.Context, userID, cursorStr string
 // verification boundary. Returns constants.ErrObserveEvalNotFound if the eval
 // does not exist or is owned by a different user.
 func (s *ObserveService) GetEval(ctx context.Context, userID, runID string) (*models.EvalDetail, error) {
-	proj, err := s.getEvalProjection(userID, runID)
+	proj, err := s.getEvalProjection(ctx, userID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func (s *ObserveService) ListDownloads(ctx context.Context, userID, cursorStr st
 	if err != nil {
 		return nil, err
 	}
-	downloads, err := s.listDownloads(userID, cursor, limit)
+	downloads, err := s.listDownloads(ctx, userID, cursor, limit)
 	if err != nil {
 		return nil, fmt.Errorf("observe: list downloads: %w", err)
 	}
@@ -379,7 +379,7 @@ func (s *ObserveService) ListDownloads(ctx context.Context, userID, cursorStr st
 // authenticated user. Returns constants.ErrObserveDownloadNotFound if the
 // artifact does not exist or is owned by a different user.
 func (s *ObserveService) GetDownload(ctx context.Context, userID, artifactID string) (*models.DownloadArtifact, error) {
-	proj, err := s.getDownloadProjection(userID, artifactID)
+	proj, err := s.getDownloadProjection(ctx, userID, artifactID)
 	if err != nil {
 		return nil, err
 	}
@@ -393,8 +393,8 @@ func (s *ObserveService) GetDownload(ctx context.Context, userID, artifactID str
 // listAgentStates fetches all agent state projections for the user, ordered
 // by observed_at DESC. Returns an empty slice (not nil) when no projections
 // exist.
-func (s *ObserveService) listAgentStates(userID string) ([]models.AgentStateProjection, error) {
-	docs, err := s.docStore.DocQuery(
+func (s *ObserveService) listAgentStates(ctx context.Context, userID string) ([]models.AgentStateProjection, error) {
+	docs, err := s.docStore.DocQuery(ctx,
 		marshaler.CollectionName(constants.CollectionObserveAgentStates),
 		userFilter(userID),
 		"observed_at DESC",
@@ -418,8 +418,8 @@ func (s *ObserveService) listAgentStates(userID string) ([]models.AgentStateProj
 // listRuns fetches run projections for the user, ordered by observed_at DESC,
 // run_id DESC, and applies cursor-based filtering. Returns an empty slice
 // (not nil) when no projections exist.
-func (s *ObserveService) listRuns(userID string, cursor observeCursor, limit int) ([]models.RunSummary, error) {
-	docs, err := s.docStore.DocQuery(
+func (s *ObserveService) listRuns(ctx context.Context, userID string, cursor observeCursor, limit int) ([]models.RunSummary, error) {
+	docs, err := s.docStore.DocQuery(ctx,
 		marshaler.CollectionName(constants.CollectionObserveRuns),
 		userFilter(userID),
 		"observed_at DESC",
@@ -459,8 +459,8 @@ func (s *ObserveService) listRuns(userID string, cursor observeCursor, limit int
 
 // listEvals fetches eval projections for the user, ordered by observed_at
 // DESC, run_id DESC, and applies cursor-based filtering.
-func (s *ObserveService) listEvals(userID string, cursor observeCursor, limit int) ([]models.EvalSummary, error) {
-	docs, err := s.docStore.DocQuery(
+func (s *ObserveService) listEvals(ctx context.Context, userID string, cursor observeCursor, limit int) ([]models.EvalSummary, error) {
+	docs, err := s.docStore.DocQuery(ctx,
 		marshaler.CollectionName(constants.CollectionObserveEvals),
 		userFilter(userID),
 		"observed_at DESC",
@@ -500,8 +500,8 @@ func (s *ObserveService) listEvals(userID string, cursor observeCursor, limit in
 
 // listDownloads fetches download artifacts for the user, ordered by
 // generated_at DESC, artifact_id DESC, and applies cursor-based filtering.
-func (s *ObserveService) listDownloads(userID string, cursor observeCursor, limit int) ([]models.DownloadArtifact, error) {
-	docs, err := s.docStore.DocQuery(
+func (s *ObserveService) listDownloads(ctx context.Context, userID string, cursor observeCursor, limit int) ([]models.DownloadArtifact, error) {
+	docs, err := s.docStore.DocQuery(ctx,
 		marshaler.CollectionName(constants.CollectionObserveDownloads),
 		userFilter(userID),
 		"generated_at DESC",
@@ -542,8 +542,8 @@ func (s *ObserveService) listDownloads(userID string, cursor observeCursor, limi
 // getRunProjection fetches a single run projection owned by userID. Returns
 // nil (not an error) if the run does not exist or is owned by a different
 // user.
-func (s *ObserveService) getRunProjection(userID, runID string) (*runProjection, error) {
-	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionObserveRuns), runID)
+func (s *ObserveService) getRunProjection(ctx context.Context, userID, runID string) (*runProjection, error) {
+	doc, err := s.docStore.DocGet(ctx, marshaler.CollectionName(constants.CollectionObserveRuns), runID)
 	if err != nil {
 		return nil, fmt.Errorf("observe: get run %s: %w", runID, err)
 	}
@@ -563,8 +563,8 @@ func (s *ObserveService) getRunProjection(userID, runID string) (*runProjection,
 // getEvalProjection fetches a single eval projection owned by userID. Returns
 // nil (not an error) if the eval does not exist or is owned by a different
 // user.
-func (s *ObserveService) getEvalProjection(userID, runID string) (*evalProjection, error) {
-	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionObserveEvals), runID)
+func (s *ObserveService) getEvalProjection(ctx context.Context, userID, runID string) (*evalProjection, error) {
+	doc, err := s.docStore.DocGet(ctx, marshaler.CollectionName(constants.CollectionObserveEvals), runID)
 	if err != nil {
 		return nil, fmt.Errorf("observe: get eval %s: %w", runID, err)
 	}
@@ -584,8 +584,8 @@ func (s *ObserveService) getEvalProjection(userID, runID string) (*evalProjectio
 // getDownloadProjection fetches a single download artifact owned by userID.
 // Returns nil (not an error) if the artifact does not exist or is owned by a
 // different user.
-func (s *ObserveService) getDownloadProjection(userID, artifactID string) (*downloadProjection, error) {
-	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionObserveDownloads), artifactID)
+func (s *ObserveService) getDownloadProjection(ctx context.Context, userID, artifactID string) (*downloadProjection, error) {
+	doc, err := s.docStore.DocGet(ctx, marshaler.CollectionName(constants.CollectionObserveDownloads), artifactID)
 	if err != nil {
 		return nil, fmt.Errorf("observe: get download %s: %w", artifactID, err)
 	}

@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,11 +66,11 @@ func (h *PasskeyHandler) setWebSessionCookie(w http.ResponseWriter, webSession *
 // same operator binding as CLI sessions. A missing or unclaimed embedded
 // operator (e.g., a remote-only owner) is skipped silently; binding
 // failures are logged as warnings and never fail the passkey ceremony.
-func (h *PasskeyHandler) bindEmbeddedOperatorSession(userID, webSessionID string) {
+func (h *PasskeyHandler) bindEmbeddedOperatorSession(ctx context.Context, userID, webSessionID string) {
 	if h.operatorBinder == nil {
 		return
 	}
-	bound, err := h.operatorBinder.BindEmbeddedOperatorToWebSession(userID, webSessionID)
+	bound, err := h.operatorBinder.BindEmbeddedOperatorToWebSession(ctx, userID, webSessionID)
 	if err != nil {
 		h.logger.Warn("Failed to bind embedded operator to web session", "error", err, "user_id", userID)
 		return
@@ -80,8 +81,8 @@ func (h *PasskeyHandler) bindEmbeddedOperatorSession(userID, webSessionID string
 }
 
 // enforceFirstCred checks whether a new registration is allowed. Returns (true, code, msg) to signal forbidden.
-func (h *PasskeyHandler) enforceFirstCred(userID string) (forbidden bool, code int, msg string) {
-	user, err := h.getUser(userID)
+func (h *PasskeyHandler) enforceFirstCred(ctx context.Context, userID string) (forbidden bool, code int, msg string) {
+	user, err := h.getUser(ctx, userID)
 	if err != nil {
 		return true, http.StatusInternalServerError, "failed to fetch user"
 	}
@@ -163,7 +164,7 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 			req.CLISessionID = tok.CLISessionID
 			req.EnrollmentToken = ""
 
-			options, err := h.GenerateRegistrationChallenge(req.UserID, req.UserName)
+			options, err := h.GenerateRegistrationChallenge(r.Context(), req.UserID, req.UserName)
 			if err != nil {
 				h.logger.Warn("Passkey register challenge failed (enrollment-token flow)", "error", err, "userID", req.UserID)
 				h.responder.Error(w, http.StatusBadRequest, err.Error())
@@ -192,7 +193,7 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 				h.responder.Error(w, http.StatusBadRequest, constants.ErrUserIDRequired.Error())
 				return
 			}
-			hasUsers, err := h.userStore.HasAnyUsers()
+			hasUsers, err := h.userStore.HasAnyUsers(r.Context())
 			if err != nil {
 				h.logger.Error("Failed to check for existing users during bootstrap", "error", err)
 				h.responder.Error(w, http.StatusInternalServerError, "failed to check bootstrap status")
@@ -202,7 +203,7 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 				h.responder.Error(w, http.StatusBadRequest, constants.ErrUserIDRequired.Error())
 				return
 			}
-			newUser, err := h.userStore.CreateUser()
+			newUser, err := h.userStore.CreateUser(r.Context())
 			if err != nil {
 				h.logger.Error("Failed to create user during bootstrap", "error", err)
 				h.responder.Error(w, http.StatusInternalServerError, "failed to create user")
@@ -215,7 +216,7 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 			// claim the embedded operator and persist its operator session so
 			// a browser-first deployment binds the same way CLI bootstrap does.
 			if h.operatorClaimer != nil {
-				if _, _, err := h.operatorClaimer.ClaimEmbeddedOperator(newUser.ID); err != nil {
+				if _, _, err := h.operatorClaimer.ClaimEmbeddedOperator(r.Context(), newUser.ID); err != nil {
 					h.logger.Error("Failed to claim embedded operator during browser bootstrap", "error", err, "user_id", newUser.ID)
 					h.responder.Error(w, http.StatusInternalServerError, "failed to bind embedded operator")
 					return
@@ -224,13 +225,13 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 		}
 
 		if cfg.enforceFirstCredentialOnly {
-			if forbidden, code, msg := h.enforceFirstCred(req.UserID); forbidden {
+			if forbidden, code, msg := h.enforceFirstCred(r.Context(), req.UserID); forbidden {
 				h.responder.Error(w, code, msg)
 				return
 			}
 		}
 
-		options, err := h.GenerateRegistrationChallenge(req.UserID, req.UserName)
+		options, err := h.GenerateRegistrationChallenge(r.Context(), req.UserID, req.UserName)
 		if err != nil {
 			h.logger.Warn("Passkey register challenge failed", "error", err, "userID", req.UserID)
 			if cfg.source == sourceBrowserBootstrap {
@@ -329,7 +330,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 				return
 			}
 
-			cred, err := h.VerifyRegistration(req.UserID, responseJSON)
+			cred, err := h.VerifyRegistration(r.Context(), req.UserID, responseJSON)
 			if err != nil {
 				h.logger.Warn("Passkey register verify failed (enrollment-token flow)", "error", err, "userID", req.UserID)
 				h.responder.Error(w, http.StatusBadRequest, err.Error())
@@ -337,7 +338,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 			}
 
 			if cfg.createWebSession {
-				webSession, err := h.webSessionSvc.CreateWebSession(req.UserID)
+				webSession, err := h.webSessionSvc.CreateWebSession(r.Context(), req.UserID)
 				if err != nil {
 					h.logger.Error("Failed to create web session after enrollment registration", "error", err, "userID", req.UserID)
 					h.responder.Error(w, http.StatusInternalServerError, "registration succeeded but web session creation failed")
@@ -346,7 +347,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 				if cfg.setCookie {
 					h.setWebSessionCookie(w, webSession)
 				}
-				h.bindEmbeddedOperatorSession(req.UserID, webSession.ID)
+				h.bindEmbeddedOperatorSession(r.Context(), req.UserID, webSession.ID)
 			}
 
 			h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
@@ -376,7 +377,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 		}
 
 		if cfg.enforceFirstCredentialOnly {
-			if forbidden, code, msg := h.enforceFirstCred(req.UserID); forbidden {
+			if forbidden, code, msg := h.enforceFirstCred(r.Context(), req.UserID); forbidden {
 				h.responder.Error(w, code, msg)
 				return
 			}
@@ -392,7 +393,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 			return
 		}
 
-		cred, err := h.VerifyRegistration(req.UserID, responseJSON)
+		cred, err := h.VerifyRegistration(r.Context(), req.UserID, responseJSON)
 		if err != nil {
 			h.logger.Warn("Passkey register verify failed", "error", err, "userID", req.UserID)
 			h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
@@ -403,7 +404,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 		}
 
 		if cfg.createWebSession {
-			webSession, err := h.webSessionSvc.CreateWebSession(req.UserID)
+			webSession, err := h.webSessionSvc.CreateWebSession(r.Context(), req.UserID)
 			if err != nil {
 				h.logger.Error("Failed to create web session after registration", "error", err, "userID", req.UserID)
 				h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
@@ -415,7 +416,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 			if cfg.setCookie {
 				h.setWebSessionCookie(w, webSession)
 			}
-			h.bindEmbeddedOperatorSession(req.UserID, webSession.ID)
+			h.bindEmbeddedOperatorSession(r.Context(), req.UserID, webSession.ID)
 		}
 
 		h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
@@ -481,7 +482,7 @@ func (h *PasskeyHandler) AuthenticateChallenge(cfg passkeyHandlerConfig) http.Ha
 			return
 		}
 
-		options, err := h.GenerateAuthenticationChallenge(userID)
+		options, err := h.GenerateAuthenticationChallenge(r.Context(), userID)
 		if err != nil {
 			h.logger.Warn("Passkey auth challenge failed", "error", err, "userID", userID)
 			h.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
@@ -555,7 +556,7 @@ func (h *PasskeyHandler) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 			return
 		}
 
-		cred, err := h.VerifyAuthentication(userID, responseJSON)
+		cred, err := h.VerifyAuthentication(r.Context(), userID, responseJSON)
 		if err != nil {
 			h.logger.Warn("Passkey auth verify failed", "error", err, "userID", userID)
 			h.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
@@ -572,7 +573,7 @@ func (h *PasskeyHandler) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 		}
 
 		if cfg.createWebSession {
-			webSession, err := h.webSessionSvc.CreateWebSession(userID)
+			webSession, err := h.webSessionSvc.CreateWebSession(r.Context(), userID)
 			if err != nil {
 				h.logger.Error("Failed to create web session after auth", "error", err, "userID", userID)
 				h.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
@@ -590,7 +591,7 @@ func (h *PasskeyHandler) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 					ExpiresAtUnixMs: webSession.ExpiresAtUnixMs,
 				}
 			}
-			h.bindEmbeddedOperatorSession(userID, webSession.ID)
+			h.bindEmbeddedOperatorSession(r.Context(), userID, webSession.ID)
 		}
 
 		h.responder.JSON(w, http.StatusOK, resp)
@@ -616,7 +617,7 @@ func (h *PasskeyHandler) ListCredentials(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	creds, err := h.listCredentials(userID)
+	creds, err := h.listCredentials(r.Context(), userID)
 	if err != nil {
 		h.logger.Error("Failed to list credentials", "error", err, "userID", userID)
 		h.responder.Error(w, http.StatusInternalServerError, "failed to list credentials")
@@ -655,7 +656,7 @@ func (h *PasskeyHandler) RevokeCredential(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	found, remaining, err := h.revokeCredential(userID, credentialID)
+	found, remaining, err := h.revokeCredential(r.Context(), userID, credentialID)
 	if err != nil {
 		h.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
 		h.responder.Error(w, http.StatusInternalServerError, "failed to revoke credential")
@@ -688,7 +689,7 @@ func (h *PasskeyHandler) CLIStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	creds, err := h.listCredentials(userID)
+	creds, err := h.listCredentials(r.Context(), userID)
 	if err != nil {
 		h.logger.Error("Failed to list credentials for CLI status", "error", err, "userID", userID)
 		h.responder.Error(w, http.StatusInternalServerError, "failed to list credentials")

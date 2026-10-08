@@ -8,6 +8,7 @@
 package embedded
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -33,7 +34,7 @@ type memStore struct {
 
 func TestService_ExecutionTarget(t *testing.T) {
 	svc := New(newMemStore(), nil)
-	require.NoError(t, svc.RegisterPending())
+	require.NoError(t, svc.RegisterPending(context.Background()))
 	require.True(t, svc.ExecutesFor(string(constants.DocIDEmbeddedOperator)), "bootstrap can execute before the embedded record is claimed")
 	require.False(t, svc.ExecutesFor("outbound-operator"))
 	require.False(t, svc.ExecutesFor(""))
@@ -44,7 +45,7 @@ func newMemStore() *memStore {
 	return &memStore{docs: map[string]map[string]map[string]json.RawMessage{}}
 }
 
-func (s *memStore) DocGet(collection, id string) (*models.Document, error) {
+func (s *memStore) DocGet(_ context.Context, collection, id string) (*models.Document, error) {
 	col := s.docs[collection]
 	if col == nil {
 		return nil, nil
@@ -56,7 +57,7 @@ func (s *memStore) DocGet(collection, id string) (*models.Document, error) {
 	return &models.Document{ID: id, Collection: collection, Data: cloneRawMap(data)}, nil
 }
 
-func (s *memStore) DocSet(collection, id string, data json.RawMessage) error {
+func (s *memStore) DocSet(_ context.Context, collection, id string, data json.RawMessage) error {
 	parsed, err := decodeRawObject(data)
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func (s *memStore) DocSet(collection, id string, data json.RawMessage) error {
 	return nil
 }
 
-func (s *memStore) DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error) {
+func (s *memStore) DocUpdate(_ context.Context, collection, id string, fields json.RawMessage) (*models.Document, error) {
 	col := s.docs[collection]
 	if col == nil || col[id] == nil {
 		return nil, constants.ErrNotFound
@@ -112,7 +113,7 @@ type memSessions struct {
 	err   error
 }
 
-func (m *memSessions) PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error {
+func (m *memSessions) PersistOperatorSession(_ context.Context, operatorSessionID, userID, orgID, operatorID, loginMethod string) error {
 	m.calls = append(m.calls, persistCall{
 		operatorSessionID: operatorSessionID,
 		userID:            userID,
@@ -144,7 +145,7 @@ func cloneRawMap(in map[string]json.RawMessage) map[string]json.RawMessage {
 
 func loadOperator(t *testing.T, store *memStore) *operatorv1.OperatorDocument {
 	t.Helper()
-	doc, err := store.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+	doc, err := store.DocGet(context.Background(), marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	op, err := models.OperatorDocumentFromStore(doc)
@@ -156,7 +157,7 @@ func TestRegisterPending_Idempotent(t *testing.T) {
 	store := newMemStore()
 	svc := New(store, &memSessions{})
 
-	require.NoError(t, svc.RegisterPending())
+	require.NoError(t, svc.RegisterPending(context.Background()))
 
 	op := loadOperator(t, store)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.Id)
@@ -169,13 +170,13 @@ func TestRegisterPending_Idempotent(t *testing.T) {
 	assert.Empty(t, op.OperatorSessionId)
 	assert.Equal(t, 1, store.count(marshaler.CollectionName(constants.CollectionOperators)))
 
-	require.NoError(t, svc.RegisterPending())
+	require.NoError(t, svc.RegisterPending(context.Background()))
 	assert.Equal(t, 1, store.count(marshaler.CollectionName(constants.CollectionOperators)))
 
 	now := time.Now().UTC()
-	_, sessionID, err := svc.Claim("user-claim", "fp", now)
+	_, sessionID, err := svc.Claim(context.Background(), "user-claim", "fp", now)
 	require.NoError(t, err)
-	require.NoError(t, svc.RegisterPending())
+	require.NoError(t, svc.RegisterPending(context.Background()))
 	claimed := loadOperator(t, store)
 	assert.True(t, claimed.Claimed)
 	assert.Equal(t, "user-claim", claimed.UserId)
@@ -188,12 +189,12 @@ func TestClaim_SameUserReclaimIsIdempotent(t *testing.T) {
 	svc := New(store, &memSessions{})
 	now := time.Now().UTC()
 
-	operatorID, sessionID, err := svc.Claim("user-same", "fp", now)
+	operatorID, sessionID, err := svc.Claim(context.Background(), "user-same", "fp", now)
 	require.NoError(t, err)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), operatorID)
 	assert.NotEmpty(t, sessionID)
 
-	operatorID2, sessionID2, err := svc.Claim("user-same", "fp", now)
+	operatorID2, sessionID2, err := svc.Claim(context.Background(), "user-same", "fp", now)
 	require.NoError(t, err)
 	assert.Equal(t, operatorID, operatorID2)
 	assert.Equal(t, sessionID, sessionID2)
@@ -204,10 +205,10 @@ func TestClaim_DifferentUserRejected(t *testing.T) {
 	svc := New(store, &memSessions{})
 	now := time.Now().UTC()
 
-	_, _, err := svc.Claim("user-owner", "fp", now)
+	_, _, err := svc.Claim(context.Background(), "user-owner", "fp", now)
 	require.NoError(t, err)
 
-	_, _, err = svc.Claim("user-other", "fp", now)
+	_, _, err = svc.Claim(context.Background(), "user-other", "fp", now)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEmbeddedOperatorClaimed)
 }
@@ -216,7 +217,7 @@ func TestClaim_MissingPendingDoc_ClaimsAnyway(t *testing.T) {
 	store := newMemStore()
 	svc := New(store, &memSessions{})
 
-	operatorID, sessionID, err := svc.Claim("user-heal", "fp-heal", time.Now().UTC())
+	operatorID, sessionID, err := svc.Claim(context.Background(), "user-heal", "fp-heal", time.Now().UTC())
 	require.NoError(t, err)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), operatorID)
 	assert.NotEmpty(t, sessionID)
@@ -235,7 +236,7 @@ func TestClaimEmbeddedOperator_PersistsBootstrapSession(t *testing.T) {
 	sessions := &memSessions{}
 	svc := New(store, sessions)
 
-	operatorID, sessionID, err := svc.ClaimEmbeddedOperator("user-browser")
+	operatorID, sessionID, err := svc.ClaimEmbeddedOperator(context.Background(), "user-browser")
 	require.NoError(t, err)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), operatorID)
 	require.Len(t, sessions.calls, 1)
@@ -247,14 +248,14 @@ func TestClaimEmbeddedOperator_PersistsBootstrapSession(t *testing.T) {
 		loginMethod:       string(constants.HeartbeatTypeBootstrap),
 	}, sessions.calls[0])
 
-	operatorID2, sessionID2, err := svc.ClaimEmbeddedOperator("user-browser")
+	operatorID2, sessionID2, err := svc.ClaimEmbeddedOperator(context.Background(), "user-browser")
 	require.NoError(t, err)
 	assert.Equal(t, operatorID, operatorID2)
 	assert.Equal(t, sessionID, sessionID2)
 	require.Len(t, sessions.calls, 2)
 	assert.Equal(t, sessions.calls[0], sessions.calls[1])
 
-	_, _, err = svc.ClaimEmbeddedOperator("user-other")
+	_, _, err = svc.ClaimEmbeddedOperator(context.Background(), "user-other")
 	require.ErrorIs(t, err, constants.ErrEmbeddedOperatorClaimed)
 	assert.Len(t, sessions.calls, 2)
 }

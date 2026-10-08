@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,9 +34,9 @@ func TestEvalCampaignPublicationService_PutAndGet(t *testing.T) {
 		PublishedIdempotency:  []string{"run-1:key-a", "run-1:key-b"},
 		LastPublishedSequence: 42,
 	}
-	require.NoError(t, service.Put(state))
+	require.NoError(t, service.Put(context.Background(), state))
 
-	loaded, err := service.Get(state.RunID)
+	loaded, err := service.Get(context.Background(), state.RunID)
 	require.NoError(t, err)
 	assert.Equal(t, state.RunID, loaded.RunID)
 	assert.Equal(t, state.LastPublishedSequence, loaded.LastPublishedSequence)

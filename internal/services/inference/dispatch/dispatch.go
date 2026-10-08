@@ -106,7 +106,7 @@ type OperatorLister interface {
 	// including platform-enrolled operators. The dispatch service filters
 	// these by RuntimeConfig.InferenceEnabled to resolve the Inference
 	// Node's operator session.
-	ListUserOperators(userID string) ([]*operatorv1.OperatorDocument, error)
+	ListUserOperators(ctx context.Context, userID string) ([]*operatorv1.OperatorDocument, error)
 }
 
 // ProviderObservationNotifier coordinates remote provider-boundary observation
@@ -291,7 +291,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	// enrolled operators. The Inference Node stamps
 	// runtime_config.inference_enabled at enrollment time; the dispatch
 	// service filters by this flag.
-	operatorSessionID, err := s.resolveInferenceOperator(req)
+	operatorSessionID, err := s.resolveInferenceOperator(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("inference dispatch: %w", err)
 	}
@@ -608,8 +608,8 @@ func validateInferenceResult(result *operatorv1.InferenceResult, req DispatchInf
 // ErrInferenceOperatorNotCapable for an explicit target that lacks the
 // capability, and ErrInferenceOperatorAmbiguous for multiple matches with
 // no explicit target.
-func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest) (string, error) {
-	operators, err := s.operatorList.ListUserOperators(req.RequestorUserID)
+func (s *DispatchService) resolveInferenceOperator(ctx context.Context, req DispatchInferenceRequest) (string, error) {
+	operators, err := s.operatorList.ListUserOperators(ctx, req.RequestorUserID)
 	if err != nil {
 		return "", err
 	}

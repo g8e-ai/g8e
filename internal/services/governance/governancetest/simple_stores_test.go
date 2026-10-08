@@ -8,6 +8,7 @@
 package governancetest
 
 import (
+	"context"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -19,7 +20,7 @@ import (
 func TestSimpleAppPolicyStore_NilMap(t *testing.T) {
 	t.Parallel()
 	s := &SimpleAppPolicyStore{}
-	policy, err := s.GetAppPolicy("app1")
+	policy, err := s.GetAppPolicy(context.Background(), "app1")
 	require.NoError(t, err)
 	assert.Nil(t, policy)
 }
@@ -27,7 +28,7 @@ func TestSimpleAppPolicyStore_NilMap(t *testing.T) {
 func TestSimpleAppPolicyStore_NotFound(t *testing.T) {
 	t.Parallel()
 	s := &SimpleAppPolicyStore{Policies: map[string]*models.AppPolicy{}}
-	policy, err := s.GetAppPolicy("nonexistent")
+	policy, err := s.GetAppPolicy(context.Background(), "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, policy)
 }
@@ -36,7 +37,7 @@ func TestSimpleAppPolicyStore_Found(t *testing.T) {
 	t.Parallel()
 	expected := &models.AppPolicy{AppID: "app1"}
 	s := &SimpleAppPolicyStore{Policies: map[string]*models.AppPolicy{"app1": expected}}
-	policy, err := s.GetAppPolicy("app1")
+	policy, err := s.GetAppPolicy(context.Background(), "app1")
 	require.NoError(t, err)
 	assert.Equal(t, expected, policy)
 }
@@ -60,7 +61,7 @@ func TestSimpleStateRootProvider_ValidRoot(t *testing.T) {
 func TestSimpleConsensusStore_NilMap(t *testing.T) {
 	t.Parallel()
 	s := &SimpleConsensusStore{}
-	consensus, err := s.GetConsensus("consensus1")
+	consensus, err := s.GetConsensus(context.Background(), "consensus1")
 	require.NoError(t, err)
 	assert.Nil(t, consensus)
 }
@@ -68,7 +69,7 @@ func TestSimpleConsensusStore_NilMap(t *testing.T) {
 func TestSimpleConsensusStore_NotFound(t *testing.T) {
 	t.Parallel()
 	s := &SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{}}
-	consensus, err := s.GetConsensus("nonexistent")
+	consensus, err := s.GetConsensus(context.Background(), "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, consensus)
 }
@@ -83,7 +84,7 @@ func TestSimpleConsensusStore_Found(t *testing.T) {
 		Enabled:         true,
 	}
 	s := &SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"consensus1": expected}}
-	consensus, err := s.GetConsensus("consensus1")
+	consensus, err := s.GetConsensus(context.Background(), "consensus1")
 	require.NoError(t, err)
 	assert.Equal(t, expected, consensus)
 }

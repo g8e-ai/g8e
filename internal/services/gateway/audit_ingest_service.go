@@ -53,7 +53,7 @@ func (s *AuditIngestService) Ingest(ctx context.Context, req models.AuditRecordI
 		return nil, err
 	}
 
-	op, err := s.auth.ValidateOperatorSession(req.OperatorSessionID)
+	op, err := s.auth.ValidateOperatorSession(ctx, req.OperatorSessionID)
 	if err != nil {
 		return nil, err
 	}

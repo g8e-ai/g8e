@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,7 @@ func NewWebSessionService(docStore *DocumentStoreService, logger *slog.Logger) *
 }
 
 // CreateWebSession creates a new web session after successful authentication.
-func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession, error) {
+func (s *WebSessionService) CreateWebSession(ctx context.Context, userID string) (*models.WebSession, error) {
 	webSessionID, err := uuid.NewString()
 	if err != nil {
 		return nil, err
@@ -54,7 +55,7 @@ func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession,
 	if err != nil {
 		return nil, fmt.Errorf("gateway: marshal web session: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
 		s.logger.Error("Failed to create web session", "error", err, "userID", userID)
 		return nil, fmt.Errorf("gateway: create web session: %w", err)
 	}
@@ -64,8 +65,8 @@ func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession,
 }
 
 // ValidateWebSession validates a web session by ID and returns the session if valid.
-func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.WebSession, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+func (s *WebSessionService) ValidateWebSession(ctx context.Context, webSessionID string) (*models.WebSession, error) {
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: validate web session: %w", err)
 	}
@@ -95,11 +96,11 @@ func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.Web
 // userID, expired or not, and returns how many of them were still live. A
 // deleted document can no longer authenticate a browser, which is what the
 // single-session logout endpoint does for its own cookie.
-func (s *WebSessionService) TerminateUserWebSessions(userID string) (int, error) {
+func (s *WebSessionService) TerminateUserWebSessions(ctx context.Context, userID string) (int, error) {
 	if userID == "" {
 		return 0, fmt.Errorf("gateway: terminate user web sessions: %w", constants.ErrRegistrationUserIDRequired)
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionWebSessions), []models.DocFilter{
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionWebSessions), []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}, "", 0)
 	if err != nil {
@@ -120,7 +121,7 @@ func (s *WebSessionService) TerminateUserWebSessions(userID string) (int, error)
 			errs = append(errs, fmt.Errorf("decode web session %s: %w", doc.ID, err))
 			continue
 		}
-		deleted, err := s.db.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionWebSessions), doc.ID)
+		deleted, err := s.db.DocDeleteWithResult(ctx, marshaler.CollectionName(constants.CollectionWebSessions), doc.ID)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("delete web session %s: %w", doc.ID, err))
 			continue

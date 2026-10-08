@@ -86,7 +86,7 @@ type SessionLogoutResult struct {
 //
 // Each step is idempotent. An error aborts the remaining steps and is
 // returned with the result accumulated so far.
-func (s *SessionLogoutService) Logout(ctx context.Context, userID,currentCLISessionID, presentedCertSerial string, scope constants.LogoutScope) (*SessionLogoutResult, error) {
+func (s *SessionLogoutService) Logout(ctx context.Context, userID, currentCLISessionID, presentedCertSerial string, scope constants.LogoutScope) (*SessionLogoutResult, error) {
 	if userID == "" {
 		return nil, constants.ErrRegistrationUserIDRequired
 	}
@@ -109,7 +109,7 @@ func (s *SessionLogoutService) Logout(ctx context.Context, userID,currentCLISess
 		if err != nil {
 			return finish(), fmt.Errorf("logout web sessions: %w", err)
 		}
-		terminated, err := s.webSessions.TerminateUserWebSessions(userID)
+		terminated, err := s.webSessions.TerminateUserWebSessions(ctx, userID)
 		result.WebSessionsTerminated = terminated
 		if err != nil {
 			return finish(), fmt.Errorf("logout web sessions: %w", err)
@@ -121,10 +121,10 @@ func (s *SessionLogoutService) Logout(ctx context.Context, userID,currentCLISess
 		if err != nil {
 			return finish(), fmt.Errorf("logout CLI sessions: %w", err)
 		}
-		if err := s.terminateCLISessions(ctx, sessions,currentCLISessionID, result, unbound); err != nil {
+		if err := s.terminateCLISessions(ctx, sessions, currentCLISessionID, result, unbound); err != nil {
 			return finish(), fmt.Errorf("logout CLI sessions: %w", err)
 		}
-		revoked, err := s.revokeCLICertificates(ctx, sessions,presentedCertSerial)
+		revoked, err := s.revokeCLICertificates(ctx, sessions, presentedCertSerial)
 		result.CertificatesRevoked = revoked
 		if err != nil {
 			return finish(), fmt.Errorf("logout CLI certificates: %w", err)
@@ -147,7 +147,7 @@ func (s *SessionLogoutService) Logout(ctx context.Context, userID,currentCLISess
 // last. A session only counts, and only reports its operator bindings, when it
 // was live: a session that is active but past its expiry is cleaned up
 // without being reported as a logout.
-func (s *SessionLogoutService) terminateCLISessions(ctx context.Context, sessions[]*models.CLISession, currentCLISessionID string, result *SessionLogoutResult, unbound map[string]struct{}) error {
+func (s *SessionLogoutService) terminateCLISessions(ctx context.Context, sessions []*models.CLISession, currentCLISessionID string, result *SessionLogoutResult, unbound map[string]struct{}) error {
 	ordered := make([]*models.CLISession, 0, len(sessions))
 	var current *models.CLISession
 	for _, session := range sessions {
@@ -187,7 +187,7 @@ func (s *SessionLogoutService) terminateCLISessions(ctx context.Context, session
 // small; an expired-but-active session's certificate is the very thing
 // refresh would otherwise revive. It attempts every serial and returns the
 // number it revoked together with the joined failures.
-func (s *SessionLogoutService) revokeCLICertificates(ctx context.Context, sessions[]*models.CLISession, presentedCertSerial string) (int, error) {
+func (s *SessionLogoutService) revokeCLICertificates(ctx context.Context, sessions []*models.CLISession, presentedCertSerial string) (int, error) {
 	if s.pki == nil {
 		return 0, constants.ErrPKIDatabaseNotAvailable
 	}
@@ -212,7 +212,7 @@ func (s *SessionLogoutService) revokeCLICertificates(ctx context.Context, sessio
 		if already {
 			continue
 		}
-		if err := s.pki.RevokeCertificate(ctx, serial,constants.CLILogoutCertRevocationReason); err != nil {
+		if err := s.pki.RevokeCertificate(ctx, serial, constants.CLILogoutCertRevocationReason); err != nil {
 			errs = append(errs, fmt.Errorf("revoke %s: %w", serial, err))
 			continue
 		}

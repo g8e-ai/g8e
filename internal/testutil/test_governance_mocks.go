@@ -164,11 +164,11 @@ func NewSlowMockL3Notary(delay time.Duration) *SlowMockL3Notary {
 // Simple version that is a no-op.
 type MockTransactionAudit struct{}
 
-func (m *MockTransactionAudit) DocSet(collection, id string, data json.RawMessage) error {
+func (m *MockTransactionAudit) DocSet(_ context.Context, collection, id string, data json.RawMessage) error {
 	return nil
 }
 
-func (m *MockTransactionAudit) DocDelete(collection, id string) error {
+func (m *MockTransactionAudit) DocDelete(_ context.Context, collection, id string) error {
 	return nil
 }
 
@@ -187,7 +187,7 @@ type ConfigurableMockAuditStore struct {
 	}
 }
 
-func (m *ConfigurableMockAuditStore) DocSet(collection, id string, data json.RawMessage) error {
+func (m *ConfigurableMockAuditStore) DocSet(_ context.Context, collection, id string, data json.RawMessage) error {
 	m.DocSetCalls = append(m.DocSetCalls, struct {
 		Collection string
 		ID         string
@@ -199,7 +199,7 @@ func (m *ConfigurableMockAuditStore) DocSet(collection, id string, data json.Raw
 	return nil
 }
 
-func (m *ConfigurableMockAuditStore) DocDelete(collection, id string) error {
+func (m *ConfigurableMockAuditStore) DocDelete(_ context.Context, collection, id string) error {
 	m.DocDeleteCalls = append(m.DocDeleteCalls, struct {
 		Collection string
 		ID         string
@@ -238,7 +238,7 @@ type ConfigurableMockGovernedDocStore struct {
 	}
 }
 
-func (m *ConfigurableMockGovernedDocStore) DocReplace(collection, id string, data json.RawMessage) error {
+func (m *ConfigurableMockGovernedDocStore) DocReplace(_ context.Context, collection, id string, data json.RawMessage) error {
 	m.DocReplaceCalls = append(m.DocReplaceCalls, struct {
 		Collection string
 		ID         string
@@ -250,7 +250,7 @@ func (m *ConfigurableMockGovernedDocStore) DocReplace(collection, id string, dat
 	return nil
 }
 
-func (m *ConfigurableMockGovernedDocStore) DocMerge(collection, id string, fields json.RawMessage) error {
+func (m *ConfigurableMockGovernedDocStore) DocMerge(_ context.Context, collection, id string, fields json.RawMessage) error {
 	m.DocMergeCalls = append(m.DocMergeCalls, struct {
 		Collection string
 		ID         string
@@ -262,7 +262,7 @@ func (m *ConfigurableMockGovernedDocStore) DocMerge(collection, id string, field
 	return nil
 }
 
-func (m *ConfigurableMockGovernedDocStore) DocDelete(collection, id string) error {
+func (m *ConfigurableMockGovernedDocStore) DocDelete(_ context.Context, collection, id string) error {
 	m.DocDeleteCalls = append(m.DocDeleteCalls, struct {
 		Collection string
 		ID         string

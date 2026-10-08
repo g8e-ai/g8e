@@ -184,7 +184,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		if err != nil {
 			return fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
-		if err := consensusPolicyBootstrap(context.Background(), db.GetConsensusStore(),db.GetSignerStore(), cfg.ConsensusBootstrap, fileSvc, logger); err != nil {
+		if err := consensusPolicyBootstrap(context.Background(), db.GetConsensusStore(), db.GetSignerStore(), cfg.ConsensusBootstrap, fileSvc, logger); err != nil {
 			return fmt.Errorf("gateway: consensus bootstrap: %w", err)
 		}
 		svc, err = gateway.NewGatewayModeServiceWithDB(gatewayCfg, fileSvc, logger, db, nil, nil)
@@ -208,7 +208,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			logger.Warn("L2 posture requires consensus but no --consensus-id set; L2-gated transactions will be rejected until a consensus is configured",
 				"posture", cfg.Posture)
 		} else {
-			policy, err := svc.GetConsensusStore().GetConsensus(cfg.ConsensusID)
+			policy, err := svc.GetConsensusStore().GetConsensus(context.Background(), cfg.ConsensusID)
 			if err != nil || policy == nil || !policy.Enabled {
 				logger.Warn("L2 posture requires consensus but policy not found or disabled; L2-gated transactions will be rejected until consensus is enrolled",
 					"posture", cfg.Posture, "consensus_id", cfg.ConsensusID)
@@ -381,7 +381,7 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // NewGatewayModeServiceWithDB so that build() reads the seeded policy from
 // the DB and constructs the ConsensusService internally. Member private keys
 // are saved to secretsDir so build()'s FileKeyProvider can load them.
-func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.ConsensusStoreService,signerStore *gateway.SignerStoreService, bootstrapPath string, fileSvc fs.RuntimeFileService, logger *slog.Logger) error {
+func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.ConsensusStoreService, signerStore *gateway.SignerStoreService, bootstrapPath string, fileSvc fs.RuntimeFileService, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapReadConfig, err)
@@ -397,7 +397,7 @@ func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.Conse
 	}
 
 	// Check if consensus already exists (idempotent)
-	existing, err := consensusStore.GetConsensus(boot.ConsensusID)
+	existing, err := consensusStore.GetConsensus(ctx, boot.ConsensusID)
 	if err != nil {
 		return fmt.Errorf("consensus bootstrap: check existing: %w", err)
 	}
@@ -486,7 +486,7 @@ func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.Conse
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	if err := consensusStore.AddConsensus(policy); err != nil {
+	if err := consensusStore.AddConsensus(ctx, policy); err != nil {
 		return fmt.Errorf("consensus bootstrap: create policy: %w", err)
 	}
 	logger.Info("Consensus policy created", "consensus_id", boot.ConsensusID, "members", len(boot.MemberAppIDs), "quorum", boot.Quorum)

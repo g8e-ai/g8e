@@ -498,7 +498,7 @@ func TestHandleReadField(t *testing.T) {
 			"field_path":          "status",
 			"operator_session_id": "valid-session-123",
 		})
-		result, err := g.handleReadField(args)
+		result, err := g.handleReadField(context.Background(), args)
 		require.NoError(t, err)
 		r, ok := result.(CallToolResult)
 		require.True(t, ok)
@@ -517,7 +517,7 @@ func TestHandleReadField(t *testing.T) {
 			"field_path":          "status",
 			"operator_session_id": "invalid-session",
 		})
-		_, err := g.handleReadField(args)
+		_, err := g.handleReadField(context.Background(), args)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "operator session is invalid or expired")
 	})
@@ -529,7 +529,7 @@ func TestHandleReadField(t *testing.T) {
 			"field_path":          "suspect_ip_addresses",
 			"operator_session_id": "valid-session-123",
 		})
-		_, err := g.handleReadField(args)
+		_, err := g.handleReadField(context.Background(), args)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "forbidden pattern")
 	})
@@ -540,7 +540,7 @@ type integrationTestDBService struct {
 	data map[string]map[string]interface{}
 }
 
-func (f *integrationTestDBService) GetField(collection, id, fieldPath string) (FieldValue, error) {
+func (f *integrationTestDBService) GetField(_ context.Context, collection, id, fieldPath string) (FieldValue, error) {
 	collectionData, ok := f.data[collection]
 	if !ok {
 		return FieldValue{}, errors.New("collection not found")

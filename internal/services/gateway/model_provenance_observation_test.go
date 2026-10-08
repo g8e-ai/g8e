@@ -56,7 +56,7 @@ type stubModelProvenanceOperatorLister struct {
 	err       error
 }
 
-func (s *stubModelProvenanceOperatorLister) ListOperatorsForProvenance() ([]*operatorv1.OperatorDocument, error) {
+func (s *stubModelProvenanceOperatorLister) ListOperatorsForProvenance(context.Context) ([]*operatorv1.OperatorDocument, error) {
 	return s.operators, s.err
 }
 

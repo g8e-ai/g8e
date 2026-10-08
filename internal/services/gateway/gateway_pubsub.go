@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -660,7 +661,9 @@ func (h *pubSubSessionHandler) relayActionReceipt(channel string, data []byte) {
 	// the SignerStore, canonicalize the receipt, decode the hex signature,
 	// and verify with ed25519. Fail-closed if the key is not found or the
 	// signature is invalid.
-	pubKey, err := signerStore.GetTrustedSigner(receipt.SignerKeyId)
+	// Broker callbacks carry no request context, so the signer lookup runs
+	// under Background; it is a bounded local read with no caller to cancel.
+	pubKey, err := signerStore.GetTrustedSigner(context.Background(), receipt.SignerKeyId)
 	if err != nil {
 		b.logger.Warn("PubSub receipts: relay: failed to look up trusted signer",
 			"channel", channel,

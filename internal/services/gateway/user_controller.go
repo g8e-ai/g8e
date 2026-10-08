@@ -58,7 +58,7 @@ func newUserController(deps UserControllerDeps) *UserController {
 func (c *UserController) handleUsers(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		users, err := c.userSvc.List()
+		users, err := c.userSvc.List(r.Context())
 		if err != nil {
 			c.logger.Error("Failed to list users", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
@@ -83,7 +83,7 @@ func (c *UserController) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 		// Zero-PII: Email-based user creation removed
 		// Users are created with only a generated ID and passkey credentials
-		user, err := c.userSvc.CreateUser()
+		user, err := c.userSvc.CreateUser(r.Context())
 		if err != nil {
 			c.logger.Warn("Failed to create user", "error", err)
 			c.responder.Error(w, http.StatusConflict, err.Error())
@@ -116,7 +116,7 @@ func (c *UserController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := c.userSvc.GetByID(userID)
+	user, err := c.userSvc.GetByID(r.Context(), userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 		return

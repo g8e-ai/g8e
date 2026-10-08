@@ -43,17 +43,17 @@ type MCPServiceProvider interface {
 
 // userStore defines the interface for user storage operations.
 type userStore interface {
-	GetUser(userID string) (*models.User, error)
-	UpdateUser(userID string, user *models.User) error
-	CreateUser() (*models.User, error)
-	HasAnyUsers() (bool, error)
+	GetUser(ctx context.Context, userID string) (*models.User, error)
+	UpdateUser(ctx context.Context, userID string, user *models.User) error
+	CreateUser(ctx context.Context) (*models.User, error)
+	HasAnyUsers(ctx context.Context) (bool, error)
 }
 
 // sessionStore defines the interface for WebAuthn session storage.
 type sessionStore interface {
-	StoreSession(userID string, session *webauthn.SessionData) error
-	GetSession(userID string) (*webauthn.SessionData, error)
-	DeleteSession(userID string) error
+	StoreSession(ctx context.Context, userID string, session *webauthn.SessionData) error
+	GetSession(ctx context.Context, userID string) (*webauthn.SessionData, error)
+	DeleteSession(ctx context.Context, userID string) error
 }
 
 // webauthnClient defines the interface for WebAuthn operations.
@@ -102,8 +102,8 @@ type dbUserStore struct {
 	db *DocumentStoreService
 }
 
-func (s *dbUserStore) GetUser(userID string) (*models.User, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+func (s *dbUserStore) GetUser(ctx context.Context, userID string) (*models.User, error) {
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -124,16 +124,16 @@ func (s *dbUserStore) GetUser(userID string) (*models.User, error) {
 	return &user, nil
 }
 
-func (s *dbUserStore) UpdateUser(userID string, user *models.User) error {
+func (s *dbUserStore) UpdateUser(ctx context.Context, userID string, user *models.User) error {
 	data, err := json.Marshal(user)
 	if err != nil {
 		return fmt.Errorf("failed to marshal user: %w", err)
 	}
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
+	_, err = s.db.DocUpdate(ctx, marshaler.CollectionName(constants.CollectionUsers), userID, data)
 	return err
 }
 
-func (s *dbUserStore) CreateUser() (*models.User, error) {
+func (s *dbUserStore) CreateUser(ctx context.Context) (*models.User, error) {
 	userID, err := uuid.NewString()
 	if err != nil {
 		return nil, err
@@ -155,14 +155,14 @@ func (s *dbUserStore) CreateUser() (*models.User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal user: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
 		return nil, fmt.Errorf("failed to store user: %w", err)
 	}
 	return u, nil
 }
 
-func (s *dbUserStore) HasAnyUsers() (bool, error) {
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
+func (s *dbUserStore) HasAnyUsers(ctx context.Context) (bool, error) {
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
 	if err != nil {
 		return false, err
 	}
@@ -174,16 +174,16 @@ type dbSessionStore struct {
 	db *DocumentStoreService
 }
 
-func (s *dbSessionStore) StoreSession(userID string, session *webauthn.SessionData) error {
+func (s *dbSessionStore) StoreSession(ctx context.Context, userID string, session *webauthn.SessionData) error {
 	data, err := json.Marshal(session)
 	if err != nil {
 		return err
 	}
-	return s.db.DocSet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
+	return s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
 }
 
-func (s *dbSessionStore) GetSession(userID string) (*webauthn.SessionData, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+func (s *dbSessionStore) GetSession(ctx context.Context, userID string) (*webauthn.SessionData, error) {
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,8 +203,8 @@ func (s *dbSessionStore) GetSession(userID string) (*webauthn.SessionData, error
 	return &session, nil
 }
 
-func (s *dbSessionStore) DeleteSession(userID string) error {
-	err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+func (s *dbSessionStore) DeleteSession(ctx context.Context, userID string) error {
+	err := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
 	return err
 }
 
@@ -293,7 +293,7 @@ func NewPasskeyService(docStore *DocumentStoreService, logger *slog.Logger, cfg 
 // embeddedOperatorBinder binds the gateway's claimed embedded operator to a
 // freshly created web session. Satisfied by *RegistrationService.
 type embeddedOperatorBinder interface {
-	BindEmbeddedOperatorToWebSession(userID, webSessionID string) (bool, error)
+	BindEmbeddedOperatorToWebSession(ctx context.Context, userID, webSessionID string) (bool, error)
 }
 
 // embeddedOperatorClaimer claims the gateway's embedded operator for a user
@@ -364,8 +364,8 @@ type ChallengeData struct {
 }
 
 // GenerateRegistrationChallenge creates a registration challenge for a user.
-func (s *PasskeyService) GenerateRegistrationChallenge(userID, userName string) (*protocol.CredentialCreation, error) {
-	user, err := s.getUser(userID)
+func (s *PasskeyService) GenerateRegistrationChallenge(ctx context.Context, userID, userName string) (*protocol.CredentialCreation, error) {
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +379,7 @@ func (s *PasskeyService) GenerateRegistrationChallenge(userID, userName string) 
 	}
 
 	// Store session data
-	if err := s.storeWebAuthnSession(userID, session); err != nil {
+	if err := s.storeWebAuthnSession(ctx, userID, session); err != nil {
 		return nil, err
 	}
 
@@ -388,8 +388,8 @@ func (s *PasskeyService) GenerateRegistrationChallenge(userID, userName string) 
 
 // VerifyRegistration verifies a registration response.
 // It accepts the raw JSON of the WebAuthn response.
-func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
-	user, err := s.getUser(userID)
+func (s *PasskeyService) VerifyRegistration(ctx context.Context, userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +397,7 @@ func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) 
 		return nil, constants.ErrUserNotFound
 	}
 
-	session, err := s.getWebAuthnSession(userID)
+	session, err := s.getWebAuthnSession(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -451,11 +451,11 @@ func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) 
 		CreatedAtUnixMs: time.Now().UnixMilli(),
 	}
 
-	if err := s.addCredential(userID, newCred); err != nil {
+	if err := s.addCredential(ctx, userID, newCred); err != nil {
 		return nil, err
 	}
 
-	if delErr := s.deleteWebAuthnSession(userID); delErr != nil {
+	if delErr := s.deleteWebAuthnSession(ctx, userID); delErr != nil {
 		s.logger.Warn("Failed to delete WebAuthn session after registration", "error", delErr, "userID", userID)
 	}
 
@@ -463,8 +463,8 @@ func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) 
 }
 
 // GenerateAuthenticationChallenge creates an authentication challenge.
-func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (*protocol.CredentialAssertion, error) {
-	user, err := s.getUser(userID)
+func (s *PasskeyService) GenerateAuthenticationChallenge(ctx context.Context, userID string) (*protocol.CredentialAssertion, error) {
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +481,7 @@ func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (*protoc
 		return nil, fmt.Errorf("failed to begin login: %w", err)
 	}
 
-	if err := s.storeWebAuthnSession(userID, session); err != nil {
+	if err := s.storeWebAuthnSession(ctx, userID, session); err != nil {
 		return nil, err
 	}
 
@@ -490,8 +490,8 @@ func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (*protoc
 
 // GenerateApprovalChallenge creates a WebAuthn assertion challenge bound to a transaction hash.
 // This is used for Out-of-Band (OOB) approval of suspended transactions.
-func (s *PasskeyService) GenerateApprovalChallenge(userID, transactionHash string) (*protocol.CredentialAssertion, error) {
-	user, err := s.getUser(userID)
+func (s *PasskeyService) GenerateApprovalChallenge(ctx context.Context, userID, transactionHash string) (*protocol.CredentialAssertion, error) {
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -524,8 +524,8 @@ func (s *PasskeyService) GenerateApprovalChallenge(userID, transactionHash strin
 
 // VerifyAuthentication verifies an authentication assertion.
 // It accepts the raw JSON of the WebAuthn response.
-func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
-	user, err := s.getUser(userID)
+func (s *PasskeyService) VerifyAuthentication(ctx context.Context, userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +533,7 @@ func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte
 		return nil, constants.ErrUserNotFound
 	}
 
-	session, err := s.getWebAuthnSession(userID)
+	session, err := s.getWebAuthnSession(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -561,11 +561,11 @@ func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte
 		}
 	}
 
-	if err := s.updateUser(userID, user); err != nil {
+	if err := s.updateUser(ctx, userID, user); err != nil {
 		return nil, err
 	}
 
-	if delErr := s.deleteWebAuthnSession(userID); delErr != nil {
+	if delErr := s.deleteWebAuthnSession(ctx, userID); delErr != nil {
 		s.logger.Warn("Failed to delete WebAuthn session after authentication", "error", delErr, "userID", userID)
 	}
 
@@ -573,8 +573,8 @@ func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte
 }
 
 // listCredentials returns all passkey credentials for a user.
-func (s *PasskeyService) listCredentials(userID string) ([]models.PasskeyCredential, error) {
-	user, err := s.getUser(userID)
+func (s *PasskeyService) listCredentials(ctx context.Context, userID string) ([]models.PasskeyCredential, error) {
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -585,8 +585,8 @@ func (s *PasskeyService) listCredentials(userID string) ([]models.PasskeyCredent
 }
 
 // revokeCredential removes a passkey credential from a user.
-func (s *PasskeyService) revokeCredential(userID, credentialID string) (found bool, remaining int, err error) {
-	user, err := s.getUser(userID)
+func (s *PasskeyService) revokeCredential(ctx context.Context, userID, credentialID string) (found bool, remaining int, err error) {
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return false, 0, err
 	}
@@ -608,7 +608,7 @@ func (s *PasskeyService) revokeCredential(userID, credentialID string) (found bo
 		return false, len(user.PasskeyCredentials), nil
 	}
 
-	if err := s.setCredentials(userID, newCreds); err != nil {
+	if err := s.setCredentials(ctx, userID, newCreds); err != nil {
 		s.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
 		return false, 0, err
 	}
@@ -651,7 +651,7 @@ func (s *PasskeyService) VerifyPasskeyProof(ctx context.Context, userID, transac
 		return false, constants.ErrMissingRequiredField
 	}
 
-	user, err := s.getUser(userID)
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return false, err
 	}
@@ -709,15 +709,15 @@ func (s *PasskeyService) VerifyPasskeyProof(ctx context.Context, userID, transac
 	return true, nil
 }
 
-func (s *PasskeyService) getUser(userID string) (*models.User, error) {
-	return s.userStore.GetUser(userID)
+func (s *PasskeyService) getUser(ctx context.Context, userID string) (*models.User, error) {
+	return s.userStore.GetUser(ctx, userID)
 }
 
-func (s *PasskeyService) addCredential(userID string, cred models.PasskeyCredential) error {
+func (s *PasskeyService) addCredential(ctx context.Context, userID string, cred models.PasskeyCredential) error {
 	if err := cred.Validate(); err != nil {
 		return err
 	}
-	user, err := s.getUser(userID)
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -727,11 +727,11 @@ func (s *PasskeyService) addCredential(userID string, cred models.PasskeyCredent
 
 	user.PasskeyCredentials = append(user.PasskeyCredentials, cred)
 
-	return s.updateUser(userID, user)
+	return s.updateUser(ctx, userID, user)
 }
 
-func (s *PasskeyService) setCredentials(userID string, creds []models.PasskeyCredential) error {
-	user, err := s.getUser(userID)
+func (s *PasskeyService) setCredentials(ctx context.Context, userID string, creds []models.PasskeyCredential) error {
+	user, err := s.getUser(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -740,21 +740,21 @@ func (s *PasskeyService) setCredentials(userID string, creds []models.PasskeyCre
 	}
 
 	user.PasskeyCredentials = creds
-	return s.updateUser(userID, user)
+	return s.updateUser(ctx, userID, user)
 }
 
-func (s *PasskeyService) updateUser(userID string, user *models.User) error {
-	return s.userStore.UpdateUser(userID, user)
+func (s *PasskeyService) updateUser(ctx context.Context, userID string, user *models.User) error {
+	return s.userStore.UpdateUser(ctx, userID, user)
 }
 
-func (s *PasskeyService) storeWebAuthnSession(userID string, session *webauthn.SessionData) error {
-	return s.sessionStore.StoreSession(userID, session)
+func (s *PasskeyService) storeWebAuthnSession(ctx context.Context, userID string, session *webauthn.SessionData) error {
+	return s.sessionStore.StoreSession(ctx, userID, session)
 }
 
-func (s *PasskeyService) getWebAuthnSession(userID string) (*webauthn.SessionData, error) {
-	return s.sessionStore.GetSession(userID)
+func (s *PasskeyService) getWebAuthnSession(ctx context.Context, userID string) (*webauthn.SessionData, error) {
+	return s.sessionStore.GetSession(ctx, userID)
 }
 
-func (s *PasskeyService) deleteWebAuthnSession(userID string) error {
-	return s.sessionStore.DeleteSession(userID)
+func (s *PasskeyService) deleteWebAuthnSession(ctx context.Context, userID string) error {
+	return s.sessionStore.DeleteSession(ctx, userID)
 }

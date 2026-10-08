@@ -169,7 +169,7 @@ func TestMockTransactionAudit(t *testing.T) {
 	audit := &MockTransactionAudit{}
 
 	// MockTransactionAudit is a no-op
-	err := audit.DocSet("test-collection", "test-id", json.RawMessage(`{"test": "data"}`))
+	err := audit.DocSet(context.Background(), "test-collection", "test-id", json.RawMessage(`{"test": "data"}`))
 	require.NoError(t, err, "MockTransactionAudit should not return errors")
 }
 
@@ -193,7 +193,7 @@ func TestConfigurableMockAuditStore(t *testing.T) {
 	require.NotNil(t, store)
 
 	data := json.RawMessage(`{"test": "value"}`)
-	err := store.DocSet("collection-1", "id-1", data)
+	err := store.DocSet(context.Background(), "collection-1", "id-1", data)
 	require.NoError(t, err)
 
 	require.Len(t, store.DocSetCalls, 1, "Should have recorded one call")
@@ -202,10 +202,10 @@ func TestConfigurableMockAuditStore(t *testing.T) {
 	require.Equal(t, data, store.DocSetCalls[0].Data)
 
 	// Test multiple calls
-	err = store.DocSet("collection-2", "id-2", json.RawMessage(`{"test": "value2"}`))
+	err = store.DocSet(context.Background(), "collection-2", "id-2", json.RawMessage(`{"test": "value2"}`))
 	require.NoError(t, err)
 
-	err = store.DocSet("collection-3", "id-3", json.RawMessage(`{"test": "value3"}`))
+	err = store.DocSet(context.Background(), "collection-3", "id-3", json.RawMessage(`{"test": "value3"}`))
 	require.NoError(t, err)
 
 	require.Len(t, store.DocSetCalls, 3, "Should have recorded three calls")
@@ -218,7 +218,7 @@ func TestConfigurableMockAuditStore_ErrorFunc(t *testing.T) {
 	}
 
 	store := NewConfigurableMockAuditStore(docSetFunc)
-	err := store.DocSet("collection-1", "id-1", json.RawMessage(`{}`))
+	err := store.DocSet(context.Background(), "collection-1", "id-1", json.RawMessage(`{}`))
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
 }
@@ -227,7 +227,7 @@ func TestConfigurableMockAuditStore_NilFunc(t *testing.T) {
 	store := NewConfigurableMockAuditStore(nil)
 	require.NotNil(t, store)
 
-	err := store.DocSet("collection-1", "id-1", json.RawMessage(`{}`))
+	err := store.DocSet(context.Background(), "collection-1", "id-1", json.RawMessage(`{}`))
 	require.NoError(t, err, "Nil DocSetFunc should not return error")
 
 	require.Len(t, store.DocSetCalls, 1, "Should still record calls even with nil func")

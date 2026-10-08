@@ -33,7 +33,7 @@ import (
 // modelProvenanceOperatorLister resolves operators capable of storage-side model
 // provenance attestation. Provenance operators are enrolled under the gateway owner.
 type modelProvenanceOperatorLister interface {
-	ListOperatorsForProvenance() ([]*operatorv1.OperatorDocument, error)
+	ListOperatorsForProvenance(ctx context.Context) ([]*operatorv1.OperatorDocument, error)
 }
 
 // ModelProvenanceObservationCoordinator fans out BEGIN/FINALIZE provenance
@@ -86,7 +86,7 @@ func (c *ModelProvenanceObservationCoordinator) synchronizeOperatorSubscription(
 	}
 	_ = ctx
 
-	operators, err := c.operatorLister.ListOperatorsForProvenance()
+	operators, err := c.operatorLister.ListOperatorsForProvenance(ctx)
 	if err != nil {
 		c.logger.Warn("Model provenance observation: list operators failed", "error", err)
 		return err

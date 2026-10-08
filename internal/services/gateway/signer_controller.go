@@ -111,7 +111,7 @@ func (c *SignerController) handleGovernanceSignerByID(w http.ResponseWriter, r *
 			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
-		doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
+		doc, err := c.docStore.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionTrustedSigners), id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("signer_controller: handleGovernanceSignerByID: %w", err).Error())
 			return

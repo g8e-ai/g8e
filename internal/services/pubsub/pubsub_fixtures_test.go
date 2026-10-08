@@ -46,8 +46,8 @@ type pubsubTestConsensusStoreAdapter struct {
 	Inner *governancetest.SimpleConsensusStore
 }
 
-func (a *pubsubTestConsensusStoreAdapter) GetConsensusPolicy(id string) (*governance.L2ConsensusPolicy, error) {
-	policy, err := a.Inner.GetConsensus(id)
+func (a *pubsubTestConsensusStoreAdapter) GetConsensusPolicy(ctx context.Context, id string) (*governance.L2ConsensusPolicy, error) {
+	policy, err := a.Inner.GetConsensus(ctx, id)
 	if err != nil {
 		return nil, err
 	}

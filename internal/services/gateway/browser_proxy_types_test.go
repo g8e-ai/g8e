@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -95,7 +96,7 @@ type fakeOperatorLister struct {
 	err error
 }
 
-func (f fakeOperatorLister) ListUserOperators(string) ([]*operatorv1.OperatorDocument, error) {
+func (f fakeOperatorLister) ListUserOperators(context.Context, string) ([]*operatorv1.OperatorDocument, error) {
 	return f.ops, f.err
 }
 
@@ -128,7 +129,7 @@ func TestBoundOperators_FiltersToWebSession(t *testing.T) {
 		}},
 	}
 
-	got := c.boundOperators("user-1", "web-1")
+	got := c.boundOperators(context.Background(), "user-1", "web-1")
 
 	assert.Equal(t, []browserBoundOperator{
 		{BoundWebSessionID: "web-1", OperatorID: "op-1", OperatorSessionID: "os-1", Status: "bound"},
@@ -144,7 +145,7 @@ func TestBoundOperators_RegistryErrorYieldsEmptyList(t *testing.T) {
 		operators: fakeOperatorLister{err: errors.New("registry down")},
 	}
 
-	got := c.boundOperators("user-1", "web-1")
+	got := c.boundOperators(context.Background(), "user-1", "web-1")
 
 	require.NotNil(t, got)
 	assert.Empty(t, got)

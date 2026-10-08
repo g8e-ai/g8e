@@ -220,7 +220,7 @@ type DispatchResult struct {
 // document. AuthService implements this; the interface makes the dispatch
 // service's dependency on auth explicit and testable.
 type operatorSessionValidator interface {
-	ValidateOperatorSession(operatorSessionID string) (*operatorv1.OperatorDocument, error)
+	ValidateOperatorSession(ctx context.Context, operatorSessionID string) (*operatorv1.OperatorDocument, error)
 }
 
 // L2ConsensusDeliberator sends an envelope to an L2 consensus service for
@@ -291,7 +291,7 @@ func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHand
 // fails, L2 deliberation fails, or the result does not arrive within DispatchTimeout.
 func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*DispatchResult, error) {
 	// 1. Resolve the target operator session.
-	op, err := d.auth.ValidateOperatorSession(req.TargetOperatorSessionID)
+	op, err := d.auth.ValidateOperatorSession(ctx, req.TargetOperatorSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("dispatch: validate operator session: %w", err)
 	}

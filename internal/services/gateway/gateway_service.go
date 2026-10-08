@@ -153,6 +153,8 @@ func (b *gatewayServiceBuilder) withConsensus(cs *consensus.ConsensusService, de
 // GatewayModeService. CanonicalDBService owns the SecretManager lifecycle
 // (initialized in initSchema, closed in CanonicalDBService.Close).
 func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
+	// Construction-time I/O runs before Start establishes the lifecycle context.
+	ctx := context.Background()
 	cfg := b.cfg
 	logger := b.logger
 
@@ -208,12 +210,12 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	personaSvc := NewPersonaService(docStore, logger)
 	for _, persona := range DefaultPersonaDefinitions() {
-		existing, err := personaSvc.GetByID(persona.ID)
+		existing, err := personaSvc.GetByID(ctx, persona.ID)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to check existing persona %s: %w", persona.ID, err)
 		}
 		if existing == nil {
-			if err := personaSvc.CreatePersona(&persona); err != nil {
+			if err := personaSvc.CreatePersona(ctx, &persona); err != nil {
 				return nil, fmt.Errorf("gateway: failed to create persona %s: %w", persona.ID, err)
 			}
 		}
@@ -240,7 +242,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// only by the explicit first-user enrollment act; until then it exists
 	// as an unclaimed pending record. Idempotent across restarts.
 	embeddedOperator := embedded.New(docStore, operatorSessionSvc)
-	if err := embeddedOperator.RegisterPending(); err != nil {
+	if err := embeddedOperator.RegisterPending(ctx); err != nil {
 		return nil, err
 	}
 
@@ -260,7 +262,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	reg := NewRegistrationService(docStore, kvStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	if err := reg.UpdateOperatorRuntimeConfig(string(constants.DocIDEmbeddedOperator), &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(cfg.EffectiveOperatorRoles()), HttpPort: int32(cfg.HTTPPort), LocalDir: cfg.WorkDir, InferenceEnabled: cfg.Inference.Enabled, InferenceOllamaEndpoint: cfg.Inference.OllamaEndpoint, ProvenanceOperatorEnabled: cfg.ProvenanceOperator.Enabled, ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperator.ModelStorageRoot, ProviderBoundaryObserverEnabled: cfg.ProviderBoundaryObserver.Enabled}); err != nil {
+	if err := reg.UpdateOperatorRuntimeConfig(ctx, string(constants.DocIDEmbeddedOperator), &operatorv1.OperatorRuntimeConfig{Roles: models.OperatorRolesToProto(cfg.EffectiveOperatorRoles()), HttpPort: int32(cfg.HTTPPort), LocalDir: cfg.WorkDir, InferenceEnabled: cfg.Inference.Enabled, InferenceOllamaEndpoint: cfg.Inference.OllamaEndpoint, ProvenanceOperatorEnabled: cfg.ProvenanceOperator.Enabled, ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperator.ModelStorageRoot, ProviderBoundaryObserverEnabled: cfg.ProviderBoundaryObserver.Enabled}); err != nil {
 		return nil, fmt.Errorf("gateway: embedded runtime config: %w", err)
 	}
 
@@ -327,7 +329,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	consensusSvc := b.consensusSvc
 	l2Deliberator := b.deliberator
 	if consensusSvc == nil && cfg.Gateway.Posture.RequiresL2() && cfg.Gateway.ConsensusID != "" {
-		policy, err := consensusStore.GetConsensus(cfg.Gateway.ConsensusID)
+		policy, err := consensusStore.GetConsensus(ctx, cfg.Gateway.ConsensusID)
 		if err == nil && policy != nil {
 			fileProvider, err := consensus.NewFileKeyProvider(b.fileSvc, cfg.Gateway.ConsensusID)
 			if err != nil {

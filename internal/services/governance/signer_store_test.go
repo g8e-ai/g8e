@@ -34,7 +34,7 @@ func newSignerTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
 func TestFailClosedSignerStore_NilMap(t *testing.T) {
 	t.Parallel()
 	s := &FailClosedSignerStore{}
-	pubKey, err := s.GetTrustedSigner("key1")
+	pubKey, err := s.GetTrustedSigner(context.Background(), "key1")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey)
 }
@@ -42,7 +42,7 @@ func TestFailClosedSignerStore_NilMap(t *testing.T) {
 func TestFailClosedSignerStore_NotFound(t *testing.T) {
 	t.Parallel()
 	s := &FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}}
-	pubKey, err := s.GetTrustedSigner("nonexistent")
+	pubKey, err := s.GetTrustedSigner(context.Background(), "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey)
 }
@@ -52,7 +52,7 @@ func TestFailClosedSignerStore_Found(t *testing.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	s := &FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"key1": pub}}
-	result, err := s.GetTrustedSigner("key1")
+	result, err := s.GetTrustedSigner(context.Background(), "key1")
 	require.NoError(t, err)
 	assert.Equal(t, pub, result)
 }
@@ -74,7 +74,7 @@ func TestFilesystemSignerStore_EmptyDir(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, store)
 
-	pubKey, err := store.GetTrustedSigner("nonexistent")
+	pubKey, err := store.GetTrustedSigner(context.Background(), "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey)
 }
@@ -94,7 +94,7 @@ func TestFilesystemSignerStore_WithValidKey(t *testing.T) {
 	store, err := NewFilesystemSignerStore(fileSvc, dir, logger)
 	require.NoError(t, err)
 
-	result, err := store.GetTrustedSigner("signer1")
+	result, err := store.GetTrustedSigner(context.Background(), "signer1")
 	require.NoError(t, err)
 	assert.Equal(t, pub, result)
 }
@@ -109,7 +109,7 @@ func TestFilesystemSignerStore_WithInvalidHex(t *testing.T) {
 	store, err := NewFilesystemSignerStore(fileSvc, dir, logger)
 	require.NoError(t, err)
 
-	pubKey, err := store.GetTrustedSigner("bad")
+	pubKey, err := store.GetTrustedSigner(context.Background(), "bad")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey, "malformed key should not be loaded")
 }
@@ -125,7 +125,7 @@ func TestFilesystemSignerStore_WithWrongKeySize(t *testing.T) {
 	store, err := NewFilesystemSignerStore(fileSvc, dir, logger)
 	require.NoError(t, err)
 
-	pubKey, err := store.GetTrustedSigner("short")
+	pubKey, err := store.GetTrustedSigner(context.Background(), "short")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey, "wrong-size key should not be loaded")
 }
@@ -146,7 +146,7 @@ func TestFilesystemSignerStore_SkipsNonPubFiles(t *testing.T) {
 func TestFilesystemSignerStore_GetTrustedSigner_NilMap(t *testing.T) {
 	t.Parallel()
 	store := &FilesystemSignerStore{signers: nil}
-	pubKey, err := store.GetTrustedSigner("key1")
+	pubKey, err := store.GetTrustedSigner(context.Background(), "key1")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey)
 }

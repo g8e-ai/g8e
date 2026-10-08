@@ -233,7 +233,7 @@ func (s *ObserveProducerService) UpdateAgentState(ctx context.Context, userID st
 	// Read the existing projection to validate the transition and check
 	// staleness. A nil projection means this is the first state for this
 	// agent; any target status is accepted.
-	existing, err := s.docStore.DocGet(collection, payload.AgentID)
+	existing, err := s.docStore.DocGet(ctx, collection, payload.AgentID)
 	if err != nil {
 		return fmt.Errorf("observe producer: update agent state: read existing: %w", err)
 	}
@@ -273,7 +273,7 @@ func (s *ObserveProducerService) UpdateAgentState(ctx context.Context, userID st
 	if err != nil {
 		return fmt.Errorf("observe producer: update agent state: marshal projection: %w", err)
 	}
-	if err := s.docStore.DocSet(collection, payload.AgentID, projBytes); err != nil {
+	if err := s.docStore.DocSet(ctx, collection, payload.AgentID, projBytes); err != nil {
 		return fmt.Errorf("observe producer: update agent state: persist: %w", err)
 	}
 
@@ -305,7 +305,7 @@ func (s *ObserveProducerService) UpdateRunState(ctx context.Context, userID stri
 
 	// Read the existing projection to validate the transition, check
 	// staleness, and preserve tasks and evidence-safe links.
-	existing, err := s.docStore.DocGet(collection, payload.RunID)
+	existing, err := s.docStore.DocGet(ctx, collection, payload.RunID)
 	if err != nil {
 		return fmt.Errorf("observe producer: update run state: read existing: %w", err)
 	}
@@ -354,7 +354,7 @@ func (s *ObserveProducerService) UpdateRunState(ctx context.Context, userID stri
 	if err != nil {
 		return fmt.Errorf("observe producer: update run state: marshal projection: %w", err)
 	}
-	if err := s.docStore.DocSet(collection, payload.RunID, projBytes); err != nil {
+	if err := s.docStore.DocSet(ctx, collection, payload.RunID, projBytes); err != nil {
 		return fmt.Errorf("observe producer: update run state: persist: %w", err)
 	}
 
@@ -384,7 +384,7 @@ func (s *ObserveProducerService) StreamDownload(ctx context.Context, userID, art
 
 	// Look up the download projection and verify ownership.
 	downloadCollection := marshaler.CollectionName(constants.CollectionObserveDownloads)
-	doc, err := s.docStore.DocGet(downloadCollection, artifactID)
+	doc, err := s.docStore.DocGet(ctx, downloadCollection, artifactID)
 	if err != nil {
 		return fmt.Errorf("observe producer: stream download: read projection: %w", err)
 	}
@@ -493,12 +493,12 @@ func (s *ObserveProducerService) emitLiveSSEEvent(route SSERoute, eventType stri
 
 // persistLiveProjection persists a live campaign projection to the document
 // store with the user_id ownership field.
-func (s *ObserveProducerService) persistLiveProjection(collection string, docID string, proj any) error {
+func (s *ObserveProducerService) persistLiveProjection(ctx context.Context, collection string, docID string, proj any) error {
 	projBytes, err := json.Marshal(proj)
 	if err != nil {
 		return fmt.Errorf("marshal projection: %w", err)
 	}
-	if err := s.docStore.DocSet(collection, docID, projBytes); err != nil {
+	if err := s.docStore.DocSet(ctx, collection, docID, projBytes); err != nil {
 		return fmt.Errorf("persist projection: %w", err)
 	}
 	return nil
@@ -530,7 +530,7 @@ func (s *ObserveProducerService) StartCycle(ctx context.Context, userID string, 
 		UserID string `json:"user_id"`
 		models.CycleStateProjection
 	}{UserID: userID, CycleStateProjection: proj}
-	if err := s.persistLiveProjection(collection, proj.CycleID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, proj.CycleID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: start cycle: %w", err)
 	}
 
@@ -578,7 +578,7 @@ func (s *ObserveProducerService) CompleteCycle(ctx context.Context, userID strin
 		UserID string `json:"user_id"`
 		models.CycleStateProjection
 	}{UserID: userID, CycleStateProjection: proj}
-	if err := s.persistLiveProjection(collection, proj.CycleID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, proj.CycleID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: complete cycle: %w", err)
 	}
 
@@ -630,7 +630,7 @@ func (s *ObserveProducerService) StartAssignment(ctx context.Context, userID str
 		UserID string `json:"user_id"`
 		models.AssignmentProgressProjection
 	}{UserID: userID, AssignmentProgressProjection: proj}
-	if err := s.persistLiveProjection(collection, proj.AssignmentID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, proj.AssignmentID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: start assignment: %w", err)
 	}
 
@@ -682,7 +682,7 @@ func (s *ObserveProducerService) CompleteAssignment(ctx context.Context, userID 
 		UserID string `json:"user_id"`
 		models.AssignmentProgressProjection
 	}{UserID: userID, AssignmentProgressProjection: proj}
-	if err := s.persistLiveProjection(collection, proj.AssignmentID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, proj.AssignmentID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: complete assignment: %w", err)
 	}
 
@@ -733,7 +733,7 @@ func (s *ObserveProducerService) RecordModelRoleInvocation(ctx context.Context, 
 		UserID string `json:"user_id"`
 		models.AssignmentProgressProjection
 	}{UserID: userID, AssignmentProgressProjection: proj}
-	if err := s.persistLiveProjection(collection, proj.AssignmentID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, proj.AssignmentID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: record model role: %w", err)
 	}
 
@@ -814,7 +814,7 @@ func (s *ObserveProducerService) CompleteVerifier(ctx context.Context, userID st
 		UserID string `json:"user_id"`
 		models.VerificationProgressProjection
 	}{UserID: userID, VerificationProgressProjection: proj}
-	if err := s.persistLiveProjection(collection, proj.CycleID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, proj.CycleID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: complete verifier: %w", err)
 	}
 
@@ -868,7 +868,7 @@ func (s *ObserveProducerService) RecordProofAvailability(ctx context.Context, us
 		UserID string `json:"user_id"`
 		models.PublicationProgressProjection
 	}{UserID: userID, PublicationProgressProjection: pubProj}
-	if err := s.persistLiveProjection(collection, cycleID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, cycleID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: record proof: %w", err)
 	}
 
@@ -917,7 +917,7 @@ func (s *ObserveProducerService) CompletePublication(ctx context.Context, userID
 		UserID string `json:"user_id"`
 		models.PublicationProgressProjection
 	}{UserID: userID, PublicationProgressProjection: proj}
-	if err := s.persistLiveProjection(collection, proj.CycleID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, proj.CycleID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: complete publication: %w", err)
 	}
 
@@ -967,7 +967,7 @@ func (s *ObserveProducerService) EmitHeartbeat(ctx context.Context, userID strin
 		UserID string `json:"user_id"`
 		models.SourceFreshnessProjection
 	}{UserID: userID, SourceFreshnessProjection: freshProj}
-	if err := s.persistLiveProjection(collection, sourceID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, sourceID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: emit heartbeat: %w", err)
 	}
 
@@ -1027,7 +1027,7 @@ func (s *ObserveProducerService) RequestStop(ctx context.Context, userID string,
 		UserID string `json:"user_id"`
 		models.SupervisorStateProjection
 	}{UserID: userID, SupervisorStateProjection: supProj}
-	if err := s.persistLiveProjection(collection, docID, wrapped); err != nil {
+	if err := s.persistLiveProjection(ctx, collection, docID, wrapped); err != nil {
 		return fmt.Errorf("observe producer: request stop: %w", err)
 	}
 

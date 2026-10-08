@@ -34,7 +34,7 @@ type stubProviderBoundaryOperatorLister struct {
 	err       error
 }
 
-func (s *stubProviderBoundaryOperatorLister) ListOperatorsForObservation() ([]*operatorv1.OperatorDocument, error) {
+func (s *stubProviderBoundaryOperatorLister) ListOperatorsForObservation(context.Context) ([]*operatorv1.OperatorDocument, error) {
 	return s.operators, s.err
 }
 
@@ -42,7 +42,7 @@ type mutableProviderBoundaryOperatorLister struct {
 	operators []*operatorv1.OperatorDocument
 }
 
-func (l *mutableProviderBoundaryOperatorLister) ListOperatorsForObservation() ([]*operatorv1.OperatorDocument, error) {
+func (l *mutableProviderBoundaryOperatorLister) ListOperatorsForObservation(context.Context) ([]*operatorv1.OperatorDocument, error) {
 	return l.operators, nil
 }
 

@@ -523,7 +523,7 @@ func seedObserveEvalProjection(t *testing.T, svc *ObserveService, userID, runID 
 	}
 	payload, err := json.Marshal(proj)
 	require.NoError(t, err)
-	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveEvals), runID, payload))
+	require.NoError(t, svc.docStore.DocSet(context.Background(), marshaler.CollectionName(constants.CollectionObserveEvals), runID, payload))
 }
 
 func seedObserveDownloadProjection(t *testing.T, svc *ObserveService, _ string, artifactID string, generatedAt time.Time) {
@@ -545,7 +545,7 @@ func seedObserveDownloadProjection(t *testing.T, svc *ObserveService, _ string, 
 	}
 	payload, err := json.Marshal(proj)
 	require.NoError(t, err)
-	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveDownloads), artifactID, payload))
+	require.NoError(t, svc.docStore.DocSet(context.Background(), marshaler.CollectionName(constants.CollectionObserveDownloads), artifactID, payload))
 }
 
 func TestObserveService_ListEvalsAndDownloads(t *testing.T) {
@@ -614,7 +614,7 @@ func seedObserveRunProjection(t *testing.T, svc *ObserveService, userID, runID s
 	}
 	payload, err := json.Marshal(proj)
 	require.NoError(t, err)
-	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveRuns), runID, payload))
+	require.NoError(t, svc.docStore.DocSet(context.Background(), marshaler.CollectionName(constants.CollectionObserveRuns), runID, payload))
 }
 
 func TestObserveController_HandleListRuns_ReturnsPage(t *testing.T) {

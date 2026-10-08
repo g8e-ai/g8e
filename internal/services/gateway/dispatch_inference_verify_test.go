@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"log/slog"
@@ -146,7 +147,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		receipt := completedReceipt(t, result)
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		out, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		out, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.NoError(t, err)
 		assert.Equal(t, txID, out.TransactionID)
 		assert.Same(t, resultEnv, out.ResultEnvelope)
@@ -163,7 +164,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		svc := newInferenceDispatchService(t, &stubSignerStore{keys: map[string]ed25519.PublicKey{keyID: pub}})
 		resultEnv := &commonv1.GovernanceEnvelope{Id: txID, Payload: []byte{0xff, 0xff, 0xff, 0xff}}
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceResultDecode)
 	})
@@ -172,7 +173,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		svc := newInferenceDispatchService(t, &stubSignerStore{keys: map[string]ed25519.PublicKey{keyID: pub}})
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Result: inferenceTestResult(t)})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceCompletionNoReceipt)
 	})
@@ -185,7 +186,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		signTestReceipt(t, receipt, priv, keyID)
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceReceiptVerify)
 	})
@@ -196,7 +197,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		receipt := completedReceipt(t, result)
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceReceiptVerify)
 	})
@@ -209,7 +210,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		signTestReceipt(t, receipt, priv, "unregistered-key")
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceReceiptVerify)
 	})
@@ -220,7 +221,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		receipt := completedReceipt(t, result)
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceReceiptVerify)
 	})
@@ -234,7 +235,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		signTestReceipt(t, receipt, otherPriv, keyID)
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		_, err = svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err = svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceReceiptVerify)
 	})
@@ -246,7 +247,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		receipt.FinalPersistenceAttestation = nil
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceReceiptVerify)
 	})
@@ -263,7 +264,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		signTestReceipt(t, receipt, priv, keyID)
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceReceiptFailed)
 	})
@@ -280,7 +281,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		signTestReceipt(t, receipt, priv, keyID)
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceCompletionNoResult)
 	})
@@ -294,7 +295,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		result.Parts[0].Part = &operatorv1.InferenceResponsePart_Text{Text: "substituted output"}
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceResultDigestMismatch)
 	})
@@ -307,7 +308,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		signTestReceipt(t, receipt, priv, keyID)
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
-		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+		_, err := svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrInferenceResultDigestMismatch)
 	})
@@ -377,7 +378,7 @@ func TestVerifyInferenceCompletion_FailureCodeMapping(t *testing.T) {
 			require.NoError(t, err)
 			resultEnv := &commonv1.GovernanceEnvelope{Id: txID, Payload: payload}
 
-			_, err = svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+			_, err = svc.verifyInferenceCompletion(context.Background(), cmdEnv, resultEnv)
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tt.want, "failure_code %v must map to the typed sentinel", tt.code)
 		})

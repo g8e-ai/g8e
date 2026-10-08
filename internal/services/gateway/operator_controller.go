@@ -107,7 +107,7 @@ func (c *OperatorController) handleValidateOperatorSession(w http.ResponseWriter
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
-	op, err := c.auth.ValidateOperatorCLISessionBinding(req.OperatorSessionID, req.CLISessionID, req.UserID)
+	op, err := c.auth.ValidateOperatorCLISessionBinding(r.Context(), req.OperatorSessionID, req.CLISessionID, req.UserID)
 	if err != nil {
 		var authErr *AuthError
 		if errors.As(err, &authErr) {
@@ -139,7 +139,7 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 		c.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
-	operators, err := c.reg.ListUserOperators(userID)
+	operators, err := c.reg.ListUserOperators(r.Context(), userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -176,7 +176,7 @@ func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.R
 		return
 	}
 	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
-	op, err := c.auth.ValidateOperatorSession(req.OperatorSessionID)
+	op, err := c.auth.ValidateOperatorSession(r.Context(), req.OperatorSessionID)
 	if err != nil {
 		c.responder.Error(w, http.StatusUnauthorized, err.Error())
 		return
@@ -214,7 +214,7 @@ func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := c.reg.MarkOperatorStopped(op.Id, userID, req.Reason); err != nil {
+	if err := c.reg.MarkOperatorStopped(r.Context(), op.Id, userID, req.Reason); err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -247,7 +247,7 @@ func (c *OperatorController) handleTerminateOperator(w http.ResponseWriter, r *h
 		c.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
-	if err := c.reg.TerminateOperator(req.OperatorID, req.UserID, req.Reason); err != nil {
+	if err := c.reg.TerminateOperator(r.Context(), req.OperatorID, req.UserID, req.Reason); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -292,7 +292,7 @@ func (c *OperatorController) handleBindOperators(w http.ResponseWriter, r *http.
 		return
 	}
 
-	resp, err := c.reg.BindOperators(req)
+	resp, err := c.reg.BindOperators(r.Context(), req)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -338,7 +338,7 @@ func (c *OperatorController) handleUnbindOperators(w http.ResponseWriter, r *htt
 		return
 	}
 
-	resp, err := c.reg.UnbindOperators(req)
+	resp, err := c.reg.UnbindOperators(r.Context(), req)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -369,7 +369,7 @@ func (c *OperatorController) handleSetTargetContext(w http.ResponseWriter, r *ht
 		return
 	}
 
-	resp, err := c.reg.SetTargetContext(req)
+	resp, err := c.reg.SetTargetContext(r.Context(), req)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -388,7 +388,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusUnauthorized, "missing operator session id")
 		return
 	}
-	op, err := c.auth.ValidateOperatorSession(operatorSessionID)
+	op, err := c.auth.ValidateOperatorSession(r.Context(), operatorSessionID)
 	if err != nil {
 		c.responder.Error(w, http.StatusUnauthorized, err.Error())
 		return
@@ -425,7 +425,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		if declared > 0 {
 			heartbeatIntervalSeconds = int(declared / time.Second)
 		}
-		if err := c.reg.UpdateOperatorRuntimeConfig(op.Id, runtimeConfig); err != nil {
+		if err := c.reg.UpdateOperatorRuntimeConfig(r.Context(), op.Id, runtimeConfig); err != nil {
 			c.logger.Error("gateway: persist operator runtime config", "operator_id", op.Id, "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 			return
@@ -462,7 +462,7 @@ func (c *OperatorController) handleGetOperatorBySession(w http.ResponseWriter, r
 		c.responder.Error(w, http.StatusBadRequest, "session_id required")
 		return
 	}
-	op, err := c.auth.ValidateOperatorSession(sessionID)
+	op, err := c.auth.ValidateOperatorSession(r.Context(), sessionID)
 	if err != nil {
 		var authErr *AuthError
 		if errors.As(err, &authErr) {
@@ -475,7 +475,7 @@ func (c *OperatorController) handleGetOperatorBySession(w http.ResponseWriter, r
 	// Session validation reads the indexed authorization document. A registry
 	// response also needs the current observed telemetry, which GetOperator
 	// overlays without adding telemetry reads to the authentication path.
-	op, err = c.reg.GetOperator(op.Id)
+	op, err = c.reg.GetOperator(r.Context(), op.Id)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return

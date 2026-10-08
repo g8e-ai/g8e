@@ -8,6 +8,7 @@
 package mcp
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ import (
 func TestNoopFieldReader_GetField_ReturnsEmptyNoError(t *testing.T) {
 	t.Parallel()
 	reader := NoopFieldReader{}
-	val, err := reader.GetField("any-collection", "any-id", "any.field.path")
+	val, err := reader.GetField(context.Background(), "any-collection", "any-id", "any.field.path")
 	require.NoError(t, err, "NoopFieldReader must never return an error")
 	assert.Equal(t, FieldValue{}, val, "NoopFieldReader must return empty FieldValue")
 }

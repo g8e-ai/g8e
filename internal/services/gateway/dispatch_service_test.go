@@ -51,7 +51,7 @@ type stubOperatorSessionValidator struct {
 	err error
 }
 
-func (s *stubOperatorSessionValidator) ValidateOperatorSession(_ string) (*operatorv1.OperatorDocument, error) {
+func (s *stubOperatorSessionValidator) ValidateOperatorSession(_ context.Context, _ string) (*operatorv1.OperatorDocument, error) {
 	return s.op, s.err
 }
 

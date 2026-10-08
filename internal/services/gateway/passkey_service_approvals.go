@@ -88,7 +88,7 @@ func (h *PasskeyHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.
 		return
 	}
 
-	options, err := h.GenerateApprovalChallenge(userID, txHash)
+	options, err := h.GenerateApprovalChallenge(r.Context(), userID, txHash)
 	if err != nil {
 		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return

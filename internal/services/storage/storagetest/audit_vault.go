@@ -1651,7 +1651,7 @@ func (avs *TestSQLAuditStore) decryptContent(data []byte) (string, error) {
 // This is a no-op implementation for the chaos tester since TestSQLAuditStore
 // is an audit store, not a document store. The actual audit data is stored
 // via RecordActionReceipt in the receipts table.
-func (avs *TestSQLAuditStore) DocSet(collection, id string, data json.RawMessage) error {
+func (avs *TestSQLAuditStore) DocSet(_ context.Context, collection, id string, data json.RawMessage) error {
 	// No-op for test infrastructure - audit data is stored via RecordActionReceipt
 	avs.logger.Debug("DocSet called (no-op in test audit store)", "collection", collection, "id", id)
 	return nil
@@ -1660,7 +1660,7 @@ func (avs *TestSQLAuditStore) DocSet(collection, id string, data json.RawMessage
 // DocDelete implements the TransactionAuditStore interface for test purposes.
 // No-op for test infrastructure — the test audit store does not persist
 // governed documents.
-func (avs *TestSQLAuditStore) DocDelete(collection, id string) error {
+func (avs *TestSQLAuditStore) DocDelete(_ context.Context, collection, id string) error {
 	avs.logger.Debug("DocDelete called (no-op in test audit store)", "collection", collection, "id", id)
 	return nil
 }

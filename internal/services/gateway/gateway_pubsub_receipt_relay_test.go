@@ -42,7 +42,7 @@ type stubSignerStore struct {
 	err  error
 }
 
-func (s *stubSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
+func (s *stubSignerStore) GetTrustedSigner(_ context.Context, keyID string) (ed25519.PublicKey, error) {
 	if s.err != nil {
 		return nil, s.err
 	}

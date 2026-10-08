@@ -123,7 +123,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	// Verify the user is still active. The auth middleware does this on
 	// every request, but a race between middleware and refresh could leave
 	// a disabled user with a still-valid cert.
-	user, err := c.userSvc.GetByID(r.Context(),userID)
+	user, err := c.userSvc.GetByID(r.Context(), userID)
 	if err != nil {
 		c.logger.Error("CLI refresh: failed to look up user", "error", err, "user_id", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
@@ -183,7 +183,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		operatorSessionID = oldSession.OperatorSessionID
 	}
 	if operatorSessionID != "" && operatorID == "" && c.operatorSessionSvc != nil {
-		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(r.Context(),userID)
+		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(r.Context(), userID)
 		if opErr != nil {
 			c.logger.Error("CLI refresh: failed to verify active operator session",
 				"error", opErr,
@@ -199,7 +199,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	if operatorSessionID == "" && c.operatorSessionSvc != nil {
-		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(r.Context(),userID)
+		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(r.Context(), userID)
 		if opErr != nil {
 			c.logger.Error("CLI refresh: failed to look up active operator session",
 				"error", opErr,
@@ -291,7 +291,7 @@ func (c *CLIRefreshController) registryOperatorBinding(ctx context.Context, user
 			if !isCandidate(op) {
 				continue
 			}
-			validated, validateErr := c.auth.ValidateOperatorSession(op.OperatorSessionId)
+			validated, validateErr := c.auth.ValidateOperatorSession(ctx, op.OperatorSessionId)
 			if validateErr == nil && validated.UserId == userID {
 				return validated.OperatorSessionId, validated.Id, true, nil
 			}
@@ -304,7 +304,7 @@ func (c *CLIRefreshController) registryOperatorBinding(ctx context.Context, user
 		}
 	}
 	if embeddedSessionID != "" {
-		validated, validateErr := c.auth.ValidateOperatorSession(embeddedSessionID)
+		validated, validateErr := c.auth.ValidateOperatorSession(ctx, embeddedSessionID)
 		if validateErr == nil && validated.UserId == userID {
 			return validated.OperatorSessionId, validated.Id, true, nil
 		}

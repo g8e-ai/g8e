@@ -71,7 +71,7 @@ func (c *OperatorController) handleBrowserGetOperator(w http.ResponseWriter, r *
 		c.responder.Error(w, http.StatusUnauthorized, constants.ErrProtocolAuthRequired.Error())
 		return
 	}
-	op, err := c.reg.GetOperator(operatorID)
+	op, err := c.reg.GetOperator(r.Context(), operatorID)
 	if err != nil || op == nil {
 		c.responder.Error(w, http.StatusNotFound, "operator not found")
 		return
@@ -90,7 +90,7 @@ func (c *OperatorController) handleBrowserStopOperator(w http.ResponseWriter, r 
 		c.responder.Error(w, http.StatusUnauthorized, constants.ErrProtocolAuthRequired.Error())
 		return
 	}
-	op, err := c.reg.GetOperator(operatorID)
+	op, err := c.reg.GetOperator(r.Context(), operatorID)
 	if err != nil || op == nil {
 		c.responder.Error(w, http.StatusNotFound, "operator not found")
 		return
@@ -132,7 +132,7 @@ func (c *OperatorController) handleBrowserStopOperator(w http.ResponseWriter, r 
 		c.responder.Error(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := c.reg.MarkOperatorStopped(op.Id, userID, ""); err != nil {
+	if err := c.reg.MarkOperatorStopped(r.Context(), op.Id, userID, ""); err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}

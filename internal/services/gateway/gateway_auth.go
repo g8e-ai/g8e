@@ -455,14 +455,14 @@ func (s *AuthService) invalidateUserCache(userID string) {
 // getAndValidateUser fetches a user by ID (cache-first), caches the result,
 // and verifies the user is active. Returns the user if active, nil if not found,
 // or an error if the lookup fails or the user is disabled.
-func (s *AuthService) getAndValidateUser(userID string) error {
+func (s *AuthService) getAndValidateUser(ctx context.Context, userID string) error {
 	if s.userSvc == nil || userID == "" {
 		return nil
 	}
 	user := s.getCachedUser(userID)
 	if user == nil {
 		var err error
-		user, err = s.userSvc.GetByID(userID)
+		user, err = s.userSvc.GetByID(ctx, userID)
 		if err != nil {
 			return fmt.Errorf("gateway: auth: load user %s: %w: %w", userID, err, constants.ErrUserNotFound)
 		}
@@ -486,12 +486,12 @@ func (s *AuthService) InvalidateUserCache(userID string) {
 // Auth depends on session validity (existence + certificate revocation), not on operator
 // status liveness signals from other processes. The primary session invalidation mechanism
 // is certificate revocation via PKI authority.
-func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operatorv1.OperatorDocument, error) {
+func (s *AuthService) ValidateOperatorSession(ctx context.Context, operatorSessionID string) (*operatorv1.OperatorDocument, error) {
 	if operatorSessionID == "" {
 		return nil, &AuthError{Message: constants.ErrGatewayOperatorSessionIDRequired.Error(), Status: http.StatusUnauthorized}
 	}
 
-	docs, err := s.db.FindOperatorsBySession(operatorSessionID)
+	docs, err := s.db.FindOperatorsBySession(ctx, operatorSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: auth: query operator session: %w", err)
 	}
@@ -522,15 +522,15 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operat
 	// Check if the linked user is active (plan §4.6)
 	// This is the single chokepoint that makes retirement real - without it,
 	// a stale CLI cert can still talk to the Gateway.
-	if err := s.getAndValidateUser(op.UserId); err != nil {
+	if err := s.getAndValidateUser(ctx, op.UserId); err != nil {
 		return nil, err
 	}
 
 	return op, nil
 }
 
-func (s *AuthService) ValidateOperatorCLISessionBinding(operatorSessionID, cliSessionID, userID string) (*operatorv1.OperatorDocument, error) {
-	op, err := s.ValidateOperatorSession(operatorSessionID)
+func (s *AuthService) ValidateOperatorCLISessionBinding(ctx context.Context, operatorSessionID, cliSessionID, userID string) (*operatorv1.OperatorDocument, error) {
+	op, err := s.ValidateOperatorSession(ctx, operatorSessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +540,7 @@ func (s *AuthService) ValidateOperatorCLISessionBinding(operatorSessionID, cliSe
 	if cliSessionID == "" {
 		return nil, &AuthError{Message: constants.ErrCLIL3SessionIDRequired.Error(), Status: http.StatusUnauthorized}
 	}
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: auth: load CLI session binding: %w", err)
 	}
@@ -686,7 +686,7 @@ func (s *AuthService) handleWebSessionAuth(w http.ResponseWriter, r *http.Reques
 // handleOperatorAuth handles authentication for Operator sessions.
 // Always handles the request (succeeds or writes an error response).
 func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request, operatorSessionID, cliSessionID string, next http.Handler) {
-	op, err := s.ValidateOperatorSession(operatorSessionID)
+	op, err := s.ValidateOperatorSession(r.Context(), operatorSessionID)
 	if err == nil {
 		if len(r.TLS.PeerCertificates) > 0 {
 			wid := protocol.NewWorkloadIdentity()
@@ -700,7 +700,7 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 			}
 			if !match && cliSessionID != "" {
 				var err error
-				match, err = s.cliCertBoundToOperator(cert.URIs, cliSessionID, op.UserId, operatorSessionID)
+				match, err = s.cliCertBoundToOperator(r.Context(), cert.URIs, cliSessionID, op.UserId, operatorSessionID)
 				if err != nil {
 					s.logger.Error("gateway: auth: CLI cert binding check failed", "operator_session_id", operatorSessionID, "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
 					s.responder.Error(w, http.StatusInternalServerError, constants.ErrCLICertBindingCheckFailed.Error())
@@ -748,7 +748,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 		}
 
-		cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		cliDoc, err := s.db.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		if err != nil {
 			s.logger.Error("gateway: auth: load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load CLI session %s: %w: %w", cliSessionID, err, constants.ErrNotFound))
 			s.responder.Error(w, http.StatusInternalServerError, constants.ErrSessionLoadFailed.Error())
@@ -804,7 +804,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			return true
 		}
 
-		if err := s.getAndValidateUser(cliSession.UserID); err != nil {
+		if err := s.getAndValidateUser(r.Context(), cliSession.UserID); err != nil {
 			if ae, ok := err.(*AuthError); ok {
 				s.logger.Warn("gateway: auth: CLI session identity disabled", "user_id", cliSession.UserID)
 				s.responder.Error(w, ae.Status, ae.Message)
@@ -860,7 +860,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				}
 				targetSessionID = headerOpSessionID
 			}
-			op, err := s.ValidateOperatorSession(targetSessionID)
+			op, err := s.ValidateOperatorSession(r.Context(), targetSessionID)
 			if err != nil {
 				if ae, ok := err.(*AuthError); ok {
 					s.logger.Warn("gateway: auth: persisted operator binding invalid", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
@@ -924,8 +924,8 @@ func isCLISessionCertIdentityPath(path string) bool {
 //   - The header session either matches the cert URI SAN or carries the same user and certificate fingerprint after a prior session rotation.
 //   - Only the refresh and logout endpoints are reachable through this path;
 //     all other endpoints fail closed on expired/missing sessions.
-func (s *AuthService) cliRefreshSessionMatchesCertificate(cliSessionID, userID string, cert *x509.Certificate) (bool, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+func (s *AuthService) cliRefreshSessionMatchesCertificate(ctx context.Context, cliSessionID, userID string, cert *x509.Certificate) (bool, error) {
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		return false, fmt.Errorf("gateway: auth: load refreshed CLI session: %w", err)
 	}
@@ -958,7 +958,7 @@ func (s *AuthService) handleCLIRefreshAuth(w http.ResponseWriter, r *http.Reques
 		return true
 	}
 	if certSessionID != oldCLISessionID {
-		matches, err := s.cliRefreshSessionMatchesCertificate(oldCLISessionID, userID, cert)
+		matches, err := s.cliRefreshSessionMatchesCertificate(r.Context(), oldCLISessionID, userID, cert)
 		if err != nil {
 			s.logger.Error("gateway: auth: CLI refresh: validate rotated session binding", "cli_session_id", oldCLISessionID, string(constants.ConnectionStateError), err)
 			s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
@@ -973,7 +973,7 @@ func (s *AuthService) handleCLIRefreshAuth(w http.ResponseWriter, r *http.Reques
 
 	// Validate the user is still active. An expired session does not
 	// bypass user-disabled checks.
-	if err := s.getAndValidateUser(userID); err != nil {
+	if err := s.getAndValidateUser(r.Context(), userID); err != nil {
 		if ae, ok := err.(*AuthError); ok {
 			s.logger.Warn("gateway: auth: CLI refresh: identity disabled", "user_id", userID)
 			s.responder.Error(w, ae.Status, ae.Message)
@@ -1004,7 +1004,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 			uriStr := uri.String()
 			if wid.IsAppSAN(uriStr) {
 				appID := uriStr
-				doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+				doc, err := s.db.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 				if err != nil {
 					s.logger.Warn("gateway: auth: app policy not found", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load app policy %s: %w", appID, err))
 					s.responder.Error(w, http.StatusForbidden, constants.ErrAppPolicyNotFound.Error())
@@ -1129,7 +1129,7 @@ func (s *AuthService) enforceAppPolicy(r *http.Request, policy *models.AppPolicy
 // session. This lets a CLI client (./g8e login) call internal APIs scoped by
 // cli_session_id while presenting its CLI mTLS cert and the linked operator
 // session as a Bearer token.
-func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, userID, operatorSessionID string) (bool, error) {
+func (s *AuthService) cliCertBoundToOperator(ctx context.Context, certURIs []*url.URL, cliSessionID, userID, operatorSessionID string) (bool, error) {
 	if cliSessionID == "" || operatorSessionID == "" {
 		return false, nil
 	}
@@ -1148,7 +1148,7 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 	if !uriMatch {
 		return false, nil
 	}
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		return false, fmt.Errorf("gateway: auth: load CLI session %s for cert binding: %w: %w", cliSessionID, err, constants.ErrNotFound)
 	}
@@ -1183,7 +1183,7 @@ func (s *AuthService) ValidateWebSessionCookie(r *http.Request) (webSessionID, u
 		return "", "", constants.ErrWebSessionCookieInvalid
 	}
 
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+	doc, err := s.db.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 	if err != nil {
 		s.logger.Error("gateway: auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load web session %s: %w: %w", webSessionID, err, constants.ErrNotFound))
 		return "", "", constants.ErrWebSessionValidationFailed
@@ -1207,7 +1207,7 @@ func (s *AuthService) ValidateWebSessionCookie(r *http.Request) (webSessionID, u
 		return "", "", constants.ErrWebSessionExpired
 	}
 
-	if err := s.getAndValidateUser(webSession.UserID); err != nil {
+	if err := s.getAndValidateUser(r.Context(), webSession.UserID); err != nil {
 		if ae, ok := err.(*AuthError); ok {
 			return "", "", ae
 		}
@@ -1265,7 +1265,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		user := s.getCachedUser(jwt.Claims.Sub)
 		if user == nil {
 			var err error
-			user, err = s.userSvc.GetBySub(jwt.Claims.Sub)
+			user, err = s.userSvc.GetBySub(r.Context(), jwt.Claims.Sub)
 			if err != nil {
 				s.logger.Error("gateway: auth: JIT user lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: lookup user by sub %s: %w: %w", jwt.Claims.Sub, err, constants.ErrUserNotFound))
 				s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
@@ -1277,7 +1277,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 		if user == nil {
 			var jitErr error
-			user, jitErr = s.userSvc.CreateUserWithSub(jwt.Claims.Sub)
+			user, jitErr = s.userSvc.CreateUserWithSub(r.Context(), jwt.Claims.Sub)
 			if jitErr != nil {
 				s.logger.Error("gateway: auth: JIT user provisioning failed", "sub", jwt.Claims.Sub, "error", jitErr)
 				s.responder.Error(w, http.StatusInternalServerError, constants.ErrUserCreationFailed.Error())
@@ -1292,7 +1292,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Persona Mapping: map JWT roles to binding persona
-		bindingPersona, err := s.personaSvc.MapRolesToPersona(jwt.Roles)
+		bindingPersona, err := s.personaSvc.MapRolesToPersona(r.Context(), jwt.Roles)
 		if err != nil {
 			s.logger.Warn("gateway: auth: map roles to persona failed, using default", string(constants.ConnectionStateError), err)
 			bindingPersona = constants.DefaultBindingPersona

@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -115,7 +116,7 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	}
 
 	boundCLISessions, _ := r.Context().Value(constants.ContextKeyBoundOperatorSessionIDs).([]string)
-	bound := c.boundOperators(userID, webSessionID, boundCLISessions)
+	bound := c.boundOperators(r.Context(), userID, webSessionID, boundCLISessions)
 
 	// Compatibility: browser GET /api/v1/investigations?... -> g8ee POST /api/v1/investigations/query
 	if method == http.MethodGet && upstreamPath == constants.APIPaths.EnsembleInvestigations {
@@ -246,7 +247,7 @@ func (c *EnsembleBrowserProxyController) handleApprovalRespond(w http.ResponseWr
 			}
 		} else {
 			if c.userSvc != nil {
-				user, err := c.userSvc.GetByID(userID)
+				user, err := c.userSvc.GetByID(r.Context(), userID)
 				if err != nil || user == nil || len(user.PasskeyCredentials) == 0 {
 					c.responder.Error(w, http.StatusForbidden, fmt.Sprintf("approval requires WebAuthn grounded session under %s posture", posture))
 					return true
@@ -335,7 +336,7 @@ type browserBoundOperator struct {
 // boundOperators returns the caller's Operators that the registry shows bound
 // to webSessionID or CLI sessions. A registry failure yields an empty list, so the request
 // proceeds with no Operator authority rather than with unverified bindings.
-func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID string, boundCLIOptional ...[]string) []browserBoundOperator {
+func (c *EnsembleBrowserProxyController) boundOperators(ctx context.Context, userID, webSessionID string, boundCLIOptional ...[]string) []browserBoundOperator {
 	bound := []browserBoundOperator{}
 	if c.operators == nil {
 		return bound
@@ -344,7 +345,7 @@ func (c *EnsembleBrowserProxyController) boundOperators(userID, webSessionID str
 	if len(boundCLIOptional) > 0 {
 		boundCLI = boundCLIOptional[0]
 	}
-	ops, err := c.operators.ListUserOperators(userID)
+	ops, err := c.operators.ListUserOperators(ctx, userID)
 	if err != nil {
 		c.logger.Warn("gateway: ensemble browser proxy could not list bound operators", "error", err)
 		return bound

@@ -32,7 +32,7 @@ import (
 // infrastructure. Observer operators are enrolled under the gateway owner,
 // not the per-request app identity on inference dispatch.
 type providerBoundaryOperatorLister interface {
-	ListOperatorsForObservation() ([]*operatorv1.OperatorDocument, error)
+	ListOperatorsForObservation(ctx context.Context) ([]*operatorv1.OperatorDocument, error)
 }
 
 type registrationOwnerOperatorLister struct {
@@ -40,32 +40,32 @@ type registrationOwnerOperatorLister struct {
 	userSvc *UserService
 }
 
-func (l *registrationOwnerOperatorLister) ListOperatorsForObservation() ([]*operatorv1.OperatorDocument, error) {
+func (l *registrationOwnerOperatorLister) ListOperatorsForObservation(ctx context.Context) ([]*operatorv1.OperatorDocument, error) {
 	if l.reg == nil || l.userSvc == nil {
 		return nil, constants.ErrServiceUnavailable
 	}
-	ownerID, err := l.userSvc.FirstUserID()
+	ownerID, err := l.userSvc.FirstUserID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if ownerID == "" {
 		return nil, constants.ErrNotFound
 	}
-	return l.reg.ListUserOperators(ownerID)
+	return l.reg.ListUserOperators(ctx, ownerID)
 }
 
-func (l *registrationOwnerOperatorLister) ListOperatorsForProvenance() ([]*operatorv1.OperatorDocument, error) {
+func (l *registrationOwnerOperatorLister) ListOperatorsForProvenance(ctx context.Context) ([]*operatorv1.OperatorDocument, error) {
 	if l.reg == nil || l.userSvc == nil {
 		return nil, constants.ErrServiceUnavailable
 	}
-	ownerID, err := l.userSvc.FirstUserID()
+	ownerID, err := l.userSvc.FirstUserID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if ownerID == "" {
 		return nil, constants.ErrNotFound
 	}
-	return l.reg.ListUserOperators(ownerID)
+	return l.reg.ListUserOperators(ctx, ownerID)
 }
 
 // ProviderBoundaryObservationCoordinator fans out BEGIN/FINALIZE observation
@@ -116,7 +116,7 @@ func (c *ProviderBoundaryObservationCoordinator) synchronizeObserverSubscription
 	}
 	_ = ctx
 
-	operators, err := c.operatorLister.ListOperatorsForObservation()
+	operators, err := c.operatorLister.ListOperatorsForObservation(ctx)
 	if err != nil {
 		c.logger.Warn("Provider-boundary observation: list operators failed", "error", err)
 		return err
@@ -395,7 +395,7 @@ type PublishCommandRequest struct {
 // PublishCommand builds a governed envelope and publishes it to the target
 // operator cmd channel without waiting for a correlated result.
 func (d *DispatchService) PublishCommand(ctx context.Context, req PublishCommandRequest) (string, error) {
-	op, err := d.auth.ValidateOperatorSession(req.TargetOperatorSessionID)
+	op, err := d.auth.ValidateOperatorSession(ctx, req.TargetOperatorSessionID)
 	if err != nil {
 		return "", fmt.Errorf("dispatch: publish command: validate operator session: %w", err)
 	}

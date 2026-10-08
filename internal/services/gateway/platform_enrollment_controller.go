@@ -238,7 +238,7 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentPending(w http.Re
 		return
 	}
 
-	if err := c.requireActiveFirstUser(userID); err != nil {
+	if err := c.requireActiveFirstUser(r.Context(), userID); err != nil {
 		c.writeEnrollmentError(w, err)
 		return
 	}
@@ -272,7 +272,7 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentEnrolled(w http.R
 		return
 	}
 
-	if err := c.requireActiveFirstUser(userID); err != nil {
+	if err := c.requireActiveFirstUser(r.Context(), userID); err != nil {
 		c.writeEnrollmentError(w, err)
 		return
 	}
@@ -324,7 +324,7 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentDecision(w http.R
 		return
 	}
 
-	if err := c.requireActiveFirstUser(userID); err != nil {
+	if err := c.requireActiveFirstUser(r.Context(), userID); err != nil {
 		c.writeEnrollmentError(w, err)
 		return
 	}
@@ -356,7 +356,7 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentBatchDecision(w h
 		c.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionAuthRequired.Error())
 		return
 	}
-	if err := c.requireActiveFirstUser(userID); err != nil {
+	if err := c.requireActiveFirstUser(r.Context(), userID); err != nil {
 		c.writeEnrollmentError(w, err)
 		return
 	}
@@ -405,7 +405,7 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentRevoke(w http.Res
 		return
 	}
 	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
-	if err := c.requireActiveFirstUser(userID); err != nil {
+	if err := c.requireActiveFirstUser(r.Context(), userID); err != nil {
 		c.writeEnrollmentError(w, err)
 		return
 	}
@@ -417,8 +417,8 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentRevoke(w http.Res
 	c.responder.JSON(w, http.StatusOK, resp)
 }
 
-func (c *PlatformEnrollmentController) requireActiveFirstUser(userID string) error {
-	user, err := c.userSvc.GetByID(userID)
+func (c *PlatformEnrollmentController) requireActiveFirstUser(ctx context.Context, userID string) error {
+	user, err := c.userSvc.GetByID(ctx, userID)
 	if err != nil {
 		c.logger.Error("platform enrollment: failed to look up user", "error", err, "user_id", userID)
 		return constants.ErrPlatformEnrollmentInvalidDecision
@@ -427,7 +427,7 @@ func (c *PlatformEnrollmentController) requireActiveFirstUser(userID string) err
 		c.logger.Warn("platform enrollment: user is not active", "user_id", userID)
 		return constants.ErrPlatformEnrollmentInvalidDecision
 	}
-	isFirst, err := c.userSvc.IsFirstUser(userID)
+	isFirst, err := c.userSvc.IsFirstUser(ctx, userID)
 	if err != nil {
 		c.logger.Error("platform enrollment: failed to check first user", "error", err, "user_id", userID)
 		return constants.ErrPlatformEnrollmentInvalidDecision

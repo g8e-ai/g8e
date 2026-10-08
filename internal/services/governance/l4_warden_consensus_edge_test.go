@@ -30,7 +30,7 @@ var errConsensusPolicyStoreDB = errors.New("consensus policy store database unav
 // errorConsensusPolicyStore simulates an L2ConsensusPolicyStore whose backing database is unavailable.
 type errorConsensusPolicyStore struct{}
 
-func (m *errorConsensusPolicyStore) GetConsensusPolicy(id string) (*L2ConsensusPolicy, error) {
+func (m *errorConsensusPolicyStore) GetConsensusPolicy(_ context.Context, id string) (*L2ConsensusPolicy, error) {
 	return nil, errConsensusPolicyStoreDB
 }
 

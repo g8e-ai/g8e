@@ -8,6 +8,7 @@
 package serve
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
@@ -1101,7 +1102,7 @@ func TestBootstrapConsensusPolicy_NilStoresReturnsError(t *testing.T) {
 	}`), 0600)
 	require.NoError(t, err)
 
-	err = consensusPolicyBootstrap(nil, nil, configPath, nil, logger)
+	err = consensusPolicyBootstrap(context.Background(), nil, nil, configPath, nil, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil),
 		"consensusPolicyBootstrap with nil stores should return ErrGatewayStoresNil")
@@ -1110,7 +1111,7 @@ func TestBootstrapConsensusPolicy_NilStoresReturnsError(t *testing.T) {
 func TestBootstrapConsensusPolicy_MissingFile(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 
-	err := consensusPolicyBootstrap(nil, nil, constants.TestPathNonexistentConsensus, nil, logger)
+	err := consensusPolicyBootstrap(context.Background(), nil, nil, constants.TestPathNonexistentConsensus, nil, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapReadConfig))
 }
@@ -1123,7 +1124,7 @@ func TestBootstrapConsensusPolicy_MalformedJSON(t *testing.T) {
 	err := os.WriteFile(configPath, []byte(`{not valid json}`), 0600)
 	require.NoError(t, err)
 
-	err = consensusPolicyBootstrap(nil, nil, configPath, nil, logger)
+	err = consensusPolicyBootstrap(context.Background(), nil, nil, configPath, nil, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
 }
@@ -1156,7 +1157,7 @@ func TestBootstrapConsensusPolicy_InvalidConfig(t *testing.T) {
 			err := os.WriteFile(configPath, []byte(tt.config), 0600)
 			require.NoError(t, err)
 
-			err = consensusPolicyBootstrap(nil, nil, configPath, nil, logger)
+			err = consensusPolicyBootstrap(context.Background(), nil, nil, configPath, nil, logger)
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 		})

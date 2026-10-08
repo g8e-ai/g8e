@@ -405,7 +405,7 @@ type mockCLISessionVerifier struct {
 	result            error
 }
 
-func (m *mockCLISessionVerifier) VerifyCLISession(userID, cliSessionID, certFingerprint string) error {
+func (m *mockCLISessionVerifier) VerifyCLISession(_ context.Context, userID, cliSessionID, certFingerprint string) error {
 	m.called = true
 	m.calledUserID = userID
 	m.calledSessionID = cliSessionID

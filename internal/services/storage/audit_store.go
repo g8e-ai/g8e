@@ -898,7 +898,7 @@ func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionRec
 // is decoded and recorded in the receipts table via the transaction-native
 // RecordActionReceipt API. The collection and id parameters are ignored —
 // the receipts table is keyed by transaction_id embedded in the record.
-func (ass *SQLAuditStore) DocSet(collection, id string, data json.RawMessage) error {
+func (ass *SQLAuditStore) DocSet(_ context.Context, collection, id string, data json.RawMessage) error {
 	if ass == nil || ass.db == nil {
 		return constants.ErrAuditStoreDisabled
 	}
@@ -912,7 +912,7 @@ func (ass *SQLAuditStore) DocSet(collection, id string, data json.RawMessage) er
 // DocDelete implements governance.TransactionAuditStore for outbound mode.
 // The outbound operator does not persist governed documents — document
 // mutations are a gateway-side concern. This is a no-op that returns nil.
-func (ass *SQLAuditStore) DocDelete(collection, id string) error {
+func (ass *SQLAuditStore) DocDelete(_ context.Context, collection, id string) error {
 	return nil
 }
 

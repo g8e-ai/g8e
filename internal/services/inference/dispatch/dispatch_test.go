@@ -44,7 +44,7 @@ type stubOperatorLister struct {
 	err error
 }
 
-func (s *stubOperatorLister) ListUserOperators(_ string) ([]*operatorv1.OperatorDocument, error) {
+func (s *stubOperatorLister) ListUserOperators(_ context.Context, _ string) ([]*operatorv1.OperatorDocument, error) {
 	return s.ops, s.err
 }
 

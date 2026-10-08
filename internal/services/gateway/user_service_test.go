@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -101,7 +102,7 @@ func TestUserService_CreateUser(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(context.Background())
 
 		assert.NoError(t, err)
 		assert.NotNil(t, user)
@@ -125,7 +126,7 @@ func TestUserService_CreateUserWithOSUser(t *testing.T) {
 			GID:      "1001",
 		}
 
-		user, err := userSvc.CreateUserWithOSUser(osUser)
+		user, err := userSvc.CreateUserWithOSUser(context.Background(), osUser)
 
 		require.NoError(t, err)
 		require.NotNil(t, user)
@@ -143,7 +144,7 @@ func TestUserService_CreateUserWithOSUser(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		user, err := userSvc.CreateUserWithOSUser(nil)
+		user, err := userSvc.CreateUserWithOSUser(context.Background(), nil)
 
 		require.NoError(t, err)
 		require.NotNil(t, user)
@@ -161,15 +162,15 @@ func TestUserService_Disable(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// Create a user first
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
 		// Disable the user
-		err = userSvc.Disable(user.ID, "test reason", "actor-123", "operator-123")
+		err = userSvc.Disable(context.Background(), user.ID, "test reason", "actor-123", "operator-123")
 		assert.NoError(t, err)
 
 		// Verify user is disabled
-		disabledUser, err := userSvc.GetByID(user.ID)
+		disabledUser, err := userSvc.GetByID(context.Background(), user.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, constants.UserStatusDisabled, disabledUser.Status)
 	})
@@ -179,7 +180,7 @@ func TestUserService_Disable(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		err := userSvc.Disable("", "test reason", "actor-123", "operator-123")
+		err := userSvc.Disable(context.Background(), "", "test reason", "actor-123", "operator-123")
 		assert.Error(t, err)
 		assert.Equal(t, constants.ErrUserIDRequired, err)
 	})
@@ -189,7 +190,7 @@ func TestUserService_Disable(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		err := userSvc.Disable("non-existent", "test reason", "actor-123", "operator-123")
+		err := userSvc.Disable(context.Background(), "non-existent", "test reason", "actor-123", "operator-123")
 		assert.Error(t, err)
 		assert.Equal(t, constants.ErrUserNotFound, err)
 	})
@@ -201,12 +202,12 @@ func TestUserService_FirstUserID(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		firstUser, err := userSvc.CreateUser()
+		firstUser, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
-		_, err = userSvc.CreateUser()
+		_, err = userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
-		ownerID, err := userSvc.FirstUserID()
+		ownerID, err := userSvc.FirstUserID(context.Background())
 		require.NoError(t, err)
 		assert.Equal(t, firstUser.ID, ownerID)
 	})
@@ -216,7 +217,7 @@ func TestUserService_FirstUserID(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		ownerID, err := userSvc.FirstUserID()
+		ownerID, err := userSvc.FirstUserID(context.Background())
 		require.NoError(t, err)
 		assert.Empty(t, ownerID)
 	})
@@ -225,10 +226,10 @@ func TestUserService_FirstUserID(t *testing.T) {
 func TestUserService_FirstUserRetainsOwnershipWhenCreationTimestampsMatch(t *testing.T) {
 	db := newTestCanonicalDBService(t)
 	createdAt := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
-	require.NoError(t, db.DocSetWithTimestamps(string(constants.CollectionUsers), "z-first", []byte(`{}`), createdAt, createdAt))
-	require.NoError(t, db.DocSetWithTimestamps(string(constants.CollectionUsers), "a-second", []byte(`{}`), createdAt, createdAt))
+	require.NoError(t, db.DocSetWithTimestamps(context.Background(), string(constants.CollectionUsers), "z-first", []byte(`{}`), createdAt, createdAt))
+	require.NoError(t, db.DocSetWithTimestamps(context.Background(), string(constants.CollectionUsers), "a-second", []byte(`{}`), createdAt, createdAt))
 	svc := NewUserService(db, newNoopLogger())
-	first, err := svc.FirstUserID()
+	first, err := svc.FirstUserID(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "z-first", first)
 }
@@ -239,10 +240,10 @@ func TestUserService_IsFirstUser(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
-		first, err := userSvc.IsFirstUser(user.ID)
+		first, err := userSvc.IsFirstUser(context.Background(), user.ID)
 		assert.NoError(t, err)
 		assert.True(t, first, "the only user in the system is the first user / admin")
 	})
@@ -253,7 +254,7 @@ func TestUserService_IsFirstUser(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// No users exist at all.
-		first, err := userSvc.IsFirstUser("non-existent")
+		first, err := userSvc.IsFirstUser(context.Background(), "non-existent")
 		assert.NoError(t, err)
 		assert.False(t, first, "a user that does not exist cannot be the first user")
 	})
@@ -263,12 +264,12 @@ func TestUserService_IsFirstUser(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		firstUser, err := userSvc.CreateUser()
+		firstUser, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
-		secondUser, err := userSvc.CreateUser()
+		secondUser, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
-		isFirst, err := userSvc.IsFirstUser(secondUser.ID)
+		isFirst, err := userSvc.IsFirstUser(context.Background(), secondUser.ID)
 		assert.NoError(t, err)
 		assert.False(t, isFirst, "the second user is not the first user / admin")
 
@@ -276,7 +277,7 @@ func TestUserService_IsFirstUser(t *testing.T) {
 		// after a second user is created — IsFirstUser reports whether the
 		// user IS the first user ever created, not whether they are the
 		// only user. The first user retains admin permanently.
-		isFirstOriginal, err := userSvc.IsFirstUser(firstUser.ID)
+		isFirstOriginal, err := userSvc.IsFirstUser(context.Background(), firstUser.ID)
 		assert.NoError(t, err)
 		assert.True(t, isFirstOriginal, "the first user created remains the first user / admin even after a second user is added")
 	})
@@ -286,7 +287,7 @@ func TestUserService_IsFirstUser(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		_, err := userSvc.IsFirstUser("")
+		_, err := userSvc.IsFirstUser(context.Background(), "")
 		assert.Error(t, err)
 		assert.Equal(t, constants.ErrUserIDRequired, err)
 	})
@@ -327,7 +328,7 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// Create a user
-		_, err := userSvc.CreateUser()
+		_, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
 		// Check if users exist
@@ -367,11 +368,11 @@ func TestPersonaService_CreatePersona(t *testing.T) {
 			Roles:       []string{"admin"},
 		}
 
-		err := personaSvc.CreatePersona(persona)
+		err := personaSvc.CreatePersona(context.Background(), persona)
 		assert.NoError(t, err)
 
 		// Verify persona was created
-		found, err := personaSvc.GetByID("test-persona")
+		found, err := personaSvc.GetByID(context.Background(), "test-persona")
 		assert.NoError(t, err)
 		assert.NotNil(t, found)
 		assert.Equal(t, "test-persona", found.ID)
@@ -391,10 +392,10 @@ func TestPersonaService_GetByID(t *testing.T) {
 			Description: "A test persona",
 			Roles:       []string{"admin"},
 		}
-		err := personaSvc.CreatePersona(persona)
+		err := personaSvc.CreatePersona(context.Background(), persona)
 		require.NoError(t, err)
 
-		retrieved, err := personaSvc.GetByID("test-persona")
+		retrieved, err := personaSvc.GetByID(context.Background(), "test-persona")
 		assert.NoError(t, err)
 		assert.NotNil(t, retrieved)
 		assert.Equal(t, "test-persona", retrieved.ID)
@@ -405,7 +406,7 @@ func TestPersonaService_GetByID(t *testing.T) {
 		logger := newNoopLogger()
 		personaSvc := NewPersonaService(mockDB, logger)
 
-		retrieved, err := personaSvc.GetByID("non-existent")
+		retrieved, err := personaSvc.GetByID(context.Background(), "non-existent")
 		assert.NoError(t, err)
 		assert.Nil(t, retrieved)
 	})
@@ -431,12 +432,12 @@ func TestPersonaService_GetAll(t *testing.T) {
 			Roles:       []string{"role2"},
 		}
 
-		err := personaSvc.CreatePersona(persona1)
+		err := personaSvc.CreatePersona(context.Background(), persona1)
 		require.NoError(t, err)
-		err = personaSvc.CreatePersona(persona2)
+		err = personaSvc.CreatePersona(context.Background(), persona2)
 		require.NoError(t, err)
 
-		all, err := personaSvc.GetAll()
+		all, err := personaSvc.GetAll(context.Background())
 		assert.NoError(t, err)
 		assert.Len(t, all, 2)
 	})
@@ -446,7 +447,7 @@ func TestPersonaService_GetAll(t *testing.T) {
 		logger := newNoopLogger()
 		personaSvc := NewPersonaService(mockDB, logger)
 
-		all, err := personaSvc.GetAll()
+		all, err := personaSvc.GetAll(context.Background())
 		assert.NoError(t, err)
 		assert.Empty(t, all)
 	})
@@ -459,11 +460,11 @@ func TestUserService_GetByID(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// Create a user
-		createdUser, err := userSvc.CreateUser()
+		createdUser, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
 		// Get the user by ID
-		foundUser, err := userSvc.GetByID(createdUser.ID)
+		foundUser, err := userSvc.GetByID(context.Background(), createdUser.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, foundUser)
 		assert.Equal(t, createdUser.ID, foundUser.ID)
@@ -475,7 +476,7 @@ func TestUserService_GetByID(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		foundUser, err := userSvc.GetByID("non-existent")
+		foundUser, err := userSvc.GetByID(context.Background(), "non-existent")
 		assert.NoError(t, err)
 		assert.Nil(t, foundUser)
 	})
@@ -488,11 +489,11 @@ func TestUserService_GetBySub(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// Create a user
-		createdUser, err := userSvc.CreateUser()
+		createdUser, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
 		// Get the user by sub (same as ID)
-		foundUser, err := userSvc.GetBySub(createdUser.ID)
+		foundUser, err := userSvc.GetBySub(context.Background(), createdUser.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, foundUser)
 		assert.Equal(t, createdUser.ID, foundUser.ID)
@@ -503,7 +504,7 @@ func TestUserService_GetBySub(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		_, err := userSvc.GetBySub("")
+		_, err := userSvc.GetBySub(context.Background(), "")
 		assert.Error(t, err)
 		assert.Equal(t, constants.ErrMissingRequiredField, err)
 	})
@@ -516,15 +517,15 @@ func TestUserService_DeleteUser(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// Create a user
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
 		// Delete the user
-		err = userSvc.DeleteUser(user.ID)
+		err = userSvc.DeleteUser(context.Background(), user.ID)
 		assert.NoError(t, err)
 
 		// Verify user is deleted
-		_, err = userSvc.GetByID(user.ID)
+		_, err = userSvc.GetByID(context.Background(), user.ID)
 		assert.NoError(t, err)
 		assert.Nil(t, nil) // Should return nil, not found
 	})
@@ -534,7 +535,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		err := userSvc.DeleteUser("non-existent")
+		err := userSvc.DeleteUser(context.Background(), "non-existent")
 		assert.Error(t, err)
 		assert.Equal(t, constants.ErrUserNotFound, err)
 	})
@@ -547,7 +548,7 @@ func TestUserService_UpdatePasskeyCredentials(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// Create a user
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(context.Background())
 		require.NoError(t, err)
 
 		// Update passkey credentials
@@ -564,11 +565,11 @@ func TestUserService_UpdatePasskeyCredentials(t *testing.T) {
 				CreatedAtUnixMs: time.Now().UnixMilli(),
 			},
 		}
-		err = userSvc.UpdatePasskeyCredentials(user.ID, credentials)
+		err = userSvc.UpdatePasskeyCredentials(context.Background(), user.ID, credentials)
 		assert.NoError(t, err)
 
 		// Verify credentials were updated
-		updatedUser, err := userSvc.GetByID(user.ID)
+		updatedUser, err := userSvc.GetByID(context.Background(), user.ID)
 		assert.NoError(t, err)
 		assert.Len(t, updatedUser.PasskeyCredentials, 1)
 	})
@@ -598,11 +599,11 @@ func TestPersonaService(t *testing.T) {
 			Roles:       []string{"admin"},
 		}
 
-		err := personaSvc.CreatePersona(persona)
+		err := personaSvc.CreatePersona(context.Background(), persona)
 		assert.NoError(t, err)
 
 		// Verify persona was created
-		found, err := personaSvc.GetByID("test-persona")
+		found, err := personaSvc.GetByID(context.Background(), "test-persona")
 		assert.NoError(t, err)
 		assert.NotNil(t, found)
 		assert.Equal(t, "test-persona", found.ID)

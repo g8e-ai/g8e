@@ -57,7 +57,7 @@ func TestStartCycle_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Cycle state projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObserveCycleStates)
-	doc, err := docStore.DocGet(collection, "cycle-1")
+	doc, err := docStore.DocGet(context.Background(), collection, "cycle-1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -112,7 +112,7 @@ func TestCompleteCycle_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Cycle state projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObserveCycleStates)
-	doc, err := docStore.DocGet(collection, "cycle-2")
+	doc, err := docStore.DocGet(context.Background(), collection, "cycle-2")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -166,7 +166,7 @@ func TestStartAssignment_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Assignment progress projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObserveAssignmentProgress)
-	doc, err := docStore.DocGet(collection, "assign-1")
+	doc, err := docStore.DocGet(context.Background(), collection, "assign-1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -221,7 +221,7 @@ func TestCompleteAssignment_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Assignment progress projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObserveAssignmentProgress)
-	doc, err := docStore.DocGet(collection, "assign-2")
+	doc, err := docStore.DocGet(context.Background(), collection, "assign-2")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -352,7 +352,7 @@ func TestCompleteVerifier_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Verification progress projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObserveVerificationProgress)
-	doc, err := docStore.DocGet(collection, "cycle-e")
+	doc, err := docStore.DocGet(context.Background(), collection, "cycle-e")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -387,7 +387,7 @@ func TestRecordProofAvailability_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Publication progress projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObservePublicationProgress)
-	doc, err := docStore.DocGet(collection, "cycle-f")
+	doc, err := docStore.DocGet(context.Background(), collection, "cycle-f")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -427,7 +427,7 @@ func TestCompletePublication_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Publication progress projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObservePublicationProgress)
-	doc, err := docStore.DocGet(collection, "cycle-g")
+	doc, err := docStore.DocGet(context.Background(), collection, "cycle-g")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -469,7 +469,7 @@ func TestEmitHeartbeat_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Source freshness projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObserveSourceFreshness)
-	doc, err := docStore.DocGet(collection, "source-1")
+	doc, err := docStore.DocGet(context.Background(), collection, "source-1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -513,7 +513,7 @@ func TestRequestStop_PersistsProjectionAndEmitsSSE(t *testing.T) {
 
 	// Supervisor state projection is persisted.
 	collection := marshaler.CollectionName(constants.CollectionObserveSupervisorStates)
-	doc, err := docStore.DocGet(collection, "sup-1")
+	doc, err := docStore.DocGet(context.Background(), collection, "sup-1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -555,7 +555,7 @@ func TestRequestStop_SafetyStopSetsSafetyStoppedFreshness(t *testing.T) {
 	require.NoError(t, err)
 
 	collection := marshaler.CollectionName(constants.CollectionObserveSupervisorStates)
-	doc, err := docStore.DocGet(collection, "sup-2")
+	doc, err := docStore.DocGet(context.Background(), collection, "sup-2")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 

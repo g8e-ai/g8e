@@ -82,8 +82,8 @@ type gatewayOperatorListerAdapter struct {
 
 // ListUserOperators implements dispatch.OperatorLister by delegating to
 // the gateway's RegistrationService.
-func (a *gatewayOperatorListerAdapter) ListUserOperators(userID string) ([]*operatorv1.OperatorDocument, error) {
-	return a.svc.ListUserOperators(userID)
+func (a *gatewayOperatorListerAdapter) ListUserOperators(ctx context.Context, userID string) ([]*operatorv1.OperatorDocument, error) {
+	return a.svc.ListUserOperators(ctx, userID)
 }
 
 // InferenceDispatchControllerDeps groups all dependencies for

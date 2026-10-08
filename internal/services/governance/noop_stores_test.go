@@ -8,6 +8,7 @@
 package governance
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ import (
 func TestNoopConsensusPolicyStore_GetConsensusPolicy_ReturnsNilNoError(t *testing.T) {
 	t.Parallel()
 	store := NoopConsensusPolicyStore{}
-	policy, err := store.GetConsensusPolicy("any-consensus-id")
+	policy, err := store.GetConsensusPolicy(context.Background(), "any-consensus-id")
 	require.NoError(t, err, "NoopConsensusPolicyStore must never return an error")
 	assert.Nil(t, policy, "NoopConsensusPolicyStore must return nil policy")
 }

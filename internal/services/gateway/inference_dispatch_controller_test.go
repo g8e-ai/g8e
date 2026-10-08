@@ -67,7 +67,7 @@ type stubInferenceOperatorLister struct {
 	err error
 }
 
-func (s *stubInferenceOperatorLister) ListUserOperators(_ string) ([]*operatorv1.OperatorDocument, error) {
+func (s *stubInferenceOperatorLister) ListUserOperators(_ context.Context, _ string) ([]*operatorv1.OperatorDocument, error) {
 	return s.ops, s.err
 }
 

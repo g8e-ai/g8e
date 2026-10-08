@@ -986,7 +986,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 	t.Run("field path registry not initialized", func(t *testing.T) {
 		g := newTestGatewayService(t, withFieldPathRegistry(nil))
 
-		_, err := g.handleReadField(json.RawMessage(`{}`))
+		_, err := g.handleReadField(context.Background(), json.RawMessage(`{}`))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "field path registry not initialized")
 	})
@@ -995,7 +995,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		registry, _ := NewFieldPathRegistry(slog.Default())
 		g := newTestGatewayService(t, withFieldPathRegistry(registry), withDBService(nil))
 
-		_, err := g.handleReadField(json.RawMessage(`{}`))
+		_, err := g.handleReadField(context.Background(), json.RawMessage(`{}`))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "database service not configured")
 	})
@@ -1004,7 +1004,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		registry, _ := NewFieldPathRegistry(slog.Default())
 		g := newTestGatewayService(t, withFieldPathRegistry(registry), withDBService(&fakeDBService{}))
 
-		_, err := g.handleReadField(json.RawMessage(`invalid json`))
+		_, err := g.handleReadField(context.Background(), json.RawMessage(`invalid json`))
 		require.Error(t, err)
 		require.Error(t, err)
 	})
@@ -1026,7 +1026,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				_, err := g.handleReadField(json.RawMessage(tc.args))
+				_, err := g.handleReadField(context.Background(), json.RawMessage(tc.args))
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.error)
 			})
@@ -1038,7 +1038,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		g := newTestGatewayService(t, withFieldPathRegistry(registry), withDBService(&fakeDBService{}))
 
 		args := `{"collection":"investigations","document_id":"doc1","field_path":"credentials.api_key","operator_session_id":"sess1"}`
-		_, err := g.handleReadField(json.RawMessage(args))
+		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
 		require.Error(t, err)
 		require.Error(t, err)
 	})
@@ -1049,7 +1049,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		g := newTestGatewayService(t, withFieldPathRegistry(registry), withDBService(&fakeDBService{}), withSessionValidator(validator))
 
 		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
-		_, err := g.handleReadField(json.RawMessage(args))
+		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "operator session is invalid or expired")
 	})
@@ -1062,7 +1062,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		g := newTestGatewayService(t, withFieldPathRegistry(registry), withDBService(db), withSessionValidator(validator), withAuditLogger(audit))
 
 		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
-		result, err := g.handleReadField(json.RawMessage(args))
+		result, err := g.handleReadField(context.Background(), json.RawMessage(args))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
@@ -1081,7 +1081,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		g := newTestGatewayService(t, withFieldPathRegistry(registry), withDBService(db), withSessionValidator(validator))
 
 		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
-		_, err := g.handleReadField(json.RawMessage(args))
+		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
 		require.Error(t, err)
 		require.Error(t, err)
 	})
@@ -1360,7 +1360,7 @@ type fakeDBService struct {
 	fieldValue *FieldValue
 }
 
-func (f *fakeDBService) GetField(collection, id, fieldPath string) (FieldValue, error) {
+func (f *fakeDBService) GetField(_ context.Context, collection, id, fieldPath string) (FieldValue, error) {
 	if f.fieldValue != nil {
 		return *f.fieldValue, nil
 	}
