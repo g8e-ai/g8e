@@ -37,6 +37,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -266,6 +267,7 @@ func TestPlatformEnrollmentRouter_OwnerRoutesNotOnPlainHTTP(t *testing.T) {
 			path:   constants.APIPaths.AuthPlatformEnrollmentPending,
 			body:   "",
 		},
+		{name: "batch decision", method: http.MethodPost, path: constants.APIPaths.AuthPlatformEnrollmentBatchDecision, body: `{"requests":[{"request_id":"missing"}],"decision":"approve"}`},
 		{
 			name:   "decision",
 			method: http.MethodPost,
@@ -850,4 +852,45 @@ func TestPlatformEnrollmentRouter_RevokeAuthorizationAndRequestStates(t *testing
 			assert.Equal(t, models.PlatformEnrollmentStateRevoked, response.State)
 		}
 	})
+}
+
+func TestPlatformEnrollmentRouter_BatchDecisionAuthorizationAndAtomicResult(t *testing.T) {
+	env := setupPlatformEnrollmentRouterEnv(t)
+	batch := models.PlatformEnrollmentBatchDecisionRequest{Decision: models.PlatformEnrollmentDecisionApprove, Reason: "reviewed"}
+	for i := 0; i < 2; i++ {
+		csr, _ := generateAppCSRAndKey(t)
+		response, err := env.enrollSvc.CreateRequest(t.Context(), models.PlatformEnrollmentCreateRequest{
+			ComponentKind: models.PlatformComponentDashboard, InstanceID: fmt.Sprintf("batch-%d", i), Hostname: "batch.local",
+			App: &models.PlatformAppCSRPayload{CSRPEM: csr},
+		}, "https://gateway.local")
+		require.NoError(t, err)
+		batch.Requests = append(batch.Requests, models.PlatformEnrollmentDecisionTarget{RequestID: response.RequestID, Fingerprints: response.Fingerprints})
+	}
+	body, err := json.Marshal(batch)
+	require.NoError(t, err)
+	outsider, err := env.userSvc.CreateUser()
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name, user string
+		want       int
+	}{
+		{"anonymous", "", http.StatusUnauthorized}, {"non-owner", outsider.ID, http.StatusForbidden}, {"owner", env.ownerID, http.StatusOK}, {"already decided", env.ownerID, http.StatusConflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPlatformEnrollmentBatchDecision, bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			if tc.user != "" {
+				req.AddCookie(createWebSessionCookie(t, env, tc.user))
+			}
+			rr := httptest.NewRecorder()
+			env.httpsRouter.ServeHTTP(rr, req)
+			require.Equal(t, tc.want, rr.Code, rr.Body.String())
+			if tc.want == http.StatusOK {
+				var resp models.PlatformEnrollmentBatchDecisionResponse
+				require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+				require.Len(t, resp.Requests, 2)
+				require.NotEmpty(t, resp.ReceiptID)
+			}
+		})
+	}
 }

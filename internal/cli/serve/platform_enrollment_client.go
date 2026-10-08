@@ -111,6 +111,7 @@ type OperatorPlatformEnrollmentClient struct {
 	fileSvc         fs.RuntimeFileService
 	logger          *slog.Logger
 	fingerprintOpts auth.FingerprintOptions
+	deployment      *OperatorDeploymentRecorder
 }
 
 // NewOperatorPlatformEnrollmentClient constructs an enrollment client.
@@ -135,6 +136,19 @@ func NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname st
 // SetFingerprintOptions sets the options that differentiate operators on the same system.
 func (c *OperatorPlatformEnrollmentClient) SetFingerprintOptions(opts auth.FingerprintOptions) {
 	c.fingerprintOpts = opts
+}
+
+// SetDeploymentRecorder makes the client publish non-secret progress for a
+// deploying CLI. Without it, enrollment records nothing.
+func (c *OperatorPlatformEnrollmentClient) SetDeploymentRecorder(recorder *OperatorDeploymentRecorder) {
+	c.deployment = recorder
+}
+
+func (c *OperatorPlatformEnrollmentClient) recordDeployment(ctx context.Context, state models.OperatorDeploymentState) error {
+	if c.deployment == nil {
+		return nil
+	}
+	return c.deployment.Record(ctx, state)
 }
 
 // Enroll performs the full nine-step platform enrollment sequence and
@@ -251,7 +265,10 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		if createResp.ApprovalURL != "" {
 			c.logger.Info("operator enrollment: approval URL", "url", createResp.ApprovalURL)
 		}
-		fmt.Fprintf(os.Stderr, "Approve with: g8e auth enroll approve %s\n", requestID)
+	}
+	fmt.Fprintf(os.Stderr, "Approve with: g8e auth enroll approve %s\n", requestID)
+	if err := c.recordDeployment(ctx, models.OperatorDeploymentState{Phase: models.OperatorDeploymentPhasePendingApproval, RequestID: requestID}); err != nil {
+		return nil, err
 	}
 
 	// Step 5: Poll status until approved.
@@ -304,6 +321,10 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		"operator_session_id", creds.OperatorSessionID,
 		"cli_session_id", creds.CLISessionID,
 	)
+
+	if err := c.recordDeployment(ctx, models.OperatorDeploymentState{Phase: models.OperatorDeploymentPhaseEnrolled, OperatorSessionID: creds.OperatorSessionID}); err != nil {
+		return nil, err
+	}
 
 	// Step 9: Return the resolved identity. Paths are relative to the
 	// runtime tree root; the caller loads them via the fileSvc-aware

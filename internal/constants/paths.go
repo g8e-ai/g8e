@@ -190,6 +190,11 @@ const (
 	PendingEnrollmentFileOperator  = "g8eo.json"
 	PendingEnrollmentFileDashboard = "g8ed.json"
 	PendingEnrollmentFileEnsemble  = "g8ee.json"
+
+	// Non-secret Operator deployment state, persisted under the runtime tree
+	// so a deploying CLI can discover enrollment progress without parsing logs.
+	DeploymentDirname           = "deployment"
+	DeploymentStateFileOperator = "operator.json"
 )
 
 // Storage constants for database filenames and paths.
@@ -209,6 +214,7 @@ const (
 	AuditVaultDBFilename     = "audit_vault.db"
 
 	// Full relative storage DB paths (relative to project root, used as config defaults)
+	OperatorDeploymentStatePath = RuntimeDirname + "/" + DeploymentDirname + "/" + DeploymentStateFileOperator
 	ReplayStoreDBPath          = RuntimeDirname + "/" + ReplayStoreDBFilename
 	ExecutionVaultDBPath       = RuntimeDirname + "/" + ExecutionVaultDBFilename
 	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename

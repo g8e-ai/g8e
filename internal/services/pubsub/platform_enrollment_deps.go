@@ -24,6 +24,7 @@ import (
 // so the handler layer does not import the gateway package (which would
 // invert the dependency direction: gateway already imports pubsub).
 type PlatformEnrollmentDocStore interface {
+	DecidePlatformEnrollments(context.Context, string, models.PlatformEnrollmentBatchDecisionRequest, string) error
 	DocSet(collection, id string, data json.RawMessage) error
 	DocGet(collection, id string) (*models.Document, error)
 	DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error)
@@ -75,9 +76,8 @@ type PlatformEnrollmentConnections interface {
 // All fields are required in gateway mode; the pubsub service fails
 // closed at handler dispatch if any is nil. Outbound (operator) mode
 // never constructs platform enrollment handlers, so nil is acceptable
-// there. Owner authorization (IsFirstUser) is enforced by the
-// enrollment service before submitting the DECIDE envelope, not by the
-// handlers, so UserService is not part of this bundle.
+// there. The document owner independently rechecks active-owner authority inside
+// the decision transaction; UserService is not part of this bundle.
 type PlatformEnrollmentDeps struct {
 	DocStore         PlatformEnrollmentDocStore
 	PKI              PlatformEnrollmentPKI

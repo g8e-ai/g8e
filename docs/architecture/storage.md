@@ -60,6 +60,8 @@ Documents g8e's storage architecture: local SQLite databases, persistence topolo
 | Replay nonce reservation | `ReplayStoreService` and outbound `SQLReplayStore` | Replay and L4 verification tests |
 | Runtime paths | `RuntimeFileService`, `internal/constants/paths.go` | Isolated runtime fixture tests |
 
+Enrollment admission uses the existing document store and `BEGIN IMMEDIATE` transaction owner. Deduplication, live-request counting, and insertion share one transaction. Partial expression indexes cover enrollment identity, token hash, live capacity, pending expiry, issuance leases, and retention. Token and pending reads decode only matching requests; the cleanup owner explicitly expires abandoned requests and retains completed issuance records. Batch decisions recheck active-owner authority and every fingerprint-bound member in one transaction, recording the same governed receipt ID on every member. These changes do not replace the current full-scan state-root implementation or document cache invalidation triggers.
+
 ## Procedures
 
 This document does not define a general SQLite backup or recovery procedure. The supported lifecycle operations are owned by CLI commands; confirm flags and defaults with `./g8e <command> --help`.

@@ -105,7 +105,7 @@ func TestApprovePlatformEnrollmentCmd_ApproveWithYes(t *testing.T) {
 		RequestID: "req-operator-001",
 		State:     models.PlatformEnrollmentStateApproved,
 	}
-	postResp, err := json.Marshal(decisionResp)
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{decisionResp}})
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
@@ -121,9 +121,9 @@ func TestApprovePlatformEnrollmentCmd_ApproveWithYes(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, mockClient.PostCalls, 1)
-	assert.Equal(t, constants.APIPaths.AuthPlatformEnrollmentDecision, mockClient.PostCalls[0].Path)
-	decisionReq := mockClient.PostCalls[0].Body.(models.PlatformEnrollmentDecisionRequest)
-	assert.Equal(t, "req-operator-001", decisionReq.RequestID)
+	assert.Equal(t, constants.APIPaths.AuthPlatformEnrollmentBatchDecision, mockClient.PostCalls[0].Path)
+	decisionReq := mockClient.PostCalls[0].Body.(models.PlatformEnrollmentBatchDecisionRequest)
+	assert.Equal(t, "req-operator-001", decisionReq.Requests[0].RequestID)
 	assert.Equal(t, models.PlatformEnrollmentDecisionApprove, decisionReq.Decision)
 	assert.Contains(t, buf.String(), "approved")
 }
@@ -140,7 +140,7 @@ func TestDenyPlatformEnrollmentCmd_WithYes(t *testing.T) {
 		RequestID: "req-dashboard-002",
 		State:     models.PlatformEnrollmentStateDenied,
 	}
-	postResp, err := json.Marshal(decisionResp)
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{decisionResp}})
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
@@ -156,7 +156,7 @@ func TestDenyPlatformEnrollmentCmd_WithYes(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, mockClient.PostCalls, 1)
-	decisionReq := mockClient.PostCalls[0].Body.(models.PlatformEnrollmentDecisionRequest)
+	decisionReq := mockClient.PostCalls[0].Body.(models.PlatformEnrollmentBatchDecisionRequest)
 	assert.Equal(t, models.PlatformEnrollmentDecisionDeny, decisionReq.Decision)
 	assert.Contains(t, buf.String(), "denied")
 }
@@ -169,10 +169,10 @@ func TestApprovePlatformEnrollmentCmd_ReasonIncludedInBody(t *testing.T) {
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
 
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{{
 		RequestID: "req-operator-001",
 		State:     models.PlatformEnrollmentStateApproved,
-	})
+	}}})
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
@@ -188,7 +188,7 @@ func TestApprovePlatformEnrollmentCmd_ReasonIncludedInBody(t *testing.T) {
 	err = cmd.RunE(cmd, []string{"req-operator-001"})
 	require.NoError(t, err)
 
-	decisionReq := mockClient.PostCalls[0].Body.(models.PlatformEnrollmentDecisionRequest)
+	decisionReq := mockClient.PostCalls[0].Body.(models.PlatformEnrollmentBatchDecisionRequest)
 	assert.Equal(t, "approved by owner via CLI", decisionReq.Reason)
 }
 
@@ -201,10 +201,10 @@ func TestApprovePlatformEnrollmentCmd_DisplaysRequestDetails(t *testing.T) {
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
 
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{{
 		RequestID: "req-operator-001",
 		State:     models.PlatformEnrollmentStateApproved,
-	})
+	}}})
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
@@ -325,10 +325,10 @@ func TestApprovePlatformEnrollmentCmd_OutputNeverContainsTokens(t *testing.T) {
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
 
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{{
 		RequestID: "req-operator-001",
 		State:     models.PlatformEnrollmentStateApproved,
-	})
+	}}})
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
@@ -415,7 +415,15 @@ func runApproveWithYes(t *testing.T, flags map[string]string, args []string) (*c
 
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{State: models.PlatformEnrollmentStateApproved})
+	targets := samplePendingResponse().Requests
+	if flags["all"] != "true" {
+		targets, _ = selectPendingRequests(targets, args)
+	}
+	response := models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt"}
+	for _, target := range targets {
+		response.Requests = append(response.Requests, models.PlatformEnrollmentDecisionResponse{RequestID: target.RequestID, State: models.PlatformEnrollmentStateApproved})
+	}
+	postResp, err := json.Marshal(response)
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
@@ -438,7 +446,9 @@ func postedRequestIDs(t *testing.T, client *cmdtest.MockAPIClient) []string {
 	t.Helper()
 	ids := make([]string, 0, len(client.PostCalls))
 	for _, call := range client.PostCalls {
-		ids = append(ids, call.Body.(models.PlatformEnrollmentDecisionRequest).RequestID)
+		for _, target := range call.Body.(models.PlatformEnrollmentBatchDecisionRequest).Requests {
+			ids = append(ids, target.RequestID)
+		}
 	}
 	return ids
 }
@@ -478,7 +488,7 @@ func TestApprovePlatformEnrollmentCmd_HostnameMatchingSeveralRequests(t *testing
 	pending.Requests[1].Hostname = pending.Requests[0].Hostname
 	pendingBody, err := json.Marshal(pending)
 	require.NoError(t, err)
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{State: models.PlatformEnrollmentStateApproved})
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{{RequestID: "req-operator-001", State: models.PlatformEnrollmentStateApproved}, {RequestID: "req-dashboard-002", State: models.PlatformEnrollmentStateApproved}}})
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
@@ -545,49 +555,22 @@ func TestApprovePlatformEnrollmentCmd_ReasonTooLongPostsNothingForBatch(t *testi
 	assert.Empty(t, client.PostCalls)
 }
 
-// failingPostClient fails Post for one request ID and delegates the rest.
-type failingPostClient struct {
-	*cmdtest.MockAPIClient
-	failID string
-	err    error
-}
-
-func (c *failingPostClient) Post(path string, body interface{}) ([]byte, error) {
-	if req, ok := body.(models.PlatformEnrollmentDecisionRequest); ok && req.RequestID == c.failID {
-		return nil, c.err
-	}
-	return c.MockAPIClient.Post(path, body)
-}
-
-func TestApprovePlatformEnrollmentCmd_PartialFailureContinuesAndReports(t *testing.T) {
+func TestApprovePlatformEnrollmentCmd_BatchFailureDoesNotFallBackToIndividualDecisions(t *testing.T) {
 	_, cfg := cmdtest.NewCmdTestEnv(t)
-
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{State: models.PlatformEnrollmentStateApproved})
-	require.NoError(t, err)
-
-	postErr := fmt.Errorf("gateway rejected")
-	mock := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
-	client := &failingPostClient{MockAPIClient: mock, failID: "req-operator-001", err: postErr}
-
-	cmd := approvePlatformEnrollmentCmdWithConfig(
-		cmdtest.ConfigLoaderFor(cfg), func(_ fs.RuntimeFileService, _ *config.Config) (APIClient, error) { return client, nil },
-		cmdtest.FileSvcFactoryFor(nil))
-	cmd.Flags().Set("all", "true")
-	cmd.Flags().Set("yes", "true")
+	postErr := constants.ErrPlatformEnrollmentAlreadyDecided
+	client := &cmdtest.MockAPIClient{GetResp: pendingBody, PostErr: postErr}
+	cmd := approvePlatformEnrollmentCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), MockClientFactory(client), cmdtest.FileSvcFactoryFor(nil))
+	require.NoError(t, cmd.Flags().Set("all", "true"))
+	require.NoError(t, cmd.Flags().Set("yes", "true"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
 	err = cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, postErr)
-	assert.Contains(t, err.Error(), "1 of 2 requests failed")
-	assert.Equal(t, []string{"req-dashboard-002"}, postedRequestIDs(t, mock),
-		"the request after the failure must still be decided")
-	assert.Contains(t, buf.String(), "req-operator-001 failed")
-	assert.Contains(t, buf.String(), "req-dashboard-002 approved")
+	require.ErrorIs(t, err, postErr)
+	require.Len(t, client.PostCalls, 1)
+	require.Equal(t, constants.APIPaths.AuthPlatformEnrollmentBatchDecision, client.PostCalls[0].Path)
+	require.NotContains(t, buf.String(), "approved.")
 }
 
 func TestApprovePlatformEnrollmentCmd_InteractiveBatchPromptsOnce(t *testing.T) {
@@ -595,7 +578,7 @@ func TestApprovePlatformEnrollmentCmd_InteractiveBatchPromptsOnce(t *testing.T) 
 
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{State: models.PlatformEnrollmentStateApproved})
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{{RequestID: "req-operator-001", State: models.PlatformEnrollmentStateApproved}, {RequestID: "req-dashboard-002", State: models.PlatformEnrollmentStateApproved}}})
 	require.NoError(t, err)
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
 
@@ -622,7 +605,7 @@ func TestDenyPlatformEnrollmentCmd_AllDeniesEveryPending(t *testing.T) {
 
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{State: models.PlatformEnrollmentStateDenied})
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{{RequestID: "req-operator-001", State: models.PlatformEnrollmentStateDenied}, {RequestID: "req-dashboard-002", State: models.PlatformEnrollmentStateDenied}}})
 	require.NoError(t, err)
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
 
@@ -637,7 +620,7 @@ func TestDenyPlatformEnrollmentCmd_AllDeniesEveryPending(t *testing.T) {
 	require.NoError(t, cmd.RunE(cmd, nil))
 	assert.Equal(t, []string{"req-operator-001", "req-dashboard-002"}, postedRequestIDs(t, mockClient))
 	for _, call := range mockClient.PostCalls {
-		assert.Equal(t, models.PlatformEnrollmentDecisionDeny, call.Body.(models.PlatformEnrollmentDecisionRequest).Decision)
+		assert.Equal(t, models.PlatformEnrollmentDecisionDeny, call.Body.(models.PlatformEnrollmentBatchDecisionRequest).Decision)
 	}
 }
 
@@ -840,7 +823,7 @@ func TestApprovePlatformEnrollmentCmd_InvalidDecisionJSONReturnsError(t *testing
 
 	err = cmd.RunE(cmd, []string{"req-operator-001"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse decision response")
+	assert.Contains(t, err.Error(), "decode batch decision")
 }
 
 // TestApprovePlatformEnrollmentCmd_ConfigLoaderError verifies that a config
@@ -886,10 +869,10 @@ func TestApprovePlatformEnrollmentCmd_DisplaysSystemFingerprint(t *testing.T) {
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
 
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{{
 		RequestID: "req-operator-001",
 		State:     models.PlatformEnrollmentStateApproved,
-	})
+	}}})
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}
@@ -952,10 +935,10 @@ func TestApprovePlatformEnrollmentCmd_ApproveWithYes_FetchesPendingFirst(t *test
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
 
-	postResp, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{
+	postResp, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "receipt", Requests: []models.PlatformEnrollmentDecisionResponse{{
 		RequestID: "req-operator-001",
 		State:     models.PlatformEnrollmentStateApproved,
-	})
+	}}})
 	require.NoError(t, err)
 
 	mockClient := &cmdtest.MockAPIClient{GetResp: pendingBody, PostResp: postResp}

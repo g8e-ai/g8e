@@ -10,6 +10,7 @@ package gateway
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -189,7 +190,7 @@ func (s *PlatformEnrollmentService) runCleanup(ctx context.Context) {
 
 // CreateRequest validates bootstrap state and CSRs, deduplicates a live
 // request for the same component kind, instance ID, and key fingerprint
-// set, writes the pending request document directly via DocSet (CREATE
+// set, atomically reserves capacity and inserts the pending request (CREATE
 // is classified as non-mutation), submits a PLATFORM_ENROLLMENT_CREATE
 // envelope for audit, and returns the request ID, requester token,
 // component name, fingerprints, approval URL, and expiry. The raw token
@@ -212,39 +213,6 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 
 	componentName, err := req.ComponentKind.CanonicalName(req.AppName)
 	if err != nil {
-		return nil, err
-	}
-
-	// Deduplicate: if a live (non-terminal, non-expired) request exists
-	// for the same component kind, instance ID, and fingerprint set,
-	// return it instead of creating a new one. The requester resumes
-	// the existing request with the original token. Since the raw token
-	// is not stored, a deduplicated response cannot return the token;
-	// the requester must have persisted it from the original creation.
-	// If no matching live request exists, proceed with creation.
-	existing, err := s.findLiveRequest(req.ComponentKind, req.InstanceID, fingerprints)
-	if err != nil {
-		return nil, fmt.Errorf("platform enrollment: dedup query: %w", err)
-	}
-	if existing != nil {
-		// A live request exists. The requester must resume with the
-		// original token. Return the public metadata so the requester
-		// can display the approval URL and fingerprints. The token is
-		// intentionally absent from the deduplicated response.
-		return &models.PlatformEnrollmentCreateResponse{
-			RequestID:     existing.ID,
-			Token:         "",
-			ComponentKind: existing.ComponentKind,
-			ComponentName: existing.ComponentName,
-			Fingerprints:  existing.Fingerprints,
-			ApprovalURL:   buildApprovalURL(approvalURLBase, existing.ID),
-			ExpiresAt:     existing.ExpiresAt,
-		}, nil
-	}
-
-	// Quota: bound live requests per component kind to prevent
-	// unbounded pending request creation.
-	if err := s.checkQuota(req.ComponentKind); err != nil {
 		return nil, err
 	}
 
@@ -278,17 +246,24 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		LastTransitionAt:  now,
 	}
 
-	// Write the pending request document directly. CREATE is classified
+	// Reserve and insert the pending request document. CREATE is classified
 	// as non-mutation in IsMutation, so invariant 17 (no direct DocSet
 	// for mutations) does not apply to this initial write. The CSR PEM
 	// is public material; the token hash is a stored credential. Neither
 	// appears in the audited CREATE envelope payload.
-	data, err := json.Marshal(persistedReq)
+	existing, err := s.createRequestRecord(ctx, persistedReq)
 	if err != nil {
-		return nil, fmt.Errorf("platform enrollment: marshal request: %w", err)
+		return nil, err
 	}
-	if err := s.db.DocSet(platformEnrollmentCollectionName(), requestID, data); err != nil {
-		return nil, fmt.Errorf("platform enrollment: persist request: %w", err)
+	if existing != nil {
+		return &models.PlatformEnrollmentCreateResponse{
+			RequestID:     existing.ID,
+			ComponentKind: existing.ComponentKind,
+			ComponentName: existing.ComponentName,
+			Fingerprints:  existing.Fingerprints,
+			ApprovalURL:   buildApprovalURL(approvalURLBase, existing.ID),
+			ExpiresAt:     existing.ExpiresAt,
+		}, nil
 	}
 
 	// Submit the CREATE envelope for audit. The handler is audit-only:
@@ -302,6 +277,14 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		InstanceId:    req.InstanceID,
 		Fingerprints:  payloadFingerprints(fingerprints),
 	}); err != nil {
+		// The raw token has not been returned. Remove only this still-pending
+		// reservation so a failed audit does not strand an unusable request.
+		_, cleanupErr := s.db.db.ExecContext(context.WithoutCancel(ctx),
+			`DELETE FROM documents WHERE collection = ? AND id = ? AND json_extract(data, '$.state') = ? AND json_extract(data, '$.token_hash') = ?`,
+			platformEnrollmentCollectionName(), requestID, models.PlatformEnrollmentStatePending, tokenHash)
+		if cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("release failed enrollment reservation: %w", cleanupErr))
+		}
 		return nil, fmt.Errorf("platform enrollment: create envelope: %w", err)
 	}
 
@@ -417,6 +400,8 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 		ComponentKind: payloadComponentKind(existing.ComponentKind),
 		ActorUserId:   actorUserID,
 		Decision:      payloadDecision(req.Decision),
+		Reason:        req.Reason,
+		Fingerprints:  payloadFingerprints(existing.Fingerprints),
 	}); err != nil {
 		return nil, fmt.Errorf("platform enrollment: decide envelope: %w", err)
 	}
@@ -440,6 +425,53 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 		RequestID: req.RequestID,
 		State:     updated.State,
 	}, nil
+}
+
+// DecideBatch submits one governed decision over the owner's fixed pending
+// snapshot. The executing document owner rechecks all members atomically.
+func (s *PlatformEnrollmentService) DecideBatch(ctx context.Context, actorUserID string, req models.PlatformEnrollmentBatchDecisionRequest) (*models.PlatformEnrollmentBatchDecisionResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	user, err := s.userSvc.GetByID(actorUserID)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: authorize batch: %w", err)
+	}
+	if user == nil || !user.IsActive() {
+		return nil, constants.ErrPlatformEnrollmentInvalidDecision
+	}
+	first, err := s.userSvc.IsFirstUser(actorUserID)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: authorize batch owner: %w", err)
+	}
+	if !first {
+		return nil, constants.ErrPlatformEnrollmentInvalidDecision
+	}
+	intent := constants.PlatformEnrollmentIntentApprove
+	state := models.PlatformEnrollmentStateApproved
+	if req.Decision == models.PlatformEnrollmentDecisionDeny {
+		intent = constants.PlatformEnrollmentIntentDeny
+		state = models.PlatformEnrollmentStateDenied
+	}
+	payload := &commonv1.PlatformEnrollmentGovernancePayload{
+		Action: string(constants.PlatformEnrollmentActionDecide), Intent: string(intent),
+		ActorUserId: actorUserID, Decision: payloadDecision(req.Decision), Reason: req.Reason,
+	}
+	for _, target := range req.Requests {
+		payload.DecisionTargets = append(payload.DecisionTargets, &commonv1.PlatformEnrollmentDecisionTarget{
+			RequestId: target.RequestID, Fingerprints: payloadFingerprints(target.Fingerprints),
+		})
+	}
+	env, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionDecide, payload)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: batch decision envelope: %w", err)
+	}
+	resp := &models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: env.GetId(), Requests: make([]models.PlatformEnrollmentDecisionResponse, len(req.Requests))}
+	for i, target := range req.Requests {
+		resp.Requests[i] = models.PlatformEnrollmentDecisionResponse{RequestID: target.RequestID, State: state}
+	}
+	s.approvals.EnrollmentsChanged()
+	return resp, nil
 }
 
 func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID string, req models.PlatformEnrollmentRevokeRequest) (*models.PlatformEnrollmentRevokeResponse, error) {
@@ -539,28 +571,28 @@ func (s *PlatformEnrollmentService) ListEnrolled(ctx context.Context) (*models.P
 // the active first user (enforced by the controller before calling this
 // method).
 func (s *PlatformEnrollmentService) ListPending(ctx context.Context) (*models.PlatformEnrollmentPendingResponse, error) {
-	_ = ctx
-	docs, err := s.db.DocQuery(platformEnrollmentCollectionName(), nil, "created_at", 0)
+	rows, err := s.db.db.QueryContext(ctx, `SELECT json_set(data, '$.id', id, '$.created_at', created_at)
+		FROM documents WHERE collection = ? AND json_extract(data, '$.state') = ?
+		AND julianday(json_extract(data, '$.expires_at')) >= julianday(?) ORDER BY created_at, id`,
+		platformEnrollmentCollectionName(), models.PlatformEnrollmentStatePending, timesvc.NowTimestamp())
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: list pending: %w", err)
 	}
-
+	defer rows.Close()
 	resp := &models.PlatformEnrollmentPendingResponse{Requests: []models.PlatformEnrollmentPendingRequest{}}
-	now := time.Now().UTC()
-	for _, doc := range docs {
-		req, err := decodePlatformEnrollmentRequest(doc)
-		if err != nil {
-			s.logger.Warn("platform enrollment: list pending: decode failed", "doc_id", doc.ID, "error", err)
-			continue
+	for rows.Next() {
+		var data []byte
+		if err := rows.Scan(&data); err != nil {
+			return nil, fmt.Errorf("platform enrollment: read pending: %w", err)
 		}
-		if req.State != models.PlatformEnrollmentStatePending {
-			continue
-		}
-		if now.After(req.ExpiresAt) {
-			s.expireRequest(req)
-			continue
+		var req models.PlatformEnrollmentRequest
+		if err := json.Unmarshal(data, &req); err != nil {
+			return nil, fmt.Errorf("platform enrollment: decode pending: %w", err)
 		}
 		resp.Requests = append(resp.Requests, req.PendingMetadata())
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("platform enrollment: iterate pending: %w", err)
 	}
 	return resp, nil
 }
@@ -783,168 +815,52 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 // recovers from a crash between lease acquisition and ISSUE completion.
 // Requests with a live lease are left in the issuing state.
 func (s *PlatformEnrollmentService) ReconcileExpiredLeases() error {
-	docs, err := s.db.DocQuery(
-		platformEnrollmentCollectionName(),
-		[]models.DocFilter{{Field: "state", Op: "==", Value: json.RawMessage(`"issuing"`)}},
-		"", 0,
-	)
+	now := timesvc.NowTimestamp()
+	result, err := s.db.db.ExecWithRetry(`UPDATE documents SET data = json_patch(data, json_object(
+  'state', CASE WHEN julianday(json_extract(data, '$.expires_at')) < julianday(?) THEN ? ELSE ? END,
+  'issuance_lease_owner', '', 'issuance_lease_expires_at', NULL, 'last_transition_at', ?)), updated_at = ?
+  WHERE collection = ? AND json_extract(data, '$.state') = ?
+  AND julianday(json_extract(data, '$.issuance_lease_expires_at')) <= julianday(?)`,
+		now, models.PlatformEnrollmentStateExpired, models.PlatformEnrollmentStateApproved, now, now,
+		platformEnrollmentCollectionName(), models.PlatformEnrollmentStateIssuing, now)
 	if err != nil {
-		return fmt.Errorf("platform enrollment: reconcile: query: %w", err)
+		return fmt.Errorf("platform enrollment: recover expired leases: %w", err)
 	}
-
-	now := time.Now().UTC()
-	var recovered int
-	for _, doc := range docs {
-		req, err := decodePlatformEnrollmentRequest(doc)
-		if err != nil {
-			s.logger.Warn("platform enrollment: reconcile: decode failed", "doc_id", doc.ID, "error", err)
-			continue
-		}
-		if req.IssuanceLeaseExpiresAt == nil || now.Before(*req.IssuanceLeaseExpiresAt) {
-			continue
-		}
-		// Also check request-level expiry: if the request itself has
-		// expired, transition to expired instead of approved.
-		if now.After(req.ExpiresAt) {
-			s.expireRequest(req)
-			continue
-		}
-		leaseRecoveryUpdate, err := marshalPlatformEnrollmentApprovedUpdate(now)
-		if err != nil {
-			s.logger.Warn("platform enrollment: reconcile: marshal rollback failed", "request_id", req.ID, "error", err)
-			continue
-		}
-		applied, err := s.db.DocConditionalUpdate(
-			platformEnrollmentCollectionName(), req.ID, leaseRecoveryUpdate,
-			"state", string(models.PlatformEnrollmentStateIssuing),
-		)
-		if err != nil {
-			s.logger.Warn("platform enrollment: reconcile: rollback failed", "request_id", req.ID, "error", err)
-			continue
-		}
-		if applied {
-			recovered++
-			s.logger.Info("platform enrollment: expired lease recovered", "request_id", req.ID)
-		}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("platform enrollment: count recovered leases: %w", err)
 	}
-	if recovered > 0 {
-		s.logger.Info("platform enrollment: reconciled expired leases", "count", recovered)
+	if count > 0 {
+		s.approvals.EnrollmentsChanged()
 	}
 	return nil
 }
 
-// CleanupTerminalRequests removes terminal request records (denied or
-// expired) that are past the retention window. Completed requests are
-// never removed by cleanup because they hold the sole copy of issued
-// artifacts needed for idempotent retry. Denied and expired requests
-// carry no issued artifacts and are safe to remove after retention.
+// CleanupTerminalRequests explicitly expires abandoned live requests, then
+// removes denied/expired records past retention. Completed records retain the
+// issued credentials needed for idempotent completion. Reads never do this work.
 func (s *PlatformEnrollmentService) CleanupTerminalRequests() error {
-	cutoff := time.Now().UTC().Add(-constants.PlatformEnrollmentCleanupRetention)
-	cutoffStr := timesvc.FormatTimestamp(cutoff)
-
-	filters := []models.DocFilter{
-		{Field: "state", Op: "==", Value: json.RawMessage(`"denied"`)},
-		{Field: "last_transition_at", Op: "<", Value: json.RawMessage(`"` + cutoffStr + `"`)},
-	}
-	if err := s.cleanupFiltered(filters); err != nil {
-		return err
-	}
-
-	filters = []models.DocFilter{
-		{Field: "state", Op: "==", Value: json.RawMessage(`"expired"`)},
-		{Field: "last_transition_at", Op: "<", Value: json.RawMessage(`"` + cutoffStr + `"`)},
-	}
-	return s.cleanupFiltered(filters)
-}
-
-func (s *PlatformEnrollmentService) cleanupFiltered(filters []models.DocFilter) error {
-	docs, err := s.db.DocQuery(platformEnrollmentCollectionName(), filters, "", 0)
-	if err != nil {
-		return fmt.Errorf("platform enrollment: cleanup: query: %w", err)
-	}
-	var deleted int
-	for _, doc := range docs {
-		err := s.db.DocDelete(platformEnrollmentCollectionName(), doc.ID)
-		if err != nil {
-			s.logger.Warn("platform enrollment: cleanup: delete failed", "doc_id", doc.ID, "error", err)
-			continue
-		}
-		deleted++
-	}
-	if deleted > 0 {
-		s.logger.Info("platform enrollment: cleaned up terminal requests", "count", deleted)
-	}
-	return nil
-}
-
-// findLiveRequest searches for a non-terminal, non-expired request
-// matching the same component kind, instance ID, and fingerprint set.
-// Returns nil if no match is found.
-func (s *PlatformEnrollmentService) findLiveRequest(kind models.PlatformComponentKind, instanceID string, fingerprints models.PlatformEnrollmentCSRFingerprints) (*models.PlatformEnrollmentRequest, error) {
-	docs, err := s.db.DocQuery(
-		platformEnrollmentCollectionName(),
-		[]models.DocFilter{
-			{Field: "component_kind", Op: "==", Value: json.RawMessage(`"` + string(kind) + `"`)},
-			{Field: "instance_id", Op: "==", Value: json.RawMessage(`"` + instanceID + `"`)},
-		},
-		"created_at", 0,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query live requests: %w", err)
-	}
 	now := time.Now().UTC()
-	for _, doc := range docs {
-		req, err := decodePlatformEnrollmentRequest(doc)
-		if err != nil {
-			continue
-		}
-		if req.State.IsTerminal() {
-			continue
-		}
-		if now.After(req.ExpiresAt) {
-			s.expireRequest(req)
-			continue
-		}
-		if fingerprintsMatch(req.Fingerprints, fingerprints) {
-			return req, nil
-		}
-	}
-	return nil, nil
-}
-
-// checkQuota rejects creation if the number of live requests for the
-// given component kind exceeds the configured maximum.
-func (s *PlatformEnrollmentService) checkQuota(kind models.PlatformComponentKind) error {
-	docs, err := s.db.DocQuery(
-		platformEnrollmentCollectionName(),
-		[]models.DocFilter{{Field: "component_kind", Op: "==", Value: json.RawMessage(`"` + string(kind) + `"`)}},
-		"", 0,
-	)
+	stamp := timesvc.FormatTimestamp(now)
+	result, err := s.db.db.ExecWithRetry(`UPDATE documents SET data = json_patch(data, json_object('state', ?, 'last_transition_at', ?)), updated_at = ?
+  WHERE collection = ? AND json_extract(data, '$.state') IN ('pending', 'approved', 'issuing')
+  AND julianday(json_extract(data, '$.expires_at')) < julianday(?)`,
+		models.PlatformEnrollmentStateExpired, stamp, stamp, platformEnrollmentCollectionName(), stamp)
 	if err != nil {
-		return fmt.Errorf("platform enrollment: quota query: %w", err)
+		return fmt.Errorf("platform enrollment: expire abandoned requests: %w", err)
 	}
-	now := time.Now().UTC()
-	var live int
-	for _, doc := range docs {
-		req, err := decodePlatformEnrollmentRequest(doc)
-		if err != nil {
-			continue
-		}
-		if req.State.IsTerminal() {
-			continue
-		}
-		if now.After(req.ExpiresAt) {
-			s.expireRequest(req)
-			continue
-		}
-		live++
+	count, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("platform enrollment: count expired requests: %w", err)
 	}
-	limit := constants.PlatformEnrollmentMaxLiveRequestsPerComponent
-	if kind == models.PlatformComponentOperator {
-		limit = constants.PlatformEnrollmentMaxLiveOperatorRequests
+	if count > 0 {
+		s.approvals.EnrollmentsChanged()
 	}
-	if live >= limit {
-		return constants.ErrPlatformEnrollmentQuotaExceeded
+	_, err = s.db.db.ExecWithRetry(`DELETE FROM documents WHERE collection = ? AND json_extract(data, '$.state') IN ('denied', 'expired')
+  AND julianday(json_extract(data, '$.last_transition_at')) < julianday(?)`,
+		platformEnrollmentCollectionName(), timesvc.FormatTimestamp(now.Add(-constants.PlatformEnrollmentCleanupRetention)))
+	if err != nil {
+		return fmt.Errorf("platform enrollment: delete retained terminal requests: %w", err)
 	}
 	return nil
 }
@@ -1093,28 +1009,23 @@ func (s *PlatformEnrollmentService) expireRequest(req *models.PlatformEnrollment
 	}
 }
 
-// loadByToken loads a request by its opaque token. The token is hashed
-// and the hash is used as the document ID for O(1) lookup. Wait — the
-// document ID is the request ID (UUID), not the token hash. So we need
-// to query by token_hash field.
+// loadByToken resolves the opaque token through the indexed token hash.
 func (s *PlatformEnrollmentService) loadByToken(token string) (*models.PlatformEnrollmentRequest, error) {
-	tokenHash := platformEnrollmentTokenHash(token)
-	docs, err := s.db.DocQuery(
-		platformEnrollmentCollectionName(),
-		[]models.DocFilter{{Field: "token_hash", Op: "==", Value: json.RawMessage(`"` + tokenHash + `"`)}},
-		"", 1,
-	)
+	var data []byte
+	err := s.db.db.QueryRowWithRetry(`SELECT json_set(data, '$.id', id, '$.created_at', created_at)
+		FROM documents WHERE collection = ? AND json_extract(data, '$.token_hash') = ? LIMIT 1`,
+		platformEnrollmentCollectionName(), platformEnrollmentTokenHash(token)).Scan(&data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, constants.ErrPlatformEnrollmentRequestNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: load by token: %w", err)
 	}
-	if len(docs) == 0 {
-		return nil, constants.ErrPlatformEnrollmentRequestNotFound
-	}
-	req, err := decodePlatformEnrollmentRequest(docs[0])
-	if err != nil {
+	var req models.PlatformEnrollmentRequest
+	if err := json.Unmarshal(data, &req); err != nil {
 		return nil, fmt.Errorf("platform enrollment: decode request: %w", err)
 	}
-	return req, nil
+	return &req, nil
 }
 
 // loadByID loads a request by its request ID (the document ID).

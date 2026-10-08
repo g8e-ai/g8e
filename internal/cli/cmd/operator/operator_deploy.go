@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -36,14 +37,8 @@ import (
 const (
 	// operatorDeployDirPrefix names the per-Operator directories created under
 	// --remote-dir when --count is greater than one.
-	operatorDeployDirPrefix = "op"
-
-	// operatorDeployEnrollAttempts bounds restarts of one Operator whose
-	// enrollment request was rejected or never appeared. The Gateway allows
-	// only constants.PlatformEnrollmentMaxLiveOperatorRequests live
-	// Operator requests platform-wide, so a busy Gateway answers 429 and the
-	// worker exits; a later attempt succeeds once earlier requests complete.
-	operatorDeployEnrollAttempts = 3
+	operatorDeployDirPrefix   = "op"
+	operatorDeployMaxParallel = 100
 
 	operatorDeployPollInterval      = 100 * time.Millisecond
 	operatorDeployEnrollTimeout     = 30 * time.Second
@@ -107,9 +102,8 @@ type operatorDeployOptions struct {
 	endpoint   string
 	background bool
 	startArgs  []string
-	// client is set only with --approve; it approves each enrollment request.
-	client     authcmd.APIClient
-	approvalMu *sync.Mutex
+	// client is set only with --approve; the staged cohort is approved once.
+	client authcmd.APIClient
 }
 
 func operatorDeployCmd() *cobra.Command {
@@ -146,7 +140,7 @@ Use --dest-dir for the binary and isolated runtime state; --remote-dir remains a
 With --count N, directories are op-00001 through op-N. --start-index adds later batches
 without replacing earlier Operators. An explicit --start-index always uses numbered directories.
 The binary is installed once per host and hard-linked into each directory.
---parallel bounds concurrent deployments (default 4, maximum 4).
+--parallel bounds concurrent deployments (default 100, maximum 100).
 
 --roles selects any combination of data (default), provenance, inference, and observer.
 Capability flags and role-specific settings use the same flags as operator start.
@@ -155,8 +149,8 @@ Role IDs default to unique, stable values per host/directory. Flag values suppor
 --background starts workers; --endpoint or --operator-endpoint is required.
 --operator-endpoint selects the worker-facing Gateway host and defaults to --endpoint.
 --approve approves enrollment as
-the authenticated owner and verifies all deployed sessions are active. Enrollment is
-paced to respect Gateway limits. Repeating a deployment replaces only its own workers.`,
+the authenticated owner in one batch after every worker is staged, then verifies
+all deployed sessions are active. Without --approve, workers remain pending. Repeating a deployment replaces only its own workers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -184,7 +178,7 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 			if err != nil {
 				return err
 			}
-			opts := operatorDeployOptions{endpoint: workerEndpoint, background: background, startArgs: startArgs, approvalMu: &sync.Mutex{}}
+			opts := operatorDeployOptions{endpoint: workerEndpoint, background: background, startArgs: startArgs}
 			if approve {
 				opts.client, err = clientFactory(fileSvc, cfg)
 				if err != nil {
@@ -240,7 +234,13 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 				}
 			}
 
+			if len(failed) > 0 {
+				return fmt.Errorf("%w: staging failed for %d of %d operators; no approvals submitted: %s", constants.ErrOperatorDeployFailed, len(failed), len(hostList)*len(dirs), strings.Join(failed, ", "))
+			}
 			if approve && len(deployed) > 0 {
+				if err := approveDeployedOperators(opts.client, deployed); err != nil {
+					return err
+				}
 				cmd.Printf("Waiting for %d operator(s) to come online...\n", len(deployed))
 				if err := awaitOperatorsOnline(ctx, opts.client, creds.UserID, deployed); err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrOperatorDeployFailed, err)
@@ -250,9 +250,6 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 				}
 			}
 
-			if len(failed) > 0 {
-				return fmt.Errorf("%w: %d of %d operators failed: %s", constants.ErrOperatorDeployFailed, len(failed), len(hostList)*len(dirs), strings.Join(failed, ", "))
-			}
 			cmd.Println("\nDeployment complete")
 			return nil
 		},
@@ -263,7 +260,7 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 	cmd.Flags().StringVar(&dockerImage, "docker-image", "", "Existing Operator image on the selected Docker daemon")
 	cmd.Flags().StringArrayVar(&dockerMounts, "docker-mount", nil, "Additional Docker mount spec (repeatable; source=,target=,readonly)")
 	cmd.Flags().StringVar(&operatorEndpoint, "operator-endpoint", "", "Gateway address used by deployed Operators (defaults to --endpoint)")
-	cmd.Flags().IntVar(&parallel, "parallel", 4, "Maximum concurrent deployments/enrollments (1..4)")
+	cmd.Flags().IntVar(&parallel, "parallel", operatorDeployMaxParallel, fmt.Sprintf("Maximum concurrent staging workers (1..%d)", operatorDeployMaxParallel))
 	cmd.Flags().IntVarP(&port, "port", "P", 0, "SSH port to connect to on remote hosts")
 	cmd.Flags().StringVarP(&identityFile, "identity", "i", "", "SSH identity file (private key)")
 	cmd.Flags().BoolVar(&background, "background", false, "Start operator in background after deployment (requires --endpoint)")
@@ -276,7 +273,7 @@ paced to respect Gateway limits. Repeating a deployment replaces only its own wo
 		cmd.Flags().AddFlag(start.Flags().Lookup(name))
 	}
 	cmd.Flags().IntVar(&count, "count", 1, "Operators to deploy per host, each in its own directory under --dest-dir when greater than 1")
-	cmd.Flags().BoolVar(&approve, "approve", false, "Approve each Operator's enrollment request as the owner and wait until it is online (requires --background)")
+	cmd.Flags().BoolVar(&approve, "approve", false, "Approve the fully staged cohort in one batch and wait until it is online (requires --background)")
 
 	return cmd
 }
@@ -310,83 +307,55 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 		cmd.Printf("Operator deployed to %s:%s (use --background to auto-start)\n", s.host, absDir)
 		return op, nil
 	}
-	if opts.client == nil {
-		if err := s.startOperator(ctx, absDir, opts.endpoint, opts.startArgs...); err != nil {
-			return deployedOperator{}, err
-		}
-		cmd.Printf("Started operator in background on %s (working dir %s)\n", s.host, absDir)
-		return op, nil
+	if err := s.startOperator(ctx, absDir, opts.endpoint, opts.startArgs...); err != nil {
+		return deployedOperator{}, err
 	}
-	op.RequestID, err = enrollOperator(ctx, s, opts, absDir)
+	op.RequestID, err = s.awaitRequestID(ctx, absDir)
 	if err != nil {
-		return deployedOperator{}, err
-	}
-	op.SessionID, err = s.awaitSessionID(ctx, absDir)
-	if err != nil {
-		return deployedOperator{}, err
-	}
-	if err := s.awaitReady(ctx, absDir); err != nil {
-		return deployedOperator{}, err
-	}
-	if err := s.markReady(ctx, absDir); err != nil {
 		return deployedOperator{}, err
 	}
 	if op.RequestID == "" {
-		cmd.Printf("Started operator on %s (working dir %s, already enrolled)\n", s.host, absDir)
-		return op, nil
+		cmd.Printf("Staged operator on %s (working dir %s, already enrolled)\n", s.host, absDir)
+	} else {
+		cmd.Printf("Staged operator on %s (working dir %s, enrollment request %s)\n", s.host, absDir, op.RequestID)
 	}
-	cmd.Printf("Started and approved operator on %s (working dir %s, enrollment request %s)\n", s.host, absDir, op.RequestID)
 	return op, nil
 }
 
-// enrollOperator starts the worker in dir and approves the enrollment request
-// it submits, restarting the worker up to operatorDeployEnrollAttempts times.
-// The returned request ID is empty when the worker was already enrolled.
-func enrollOperator(ctx context.Context, s deployTarget, opts operatorDeployOptions, dir string) (string, error) {
-	var lastErr error
-	for attempt := 1; attempt <= operatorDeployEnrollAttempts; attempt++ {
-		if attempt > 1 {
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(time.Duration(attempt-1) * time.Second):
-			}
+// approveDeployedOperators resolves only this deployment's IDs against one
+// pending snapshot and posts one fingerprint-bound decision after staging.
+func approveDeployedOperators(client authcmd.APIClient, ops []deployedOperator) error {
+	ids := make(map[string]struct{}, len(ops))
+	for _, op := range ops {
+		if op.RequestID != "" {
+			ids[op.RequestID] = struct{}{}
 		}
-		requestID, err := startAndApprove(ctx, s, opts, dir)
-		if err == nil {
-			return requestID, nil
-		}
-		lastErr = err
 	}
-	return "", fmt.Errorf("enrollment failed after %d attempts: %w", operatorDeployEnrollAttempts, lastErr)
-}
-
-func startAndApprove(ctx context.Context, s deployTarget, opts operatorDeployOptions, dir string) (string, error) {
-	if err := s.startOperator(ctx, dir, opts.endpoint, opts.startArgs...); err != nil {
-		return "", err
+	if len(ids) == 0 {
+		return nil
 	}
-	requestID, err := s.awaitRequestID(ctx, dir)
-	if err != nil || requestID == "" {
-		return "", err
-	}
-	if opts.approvalMu != nil {
-		opts.approvalMu.Lock()
-	}
-	_, err = authcmd.PostPlatformEnrollmentDecision(opts.client, models.PlatformEnrollmentDecisionRequest{
-		RequestID: requestID,
-		Decision:  models.PlatformEnrollmentDecisionApprove,
-	})
-	if opts.approvalMu != nil {
-		opts.approvalMu.Unlock()
-	}
+	body, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentPending)
 	if err != nil {
-		return "", fmt.Errorf("approve %s: %w", requestID, err)
+		return fmt.Errorf("operator deploy: fetch staged requests: %w", err)
 	}
-	// Wait for completion before opening another enrollment slot.
-	if _, err := s.awaitSessionID(ctx, dir); err != nil {
-		return "", err
+	var pending models.PlatformEnrollmentPendingResponse
+	if err := json.Unmarshal(body, &pending); err != nil {
+		return fmt.Errorf("operator deploy: decode staged requests: %w", err)
 	}
-	return requestID, nil
+	req := models.PlatformEnrollmentBatchDecisionRequest{Decision: models.PlatformEnrollmentDecisionApprove}
+	for _, target := range pending.Requests {
+		if _, ok := ids[target.RequestID]; ok {
+			req.Requests = append(req.Requests, models.PlatformEnrollmentDecisionTarget{RequestID: target.RequestID, Fingerprints: target.Fingerprints})
+			delete(ids, target.RequestID)
+		}
+	}
+	if len(ids) != 0 {
+		return fmt.Errorf("operator deploy: %d staged requests are no longer pending: %w", len(ids), constants.ErrPlatformEnrollmentRequestNotFound)
+	}
+	if _, err := authcmd.PostPlatformEnrollmentBatchDecision(client, req); err != nil {
+		return fmt.Errorf("operator deploy: approve staged cohort: %w", err)
+	}
+	return nil
 }
 
 // awaitOperatorsOnline resolves each Operator's session ID from its start log,
@@ -404,6 +373,12 @@ func awaitOperatorsOnline(ctx context.Context, client authcmd.APIClient, userID 
 			return fmt.Errorf("%s:%s: %w", ops[i].target.name(), ops[i].Dir, err)
 		}
 		ops[i].SessionID = sessionID
+		if err := ops[i].target.awaitReady(ctx, ops[i].Dir); err != nil {
+			return err
+		}
+		if err := ops[i].target.markReady(ctx, ops[i].Dir); err != nil {
+			return err
+		}
 	}
 
 	return pollUntil(ctx, func() (bool, error) {
@@ -847,8 +822,8 @@ func validateOperatorDeployFlags(
 	if dockerContext != "" && (!filepath.IsAbs(remoteDir) || filepath.Clean(remoteDir) == "/") {
 		return "", "", fmt.Errorf("%w: Docker --dest-dir must be an absolute non-root container path", constants.ErrPathValidation)
 	}
-	if parallel < 1 || parallel > constants.PlatformEnrollmentMaxLiveOperatorRequests {
-		return "", "", fmt.Errorf("%w: --parallel must be between 1 and %d", constants.ErrMissingRequiredField, constants.PlatformEnrollmentMaxLiveOperatorRequests)
+	if parallel < 1 || parallel > operatorDeployMaxParallel {
+		return "", "", fmt.Errorf("%w: --parallel must be between 1 and %d", constants.ErrMissingRequiredField, operatorDeployMaxParallel)
 	}
 	if count < 1 || count > 5000 || startIndex < 1 || startIndex > 5000 || count > 5001-startIndex {
 		return "", "", fmt.Errorf("%w: --count and --start-index must select operators within 1..5000", constants.ErrMissingRequiredField)

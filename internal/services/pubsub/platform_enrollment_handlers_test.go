@@ -722,163 +722,27 @@ func TestHandleCreate_FailsClosedOnBadInput(t *testing.T) {
 // HandleDecide
 // ---------------------------------------------------------------------------
 
-func decidePayload(decision commonv1.PlatformEnrollmentDecision) *commonv1.PlatformEnrollmentGovernancePayload {
-	return &commonv1.PlatformEnrollmentGovernancePayload{
-		RequestId:   enrollTestRequest,
-		ActorUserId: enrollTestOwnerID,
-		Decision:    decision,
+// Decision state, authority, and rollback assertions live beside the real
+// SQLite transaction in gateway/platform_enrollment_store_test.go.
+func (s *enrollTestDocStore) DecidePlatformEnrollments(ctx context.Context, actor string, req models.PlatformEnrollmentBatchDecisionRequest, envelopeID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
+	if err := req.Validate(); err != nil {
+		return err
+	}
+	return s.condErr
 }
 
-func TestHandleDecide_TransitionsPendingRequestAndStampsAttribution(t *testing.T) {
-	tests := []struct {
-		name      string
-		decision  commonv1.PlatformEnrollmentDecision
-		wantState models.PlatformEnrollmentState
-		wantWord  string
-	}{
-		{"approve", commonv1.PlatformEnrollmentDecision_PLATFORM_ENROLLMENT_DECISION_APPROVE, models.PlatformEnrollmentStateApproved, "approve"},
-		{"deny", commonv1.PlatformEnrollmentDecision_PLATFORM_ENROLLMENT_DECISION_DENY, models.PlatformEnrollmentStateDenied, "deny"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			env := newEnrollTestEnv(t)
-			env.seedRequest(t, enrollTestAppRequest(models.PlatformEnrollmentStatePending))
-			msg := enrollTestMessage(t, constants.EventPlatformEnrollmentDecideRequested, decidePayload(tt.decision))
-
-			summary, err := env.handler.HandleDecide(t.Context(), msg)
-
-			require.NoError(t, err)
-			assert.Equal(t, "platform enrollment decide request_id=req-1 decision="+tt.wantWord+" actor=user-owner", summary)
-			assert.Equal(t, tt.wantState, env.requestState(t))
-			coll := platformEnrollmentCollection()
-			assert.Equal(t, enrollTestOwnerID, env.store.field(t, coll, enrollTestRequest, "approved_by_user_id"))
-			assert.Equal(t, enrollTestEnvelope, env.store.field(t, coll, enrollTestRequest, "decision_envelope_id"))
-			assert.Equal(t, enrollTestEnvelope, env.store.field(t, coll, enrollTestRequest, "decision_receipt_id"))
-			require.Len(t, env.store.condCalls, 1)
-			assert.Equal(t, "state", env.store.condCalls[0].Field)
-			assert.Equal(t, string(models.PlatformEnrollmentStatePending), env.store.condCalls[0].Value,
-				"the transition must be conditional on the request still being pending")
-		})
-	}
-}
-
-func TestHandleDecide_RejectsInvalidRequests(t *testing.T) {
-	approve := commonv1.PlatformEnrollmentDecision_PLATFORM_ENROLLMENT_DECISION_APPROVE
-
-	tests := []struct {
-		name    string
-		seed    func(t *testing.T, e *enrollTestEnv)
-		payload *commonv1.PlatformEnrollmentGovernancePayload
-		wantErr error
-	}{
-		{
-			name:    "unspecified decision",
-			payload: decidePayload(commonv1.PlatformEnrollmentDecision_PLATFORM_ENROLLMENT_DECISION_UNSPECIFIED),
-			wantErr: constants.ErrPlatformEnrollmentInvalidDecision,
-		},
-		{
-			name:    "missing request id",
-			payload: &commonv1.PlatformEnrollmentGovernancePayload{ActorUserId: enrollTestOwnerID, Decision: approve},
-			wantErr: constants.ErrPlatformEnrollmentRequestIDRequired,
-		},
-		{
-			name:    "missing actor",
-			payload: &commonv1.PlatformEnrollmentGovernancePayload{RequestId: enrollTestRequest, Decision: approve},
-			wantErr: constants.ErrPlatformEnrollmentInvalidDecision,
-		},
-		{
-			name:    "request does not exist",
-			payload: decidePayload(approve),
-			wantErr: constants.ErrPlatformEnrollmentRequestNotFound,
-		},
-		{
-			name: "request already approved",
-			seed: func(t *testing.T, e *enrollTestEnv) {
-				e.seedRequest(t, enrollTestAppRequest(models.PlatformEnrollmentStateApproved))
-			},
-			payload: decidePayload(approve),
-			wantErr: constants.ErrPlatformEnrollmentAlreadyDecided,
-		},
-		{
-			name: "request already denied",
-			seed: func(t *testing.T, e *enrollTestEnv) {
-				e.seedRequest(t, enrollTestAppRequest(models.PlatformEnrollmentStateDenied))
-			},
-			payload: decidePayload(approve),
-			wantErr: constants.ErrPlatformEnrollmentAlreadyDecided,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			env := newEnrollTestEnv(t)
-			if tt.seed != nil {
-				tt.seed(t, env)
-			}
-
-			summary, err := env.handler.HandleDecide(t.Context(), enrollTestMessage(t, constants.EventPlatformEnrollmentDecideRequested, tt.payload))
-
-			require.ErrorIs(t, err, tt.wantErr)
-			assert.Empty(t, summary)
-			assert.Empty(t, env.store.condCalls, "a rejected decision must not attempt a write")
-		})
-	}
-}
-
-func TestHandleDecide_ReportsAlreadyDecidedWhenConcurrentWriterWinsTheRace(t *testing.T) {
+func TestHandleDecide_PropagatesAtomicDecisionFailure(t *testing.T) {
 	env := newEnrollTestEnv(t)
-	env.seedRequest(t, enrollTestAppRequest(models.PlatformEnrollmentStatePending))
-	lost := false
-	env.store.condApplied = &lost
-
-	_, err := env.handler.HandleDecide(t.Context(), enrollTestMessage(t, constants.EventPlatformEnrollmentDecideRequested,
-		decidePayload(commonv1.PlatformEnrollmentDecision_PLATFORM_ENROLLMENT_DECISION_APPROVE)))
-
+	env.store.condErr = constants.ErrPlatformEnrollmentAlreadyDecided
+	_, err := env.handler.HandleDecide(t.Context(), enrollTestMessage(t, constants.EventPlatformEnrollmentDecideRequested, &commonv1.PlatformEnrollmentGovernancePayload{
+		ActorUserId:     enrollTestOwnerID,
+		Decision:        commonv1.PlatformEnrollmentDecision_PLATFORM_ENROLLMENT_DECISION_APPROVE,
+		DecisionTargets: []*commonv1.PlatformEnrollmentDecisionTarget{{RequestId: enrollTestRequest}},
+	}))
 	require.ErrorIs(t, err, constants.ErrPlatformEnrollmentAlreadyDecided)
-	assert.Equal(t, models.PlatformEnrollmentStatePending, env.requestState(t), "a lost race must not change state")
-}
-
-func TestHandleDecide_PropagatesStoreErrors(t *testing.T) {
-	approve := commonv1.PlatformEnrollmentDecision_PLATFORM_ENROLLMENT_DECISION_APPROVE
-
-	t.Run("load failure", func(t *testing.T) {
-		env := newEnrollTestEnv(t)
-		env.store.getErr[platformEnrollmentCollection()] = errEnrollTestBoom
-
-		_, err := env.handler.HandleDecide(t.Context(), enrollTestMessage(t, constants.EventPlatformEnrollmentDecideRequested, decidePayload(approve)))
-
-		require.ErrorIs(t, err, errEnrollTestBoom)
-		assert.Contains(t, err.Error(), "load request req-1")
-	})
-
-	t.Run("conditional update failure", func(t *testing.T) {
-		env := newEnrollTestEnv(t)
-		env.seedRequest(t, enrollTestAppRequest(models.PlatformEnrollmentStatePending))
-		env.store.condErr = errEnrollTestBoom
-
-		_, err := env.handler.HandleDecide(t.Context(), enrollTestMessage(t, constants.EventPlatformEnrollmentDecideRequested, decidePayload(approve)))
-
-		require.ErrorIs(t, err, errEnrollTestBoom)
-		assert.Contains(t, err.Error(), "decide req-1")
-	})
-
-	t.Run("cancelled context", func(t *testing.T) {
-		env := newEnrollTestEnv(t)
-		ctx, cancel := context.WithCancel(t.Context())
-		cancel()
-
-		_, err := env.handler.HandleDecide(ctx, enrollTestMessage(t, constants.EventPlatformEnrollmentDecideRequested, decidePayload(approve)))
-
-		require.ErrorIs(t, err, context.Canceled)
-	})
-
-	t.Run("undecodable payload", func(t *testing.T) {
-		env := newEnrollTestEnv(t)
-
-		_, err := env.handler.HandleDecide(t.Context(), &PubSubCommandMessage{EventType: constants.EventPlatformEnrollmentDecideRequested, Payload: []byte{0xff}})
-
-		require.Error(t, err)
-	})
 }
 
 // ---------------------------------------------------------------------------

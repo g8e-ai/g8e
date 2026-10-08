@@ -175,6 +175,14 @@ message PlatformEnrollmentGovernancePayload {
   string certificate_fingerprint = 16;
   string owner_user_id = 17;
   string reason = 18;
+  // A fixed, bounded decision cohort. Every member is fingerprint-bound and
+  // committed atomically by the existing PLATFORM_ENROLLMENT_DECIDE action.
+  repeated PlatformEnrollmentDecisionTarget decision_targets = 19;
+}
+
+message PlatformEnrollmentDecisionTarget {
+  string request_id = 1;
+  PlatformEnrollmentFingerprints fingerprints = 2;
 }
 
 message PlatformEnrollmentCompletionTranscript {

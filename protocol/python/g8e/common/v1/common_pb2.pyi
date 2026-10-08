@@ -174,7 +174,7 @@ class PlatformEnrollmentFingerprints(_message.Message):
     def __init__(self, app: _Optional[str] = ..., operator: _Optional[str] = ..., cli: _Optional[str] = ...) -> None: ...
 
 class PlatformEnrollmentGovernancePayload(_message.Message):
-    __slots__ = ("action", "intent", "request_id", "component_kind", "instance_id", "actor_user_id", "decision", "fingerprints", "target_collection", "target_document_id", "operator_id", "operator_session_id", "cli_session_id", "policy_id", "certificate_serial", "certificate_fingerprint", "owner_user_id", "reason")
+    __slots__ = ("action", "intent", "request_id", "component_kind", "instance_id", "actor_user_id", "decision", "fingerprints", "target_collection", "target_document_id", "operator_id", "operator_session_id", "cli_session_id", "policy_id", "certificate_serial", "certificate_fingerprint", "owner_user_id", "reason", "decision_targets")
     ACTION_FIELD_NUMBER: _ClassVar[int]
     INTENT_FIELD_NUMBER: _ClassVar[int]
     REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
@@ -193,6 +193,7 @@ class PlatformEnrollmentGovernancePayload(_message.Message):
     CERTIFICATE_FINGERPRINT_FIELD_NUMBER: _ClassVar[int]
     OWNER_USER_ID_FIELD_NUMBER: _ClassVar[int]
     REASON_FIELD_NUMBER: _ClassVar[int]
+    DECISION_TARGETS_FIELD_NUMBER: _ClassVar[int]
     action: str
     intent: str
     request_id: str
@@ -211,7 +212,16 @@ class PlatformEnrollmentGovernancePayload(_message.Message):
     certificate_fingerprint: str
     owner_user_id: str
     reason: str
-    def __init__(self, action: _Optional[str] = ..., intent: _Optional[str] = ..., request_id: _Optional[str] = ..., component_kind: _Optional[_Union[PlatformComponentKind, str]] = ..., instance_id: _Optional[str] = ..., actor_user_id: _Optional[str] = ..., decision: _Optional[_Union[PlatformEnrollmentDecision, str]] = ..., fingerprints: _Optional[_Union[PlatformEnrollmentFingerprints, _Mapping]] = ..., target_collection: _Optional[str] = ..., target_document_id: _Optional[str] = ..., operator_id: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., cli_session_id: _Optional[str] = ..., policy_id: _Optional[str] = ..., certificate_serial: _Optional[str] = ..., certificate_fingerprint: _Optional[str] = ..., owner_user_id: _Optional[str] = ..., reason: _Optional[str] = ...) -> None: ...
+    decision_targets: _containers.RepeatedCompositeFieldContainer[PlatformEnrollmentDecisionTarget]
+    def __init__(self, action: _Optional[str] = ..., intent: _Optional[str] = ..., request_id: _Optional[str] = ..., component_kind: _Optional[_Union[PlatformComponentKind, str]] = ..., instance_id: _Optional[str] = ..., actor_user_id: _Optional[str] = ..., decision: _Optional[_Union[PlatformEnrollmentDecision, str]] = ..., fingerprints: _Optional[_Union[PlatformEnrollmentFingerprints, _Mapping]] = ..., target_collection: _Optional[str] = ..., target_document_id: _Optional[str] = ..., operator_id: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., cli_session_id: _Optional[str] = ..., policy_id: _Optional[str] = ..., certificate_serial: _Optional[str] = ..., certificate_fingerprint: _Optional[str] = ..., owner_user_id: _Optional[str] = ..., reason: _Optional[str] = ..., decision_targets: _Optional[_Iterable[_Union[PlatformEnrollmentDecisionTarget, _Mapping]]] = ...) -> None: ...
+
+class PlatformEnrollmentDecisionTarget(_message.Message):
+    __slots__ = ("request_id", "fingerprints")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    FINGERPRINTS_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    fingerprints: PlatformEnrollmentFingerprints
+    def __init__(self, request_id: _Optional[str] = ..., fingerprints: _Optional[_Union[PlatformEnrollmentFingerprints, _Mapping]] = ...) -> None: ...
 
 class PlatformEnrollmentCompletionTranscript(_message.Message):
     __slots__ = ("protocol_version", "request_id", "token_hash", "component_kind", "instance_id", "fingerprints")

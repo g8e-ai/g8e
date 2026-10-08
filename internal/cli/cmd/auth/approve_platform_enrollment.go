@@ -10,10 +10,8 @@ package authcmd
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
@@ -54,7 +52,7 @@ approved.
 
 The command fetches the pending list to display the component kind, hostname,
 instance ID, CSR fingerprints, creation time, and expiry of every matched
-request, then asks for a single confirmation before posting the decisions,
+request, then asks for a single confirmation before posting one atomic batch decision,
 unless --yes is supplied for non-interactive automation. The approver must hold
 a valid, non-revoked CLI certificate bound to the active first user (the
 persistent owner); the gateway enforces this server-side.
@@ -67,8 +65,8 @@ Examples:
 
 Use --reason to attach an optional bounded approval note (max ` + fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes) + ` bytes).
 
-The request body carries only the request ID, typed decision, and optional
-reason — never a user ID or requester token. The requester token is held only by
+The request body binds the selected request IDs, displayed fingerprints, typed
+decision, and optional reason — never a user ID or requester token. The requester token is held only by
 the requesting workload and is never exposed through this command.`,
 		},
 		shared.LoadConfig, DefaultAPIClientFactory, shared.NewFileSvc,
@@ -91,15 +89,15 @@ must match a pending request or nothing is denied.
 
 The command fetches the pending list to display the component kind, hostname,
 instance ID, CSR fingerprints, creation time, and expiry of every matched
-request, then asks for a single confirmation before posting the decisions,
+request, then asks for a single confirmation before posting one atomic batch decision,
 unless --yes is supplied for non-interactive automation. The approver must hold
 a valid, non-revoked CLI certificate bound to the active first user (the
 persistent owner); the gateway enforces this server-side.
 
 Use --reason to attach an optional bounded denial note (max ` + fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes) + ` bytes).
 
-The request body carries only the request ID, typed decision, and optional
-reason — never a user ID or requester token. The requester token is held only by
+The request body binds the selected request IDs, displayed fingerprints, typed
+decision, and optional reason — never a user ID or requester token. The requester token is held only by
 the requesting workload and is never exposed through this command.`,
 		},
 		shared.LoadConfig, DefaultAPIClientFactory, shared.NewFileSvc,
@@ -264,18 +262,12 @@ func platformEnrollmentDecisionCmdWithConfig(
 				}
 			}
 
-			// Validate every decision before any is posted so a bad --reason
-			// cannot leave a batch partially decided.
-			decisions := make([]models.PlatformEnrollmentDecisionRequest, len(targets))
-			for i := range targets {
-				decisions[i] = models.PlatformEnrollmentDecisionRequest{
-					RequestID: targets[i].RequestID,
-					Decision:  spec.decision,
-					Reason:    reason,
-				}
-				if err := decisions[i].Validate(); err != nil {
-					return fmt.Errorf("enroll %s: %w", spec.verb, err)
-				}
+			decision := models.PlatformEnrollmentBatchDecisionRequest{Decision: spec.decision, Reason: reason}
+			for _, target := range targets {
+				decision.Requests = append(decision.Requests, models.PlatformEnrollmentDecisionTarget{RequestID: target.RequestID, Fingerprints: target.Fingerprints})
+			}
+			if err := decision.Validate(); err != nil {
+				return fmt.Errorf("enroll %s: %w", spec.verb, err)
 			}
 
 			for i := range targets {
@@ -284,11 +276,11 @@ func platformEnrollmentDecisionCmdWithConfig(
 			}
 
 			if !yes {
-				reader := bufio.NewReader(os.Stdin)
+				reader := bufio.NewReader(cmd.InOrStdin())
 				if len(targets) == 1 {
-					fmt.Printf("%s this platform enrollment request? (y/N): ", spec.promptVerb)
+					cmd.Printf("%s this platform enrollment request? (y/N): ", spec.promptVerb)
 				} else {
-					fmt.Printf("%s these %d platform enrollment requests? (y/N): ", spec.promptVerb, len(targets))
+					cmd.Printf("%s these %d platform enrollment requests? (y/N): ", spec.promptVerb, len(targets))
 				}
 				response, _ := reader.ReadString('\n')
 				response = strings.TrimSpace(strings.ToLower(response))
@@ -298,20 +290,12 @@ func platformEnrollmentDecisionCmdWithConfig(
 				}
 			}
 
-			// Each request is decided independently; a failure does not stop the
-			// remaining requests, and every failure is reported in the final error.
-			var failures []error
-			for _, decision := range decisions {
-				resp, err := PostPlatformEnrollmentDecision(client, decision)
-				if err != nil {
-					cmd.Printf("Platform enrollment request %s failed: %v\n", decision.RequestID, err)
-					failures = append(failures, fmt.Errorf("%s: %w", decision.RequestID, err))
-					continue
-				}
-				cmd.Printf("Platform enrollment request %s %s.\n", decision.RequestID, string(resp.State))
+			resp, err := PostPlatformEnrollmentBatchDecision(client, decision)
+			if err != nil {
+				return fmt.Errorf("enroll %s: %w", spec.verb, err)
 			}
-			if len(failures) > 0 {
-				return fmt.Errorf("enroll %s: %d of %d requests failed: %w", spec.verb, len(failures), len(decisions), errors.Join(failures...))
+			for _, result := range resp.Requests {
+				cmd.Printf("Platform enrollment request %s %s.\n", result.RequestID, result.State)
 			}
 			return nil
 		},
@@ -337,6 +321,34 @@ func PostPlatformEnrollmentDecision(client APIClient, decisionReq models.Platfor
 		return nil, fmt.Errorf("post decision: %w", err)
 	}
 	return auth.DecodePlatformEnrollmentDecision(respBody)
+}
+
+// PostPlatformEnrollmentBatchDecision sends one atomic, governed decision.
+func PostPlatformEnrollmentBatchDecision(client APIClient, req models.PlatformEnrollmentBatchDecisionRequest) (*models.PlatformEnrollmentBatchDecisionResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("validate batch decision: %w", err)
+	}
+	body, err := client.Post(constants.APIPaths.AuthPlatformEnrollmentBatchDecision, req)
+	if err != nil {
+		return nil, fmt.Errorf("post batch decision: %w", err)
+	}
+	var resp models.PlatformEnrollmentBatchDecisionResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("decode batch decision: %w", err)
+	}
+	if len(resp.Requests) != len(req.Requests) || resp.ReceiptID == "" {
+		return nil, constants.ErrPlatformEnrollmentInvalidDecision
+	}
+	for i, result := range resp.Requests {
+		expected := models.PlatformEnrollmentStateApproved
+		if req.Decision == models.PlatformEnrollmentDecisionDeny {
+			expected = models.PlatformEnrollmentStateDenied
+		}
+		if result.RequestID != req.Requests[i].RequestID || result.State != expected {
+			return nil, constants.ErrPlatformEnrollmentInvalidDecision
+		}
+	}
+	return &resp, nil
 }
 
 // selectPendingRequests resolves each selector against the pending list by exact

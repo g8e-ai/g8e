@@ -906,8 +906,11 @@ type PlatformEnrollmentGovernancePayload struct {
 	CertificateFingerprint string `protobuf:"bytes,16,opt,name=certificate_fingerprint,json=certificateFingerprint,proto3" json:"certificate_fingerprint,omitempty"`
 	OwnerUserId            string `protobuf:"bytes,17,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
 	Reason                 string `protobuf:"bytes,18,opt,name=reason,proto3" json:"reason,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// A fixed, bounded decision cohort. Every member is fingerprint-bound and
+	// committed atomically by the existing PLATFORM_ENROLLMENT_DECIDE action.
+	DecisionTargets []*PlatformEnrollmentDecisionTarget `protobuf:"bytes,19,rep,name=decision_targets,json=decisionTargets,proto3" json:"decision_targets,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *PlatformEnrollmentGovernancePayload) Reset() {
@@ -1066,6 +1069,65 @@ func (x *PlatformEnrollmentGovernancePayload) GetReason() string {
 	return ""
 }
 
+func (x *PlatformEnrollmentGovernancePayload) GetDecisionTargets() []*PlatformEnrollmentDecisionTarget {
+	if x != nil {
+		return x.DecisionTargets
+	}
+	return nil
+}
+
+type PlatformEnrollmentDecisionTarget struct {
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	RequestId     string                          `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Fingerprints  *PlatformEnrollmentFingerprints `protobuf:"bytes,2,opt,name=fingerprints,proto3" json:"fingerprints,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlatformEnrollmentDecisionTarget) Reset() {
+	*x = PlatformEnrollmentDecisionTarget{}
+	mi := &file_g8e_common_v1_common_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlatformEnrollmentDecisionTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlatformEnrollmentDecisionTarget) ProtoMessage() {}
+
+func (x *PlatformEnrollmentDecisionTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_common_v1_common_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlatformEnrollmentDecisionTarget.ProtoReflect.Descriptor instead.
+func (*PlatformEnrollmentDecisionTarget) Descriptor() ([]byte, []int) {
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *PlatformEnrollmentDecisionTarget) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentDecisionTarget) GetFingerprints() *PlatformEnrollmentFingerprints {
+	if x != nil {
+		return x.Fingerprints
+	}
+	return nil
+}
+
 type PlatformEnrollmentCompletionTranscript struct {
 	state           protoimpl.MessageState          `protogen:"open.v1"`
 	ProtocolVersion string                          `protobuf:"bytes,1,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
@@ -1080,7 +1142,7 @@ type PlatformEnrollmentCompletionTranscript struct {
 
 func (x *PlatformEnrollmentCompletionTranscript) Reset() {
 	*x = PlatformEnrollmentCompletionTranscript{}
-	mi := &file_g8e_common_v1_common_proto_msgTypes[9]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1092,7 +1154,7 @@ func (x *PlatformEnrollmentCompletionTranscript) String() string {
 func (*PlatformEnrollmentCompletionTranscript) ProtoMessage() {}
 
 func (x *PlatformEnrollmentCompletionTranscript) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_common_v1_common_proto_msgTypes[9]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1105,7 +1167,7 @@ func (x *PlatformEnrollmentCompletionTranscript) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use PlatformEnrollmentCompletionTranscript.ProtoReflect.Descriptor instead.
 func (*PlatformEnrollmentCompletionTranscript) Descriptor() ([]byte, []int) {
-	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{9}
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PlatformEnrollmentCompletionTranscript) GetProtocolVersion() string {
@@ -1180,7 +1242,7 @@ type CommandIntent struct {
 
 func (x *CommandIntent) Reset() {
 	*x = CommandIntent{}
-	mi := &file_g8e_common_v1_common_proto_msgTypes[10]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1192,7 +1254,7 @@ func (x *CommandIntent) String() string {
 func (*CommandIntent) ProtoMessage() {}
 
 func (x *CommandIntent) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_common_v1_common_proto_msgTypes[10]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1205,7 +1267,7 @@ func (x *CommandIntent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandIntent.ProtoReflect.Descriptor instead.
 func (*CommandIntent) Descriptor() ([]byte, []int) {
-	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{10}
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CommandIntent) GetOperatorId() string {
@@ -1384,7 +1446,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x1ePlatformEnrollmentFingerprints\x12\x10\n" +
 	"\x03app\x18\x01 \x01(\tR\x03app\x12\x1a\n" +
 	"\boperator\x18\x02 \x01(\tR\boperator\x12\x10\n" +
-	"\x03cli\x18\x03 \x01(\tR\x03cli\"\xb3\x06\n" +
+	"\x03cli\x18\x03 \x01(\tR\x03cli\"\x8f\a\n" +
 	"#PlatformEnrollmentGovernancePayload\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x16\n" +
 	"\x06intent\x18\x02 \x01(\tR\x06intent\x12\x1d\n" +
@@ -1407,7 +1469,12 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x12certificate_serial\x18\x0f \x01(\tR\x11certificateSerial\x127\n" +
 	"\x17certificate_fingerprint\x18\x10 \x01(\tR\x16certificateFingerprint\x12\"\n" +
 	"\rowner_user_id\x18\x11 \x01(\tR\vownerUserId\x12\x16\n" +
-	"\x06reason\x18\x12 \x01(\tR\x06reason\"\xd2\x02\n" +
+	"\x06reason\x18\x12 \x01(\tR\x06reason\x12Z\n" +
+	"\x10decision_targets\x18\x13 \x03(\v2/.g8e.common.v1.PlatformEnrollmentDecisionTargetR\x0fdecisionTargets\"\x94\x01\n" +
+	" PlatformEnrollmentDecisionTarget\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12Q\n" +
+	"\ffingerprints\x18\x02 \x01(\v2-.g8e.common.v1.PlatformEnrollmentFingerprintsR\ffingerprints\"\xd2\x02\n" +
 	"&PlatformEnrollmentCompletionTranscript\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\tR\x0fprotocolVersion\x12\x1d\n" +
 	"\n" +
@@ -1465,7 +1532,7 @@ func file_g8e_common_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_g8e_common_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_g8e_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_g8e_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_g8e_common_v1_common_proto_goTypes = []any{
 	(Component)(0),                                 // 0: g8e.common.v1.Component
 	(PlatformComponentKind)(0),                     // 1: g8e.common.v1.PlatformComponentKind
@@ -1479,11 +1546,12 @@ var file_g8e_common_v1_common_proto_goTypes = []any{
 	(*GovernanceEnvelope)(nil),                     // 9: g8e.common.v1.GovernanceEnvelope
 	(*PlatformEnrollmentFingerprints)(nil),         // 10: g8e.common.v1.PlatformEnrollmentFingerprints
 	(*PlatformEnrollmentGovernancePayload)(nil),    // 11: g8e.common.v1.PlatformEnrollmentGovernancePayload
-	(*PlatformEnrollmentCompletionTranscript)(nil), // 12: g8e.common.v1.PlatformEnrollmentCompletionTranscript
-	(*CommandIntent)(nil),                          // 13: g8e.common.v1.CommandIntent
-	(*timestamppb.Timestamp)(nil),                  // 14: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),                        // 15: google.protobuf.Struct
-	(*descriptorpb.FieldOptions)(nil),              // 16: google.protobuf.FieldOptions
+	(*PlatformEnrollmentDecisionTarget)(nil),       // 12: g8e.common.v1.PlatformEnrollmentDecisionTarget
+	(*PlatformEnrollmentCompletionTranscript)(nil), // 13: g8e.common.v1.PlatformEnrollmentCompletionTranscript
+	(*CommandIntent)(nil),                          // 14: g8e.common.v1.CommandIntent
+	(*timestamppb.Timestamp)(nil),                  // 15: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),                        // 16: google.protobuf.Struct
+	(*descriptorpb.FieldOptions)(nil),              // 17: google.protobuf.FieldOptions
 }
 var file_g8e_common_v1_common_proto_depIdxs = []int32{
 	4,  // 0: g8e.common.v1.L2Metadata.votes:type_name -> g8e.common.v1.L2Vote
@@ -1491,22 +1559,24 @@ var file_g8e_common_v1_common_proto_depIdxs = []int32{
 	3,  // 2: g8e.common.v1.GovernanceMetadata.l1:type_name -> g8e.common.v1.L1Metadata
 	5,  // 3: g8e.common.v1.GovernanceMetadata.l2:type_name -> g8e.common.v1.L2Metadata
 	7,  // 4: g8e.common.v1.GovernanceMetadata.l3:type_name -> g8e.common.v1.L3Metadata
-	14, // 5: g8e.common.v1.GovernanceEnvelope.timestamp:type_name -> google.protobuf.Timestamp
-	14, // 6: g8e.common.v1.GovernanceEnvelope.expires_at:type_name -> google.protobuf.Timestamp
+	15, // 5: g8e.common.v1.GovernanceEnvelope.timestamp:type_name -> google.protobuf.Timestamp
+	15, // 6: g8e.common.v1.GovernanceEnvelope.expires_at:type_name -> google.protobuf.Timestamp
 	0,  // 7: g8e.common.v1.GovernanceEnvelope.source_component:type_name -> g8e.common.v1.Component
-	15, // 8: g8e.common.v1.GovernanceEnvelope.intent_data:type_name -> google.protobuf.Struct
+	16, // 8: g8e.common.v1.GovernanceEnvelope.intent_data:type_name -> google.protobuf.Struct
 	8,  // 9: g8e.common.v1.GovernanceEnvelope.governance:type_name -> g8e.common.v1.GovernanceMetadata
 	1,  // 10: g8e.common.v1.PlatformEnrollmentGovernancePayload.component_kind:type_name -> g8e.common.v1.PlatformComponentKind
 	2,  // 11: g8e.common.v1.PlatformEnrollmentGovernancePayload.decision:type_name -> g8e.common.v1.PlatformEnrollmentDecision
 	10, // 12: g8e.common.v1.PlatformEnrollmentGovernancePayload.fingerprints:type_name -> g8e.common.v1.PlatformEnrollmentFingerprints
-	1,  // 13: g8e.common.v1.PlatformEnrollmentCompletionTranscript.component_kind:type_name -> g8e.common.v1.PlatformComponentKind
-	10, // 14: g8e.common.v1.PlatformEnrollmentCompletionTranscript.fingerprints:type_name -> g8e.common.v1.PlatformEnrollmentFingerprints
-	16, // 15: g8e.common.v1.forbidden_patterns:extendee -> google.protobuf.FieldOptions
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	15, // [15:16] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	12, // 13: g8e.common.v1.PlatformEnrollmentGovernancePayload.decision_targets:type_name -> g8e.common.v1.PlatformEnrollmentDecisionTarget
+	10, // 14: g8e.common.v1.PlatformEnrollmentDecisionTarget.fingerprints:type_name -> g8e.common.v1.PlatformEnrollmentFingerprints
+	1,  // 15: g8e.common.v1.PlatformEnrollmentCompletionTranscript.component_kind:type_name -> g8e.common.v1.PlatformComponentKind
+	10, // 16: g8e.common.v1.PlatformEnrollmentCompletionTranscript.fingerprints:type_name -> g8e.common.v1.PlatformEnrollmentFingerprints
+	17, // 17: g8e.common.v1.forbidden_patterns:extendee -> google.protobuf.FieldOptions
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	17, // [17:18] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_g8e_common_v1_common_proto_init() }
@@ -1520,7 +1590,7 @@ func file_g8e_common_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_common_v1_common_proto_rawDesc), len(file_g8e_common_v1_common_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 1,
 			NumServices:   0,
 		},

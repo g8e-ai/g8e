@@ -21,6 +21,30 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS idx_documents_collection ON documents(collection);
 CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(collection, updated_at);
 
+-- Enrollment hot paths use literal JSON expressions (not parameterized paths).
+-- Partial indexes exclude unrelated documents and historical payloads are never
+-- decoded to count capacity or discover pending requests.
+CREATE INDEX IF NOT EXISTS idx_enrollment_token ON documents(json_extract(data, '$.token_hash'))
+    WHERE collection = 'platform_enrollments';
+CREATE INDEX IF NOT EXISTS idx_enrollment_identity ON documents(
+    json_extract(data, '$.component_kind'), json_extract(data, '$.instance_id'),
+    json_extract(data, '$.state'), julianday(json_extract(data, '$.expires_at')))
+    WHERE collection = 'platform_enrollments';
+CREATE INDEX IF NOT EXISTS idx_enrollment_capacity ON documents(
+    json_extract(data, '$.component_kind'), json_extract(data, '$.state'),
+    julianday(json_extract(data, '$.expires_at')))
+    WHERE collection = 'platform_enrollments';
+CREATE INDEX IF NOT EXISTS idx_enrollment_pending ON documents(
+    json_extract(data, '$.state'), julianday(json_extract(data, '$.expires_at')))
+    WHERE collection = 'platform_enrollments';
+
+CREATE INDEX IF NOT EXISTS idx_enrollment_lease ON documents(
+    json_extract(data, '$.state'), julianday(json_extract(data, '$.issuance_lease_expires_at')))
+    WHERE collection = 'platform_enrollments';
+CREATE INDEX IF NOT EXISTS idx_enrollment_retention ON documents(
+    json_extract(data, '$.state'), julianday(json_extract(data, '$.last_transition_at')))
+    WHERE collection = 'platform_enrollments';
+
 -- KV store with TTL
 -- Must be defined before document triggers that reference it.
 CREATE TABLE IF NOT EXISTS kv_store (

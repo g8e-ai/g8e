@@ -202,6 +202,41 @@ func (r PlatformEnrollmentDecisionRequest) Validate() error {
 	return nil
 }
 
+// PlatformEnrollmentDecisionTarget binds an owner decision to the exact keys
+// displayed in the pending snapshot, including when enrollment is batched.
+type PlatformEnrollmentDecisionTarget struct {
+	RequestID    string                            `json:"request_id"`
+	Fingerprints PlatformEnrollmentCSRFingerprints `json:"fingerprints"`
+}
+
+type PlatformEnrollmentBatchDecisionRequest struct {
+	Requests []PlatformEnrollmentDecisionTarget `json:"requests"`
+	Decision PlatformEnrollmentDecision         `json:"decision"`
+	Reason   string                             `json:"reason,omitempty"`
+}
+
+func (r PlatformEnrollmentBatchDecisionRequest) Validate() error {
+	if len(r.Requests) == 0 || len(r.Requests) > constants.PlatformEnrollmentMaxDecisionBatch {
+		return constants.ErrPlatformEnrollmentInvalidDecision
+	}
+	seen := make(map[string]struct{}, len(r.Requests))
+	for _, target := range r.Requests {
+		if err := (PlatformEnrollmentDecisionRequest{RequestID: target.RequestID, Decision: r.Decision, Reason: r.Reason}).Validate(); err != nil {
+			return err
+		}
+		if _, exists := seen[target.RequestID]; exists {
+			return constants.ErrPlatformEnrollmentInvalidDecision
+		}
+		seen[target.RequestID] = struct{}{}
+	}
+	return nil
+}
+
+type PlatformEnrollmentBatchDecisionResponse struct {
+	Requests  []PlatformEnrollmentDecisionResponse `json:"requests"`
+	ReceiptID string                               `json:"receipt_id"`
+}
+
 type PlatformEnrollmentDecisionResponse struct {
 	RequestID string                  `json:"request_id"`
 	State     PlatformEnrollmentState `json:"state"`

@@ -229,7 +229,7 @@ The workload enrollment flow is:
 4. The owner approves or denies requests:
    - CLI approval: `g8e auth enroll approve <selector>... [--all] [--yes] [--reason <text>]`
    - CLI denial: `g8e auth enroll deny <selector>... [--all] [--yes] [--reason <text>]`
-   - Each space-separated selector matches a pending request by request ID, instance ID, or hostname. `--all` decides every pending request. Every selector must match or nothing is decided; matched requests are confirmed once, then decided independently.
+   - Each space-separated selector matches a pending request by request ID, instance ID, or hostname. `--all` decides every pending request. Every selector must match or nothing is decided. Matched requests are confirmed once, then sent to `POST /api/v1/auth/platform-enrollments/decisions` as one bounded batch of IDs and displayed CSR fingerprints. The existing governed `PLATFORM_ENROLLMENT_DECIDE` action rechecks the active first owner, expiry, pending state, and fingerprints in one SQLite write transaction. A stale member rolls back the whole cohort. Every member stores the shared decision receipt ID and reason. The existing bootstrap/posture policy remains in force: consensus exempts enrollment bootstrap actions from mandatory L2; ratify/notary still require their applicable L3 proof.
 5. After approval, the workload calls `POST /api/v1/auth/platform/complete`, proves possession of every requested private key, and receives its certificate, trust bundle, and session or application policy.
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
 7. The active first owner can revoke completed enrollments by request ID using `g8e auth enroll revoke <request-id> [--yes] [--reason <text>]`. Completed enrollments are discovered using `g8e auth enroll list`. Revocation records the actor, reason, timestamp, governance envelope, and receipt identifiers on the enrollment record.
@@ -290,7 +290,8 @@ L1, L4, and L5 apply universally. L2 Consensus and L3 Notary are enforced or aud
 | `/api/v1/auth/platform/complete` | POST | Workload completes enrollment via proof of possession | `RouteAuthNone` (token-scoped) |
 | `/api/v1/auth/platform/pending` | GET | List pending platform enrollment requests | `RouteAuthDual` |
 | `/api/v1/auth/platform/enrolled` | GET | List completed and revoked enrollments | `RouteAuthDual` |
-| `/api/v1/auth/platform/decision` | POST | Approve or deny platform enrollment requests | `RouteAuthDual` |
+| `/api/v1/auth/platform-enrollments/decision` | POST | Approve or deny one platform enrollment request | `RouteAuthDual` |
+| `/api/v1/auth/platform-enrollments/decisions` | POST | Atomically decide a fixed cohort of at most 2048 requests | `RouteAuthDual` |
 | `/api/v1/auth/platform/revoke` | POST | Revoke completed platform workload enrollment | `RouteAuthDual` |
 | `/api/v1/gateway/proxy-signing-key` | GET | Fetch Actuator public key for browser proxy stamp | `RouteAuthMTLS` |
 | `/api/v1/approvals/cli/list` | GET | List pending L3 transaction approvals for CLI | `RouteAuthMTLS` |

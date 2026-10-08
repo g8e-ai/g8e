@@ -381,28 +381,14 @@ func deployDockerOperator(ctx context.Context, cmd *cobra.Command, d *deployDock
 		cmd.Printf("Operator container %s prepared on %s (use --background to start)\n", op.container, d.context)
 		return deployed, nil
 	}
-	if opts.client == nil {
-		if err := d.startOperator(ctx, dir, opts.endpoint); err != nil {
-			return deployedOperator{}, err
-		}
-		cmd.Printf("Started Operator container %s on %s\n", op.container, d.context)
-		return deployed, nil
+	if err := d.startOperator(ctx, dir, opts.endpoint); err != nil {
+		return deployedOperator{}, err
 	}
-	deployed.RequestID, err = enrollOperator(ctx, d, opts, dir)
+	deployed.RequestID, err = d.awaitRequestID(ctx, dir)
 	if err != nil {
 		return deployedOperator{}, err
 	}
-	deployed.SessionID, err = d.awaitSessionID(ctx, dir)
-	if err != nil {
-		return deployedOperator{}, err
-	}
-	if err := d.awaitReady(ctx, dir); err != nil {
-		return deployedOperator{}, err
-	}
-	if err := d.markReady(ctx, dir); err != nil {
-		return deployedOperator{}, err
-	}
-	cmd.Printf("Started and verified Operator container %s on %s\n", op.container, d.context)
+	cmd.Printf("Staged Operator container %s on %s (enrollment request %s)\n", op.container, d.context, deployed.RequestID)
 	return deployed, nil
 }
 

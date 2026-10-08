@@ -148,7 +148,7 @@ func TestOperatorDeployInstallsBinaryWithoutStartingIt(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(remoteDir, operatorDeployStartLog))
 }
 
-func TestOperatorDeployApprovesEachOperatorAndReportsSessions(t *testing.T) {
+func TestOperatorDeployStagesFleetBeforeOneApprovalAndReportsSessions(t *testing.T) {
 	useFakeSSH(t, fakeWorkerEnrolls)
 	remoteDir := filepath.Join(t.TempDir(), "fleet")
 	dirs := operatorDeployDirs(remoteDir, 2)
@@ -160,9 +160,20 @@ func TestOperatorDeployApprovesEachOperatorAndReportsSessions(t *testing.T) {
 			Status:            string(constants.OperatorStatusActive),
 		}
 	}
-	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: sessions})
+	pending := models.PlatformEnrollmentPendingResponse{}
+	response := models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "batch-receipt"}
+	for _, dir := range dirs {
+		id := deployedDirID(dir) + "-000"
+		pending.Requests = append(pending.Requests, models.PlatformEnrollmentPendingRequest{RequestID: id})
+		response.Requests = append(response.Requests, models.PlatformEnrollmentDecisionResponse{RequestID: id, State: models.PlatformEnrollmentStateApproved})
+	}
+	listBody, err := json.Marshal(struct {
+		Success   bool                                      `json:"success"`
+		Operators []*operatorv1.OperatorDocument            `json:"operators"`
+		Requests  []models.PlatformEnrollmentPendingRequest `json:"requests"`
+	}{true, sessions, pending.Requests})
 	require.NoError(t, err)
-	decisionBody, err := json.Marshal(models.PlatformEnrollmentDecisionResponse{State: models.PlatformEnrollmentStateApproved})
+	decisionBody, err := json.Marshal(response)
 	require.NoError(t, err)
 	client := &cmdtest.MockAPIClient{GetResp: listBody, PostResp: decisionBody}
 
@@ -170,14 +181,13 @@ func TestOperatorDeployApprovesEachOperatorAndReportsSessions(t *testing.T) {
 		"--count", "2", "--background", "--endpoint", "localhost", "--approve")
 	require.NoError(t, err, out)
 
-	require.Len(t, client.PostCalls, len(dirs))
+	require.Len(t, client.PostCalls, 1)
+	require.Equal(t, constants.APIPaths.AuthPlatformEnrollmentBatchDecision, client.PostCalls[0].Path)
+	decision := client.PostCalls[0].Body.(models.PlatformEnrollmentBatchDecisionRequest)
+	require.Len(t, decision.Requests, len(dirs))
 	for i, dir := range dirs {
-		assert.Equal(t, constants.APIPaths.AuthPlatformEnrollmentDecision, client.PostCalls[i].Path)
-		assert.Equal(t, models.PlatformEnrollmentDecisionRequest{
-			RequestID: deployedDirID(dir) + "-000",
-			Decision:  models.PlatformEnrollmentDecisionApprove,
-		}, client.PostCalls[i].Body, "each request is approved by the ID its own directory logged")
-		assert.Contains(t, out, deployedDirID(dir)+"-111", "session ID for %s is reported", dir)
+		assert.Equal(t, deployedDirID(dir)+"-000", decision.Requests[i].RequestID)
+		assert.Contains(t, out, deployedDirID(dir)+"-111")
 	}
 }
 
@@ -245,7 +255,7 @@ func TestOperatorDeployLocalBatchSharesBinaryAndPreservesEarlierBatch(t *testing
 func TestOperatorDeployRejectsUnsafeBatchesAndRoles(t *testing.T) {
 	for _, flags := range [][]string{
 		{"--count", "5001"}, {"--count", "2", "--start-index", "5000"},
-		{"--start-index", "0"}, {"--parallel", "0"}, {"--parallel", "5"},
+		{"--start-index", "0"}, {"--parallel", "0"}, {"--parallel", "101"},
 		{"--roles", "unknown"},
 
 		{"--local"}, {"--hosts", "a,,b"}, {"--hosts", "a,a"}, {"--hosts", "-oProxyCommand=bad"},
@@ -382,16 +392,29 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 		sessions[i] = &operatorv1.OperatorDocument{OperatorSessionId: deployedDirID(dir) + "-111", Status: string(constants.OperatorStatusActive)}
 		expected[deployedDirID(dir)+"-000"] = true
 	}
-	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: sessions})
+	pending := models.PlatformEnrollmentPendingResponse{Requests: []models.PlatformEnrollmentPendingRequest{{RequestID: "unrelated"}}}
+	response := models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "batch-receipt"}
+	for _, dir := range dirs {
+		id := deployedDirID(dir) + "-000"
+		pending.Requests = append(pending.Requests, models.PlatformEnrollmentPendingRequest{RequestID: id})
+		response.Requests = append(response.Requests, models.PlatformEnrollmentDecisionResponse{RequestID: id, State: models.PlatformEnrollmentStateApproved})
+	}
+	body, err := json.Marshal(struct {
+		Success   bool                                      `json:"success"`
+		Operators []*operatorv1.OperatorDocument            `json:"operators"`
+		Requests  []models.PlatformEnrollmentPendingRequest `json:"requests"`
+	}{true, sessions, pending.Requests})
 	require.NoError(t, err)
-	client := &cmdtest.MockAPIClient{GetResp: body, PostResp: []byte(`{"state":"approved"}`)}
+	postBody, err := json.Marshal(response)
+	require.NoError(t, err)
+	client := &cmdtest.MockAPIClient{GetResp: body, PostResp: postBody}
+
 	out, err := runOperatorDeploy(t, client, "--hosts", "host", "--dest-dir", root,
 		"--count", "12", "--parallel", "4", "--background", "--approve", "--endpoint", "localhost")
 	require.NoError(t, err, out)
-	require.Len(t, client.PostCalls, 12)
-	for _, call := range client.PostCalls {
-		decision := call.Body.(models.PlatformEnrollmentDecisionRequest)
-		require.True(t, expected[decision.RequestID], "only this batch's requests may be approved, exactly once")
+	require.Len(t, client.PostCalls, 1)
+	for _, decision := range client.PostCalls[0].Body.(models.PlatformEnrollmentBatchDecisionRequest).Requests {
+		require.True(t, expected[decision.RequestID], "only this cohort may be approved")
 		delete(expected, decision.RequestID)
 	}
 	assert.Empty(t, expected)

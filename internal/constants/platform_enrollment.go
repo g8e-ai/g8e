@@ -47,10 +47,14 @@ const (
 	// malicious requester.
 	PlatformEnrollmentMaxLiveRequestsPerComponent = 3
 
-	// The native full platform launches four distinct Operator roles before
-	// owner approval. Bound Operator requests separately so all four can wait
-	// for approval without increasing the quota for other component kinds.
-	PlatformEnrollmentMaxLiveOperatorRequests = 4
+	// Bound Operator requests separately from other component kinds. The
+	// native full platform launches four distinct Operator roles before owner
+	// approval, and a staged fleet must fit before any request is approved. This
+	// pending budget is independent of CLI launch concurrency.
+	PlatformEnrollmentMaxLiveOperatorRequests = 2048
+
+	// PlatformEnrollmentMaxDecisionBatch bounds a single owner-approved cohort.
+	PlatformEnrollmentMaxDecisionBatch = 2048
 
 	// PlatformEnrollmentCleanupInterval is how often the managed cleanup
 	// goroutine runs reconciliation of expired leases and removal of

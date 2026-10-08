@@ -13,6 +13,7 @@
     - [L3Metadata](#g8e-common-v1-L3Metadata)
     - [L3Proof](#g8e-common-v1-L3Proof)
     - [PlatformEnrollmentCompletionTranscript](#g8e-common-v1-PlatformEnrollmentCompletionTranscript)
+    - [PlatformEnrollmentDecisionTarget](#g8e-common-v1-PlatformEnrollmentDecisionTarget)
     - [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints)
     - [PlatformEnrollmentGovernancePayload](#g8e-common-v1-PlatformEnrollmentGovernancePayload)
   
@@ -228,6 +229,22 @@ should be populated per instance.
 
 
 
+<a name="g8e-common-v1-PlatformEnrollmentDecisionTarget"></a>
+
+### PlatformEnrollmentDecisionTarget
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| request_id | [string](#string) |  |  |
+| fingerprints | [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints) |  |  |
+
+
+
+
+
+
 <a name="g8e-common-v1-PlatformEnrollmentFingerprints"></a>
 
 ### PlatformEnrollmentFingerprints
@@ -271,6 +288,7 @@ should be populated per instance.
 | certificate_fingerprint | [string](#string) |  |  |
 | owner_user_id | [string](#string) |  |  |
 | reason | [string](#string) |  |  |
+| decision_targets | [PlatformEnrollmentDecisionTarget](#g8e-common-v1-PlatformEnrollmentDecisionTarget) | repeated | A fixed, bounded decision cohort. Every member is fingerprint-bound and committed atomically by the existing PLATFORM_ENROLLMENT_DECIDE action. |
 
 
 

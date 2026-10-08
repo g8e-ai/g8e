@@ -40,15 +40,6 @@ import (
 // decision, actor user ID, and resulting document/session IDs. CSR PEM,
 // token hashes, and private keys never appear in summaries or audit
 // records.
-type platformEnrollmentDecisionUpdate struct {
-	State              string    `json:"state"`
-	ApprovedByUserID   string    `json:"approved_by_user_id"`
-	DecidedAt          time.Time `json:"decided_at"`
-	DecisionReason     string    `json:"decision_reason"`
-	DecisionEnvelopeID string    `json:"decision_envelope_id"`
-	DecisionReceiptID  string    `json:"decision_receipt_id"`
-	LastTransitionAt   time.Time `json:"last_transition_at"`
-}
 
 type platformEnrollmentIssueRollbackUpdate struct {
 	State            string    `json:"state"`
@@ -168,11 +159,8 @@ func (h *PlatformEnrollmentHandler) HandleCreate(ctx context.Context, msg *PubSu
 		payload.GetRequestId(), string(kind), payload.GetInstanceId(), fingerprintsSummary(fp)), nil
 }
 
-// HandleDecide loads the request, verifies it is in the pending state,
-// performs a conditional pending -> approved|denied transition, and
-// stamps approved_by_user_id, decided_at, decision_envelope_id, and
-// decision_receipt_id (from msg.ID). The conditional update ensures a
-// concurrent or repeated decision does not consume approval.
+// HandleDecide applies the fingerprint-bound cohort through the document
+// owner, which rechecks authority and all preconditions in one transaction.
 func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	payload, err := h.decodePayload(msg)
 	if err != nil {
@@ -182,65 +170,21 @@ func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSu
 	if err != nil {
 		return "", err
 	}
-	requestID := payload.GetRequestId()
-	if requestID == "" {
-		return "", constants.ErrPlatformEnrollmentRequestIDRequired
+	req := models.PlatformEnrollmentBatchDecisionRequest{Decision: decision, Reason: payload.GetReason()}
+	for _, target := range payload.GetDecisionTargets() {
+		req.Requests = append(req.Requests, models.PlatformEnrollmentDecisionTarget{
+			RequestID: target.GetRequestId(), Fingerprints: fingerprintsFromPayload(target.GetFingerprints()),
+		})
 	}
-	actorUserID := payload.GetActorUserId()
-	if actorUserID == "" {
+	if len(req.Requests) == 0 {
+		req.Requests = []models.PlatformEnrollmentDecisionTarget{{RequestID: payload.GetRequestId(), Fingerprints: fingerprintsFromPayload(payload.GetFingerprints())}}
+	} else if payload.GetRequestId() != "" {
 		return "", constants.ErrPlatformEnrollmentInvalidDecision
 	}
-
-	req, err := loadPlatformEnrollmentRequest(ctx, h.deps, requestID)
-	if err != nil {
-		return "", err
+	if err := h.deps.DocStore.DecidePlatformEnrollments(ctx, payload.GetActorUserId(), req, msg.ID); err != nil {
+		return "", fmt.Errorf("platform enrollment: decide cohort: %w", err)
 	}
-	if req == nil {
-		return "", constants.ErrPlatformEnrollmentRequestNotFound
-	}
-	if req.State != models.PlatformEnrollmentStatePending {
-		return "", constants.ErrPlatformEnrollmentAlreadyDecided
-	}
-
-	var targetState models.PlatformEnrollmentState
-	switch decision {
-	case models.PlatformEnrollmentDecisionApprove:
-		targetState = models.PlatformEnrollmentStateApproved
-	case models.PlatformEnrollmentDecisionDeny:
-		targetState = models.PlatformEnrollmentStateDenied
-	default:
-		return "", constants.ErrPlatformEnrollmentInvalidDecision
-	}
-
-	now := time.Now().UTC()
-	setFields, err := json.Marshal(platformEnrollmentDecisionUpdate{
-		State:              string(targetState),
-		ApprovedByUserID:   actorUserID,
-		DecidedAt:          now,
-		DecisionReason:     "",
-		DecisionEnvelopeID: msg.ID,
-		DecisionReceiptID:  msg.ID,
-		LastTransitionAt:   now,
-	})
-	if err != nil {
-		return "", fmt.Errorf("platform enrollment: marshal decision %s: %w", requestID, err)
-	}
-	applied, err := h.deps.DocStore.DocConditionalUpdate(
-		platformEnrollmentCollection(), requestID, setFields, "state", string(models.PlatformEnrollmentStatePending),
-	)
-	if err != nil {
-		return "", fmt.Errorf("platform enrollment: decide %s: %w", requestID, err)
-	}
-	if !applied {
-		return "", constants.ErrPlatformEnrollmentAlreadyDecided
-	}
-
-	h.logger.Info("platform enrollment decision recorded",
-		"request_id", requestID,
-		"decision", string(decision),
-		"actor_user_id", actorUserID)
-	return fmt.Sprintf("platform enrollment decide request_id=%s decision=%s actor=%s",
-		requestID, string(decision), actorUserID), nil
+	return fmt.Sprintf("platform enrollment decide count=%d decision=%s actor=%s", len(req.Requests), decision, payload.GetActorUserId()), nil
 }
 
 // HandleIssue loads the request, verifies it is in the issuing state

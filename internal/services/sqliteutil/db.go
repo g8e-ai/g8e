@@ -397,6 +397,13 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 			return err
 		}
 		_, err = conn.ExecContext(ctx, "COMMIT")
+		if err != nil {
+			// Closing a pooled Conn does not end an open transaction. Roll back
+			// before returning it to the pool, even when the caller canceled.
+			if _, rollbackErr := conn.ExecContext(context.Background(), "ROLLBACK"); rollbackErr != nil {
+				err = errors.Join(err, fmt.Errorf("rollback failed commit: %w", rollbackErr))
+			}
+		}
 		closeErr := conn.Close()
 		if closeErr != nil {
 			if err != nil {

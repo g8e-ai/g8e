@@ -73,6 +73,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentPending, h.platformEnrollmentController.handlePlatformEnrollmentPending)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentEnrolled, h.platformEnrollmentController.handlePlatformEnrollmentEnrolled)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentDecision, h.platformEnrollmentController.handlePlatformEnrollmentDecision)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentBatchDecision, h.platformEnrollmentController.handlePlatformEnrollmentBatchDecision)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRevoke, h.platformEnrollmentController.handlePlatformEnrollmentRevoke)
 
 	// CLI rotation — mTLS-protected; the caller's identity is derived from

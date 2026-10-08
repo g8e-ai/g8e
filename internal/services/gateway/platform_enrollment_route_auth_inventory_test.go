@@ -99,6 +99,7 @@ func TestPlatformEnrollmentRouteAuth_NewRoutesClassified(t *testing.T) {
 		"platform enrollment complete is RouteAuthNone (public, token + proof-of-possession)")
 
 	// Owner surfaces — dual auth (web session or mTLS).
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentBatchDecision))
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentPending),
 		"platform enrollment pending is RouteAuthDual (owner: web session or mTLS)")
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentEnrolled),

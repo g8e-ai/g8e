@@ -312,6 +312,11 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		logger.Error("Failed to create runtime tree", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))
 	}
+	deployment := NewOperatorDeploymentRecorder(fileSvc)
+	if err := deployment.Reset(context.Background()); err != nil {
+		logger.Error("Failed to reset deployment state", string(constants.ConnectionStateError), err)
+		os.Exit(exitcode.FromError(err))
+	}
 
 	trustStore := certs.NewTrustStore(nil)
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})

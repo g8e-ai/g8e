@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -325,6 +326,44 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentDecision(w http.R
 	c.responder.JSON(w, http.StatusOK, resp)
 }
 
+// handlePlatformEnrollmentBatchDecision commits a fixed owner-approved cohort.
+// POST /api/v1/auth/platform-enrollments/decisions (RouteAuthDual, HTTPS only).
+func (c *PlatformEnrollmentController) handlePlatformEnrollmentBatchDecision(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	if userID == "" {
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionAuthRequired.Error())
+		return
+	}
+	if err := c.requireActiveFirstUser(userID); err != nil {
+		c.writeEnrollmentError(w, err)
+		return
+	}
+	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+	var req models.PlatformEnrollmentBatchDecisionRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	if err := req.Validate(); err != nil {
+		c.writeEnrollmentError(w, err)
+		return
+	}
+	resp, err := c.enrollSvc.DecideBatch(r.Context(), userID, req)
+	if err != nil {
+		c.writeEnrollmentError(w, err)
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, resp)
+}
+
 // requireActiveFirstUser verifies that the given user ID is the active
 // first user (the persistent owner). Returns a typed error if the user
 // is not the first user, is not active, or cannot be looked up.
@@ -400,74 +439,74 @@ func (c *PlatformEnrollmentController) writeEnrollmentError(w http.ResponseWrite
 	if err == nil {
 		return
 	}
-	switch err {
-	case constants.ErrPlatformEnrollmentRequiresBootstrap:
+	switch {
+	case errors.Is(err, constants.ErrPlatformEnrollmentRequiresBootstrap):
 		c.responder.Error(w, http.StatusForbidden, err.Error())
-	case constants.ErrPlatformEnrollmentInvalidComponent:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidComponent):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentInstanceIDRequired:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInstanceIDRequired):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentInvalidInstanceID:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidInstanceID):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentHostnameRequired:
+	case errors.Is(err, constants.ErrPlatformEnrollmentHostnameRequired):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentInvalidHostname:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidHostname):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentFingerprintRequired:
+	case errors.Is(err, constants.ErrPlatformEnrollmentFingerprintRequired):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentInvalidPayload:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidPayload):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentInvalidCSR:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidCSR):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentUnsupportedKey:
+	case errors.Is(err, constants.ErrPlatformEnrollmentUnsupportedKey):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentDuplicateKey:
+	case errors.Is(err, constants.ErrPlatformEnrollmentDuplicateKey):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentRequestIDRequired:
+	case errors.Is(err, constants.ErrPlatformEnrollmentRequestIDRequired):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentTokenRequired:
+	case errors.Is(err, constants.ErrPlatformEnrollmentTokenRequired):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentInvalidToken:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidToken):
 		c.responder.Error(w, http.StatusNotFound, err.Error())
-	case constants.ErrPlatformEnrollmentRequestNotFound:
+	case errors.Is(err, constants.ErrPlatformEnrollmentRequestNotFound):
 		c.responder.Error(w, http.StatusNotFound, err.Error())
-	case constants.ErrPlatformEnrollmentRequestExpired:
+	case errors.Is(err, constants.ErrPlatformEnrollmentRequestExpired):
 		c.responder.Error(w, http.StatusGone, err.Error())
-	case constants.ErrPlatformEnrollmentRequestDenied:
+	case errors.Is(err, constants.ErrPlatformEnrollmentRequestDenied):
 		c.responder.Error(w, http.StatusForbidden, err.Error())
-	case constants.ErrPlatformEnrollmentNotApproved:
+	case errors.Is(err, constants.ErrPlatformEnrollmentNotApproved):
 		c.responder.Error(w, http.StatusForbidden, err.Error())
-	case constants.ErrPlatformEnrollmentAlreadyDecided:
+	case errors.Is(err, constants.ErrPlatformEnrollmentAlreadyDecided):
 		c.responder.Error(w, http.StatusConflict, err.Error())
-	case constants.ErrPlatformEnrollmentIssuanceInProgress:
+	case errors.Is(err, constants.ErrPlatformEnrollmentIssuanceInProgress):
 		w.Header().Set("Retry-After", "5")
 		c.responder.Error(w, http.StatusTooManyRequests, err.Error())
-	case constants.ErrPlatformEnrollmentInvalidState:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidState):
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
-	case constants.ErrPlatformEnrollmentInvalidDecision:
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidDecision):
 		c.responder.Error(w, http.StatusForbidden, err.Error())
-	case constants.ErrPlatformEnrollmentReasonTooLong:
+	case errors.Is(err, constants.ErrPlatformEnrollmentReasonTooLong):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentProofRequired:
+	case errors.Is(err, constants.ErrPlatformEnrollmentProofRequired):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentProofInvalid:
+	case errors.Is(err, constants.ErrPlatformEnrollmentProofInvalid):
 		c.responder.Error(w, http.StatusUnauthorized, err.Error())
-	case constants.ErrPlatformEnrollmentCSRMismatch:
+	case errors.Is(err, constants.ErrPlatformEnrollmentCSRMismatch):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case constants.ErrPlatformEnrollmentQuotaExceeded:
+	case errors.Is(err, constants.ErrPlatformEnrollmentQuotaExceeded):
 		c.responder.Error(w, http.StatusTooManyRequests, err.Error())
-	case constants.ErrPlatformEnrollmentRateLimited:
+	case errors.Is(err, constants.ErrPlatformEnrollmentRateLimited):
 		w.Header().Set("Retry-After", "5")
 		c.responder.Error(w, http.StatusTooManyRequests, err.Error())
-	case constants.ErrPlatformEnrollmentGovernanceRejected:
+	case errors.Is(err, constants.ErrPlatformEnrollmentGovernanceRejected):
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
-	case constants.ErrPlatformEnrollmentPersistenceFailed:
+	case errors.Is(err, constants.ErrPlatformEnrollmentPersistenceFailed):
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
-	case constants.ErrPlatformEnrollmentIssuanceFailed:
+	case errors.Is(err, constants.ErrPlatformEnrollmentIssuanceFailed):
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
-	case constants.ErrPlatformEnrollmentStoredRequestInvalid:
+	case errors.Is(err, constants.ErrPlatformEnrollmentStoredRequestInvalid):
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
-	case constants.ErrPlatformEnrollmentRevoked:
+	case errors.Is(err, constants.ErrPlatformEnrollmentRevoked):
 		c.responder.Error(w, http.StatusGone, err.Error())
 	default:
 		c.logger.Error("platform enrollment: unhandled error", "error", err)

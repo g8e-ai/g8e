@@ -995,6 +995,20 @@ func TestPlatformEnrollmentService_FullPlatformOperatorsAwaitApproval(t *testing
 		require.NoError(t, err, "role %s must be able to await owner approval", role)
 		require.NotEmpty(t, response.RequestID)
 	}
+	// Fill remaining capacity at the reservation boundary. Repeating PKI and
+	// full governed CREATE for every slot would turn this quota regression
+	// into a scale test; the four role requests above cover that pipeline.
+	for i := 4; i < constants.PlatformEnrollmentMaxLiveOperatorRequests; i++ {
+		now := time.Now().UTC()
+		_, err := env.enrollSvc.createRequestRecord(t.Context(), &models.PlatformEnrollmentRequest{
+			ID:            fmt.Sprintf("operator-fill-%d", i),
+			ComponentKind: models.PlatformComponentOperator,
+			InstanceID:    fmt.Sprintf("operator-fill-%d", i),
+			State:         models.PlatformEnrollmentStatePending,
+			CreatedAt:     now, ExpiresAt: now.Add(constants.PlatformEnrollmentRequestTTL),
+		})
+		require.NoError(t, err, "request %d is within the Operator quota", i)
+	}
 	operatorCSR, _, cliCSR, _ := generateOperatorCSRsAndKeys(t)
 	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind:     models.PlatformComponentOperator,
