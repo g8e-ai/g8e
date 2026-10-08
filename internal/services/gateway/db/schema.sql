@@ -124,92 +124,144 @@ CREATE INDEX IF NOT EXISTS idx_blobs_namespace ON blobs(namespace);
 CREATE INDEX IF NOT EXISTS idx_blobs_expires   ON blobs(expires_at);
 CREATE INDEX IF NOT EXISTS idx_blobs_tier      ON blobs(state_tier);
 
--- State Merkle Root: single row containing the current platform state root
-CREATE TABLE IF NOT EXISTS state_root (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    root TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+-- The full-scan state root (algorithm 1) kept a global state_version counter and
+-- a persisted root row. Both are replaced by the incremental commitment below.
+DROP TRIGGER IF EXISTS trg_documents_insert_version;
+DROP TRIGGER IF EXISTS trg_documents_update_version;
+DROP TRIGGER IF EXISTS trg_documents_delete_version;
+DROP TRIGGER IF EXISTS trg_kv_store_insert_version;
+DROP TRIGGER IF EXISTS trg_kv_store_update_version;
+DROP TRIGGER IF EXISTS trg_kv_store_delete_version;
+DROP TRIGGER IF EXISTS trg_blobs_insert_version;
+DROP TRIGGER IF EXISTS trg_blobs_update_version;
+DROP TRIGGER IF EXISTS trg_blobs_delete_version;
+DROP TABLE IF EXISTS state_version;
+DROP TABLE IF EXISTS state_root;
+
+-- Incremental state Merkle commitment, owned by StateRootService.
+-- Triggers record each changed committed row in the writer's own transaction;
+-- a root read rehashes only those leaves and their bucket ancestor paths.
+-- Cache keys (g8e:cache:*), nonces and SSE events are not committed.
+CREATE TABLE IF NOT EXISTS state_commitment_dirty (
+    source TEXT NOT NULL,
+    k1     TEXT NOT NULL,
+    k2     TEXT NOT NULL,
+    PRIMARY KEY (source, k1, k2)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS state_leaves (
+    leaf_id BLOB PRIMARY KEY,
+    tier    TEXT NOT NULL,
+    bucket  INTEGER NOT NULL,
+    digest  BLOB NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_state_leaves_bucket ON state_leaves(tier, bucket, leaf_id);
+
+-- Only non-empty nodes are stored; level 0 is the root, level 4 the buckets.
+CREATE TABLE IF NOT EXISTS state_nodes (
+    tier   TEXT NOT NULL,
+    level  INTEGER NOT NULL,
+    idx    INTEGER NOT NULL,
+    digest BLOB NOT NULL,
+    PRIMARY KEY (tier, level, idx)
+) WITHOUT ROWID;
+
+-- Algorithm of the persisted tree; a mismatch triggers one rebuild at open.
+CREATE TABLE IF NOT EXISTS state_commitment (
+    id        INTEGER PRIMARY KEY CHECK (id = 1),
+    algorithm INTEGER NOT NULL
 );
 
--- State Version: monotonically increasing counter for change tracking
--- Used to avoid full table scans when state hasn't changed
-CREATE TABLE IF NOT EXISTS state_version (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    version INTEGER NOT NULL DEFAULT 0
-);
-
--- Initialize state_version row if table was just created
-INSERT OR IGNORE INTO state_version (id, version) VALUES (1, 0);
-
--- Trigger to increment state_version on document insert
-CREATE TRIGGER IF NOT EXISTS trg_documents_insert_version
+-- Dirty marks use NOT EXISTS rather than INSERT OR IGNORE: an outer statement's
+-- conflict clause (for example an UPSERT) overrides OR IGNORE inside a trigger.
+-- Triggers are replaced on open so existing databases receive rule changes.
+DROP TRIGGER IF EXISTS trg_documents_insert_commitment;
+CREATE TRIGGER trg_documents_insert_commitment
 AFTER INSERT ON documents
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'documents', NEW.collection, NEW.id
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'documents' AND k1 = NEW.collection AND k2 = NEW.id);
 END;
 
--- Trigger to increment state_version on document update (only when data changes)
-CREATE TRIGGER IF NOT EXISTS trg_documents_update_version
+-- Metadata-only updates (updated_at) do not change the commitment.
+DROP TRIGGER IF EXISTS trg_documents_update_commitment;
+CREATE TRIGGER trg_documents_update_commitment
 AFTER UPDATE ON documents
-WHEN OLD.data IS NOT NEW.data
+WHEN OLD.data IS NOT NEW.data OR OLD.collection IS NOT NEW.collection OR OLD.id IS NOT NEW.id
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'documents', OLD.collection, OLD.id
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'documents' AND k1 = OLD.collection AND k2 = OLD.id);
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'documents', NEW.collection, NEW.id
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'documents' AND k1 = NEW.collection AND k2 = NEW.id);
 END;
 
--- Trigger to increment state_version on document delete
-CREATE TRIGGER IF NOT EXISTS trg_documents_delete_version
+DROP TRIGGER IF EXISTS trg_documents_delete_commitment;
+CREATE TRIGGER trg_documents_delete_commitment
 AFTER DELETE ON documents
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'documents', OLD.collection, OLD.id
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'documents' AND k1 = OLD.collection AND k2 = OLD.id);
 END;
 
--- Trigger to increment state_version on kv_store insert
--- Replace these triggers on open so existing databases receive the cache rule.
-DROP TRIGGER IF EXISTS trg_kv_store_insert_version;
-CREATE TRIGGER trg_kv_store_insert_version
+DROP TRIGGER IF EXISTS trg_kv_store_insert_commitment;
+CREATE TRIGGER trg_kv_store_insert_commitment
 AFTER INSERT ON kv_store
 WHEN NEW.key NOT LIKE 'g8e:cache:%'
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', NEW.key, ''
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = NEW.key AND k2 = '');
 END;
 
--- Trigger to increment state_version on kv_store update
-DROP TRIGGER IF EXISTS trg_kv_store_update_version;
-CREATE TRIGGER trg_kv_store_update_version
+DROP TRIGGER IF EXISTS trg_kv_store_update_commitment;
+CREATE TRIGGER trg_kv_store_update_commitment
 AFTER UPDATE ON kv_store
-WHEN OLD.key NOT LIKE 'g8e:cache:%' OR NEW.key NOT LIKE 'g8e:cache:%'
+WHEN OLD.key IS NOT NEW.key OR OLD.value IS NOT NEW.value
+  OR OLD.expires_at IS NOT NEW.expires_at OR OLD.state_tier IS NOT NEW.state_tier
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', OLD.key, ''
+        WHERE OLD.key NOT LIKE 'g8e:cache:%'
+          AND NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = OLD.key AND k2 = '');
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', NEW.key, ''
+        WHERE NEW.key NOT LIKE 'g8e:cache:%'
+          AND NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = NEW.key AND k2 = '');
 END;
 
--- Trigger to increment state_version on kv_store delete
-DROP TRIGGER IF EXISTS trg_kv_store_delete_version;
-CREATE TRIGGER trg_kv_store_delete_version
+DROP TRIGGER IF EXISTS trg_kv_store_delete_commitment;
+CREATE TRIGGER trg_kv_store_delete_commitment
 AFTER DELETE ON kv_store
 WHEN OLD.key NOT LIKE 'g8e:cache:%'
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', OLD.key, ''
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = OLD.key AND k2 = '');
 END;
 
--- Trigger to increment state_version on blobs insert
-CREATE TRIGGER IF NOT EXISTS trg_blobs_insert_version
+DROP TRIGGER IF EXISTS trg_blobs_insert_commitment;
+CREATE TRIGGER trg_blobs_insert_commitment
 AFTER INSERT ON blobs
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'blobs', NEW.namespace, NEW.id
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'blobs' AND k1 = NEW.namespace AND k2 = NEW.id);
 END;
 
--- Trigger to increment state_version on blobs update
-CREATE TRIGGER IF NOT EXISTS trg_blobs_update_version
+DROP TRIGGER IF EXISTS trg_blobs_update_commitment;
+CREATE TRIGGER trg_blobs_update_commitment
 AFTER UPDATE ON blobs
+WHEN OLD.namespace IS NOT NEW.namespace OR OLD.id IS NOT NEW.id OR OLD.size IS NOT NEW.size
+  OR OLD.content_type IS NOT NEW.content_type OR OLD.data IS NOT NEW.data
+  OR OLD.expires_at IS NOT NEW.expires_at OR OLD.state_tier IS NOT NEW.state_tier
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'blobs', OLD.namespace, OLD.id
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'blobs' AND k1 = OLD.namespace AND k2 = OLD.id);
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'blobs', NEW.namespace, NEW.id
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'blobs' AND k1 = NEW.namespace AND k2 = NEW.id);
 END;
 
--- Trigger to increment state_version on blobs delete
-CREATE TRIGGER IF NOT EXISTS trg_blobs_delete_version
+DROP TRIGGER IF EXISTS trg_blobs_delete_commitment;
+CREATE TRIGGER trg_blobs_delete_commitment
 AFTER DELETE ON blobs
 BEGIN
-    UPDATE state_version SET version = version + 1 WHERE id = 1;
+    INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'blobs', OLD.namespace, OLD.id
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'blobs' AND k1 = OLD.namespace AND k2 = OLD.id);
 END;
 
 -- Nonces: used for transaction replay protection

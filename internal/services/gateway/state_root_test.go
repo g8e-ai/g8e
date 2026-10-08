@@ -36,24 +36,12 @@ func TestStateRootSemantics(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, root1, root1Again, "State root must be deterministic for identical state")
 
-	// 1.5. Verify caching - second call should use cache (same version)
-	// This is implicitly tested by the above, but we can verify the version tracking
-	var version1 int64
-	err = db.db.QueryRow("SELECT version FROM state_version WHERE id = 1").Scan(&version1)
-	require.NoError(t, err)
-
 	// 2. Document content change alters root
 	err = db.GetDocStore().DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
 	root2, err := db.GetStateRootSvc().GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.NotEqual(t, root1, root2, "Content change must alter state root")
-
-	// 2.5. Verify version incremented
-	var version2 int64
-	err = db.db.QueryRow("SELECT version FROM state_version WHERE id = 1").Scan(&version2)
-	require.NoError(t, err)
-	assert.Greater(t, version2, version1, "State version must increment on document change")
 
 	// 3. Document metadata change (updated_at) does NOT alter root
 	// Small delay to ensure updated_at timestamp changes
@@ -143,44 +131,24 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 	assert.Equal(t, root1, root2, "State root must be deterministic regardless of insertion order")
 }
 
-func TestStateRootCaching(t *testing.T) {
+func TestStateRootUnchangedReadsDoNoFlushWork(t *testing.T) {
 	db := newTestDB(t)
+	svc := db.GetStateRootSvc()
 
-	// Get initial root and version
-	root1, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root1, err := svc.GetCurrentStateRoot()
 	require.NoError(t, err)
+	flushed := svc.flushedLeaves.Load()
 
-	var version1 int64
-	err = db.db.QueryRow("SELECT version FROM state_version WHERE id = 1").Scan(&version1)
+	root2, err := svc.GetCurrentStateRoot()
 	require.NoError(t, err)
+	assert.Equal(t, root1, root2)
+	assert.Equal(t, flushed, svc.flushedLeaves.Load(), "an unchanged root read must not rehash any leaf")
 
-	// Call again without changes - should use cache
-	root2, err := db.GetStateRootSvc().GetCurrentStateRoot()
-	require.NoError(t, err)
-	assert.Equal(t, root1, root2, "Cached root must match")
-
-	// Verify cache is being used by checking internal state
-	assert.Equal(t, root1, db.GetStateRootSvc().cachedStateRoot, "Internal cache should be set")
-	assert.Equal(t, version1, db.GetStateRootSvc().cachedStateVersion, "Internal version should match")
-
-	// Make a change
-	err = db.GetDocStore().DocSet("cache_test", "doc1", json.RawMessage(`{"data":1}`))
-	require.NoError(t, err)
-
-	// Version should have incremented
-	var version2 int64
-	err = db.db.QueryRow("SELECT version FROM state_version WHERE id = 1").Scan(&version2)
-	require.NoError(t, err)
-	assert.Greater(t, version2, version1, "Version must increment on change")
-
-	// Get new root - should recalculate
-	root3, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	require.NoError(t, db.GetDocStore().DocSet("cache_test", "doc1", json.RawMessage(`{"data":1}`)))
+	root3, err := svc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.NotEqual(t, root1, root3, "Root must change after data change")
-
-	// Cache should be updated
-	assert.Equal(t, root3, db.GetStateRootSvc().cachedStateRoot, "Cache should be updated")
-	assert.Equal(t, version2, db.GetStateRootSvc().cachedStateVersion, "Cache version should be updated")
+	assert.Equal(t, flushed+1, svc.flushedLeaves.Load(), "one write must rehash exactly one leaf")
 }
 
 func BenchmarkStateRootCalculation(b *testing.B) {
@@ -318,24 +286,18 @@ func TestStateRoot_ObservedStateRootIsSeparate(t *testing.T) {
 	assert.NotEqual(t, obsRoot2, obsRoot3, "observed root must change when more observed state is written")
 }
 
-func TestStateRoot_ObservedStateRootCaching(t *testing.T) {
+func TestStateRoot_ObservedStateRootSurvivesRebuild(t *testing.T) {
 	db := newTestDB(t)
+	require.NoError(t, db.GetKVStore().KVSetObserved("observed:metric:load", "0.5", 0))
 
-	// Get observed root — should cache it
 	root1, err := db.GetStateRootSvc().GetObservedStateRoot()
 	require.NoError(t, err)
-
-	// Call again — should return cached value
 	root2, err := db.GetStateRootSvc().GetObservedStateRoot()
 	require.NoError(t, err)
-	assert.Equal(t, root1, root2, "observed root should be cached")
+	assert.Equal(t, root1, root2, "observed root must be stable without changes")
 
-	// Invalidate cache
-	err = db.GetStateRootSvc().InvalidateCache()
-	require.NoError(t, err)
-
-	// Call again — should recalculate but return same value (no state change)
+	require.NoError(t, db.GetStateRootSvc().RebuildCommitment(t.Context()))
 	root3, err := db.GetStateRootSvc().GetObservedStateRoot()
 	require.NoError(t, err)
-	assert.Equal(t, root1, root3, "observed root should be same after recalculation without changes")
+	assert.Equal(t, root1, root3, "a full rebuild must reproduce the incremental observed root")
 }

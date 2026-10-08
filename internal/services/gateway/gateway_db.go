@@ -33,7 +33,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
-	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
 // gatewaySchema is the canonical Operator SQLite schema, embedded at compile time
@@ -250,26 +249,21 @@ func resolveVaultKeyPath(vaultKeyPath string, fileSvc fs.RuntimeFileService) str
 	return fileSvc.Resolve(filepath.ToSlash(vaultKeyPath))
 }
 
+// initStateRoot builds the incremental state commitment once for a new database
+// or one recorded under a different commitment algorithm.
 func (s *CanonicalDBService) initStateRoot() error {
-	var count int
-	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM state_root").Scan(&count)
+	algorithm, err := s.stores.StateRootSvc.CommitmentAlgorithm()
 	if err != nil {
-		return fmt.Errorf("canonicalDB: init state root: count: %w", err)
+		return fmt.Errorf("canonicalDB: init state root: %w", err)
 	}
-	if count == 0 {
-		root, err := s.stores.StateRootSvc.CalculateStateRoot()
-		if err != nil {
-			return fmt.Errorf("canonicalDB: init state root: calculate: %w", err)
-		}
-		_, err = s.db.ExecWithRetry(
-			"INSERT INTO state_root (id, root, updated_at) VALUES (1, ?, ?)",
-			root,
-			timesvc.FormatTimestamp(time.Now().UTC()),
-		)
-		if err != nil {
-			return fmt.Errorf("canonicalDB: init state root: insert: %w", err)
-		}
+	if algorithm == stateCommitmentAlgorithm {
+		return nil
 	}
+	start := time.Now()
+	if err := s.stores.StateRootSvc.RebuildCommitment(s.ctx); err != nil {
+		return fmt.Errorf("canonicalDB: init state root: rebuild: %w", err)
+	}
+	s.logger.Info("State commitment rebuilt", "from_algorithm", algorithm, "to_algorithm", stateCommitmentAlgorithm, "elapsed", time.Since(start))
 	return nil
 }
 
