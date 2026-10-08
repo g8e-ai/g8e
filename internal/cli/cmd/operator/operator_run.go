@@ -188,8 +188,9 @@ func operatorStopCmdWithLocal(
 	var reason string
 	var grace time.Duration
 	cmd := &cobra.Command{
-		Use:   "stop [operator-session-id]",
-		Short: "Stop operators, terminating local workers if governed shutdown stalls",
+		Use:          "stop [operator-session-id]",
+		Short:        "Stop operators, terminating local workers if governed shutdown stalls",
+		SilenceUsage: true,
 		Long: `Request governed shutdown, then wait briefly for local workers to exit.
 Local workers that remain running receive TERM, then KILL. Bulk stops process at most
 64 workers concurrently and report each outcome. With no session ID,

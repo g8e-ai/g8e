@@ -125,12 +125,13 @@ func TestOperatorStopLocal_CancellationAccountsForQueuedWorkers(t *testing.T) {
 		}
 		cmd := operatorStopCmdWithLocal(cmdtest.ConfigLoaderFor(cfg), authcmd.MockClientFactory(client), cmdtest.FileSvcFactoryFor(fileSvc), func() ([]localOperatorProcess, error) { return locals, nil })
 		var out bytes.Buffer
-		cmd.SetOut(&out)
-		cmd.SetErr(&bytes.Buffer{})
-		cmd.PersistentFlags().Bool("json", true, "")
-		cmd.SetArgs(nil)
+		var errOut bytes.Buffer
+		root := cmdtest.GlobalJSONRoot(t, cmd)
+		root.SetOut(&out)
+		root.SetErr(&errOut)
+		root.SetArgs([]string{"stop"})
 		done := make(chan error, 1)
-		go func() { done <- cmd.ExecuteContext(ctx) }()
+		go func() { done <- root.ExecuteContext(ctx) }()
 		synctest.Wait()
 		cancel()
 		close(release)
@@ -145,6 +146,7 @@ func TestOperatorStopLocal_CancellationAccountsForQueuedWorkers(t *testing.T) {
 			require.Equal(t, "failed", result.Method)
 			require.NotEmpty(t, result.Error)
 		}
+		require.Contains(t, errOut.String(), "context canceled")
 	})
 }
 

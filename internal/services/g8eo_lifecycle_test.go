@@ -104,6 +104,14 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	assert.True(t, service.running)
 	assert.Equal(t, 1, factoryCalls)
 
+	service.pubSubCommands.ShutdownChan <- "test shutdown request"
+	select {
+	case <-service.Done():
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the Operator service to observe shutdown")
+	}
+	assert.ErrorIs(t, service.ctx.Err(), context.Canceled)
+
 	// Clean up to avoid background goroutines logging after test completion
 	require.NoError(t, service.Stop(context.Background()))
 }

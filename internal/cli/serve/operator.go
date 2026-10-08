@@ -561,6 +561,9 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	case sig := <-sigChan:
 		logger.Info("Received signal, shutting down", "signal", sig.String())
 		cancel()
+	case <-g8eoService.Done():
+		logger.Info("Operator service requested shutdown")
+		cancel()
 	}
 
 	wg.Wait()

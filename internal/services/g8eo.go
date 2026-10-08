@@ -75,6 +75,7 @@ type G8eoService struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+	done   chan struct{}
 
 	running   bool
 	mu        sync.RWMutex
@@ -99,6 +100,7 @@ func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TL
 		tlsConfig:           tlsConfig,
 		fileSvc:             fileSvc,
 		pubSubClientFactory: pubSubClientFactory,
+		done:                make(chan struct{}),
 	}
 
 	bootstrapService, err := auth.NewBootstrapService(cfg, logger, tlsConfig)
@@ -119,6 +121,12 @@ func (vs *G8eoService) SetCommandSubscriptionObserver(observer func(context.Cont
 	}
 	vs.onCommandSubscription = observer
 	return nil
+}
+
+// Done is closed when the Operator service context ends. The CLI waits on it
+// so a governed shutdown request can stop the process after service cleanup.
+func (vs *G8eoService) Done() <-chan struct{} {
+	return vs.done
 }
 
 func (vs *G8eoService) Start(ctx context.Context) error {
@@ -428,6 +436,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.wg.Add(1)
 	go func() {
 		defer vs.wg.Done()
+		defer close(vs.done)
 		select {
 		case reason := <-vs.pubSubCommands.ShutdownChan:
 			vs.logger.Info("g8eo Service received external shutdown request", "reason", reason)

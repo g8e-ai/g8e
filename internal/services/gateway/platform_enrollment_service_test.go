@@ -1120,8 +1120,9 @@ func TestPlatformEnrollmentService_ConcurrentApproveDeny(t *testing.T) {
 }
 
 // TestPlatformEnrollmentService_ConcurrentComplete proves that concurrent
-// completion attempts on the same approved request result in at most one
-// issuance. The issuance lease ensures only one signer proceeds.
+// completion attempts on the same approved request produce one stored
+// issuance. The competing caller either sees the live lease or, if issuance
+// already finished, receives the same idempotent result.
 func TestPlatformEnrollmentService_ConcurrentComplete(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
@@ -1153,11 +1154,11 @@ func TestPlatformEnrollmentService_ConcurrentComplete(t *testing.T) {
 	close(results)
 	close(errs)
 
-	successCount := 0
+	var successfulResponses []*models.PlatformEnrollmentCompleteResponse
 	inProgressCount := 0
 	for resp := range results {
 		require.NotNil(t, resp.App)
-		successCount++
+		successfulResponses = append(successfulResponses, resp)
 	}
 	for err := range errs {
 		if errors.Is(err, constants.ErrPlatformEnrollmentIssuanceInProgress) {
@@ -1167,8 +1168,22 @@ func TestPlatformEnrollmentService_ConcurrentComplete(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 1, successCount, "exactly one completion must succeed")
-	assert.Equal(t, 1, inProgressCount, "the losing completion must get issuance-in-progress")
+	stored := loadStoredRequest(t, env, approved.ID)
+	require.Equal(t, models.PlatformEnrollmentStateCompleted, stored.State)
+	require.NotNil(t, stored.Issued)
+	require.NotNil(t, stored.Issued.App)
+	require.GreaterOrEqual(t, len(successfulResponses), 1)
+	require.LessOrEqual(t, len(successfulResponses), 2)
+	require.Equal(t, 2, len(successfulResponses)+inProgressCount)
+	for _, resp := range successfulResponses {
+		assert.Equal(t, stored.Issued.App.AppID, resp.App.AppID)
+		assert.Equal(t, stored.Issued.App.AppCert, resp.App.AppCert)
+	}
+	if len(successfulResponses) == 1 {
+		assert.Equal(t, 1, inProgressCount, "the competing completion must see the live issuance lease")
+	} else {
+		assert.Zero(t, inProgressCount, "both calls may succeed when the second observes the completed idempotent result")
+	}
 }
 
 // ============================================================================
